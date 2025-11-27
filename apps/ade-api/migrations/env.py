@@ -16,7 +16,9 @@ from ade_api.shared.db.engine import render_sync_url
 
 config = context.config
 
-if config.config_file_name is not None:
+# Allow callers to opt out of Alembic's logging config so application logging
+# (handlers/levels/formatters) is left intact when migrations run in-process.
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 

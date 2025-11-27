@@ -15,7 +15,7 @@ This stage is implemented in `pipeline/normalize.py` and sits between:
 
 It assumes you’ve read:
 
-- `03-io-and-table-detection.md` (how we get `RawTable`), and  
+- `03-io-and-table-detection.md` (how we get `ExtractedTable`), and  
 - `04-column-mapping.md` (how we get `MappedTable`).
 
 ## Terminology
@@ -41,7 +41,7 @@ This stage keeps field/column naming strict to avoid ambiguity.
 High-level view:
 
 ```text
-RawTable
+ExtractedTable
   └─(mapping)─▶ MappedTable
                     └─(normalization)─▶ NormalizedTable
                                               └─(write)─▶ Excel workbook
@@ -90,7 +90,7 @@ Where:
 
   * Output of the mapping stage:
 
-    * `raw: RawTable`
+    * `raw: ExtractedTable`
     * `column_map: ColumnMap` (`mapped_columns` + `unmapped_columns`)
 * `logger: PipelineLogger`
 
@@ -141,7 +141,7 @@ where `c1..cN` follow `columns.order` and `extra*` follow `MappedTable.column_ma
 
 ### 3.2 Seeding the canonical row
 
-For each data row in `mapped.raw.data_rows`:
+For each data row in `mapped.extracted.data_rows`:
 
 1. Start with an empty `row: dict[str, Any]`.
 2. For each canonical field in `manifest.columns.order`:
@@ -149,7 +149,7 @@ For each data row in `mapped.raw.data_rows`:
    * Find its `MappedColumn` in `mapped.column_map.mapped_columns` (if any).
    * If mapped:
 
-     * Read the raw cell from `mapped.raw.data_rows[row_idx][mapped_col.source_column_index]`.
+     * Read the raw cell from `mapped.extracted.data_rows[row_idx][mapped_col.source_column_index]`.
      * Set `row[field_name] = raw_value`.
    * If not mapped:
 
@@ -168,7 +168,7 @@ This seeded `row` is the input to the transform phase.
 * Data row `i` is at original row index:
 
 ```python
-row_index = mapped.raw.first_data_row_index + i
+row_index = mapped.extracted.first_data_row_index + i
 ```
 
 This index is passed into transforms and validators and appears in
@@ -407,7 +407,7 @@ For each data row:
    for extra in mapped.column_map.unmapped_columns:
        col_idx = extra.source_column_index  # 0-based raw column index
        extra_values.append(
-           mapped.raw.data_rows[row_offset][col_idx]
+           mapped.extracted.data_rows[row_offset][col_idx]
        )
    ```
 

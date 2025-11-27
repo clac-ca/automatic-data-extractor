@@ -29,13 +29,22 @@ def _iter_strings(values: Iterable[Any]) -> list[str]:
 
 def detect_known_header_words(
     *,
-    run: Any,
+    run: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    logger: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
     Strongest signal: does this row contain known header words?
+
+    Args:
+        run: metadata for the current run (IDs, workspace, sheet info)
+        state: shared dict persisted across detectors/transforms for caching
+        row_index: 1-based stream index for this row
+        row_values: raw values from the spreadsheet row
+        logger: run-scoped logger for diagnostics
     """
     hits = 0
     for cell in _iter_strings(row_values):
@@ -57,13 +66,22 @@ def detect_known_header_words(
 
 def detect_mostly_text(
     *,
-    run: Any,
+    run: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    logger: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
     Medium signal: header rows are usually text-heavy.
+
+    Args:
+        run: metadata for the current run (IDs, workspace, sheet info)
+        state: shared dict persisted across detectors/transforms for caching
+        row_index: 1-based stream index for this row
+        row_values: raw values from the spreadsheet row
+        logger: run-scoped logger for diagnostics
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:
@@ -84,13 +102,22 @@ def detect_mostly_text(
 
 def detect_early_row_bias(
     *,
-    run: Any,
+    run: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    logger: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
     Small nudge: earlier rows are more likely to be headers.
+
+    Args:
+        run: metadata for the current run (IDs, workspace, sheet info)
+        state: shared dict persisted across detectors/transforms for caching
+        row_index: 1-based stream index for this row
+        row_values: raw values from the spreadsheet row
+        logger: run-scoped logger for diagnostics
     """
     if row_index <= 2:
         score = 0.20

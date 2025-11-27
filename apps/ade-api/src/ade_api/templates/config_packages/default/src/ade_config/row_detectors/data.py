@@ -17,13 +17,22 @@ AGG_WORDS = {"total", "subtotal", "grand total", "summary", "average", "avg"}
 
 def detect_mixed_text_and_numbers(
     *,
-    run: Any,
+    run: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    logger: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
     Data rows often contain both text and numbers.
+
+    Args:
+        run: metadata for the current run (IDs, workspace, sheet info)
+        state: shared dict persisted across detectors/transforms for caching
+        row_index: 1-based stream index for this row
+        row_values: raw values from the spreadsheet row
+        logger: run-scoped logger for diagnostics
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:
@@ -60,9 +69,11 @@ def detect_mixed_text_and_numbers(
 
 def detect_value_patterns(
     *,
-    run: Any,
+    run: dict[str, Any] | None = None,
+    state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    logger: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
@@ -70,6 +81,13 @@ def detect_value_patterns(
       - email addresses
       - phone numbers
       - valid 9-digit SIN (Luhn)
+
+    Args:
+        run: metadata for the current run (IDs, workspace, sheet info)
+        state: shared dict persisted across detectors/transforms for caching
+        row_index: 1-based stream index for this row
+        row_values: raw values from the spreadsheet row
+        logger: run-scoped logger for diagnostics
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:

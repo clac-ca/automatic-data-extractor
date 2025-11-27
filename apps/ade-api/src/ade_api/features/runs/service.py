@@ -36,6 +36,7 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.settings import Settings
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.pagination import Page
 from ade_api.storage_layout import (
@@ -47,7 +48,7 @@ from ade_api.storage_layout import (
 
 from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
-from .runner import ADEProcessRunner, StdoutFrame
+from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
     RunCreateOptions,
     RunDiagnosticsV1,
@@ -60,7 +61,7 @@ from .schemas import (
     RunStatusLiteral,
 )
 from .summary_builder import build_run_summary_from_paths
-from .supervisor import RunSupervisor
+from .supervisor import RunExecutionSupervisor
 
 __all__ = [
     "RunExecutionContext",
@@ -75,6 +76,7 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+event_logger = logging.getLogger("ade_api.runs.events")
 
 DEFAULT_STREAM_LIMIT = 1000
 
@@ -189,14 +191,14 @@ class RunsService:
         *,
         session: AsyncSession,
         settings: Settings,
-        supervisor: RunSupervisor | None = None,
+        supervisor: RunExecutionSupervisor | None = None,
         safe_mode_service: SafeModeService | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
         self._runs = RunsRepository(session)
-        self._supervisor = supervisor or RunSupervisor()
+        self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
         self._builder = VirtualEnvironmentBuilder()
@@ -219,6 +221,17 @@ class RunsService:
         options: RunCreateOptions,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
+
+        logger.debug(
+            "run.prepare.start",
+            extra=log_context(
+                configuration_id=configuration_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+                force_rebuild=options.force_rebuild,
+                input_document_id=options.input_document_id,
+            ),
+        )
 
         configuration = await self._resolve_configuration(configuration_id)
 
@@ -278,6 +291,19 @@ class RunsService:
             build_id=build_id or "",
             runs_dir=str(runs_root),
         )
+
+        logger.info(
+            "run.prepare.success",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                input_document_id=input_document_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+                force_rebuild=options.force_rebuild,
+            ),
+        )
         return run, context
 
     async def run_to_completion(
@@ -288,8 +314,28 @@ class RunsService:
     ) -> None:
         """Execute the run, exhausting the event stream."""
 
+        logger.info(
+            "run.execute.start",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                run_id=context.run_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+            ),
+        )
         async for _ in self.stream_run(context=context, options=options):
             pass
+        logger.info(
+            "run.execute.completed",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                run_id=context.run_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+            ),
+        )
 
     async def stream_run(
         self,
@@ -298,6 +344,17 @@ class RunsService:
         options: RunCreateOptions,
     ) -> AsyncIterator[RunStreamFrame]:
         """Iterate through run events while executing the engine."""
+
+        logger.debug(
+            "run.stream.start",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                run_id=context.run_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+            ),
+        )
 
         run = await self._require_run(context.run_id)
         mode_literal = "validate" if options.validate_only else "execute"
@@ -339,6 +396,14 @@ class RunsService:
 
         # Validation-only short circuit: we never touch the engine.
         if options.validate_only:
+            logger.debug(
+                "run.stream.validate_only_short_circuit",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                ),
+            )
             async for event in self._stream_validate_only_run(
                 run=run,
                 mode_literal=mode_literal,
@@ -348,6 +413,15 @@ class RunsService:
 
         # Safe mode short circuit: log, synthesize a summary, and exit.
         if safe_mode.enabled:
+            logger.debug(
+                "run.stream.safe_mode_short_circuit",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    safe_mode_enabled=True,
+                ),
+            )
             async for event in self._stream_safe_mode_skip(
                 run=run,
                 mode_literal=mode_literal,
@@ -373,19 +447,59 @@ class RunsService:
     async def get_run(self, run_id: str) -> Run | None:
         """Return the run instance for ``run_id`` if it exists."""
 
-        return await self._runs.get(run_id)
+        logger.debug(
+            "run.get.start",
+            extra=log_context(run_id=run_id),
+        )
+        run = await self._runs.get(run_id)
+        if run is None:
+            logger.debug(
+                "run.get.miss",
+                extra=log_context(run_id=run_id),
+            )
+        else:
+            logger.debug(
+                "run.get.hit",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    status=run.status.value,
+                ),
+            )
+        return run
 
     async def get_run_summary(self, run_id: str) -> RunSummaryV1 | None:
         """Return a RunSummaryV1 for ``run_id`` if available or derivable."""
 
+        logger.debug(
+            "run.summary.get.start",
+            extra=log_context(run_id=run_id),
+        )
         run = await self._require_run(run_id)
         summary_payload = self._deserialize_run_summary(run.summary)
         if isinstance(summary_payload, dict):
             try:
-                return RunSummaryV1.model_validate(summary_payload)
+                summary = RunSummaryV1.model_validate(summary_payload)
+                logger.info(
+                    "run.summary.get.cached",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                    ),
+                )
+                return summary
             except ValidationError:
                 # Fallback to recomputing from events and manifest below.
-                pass
+                logger.warning(
+                    "run.summary.get.cached_invalid",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                    ),
+                )
 
         paths = self._finalize_paths(
             summary=None,
@@ -395,11 +509,25 @@ class RunsService:
             ),
             default_paths=RunPathsSnapshot(),
         )
-        return await self._build_run_summary_for_completion(run=run, paths=paths)
+        summary = await self._build_run_summary_for_completion(run=run, paths=paths)
+        logger.info(
+            "run.summary.get.recomputed",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                has_summary=bool(summary),
+            ),
+        )
+        return summary
 
     async def get_run_diagnostics(self, run_id: str) -> RunDiagnosticsV1:
         """Return detailed diagnostics (former artifact) for ``run_id``."""
 
+        logger.debug(
+            "run.diagnostics.get.start",
+            extra=log_context(run_id=run_id),
+        )
         run = await self._require_run(run_id)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         candidates = [
@@ -412,11 +540,29 @@ class RunsService:
             if not path.is_file():
                 continue
             try:
-                return RunDiagnosticsV1.model_validate_json(
+                diagnostics = RunDiagnosticsV1.model_validate_json(
                     path.read_text(encoding="utf-8")
                 )
+                logger.info(
+                    "run.diagnostics.get.success",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        path=str(path),
+                    ),
+                )
+                return diagnostics
             except ValidationError:
                 continue
+        logger.warning(
+            "run.diagnostics.get.missing",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+            ),
+        )
         raise RunOutputMissingError("Run diagnostics are unavailable")
 
     async def get_run_events(
@@ -428,6 +574,10 @@ class RunsService:
     ) -> tuple[list[AdeEvent], int | None]:
         """Return ADE telemetry events for ``run_id`` with optional paging."""
 
+        logger.debug(
+            "run.events.get.start",
+            extra=log_context(run_id=run_id, cursor=cursor, limit=limit),
+        )
         run = await self._require_run(run_id)
         events_path = (
             self._run_dir_for_run(
@@ -443,6 +593,15 @@ class RunsService:
         start = 0 if cursor is None else max(cursor, 0)
 
         if not events_path.exists():
+            logger.info(
+                "run.events.get.missing",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(events_path),
+                ),
+            )
             return events, None
 
         with events_path.open("r", encoding="utf-8") as handle:
@@ -460,6 +619,16 @@ class RunsService:
                     next_cursor = idx + 1
                     break
 
+        logger.info(
+            "run.events.get.success",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                count=len(events),
+                next_cursor=next_cursor,
+            ),
+        )
         return events, next_cursor
 
     async def list_runs(
@@ -474,6 +643,18 @@ class RunsService:
     ) -> Page[RunResource]:
         """Return paginated runs for ``workspace_id`` with optional filters."""
 
+        logger.debug(
+            "run.list.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                statuses=[s.value for s in statuses] if statuses else None,
+                input_document_id=input_document_id,
+                page=page,
+                page_size=page_size,
+                include_total=include_total,
+            ),
+        )
+
         page_result = await self._runs.list_by_workspace(
             workspace_id=workspace_id,
             statuses=statuses,
@@ -483,7 +664,7 @@ class RunsService:
             include_total=include_total,
         )
         resources = [self.to_resource(run) for run in page_result.items]
-        return Page(
+        response = Page(
             items=resources,
             page=page_result.page,
             page_size=page_result.page_size,
@@ -491,6 +672,18 @@ class RunsService:
             has_previous=page_result.has_previous,
             total=page_result.total,
         )
+
+        logger.info(
+            "run.list.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                page=response.page,
+                page_size=response.page_size,
+                count=len(response.items),
+                total=response.total,
+            ),
+        )
+        return response
 
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
@@ -594,13 +787,16 @@ class RunsService:
     async def get_logs(
         self,
         *,
-
         run_id: str,
         after_id: int | None = None,
         limit: int = DEFAULT_STREAM_LIMIT,
     ) -> RunLogsResponse:
         """Return persisted log entries for ``run_id``."""
 
+        logger.debug(
+            "run.logs.list.start",
+            extra=log_context(run_id=run_id, after_id=after_id, limit=limit),
+        )
         records = await self._runs.list_logs(
             run_id=run_id,
             after_id=after_id,
@@ -608,28 +804,72 @@ class RunsService:
         )
         entries = [self._log_to_entry(log) for log in records]
         next_after = entries[-1].id if entries and len(entries) == limit else None
-        return RunLogsResponse(
+        response = RunLogsResponse(
             run_id=run_id,
             entries=entries,
             next_after_id=next_after,
         )
+        logger.info(
+            "run.logs.list.success",
+            extra=log_context(
+                run_id=run_id,
+                count=len(entries),
+                next_after_id=response.next_after_id,
+            ),
+        )
+        return response
 
     async def get_logs_file_path(self, *, run_id: str) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
 
+        logger.debug(
+            "run.logs.file_path.start",
+            extra=log_context(run_id=run_id),
+        )
         run = await self._require_run(run_id)
         logs_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "logs"
         logs_path = logs_dir / "events.ndjson"
         if not logs_path.is_file():
+            logger.warning(
+                "run.logs.file_path.missing",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(logs_path),
+                ),
+            )
             raise RunLogsFileMissingError("Run log stream is unavailable")
+        logger.info(
+            "run.logs.file_path.success",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                path=str(logs_path),
+            ),
+        )
         return logs_path
 
     async def list_output_files(self, *, run_id: str) -> list[tuple[str, int]]:
         """Return output file tuples for ``run_id``."""
 
+        logger.debug(
+            "run.outputs.list.start",
+            extra=log_context(run_id=run_id),
+        )
         run = await self._require_run(run_id)
         output_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "output"
         if not output_dir.exists() or not output_dir.is_dir():
+            logger.warning(
+                "run.outputs.list.missing",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(output_dir),
+                ),
+            )
             raise RunOutputMissingError("Run output is unavailable")
 
         files: list[tuple[str, int]] = []
@@ -641,6 +881,16 @@ class RunsService:
             except ValueError:
                 continue
             files.append((str(relative), path.stat().st_size))
+
+        logger.info(
+            "run.outputs.list.success",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                count=len(files),
+            ),
+        )
         return files
 
     async def resolve_output_file(
@@ -651,6 +901,10 @@ class RunsService:
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
 
+        logger.debug(
+            "run.outputs.resolve.start",
+            extra=log_context(run_id=run_id, path=relative_path),
+        )
         run = await self._require_run(run_id)
         output_dir = (
             self._run_dir_for_run(
@@ -660,22 +914,64 @@ class RunsService:
             / "output"
         )
         if not output_dir.exists() or not output_dir.is_dir():
+            logger.warning(
+                "run.outputs.resolve.missing_root",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(output_dir),
+                ),
+            )
             raise RunOutputMissingError("Run output is unavailable")
 
         candidate = (output_dir / relative_path).resolve()
         try:
             candidate.relative_to(output_dir)
         except ValueError:
+            logger.warning(
+                "run.outputs.resolve.outside_directory",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(candidate),
+                ),
+            )
             raise RunOutputMissingError("Requested output is outside the run directory") from None
 
         if not candidate.is_file():
+            logger.warning(
+                "run.outputs.resolve.not_found",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    path=str(candidate),
+                ),
+            )
             raise RunOutputMissingError("Requested output file not found")
+
+        logger.info(
+            "run.outputs.resolve.success",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                path=str(candidate),
+            ),
+        )
         return candidate
 
     def run_directory(self, *, workspace_id: str, run_id: str) -> Path:
         """Return the canonical run directory for a given ``run_id``."""
 
-        return self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
+        path = self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
+        logger.debug(
+            "run.directory.resolve",
+            extra=log_context(workspace_id=workspace_id, run_id=run_id, path=str(path)),
+        )
+        return path
 
     def run_relative_path(self, path: Path) -> str:
         """Return ``path`` relative to the runs root, validating traversal."""
@@ -683,9 +979,14 @@ class RunsService:
         root = self._runs_dir.resolve()
         candidate = path.resolve()
         try:
-            return str(candidate.relative_to(root))
+            value = str(candidate.relative_to(root))
         except ValueError:  # pragma: no cover - defensive guard
+            logger.warning(
+                "run.path.escape_detected",
+                extra=log_context(path=str(candidate)),
+            )
             raise RunOutputMissingError("Requested path escapes runs directory") from None
+        return value
 
     # --------------------------------------------------------------------- #
     # Internal helpers: paths, summaries, manifests
@@ -848,8 +1149,12 @@ class RunsService:
             return ManifestV1.model_validate_json(path.read_text(encoding="utf-8"))
         except (ValidationError, OSError, ValueError):
             logger.warning(
-                "Unable to parse manifest for summary construction",
-                extra={"workspace_id": workspace_id, "configuration_id": configuration_id},
+                "run.manifest.parse_failed",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    path=str(path),
+                ),
             )
             return None
 
@@ -875,12 +1180,32 @@ class RunsService:
             )
 
         if events_path is None or not events_path.exists():
+            logger.info(
+                "run.summary.build.events_missing",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    events_path=str(events_path),
+                ),
+            )
             return None
 
         manifest_path = self._manifest_path(run.workspace_id, run.configuration_id)
 
+        logger.debug(
+            "run.summary.build.start",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                events_path=str(events_path),
+                manifest_path=str(manifest_path),
+            ),
+        )
+
         try:
-            return await asyncio.to_thread(
+            summary = await asyncio.to_thread(
                 build_run_summary_from_paths,
                 events_path=events_path if events_path.exists() else None,
                 manifest_path=manifest_path if manifest_path.exists() else None,
@@ -889,10 +1214,24 @@ class RunsService:
                 configuration_version=run.configuration_version_id,
                 run_id=run.id,
             )
+            logger.info(
+                "run.summary.build.success",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                ),
+            )
+            return summary
         except Exception:
             logger.warning(
-                "Failed to build run summary",
-                extra={"run_id": run.id, "events_path": str(events_path)},
+                "run.summary.build.failed",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    events_path=str(events_path),
+                ),
                 exc_info=True,
             )
             return None
@@ -994,6 +1333,18 @@ class RunsService:
     ) -> AsyncIterator[RunStreamFrame]:
         """Invoke the engine process and stream ADE events back to the caller."""
 
+        logger.info(
+            "run.engine.execute.start",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+                safe_mode_enabled=safe_mode_enabled,
+            ),
+        )
+
         python = self._resolve_python(Path(context.venv_path))
         env = self._build_env(Path(context.venv_path), options, context)
         runs_root = (
@@ -1005,6 +1356,14 @@ class RunsService:
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
+            logger.warning(
+                "run.engine.execute.input_missing",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                ),
+            )
             raise RunInputMissingError("Input document is required for run execution")
 
         staged_input = await self._stage_input_document(
@@ -1039,7 +1398,7 @@ class RunsService:
         if safe_mode_enabled:
             command.append("--safe-mode")
 
-        runner = ADEProcessRunner(command=command, run_dir=run_dir, env=env)
+        runner = EngineSubprocessRunner(command=command, run_dir=run_dir, env=env)
 
         summary: dict[str, Any] | None = None
         paths_snapshot = RunPathsSnapshot()
@@ -1051,7 +1410,9 @@ class RunsService:
                 await self._append_log(run.id, frame.message, stream=frame.stream)
                 continue
 
-            # Engine AdeEvents flow through unchanged.
+            # Engine AdeEvents flow through unchanged, mirrored to logs in debug mode.
+            self._log_event_debug(frame, origin="engine")
+
             serialized = frame.model_dump_json()
             await self._append_log(run.id, serialized, stream="stdout")
             yield frame
@@ -1097,6 +1458,17 @@ class RunsService:
             payload=payload,
         )
 
+        logger.info(
+            "run.engine.execute.completed",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                status=completion.status.value,
+                exit_code=completion.exit_code,
+            ),
+        )
+
     async def _stream_validate_only_run(
         self,
         *,
@@ -1105,6 +1477,14 @@ class RunsService:
     ) -> AsyncIterator[RunStreamFrame]:
         """Handle validate-only runs without invoking the engine."""
 
+        logger.info(
+            "run.validate_only.start",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+            ),
+        )
         placeholder_summary = await self._build_placeholder_summary(
             run=run,
             status=RunStatus.SUCCEEDED,
@@ -1130,6 +1510,14 @@ class RunsService:
                 "run_summary": placeholder_summary.model_dump(mode="json"),
             },
         )
+        logger.info(
+            "run.validate_only.completed",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+            ),
+        )
 
     async def _stream_safe_mode_skip(
         self,
@@ -1139,6 +1527,17 @@ class RunsService:
         safe_mode: SafeModeStatus,
     ) -> AsyncIterator[RunStreamFrame]:
         """Handle safe-mode runs by skipping engine execution."""
+
+        logger.info(
+            "run.safe_mode.skip.start",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                safe_mode_enabled=True,
+                safe_mode_detail=safe_mode.detail,
+            ),
+        )
 
         message = f"Safe mode enabled: {safe_mode.detail}"
         log = await self._append_log(
@@ -1186,6 +1585,15 @@ class RunsService:
             },
         )
 
+        logger.info(
+            "run.safe_mode.skip.completed",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+            ),
+        )
+
     async def _stream_engine_run(
         self,
         *,
@@ -1211,6 +1619,16 @@ class RunsService:
             async for frame in execute_engine(**kwargs):  # type: ignore[misc]
                 yield frame
 
+        logger.debug(
+            "run.engine.stream.start",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                safe_mode_enabled=safe_mode_enabled,
+            ),
+        )
+
         try:
             async for event in self._supervisor.stream(
                 run.id,
@@ -1221,6 +1639,14 @@ class RunsService:
                     continue
                 yield event
         except asyncio.CancelledError:
+            logger.warning(
+                "run.engine.stream.cancelled",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                ),
+            )
             placeholder_summary = await self._build_placeholder_summary(
                 run=run,
                 status=RunStatus.CANCELED,
@@ -1250,7 +1676,14 @@ class RunsService:
             )
             raise
         except Exception as exc:  # pragma: no cover - defensive
-            logger.exception("ADE run failed", extra={"run_id": run.id})
+            logger.exception(
+                "run.engine.stream.error",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                ),
+            )
             log = await self._append_log(
                 run.id,
                 f"ADE run failed: {exc}",
@@ -1304,6 +1737,10 @@ class RunsService:
     async def _require_run(self, run_id: str) -> Run:
         run = await self._runs.get(run_id)
         if run is None:
+            logger.warning(
+                "run.require_run.not_found",
+                extra=log_context(run_id=run_id),
+            )
             raise RunNotFoundError(run_id)
         return run
 
@@ -1313,6 +1750,13 @@ class RunsService:
             document_id=document_id,
         )
         if document is None:
+            logger.warning(
+                "run.require_document.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                ),
+            )
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
 
@@ -1343,11 +1787,19 @@ class RunsService:
     async def _resolve_configuration(self, configuration_id: str) -> Configuration:
         configuration = await self._configs.get_by_id(configuration_id)
         if configuration is None:
+            logger.warning(
+                "run.config.resolve.not_found",
+                extra=log_context(configuration_id=configuration_id),
+            )
             raise ConfigurationNotFoundError(configuration_id)
         if configuration.status == ConfigurationStatus.INACTIVE:
             logger.warning(
-                "Launching run for inactive configuration",
-                extra={"configuration_id": configuration_id},
+                "run.config.resolve.inactive",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    status=configuration.status.value,
+                ),
             )
         return configuration
 
@@ -1374,7 +1826,28 @@ class RunsService:
             or configuration.built_content_digest != digest
             or force_rebuild
         )
+
+        logger.debug(
+            "run.env.ensure.start",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                current_build_status=getattr(configuration.build_status, "value", None),
+                force_rebuild=force_rebuild,
+                digest=digest,
+                venv_exists=venv_path.exists(),
+            ),
+        )
+
         if dirty:
+            logger.info(
+                "run.env.ensure.rebuild_needed",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    force_rebuild=force_rebuild,
+                ),
+            )
             await self._rebuild_configuration_env(
                 configuration=configuration,
                 config_root=config_root,
@@ -1383,6 +1856,15 @@ class RunsService:
             )
             if configuration.last_build_id is None:  # defensive for patched rebuilds
                 configuration.last_build_id = f"build_{uuid4().hex}"  # type: ignore[attr-defined]
+        else:
+            logger.info(
+                "run.env.ensure.reuse",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    build_id=configuration.last_build_id,
+                ),
+            )
         return venv_path, configuration.last_build_id
 
     async def _rebuild_configuration_env(
@@ -1394,6 +1876,15 @@ class RunsService:
         digest: str,
     ) -> None:
         build_id = f"build_{uuid4().hex}"
+        logger.info(
+            "run.env.build.start",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                build_id=build_id,
+            ),
+        )
+
         configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
         configuration.last_build_started_at = utc_now()  # type: ignore[attr-defined]
         configuration.last_build_error = None  # type: ignore[attr-defined]
@@ -1401,25 +1892,44 @@ class RunsService:
         await self._session.flush()
 
         artifacts: BuilderArtifactsEvent | None = None
-        async for event in self._builder.build_stream(
-            build_id=build_id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            target_path=venv_path,
-            config_path=config_root,
-            engine_spec=self._settings.engine_spec,
-            pip_cache_dir=(
-                Path(self._settings.pip_cache_dir)
-                if self._settings.pip_cache_dir
-                else None
-            ),
-            python_bin=self._settings.python_bin,
-            timeout=float(self._settings.build_timeout.total_seconds()),
-        ):
-            if isinstance(event, BuilderArtifactsEvent):
-                artifacts = event
+        try:
+            async for event in self._builder.build_stream(
+                build_id=build_id,
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                target_path=venv_path,
+                config_path=config_root,
+                engine_spec=self._settings.engine_spec,
+                pip_cache_dir=(
+                    Path(self._settings.pip_cache_dir)
+                    if self._settings.pip_cache_dir
+                    else None
+                ),
+                python_bin=self._settings.python_bin,
+                timeout=float(self._settings.build_timeout.total_seconds()),
+            ):
+                if isinstance(event, BuilderArtifactsEvent):
+                    artifacts = event
+        except Exception:
+            logger.exception(
+                "run.env.build.stream_error",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    build_id=build_id,
+                ),
+            )
+            raise
 
         if artifacts is None:
+            logger.warning(
+                "run.env.build.no_artifacts",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    build_id=build_id,
+                ),
+            )
             raise RunEnvironmentNotReadyError(
                 f"Build for configuration {configuration.id} did not return metadata"
             )
@@ -1442,12 +1952,30 @@ class RunsService:
         configuration.last_build_error = None  # type: ignore[attr-defined]
         await self._session.flush()
 
+        logger.info(
+            "run.env.build.success",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                build_id=build_id,
+            ),
+        )
+
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
             run.started_at = run.started_at or utc_now()
         run.status = status
         await self._session.commit()
         await self._session.refresh(run)
+        logger.debug(
+            "run.status.transition",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                status=run.status.value,
+            ),
+        )
         return run
 
     async def _complete_run(
@@ -1469,6 +1997,18 @@ class RunsService:
         run.canceled_at = utc_now() if status is RunStatus.CANCELED else None
         await self._session.commit()
         await self._session.refresh(run)
+
+        logger.info(
+            "run.complete",
+            extra=log_context(
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                status=run.status.value,
+                exit_code=run.exit_code,
+                has_error=bool(run.error_message),
+            ),
+        )
         return run
 
     async def _append_log(self, run_id: str, message: str, *, stream: str) -> RunLog:
@@ -1526,6 +2066,10 @@ class RunsService:
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
+            logger.warning(
+                "run.directory.escape_detected",
+                extra=log_context(workspace_id=workspace_id, run_id=run_id, path=str(candidate)),
+            )
             raise RunOutputMissingError("Requested path escapes runs directory") from None
         return candidate
 
@@ -1551,6 +2095,8 @@ class RunsService:
 
     @staticmethod
     def _format_mode_message(options: RunCreateOptions) -> str | None:
+        """Render a one-line banner describing special run modes, if any."""
+
         modes: list[str] = []
         if options.dry_run:
             modes.append("dry-run enabled")
@@ -1578,6 +2124,24 @@ class RunsService:
                 selected = options.input_sheet_names[0]
         return selected
 
+    # ------------------------------------------------------------------ #
+    # Internal helpers: event logging
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _log_event_debug(event: AdeEvent, *, origin: str) -> None:
+        """Emit ADE events to the console when debug logging is enabled."""
+
+        if not event_logger.isEnabledFor(logging.DEBUG):
+            return
+
+        event_logger.debug(
+            "[%s] %s %s",
+            origin,
+            event.type,
+            event.model_dump_json(),
+        )
+
     def _ade_event(
         self,
         *,
@@ -1595,12 +2159,14 @@ class RunsService:
             "source": "api",
         }
         extra = payload or {}
-        return AdeEvent(
+        event = AdeEvent(
             type=type_,
             created_at=utc_now(),
             **base,
             **extra,
         )
+        self._log_event_debug(event, origin="api")
+        return event
 
     @property
     def settings(self) -> Settings:

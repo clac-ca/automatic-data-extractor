@@ -47,7 +47,7 @@ Keep short inline status notes as you go.
   - `RunStatus`, `RunErrorCode`, `RunPhase`, `EngineInfo`
   - `RunRequest`, `RunPaths`, `RunContext`
   - `RunError`, `RunResult`
-  - `RawTable`, table indices & row index semantics
+  - `ExtractedTable`, table indices & row index semantics
 - [x] Implement column‑mapping and normalization types in `core/types.py`:
   - `ScoreContribution`, `MappedColumn`, `UnmappedColumn`, `ColumnMap`, `MappedTable` per `04-column-mapping.md`
   - `ValidationIssue`, `NormalizedTable` per `05-normalization-and-validation.md`
@@ -107,7 +107,7 @@ Keep short inline status notes as you go.
 
 ### 3. IO & table detection
 
-**Goal:** Turn `RunRequest` into concrete source files and `RawTable` objects via streaming IO and row detectors.
+**Goal:** Turn `RunRequest` into concrete source files and `ExtractedTable` objects via streaming IO and row detectors.
 
 - [x] Implement IO helpers (`infra/io.py`) per `03-io-and-table-detection.md` §3–§4:
   - `list_input_files(input_dir: Path) -> list[Path]`
@@ -123,33 +123,33 @@ Keep short inline status notes as you go.
   - Integrate `ade_config.row_detectors.*`:
     - Call all `detect_*` functions per row
     - Aggregate `"scores"` into header/data scores
-  - Implement heuristics to construct one or more `RawTable` per sheet:
+  - Implement heuristics to construct one or more `ExtractedTable` per sheet:
     - Detect header row
     - Identify contiguous data rows
     - Support multiple tables per sheet via `table_index`
   - Respect `RunRequest.input_files` vs `input_dir` and `input_sheets`
-  - Emit `RawTable` with correct `source_file`, `source_sheet`, row indices
+  - Emit `ExtractedTable` with correct `source_file`, `source_sheet`, row indices
 - [x] Add unit tests for IO + extraction:
   - `tests/pipeline/test_io.py`: CSV/XLSX iteration, sheet filters, unsupported extensions
-  - `tests/pipeline/test_extract.py`: simple detectors → predictable `RawTable` boundaries, multiple tables per sheet, empty sheets/table‑missing behavior
+  - `tests/pipeline/test_extract.py`: simple detectors → predictable `ExtractedTable` boundaries, multiple tables per sheet, empty sheets/table‑missing behavior
 
 ---
 
 ### 4. Column mapping
 
-**Goal:** Map physical columns in `RawTable` to canonical fields defined in the manifest, and produce debuggable mapping metadata.
+**Goal:** Map physical columns in `ExtractedTable` to canonical fields defined in the manifest, and produce debuggable mapping metadata.
 
 - [x] Ensure all column mapping data structures are in `core/types.py` per `04-column-mapping.md`:
   - `ScoreContribution`, `MappedColumn`, `UnmappedColumn`, `ColumnMap`, `MappedTable`
 - [x] Implement mapping logic (`core/pipeline/mapping.py`) per `04-column-mapping.md` (“Mapping Pipeline”):
-  - For each `RawTable`:
+  - For each `ExtractedTable`:
     - Build per‑column samples (`column_values`, `column_values_sample`)
     - For each field/module:
-      - Call all `detect_*` with the correct script API (1‑based `column_index`, `header`, samples, `RawTable`, etc.)
+      - Call all `detect_*` with the correct script API (1‑based `column_index`, `header`, samples, `ExtractedTable`, etc.)
       - Aggregate scores into `ScoreContribution`s
     - Choose the winning `(field, column)` mappings above the engine’s threshold
     - Generate `UnmappedColumn`s for remaining physical columns when manifest writer settings say so
-  - Produce `MappedTable` from `RawTable` + `ColumnMap`
+  - Produce `MappedTable` from `ExtractedTable` + `ColumnMap`
 - [x] Add unit tests for mapping scoring, thresholds, tie‑breaking (`tests/pipeline/test_mapping.py`):
   - Single clear winner per field
   - Ties resolved by manifest `columns.order`
@@ -166,7 +166,7 @@ Keep short inline status notes as you go.
   - `ValidationIssue`, `NormalizedTable`
 - [x] Implement transform + validate integration (`core/pipeline/normalize.py`) per `05-normalization-and-validation.md` §4–§5:
   - Build canonical row dict (`field` → raw value) per data row:
-    - Use `MappedTable.column_map`, `RawTable.data_rows`, and manifest `columns.order`
+    - Use `MappedTable.column_map`, `ExtractedTable.data_rows`, and manifest `columns.order`
     - Use original sheet indices (`row_index`) for all downstream reporting
   - Transform phase:
     - Call `transform` (if present) per field in manifest order
@@ -225,7 +225,7 @@ Keep short inline status notes as you go.
 - Ensure `HookContext` fields align with docs: `run`, `state`, `manifest`, `artifact`, `events`, `tables`, `workbook`, `result`, `logger`, `stage`
 - [x] Wire hooks into pipeline phases per `08-hooks-and-extensibility.md` §6–§7: helper available; pipeline orchestrator still to hook up.
   - `on_run_start` after manifest + telemetry setup, before IO
-  - `on_after_extract` after `RawTable[]` built
+  - `on_after_extract` after `ExtractedTable[]` built
   - `on_after_mapping` after `MappedTable[]` built
   - `on_before_save` after `NormalizedTable[]`, with live `Workbook`
   - `on_run_end` after `RunResult` computed (success or failure)
@@ -368,7 +368,7 @@ Implement the `ade_engine` runtime (core engine, pipeline, config integration, a
 
 You will:
 
-* Implement the **core runtime types and pipeline** (`RunRequest`, `RunContext`, `RunResult`, `RawTable`, `MappedTable`, `NormalizedTable`) per `01-engine-runtime.md`, `03-io-and-table-detection.md`, `04-column-mapping.md`, and `05-normalization-and-validation.md`.
+* Implement the **core runtime types and pipeline** (`RunRequest`, `RunContext`, `RunResult`, `ExtractedTable`, `MappedTable`, `NormalizedTable`) per `01-engine-runtime.md`, `03-io-and-table-detection.md`, `04-column-mapping.md`, and `05-normalization-and-validation.md`.
 * Implement the **config runtime** (`config` loader, manifest schema, column + hook registries) per `02-config-and-manifest.md`.
 * Implement **IO, mapping, normalization, artifact, telemetry, hooks, and CLI** in a test‑driven, layered way per `03–10` docs.
 
@@ -437,11 +437,11 @@ apps/ade-engine/
     core/
       __init__.py        # re-export Engine, RunRequest, RunResult, RunStatus, core types
       engine.py          # Engine.run orchestration per 01-engine-runtime.md §4
-      types.py           # RunRequest, RunResult, RunContext, RunPaths, RawTable, MappedTable, NormalizedTable, enums
+      types.py           # RunRequest, RunResult, RunContext, RunPaths, ExtractedTable, MappedTable, NormalizedTable, enums
       errors.py          # AdeEngineError + config/input/hook/pipeline errors → RunErrorCode
       pipeline/
         __init__.py      # re-export execute_pipeline, phase helpers
-        extract.py       # IO + RawTable detection per 03-io-and-table-detection.md
+        extract.py       # IO + ExtractedTable detection per 03-io-and-table-detection.md
         mapping.py       # column mapping per 04-column-mapping.md
         normalize.py     # transforms + validators per 05-normalization-and-validation.md
         write.py         # workbook writing per 05-normalization-and-validation.md §6

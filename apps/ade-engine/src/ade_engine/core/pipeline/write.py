@@ -14,12 +14,12 @@ from ade_engine.infra.telemetry import PipelineLogger
 
 
 def _generate_sheet_name(table: NormalizedTable) -> str:
-    raw = table.mapped.raw
-    base = raw.source_file.stem
-    if raw.source_sheet:
-        base = f"{base}-{raw.source_sheet}"
-    if raw.table_index > 0:
-        base = f"{base}-{raw.table_index + 1}"
+    extracted = table.mapped.extracted
+    base = extracted.source_file.stem
+    if extracted.source_sheet:
+        base = f"{base}-{extracted.source_sheet}"
+    if extracted.table_index > 0:
+        base = f"{base}-{extracted.table_index + 1}"
 
     # Excel limits sheet titles to 31 characters.
     base = base[:31] if len(base) > 31 else base
@@ -69,9 +69,9 @@ def write_workbook(
     sorted_tables = sorted(
         tables,
         key=lambda t: (
-            t.mapped.raw.source_file.name,
-            t.mapped.raw.source_sheet or "",
-            t.mapped.raw.table_index,
+            t.mapped.extracted.source_file.name,
+            t.mapped.extracted.source_sheet or "",
+            t.mapped.extracted.table_index,
         ),
     )
 
@@ -114,7 +114,7 @@ def write_workbook(
         for row in table.rows:
             sheet.append(row)
 
-    run_hooks(
+    before_save_context = run_hooks(
         HookStage.ON_BEFORE_SAVE,
         cfg.hooks,
         run=ctx,
@@ -124,6 +124,7 @@ def write_workbook(
         result=None,
         logger=pipeline_logger,
     )
+    workbook = before_save_context.workbook or workbook
 
     output_path = output_dir / "normalized.xlsx"
     workbook.save(output_path)

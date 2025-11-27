@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.db import generate_ulid
 from ade_api.shared.pagination import paginate_sql
 from ade_api.shared.types import OrderBy
@@ -52,6 +53,7 @@ class DocumentsService:
         documents_dir = settings.documents_dir
         if documents_dir is None:
             raise RuntimeError("Document storage directory is not configured")
+
         self._repository = DocumentsRepository(session)
 
     async def create_document(
@@ -64,6 +66,18 @@ class DocumentsService:
         actor: User | None = None,
     ) -> DocumentOut:
         """Persist ``upload`` to storage and return the resulting metadata record."""
+
+        actor_id = cast(str | None, getattr(actor, "id", None))
+        logger.debug(
+            "document.create.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                user_id=actor_id,
+                upload_filename=upload.filename,
+                content_type=upload.content_type,
+                expires_at=expires_at,
+            ),
+        )
 
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
@@ -91,7 +105,7 @@ class DocumentsService:
             sha256=stored.sha256,
             stored_uri=stored_uri,
             attributes=metadata_payload,
-            uploaded_by_user_id=cast(str | None, getattr(actor, "id", None)),
+            uploaded_by_user_id=actor_id,
             status=DocumentStatus.UPLOADED.value,
             source=DocumentSource.MANUAL_UPLOAD.value,
             expires_at=expiration,
@@ -100,9 +114,22 @@ class DocumentsService:
         await self._capture_worksheet_metadata(document, storage.path_for(stored_uri))
         self._session.add(document)
         await self._session.flush()
+
         stmt = self._repository.base_query(workspace_id).where(Document.id == document_id)
         result = await self._session.execute(stmt)
         hydrated = result.scalar_one()
+
+        logger.info(
+            "document.create.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                user_id=actor_id,
+                content_type=document.content_type,
+                byte_size=document.byte_size,
+                expires_at=document.expires_at.isoformat() if document.expires_at else None,
+            ),
+        )
 
         return DocumentOut.model_validate(hydrated)
 
@@ -118,6 +145,19 @@ class DocumentsService:
         actor: User | None = None,
     ) -> DocumentPage:
         """Return paginated documents with the shared envelope."""
+
+        actor_id = cast(str | None, getattr(actor, "id", None))
+        logger.debug(
+            "document.list.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                user_id=actor_id,
+                page=page,
+                page_size=page_size,
+                include_total=include_total,
+                order_by=str(order_by),
+            ),
+        )
 
         stmt = (
             self._repository.base_query(workspace_id)
@@ -136,6 +176,20 @@ class DocumentsService:
         items = [DocumentOut.model_validate(item) for item in page_result.items]
         await self._attach_last_runs(workspace_id, items)
 
+        logger.info(
+            "document.list.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                user_id=actor_id,
+                page=page_result.page,
+                page_size=page_result.page_size,
+                count=len(items),
+                has_next=page_result.has_next,
+                has_previous=page_result.has_previous,
+                total=page_result.total if include_total else None,
+            ),
+        )
+
         return DocumentPage(
             items=items,
             page=page_result.page,
@@ -148,9 +202,23 @@ class DocumentsService:
     async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
+        logger.debug(
+            "document.get.start",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id),
+        )
         document = await self._get_document(workspace_id, document_id)
         payload = DocumentOut.model_validate(document)
         await self._attach_last_runs(workspace_id, [payload])
+
+        logger.info(
+            "document.get.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                status=document.status,
+                byte_size=document.byte_size,
+            ),
+        )
         return payload
 
     async def list_document_sheets(
@@ -161,6 +229,11 @@ class DocumentsService:
     ) -> list[DocumentSheet]:
         """Return worksheet descriptors for ``document_id``."""
 
+        logger.debug(
+            "document.sheets.list.start",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id),
+        )
+
         document = await self._get_document(workspace_id, document_id)
         cached_sheets = self._cached_worksheets(document)
         storage = self._storage_for(workspace_id)
@@ -170,12 +243,13 @@ class DocumentsService:
         if not exists:
             if cached_sheets:
                 logger.warning(
-                    "Serving cached worksheet metadata because the stored file is missing",
-                    extra={
-                        "document_id": document_id,
-                        "workspace_id": workspace_id,
-                        "stored_uri": document.stored_uri,
-                    },
+                    "document.sheets.cached_missing_file",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        document_id=document_id,
+                        stored_uri=document.stored_uri,
+                        cache_source="worksheets",
+                    ),
                 )
                 return cached_sheets
 
@@ -187,18 +261,27 @@ class DocumentsService:
         suffix = Path(document.original_filename).suffix.lower()
         if suffix == ".xlsx":
             try:
-                return await run_in_threadpool(self._inspect_workbook, path)
+                sheets = await run_in_threadpool(self._inspect_workbook, path)
+                logger.info(
+                    "document.sheets.list.success",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        document_id=document_id,
+                        sheet_count=len(sheets),
+                        kind="workbook",
+                    ),
+                )
+                return sheets
             except Exception as exc:  # pragma: no cover - defensive fallback
                 if cached_sheets:
                     logger.warning(
-                        "Serving cached worksheet metadata after workbook inspection failed",
-                        extra={
-                            "document_id": document_id,
-                            "workspace_id": workspace_id,
-                            "stored_uri": document.stored_uri,
-                            "reason": type(exc).__name__,
-                        },
-                        exc_info=True,
+                        "document.sheets.cached_after_inspection_error",
+                        extra=log_context(
+                            workspace_id=workspace_id,
+                            document_id=document_id,
+                            stored_uri=document.stored_uri,
+                            reason=type(exc).__name__,
+                        ),
                     )
                     return cached_sheets
 
@@ -209,21 +292,56 @@ class DocumentsService:
                 ) from exc
 
         if cached_sheets:
+            logger.info(
+                "document.sheets.list.success",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    sheet_count=len(cached_sheets),
+                    kind="cached",
+                ),
+            )
             return cached_sheets
 
         name = self._default_sheet_name(document.original_filename)
-        return [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
+        sheets = [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
+        logger.info(
+            "document.sheets.list.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                sheet_count=len(sheets),
+                kind="fallback",
+            ),
+        )
+        return sheets
 
     async def stream_document(
-        self, *, workspace_id: str, document_id: str
+        self,
+        *,
+        workspace_id: str,
+        document_id: str,
     ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
+
+        logger.debug(
+            "document.stream.start",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id),
+        )
 
         document = await self._get_document(workspace_id, document_id)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
         exists = await run_in_threadpool(path.exists)
         if not exists:
+            logger.warning(
+                "document.stream.missing_file",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                    stored_uri=document.stored_uri,
+                ),
+            )
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -236,6 +354,14 @@ class DocumentsService:
                 async for chunk in stream:
                     yield chunk
             except FileNotFoundError as exc:
+                logger.warning(
+                    "document.stream.file_lost_during_stream",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        document_id=document_id,
+                        stored_uri=document.stored_uri,
+                    ),
+                )
                 raise DocumentFileMissingError(
                     document_id=document_id,
                     stored_uri=document.stored_uri,
@@ -243,6 +369,16 @@ class DocumentsService:
 
         payload = DocumentOut.model_validate(document)
         await self._attach_last_runs(workspace_id, [payload])
+
+        logger.info(
+            "document.stream.ready",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                byte_size=document.byte_size,
+                content_type=document.content_type,
+            ),
+        )
         return payload, _guarded()
 
     async def delete_document(
@@ -254,15 +390,35 @@ class DocumentsService:
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
+        actor_id = cast(str | None, getattr(actor, "id", None))
+        logger.debug(
+            "document.delete.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                user_id=actor_id,
+            ),
+        )
+
         document = await self._get_document(workspace_id, document_id)
         now = datetime.now(tz=UTC)
         document.deleted_at = now
         if actor is not None:
-            document.deleted_by_user_id = getattr(actor, "id", None)
+            document.deleted_by_user_id = actor_id
         await self._session.flush()
 
         storage = self._storage_for(workspace_id)
         await storage.delete(document.stored_uri)
+
+        logger.info(
+            "document.delete.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                user_id=actor_id,
+                stored_uri=document.stored_uri,
+            ),
+        )
 
     async def _get_document(self, workspace_id: str, document_id: str) -> Document:
         document = await self._repository.get_document(
@@ -270,6 +426,13 @@ class DocumentsService:
             document_id=document_id,
         )
         if document is None:
+            logger.warning(
+                "document.get.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=document_id,
+                ),
+            )
             raise DocumentNotFoundError(document_id)
         return document
 
@@ -283,23 +446,50 @@ class DocumentsService:
         if not documents:
             return
 
+        logger.debug(
+            "document.last_run.attach.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_count=len(documents),
+            ),
+        )
+
         run_summaries = await self._latest_stream_runs(
-            workspace_id=workspace_id, documents=documents
+            workspace_id=workspace_id,
+            documents=documents,
         )
         for document in documents:
             summary = run_summaries.get(document.id)
             if summary is None:
                 document.last_run = None
                 continue
-
             document.last_run = summary
 
+        logger.debug(
+            "document.last_run.attach.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                matched_documents=len(run_summaries),
+            ),
+        )
+
     async def _latest_stream_runs(
-        self, *, workspace_id: str, documents: Sequence[DocumentOut]
+        self,
+        *,
+        workspace_id: str,
+        documents: Sequence[DocumentOut],
     ) -> dict[str, DocumentLastRun]:
         ids = [document.id for document in documents if document.id]
         if not ids:
             return {}
+
+        logger.debug(
+            "document.last_run.query.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_count=len(ids),
+            ),
+        )
 
         stmt = (
             select(Run)
@@ -307,7 +497,10 @@ class DocumentsService:
                 Run.workspace_id == workspace_id,
                 Run.input_document_id.in_(ids),
             )
-            .order_by(Run.finished_at.desc().nullslast(), Run.started_at.desc().nullslast())
+            .order_by(
+                Run.finished_at.desc().nullslast(),
+                Run.started_at.desc().nullslast(),
+            )
         )
         result = await self._session.execute(stmt)
         rows = result.scalars().all()
@@ -341,6 +534,15 @@ class DocumentsService:
                 run_at=timestamp,
                 message=message,
             )
+
+        logger.debug(
+            "document.last_run.query.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_count=len(ids),
+                matched_runs=len(latest),
+            ),
+        )
         return latest
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
@@ -431,14 +633,13 @@ class DocumentsService:
                 sheets = [DocumentSheet(name=sheet_name, index=0, kind="file", is_active=True)]
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.warning(
-                "Unable to cache worksheet metadata",
-                extra={
-                    "document_id": document.id,
-                    "workspace_id": document.workspace_id,
-                    "stored_uri": document.stored_uri,
-                    "reason": type(exc).__name__,
-                },
-                exc_info=True,
+                "document.sheets.cache_failed",
+                extra=log_context(
+                    workspace_id=document.workspace_id,
+                    document_id=document.id,
+                    stored_uri=document.stored_uri,
+                    reason=type(exc).__name__,
+                ),
             )
             return
 

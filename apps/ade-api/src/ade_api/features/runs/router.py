@@ -29,6 +29,7 @@ from ade_api.shared.dependency import (
     require_authenticated,
     require_csrf,
 )
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import PageParams
 
 from .models import RunStatus
@@ -84,7 +85,10 @@ async def _execute_run_background(
         try:
             await service.run_to_completion(context=context, options=options)
         except Exception:  # pragma: no cover - defensive logging
-            logger.exception("Background ADE run failed", extra={"run_id": context.run_id})
+            logger.exception(
+                "run.background.failed",
+                extra=log_context(run_id=context.run_id),
+            )
 
 
 @router.post(
@@ -132,7 +136,10 @@ async def create_run_endpoint(
             async for event in service.stream_run(context=context, options=payload.options):
                 yield _event_bytes(event)
         except RunNotFoundError:
-            logger.warning("Run disappeared during streaming", extra={"run_id": context.run_id})
+            logger.warning(
+                "run.stream.missing",
+                extra=log_context(run_id=context.run_id),
+            )
             return
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")

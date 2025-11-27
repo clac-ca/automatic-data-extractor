@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from ade_engine.config.loader import load_config_runtime
-from ade_engine.core.pipeline import map_raw_tables, normalize_table
-from ade_engine.core.types import RawTable, RunContext, RunPaths, RunRequest
+from ade_engine.core.pipeline import map_extracted_tables, normalize_table
+from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -29,7 +29,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], append_unmapped: bool = 
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -112,7 +112,7 @@ def transform(*, value, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -123,7 +123,7 @@ def transform(*, value, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
 
     assert normalized.rows == [["ALICE", 31, "x"], ["BOB", 41, "y"]]
@@ -155,7 +155,7 @@ def validate(*, value, row_index, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -166,7 +166,7 @@ def validate(*, value, row_index, **_):
         last_data_row_index=7,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
 
     assert normalized.rows[0][0] == "invalid"
@@ -193,7 +193,7 @@ def detect_header(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -204,7 +204,7 @@ def detect_header(*, header, **_):
         last_data_row_index=1,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
 
     assert normalized.rows == []

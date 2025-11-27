@@ -33,7 +33,7 @@ def _write_manifest(pkg_dir: Path) -> Path:
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {"order": [], "fields": {}},
         "hooks": {
             "on_run_start": [],
