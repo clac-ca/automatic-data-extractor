@@ -111,6 +111,9 @@ def run_dev(
             "--port",
             env["DEV_BACKEND_PORT"],
             "--reload",
+            # Restrict reload watching to backend code (avoid data/ workspace churn).
+            "--reload-dir",
+            str(common.BACKEND_DIR),
         ]
         tasks.append(("backend", backend_cmd, common.REPO_ROOT, env))
 
