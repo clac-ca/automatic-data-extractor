@@ -8,12 +8,13 @@ import json
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
+from sqlalchemy.engine import URL, make_url
 
 # ---- Defaults ---------------------------------------------------------------
 
@@ -317,6 +318,10 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(5, ge=1)       # ignored by sqlite; relevant for Postgres
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
+    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(
+        default="sql_password"
+    )
+    database_mi_client_id: str | None = None
 
     # JWT
     jwt_secret: SecretStr = Field(default=SecretStr("development-secret"))
@@ -391,6 +396,25 @@ class Settings(BaseSettings):
     @classmethod
     def _v_scopes(cls, v: Any) -> list[str]:
         return _list_from_env(v, default=["openid", "email", "profile"])
+
+    @field_validator("database_auth_mode", mode="before")
+    @classmethod
+    def _v_db_auth_mode(cls, v: Any) -> str:
+        if v in (None, ""):
+            return "sql_password"
+        mode = str(v).strip().lower()
+        if mode not in {"sql_password", "managed_identity"}:
+            raise ValueError(
+                "ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'"
+            )
+        return mode
+
+    @field_validator("database_mi_client_id", mode="before")
+    @classmethod
+    def _v_db_mi_client(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
 
     @field_validator(
         "jwt_access_ttl",
@@ -498,6 +522,31 @@ class Settings(BaseSettings):
         if not self.database_dsn:
             sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
             self.database_dsn = f"sqlite+aiosqlite:///{sqlite.as_posix()}"
+
+        url = make_url(self.database_dsn)
+        query = dict(url.query or {})
+
+        if url.get_backend_name() == "mssql" and "driver" not in query:
+            query["driver"] = "ODBC Driver 18 for SQL Server"
+
+        if self.database_auth_mode == "managed_identity":
+            if url.get_backend_name() != "mssql":
+                raise ValueError(
+                    "ADE_DATABASE_AUTH_MODE=managed_identity requires an mssql+pyodbc DSN"
+                )
+            url = URL.create(
+                drivername=url.drivername,
+                username=None,
+                password=None,
+                host=url.host,
+                port=url.port,
+                database=url.database,
+                query=query,
+            )
+        elif query != url.query:
+            url = url.set(query=query)
+
+        self.database_dsn = url.render_as_string(hide_password=False)
 
         oidc_config = {
             "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
