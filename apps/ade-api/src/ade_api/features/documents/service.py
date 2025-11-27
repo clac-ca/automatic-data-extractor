@@ -492,39 +492,46 @@ class DocumentsService:
             ),
         )
 
-        bind = self._session.get_bind()
-        dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
-
+        latest: dict[str, DocumentLastRun] = {}
         stmt = (
-            select(Run)
+            select(
+                Run.id,
+                Run.input_document_id,
+                Run.status,
+                Run.finished_at,
+                Run.started_at,
+                Run.created_at,
+                Run.summary,
+                Run.error_message,
+            )
             .where(
                 Run.workspace_id == workspace_id,
                 Run.input_document_id.in_(ids),
             )
             .order_by(
+                Run.input_document_id,
                 *nulls_last(Run.finished_at.desc()),
                 *nulls_last(Run.started_at.desc()),
             )
         )
         result = await self._session.execute(stmt)
-        rows = result.scalars().all()
-        latest: dict[str, DocumentLastRun] = {}
-        for run in rows:
-            doc_id = run.input_document_id
+        rows = result.all()
+        for row in rows:
+            doc_id = row.input_document_id
             if doc_id is None or doc_id in latest:
                 continue
-            timestamp = run.finished_at or run.started_at or run.created_at
+            timestamp = row.finished_at or row.started_at or row.created_at
             status_value = (
-                RunStatus.CANCELED if run.status == RunStatus.CANCELED else run.status
+                RunStatus.CANCELED if row.status == RunStatus.CANCELED else row.status
             )
             summary_payload = None
-            if run.summary:
+            if row.summary:
                 try:
-                    parsed = json.loads(run.summary)
+                    parsed = json.loads(row.summary)
                     summary_payload = parsed if isinstance(parsed, dict) else None
                 except json.JSONDecodeError:
                     summary_payload = None
-            message = run.error_message
+            message = row.error_message
             if summary_payload:
                 run_block = summary_payload.get("run", {})
                 message = (
@@ -533,9 +540,9 @@ class DocumentsService:
                     or run_block.get("status")
                 )
             latest[doc_id] = DocumentLastRun(
-                run_id=run.id,
+                run_id=row.id,
                 status=status_value,
-                run_at=timestamp,
+                run_at=timestamp if timestamp is None or timestamp.tzinfo else timestamp.replace(tzinfo=UTC),
                 message=message,
             )
 

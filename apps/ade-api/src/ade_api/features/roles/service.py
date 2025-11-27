@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import json
 import logging
 import re
-import asyncio
+from datetime import UTC, datetime, timedelta
 from collections import deque
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -23,6 +26,7 @@ from ade_api.features.workspaces.models import Workspace
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import Page, paginate_sql
 
+from ..system_settings.models import SystemSetting
 from .models import (
     Permission,
     Principal,
@@ -44,6 +48,13 @@ logger = logging.getLogger(__name__)
 
 _REGISTRY_SYNCED = False
 _REGISTRY_LOCK = asyncio.Lock()
+_REGISTRY_VERSION_KEY = "roles-registry-version"
+_REGISTRY_CACHE_TTL = timedelta(minutes=10)
+_registry_cache_expires_at: datetime | None = None
+_registry_cached_version: str | None = None
+_GLOBAL_ROLE_CACHE_TTL = timedelta(minutes=10)
+_global_role_cache_expires_at: datetime | None = None
+_global_role_cache: dict[str, str] = {}
 
 GLOBAL_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {
     "Roles.ReadWrite.All": ("Roles.Read.All",),
@@ -616,6 +627,20 @@ async def get_global_role_by_slug(
 ) -> Role | None:
     """Return the global role matching ``slug`` if present."""
 
+    global _global_role_cache_expires_at, _global_role_cache
+    now = datetime.now(tz=UTC)
+    cached_id = _global_role_cache.get(slug)
+    if (
+        cached_id is not None
+        and _global_role_cache_expires_at is not None
+        and now < _global_role_cache_expires_at
+    ):
+        logger.debug(
+            "roles.global.get_by_slug.cached",
+            extra=log_context(slug=slug, role_id=cached_id),
+        )
+        return await session.get(Role, cached_id)
+
     logger.debug(
         "roles.global.get_by_slug.start",
         extra=log_context(slug=slug),
@@ -628,6 +653,12 @@ async def get_global_role_by_slug(
     )
     result = await session.execute(stmt)
     role = result.scalar_one_or_none()
+
+    if role is not None:
+        _global_role_cache[slug] = cast(str, role.id)
+        _global_role_cache_expires_at = now + _GLOBAL_ROLE_CACHE_TTL
+    else:
+        _global_role_cache.pop(slug, None)
 
     logger.debug(
         "roles.global.get_by_slug.completed",
@@ -1437,6 +1468,74 @@ async def assign_global_role(
     return assignment
 
 
+async def assign_global_role_if_missing(
+    *, session: AsyncSession, user_id: str, role_id: str
+) -> RoleAssignment | None:
+    """Assign a global role if not already present.
+
+    Returns the assignment when created; returns None when it already existed.
+    """
+
+    logger.debug(
+        "roles.assignments.assign_global_if_missing.start",
+        extra=log_context(user_id=user_id, role_id=role_id),
+    )
+
+    user = await session.get(User, user_id)
+    if user is None:
+        msg = f"User '{user_id}' not found"
+        logger.warning(
+            "roles.assignments.assign_global_if_missing.user_not_found",
+            extra=log_context(user_id=user_id),
+        )
+        raise ValueError(msg)
+
+    principal = await ensure_user_principal(session=session, user=user)
+
+    existing_stmt = (
+        select(RoleAssignment)
+        .where(
+            RoleAssignment.principal_id == principal.id,
+            RoleAssignment.role_id == role_id,
+            RoleAssignment.scope_type == ScopeType.GLOBAL,
+            RoleAssignment.scope_id.is_(None),
+        )
+        .limit(1)
+    )
+    result = await session.execute(existing_stmt)
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        logger.debug(
+            "roles.assignments.assign_global_if_missing.already_exists",
+            extra=log_context(
+                assignment_id=existing.id,
+                user_id=user_id,
+                principal_id=principal.id,
+                role_id=role_id,
+            ),
+        )
+        return None
+
+    assignment = await assign_role(
+        session=session,
+        principal_id=principal.id,
+        role_id=role_id,
+        scope_type=ScopeType.GLOBAL,
+        scope_id=None,
+    )
+
+    logger.info(
+        "roles.assignments.assign_global_if_missing.created",
+        extra=log_context(
+            assignment_id=assignment.id,
+            user_id=user_id,
+            principal_id=principal.id,
+            role_id=role_id,
+        ),
+    )
+    return assignment
+
+
 async def delete_role_assignment(
     *,
     session: AsyncSession,
@@ -1546,13 +1645,73 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
     Pass ``force=True`` for startup/maintenance flows that must refresh.
     """
 
-    global _REGISTRY_SYNCED
-    if _REGISTRY_SYNCED and not force:
+    global _REGISTRY_SYNCED, _registry_cache_expires_at, _registry_cached_version
+
+    now = datetime.now(tz=UTC)
+    current_version = _compute_registry_version()
+
+    existing_permission_count = await session.scalar(select(func.count()).select_from(Permission))
+    existing_role_count = await session.scalar(select(func.count()).select_from(Role))
+
+    if (
+        not force
+        and _REGISTRY_SYNCED
+        and _registry_cached_version == current_version
+        and _registry_cache_expires_at is not None
+        and now < _registry_cache_expires_at
+        and existing_permission_count
+        and existing_role_count
+    ):
+        logger.debug(
+            "roles.registry.sync.skip_cached",
+            extra=log_context(version=current_version),
+        )
         return
 
     async with _REGISTRY_LOCK:
-        if _REGISTRY_SYNCED and not force:
-            return
+        if (
+            not force
+            and _REGISTRY_SYNCED
+            and _registry_cached_version == current_version
+            and _registry_cache_expires_at is not None
+            and now < _registry_cache_expires_at
+        ):
+            current_permission_count = await session.scalar(
+                select(func.count()).select_from(Permission)
+            )
+            current_role_count = await session.scalar(
+                select(func.count()).select_from(Role)
+            )
+            if current_permission_count and current_role_count:
+                logger.debug(
+                    "roles.registry.sync.skip_cached_locked",
+                    extra=log_context(version=current_version),
+                )
+                return
+            # Cached version is valid but the DB is empty; force reseed
+            force = True
+
+        stored_version = await _fetch_registry_version(session=session)
+
+        # If no version is persisted, always seed to ensure registry exists.
+        if stored_version is None:
+            logger.debug("roles.registry.sync.missing_version_seed", extra=log_context())
+            force = True
+
+        if not force and stored_version == current_version:
+            existing_permission_count = await session.scalar(select(func.count()).select_from(Permission))
+            existing_role_count = await session.scalar(select(func.count()).select_from(Role))
+            if existing_permission_count and existing_role_count:
+                _REGISTRY_SYNCED = True
+                _registry_cached_version = current_version
+                _registry_cache_expires_at = now + _REGISTRY_CACHE_TTL
+                logger.debug(
+                    "roles.registry.sync.skip_persisted",
+                    extra=log_context(version=current_version),
+                )
+                return
+            # Missing data; force reseed
+            force = True
 
         logger.info("roles.registry.sync.start", extra=log_context())
 
@@ -1661,6 +1820,11 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
         await session.commit()
 
         _REGISTRY_SYNCED = True
+        _registry_cached_version = current_version
+        _registry_cache_expires_at = now + _REGISTRY_CACHE_TTL
+        await _persist_registry_version(
+            session=session, version=current_version, synced_at=now
+        )
 
         logger.info(
             "roles.registry.sync.success",
@@ -1669,6 +1833,72 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
                 system_role_count=len(SYSTEM_ROLES),
             ),
         )
+
+
+def _compute_registry_version() -> str:
+    payload = {
+        "permissions": [
+            (
+                definition.key,
+                definition.resource,
+                definition.action,
+                definition.scope.value,
+                definition.label,
+                definition.description,
+            )
+            for definition in PERMISSIONS
+        ],
+        "system_roles": [
+            (
+                definition.slug,
+                definition.name,
+                definition.scope_type.value,
+                definition.description,
+                definition.permissions,
+                definition.built_in,
+                definition.editable,
+            )
+            for definition in SYSTEM_ROLES
+        ],
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(serialized).hexdigest()
+
+
+async def _fetch_registry_version(*, session: AsyncSession) -> str | None:
+    stmt = (
+        select(SystemSetting)
+        .where(SystemSetting.key == _REGISTRY_VERSION_KEY)
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    record = result.scalar_one_or_none()
+    value = record.value if record else None
+    if not value:
+        return None
+    version = value.get("version")
+    return str(version) if version is not None else None
+
+
+async def _persist_registry_version(
+    *,
+    session: AsyncSession,
+    version: str,
+    synced_at: datetime,
+) -> None:
+    payload = {"version": version, "synced_at": synced_at.isoformat()}
+    result = await session.execute(
+        select(SystemSetting)
+        .where(SystemSetting.key == _REGISTRY_VERSION_KEY)
+        .limit(1)
+    )
+    record = result.scalar_one_or_none()
+    if record is None:
+        record = SystemSetting(key=_REGISTRY_VERSION_KEY, value=payload)
+        session.add(record)
+    else:
+        record.value = payload
+    await session.commit()
 
 
 __all__ = [

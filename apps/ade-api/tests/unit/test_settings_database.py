@@ -25,5 +25,5 @@ def test_managed_identity_strips_credentials_from_dsn() -> None:
 
     assert "user:secret" not in settings.database_dsn
     assert settings.database_dsn.startswith(
-        "mssql+pyodbc://contoso.database.windows.net:1433/ade"
+        "mssql+aioodbc://contoso.database.windows.net:1433/ade"
     )

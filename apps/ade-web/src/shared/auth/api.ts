@@ -1,12 +1,15 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
 import type { components } from "@schema";
+import type { WorkspaceListPage } from "@features/Workspace/api/workspaces-api";
+import type { SafeModeStatus } from "@shared/system/api";
 
 export const sessionKeys = {
   root: ["auth"] as const,
   detail: () => [...sessionKeys.root, "session"] as const,
   providers: () => [...sessionKeys.root, "providers"] as const,
   setupStatus: () => [...sessionKeys.root, "setup-status"] as const,
+  bootstrap: () => [...sessionKeys.root, "bootstrap"] as const,
 };
 
 export async function fetchSession(options: RequestOptions = {}): Promise<SessionEnvelope | null> {
@@ -64,6 +67,47 @@ export function normalizeSessionEnvelope(envelope: SessionEnvelopeWire): Session
     expires_at: envelope.expires_at ?? null,
     refresh_expires_at: envelope.refresh_expires_at ?? null,
     return_to: envelope.return_to ?? null,
+  };
+}
+
+export type BootstrapEnvelope = Readonly<{
+  user: SessionEnvelope["user"];
+  global_roles: string[];
+  global_permissions: string[];
+  workspaces: WorkspaceListPage;
+  safe_mode: SafeModeStatus;
+}>;
+
+export async function fetchBootstrap(options: RequestOptions = {}): Promise<BootstrapEnvelope | null> {
+  try {
+    const { data } = await client.GET("/api/v1/bootstrap", {
+      signal: options.signal,
+    });
+    if (!data) {
+      return null;
+    }
+    return normalizeBootstrapEnvelope(data);
+  } catch (error: unknown) {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function normalizeBootstrapEnvelope(payload: unknown): BootstrapEnvelope {
+  const envelope = payload as Partial<BootstrapEnvelope>;
+  if (!envelope || !envelope.user) {
+    throw new Error("Unexpected bootstrap payload shape returned by the server.");
+  }
+  return {
+    user: normalizeSessionEnvelope(envelope.user as SessionEnvelopeWire),
+    global_roles: Array.isArray(envelope.global_roles) ? envelope.global_roles.map(String) : [],
+    global_permissions: Array.isArray(envelope.global_permissions)
+      ? envelope.global_permissions.map(String)
+      : [],
+    workspaces: envelope.workspaces as WorkspaceListPage,
+    safe_mode: (envelope.safe_mode ?? { enabled: false, detail: "" }) as SafeModeStatus,
   };
 }
 

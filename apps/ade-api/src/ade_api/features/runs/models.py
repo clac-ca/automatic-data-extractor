@@ -94,6 +94,13 @@ class Run(Base):
         Index("runs_workspace_idx", "workspace_id"),
         Index("runs_status_idx", "status"),
         Index("runs_input_document_idx", "input_document_id"),
+        Index(
+            "runs_workspace_input_document_finished_idx",
+            "workspace_id",
+            "input_document_id",
+            "finished_at",
+            "started_at",
+        ),
         Index("runs_configuration_version_idx", "configuration_version_id"),
         Index("runs_workspace_created_idx", "workspace_id", "created_at"),
         Index("runs_retry_of_idx", "retry_of_run_id"),
