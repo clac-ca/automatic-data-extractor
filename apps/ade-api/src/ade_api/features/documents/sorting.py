@@ -11,8 +11,8 @@ SORT_FIELDS = {
     "created_at": (Document.created_at.asc(), Document.created_at.desc()),
     "status": (Document.status.asc(), Document.status.desc()),
     "last_run_at": (
-        nulls_last(Document.last_run_at.asc()),
-        nulls_last(Document.last_run_at.desc()),
+        tuple(nulls_last(Document.last_run_at.asc())),
+        tuple(nulls_last(Document.last_run_at.desc())),
     ),
     "byte_size": (Document.byte_size.asc(), Document.byte_size.desc()),
     "source": (Document.source.asc(), Document.source.desc()),

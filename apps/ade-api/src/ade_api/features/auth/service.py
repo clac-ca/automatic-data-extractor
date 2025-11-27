@@ -346,7 +346,7 @@ class AuthService:
 
         # Ensure the canonical permission and role registry exists before
         # provisioning the first administrator.
-        await sync_permission_registry(session=session)
+        await sync_permission_registry(session=session, force=True)
 
         async with session.begin():
             setting = await self._system_settings.get_for_update(

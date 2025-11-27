@@ -52,7 +52,7 @@ def create_application_lifespan(
         await ensure_database_ready(settings)
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:
-            await sync_permission_registry(session=session)
+            await sync_permission_registry(session=session, force=True)
         yield
 
     return lifespan

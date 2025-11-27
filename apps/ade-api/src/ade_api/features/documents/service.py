@@ -22,6 +22,7 @@ from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.db import generate_ulid
 from ade_api.shared.pagination import paginate_sql
+from ade_api.shared.sql import nulls_last
 from ade_api.shared.types import OrderBy
 from ade_api.storage_layout import workspace_documents_root
 
@@ -491,6 +492,9 @@ class DocumentsService:
             ),
         )
 
+        bind = self._session.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+
         stmt = (
             select(Run)
             .where(
@@ -498,8 +502,8 @@ class DocumentsService:
                 Run.input_document_id.in_(ids),
             )
             .order_by(
-                Run.finished_at.desc().nullslast(),
-                Run.started_at.desc().nullslast(),
+                *nulls_last(Run.finished_at.desc()),
+                *nulls_last(Run.started_at.desc()),
             )
         )
         result = await self._session.execute(stmt)

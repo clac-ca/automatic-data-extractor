@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import asyncio
 from collections import deque
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -40,6 +41,9 @@ from .registry import (
 from .schemas import RoleCreate, RoleUpdate
 
 logger = logging.getLogger(__name__)
+
+_REGISTRY_SYNCED = False
+_REGISTRY_LOCK = asyncio.Lock()
 
 GLOBAL_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {
     "Roles.ReadWrite.All": ("Roles.Read.All",),
@@ -1535,118 +1539,136 @@ async def unassign_role(
     )
 
 
-async def sync_permission_registry(*, session: AsyncSession) -> None:
-    """Synchronise the ``permissions`` and system ``roles`` tables."""
+async def sync_permission_registry(*, session: AsyncSession, force: bool = False) -> None:
+    """Synchronise the ``permissions`` and system ``roles`` tables.
 
-    logger.info("roles.registry.sync.start", extra=log_context())
+    By default runs once per process to avoid repeated work on every request.
+    Pass ``force=True`` for startup/maintenance flows that must refresh.
+    """
 
-    registry = {definition.key: definition for definition in PERMISSIONS}
-    result = await session.execute(select(Permission))
-    existing_permissions = {permission.key: permission for permission in result.scalars()}
+    global _REGISTRY_SYNCED
+    if _REGISTRY_SYNCED and not force:
+        return
 
-    # Upsert registered permissions
-    for definition in PERMISSIONS:
-        record = existing_permissions.get(definition.key)
-        if record is None:
-            session.add(
-                Permission(
-                    key=definition.key,
-                    resource=definition.resource,
-                    action=definition.action,
-                    scope_type=definition.scope,
-                    label=definition.label,
-                    description=definition.description,
+    async with _REGISTRY_LOCK:
+        if _REGISTRY_SYNCED and not force:
+            return
+
+        logger.info("roles.registry.sync.start", extra=log_context())
+
+        registry = {definition.key: definition for definition in PERMISSIONS}
+        result = await session.execute(select(Permission))
+        existing_permissions = {
+            permission.key: permission for permission in result.scalars()
+        }
+
+        # Upsert registered permissions
+        for definition in PERMISSIONS:
+            record = existing_permissions.get(definition.key)
+            if record is None:
+                session.add(
+                    Permission(
+                        key=definition.key,
+                        resource=definition.resource,
+                        action=definition.action,
+                        scope_type=definition.scope,
+                        label=definition.label,
+                        description=definition.description,
+                    )
                 )
+            else:
+                record.resource = definition.resource
+                record.action = definition.action
+                record.scope_type = definition.scope
+                record.label = definition.label
+                record.description = definition.description
+
+        # Remove permissions that are no longer defined
+        obsolete = set(existing_permissions) - set(registry)
+        if obsolete:
+            await session.execute(
+                delete(Permission).where(Permission.key.in_(sorted(obsolete)))
             )
-        else:
-            record.resource = definition.resource
-            record.action = definition.action
-            record.scope_type = definition.scope
-            record.label = definition.label
-            record.description = definition.description
 
-    # Remove permissions that are no longer defined
-    obsolete = set(existing_permissions) - set(registry)
-    if obsolete:
-        await session.execute(
-            delete(Permission).where(Permission.key.in_(sorted(obsolete)))
-        )
+        await session.flush()
 
-    await session.flush()
-
-    # Sync system roles and their permissions
-    role_slugs = [definition.slug for definition in SYSTEM_ROLES]
-    result = await session.execute(
-        select(Role).where(
-            Role.slug.in_(role_slugs),
-            Role.scope_id.is_(None),
-        )
-    )
-    existing_roles = {role.slug: role for role in result.scalars()}
-
-    for definition in SYSTEM_ROLES:
-        role = existing_roles.get(definition.slug)
-        if role is None:
-            role = Role(
-                slug=definition.slug,
-                name=definition.name,
-                scope_type=definition.scope_type,
-                scope_id=None,
-                description=definition.description,
-                built_in=definition.built_in,
-                editable=definition.editable,
-            )
-            session.add(role)
-            await session.flush([role])
-        else:
-            role.name = definition.name
-            role.scope_type = definition.scope_type
-            role.scope_id = None
-            role.description = definition.description
-            role.built_in = definition.built_in
-            role.editable = definition.editable
-
+        # Sync system roles and their permissions
+        role_slugs = [definition.slug for definition in SYSTEM_ROLES]
         result = await session.execute(
-            select(Permission.key, RolePermission.permission_id)
-            .join(RolePermission, RolePermission.permission_id == Permission.id)
-            .where(RolePermission.role_id == role.id)
-        )
-        current_permissions = {key: permission_id for key, permission_id in result.all()}
-        desired_permissions = set(definition.permissions)
-
-        additions = desired_permissions - set(current_permissions)
-        if additions:
-            permission_map = await resolve_permission_ids(session, additions)
-            session.add_all(
-                [
-                    RolePermission(
-                        role_id=role.id,
-                        permission_id=permission_map[key],
-                    )
-                    for key in additions
-                ]
+            select(Role).where(
+                Role.slug.in_(role_slugs),
+                Role.scope_id.is_(None),
             )
+        )
+        existing_roles = {role.slug: role for role in result.scalars()}
 
-        extras = set(current_permissions) - desired_permissions
-        if extras:
-            removal_ids = [current_permissions[key] for key in extras]
-            if removal_ids:
-                await session.execute(
-                    delete(RolePermission).where(
-                        RolePermission.role_id == role.id,
-                        RolePermission.permission_id.in_(removal_ids),
-                    )
+        for definition in SYSTEM_ROLES:
+            role = existing_roles.get(definition.slug)
+            if role is None:
+                role = Role(
+                    slug=definition.slug,
+                    name=definition.name,
+                    scope_type=definition.scope_type,
+                    scope_id=None,
+                    description=definition.description,
+                    built_in=definition.built_in,
+                    editable=definition.editable,
+                )
+                session.add(role)
+                await session.flush([role])
+            else:
+                role.name = definition.name
+                role.scope_type = definition.scope_type
+                role.scope_id = None
+                role.description = definition.description
+                role.built_in = definition.built_in
+                role.editable = definition.editable
+
+            result = await session.execute(
+                select(Permission.key, RolePermission.permission_id)
+                .join(RolePermission, RolePermission.permission_id == Permission.id)
+                .where(RolePermission.role_id == role.id)
+            )
+            current_permissions = {
+                key: permission_id for key, permission_id in result.all()
+            }
+            desired_permissions = set(definition.permissions)
+
+            additions = desired_permissions - set(current_permissions)
+            if additions:
+                permission_map = await resolve_permission_ids(session, additions)
+                session.add_all(
+                    [
+                        RolePermission(
+                            role_id=role.id,
+                            permission_id=permission_map[key],
+                        )
+                        for key in additions
+                    ]
                 )
 
-    await session.commit()
+            extras = set(current_permissions) - desired_permissions
+            if extras:
+                removal_ids = [current_permissions[key] for key in extras]
+                if removal_ids:
+                    await session.execute(
+                        delete(RolePermission).where(
+                            RolePermission.role_id == role.id,
+                            RolePermission.permission_id.in_(removal_ids),
+                        )
+                    )
 
-    logger.info(
-        "roles.registry.sync.success",
-        extra=log_context(
-            permission_count=len(PERMISSIONS),
-            system_role_count=len(SYSTEM_ROLES),
-        ),
-    )
+        await session.commit()
+
+        _REGISTRY_SYNCED = True
+
+        logger.info(
+            "roles.registry.sync.success",
+            extra=log_context(
+                permission_count=len(PERMISSIONS),
+                system_role_count=len(SYSTEM_ROLES),
+            ),
+        )
 
 
 __all__ = [

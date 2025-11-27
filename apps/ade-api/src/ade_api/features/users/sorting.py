@@ -13,14 +13,14 @@ SORT_FIELDS = {
         func.lower(User.email).desc(),
     ),
     "display_name": (
-        nulls_last(func.lower(User.display_name).asc()),
-        nulls_last(func.lower(User.display_name).desc()),
+        tuple(nulls_last(func.lower(User.display_name).asc())),
+        tuple(nulls_last(func.lower(User.display_name).desc())),
     ),
     "created_at": (User.created_at.asc(), User.created_at.desc()),
     "updated_at": (User.updated_at.asc(), User.updated_at.desc()),
     "last_login_at": (
-        nulls_last(User.last_login_at.asc()),
-        nulls_last(User.last_login_at.desc()),
+        tuple(nulls_last(User.last_login_at.asc())),
+        tuple(nulls_last(User.last_login_at.desc())),
     ),
     "failed_login_count": (User.failed_login_count.asc(), User.failed_login_count.desc()),
     "is_active": (User.is_active.asc(), User.is_active.desc()),

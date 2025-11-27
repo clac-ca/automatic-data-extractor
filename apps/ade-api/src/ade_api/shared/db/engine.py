@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 from collections.abc import Callable
 from pathlib import Path
@@ -13,6 +14,7 @@ from alembic.config import Config
 from azure.identity import DefaultAzureCredential
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Connection, Engine, make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -25,6 +27,8 @@ _ENGINE: AsyncEngine | None = None
 _ENGINE_KEY: tuple[Any, ...] | None = None
 _BOOTSTRAP_LOCK = asyncio.Lock()
 _BOOTSTRAPPED_URLS: set[str] = set()
+
+logger = logging.getLogger(__name__)
 
 
 def _is_managed_identity(settings: Settings, url: URL) -> bool:
@@ -148,8 +152,32 @@ def ensure_sqlite_database_directory(url: URL) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _assert_pyodbc_available(url: URL) -> None:
+    """Raise a clearer error when pyodbc/system drivers are missing for MSSQL."""
+
+    if url.get_backend_name() != "mssql":
+        return
+
+    try:
+        import pyodbc  # noqa: F401
+    except ImportError as exc:  # pragma: no cover - depends on host system deps
+        msg = (
+            "pyodbc could not load the ODBC driver. Install unixODBC and the "
+            "Microsoft ODBC Driver 18 for SQL Server to use Azure SQL. "
+            "On Debian/Ubuntu add the Microsoft repo "
+            "(`curl -sSL -O https://packages.microsoft.com/config/ubuntu/$(grep VERSION_ID /etc/os-release | cut -d '\"' -f 2)/packages-microsoft-prod.deb && "
+            "sudo dpkg -i packages-microsoft-prod.deb && sudo apt-get update`) "
+            "then install with `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`. "
+            "For local dev you can avoid this by using SQLite (ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite). "
+            f"DSN: {url.render_as_string(hide_password=True)}"
+        )
+        logger.error(msg)
+        raise RuntimeError(msg) from exc
+
+
 def _create_engine(settings: Settings) -> AsyncEngine:
     url = build_database_url(settings)
+    _assert_pyodbc_available(url)
     connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {
         "echo": settings.database_echo,
@@ -246,9 +274,23 @@ def _upgrade_database(settings: Settings, connection: Connection | None = None) 
 
 def _apply_migrations(settings: Settings) -> None:
     url = build_database_url(settings)
+    _assert_pyodbc_available(url)
     if url.get_backend_name() == "sqlite":
         ensure_sqlite_database_directory(url)
-    _upgrade_database(settings)
+    try:
+        _upgrade_database(settings)
+    except OperationalError as exc:
+        if url.get_backend_name() == "mssql":
+            msg = (
+                "Failed to connect to SQL Server / Azure SQL (login timeout). "
+                f"DSN: {url.render_as_string(hide_password=True)}. "
+                "Check network/firewall rules to port 1433, server name, credentials or managed identity, "
+                "and that the ODBC driver can reach the host. "
+                "For local dev you can switch to SQLite with "
+                "ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite."
+            )
+            logger.error(msg, exc_info=True)
+        raise
 
 
 async def ensure_database_ready(settings: Settings | None = None) -> None:
