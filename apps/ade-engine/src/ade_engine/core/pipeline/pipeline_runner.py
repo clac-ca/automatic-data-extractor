@@ -10,7 +10,7 @@ from ade_engine.config.hook_registry import HookStage
 from ade_engine.config.loader import ConfigRuntime
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.pipeline.extract import extract_raw_tables
-from ade_engine.core.pipeline.mapping import map_raw_tables
+from ade_engine.core.pipeline.mapping import map_extracted_tables
 from ade_engine.core.pipeline.normalize import normalize_table
 from ade_engine.core.pipeline.write import write_workbook
 from ade_engine.core.types import NormalizedTable, RunContext, RunRequest
@@ -18,7 +18,7 @@ from ade_engine.infra.telemetry import PipelineLogger
 
 
 def _collect_processed_files(tables: Iterable[NormalizedTable]) -> tuple[str, ...]:
-    names = {table.mapped.raw.source_file.name for table in tables}
+    names = {table.mapped.extracted.source_file.name for table in tables}
     return tuple(sorted(names))
 
 
@@ -36,7 +36,7 @@ def execute_pipeline(
 
     pipeline_logger.pipeline_phase("extracting")
     raw_tables = extract_raw_tables(request=request, run=run, runtime=runtime, logger=logger)
-    run_hooks(
+    extract_context = run_hooks(
         HookStage.ON_AFTER_EXTRACT,
         runtime.hooks,
         run=run,
@@ -46,10 +46,11 @@ def execute_pipeline(
         result=None,
         logger=pipeline_logger,
     )
+    raw_tables = extract_context.tables or []
 
     pipeline_logger.pipeline_phase("mapping")
-    mapped_tables = map_raw_tables(tables=raw_tables, runtime=runtime, run=run, logger=logger)
-    run_hooks(
+    mapped_tables = map_extracted_tables(tables=raw_tables, runtime=runtime, run=run, logger=logger)
+    mapping_context = run_hooks(
         HookStage.ON_AFTER_MAPPING,
         runtime.hooks,
         run=run,
@@ -59,6 +60,7 @@ def execute_pipeline(
         result=None,
         logger=pipeline_logger,
     )
+    mapped_tables = mapping_context.tables or []
 
     pipeline_logger.pipeline_phase("normalizing")
     normalized_tables = [

@@ -253,7 +253,7 @@ Key tests:
     sheets.
 * Table detection:
 
-  * Produces `RawTable` with correct header/data ranges given basic
+  * Produces `ExtractedTable` with correct header/data ranges given basic
     row detectors.
   * Handles empty sheets or sheets with no detectable table gracefully.
 
@@ -325,7 +325,7 @@ Key tests:
 * Tables section:
 
   * `mapping`, `unmapped`, and `validation` entries reflect the given
-    `RawTable`, `MappedTable`, and `NormalizedTable`.
+    `ExtractedTable`, `MappedTable`, and `NormalizedTable`.
 * Telemetry events:
 
   * `FileEventSink` writes well‑formed NDJSON.

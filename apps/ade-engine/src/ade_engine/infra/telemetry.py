@@ -214,7 +214,7 @@ class PipelineLogger:
     def record_table(self, table: NormalizedTable) -> None:
         """Emit a run.table.summary event for a single normalized table."""
 
-        raw = table.mapped.raw
+        extracted = table.mapped.extracted
         validation = _aggregate_validation(table.validation_issues)
 
         mapped_columns = table.mapped.column_map.mapped_columns
@@ -246,10 +246,10 @@ class PipelineLogger:
         self._emit(
             "run.table.summary",
             payload={
-                "table_id": f"tbl_{raw.table_index}",
-                "source_file": str(raw.source_file),
-                "source_sheet": raw.source_sheet,
-                "table_index": raw.table_index,
+                "table_id": f"tbl_{extracted.table_index}",
+                "source_file": str(extracted.source_file),
+                "source_sheet": extracted.source_sheet,
+                "table_index": extracted.table_index,
                 "row_count": len(table.rows),
                 "column_count": column_count,
                 "mapped_fields": mapped_field_names,
@@ -261,9 +261,9 @@ class PipelineLogger:
                     "unmapped_columns": unmapped_columns_payload,
                 },
                 "details": {
-                    "header_row": raw.header_row_index,
-                    "first_data_row": raw.first_data_row_index,
-                    "last_data_row": raw.last_data_row_index,
+                    "header_row": extracted.header_row_index,
+                    "first_data_row": extracted.first_data_row_index,
+                    "last_data_row": extracted.last_data_row_index,
                 },
             },
         )

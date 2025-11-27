@@ -114,7 +114,7 @@ class RunResult:
 
 
 @dataclass
-class RawTable:
+class ExtractedTable:
     """Table detected in a source file before mapping or normalization."""
 
     source_file: Path
@@ -168,9 +168,9 @@ class ColumnMap:
 
 @dataclass
 class MappedTable:
-    """Wrapper pairing a raw table with its column map."""
+    """Wrapper pairing an extracted table with its column map."""
 
-    raw: RawTable
+    extracted: ExtractedTable
     column_map: ColumnMap
 
 

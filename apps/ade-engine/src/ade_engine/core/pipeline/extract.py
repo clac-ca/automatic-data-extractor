@@ -1,7 +1,7 @@
-"""Row detector integration and RawTable construction.
+"""Row detector integration and ExtractedTable construction.
 
 This module bridges streamed sheet rows with config-provided row detectors to
-produce :class:`ade_engine.core.types.RawTable` instances. The implementation is
+produce :class:`ade_engine.core.types.ExtractedTable` instances. The implementation is
 intentionally lightweight but deterministic, mirroring the behavior outlined in
 ``docs/03-io-and-table-detection.md``.
 """
@@ -21,7 +21,7 @@ from openpyxl import load_workbook
 
 from ade_engine.config.loader import ConfigRuntime
 from ade_engine.core.errors import ConfigError, InputError
-from ade_engine.core.types import RawTable, RunContext, RunRequest
+from ade_engine.core.types import ExtractedTable, RunContext, RunRequest
 from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows, list_input_files
 
 RowDetectorFn = Callable[..., Mapping[str, Any]]
@@ -129,8 +129,8 @@ def _detect_tables_for_sheet(
     source_sheet: str | None,
     header_threshold: float = HEADER_SCORE_THRESHOLD,
     data_threshold: float = DATA_SCORE_THRESHOLD,
-) -> list[RawTable]:
-    tables: list[RawTable] = []
+) -> list[ExtractedTable]:
+    tables: list[ExtractedTable] = []
     table_index = 0
     position = 0
     while position < len(scored_rows):
@@ -147,7 +147,7 @@ def _detect_tables_for_sheet(
 
         if data_rows:
             tables.append(
-                RawTable(
+                ExtractedTable(
                     source_file=source_file,
                     source_sheet=source_sheet,
                     table_index=table_index,
@@ -170,7 +170,7 @@ def extract_raw_tables(
     run: RunContext,
     runtime: ConfigRuntime,
     logger: logging.Logger | None = None,
-) -> list[RawTable]:
+) -> list[ExtractedTable]:
     """Detect tables across CSV/XLSX inputs using config row detectors."""
 
     logger = logger or logging.getLogger(__name__)
@@ -184,7 +184,7 @@ def extract_raw_tables(
     else:
         raise InputError("RunRequest must include either input_files or input_dir")
 
-    detected: list[RawTable] = []
+    detected: list[ExtractedTable] = []
     for source_file in source_files:
         suffix = source_file.suffix.lower()
         if suffix == ".csv":

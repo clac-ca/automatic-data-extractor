@@ -10,7 +10,7 @@ from ade_engine.core.types import (
     MappedColumn,
     MappedTable,
     NormalizedTable,
-    RawTable,
+    ExtractedTable,
     RunContext,
     RunError,
     RunErrorCode,
@@ -30,7 +30,7 @@ def build_manifest() -> ManifestContext:
         "version": "1.0.0",
         "name": "Test Config",
         "description": "",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": ["id", "email"],
             "fields": {
@@ -47,7 +47,7 @@ def build_manifest() -> ManifestContext:
         version="1.0.0",
         name="Test Config",
         description="",
-        script_api_version=1,
+        script_api_version=2,
         columns=ColumnsConfig(
             order=["id", "email"],
             fields={
@@ -79,7 +79,7 @@ def build_run_context(tmp_path: Path) -> RunContext:
 
 
 def build_normalized_table(tmp_path: Path) -> NormalizedTable:
-    raw_table = RawTable(
+    raw_table = ExtractedTable(
         source_file=tmp_path / "input" / "data.xlsx",
         source_sheet="Sheet1",
         table_index=0,
@@ -112,7 +112,7 @@ def build_normalized_table(tmp_path: Path) -> NormalizedTable:
             UnmappedColumn(header="Notes", source_column_index=2, output_header="raw_notes"),
         ],
     )
-    mapped_table = MappedTable(raw=raw_table, column_map=column_map)
+    mapped_table = MappedTable(extracted=raw_table, column_map=column_map)
     validation_issues = [
         ValidationIssue(
             row_index=3,

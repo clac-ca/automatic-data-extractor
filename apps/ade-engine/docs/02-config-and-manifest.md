@@ -98,7 +98,7 @@ The manifest has a small number of top-level sections:
   "version": "1.2.3",
   "name": "My Config",
   "description": "Optional description",
-  "script_api_version": 1,
+  "script_api_version": 2,
 
   "columns": {
     "order": ["member_id", "email", "..."],
@@ -186,11 +186,12 @@ class ManifestContext:
     def writer(self) -> WriterConfig: ...
 ```
 
-This gives the pipeline and config runtime a clean, typed surface:
+This gives the pipeline and config runtime a clean, typed surface exposed via
+`RunContext` and script entrypoints (row detectors, column detectors, hooks):
 
-* `ctx.manifest.columns.order` to drive output ordering,
-* `ctx.manifest.columns.fields["email"]` to look up script modules and labels,
-* `ctx.manifest.writer.append_unmapped_columns` for output behavior.
+* `run.manifest.columns.order` to drive output ordering,
+* `run.manifest.columns.fields["email"]` to look up script modules and labels,
+* `run.manifest.writer.append_unmapped_columns` for output behavior.
 
 The **same `ManifestContext` instance** is stored on `RunContext` and passed to
 scripts via the `run` argument (see script API docs).
@@ -399,10 +400,12 @@ class ConfigRuntime:
 The engine typically does:
 
 ```python
-cfg = load_config_runtime(package=request.config_package,
-                          manifest_path=request.manifest_path)
+cfg = load_config_runtime(
+    package=request.config_package,
+    manifest_path=request.manifest_path,
+)
 
-ctx.manifest = cfg.manifest
+run_context.manifest = cfg.manifest
 # pass `cfg` into pipeline stages for access to column registry and hooks
 ```
 
@@ -422,7 +425,7 @@ Two fields in the manifest control how configurations evolve over time:
 
   * Identifies the manifest schema version.
   * Used by the engine and tooling to decide which Pydantic model to use.
-* `script_api_version` (e.g. `1`):
+* `script_api_version` (e.g. `2`):
 
   * Indicates which **script API contract** the config expects
     (parameters of detectors, transforms, validators, hooks).

@@ -9,7 +9,7 @@ from ade_engine.config.hook_registry import HookStage
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.errors import HookError
 from ade_engine.core.hooks import run_hooks
-from ade_engine.core.types import RawTable, RunContext, RunPaths, RunResult, RunStatus
+from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunResult, RunStatus
 from ade_engine.infra.telemetry import PipelineLogger
 
 
@@ -63,7 +63,7 @@ def test_hooks_execute_in_order_and_allow_mutation(tmp_path: Path, monkeypatch: 
         "version": "1.0.0",
         "name": "Hook Config",
         "description": None,
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {"order": [], "fields": {}},
         "hooks": {
             "on_run_start": [],
@@ -86,17 +86,23 @@ def test_hooks_execute_in_order_and_allow_mutation(tmp_path: Path, monkeypatch: 
     (hooks_dir / "__init__.py").write_text("")
     (hooks_dir / "first.py").write_text(
         """
-def run(context):
-    context.state.setdefault("order", []).append("first")
-    context.logger.note("first note", stage=context.stage.value)
+def run(*, tables, run, logger, **_):
+    order = run.state.setdefault("order", [])
+    order.append("first")
+    logger.note("first note", stage="first")
+    return tables[:1]
 """
     )
     (hooks_dir / "second.py").write_text(
         """
 def run(*, tables, run, logger, **_):
-    run.state.setdefault("order", []).append("second")
-    tables[0].header_row.append("extra")
-    logger.note("second note", stage="kw")
+    order = run.state.setdefault("order", [])
+    order.append("second")
+    assert len(tables or []) == 1, "expect first hook to trim tables to one entry"
+    if tables:
+        tables[0].header_row.append("extra")
+    logger.note("second note", stage="second")
+    return tables
 """
     )
 
@@ -104,7 +110,7 @@ def run(*, tables, run, logger, **_):
     run, logger = _run_context(runtime, tmp_path)
 
     tables = [
-        RawTable(
+        ExtractedTable(
             source_file=run.paths.input_dir / "sample.csv",
             source_sheet=None,
             table_index=1,
@@ -137,7 +143,7 @@ def test_hook_failure_raises_hookerror(tmp_path: Path, monkeypatch: pytest.Monke
         "version": "1.0.0",
         "name": "Hook Config",
         "description": None,
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {"order": [], "fields": {}},
         "hooks": {
             "on_run_start": [],

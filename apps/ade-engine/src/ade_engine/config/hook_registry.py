@@ -12,7 +12,7 @@ from openpyxl import Workbook
 
 from ade_engine.core.errors import ConfigError
 from ade_engine.config.manifest_context import ManifestContext
-from ade_engine.core.types import MappedTable, NormalizedTable, RawTable, RunContext, RunResult
+from ade_engine.core.types import MappedTable, NormalizedTable, ExtractedTable, RunContext, RunResult
 from ade_engine.infra.telemetry import PipelineLogger
 
 
@@ -33,7 +33,7 @@ class HookContext:
     run: RunContext
     state: dict[str, Any]
     manifest: ManifestContext
-    tables: list[RawTable | MappedTable | NormalizedTable] | None
+    tables: list[ExtractedTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None
     logger: PipelineLogger
