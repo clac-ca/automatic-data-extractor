@@ -1108,3 +1108,378 @@ class InvalidDepthError(Exception):
 
 class DestinationExistsError(Exception):
     """Raised when rename target exists without overwrite preconditions."""
+
+
+def _ensure_editable_status(configuration: Configuration) -> None:
+    if configuration.status != ConfigurationStatus.DRAFT:
+        raise ConfigStateError("configuration_not_editable")
+
+
+def _normalize_editable_path(path: str) -> PurePosixPath:
+    candidate = (path or "").strip()
+    if not candidate:
+        raise InvalidPathError("path_required")
+    normalized = PurePosixPath(candidate)
+    if normalized.is_absolute():
+        raise InvalidPathError("absolute_paths_not_allowed")
+    if any(part in ("..", "") for part in normalized.parts):
+        raise InvalidPathError("invalid_segments")
+    return normalized
+
+
+def _is_src_config_path(rel_path: PurePosixPath) -> bool:
+    parts = rel_path.parts
+    return len(parts) >= 2 and parts[0] == "src" and parts[1] == "ade_config"
+
+
+def _is_assets_path(rel_path: PurePosixPath) -> bool:
+    return len(rel_path.parts) >= 1 and rel_path.parts[0] == "assets"
+
+
+def _is_allowed_directory(rel_path: PurePosixPath) -> bool:
+    if rel_path == PurePosixPath(""):
+        return True
+    if any(part in _EXCLUDED_NAMES for part in rel_path.parts):
+        return False
+    return True
+
+
+def _ensure_allowed_file_path(root: Path, rel_path: PurePosixPath) -> Path:
+    if any(part in _EXCLUDED_NAMES for part in rel_path.parts):
+        raise PathNotAllowedError(f"{rel_path} is excluded")
+    if rel_path.suffix in _EXCLUDED_SUFFIXES or rel_path.name == ".DS_Store":
+        raise PathNotAllowedError(f"{rel_path} is excluded")
+    return root / rel_path.as_posix()
+
+
+def _ensure_allowed_directory_path(root: Path, rel_path: PurePosixPath) -> Path:
+    if not _is_allowed_directory(rel_path):
+        raise PathNotAllowedError(f"{rel_path} is outside editable roots")
+    if any(part in _EXCLUDED_NAMES for part in rel_path.parts):
+        raise PathNotAllowedError(f"{rel_path} is excluded")
+    return root / rel_path.as_posix()
+
+
+def _build_file_index(config_path: Path) -> dict:
+    entries: list[dict] = []
+    dir_paths: set[str] = set()
+    file_paths: set[str] = set()
+    child_counts: dict[str, int] = defaultdict(int)
+
+    def _register_entry(entry: dict) -> None:
+        entries.append(entry)
+        parent = entry["parent"]
+        child_counts[parent] += 1
+        if entry["kind"] == "dir":
+            dir_paths.add(entry["path"])
+            child_counts.setdefault(entry["path"], 0)
+        else:
+            file_paths.add(entry["path"])
+
+    def _add_directory(rel_path: PurePosixPath) -> None:
+        path_str = _format_directory_path(rel_path)
+        if path_str in dir_paths or path_str == "":
+            return
+        full_path = config_path / rel_path.as_posix()
+        stat = full_path.stat()
+        entry = {
+            "path": path_str,
+            "name": _entry_name(path_str),
+            "parent": _entry_parent(path_str),
+            "kind": "dir",
+            "depth": _compute_depth_value(path_str),
+            "size": None,
+            "mtime": _format_mtime(stat.st_mtime),
+            "etag": "",
+            "content_type": "inode/directory",
+            "has_children": False,
+        }
+        _register_entry(entry)
+
+    def _add_file(rel_path: PurePosixPath) -> None:
+        path_str = rel_path.as_posix()
+        if path_str in file_paths:
+            return
+        full_path = config_path / path_str
+        if not full_path.is_file():
+            return
+        stat = full_path.stat()
+        entry = {
+            "path": path_str,
+            "name": _entry_name(path_str),
+            "parent": _entry_parent(path_str),
+            "kind": "file",
+            "depth": _compute_depth_value(path_str),
+            "size": stat.st_size,
+            "mtime": _format_mtime(stat.st_mtime),
+            "etag": _compute_file_etag(full_path) or "",
+            "content_type": mimetypes.guess_type(path_str)[0] or "application/octet-stream",
+            "has_children": False,
+        }
+        _register_entry(entry)
+
+    _add_directory(PurePosixPath(""))
+    if not config_path.exists():
+        return {"entries": [], "dir_paths": dir_paths, "file_paths": file_paths}
+
+    for dirpath, dirnames, filenames in os.walk(config_path):
+        rel_dir = PurePosixPath(os.path.relpath(dirpath, config_path))
+        if rel_dir == PurePosixPath("."):
+            rel_dir = PurePosixPath("")
+        for name in list(dirnames):
+            rel = (rel_dir / name) if rel_dir else PurePosixPath(name)
+            if not _is_allowed_directory(rel) or name in _EXCLUDED_NAMES:
+                dirnames.remove(name)
+                continue
+            _add_directory(rel)
+        for filename in filenames:
+            rel = (rel_dir / filename) if rel_dir else PurePosixPath(filename)
+            if any(part in _EXCLUDED_NAMES for part in rel.parts):
+                continue
+            if rel.suffix in _EXCLUDED_SUFFIXES or rel.name == ".DS_Store":
+                continue
+            _add_file(rel)
+
+    for entry in entries:
+        if entry["kind"] == "dir":
+            entry["has_children"] = child_counts.get(entry["path"], 0) > 0
+
+    entries.sort(key=lambda item: item["path"])
+    return {"entries": entries, "dir_paths": dir_paths, "file_paths": file_paths}
+
+
+def _filter_entries(
+    entries: list[dict],
+    prefix: str,
+    prefix_is_file: bool,
+    depth_limit: int | None,
+    include_patterns: list[str],
+    exclude_patterns: list[str],
+) -> list[dict]:
+    if prefix_is_file:
+        subset = [entry for entry in entries if entry["path"] == prefix]
+    else:
+        subset = [entry for entry in entries if not prefix or entry["path"].startswith(prefix)]
+
+    if prefix and not prefix_is_file and prefix not in {entry["path"] for entry in subset}:
+        matching = [entry for entry in entries if entry["path"] == prefix]
+        subset = matching + subset
+
+    def _matches_include(path: str) -> bool:
+        if not include_patterns:
+            return True
+        return any(fnmatch.fnmatch(path, pattern) for pattern in include_patterns)
+
+    def _matches_exclude(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pattern) for pattern in exclude_patterns)
+
+    prefix_depth = -1 if prefix == "" else _compute_depth_value(prefix)
+
+    filtered: list[dict] = []
+    for entry in subset:
+        path = entry["path"]
+        if not _matches_include(path) or _matches_exclude(path):
+            continue
+        if depth_limit is not None and not prefix_is_file:
+            rel_depth = _relative_depth(entry["depth"], prefix_depth)
+            if rel_depth > depth_limit:
+                continue
+        filtered.append(entry)
+    return filtered
+
+
+def _sort_entries(entries: list[dict], sort: str, order: str) -> list[dict]:
+    reverse = order == "desc"
+
+    def _key(entry: dict):
+        if sort == "name":
+            return entry["name"]
+        if sort == "mtime":
+            return entry.get("mtime") or dt.datetime.fromtimestamp(0, tz=dt.UTC)
+        if sort == "size":
+            return entry.get("size") or 0
+        return entry["path"]
+
+    return sorted(entries, key=_key, reverse=reverse)
+
+
+def _compute_fileset_hash(entries: list[dict]) -> str:
+    digest = sha256()
+    for entry in sorted(entries, key=lambda item: item["path"]):
+        token = f"{entry['path']}\x00{entry.get('etag') or ''}\x00{entry.get('size') or 0}"
+        digest.update(token.encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _normalize_prefix_argument(
+    prefix: str,
+    dir_paths: set[str],
+    file_paths: set[str],
+) -> tuple[str, bool]:
+    candidate = (prefix or "").strip()
+    candidate = candidate.lstrip("/")
+    if not candidate:
+        return "", False
+    canonical = candidate.rstrip("/")
+    if canonical in dir_paths:
+        return canonical, False
+    if canonical in file_paths:
+        return canonical, True
+    return canonical, False
+
+
+def _coerce_depth(value: str) -> int | None:
+    if value not in {"0", "1", "infinity"}:
+        raise InvalidDepthError
+    if value == "infinity":
+        return None
+    return int(value)
+
+
+def _encode_page_token(offset: int) -> str:
+    data = str(offset).encode("ascii")
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _decode_page_token(token: str | None) -> int:
+    if not token:
+        return 0
+    padding = "=" * (-len(token) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + padding).decode("ascii")
+        value = int(decoded)
+    except (ValueError, binascii.Error) as exc:
+        raise InvalidPageTokenError from exc
+    if value < 0:
+        raise InvalidPageTokenError
+    return value
+
+
+def _relative_depth(entry_depth: int, prefix_depth: int) -> int:
+    return entry_depth - prefix_depth - 1
+
+
+def _format_directory_path(rel_path: PurePosixPath) -> str:
+    return rel_path.as_posix()
+
+
+def _entry_name(path: str) -> str:
+    if not path:
+        return ""
+    return path.split("/")[-1]
+
+
+def _entry_parent(path: str) -> str:
+    if not path or "/" not in path:
+        return ""
+    return path.rsplit("/", 1)[0]
+
+
+def _compute_depth_value(path: str) -> int:
+    if not path:
+        return -1
+    return path.count("/")
+
+
+def _resolve_entry_path(root: Path, rel_path: PurePosixPath) -> Path:
+    return root / rel_path.as_posix()
+
+
+def _stringify_path(rel_path: PurePosixPath, is_dir: bool) -> str:
+    return rel_path.as_posix()
+
+
+def _read_file_info(path: Path, rel_path: PurePosixPath, include_content: bool) -> dict:
+    data = path.read_bytes() if include_content else None
+    stat = path.stat()
+    etag = _compute_hash(data) if data is not None else _compute_file_etag(path)
+    content_type = mimetypes.guess_type(rel_path.as_posix())[0] or "application/octet-stream"
+    return {
+        "path": rel_path.as_posix(),
+        "data": data,
+        "etag": etag,
+        "size": stat.st_size,
+        "mtime": _format_mtime(stat.st_mtime),
+        "content_type": content_type,
+    }
+
+
+def _write_file_atomic(
+    path: Path,
+    rel_path: PurePosixPath,
+    content: bytes,
+    parents: bool,
+    if_match: str | None,
+    if_none_match: str | None,
+) -> dict:
+    if not path.parent.exists():
+        if parents:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            raise InvalidPathError("parent_missing")
+    exists = path.exists()
+    current_etag = _compute_file_etag(path) if exists else None
+    if exists:
+        if not if_match:
+            raise PreconditionRequiredError()
+        if canonicalize_etag(if_match) != current_etag:
+            raise PreconditionFailedError(current_etag or "")
+    else:
+        if if_none_match != "*":
+            raise PreconditionRequiredError()
+    tmp_path = path.parent / f".tmp-{secrets.token_hex(8)}"
+    with tmp_path.open("wb") as fh:
+        fh.write(content)
+        fh.flush()
+        os.fsync(fh.fileno())
+    tmp_path.replace(path)
+    stat = path.stat()
+    etag = _compute_hash(content)
+    return {
+        "path": rel_path.as_posix(),
+        "size": stat.st_size,
+        "mtime": _format_mtime(stat.st_mtime),
+        "etag": etag,
+        "created": not exists,
+    }
+
+
+def _delete_file_checked(path: Path, if_match: str | None) -> None:
+    if not path.exists():
+        raise FileNotFoundError(path.as_posix())
+    if not if_match:
+        raise PreconditionRequiredError()
+    current = _compute_file_etag(path)
+    if canonicalize_etag(if_match) != current:
+        raise PreconditionFailedError(current or "")
+    path.unlink()
+
+
+def _build_zip_bytes(config_path: Path) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        index = _build_file_index(config_path)
+        for entry in index["entries"]:
+            if entry["kind"] != "file":
+                continue
+            source = config_path / entry["path"]
+            if source.is_file():
+                archive.write(source, entry["path"])
+    buffer.seek(0)
+    return buffer.read()
+
+
+def _compute_file_etag(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    with path.open("rb") as fh:
+        digest = sha256(fh.read()).hexdigest()
+    return f"sha256:{digest}"
+
+
+def _compute_hash(data: bytes) -> str:
+    return f"sha256:{sha256(data).hexdigest()}"
+
+
+def _format_mtime(timestamp: float) -> dt.datetime:
+    return dt.datetime.fromtimestamp(timestamp, tz=dt.UTC)

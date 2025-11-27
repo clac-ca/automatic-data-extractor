@@ -73,7 +73,7 @@ class DocumentsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 user_id=actor_id,
-                filename=upload.filename,
+                upload_filename=upload.filename,
                 content_type=upload.content_type,
                 expires_at=expires_at,
             ),
