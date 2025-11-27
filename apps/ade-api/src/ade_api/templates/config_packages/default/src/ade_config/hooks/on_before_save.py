@@ -12,18 +12,31 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
-def run(ctx: Any) -> None:
+def run(
+    *,
+    workbook: Any | None = None,         # openpyxl Workbook
+    tables: list[Any] | None = None,     # NormalizedTable[]
+    run: Any | None = None,
+    manifest: Any | None = None,
+    state: dict[str, Any] | None = None,
+    logger: Any | None = None,
+    stage: Any | None = None,
+    result: Any | None = None,
+    **_: Any,
+) -> Any | None:
     """
-    Convert the active sheet to an Excel table for readability.
+    on_before_save: decorate or replace the normalized workbook.
 
-    If you don't care about styling, you can safely delete this hook or
-    strip it down.
+    The engine will save whatever Workbook you return here.
+
+    Return:
+        - Workbook: the workbook to save (often the same `workbook` after mutation).
+        - None: keep and save the original workbook object.
     """
-    workbook = getattr(ctx, "workbook", None)
     if workbook is None:
-        return
+        return None
 
-    sheet = workbook.active
+    sheet = workbook.active  # normalized worksheet
     sheet.freeze_panes = "A2"
 
     right = get_column_letter(sheet.max_column)
@@ -35,3 +48,8 @@ def run(ctx: Any) -> None:
         showRowStripes=True,
     )
     sheet.add_table(excel_table)
+
+    if logger is not None:
+        logger.note("Styled workbook with Excel table", stage=stage)
+
+    return workbook

@@ -22,8 +22,8 @@ def normalize_table(
     normalized_rows: list[list[Any]] = []
     validation_issues: list[ValidationIssue] = []
 
-    for offset, data_row in enumerate(mapped.raw.data_rows):
-        row_index = mapped.raw.first_data_row_index + offset
+    for offset, data_row in enumerate(mapped.extracted.data_rows):
+        row_index = mapped.extracted.first_data_row_index + offset
         row: dict[str, Any] = {}
 
         for field in manifest.columns.order:

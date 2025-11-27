@@ -23,7 +23,17 @@ from .exceptions import (
 )
 from .schemas import ConfigValidationIssue
 
-_DIGEST_SUFFIXES = {".py", ".toml", ".json"}
+_DIGEST_SUFFIXES = {
+    ".py",
+    ".toml",
+    ".json",
+    ".md",
+    ".txt",
+    ".rst",
+    ".yml",
+    ".yaml",
+    ".csv",
+}
 _COPY_IGNORE_PATTERNS = (
     ".git",
     ".idea",

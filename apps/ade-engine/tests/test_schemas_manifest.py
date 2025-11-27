@@ -11,7 +11,7 @@ def sample_manifest() -> dict:
         "version": "1.2.3",
         "name": "Sample Config",
         "description": "Optional description",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": ["member_id", "email"],
             "fields": {

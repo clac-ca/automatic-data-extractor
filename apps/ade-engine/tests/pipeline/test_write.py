@@ -7,8 +7,8 @@ import pytest
 from openpyxl import load_workbook
 
 from ade_engine.config.loader import load_config_runtime
-from ade_engine.core.pipeline import map_raw_tables, normalize_table, write_workbook
-from ade_engine.core.types import RawTable, RunContext, RunPaths, RunRequest
+from ade_engine.core.pipeline import map_extracted_tables, normalize_table, write_workbook
+from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
 from ade_engine.infra.telemetry import PipelineLogger
 
 
@@ -31,7 +31,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], writer: dict | None = No
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -113,7 +113,7 @@ def detect_header(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -124,7 +124,7 @@ def detect_header(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped)
 
     pipeline_logger = _logger(run, runtime.manifest)
@@ -177,7 +177,7 @@ def detect_header(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw_one = RawTable(
+    raw_one = ExtractedTable(
         source_file=tmp_path / "first.csv",
         source_sheet=None,
         table_index=0,
@@ -187,7 +187,7 @@ def detect_header(*, header, **_):
         first_data_row_index=2,
         last_data_row_index=2,
     )
-    raw_two = RawTable(
+    raw_two = ExtractedTable(
         source_file=tmp_path / "second.csv",
         source_sheet="Sheet1",
         table_index=1,
@@ -198,7 +198,7 @@ def detect_header(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped_tables = map_raw_tables(tables=[raw_one, raw_two], runtime=runtime, run=run)
+    mapped_tables = map_extracted_tables(tables=[raw_one, raw_two], runtime=runtime, run=run)
     normalized_tables = [normalize_table(ctx=run, cfg=runtime, mapped=mapped) for mapped in mapped_tables]
 
     pipeline_logger = _logger(run, runtime.manifest)

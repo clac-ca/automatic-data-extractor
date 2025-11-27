@@ -4,7 +4,7 @@ This document describes how the ADE engine:
 
 1. Discovers **source files** (CSV/XLSX),
 2. Streams **rows** from those files in a memory‑friendly way, and
-3. Uses **row detectors** from `ade_config` to turn raw sheets into `RawTable`
+3. Uses **row detectors** from `ade_config` to turn raw sheets into `ExtractedTable`
    objects that feed the mapping stage.
 
 It assumes you’ve read:
@@ -45,7 +45,7 @@ The IO + extract layer has three core responsibilities:
 1. **Turn a `RunRequest` into a deterministic sequence of source files.**
 2. **Stream rows** from CSV/XLSX without loading whole workbooks into memory.
 3. **Locate tables** in each sheet by running row detectors and emitting
-   `RawTable` objects.
+   `ExtractedTable` objects.
 
 Design constraints:
 
@@ -56,7 +56,7 @@ Design constraints:
 - **Predictable ordering** — given the same inputs and config, detection is
   deterministic.
 
-The output of this layer is a list of `RawTable` objects that fully describe
+The output of this layer is a list of `ExtractedTable` objects that fully describe
 each detected table, including header row, data rows, and location metadata.
 
 ---
@@ -324,7 +324,7 @@ baseline flow:
 3. After a data block ends (or after trimming), continue scanning **below the last data row**
    for the next header candidate. If found, start **Table 1**, and repeat.
 4. Stop when the end of the sheet is reached or no further header candidates pass the threshold.
-5. If no header/data block is found at all, the sheet produces no `RawTable` and the engine
+5. If no header/data block is found at all, the sheet produces no `ExtractedTable` and the engine
    logs an informative diagnostic.
 
 CSV inputs follow the same logic but have a single implicit sheet.
@@ -335,14 +335,14 @@ sheet is deterministic: top‑to‑bottom as discovered.
 
 ---
 
-## 6. RawTable model
+## 6. ExtractedTable model
 
-Once a table is identified, the engine materializes a `RawTable` dataclass
+Once a table is identified, the engine materializes a `ExtractedTable` dataclass
 (see `types.py`), conceptually:
 
 ```python
 @dataclass
-class RawTable:
+class ExtractedTable:
     source_file: Path
     source_sheet: str | None
     table_index: int              # 0-based ordinal within the sheet
@@ -364,7 +364,7 @@ Details:
 * Indices are **1‑based** and correspond to original sheet row numbers; this
   is important for traceability and artifact reporting.
 
-`RawTable` is the only table‑level type passed into column mapping.
+`ExtractedTable` is the only table‑level type passed into column mapping.
 
 ---
 
@@ -408,7 +408,7 @@ backend for realtime progress indicators or metrics.
 * If a file or sheet yields no rows at all:
 
   * Engine records a note and skip it.
-  * No `RawTable` is created.
+  * No `ExtractedTable` is created.
 * If detectors cannot identify a header/data region:
 
   * Engine may:
@@ -430,7 +430,7 @@ Policies should be consistent and covered by tests.
 
 ### 8.3 Multiple tables per sheet
 
-A sheet can yield multiple `RawTable` objects, each with its own header/data
+A sheet can yield multiple `ExtractedTable` objects, each with its own header/data
 region. Table detection logic can segment by gaps and continue scanning for
 additional tables within the same sheet.
 
@@ -443,9 +443,9 @@ The IO and table detection layer is responsible for:
 1. Turning a `RunRequest` into a **deterministic list of source files**.
 2. Streaming **rows** from CSV/XLSX in a memory‑conscious way.
 3. Using **config‑provided row detectors** to identify table boundaries and
-   emit `RawTable` objects with precise sheet/row metadata.
+   emit `ExtractedTable` objects with precise sheet/row metadata.
 
 Everything beyond this point — column mapping, normalization, artifact detail —
-is layered on top of these `RawTable`s. If extraction is correct and well
+is layered on top of these `ExtractedTable`s. If extraction is correct and well
 instrumented, the rest of the pipeline can reliably reason about what the
 engine “saw” in the original spreadsheets.

@@ -65,7 +65,7 @@ invoked in this order:
 | Stage name        | When it runs                                       | What is available / allowed to change                                  |
 | ----------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
 | `on_run_start`    | After manifest + telemetry initialized, before IO | Read/initialize `state`, add notes, never touches tables or workbook|
-| `on_after_extract`| After `RawTable[]` built, before column mapping   | Inspect/modify `RawTable` objects                                       |
+| `on_after_extract`| After `ExtractedTable[]` built, before column mapping   | Inspect/modify `ExtractedTable` objects                                       |
 | `on_after_mapping`| After `MappedTable[]` built, before normalization | Inspect/modify `MappedTable` objects (`column_map.mapped_columns` / `unmapped_columns`) |
 | `on_before_save`  | After `NormalizedTable[]`, before writing files   | Inspect `NormalizedTable[]`, modify `Workbook` (formatting, summary)    |
 | `on_run_end`      | After run success/failure determined              | Inspect `RunResult`, emit metrics/notes, **no further pipeline changes** |
@@ -151,43 +151,53 @@ class HookStage(str, Enum):
 
 Hook modules are regular Python modules in `ade_config.hooks.*`.
 
-### 5.1 Recommended signature (context-first)
+### 5.1 Recommended signature (keyword args)
 
-Hooks should take a single `HookContext` argument for consistency:
+Hooks should accept keyword arguments for the same fields exposed by `HookContext`:
 
 ```python
-from dataclasses import dataclass
 from typing import Any
-from ade_engine.config.hook_registry import HookContext, HookStage  # legacy path: ade_engine.config_runtime.hook_registry
+from ade_engine.config.hook_registry import HookStage
 from ade_engine.core.types import RunResult, RunContext
-from ade_engine.core.pipeline import RawTable, MappedTable, NormalizedTable
-from ade_engine.infra.artifact import ArtifactSink
-from ade_engine.infra.telemetry import EventSink, PipelineLogger
+from ade_engine.core.pipeline import ExtractedTable, MappedTable, NormalizedTable
+from ade_engine.infra.telemetry import PipelineLogger
 from openpyxl import Workbook
 
-@dataclass
-class HookContext:
-    run: RunContext
-    state: dict[str, Any]
-    manifest: ManifestContext
-    artifact: ArtifactSink
-    events: EventSink | None
-    tables: list[RawTable | MappedTable | NormalizedTable] | None
-    workbook: Workbook | None
-    result: RunResult | None
-    logger: PipelineLogger
-    stage: HookStage
-
-def run(context: HookContext) -> None:
-    context.logger.note("Run started", stage=context.stage.value)
+def run(
+    *,
+    run: RunContext,
+    state: dict[str, Any],
+    manifest: Any,
+    tables: list[ExtractedTable | MappedTable | NormalizedTable] | None = None,
+    workbook: Workbook | None = None,
+    result: RunResult | None = None,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> None:
+    logger.note("Run started", stage=stage.value)
 ```
+
+The engine still constructs a full `HookContext` internally and provides it via the `context` keyword, so legacy hooks that expect a `HookContext` object continue to work. However, using explicit keyword arguments keeps the experience consistent with detectors/transforms, highlights what is guaranteed to be available at each stage, and helps authors reason about optional fields.
 
 Guidelines:
 
-* Use `context.state` for mutable per‑run data; treat `context.run` as read‑only engine context.
-* Use `context.logger` for notes/events; reach for `context.artifact`/`context.events` only when you need sink-level control.
-* `context.tables`, `context.workbook`, and `context.result` are stage-dependent and may be `None`.
-* If you choose to expose a keyword‑only hook signature instead of the context object, include `**_` to absorb new parameters.
+* Use `state` for mutable per-run data caches; treat `run` as read-only engine metadata.
+* Call `logger` (a `PipelineLogger`) for telemetry notes; use `result`, `tables`, or `workbook` only if the stage provides it.
+* Expect `tables`, `workbook`, and `result` to be `None` unless the stage promises them.
+* Include `**_` to absorb future keyword arguments added by the engine.
+
+### 5.2 Return values
+
+| Stage | Primary object | Return type |
+| --- | --- | --- |
+| `on_run_start` | `state`, logging | `None` |
+| `on_after_extract` | `list[ExtractedTable]` | `list[ExtractedTable] \| None` |
+| `on_after_mapping` | `list[MappedTable]` | `list[MappedTable] \| None` |
+| `on_before_save` | `Workbook` | `Workbook \| None` |
+| `on_run_end` | logging/metrics | `None` |
+
+Hooks that return `None` leave the existing object unchanged; returning a non-`None` value replaces the table list/workbook the pipeline carries forward. This keeps the contract explicit for stages that transform objects while keeping `on_run_start`/`on_run_end` side-effect-only.
 
 ---
 
@@ -212,7 +222,7 @@ stage.
 
 * `on_after_extract`:
 
-  * Receives `RawTable[]`.
+  * Receives `ExtractedTable[]`.
   * You may:
 
     * reorder tables,
@@ -280,14 +290,22 @@ Below are typical uses of each hook stage.
 
 ```python
 # ade_config/hooks/on_run_start.py
-def run(ctx):
-    ctx.state["start_timestamp"] = ctx.run.started_at.isoformat()
-    ctx.state["config_version"] = ctx.manifest["info"]["version"]
-
-    ctx.logger.note(
+def run(
+    *,
+    run: RunContext,
+    state: dict[str, Any],
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> None:
+    state["start_timestamp"] = run.started_at.isoformat()
+    state["config_version"] = manifest.model.version
+    logger.note(
         "Run started",
-        config_title=ctx.manifest["info"].get("title"),
-        config_version=ctx.manifest["info"]["version"],
+        config_title=manifest.model.name,
+        config_version=manifest.model.version,
+        stage=stage.value,
     )
 ```
 
@@ -295,91 +313,124 @@ def run(ctx):
 
 ```python
 # ade_config/hooks/on_after_extract.py
-def run(ctx):
-    for t in ctx.tables or []:
-        ctx.logger.note(
+def run(
+    *,
+    tables: list[ExtractedTable] | None = None,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> list[ExtractedTable] | None:
+    filtered: list[ExtractedTable] = []
+    for t in tables or []:
+        logger.note(
             "Extracted table",
             file=str(t.source_file),
             sheet=t.source_sheet,
             row_count=len(t.data_rows),
             header_row_index=t.header_row_index,
+            stage=stage.value,
         )
 
         if len(t.data_rows) == 0:
-            ctx.logger.note(
+            logger.note(
                 "Empty table detected",
                 level="warning",
                 file=str(t.source_file),
                 sheet=t.source_sheet,
+                stage=stage.value,
             )
+            continue
+
+        filtered.append(t)
+
+    return filtered
 ```
 
 ### 7.3 `on_after_mapping`: tweak ambiguous mappings
 
 ```python
 # ade_config/hooks/on_after_mapping.py
-def run(ctx):
-    for table in ctx.tables or []:
-        # Example: ensure at most one "email" mapping
+def run(
+    *,
+    tables: list[MappedTable] | None = None,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> list[MappedTable] | None:
+    for table in tables or []:
         seen_email = False
         for m in table.mapping:
             if m.field == "email":
                 if seen_email:
-                    ctx.logger.note(
+                    logger.note(
                         "Dropping duplicate email mapping",
                         level="warning",
                         header=m.header,
                         column_index=m.source_column_index,
+                        stage=stage.value,
                     )
                     m.field = "raw_email_candidate"
                 else:
                     seen_email = True
+
+    return tables
 ```
 
 ### 7.4 `on_before_save`: add summary sheet
 
 ```python
 # ade_config/hooks/on_before_save.py
-def run(ctx):
-    summary = ctx.workbook.create_sheet(title="ADE Summary")
+def run(
+    *,
+    workbook: Workbook,
+    tables: list[NormalizedTable] | None = None,
+    manifest: ManifestContext,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> Workbook | None:
+    summary = workbook.create_sheet(title="ADE Summary")
 
     summary["A1"] = "Config"
-    summary["B1"] = ctx.manifest["info"]["title"]
+    summary["B1"] = manifest.model.name
     summary["A2"] = "Version"
-    summary["B2"] = ctx.manifest["info"]["version"]
+    summary["B2"] = manifest.model.version
 
     row = 4
     summary[f"A{row}"] = "Table"
     summary[f"B{row}"] = "Rows"
     row += 1
 
-    for t in ctx.tables or []:
-        summary[f"A{row}"] = f"{t.mapped.raw.source_file.name}:{t.output_sheet_name}"
+    for t in tables or []:
+        summary[f"A{row}"] = f"{t.mapped.extracted.source_file.name}:{t.output_sheet_name}"
         summary[f"B{row}"] = len(t.rows)
         row += 1
 
-    ctx.logger.note("Added ADE Summary sheet")
+    logger.note("Added ADE Summary sheet", stage=stage.value)
+    return workbook
 ```
 
 ### 7.5 `on_run_end`: aggregate metrics
 
 ```python
 # ade_config/hooks/on_run_end.py
-def run(ctx):
-    duration_ms = (ctx.run.completed_at - ctx.run.started_at).total_seconds() * 1000
-    status = ctx.result.status
-
-    ctx.logger.event(
+def run(
+    *,
+    run: RunContext,
+    result: RunResult,
+    logger: PipelineLogger,
+    stage: HookStage,
+    **_: Any,
+) -> None:
+    duration_ms = (run.completed_at - run.started_at).total_seconds() * 1000
+    status = result.status
+    logger.event(
         "run_summary",
         level="info",
         status=status,
         duration_ms=duration_ms,
-        processed_files=list(ctx.result.processed_files),
-    )
-
-    ctx.artifact.note(
-        f"Run {status} in {duration_ms:.0f}ms",
-        level="info",
+        processed_files=list(result.processed_files),
+        stage=stage.value,
     )
 ```
 

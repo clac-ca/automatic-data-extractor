@@ -10,7 +10,7 @@ from ade_engine.core.types import (
     MappedColumn,
     MappedTable,
     NormalizedTable,
-    RawTable,
+    ExtractedTable,
     RunContext,
     RunPaths,
     UnmappedColumn,
@@ -42,7 +42,7 @@ def build_manifest() -> ManifestContext:
         version="1.0.0",
         name="Telemetry Config",
         description="",
-        script_api_version=1,
+        script_api_version=2,
         columns=ColumnsConfig(
             order=["id"],
             fields={"id": FieldConfig(label="ID", module="id", required=True)},
@@ -58,7 +58,7 @@ def build_manifest() -> ManifestContext:
 
 
 def build_table(tmp_path: Path) -> NormalizedTable:
-    raw_table = RawTable(
+    raw_table = ExtractedTable(
         source_file=tmp_path / "input" / "data.xlsx",
         source_sheet="Sheet1",
         table_index=0,
@@ -82,7 +82,7 @@ def build_table(tmp_path: Path) -> NormalizedTable:
         ],
         unmapped_columns=[UnmappedColumn(header="Extra", source_column_index=1, output_header="raw_extra")],
     )
-    mapped_table = MappedTable(raw=raw_table, column_map=column_map)
+    mapped_table = MappedTable(extracted=raw_table, column_map=column_map)
     return NormalizedTable(
         mapped=mapped_table,
         rows=[["1", None], ["2", None]],

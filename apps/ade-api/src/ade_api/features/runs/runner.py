@@ -1,4 +1,4 @@
-"""Async ADE engine process supervisor."""
+"""Asynchronous supervisor for ADE engine subprocess streams."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Literal
 
 from ade_engine.schemas import AdeEvent
 from pydantic import ValidationError
+from ade_api.shared.core.logging import log_context
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,8 @@ class StdoutFrame:
 RunnerFrame = StdoutFrame | AdeEvent
 
 
-class ADEProcessRunner:
-    """Spawn the ADE engine subprocess and surface streaming frames."""
+class EngineSubprocessRunner:
+    """Manage a single ADE engine subprocess and stream its telemetry."""
 
     def __init__(
         self,
@@ -105,8 +106,12 @@ class ADEProcessRunner:
                         envelope = AdeEvent.model_validate_json(line)
                     except ValidationError as exc:
                         logger.warning(
-                            "Invalid telemetry payload",
-                            extra={"line": line, "error": str(exc)},
+                            "run.telemetry.invalid",
+                            extra=log_context(
+                                run_dir=str(self._run_dir),
+                                line=line,
+                                error=str(exc),
+                            ),
                         )
                         continue
                     await self._queue.put(envelope)
@@ -127,4 +132,4 @@ def _read_new_event_lines(path: Path, position: int) -> tuple[int, list[str]]:
     return position, [line.rstrip("\n") for line in data]
 
 
-__all__ = ["ADEProcessRunner", "RunnerFrame", "StdoutFrame"]
+__all__ = ["EngineSubprocessRunner", "RunnerFrame", "StdoutFrame"]

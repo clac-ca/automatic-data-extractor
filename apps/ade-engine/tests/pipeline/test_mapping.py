@@ -6,8 +6,8 @@ import sys
 import pytest
 
 from ade_engine.config.loader import load_config_runtime
-from ade_engine.core.pipeline import map_raw_tables
-from ade_engine.core.types import RawTable, RunContext, RunPaths, RunRequest
+from ade_engine.core.pipeline import map_extracted_tables
+from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -29,7 +29,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str]) -> Path:
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -94,7 +94,7 @@ def detect_header(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -105,7 +105,7 @@ def detect_header(*, header, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     assert [mc.field for mc in mapped.column_map.mapped_columns] == ["alpha", "beta"]
     assert [mc.source_column_index for mc in mapped.column_map.mapped_columns] == [0, 1]
     assert all(mc.is_satisfied for mc in mapped.column_map.mapped_columns)
@@ -125,7 +125,7 @@ def detect_equal(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -136,7 +136,7 @@ def detect_equal(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     chosen_columns = {mc.field: mc.source_column_index for mc in mapped.column_map.mapped_columns if mc.is_satisfied}
     assert chosen_columns == {"first": 0, "second": 1}
 
@@ -159,7 +159,7 @@ def detect_low(*, header, **_):
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
 
-    raw = RawTable(
+    raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
         source_sheet=None,
         table_index=0,
@@ -170,7 +170,7 @@ def detect_low(*, header, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_raw_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
     field_mapping = mapped.column_map.mapped_columns[0]
     assert field_mapping.field == "only_field"
     assert field_mapping.is_satisfied is False
