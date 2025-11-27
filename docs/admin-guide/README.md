@@ -19,6 +19,11 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
   `ADE_FAILED_LOGIN_LOCK_DURATION` (lock length, supports suffixed durations like `5m`). Defaults lock a user for
   five minutes after five consecutive failures.
 
+### Database configuration
+- `ADE_DATABASE_DSN` defaults to SQLite (`sqlite+aiosqlite:///./data/db/ade.sqlite`). Point it at Azure SQL with an `mssql+pyodbc` URL when deploying.
+- `ADE_DATABASE_AUTH_MODE` chooses authentication: `sql_password` (default) uses credentials embedded in the DSN; `managed_identity` strips username/password and injects an Entra token for Azure SQL.
+- `ADE_DATABASE_MI_CLIENT_ID` optionally pins a user-assigned managed identity; omit it to use the system-assigned identity. Alembic migrations reuse the same settings and token flow as the runtime engine.
+
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/shared/db/engine.py`](../../apps/ade-api/src/ade_api/shared/db/engine.py) and scoped sessions from [`apps/ade-api/src/ade_api/shared/db/session.py`](../../apps/ade-api/src/ade_api/shared/db/session.py).
 - Structured logging and correlation IDs are configured through [`apps/ade-api/src/ade_api/shared/core/logging.py`](../../apps/ade-api/src/ade_api/shared/core/logging.py) and middleware in [`apps/ade-api/src/ade_api/shared/core/middleware.py`](../../apps/ade-api/src/ade_api/shared/core/middleware.py).
