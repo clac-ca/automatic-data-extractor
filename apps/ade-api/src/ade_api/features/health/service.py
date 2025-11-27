@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
