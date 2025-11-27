@@ -13,6 +13,7 @@ from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.session import get_sessionmaker
 from ade_api.shared.dependency import (
@@ -21,7 +22,6 @@ from ade_api.shared.dependency import (
     require_csrf,
     require_workspace,
 )
-from ade_api.shared.core.logging import log_context
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildLogsResponse, BuildResource

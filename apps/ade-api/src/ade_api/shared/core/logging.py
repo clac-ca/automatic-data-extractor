@@ -76,7 +76,8 @@ class ConsoleLogFormatter(logging.Formatter):
 
     Example line:
 
-        2025-11-27T02:57:00.302Z INFO  ade_api.main [cid=1234abcd] ade_api.startup safe_mode=False auth_disabled=True
+        2025-11-27T02:57:00.302Z INFO  ade_api.main [cid=1234abcd] ade_api.startup
+        safe_mode=False auth_disabled=True
     """
 
     # ISO8601-ish UTC timestamp (seconds) – we'll append millis and 'Z'.
