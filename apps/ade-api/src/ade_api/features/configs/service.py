@@ -42,8 +42,6 @@ from .schemas import (
 )
 from .storage import ConfigStorage
 
-_ROOT_FILE_WHITELIST = {"manifest.json", "pyproject.toml", "config.env"}
-_ROOT_DIR_WHITELIST = {"src/ade_config", "assets"}
 _EXCLUDED_NAMES = {
     ".git",
     ".idea",
@@ -659,15 +657,9 @@ def _is_assets_path(rel_path: PurePosixPath) -> bool:
 def _is_allowed_directory(rel_path: PurePosixPath) -> bool:
     if rel_path == PurePosixPath(""):
         return True
-    if rel_path.as_posix() == "src":
-        return True
-    if str(rel_path) in _ROOT_DIR_WHITELIST:
-        return True
-    if _is_src_config_path(rel_path):
-        return True
-    if _is_assets_path(rel_path):
-        return True
-    return False
+    if any(part in _EXCLUDED_NAMES for part in rel_path.parts):
+        return False
+    return True
 
 
 def _ensure_allowed_file_path(root: Path, rel_path: PurePosixPath) -> Path:
@@ -675,11 +667,7 @@ def _ensure_allowed_file_path(root: Path, rel_path: PurePosixPath) -> Path:
         raise PathNotAllowedError(f"{rel_path} is excluded")
     if rel_path.suffix in _EXCLUDED_SUFFIXES or rel_path.name == ".DS_Store":
         raise PathNotAllowedError(f"{rel_path} is excluded")
-    if len(rel_path.parts) == 1 and rel_path.as_posix() in _ROOT_FILE_WHITELIST:
-        return root / rel_path.as_posix()
-    if _is_src_config_path(rel_path) or _is_assets_path(rel_path):
-        return root / rel_path.as_posix()
-    raise PathNotAllowedError(f"{rel_path} is outside editable roots")
+    return root / rel_path.as_posix()
 
 
 def _ensure_allowed_directory_path(root: Path, rel_path: PurePosixPath) -> Path:
@@ -748,18 +736,9 @@ def _build_file_index(config_path: Path) -> dict:
         }
         _register_entry(entry)
 
+    _add_directory(PurePosixPath(""))
     if not config_path.exists():
         return {"entries": [], "dir_paths": dir_paths, "file_paths": file_paths}
-
-    for name in sorted(_ROOT_FILE_WHITELIST):
-        rel = PurePosixPath(name)
-        _add_file(rel)
-
-    for dir_name in sorted(_ROOT_DIR_WHITELIST):
-        rel_dir = PurePosixPath(dir_name)
-        dir_path = config_path / rel_dir.as_posix()
-        if dir_path.exists():
-            _add_directory(rel_dir)
 
     for dirpath, dirnames, filenames in os.walk(config_path):
         rel_dir = PurePosixPath(os.path.relpath(dirpath, config_path))
@@ -773,18 +752,11 @@ def _build_file_index(config_path: Path) -> dict:
             _add_directory(rel)
         for filename in filenames:
             rel = (rel_dir / filename) if rel_dir else PurePosixPath(filename)
-            if not rel_dir and rel.as_posix() in _ROOT_FILE_WHITELIST:
+            if any(part in _EXCLUDED_NAMES for part in rel.parts):
                 continue
-            if (
-                rel.as_posix() in _ROOT_FILE_WHITELIST
-                or _is_src_config_path(rel)
-                or _is_assets_path(rel)
-            ):
-                if any(part in _EXCLUDED_NAMES for part in rel.parts):
-                    continue
-                if rel.suffix in _EXCLUDED_SUFFIXES or rel.name == ".DS_Store":
-                    continue
-                _add_file(rel)
+            if rel.suffix in _EXCLUDED_SUFFIXES or rel.name == ".DS_Store":
+                continue
+            _add_file(rel)
 
     for entry in entries:
         if entry["kind"] == "dir":

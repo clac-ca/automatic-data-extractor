@@ -144,7 +144,7 @@ ade_engine/
   core/                      # Runtime orchestrator + pipeline
     __init__.py              # Re-export Engine, RunRequest, RunResult, etc.
     engine.py                # Engine.run orchestration
-    types.py                 # RunRequest, RunResult, RunContext, RawTable, enums (core runtime models)
+    types.py                 # RunRequest, RunResult, RunContext, ExtractedTable, enums (core runtime models)
     pipeline/
       __init__.py            # Re-export execute_pipeline(), RunPhase helpers
       extract.py
@@ -297,7 +297,7 @@ ade_config/
 (unchanged from your current docs, just summarized here)
 
 The core runtime types (`RunRequest`, `RunResult`, `RunContext`, `RunPaths`,
-`RunPhase`, `RunStatus`, `RunError`, `RunErrorCode`, `RawTable`, `MappedTable`,
+`RunPhase`, `RunStatus`, `RunError`, `RunErrorCode`, `ExtractedTable`, `MappedTable`,
 `NormalizedTable`, etc.) are already documented in
 `docs/01-engine-runtime.md`. This README just points you there.
 
@@ -341,7 +341,7 @@ The mechanics of `Engine.run` are documented in
 * Initialize artifact + telemetry sinks.
 * Execute pipeline via `execute_pipeline()`:
 
-  * `extract` ➜ `RawTable[]`
+  * `extract` ➜ `ExtractedTable[]`
   * `mapping` ➜ `MappedTable[]`
   * `normalize` ➜ `NormalizedTable[]`
   * `write` ➜ workbook(s)
@@ -360,7 +360,7 @@ See `01-engine-runtime.md` for the full lifecycle and error handling details.
 
 The pipeline is broken into obvious stages:
 
-* `extract.py` – IO + row detectors → `RawTable`.
+* `extract.py` – IO + row detectors → `ExtractedTable`.
 * `mapping.py` – column detectors + scoring → `MappedTable`.
 * `normalize.py` – transforms + validators → `NormalizedTable`.
 * `write.py` – produce the normalized workbook(s).

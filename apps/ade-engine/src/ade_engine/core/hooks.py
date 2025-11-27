@@ -10,10 +10,10 @@ from openpyxl import Workbook
 from ade_engine.config.hook_registry import HookContext, HookRegistry, HookStage
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.errors import HookError
-from ade_engine.core.types import MappedTable, NormalizedTable, RawTable, RunContext, RunResult
+from ade_engine.core.types import MappedTable, NormalizedTable, ExtractedTable, RunContext, RunResult
 from ade_engine.infra.telemetry import PipelineLogger
 
-HookTables = list[RawTable | MappedTable | NormalizedTable] | None
+HookTables = list[ExtractedTable | MappedTable | NormalizedTable] | None
 
 
 def _build_kwargs(context: HookContext) -> dict[str, Any]:
@@ -30,29 +30,26 @@ def _build_kwargs(context: HookContext) -> dict[str, Any]:
     }
 
 
-def _invoke_hook(hook: Callable[..., Any], context: HookContext) -> None:
+def _invoke_hook(hook: Callable[..., Any], context: HookContext) -> Any:
     signature = inspect.signature(hook)
     parameters = list(signature.parameters.values())
 
     if not parameters:
-        hook(context)
-        return
+        return hook(context)
 
     first = parameters[0]
     if len(parameters) == 1 and first.kind in (
         inspect.Parameter.POSITIONAL_ONLY,
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
     ):
-        hook(context)
-        return
+        return hook(context)
 
     kwargs = _build_kwargs(context)
     if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters):
-        hook(**kwargs)
-        return
+        return hook(**kwargs)
 
     filtered_kwargs = {name: kwargs[name] for name in signature.parameters if name in kwargs}
-    hook(**filtered_kwargs)
+    return hook(**filtered_kwargs)
 
 
 def run_hooks(
@@ -65,12 +62,8 @@ def run_hooks(
     tables: HookTables = None,
     workbook: Workbook | None = None,
     result: RunResult | None = None,
-) -> None:
+) -> HookContext:
     """Execute configured hooks for a stage with a rich context."""
-
-    hooks = registry.get(stage, []) if registry else []
-    if not hooks:
-        return
 
     context = HookContext(
         run=run,
@@ -82,11 +75,24 @@ def run_hooks(
         logger=logger,
         stage=stage,
     )
+    hooks = registry.get(stage, []) if registry else []
+    if not hooks:
+        return context
 
     for hook in hooks:
         try:
-            _invoke_hook(hook, context)
+            ret = _invoke_hook(hook, context)
         except Exception as exc:
             module = hook.__module__
             name = getattr(hook, "__name__", "<callable>")
             raise HookError(f"Hook '{module}.{name}' failed during {stage.value}") from exc
+
+        if ret is None:
+            continue
+
+        if stage in {HookStage.ON_AFTER_EXTRACT, HookStage.ON_AFTER_MAPPING}:
+            context.tables = list(ret)
+        elif stage is HookStage.ON_BEFORE_SAVE:
+            context.workbook = ret
+
+    return context

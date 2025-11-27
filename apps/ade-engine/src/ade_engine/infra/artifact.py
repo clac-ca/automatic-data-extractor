@@ -100,7 +100,7 @@ class FileArtifactSink:
             msg = "ArtifactSink.start must be called before recording tables."
             raise RuntimeError(msg)
 
-        raw = table.mapped.raw
+        extracted = table.mapped.extracted
         mapped_columns = [
             ArtifactMappedColumn(
                 field=column.field,
@@ -137,10 +137,10 @@ class FileArtifactSink:
         ]
 
         table_entry = TableArtifact(
-            source_file=str(raw.source_file),
-            source_sheet=raw.source_sheet,
-            table_index=raw.table_index,
-            header=TableHeader(row_index=raw.header_row_index, cells=raw.header_row),
+            source_file=str(extracted.source_file),
+            source_sheet=extracted.source_sheet,
+            table_index=extracted.table_index,
+            header=TableHeader(row_index=extracted.header_row_index, cells=extracted.header_row),
             mapped_columns=mapped_columns,
             unmapped_columns=unmapped_columns,
             validation_issues=validation_issues,

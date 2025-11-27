@@ -1,4 +1,4 @@
-"""Column mapping pipeline for converting :class:`RawTable` to :class:`MappedTable`."""
+"""Column mapping pipeline for converting :class:`ExtractedTable` to :class:`MappedTable`."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from ade_engine.core.types import (
     ColumnMap,
     MappedColumn,
     MappedTable,
-    RawTable,
+    ExtractedTable,
     ScoreContribution,
     UnmappedColumn,
 )
@@ -31,7 +31,7 @@ class _ColumnCandidate:
     values: list[Any]
 
 
-def _collect_columns(raw: RawTable) -> list[_ColumnCandidate]:
+def _collect_columns(raw: ExtractedTable) -> list[_ColumnCandidate]:
     max_columns = max(
         [len(raw.header_row)] + [len(row) for row in raw.data_rows] if raw.data_rows else [len(raw.header_row)]
     )
@@ -50,7 +50,7 @@ def _score_field(
     field: str,
     candidates: Iterable[_ColumnCandidate],
     runtime: ConfigRuntime,
-    raw: RawTable,
+    raw: ExtractedTable,
     run: Any,
     logger: logging.Logger,
     state: dict[str, Any],
@@ -99,14 +99,14 @@ def _score_field(
     return winning, column_scores
 
 
-def map_raw_tables(
+def map_extracted_tables(
     *,
-    tables: Iterable[RawTable],
+    tables: Iterable[ExtractedTable],
     runtime: ConfigRuntime,
     run: Any,
     logger: logging.Logger | None = None,
 ) -> list[MappedTable]:
-    """Map physical columns in :class:`RawTable` objects to manifest fields."""
+    """Map physical columns in :class:`ExtractedTable` objects to manifest fields."""
 
     logger = logger or logging.getLogger(__name__)
     mapped_tables: list[MappedTable] = []
@@ -154,9 +154,9 @@ def map_raw_tables(
         ]
 
         column_map = ColumnMap(mapped_columns=mapped_columns, unmapped_columns=unmapped_columns)
-        mapped_tables.append(MappedTable(raw=raw, column_map=column_map))
+        mapped_tables.append(MappedTable(extracted=raw, column_map=column_map))
 
     return mapped_tables
 
 
-__all__ = ["map_raw_tables", "MAPPING_SCORE_THRESHOLD", "COLUMN_SAMPLE_SIZE"]
+__all__ = ["map_extracted_tables", "MAPPING_SCORE_THRESHOLD", "COLUMN_SAMPLE_SIZE"]

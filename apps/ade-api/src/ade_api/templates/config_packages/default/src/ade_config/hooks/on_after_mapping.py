@@ -3,28 +3,36 @@
 Runs after MappedTable objects have been produced, before normalization.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 
-def run(ctx: Any) -> None:
+def run(
+    *,
+    tables: list[Any] | None = None,    # MappedTable[]
+    run: Any | None = None,
+    state: dict[str, Any] | None = None,
+    manifest: Any | None = None,
+    logger: Any | None = None,
+    stage: Any | None = None,
+    **_: Any,
+) -> list[Any] | None:
     """
-    Emit a compact summary of mapped vs extra columns per table.
+    on_after_mapping: tweak mapped columns before normalization.
 
-    This is intentionally simple and defensive so it's safe to copy as a
-    starting point.
+    Args:
+        tables: list of MappedTable objects (mapping + extras metadata).
+
+    Return:
+        - list of MappedTable: to modify/reorder/drop tables.
+        - None: to keep the original list (mutate in place if you wish).
     """
-    logger = getattr(ctx, "logger", None)
-    tables = getattr(ctx, "tables", None) or []
-
-    if logger is None:
-        return
+    if tables is None or logger is None:
+        return tables
 
     for mapped_table in tables:
-        raw = getattr(mapped_table, "raw", None)
-        source_file = getattr(getattr(raw, "source_file", None), "name", None)
-        source_sheet = getattr(raw, "source_sheet", None)
+        extracted = getattr(mapped_table, "extracted", None)
+        source_file = getattr(getattr(extracted, "source_file", None), "name", None)
+        source_sheet = getattr(extracted, "source_sheet", None)
         mapping = getattr(mapped_table, "mapping", []) or []
         extras = getattr(mapped_table, "extras", []) or []
 
@@ -34,5 +42,8 @@ def run(ctx: Any) -> None:
             sheet=source_sheet,
             mapped_columns=len(mapping),
             extra_columns=len(extras),
-            stage=getattr(ctx, "stage", None),
+            stage=stage,
         )
+
+    # Example: just log, no structural change.
+    return tables

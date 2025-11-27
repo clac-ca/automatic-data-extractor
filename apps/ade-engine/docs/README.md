@@ -42,7 +42,7 @@ Recommended reading order (mirrors the pipeline flow):
 
 3. [`03-io-and-table-detection.md`](./03-io-and-table-detection.md)  
    How source files are discovered and read, how sheets are selected, and how
-   row detectors find table boundaries (`RawTable`).
+   row detectors find table boundaries (`ExtractedTable`).
 
 4. [`04-column-mapping.md`](./04-column-mapping.md)  
    How raw headers/columns are mapped to canonical fields via detectors,

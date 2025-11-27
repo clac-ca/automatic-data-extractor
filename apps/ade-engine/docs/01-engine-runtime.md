@@ -125,7 +125,7 @@ Note: callers can derive `events.ndjson` as `logs_dir / "events.ndjson"`.
 2. **Load config**: import `ade_config`, load `manifest.json`, build `ConfigRuntime`.
 3. **Initialize telemetry**: build an `EventSink` (default `FileEventSink` writing to `logs/events.ndjson`), and construct a `PipelineLogger` that emits `AdeEvent` envelopes.
 4. **Run hooks (ON_RUN_START)**: give hooks access to `run`, `manifest`, `logger`, and mutable `state`.
-5. **Extract**: discover and slice tables into `RawTable` objects.
+5. **Extract**: discover and slice tables into `ExtractedTable` objects.
 6. **Map**: score headers and build `MappedTable` objects.
 7. **Normalize**: apply transforms/validators to produce `NormalizedTable` objects; emit `run.table.summary` events that include row counts, mapped/unmapped columns, and validation breakdowns.
 8. **Write outputs**: sort tables, write `normalized.xlsx` to `output_dir`.

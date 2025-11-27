@@ -3,22 +3,26 @@
 Runs once after the run is complete (success or failure).
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 
-def run(ctx: Any) -> None:
+def run(
+    *,
+    run: Any | None = None,
+    result: Any | None = None,
+    logger: Any | None = None,
+    state: dict[str, Any] | None = None,
+    manifest: Any | None = None,
+    tables: list[Any] | None = None,
+    workbook: Any | None = None,
+    stage: Any | None = None,
+    **_: Any,
+) -> None:
     """
-    Emit a simple run summary.
+    on_run_end: log final status; no pipeline changes.
 
-    This uses the PipelineLogger (ctx.logger) so the message shows up in
-    telemetry events.
+    This hook does not change tables/workbook/result.
     """
-    logger = getattr(ctx, "logger", None)
-    run = getattr(ctx, "run", None)
-    result = getattr(ctx, "result", None)
-
     if logger is None or run is None or result is None:
         return
 
@@ -28,7 +32,7 @@ def run(ctx: Any) -> None:
 
     logger.note(
         "Run finished",
-        stage=getattr(ctx, "stage", None),
+        stage=stage,
         run_id=run_id,
         status=status,
         outputs=[str(p) for p in output_paths],

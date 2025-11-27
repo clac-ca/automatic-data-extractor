@@ -39,7 +39,7 @@ def test_load_config_runtime_happy_path(tmp_path: Path, monkeypatch: pytest.Monk
         "version": "1.0.0",
         "name": "Test Config",
         "description": None,
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": ["email"],
             "fields": {
@@ -130,7 +130,7 @@ def test_column_module_missing_module_raises(tmp_path: Path, monkeypatch: pytest
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": ["foo"],
             "fields": {
@@ -158,7 +158,7 @@ def test_detector_signature_must_be_keyword_only(tmp_path: Path, monkeypatch: py
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 1,
+        "script_api_version": 2,
         "columns": {
             "order": ["foo"],
             "fields": {

@@ -128,7 +128,7 @@ def _write_manifest(
         version="1.0.0",
         name="Fixture Config",
         description="minimal config for engine tests",
-        script_api_version=1,
+        script_api_version=2,
         columns=ColumnsConfig(
             order=[field for field, _ in fields],
             fields={

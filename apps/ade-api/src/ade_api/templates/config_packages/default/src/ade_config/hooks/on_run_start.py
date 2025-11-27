@@ -4,30 +4,37 @@ Runs once at the very beginning of a run, after the manifest and
 telemetry have been initialized but before any IO happens.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 
-def run(ctx: Any) -> None:
+def run(
+    *,
+    run: Any | None = None,          # RunContext: run_id, metadata, etc.
+    state: dict[str, Any] | None = None,  # shared per-run dict
+    manifest: Any | None = None,     # manifest context
+    logger: Any | None = None,       # PipelineLogger
+    stage: Any | None = None,        # e.g. 'on_run_start'
+    **_: Any,
+) -> None:
     """
-    `ctx` is a HookContext provided by ade_engine.
+    on_run_start: log high-level run info and initialize shared state.
 
-    Here we just log a small note with the run_id and any metadata that
-    the caller passed in.
+    This hook does not change pipeline objects; it just mutates `state`
+    and emits telemetry. It returns None.
     """
-    logger = getattr(ctx, "logger", None)
-    run = getattr(ctx, "run", None)
-
     if logger is None or run is None:
         return
 
     run_id = getattr(run, "run_id", None)
-    metadata = getattr(run, "metadata", {})
+    metadata = getattr(run, "metadata", {}) or {}
+
+    # Example: stash something in state for later hooks/detectors.
+    if state is not None:
+        state["run_id"] = run_id
 
     logger.note(
         "Run started",
         run_id=run_id,
         metadata=metadata,
-        stage=getattr(ctx, "stage", None),
+        stage=stage,
     )
