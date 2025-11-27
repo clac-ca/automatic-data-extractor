@@ -12,7 +12,9 @@ from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
+from ..system_settings.schemas import SafeModeStatus
 from ..users.schemas import UserProfile
+from ..workspaces.schemas import WorkspacePage
 from .utils import normalise_email
 
 
@@ -107,6 +109,16 @@ class SessionEnvelope(BaseSchema):
     expires_at: datetime | None = None
     refresh_expires_at: datetime | None = None
     return_to: str | None = None
+
+
+class BootstrapEnvelope(BaseSchema):
+    """Consolidated bootstrap payload for SPA initialization."""
+
+    user: UserProfile
+    global_roles: list[str]
+    global_permissions: list[str]
+    workspaces: WorkspacePage
+    safe_mode: SafeModeStatus
 
 
 class AuthProvider(BaseSchema):

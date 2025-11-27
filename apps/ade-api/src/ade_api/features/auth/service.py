@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.roles.service import (
     assign_global_role,
+    assign_global_role_if_missing,
     ensure_user_principal,
     get_global_role_by_slug,
     has_users_with_global_role,
@@ -268,7 +269,7 @@ class AuthService:
                 await self._session.flush()
 
         await sync_permission_registry(session=self._session)
-        await self._assign_global_role(
+        await self._assign_global_role_if_missing(
             user=user,
             slug=_GLOBAL_ADMIN_ROLE_SLUG,
             session=self._session,
@@ -389,7 +390,7 @@ class AuthService:
                 display_name=display_name,
             )
 
-            await self._assign_global_role(
+            await self._assign_global_role_if_missing(
                 user=user, slug=_GLOBAL_ADMIN_ROLE_SLUG, session=session
             )
 
@@ -568,6 +569,26 @@ class AuthService:
                 detail=f"Global role '{slug}' is not configured",
             )
         await assign_global_role(
+            session=target_session,
+            user_id=cast(str, user.id),
+            role_id=cast(str, role.id),
+        )
+
+    async def _assign_global_role_if_missing(
+        self,
+        *,
+        user: User,
+        slug: str,
+        session: AsyncSession | None = None,
+    ) -> None:
+        target_session = session or self._session
+        role = await get_global_role_by_slug(session=target_session, slug=slug)
+        if role is None:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Global role '{slug}' is not configured",
+            )
+        await assign_global_role_if_missing(
             session=target_session,
             user_id=cast(str, user.id),
             role_id=cast(str, role.id),
@@ -2026,7 +2047,7 @@ class AuthService:
                     is_active=True,
                     is_service_account=False,
                 )
-                await self._assign_global_role(
+                await self._assign_global_role_if_missing(
                     user=user, slug=_GLOBAL_USER_ROLE_SLUG
                 )
                 logger.info(

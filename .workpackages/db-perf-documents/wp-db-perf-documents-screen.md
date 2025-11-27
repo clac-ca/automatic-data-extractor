@@ -11,26 +11,31 @@
 ## Work Package Checklist
 
 * [ ] Baseline current auth/roles/documents call timings and DB queries for the documents screen (session, workspaces, safe-mode, documents).
-* [ ] Cache/short-circuit roles registry sync and global role slug lookup so they do not run per request.
-* [ ] Make global role assignment + principal/permission resolution idempotent within a request (early exit when already assigned, reuse cached principal/permissions).
-* [ ] Add a backend bootstrap path or shared cache to avoid multiple auth/roles round-trips for one screen; update OpenAPI types and frontend usage.
-* [ ] Optimize documents list DB path (including last_run join) and add regression safeguards/metrics for latency.
-* [ ] Deep-dive `logs/ade-startup.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-initial-setup.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-workspaces-page.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-workspace-settings.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-workspace-settings-members-tab.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-workspace-settings-roles-tab.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-creating-workspace.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-creating-config-from-template.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-config-builder-page.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-load-config-builder-editor.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-start-config-builder-validation.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-start-config-builder-test-run.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-upload-document.log` and summarize perf findings in Section 6.
-* [ ] Deep-dive `logs/ade-upload-multiple-documents.log` and summarize perf findings in Section 6.
+* [x] Cache/short-circuit roles registry sync and global role slug lookup so they do not run per request.
+* [x] Make global role assignment + principal/permission resolution idempotent within a request (early exit when already assigned, reuse cached principal/permissions).
+* [x] Add a backend bootstrap path or shared cache to avoid multiple auth/roles round-trips for one screen; update OpenAPI types and frontend usage.
+* [x] Optimize documents list DB path (including last_run join) and add regression safeguards/metrics for latency.
+* [x] Deep-dive `logs/ade-startup.log` and summarize perf findings in Section 6 — startup registry sync ~2s; no other heavy work observed.
+* [x] Deep-dive `logs/ade-initial-setup.log` and summarize perf findings in Section 6 — startup build + migration; roles registry sync ~3.4s; session 3.3s; workspaces 1.8s with repeated role assignment.
+* [x] Deep-dive `logs/ade-load-workspaces-page.log` and summarize perf findings in Section 6 — registry sync ~2s; parallel session/workspaces calls both redo role assignment; 1.9s+ latency.
+* [x] Deep-dive `logs/ade-load-workspace-settings.log` and summarize perf findings in Section 6 — registry sync ~2.1s; safe-mode call incurs role assignment (~1.3s) even auth disabled.
+* [x] Deep-dive `logs/ade-load-workspace-settings-members-tab.log` and summarize perf findings in Section 6 — registry sync ~2s; members/roles requests run in parallel with repeated assign_global; ~3.5–5.5s durations ending 422.
+* [x] Deep-dive `logs/ade-load-workspace-settings-roles-tab.log` and summarize perf findings in Section 6 — registry sync ~2.1s; multiple parallel calls (permissions, workspace roles) redo assign_global; ~2.6–4.3s durations ending 422.
+* [x] Deep-dive `logs/ade-creating-workspace.log` and summarize perf findings in Section 6 — registry sync ~2.1s; workspace creation POST ~4.6s with repeated assign_global; follow-up GETs (workspaces, safe-mode) also redo role work (~3.2s).
+* [x] Deep-dive `logs/ade-creating-config-from-template.log` and summarize perf findings in Section 6 — registry sync ~2.1s; config list ~3.0s, safe-mode ~1.35s, config create ~2.7s, second list ~2.5s; all redo assign_global.
+* [x] Deep-dive `logs/ade-load-config-builder-page.log` and summarize perf findings in Section 6 — registry sync ~2.1s; config list ~3.1s; safe-mode ~1.35s; all repeat assign_global.
+* [x] Deep-dive `logs/ade-load-config-builder-editor.log` and summarize perf findings in Section 6 — registry sync ~2.1s; safe-mode ~1.36s; config files list ~3.17s; file read ~2.39s; every call redoes assign_global.
+* [x] Deep-dive `logs/ade-start-config-builder-validation.log` and summarize perf findings in Section 6 — registry sync ~2s; validation POST builds env/run in ~14.9s; repeated assign_global; pool warning for unclosed aioodbc connection.
+* [x] Deep-dive `logs/ade-start-config-builder-test-run.log` and summarize perf findings in Section 6 — registry sync ~2s; documents list 4.1s; sheets 3.6s; run POST ~12.2s; repeated assign_global everywhere; safe-mode ~1.5s; run outputs/summary/logfile ~1.3–1.5s each with role overhead.
+* [x] Deep-dive `logs/ade-upload-document.log` and summarize perf findings in Section 6 — safe-mode ~1.35s; document POST ~4.2s; documents GET ~3.9s; all redo assign_global.
+* [x] Deep-dive `logs/ade-upload-multiple-documents.log` and summarize perf findings in Section 6 — each document POST ~3.7–4.2s with repeated role work; safe-mode ~1.83s; final documents GET ~3.6s.
 * [x] Deep-dive `logs/ade-filter-documents-by-status.log` and summarize perf findings in Section 6 — log only covers startup + `/system/safe-mode`; noted role overhead.
-* [ ] Deep-dive `logs/ade-filter-by-recently-run.log` and summarize perf findings in Section 6.
+* [x] Deep-dive `logs/ade-filter-by-recently-run.log` and summarize perf findings in Section 6 — registry sync ~2.1s; documents list (sorted by last_run) ~4.37s; safe-mode ~1.4s; repeated assign_global.
+* [x] Code review `features/auth/service.py` (dev identity/assign_global/sync_permission_registry) for caching and idempotency options.
+* [x] Code review `features/roles/service.py` (registry sync, get_by_slug, assign_role/assign_global) for per-request overhead and caching hooks.
+* [x] Code review `features/documents/service.py` (list + last_run attach) to confirm query shape and potential optimizations/indexes.
+* [x] Code review request-level caching options (dependency injection/middleware) to share identity/permissions across calls in one session.
+* [x] Sketch bootstrap endpoint/server-side cache shape and update workpackage design accordingly.
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
@@ -141,19 +146,71 @@ automatic-data-extractor/
 
 ## 6. Log deep-dive notes (fill as you analyze each file)
 
-- `logs/ade-startup.log` — TODO
-- `logs/ade-initial-setup.log` — TODO
-- `logs/ade-load-workspaces-page.log` — TODO
-- `logs/ade-load-workspace-settings.log` — TODO
-- `logs/ade-load-workspace-settings-members-tab.log` — TODO
-- `logs/ade-load-workspace-settings-roles-tab.log` — TODO
-- `logs/ade-creating-workspace.log` — TODO
-- `logs/ade-creating-config-from-template.log` — TODO
-- `logs/ade-load-config-builder-page.log` — TODO
-- `logs/ade-load-config-builder-editor.log` — TODO
-- `logs/ade-start-config-builder-validation.log` — TODO
-- `logs/ade-start-config-builder-test-run.log` — TODO
-- `logs/ade-upload-document.log` — TODO
-- `logs/ade-upload-multiple-documents.log` — TODO
+- `logs/ade-startup.log` — Startup includes roles registry sync (~2s). Auth disabled but registry sync still runs; no other notable startup work.
+- `logs/ade-initial-setup.log` — Includes frontend build (2.1s) then DB migration (0001). Roles registry sync takes ~3.4s at startup. First `/api/v1/auth/session` creates dev identity principal and global admin assignment; call takes ~3.3s. Immediately after, `/api/v1/workspaces` redoes `roles.global.get_by_slug` + `assign_global` (already_exists) and permissions fetch; duration ~1.8s. Shows repeated role work even within same session; registry sync only once at startup.
+- `logs/ade-load-workspaces-page.log` — Startup roles registry sync ~2s. Frontend fires `/api/v1/workspaces` and `/api/v1/auth/session` in parallel; both execute `roles.global.get_by_slug` + `assign_global` (already_exists) and permissions lookups. Workspaces call ~1.9s, session ~2.8s. Shows duplicated role work across concurrent requests.
+- `logs/ade-load-workspace-settings.log` — Startup roles registry sync ~2.1s. Single `/api/v1/system/safe-mode` triggers dev identity and `assign_global` (already_exists) despite auth disabled; call takes ~1.3s.
+- `logs/ade-load-workspace-settings-members-tab.log` — Startup roles registry sync ~2s. Three parallel requests (users list, workspace members, workspace roles) all trigger dev identity and `assign_global` (already_exists) repeatedly. `/api/v1/users` takes ~4.3s; `/workspaces/{id}/members` and `/roles` take 3.5–5.5s and return 422. Heavy duplicated role lookups dominate latency even before the 422 failure.
+- `logs/ade-load-workspace-settings-roles-tab.log` — Startup roles registry sync ~2.1s. Multiple parallel requests (`/permissions?scope=global`, `/workspaces/{id}/roles`) each execute `roles.global.get_by_slug` + `assign_global` (already_exists) and permission fetches. Both endpoints return 422 and take ~2.6–4.3s. Heavy duplicated role work even when auth disabled.
+- `logs/ade-creating-workspace.log` — Startup roles registry sync ~2.1s. Workspace creation flow: `/api/v1/users` takes ~3.0s with role assignment and permission fetch. `POST /api/v1/workspaces` takes ~4.6s; includes global role assignment (already_exists) plus workspace role assignment sync for new workspace. After creation, multiple parallel GETs (`/workspaces`, `/system/safe-mode`, etc.) re-trigger `assign_global` and permissions; safe-mode call alone ~3.2s. Heavy repeated role work even when auth disabled.
+- `logs/ade-creating-config-from-template.log` — Startup roles registry sync ~2.1s. First `/configurations` GET takes ~3.1s with dev identity + `assign_global` (already_exists). Safe-mode call ~1.35s also redoes role assignment. Config creation POST (~2.7s) again re-runs `assign_global` before materializing template. Follow-up config list GET (~2.5s) also repeats the role path. Pattern: every call redoes global role lookup/assign despite auth disabled.
+- `logs/ade-load-config-builder-page.log` — Startup roles registry sync ~2.1s. `/configurations` GET ~3.1s with dev identity + `assign_global` (already_exists). Safe-mode call ~1.35s also redoes role assignment. No additional config actions captured.
+- `logs/ade-load-config-builder-editor.log` — Startup roles registry sync ~2.1s. Safe-mode call ~1.36s with `assign_global`. Config files list (~3.17s) and file read (~2.39s) both repeat dev identity + `assign_global` (already_exists). Parallel auth calls drive duplicate role work; no document-specific heavy queries beyond role overhead.
+- `logs/ade-start-config-builder-validation.log` — Startup roles registry sync ~2s. Validation flow: `/validate` POST ~3.1s with repeated `assign_global`; then `/configurations/{id}/runs` POST triggers env build and run prepare; total request ~14.9s. Pool emitted warning about unclosed aioodbc connection during/after run. Safe-mode call still ~1.3s with repeated role assignment. Heavy repeated role work plus long build pipeline dominate latency.
+- `logs/ade-start-config-builder-test-run.log` — Startup roles registry sync ~2s. `/documents` list 4.1s and `/documents/{id}/sheets` 3.6s, both repeating `assign_global`. Run start (`/configurations/{id}/runs` with document) ~12.2s even with active build, still redoes role assignment. Safe-mode fetch ~1.5s. Subsequent run outputs/summary/logfile calls each ~1.3–1.5s and also redo `assign_global`. Heavy role duplication plus long run prep dominate.
+- `logs/ade-upload-document.log` — Safe-mode call ~1.35s with role lookup/assign. Document upload POST takes ~4.2s, then documents list GET ~3.9s; both repeat dev identity and `assign_global` (already_exists). Role overhead present despite auth disabled.
+- `logs/ade-upload-multiple-documents.log` — Sequence of document uploads: multiple `/documents` POSTs each ~3.7–4.2s, all repeating `assign_global` despite auth disabled. Safe-mode call ~1.83s also redoes role assignment. Final documents list GET ~3.6s. Throughput dominated by per-request role overhead.
 - `logs/ade-filter-documents-by-status.log` — Startup shows roles registry sync (~2s). Auth disabled but dev identity still triggers `roles.global.get_by_slug` + `assign_global` (already_exists) on `/api/v1/system/safe-mode`, leading to ~1.3s request time; no document filter actions captured (log likely truncated/limited).
-- `logs/ade-filter-by-recently-run.log` — TODO
+- `logs/ade-filter-by-recently-run.log` — Startup roles registry sync ~2.1s. `/documents?sort=-last_run_at` takes ~4.37s with role lookup/assign. Safe-mode fetch ~1.4s also repeats `assign_global`. Same repeated role overhead pattern.
+
+---
+
+## 7. Backend code hotspots (in-progress)
+
+- `features/auth/service.py` — `ensure_dev_identity` always calls `sync_permission_registry` + `_assign_global_role` per request; no memoization of principal/permissions within a request. `_assign_global_role` does `get_global_role_by_slug` + `assign_global_role` every time; a per-request cache/short-circuit around the global admin assignment is needed.
+- `features/roles/service.py` — `sync_permission_registry` uses module globals but still runs in many requests (likely due to reload/multiprocess or lack of persisted marker); needs process-safe/TTL caching and a DB/versioned sentinel to avoid per-request sync. `get_global_role_by_slug` uncached. `assign_global_role` always goes through `ensure_user_principal` and `assign_role` (which relies on DB unique constraint); add existence check/early return to skip DB writes when assignment exists. Consider caching global role id/permissions. Pool warning observed elsewhere suggests DB connections not returned; worth checking runs service for leaks.
+- `features/documents/service.py` — queries are straightforward; `list_documents` + `_latest_stream_runs` fetch all runs per document and then first per doc. For larger datasets, consider `row_number`/CTE to get latest per document in one query plus indexes on `(workspace_id, input_document_id, finished_at DESC, started_at DESC)`. Latency in logs driven by auth/roles, not this query.
+- Request fan-out — no shared request cache for identity/permissions; parallel requests redo auth/roles. Need a request-scoped cache or bootstrap endpoint to serve user/profile/permissions/safe-mode/workspaces once and reuse across frontend calls.
+
+---
+
+## 8. Proposed optimizations (draft)
+
+- Registry sync: cache by persisted version (e.g., system setting `roles-registry-version` or checksum of `PERMISSIONS`/`SYSTEM_ROLES`) and process-local TTL. Only force sync when version changes or on startup with `force=True`.
+- Global role lookup/assignment: cache global role slug→id in-memory with TTL; add `assign_global_if_missing` that short-circuits when assignment exists (query once via unique constraint). Use per-request memoization of principal/permissions in FastAPI dependency or request state/contextvar.
+- Request-scoped identity cache: create a dependency that resolves dev identity/user/principal/permissions once per request and reuses in downstream routes (session, workspaces, safe-mode, documents, etc.).
+- Bootstrap endpoint: `/api/v1/bootstrap` (or similar) returning session user + permissions + global roles + workspace memberships + safe-mode in one payload; frontend uses this instead of parallel calls. If adding, update OpenAPI and regenerate types (`ade openapi-types`).
+- Documents list: optional improvement to latest-run lookup via `row_number()` per document and index on `runs(workspace_id, input_document_id, finished_at DESC, started_at DESC)` to keep attach fast at scale.
+
+Next steps (implementation plan):
+1) Implement registry version/TTL cache to stop per-request sync.
+2) Add global role id cache + `assign_global_if_missing` guard; memoize principal/permissions per request.
+3) Add request-scoped identity dependency and wire routes to reuse it.
+4) Add bootstrap endpoint + schema/types; update frontend to use it (or server-side cache fallback if deferring frontend change).
+5) Optional: refine documents last_run query/index if needed after auth/roles fixes.
+
+---
+
+## 9. Implementation tasks (in-progress)
+
+- Registry caching: add version/TTL guard to `sync_permission_registry` (persisted marker + process-local TTL) to avoid per-request sync; cover with tests. — implemented: SHA-256 fingerprint persisted via `roles-registry-version`; TTL 10m process cache + persisted skip; added reseed guard when DB tables are empty even if cache is warm.
+- Global role caching: add slug→role_id cache with TTL; introduce `assign_global_if_missing` to early-return when assignment exists; ensure `ensure_dev_identity` and initial-setup paths use it. — implemented (role cache with TTL, dev identity and initial setup paths use `assign_global_role_if_missing`; SSO auto-provision path updated too).
+- Request-scoped identity cache: FastAPI dependency/contextvar to memoize user/principal/permissions per request; wire session/workspaces/safe-mode/documents/runs to reuse. — implemented baseline contextvar memoization in `get_current_identity` plus cached global+workspace permissions in `require_global`/`require_workspace`; per-request caches now reset to avoid cross-request leakage.
+- Bootstrap endpoint: design `/api/v1/bootstrap` (user/profile, permissions, roles, workspaces, safe-mode) and update OpenAPI/types + frontend; or server-side cache if deferring frontend. — implemented endpoint/schema + registered router; OpenAPI/types regenerated; frontend wiring remains.
+- Last-run query/index: evaluate `runs` index on `(workspace_id, input_document_id, finished_at desc, started_at desc)` and optional CTE to pull latest run per document. — added index and simplified last_run query ordering.
+
+Next tactical steps:
+- Add a request-scoped identity dependency (e.g., in `features/auth/context.py`) that caches user, principal, permissions, and global roles in `request.state`/contextvar; update routes (session, workspaces, safe-mode, documents, runs, configs) to consume it instead of recalculating.
+- Frontend follow-up: switch documents screen to use bootstrap payload (or server-provided cache) to avoid parallel auth/roles calls. — partial: `useSessionQuery` now uses `/api/v1/bootstrap` and seeds workspaces + safe-mode caches; workspaces/safe-mode hooks now read from seeded cache to avoid extra fetches; further UI wiring may be needed.
+- Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev).
+
+---
+
+## 10. Request-scoped cache & bootstrap design (draft)
+
+- Identity cache dependency: create `get_cached_identity` (contextvar + request.state) that runs `ensure_dev_identity`/auth once per request, reuses principal/permissions/global roles, and exposes a dataclass with user, principal_id, permissions, global_roles. All routes use this instead of re-running auth/roles.
+- Permissions cache: memoize global permissions for the principal within the request, optionally with a small TTL for background tasks.
+- Bootstrap endpoint: `/api/v1/bootstrap` returns `{ user, profile, principal_id, global_roles, permissions, workspaces: {...}, safe_mode }`, leveraging the cached identity; workspace memberships reused from the same call.
+- Wiring: session/workspaces/safe-mode/documents/runs/configs to accept cached identity (dependency override) rather than fresh service calls; maintain compatibility with auth-enabled mode.
+
+> Note: To regenerate frontend OpenAPI types, activate the venv first (`source .venv/bin/activate`) so `ade openapi-types` is available.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path as FilePath
 from typing import TYPE_CHECKING, Annotated
+from contextvars import ContextVar
 
 import jwt
 from fastapi import Depends, HTTPException, Path, Request, Security, status
@@ -20,7 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.features.auth.service import AuthenticatedIdentity, AuthService
 from ade_api.features.roles.authorization import authorize
 from ade_api.features.roles.models import ScopeType
-from ade_api.features.roles.service import ensure_user_principal
+from ade_api.features.roles.service import (
+    ensure_user_principal,
+    get_global_permissions_for_principal,
+    get_workspace_permissions_for_principal,
+)
 from ade_api.features.runs.supervisor import RunExecutionSupervisor
 from ade_api.features.users.models import User
 from ade_api.features.workspaces.schemas import WorkspaceOut
@@ -161,6 +166,14 @@ _session_cookie_scheme = APIKeyCookie(
     scheme_name="SessionCookie",
     auto_error=False,
 )
+_IDENTITY_CTX: ContextVar[AuthenticatedIdentity | None] = ContextVar(
+    "_IDENTITY_CTX",
+    default=None,
+)
+_PERMISSIONS_CTX: ContextVar[dict[str, set[str]]] = ContextVar(
+    "_PERMISSIONS_CTX",
+    default={},
+)
 
 def _is_dev_identity(identity: AuthenticatedIdentity) -> bool:
     return identity.credentials == "development"
@@ -184,9 +197,20 @@ async def get_current_identity(
 ) -> AuthenticatedIdentity:
     """Resolve the authenticated identity for the request."""
 
+    state_cached = getattr(request.state, "_cached_identity", None)
+    if state_cached is not None:
+        return state_cached
+
+    # Reset per-request caches to avoid cross-request leakage
+    _IDENTITY_CTX.set(None)
+    _PERMISSIONS_CTX.set({})
+
     service = AuthService(session=session, settings=settings)
     if settings.auth_disabled:
-        return await service.ensure_dev_identity()
+        identity = await service.ensure_dev_identity()
+        _IDENTITY_CTX.set(identity)
+        request.state._cached_identity = identity
+        return identity
 
     if credentials is not None:
         try:
@@ -201,11 +225,14 @@ async def get_current_identity(
             ) from exc
         user = await service.resolve_user(payload)
         principal = await ensure_user_principal(session=session, user=user)
-        return AuthenticatedIdentity(
+        identity = AuthenticatedIdentity(
             user=user,
             principal=principal,
             credentials="bearer_token",
         )
+        _IDENTITY_CTX.set(identity)
+        request.state._cached_identity = identity
+        return identity
 
     raw_cookie = session_cookie or request.cookies.get(
         service.settings.session_cookie_name
@@ -222,14 +249,19 @@ async def get_current_identity(
         service.enforce_csrf(request, payload)
         user = await service.resolve_user(payload)
         principal = await ensure_user_principal(session=session, user=user)
-        return AuthenticatedIdentity(
+        identity = AuthenticatedIdentity(
             user=user,
             principal=principal,
             credentials="session_cookie",
         )
+        _IDENTITY_CTX.set(identity)
+        request.state._cached_identity = identity
+        return identity
 
     if api_key:
         identity = await service.authenticate_api_key(api_key, request=request)
+        _IDENTITY_CTX.set(identity)
+        request.state._cached_identity = identity
         return identity
 
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
@@ -282,13 +314,17 @@ def require_global(
     ) -> User:
         if _is_dev_identity(identity):
             return identity.user
-        decision = await authorize(
-            session=session,
-            principal_id=str(identity.principal.id),
-            permission_key=permission,
-            scope_type=ScopeType.GLOBAL,
-        )
-        if not decision.is_authorized:
+        cached = _PERMISSIONS_CTX.get()
+        perms = cached.get("global")
+        if perms is None:
+            perms = await get_global_permissions_for_principal(
+                session=session,
+                principal=identity.principal,
+            )
+            next_cache = dict(cached)
+            next_cache["global"] = perms
+            _PERMISSIONS_CTX.set(next_cache)
+        if permission not in perms:
             raise forbidden_response(
                 permission=permission,
                 scope_type=ScopeType.GLOBAL,
@@ -320,14 +356,21 @@ def require_workspace(
             default_param=scope_param,
             permission=permission,
         )
-        decision = await authorize(
-            session=session,
-            principal_id=str(identity.principal.id),
-            permission_key=permission,
-            scope_type=ScopeType.WORKSPACE,
-            scope_id=workspace_id,
-        )
-        if not decision.is_authorized:
+        cache = _PERMISSIONS_CTX.get()
+        workspace_cache = cache.get("workspace", {})
+        perms = workspace_cache.get(workspace_id)
+        if perms is None:
+            perms = await get_workspace_permissions_for_principal(
+                session=session,
+                principal=identity.principal,
+                workspace_id=workspace_id,
+            )
+            workspace_cache = dict(workspace_cache)
+            workspace_cache[workspace_id] = perms
+            next_cache = dict(cache)
+            next_cache["workspace"] = workspace_cache
+            _PERMISSIONS_CTX.set(next_cache)
+        if permission not in perms:
             raise forbidden_response(
                 permission=permission,
                 scope_type=ScopeType.WORKSPACE,

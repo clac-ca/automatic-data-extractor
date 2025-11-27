@@ -8,12 +8,15 @@ import {
   type SafeModeUpdateRequest,
 } from "./api";
 
-const SAFE_MODE_QUERY_KEY = ["system", "safe-mode"] as const;
+export const SAFE_MODE_QUERY_KEY = ["system", "safe-mode"] as const;
 
 export function useSafeModeStatus() {
+  const queryClient = useQueryClient();
+  const initialData = queryClient.getQueryData<SafeModeStatus>(SAFE_MODE_QUERY_KEY);
   return useQuery<SafeModeStatus>({
     queryKey: SAFE_MODE_QUERY_KEY,
     queryFn: ({ signal }) => fetchSafeModeStatus({ signal }),
+    initialData,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
