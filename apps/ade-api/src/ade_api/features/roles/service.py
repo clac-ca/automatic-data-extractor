@@ -808,7 +808,7 @@ async def create_global_role(
         "roles.global.create.start",
         extra=log_context(
             slug=slug,
-            name=normalized_name,
+            role_name=normalized_name,
             actor_id=getattr(actor, "id", None),
         ),
     )
@@ -822,7 +822,7 @@ async def create_global_role(
     except AuthorizationError as exc:
         logger.warning(
             "roles.global.create.permission_validation_failed",
-            extra=log_context(slug=slug, name=normalized_name),
+            extra=log_context(slug=slug, role_name=normalized_name),
         )
         raise RoleValidationError(str(exc)) from exc
 
@@ -860,7 +860,7 @@ async def create_global_role(
         extra=log_context(
             role_id=role.id,
             slug=role.slug,
-            name=role.name,
+            role_name=role.name,
             permission_count=len(permission_keys),
         ),
     )
@@ -950,7 +950,7 @@ async def update_global_role(
         extra=log_context(
             role_id=role.id,
             slug=role.slug,
-            name=role.name,
+            role_name=role.name,
             added=len(additions),
             removed=len(removals),
         ),

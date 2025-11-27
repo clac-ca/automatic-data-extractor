@@ -64,7 +64,7 @@ class SystemSettingsService:
             "system_settings.upsert.success",
             extra=log_context(
                 setting_key=key,
-                created=created,
+                record_created=created,
             ),
         )
         return setting
