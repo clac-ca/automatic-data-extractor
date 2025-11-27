@@ -26,6 +26,7 @@ from ade_api.features.roles.service import (
     sync_permission_registry,
 )
 from ade_api.settings import Settings
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import Page, paginate_sql
 
 from ..system_settings.repository import SystemSettingsRepository
@@ -47,6 +48,9 @@ from .utils import normalise_api_key_label, normalise_email
 
 if TYPE_CHECKING:
     from ade_api.features.roles.models import Principal
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -92,6 +96,7 @@ class SessionTokens:
     refresh_expires_at: datetime
     access_max_age: int
     refresh_max_age: int
+
 
 @dataclass(slots=True)
 class OIDCProviderMetadata:
@@ -152,7 +157,6 @@ _DEFAULT_SSO_PROVIDER_ID = "sso"
 _DEFAULT_SSO_PROVIDER_LABEL = "Single sign-on"
 _DEFAULT_SSO_PROVIDER_START_URL = "/api/v1/auth/sso/login"
 
-
 _SSO_STATE_TTL_SECONDS = 300
 SSO_STATE_COOKIE = "backend_app_sso_state"
 _MAX_PROVIDER_RESPONSE_BYTES = 64 * 1024
@@ -160,6 +164,10 @@ _HTTP_TIMEOUT = httpx.Timeout(5.0, connect=5.0, read=5.0)
 _HTTP_LIMITS = httpx.Limits(max_connections=5, max_keepalive_connections=5)
 _ALLOWED_JWT_ALGORITHMS = {"RS256", "RS384", "RS512", "ES256"}
 _JWT_LEEWAY_SECONDS = 60
+
+_INITIAL_SETUP_SETTING_KEY = "initial_setup"
+_GLOBAL_ADMIN_ROLE_SLUG = "global-administrator"
+_GLOBAL_USER_ROLE_SLUG = "global-user"
 
 
 def _is_private_host(host: str) -> bool:
@@ -201,9 +209,6 @@ def _ensure_public_https_url(raw_url: str, *, purpose: str) -> httpx.URL:
             detail=f"Identity provider {purpose} URL targets a private host",
         )
     return url
-_INITIAL_SETUP_SETTING_KEY = "initial_setup"
-_GLOBAL_ADMIN_ROLE_SLUG = "global-administrator"
-_GLOBAL_USER_ROLE_SLUG = "global-user"
 
 
 class AuthService:
@@ -215,11 +220,15 @@ class AuthService:
         self._users = UsersRepository(session)
         self._api_keys = APIKeysRepository(session)
         self._system_settings = SystemSettingsRepository(session)
-        self._logger = logging.getLogger(__name__)
+        # Keep for backwards compatibility; use module-level `logger` for logging.
+        self._logger = logger
 
     @property
     def settings(self) -> Settings:
         return self._settings
+
+    # ------------------------------------------------------------------
+    # Development identity
 
     async def ensure_dev_identity(self) -> AuthenticatedIdentity:
         """Ensure a development identity exists when auth is bypassed."""
@@ -228,7 +237,16 @@ class AuthService:
         email = normalise_email(email_source)
         display_name = (self.settings.auth_disabled_user_name or "Development User").strip() or None
 
+        logger.debug(
+            "auth.dev_identity.ensure.start",
+            extra=log_context(
+                user_email=email,
+                display_name=display_name,
+            ),
+        )
+
         user = await self._users.get_by_email(email)
+        created = False
         if user is None:
             user = await self._users.create(
                 email=email,
@@ -237,6 +255,7 @@ class AuthService:
                 is_active=True,
                 is_service_account=False,
             )
+            created = True
         else:
             updated = False
             if not user.is_active:
@@ -255,6 +274,17 @@ class AuthService:
             session=self._session,
         )
         principal = await ensure_user_principal(session=self._session, user=user)
+
+        logger.info(
+            "auth.dev_identity.ensure.success",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                user_email=user.email_canonical,
+                user_created=created,
+                is_service_account=user.is_service_account,
+            ),
+        )
+
         return AuthenticatedIdentity(
             user=user,
             principal=principal,
@@ -267,6 +297,8 @@ class AuthService:
     async def get_initial_setup_status(self) -> tuple[bool, datetime | None]:
         """Return whether setup is required plus the completion timestamp."""
 
+        logger.debug("auth.initial_setup.status.start", extra=log_context())
+
         setting = await self._system_settings.get(_INITIAL_SETUP_SETTING_KEY)
         completed_at: datetime | None = None
         if setting is not None:
@@ -277,12 +309,20 @@ class AuthService:
                 except ValueError:
                     completed_at = None
         if completed_at is not None:
-            return False, completed_at
+            requires_setup = False
+        else:
+            has_admin = await has_users_with_global_role(
+                session=self._session, slug=_GLOBAL_ADMIN_ROLE_SLUG
+            )
+            requires_setup = not has_admin
 
-        has_admin = await has_users_with_global_role(
-            session=self._session, slug=_GLOBAL_ADMIN_ROLE_SLUG
+        logger.info(
+            "auth.initial_setup.status",
+            extra=log_context(
+                requires_setup=requires_setup,
+                completed_at=completed_at.isoformat() if completed_at else None,
+            ),
         )
-        requires_setup = not has_admin
         return requires_setup, completed_at
 
     async def complete_initial_setup(
@@ -294,15 +334,18 @@ class AuthService:
     ) -> User:
         """Create the first administrator and mark setup as complete."""
 
+        logger.debug(
+            "auth.initial_setup.complete.start",
+            extra=log_context(
+                email=normalise_email(email),
+                has_display_name=bool(display_name),
+            ),
+        )
+
         session = self._session
 
         # Ensure the canonical permission and role registry exists before
-        # provisioning the first administrator. In environments where the
-        # service is executed outside of the FastAPI lifespan (for example,
-        # CLI utilities or ephemeral setup scripts), the registry may not have
-        # been synced yet which would previously raise a 500 when assigning the
-        # `global-administrator` role. Running the synchronisation here keeps the
-        # initial setup flow resilient regardless of the caller.
+        # provisioning the first administrator.
         await sync_permission_registry(session=session)
 
         async with session.begin():
@@ -318,6 +361,10 @@ class AuthService:
             raw_value = setting.value or {}
             completed_at = raw_value.get("completed_at")
             if completed_at:
+                logger.warning(
+                    "auth.initial_setup.complete.already_completed",
+                    extra=log_context(),
+                )
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     detail="Initial setup already completed",
@@ -326,6 +373,10 @@ class AuthService:
                 session=session, slug=_GLOBAL_ADMIN_ROLE_SLUG
             )
             if has_admin:
+                logger.warning(
+                    "auth.initial_setup.complete.already_completed_admin_exists",
+                    extra=log_context(),
+                )
                 raise HTTPException(
                     status.HTTP_409_CONFLICT,
                     detail="Initial setup already completed",
@@ -349,31 +400,85 @@ class AuthService:
             setting.value = setting_value
             await session.flush()
 
+            logger.info(
+                "auth.initial_setup.complete.success",
+                extra=log_context(
+                    user_id=cast(str, user.id),
+                    email=user.email_canonical,
+                ),
+            )
             return user
 
     async def authenticate(self, *, email: str, password: str) -> User:
         """Return the active user matching ``email``/``password``."""
 
         canonical = normalise_email(email)
+        logger.debug(
+            "auth.login.password.start",
+            extra=log_context(email=canonical),
+        )
+
         user = await self._users.get_by_email(canonical)
         if user is None:
+            logger.warning(
+                "auth.login.failed",
+                extra=log_context(
+                    email=canonical,
+                    reason="unknown_user",
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
         if not user.is_active:
+            logger.warning(
+                "auth.login.failed",
+                extra=log_context(
+                    user_id=cast(str, user.id),
+                    email=canonical,
+                    reason="user_inactive",
+                ),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
+
         now = self._now()
         lockout_error = self._lockout_error(user, reference=now)
         if lockout_error is not None:
+            logger.warning(
+                "auth.login.locked_out",
+                extra=log_context(
+                    user_id=cast(str, user.id),
+                    email=canonical,
+                    locked_until=user.locked_until.isoformat()
+                    if user.locked_until
+                    else None,
+                ),
+            )
             raise lockout_error
 
         credential = user.credential
         if credential is None or not verify_password(password, credential.password_hash):
             await self._record_failed_login(user)
+            logger.warning(
+                "auth.login.failed",
+                extra=log_context(
+                    user_id=cast(str, user.id),
+                    email=canonical,
+                    reason="invalid_password",
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         user.last_login_at = now
         user.failed_login_count = 0
         user.locked_until = None
         await self._session.flush()
+
+        logger.info(
+            "auth.login.password.success",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                email=canonical,
+            ),
+        )
         return user
 
     def is_secure_request(self, request: Request) -> bool:
@@ -401,6 +506,16 @@ class AuthService:
         refresh_delta = settings.jwt_refresh_ttl
         csrf_token = secrets.token_urlsafe(32)
         csrf_hash = hash_csrf_token(csrf_token)
+
+        logger.debug(
+            "auth.session.issue",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                session_id=session_identifier,
+                access_ttl_seconds=int(access_delta.total_seconds()),
+                refresh_ttl_seconds=int(refresh_delta.total_seconds()),
+            ),
+        )
 
         now = datetime.now(UTC)
         access_expires_at = now + access_delta
@@ -461,6 +576,10 @@ class AuthService:
     async def start_session(self, *, user: User) -> SessionTokens:
         """Return freshly minted session cookies for ``user``."""
 
+        logger.info(
+            "auth.session.start",
+            extra=log_context(user_id=cast(str, user.id)),
+        )
         return self._issue_session_tokens(user=user)
 
     async def refresh_session(
@@ -470,6 +589,14 @@ class AuthService:
 
         if payload.token_type != "refresh":
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token required")
+
+        logger.info(
+            "auth.session.refresh",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                session_id=payload.session_id,
+            ),
+        )
         return self._issue_session_tokens(user=user, session_id=payload.session_id)
 
     def decode_token(
@@ -484,6 +611,16 @@ class AuthService:
         )
         if expected_type != "any" and payload.token_type != expected_type:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unexpected token type")
+
+        logger.debug(
+            "auth.token.decode",
+            extra=log_context(
+                user_id=payload.user_id,
+                session_id=payload.session_id,
+                token_type=payload.token_type,
+                expected_type=expected_type,
+            ),
+        )
         return payload
 
     def apply_session_cookies(
@@ -494,6 +631,16 @@ class AuthService:
         settings = self.settings
         session_path = self._normalise_cookie_path(settings.session_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
+
+        logger.debug(
+            "auth.session.cookies.apply",
+            extra=log_context(
+                session_path=session_path,
+                refresh_path=refresh_path,
+                secure=secure,
+            ),
+        )
+
         response.set_cookie(
             key=settings.session_cookie_name,
             value=tokens.access_token,
@@ -532,6 +679,15 @@ class AuthService:
         settings = self.settings
         session_path = self._normalise_cookie_path(settings.session_cookie_path)
         refresh_path = self._refresh_cookie_path(session_path)
+
+        logger.debug(
+            "auth.session.cookies.clear",
+            extra=log_context(
+                session_path=session_path,
+                refresh_path=refresh_path,
+            ),
+        )
+
         response.delete_cookie(
             key=settings.session_cookie_name,
             domain=settings.session_cookie_domain,
@@ -558,14 +714,30 @@ class AuthService:
         csrf_cookie = request.cookies.get(self.settings.session_csrf_cookie_name)
         header_token = request.headers.get("X-CSRF-Token")
         if not csrf_cookie or not header_token:
+            logger.warning(
+                "auth.csrf.missing",
+                extra=log_context(method=request.method),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token missing")
         if csrf_cookie != header_token:
+            logger.warning(
+                "auth.csrf.mismatch_header_cookie",
+                extra=log_context(method=request.method),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
 
         expected_hash = payload.csrf_hash
         if not expected_hash:
+            logger.warning(
+                "auth.csrf.missing_payload_hash",
+                extra=log_context(method=request.method),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
         if hash_csrf_token(header_token) != expected_hash:
+            logger.warning(
+                "auth.csrf.mismatch_payload",
+                extra=log_context(method=request.method),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="CSRF token mismatch")
 
     def _normalise_cookie_path(self, raw_path: str | None) -> str:
@@ -591,10 +763,18 @@ class AuthService:
         raw_session_cookie = request.cookies.get(self.settings.session_cookie_name)
         session_cookie = (raw_session_cookie or "").strip()
         if not session_cookie:
+            logger.warning(
+                "auth.session.payloads.missing_access",
+                extra=log_context(include_refresh=include_refresh),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
         try:
             access_payload = self.decode_token(session_cookie, expected_type="access")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            logger.warning(
+                "auth.session.payloads.invalid_access",
+                extra=log_context(include_refresh=include_refresh),
+            )
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid session token",
@@ -604,11 +784,29 @@ class AuthService:
         refresh_cookie = (raw_refresh_cookie or "").strip()
         if not refresh_cookie:
             if include_refresh:
+                logger.warning(
+                    "auth.session.payloads.missing_refresh",
+                    extra=log_context(
+                        user_id=access_payload.user_id,
+                        include_refresh=include_refresh,
+                    ),
+                )
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
+            logger.debug(
+                "auth.session.payloads.access_only",
+                extra=log_context(user_id=access_payload.user_id, include_refresh=False),
+            )
             return access_payload, None
         try:
             refresh_payload = self.decode_token(refresh_cookie, expected_type="refresh")
         except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
+            logger.warning(
+                "auth.session.payloads.invalid_refresh",
+                extra=log_context(
+                    user_id=access_payload.user_id,
+                    include_refresh=include_refresh,
+                ),
+            )
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
@@ -617,8 +815,23 @@ class AuthService:
         if refresh_payload.session_id != access_payload.session_id or (
             refresh_payload.user_id != access_payload.user_id
         ):
+            logger.warning(
+                "auth.session.payloads.mismatch",
+                extra=log_context(
+                    user_id=access_payload.user_id,
+                    access_session_id=access_payload.session_id,
+                    refresh_session_id=refresh_payload.session_id,
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session mismatch")
 
+        logger.debug(
+            "auth.session.payloads.success",
+            extra=log_context(
+                user_id=access_payload.user_id,
+                session_id=access_payload.session_id,
+            ),
+        )
         return access_payload, refresh_payload
 
     def get_provider_discovery(self) -> AuthProviderDiscovery:
@@ -634,21 +847,60 @@ class AuthService:
                     icon_url=None,
                 )
             )
-        return AuthProviderDiscovery(
+        discovery = AuthProviderDiscovery(
             providers=providers, force_sso=self.settings.auth_force_sso
         )
+        logger.debug(
+            "auth.providers.discovery",
+            extra=log_context(
+                provider_count=len(discovery.providers),
+                force_sso=discovery.force_sso,
+            ),
+        )
+        return discovery
 
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""
 
+        logger.debug(
+            "auth.resolve_user.start",
+            extra=log_context(
+                user_id=payload.user_id,
+                session_id=payload.session_id,
+                credentials="bearer_token",
+            ),
+        )
+
         user = await self._users.get_by_id(payload.user_id)
         if user is None:
+            logger.warning(
+                "auth.resolve_user.unknown",
+                extra=log_context(user_id=payload.user_id),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unknown user")
         if not user.is_active:
+            logger.warning(
+                "auth.resolve_user.inactive",
+                extra=log_context(user_id=payload.user_id),
+            )
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail="User inactive")
         lockout_error = self._lockout_error(user)
         if lockout_error is not None:
+            logger.warning(
+                "auth.resolve_user.locked_out",
+                extra=log_context(
+                    user_id=payload.user_id,
+                    locked_until=user.locked_until.isoformat()
+                    if user.locked_until
+                    else None,
+                ),
+            )
             raise lockout_error
+
+        logger.debug(
+            "auth.resolve_user.success",
+            extra=log_context(user_id=payload.user_id),
+        )
         return user
 
     # ------------------------------------------------------------------
@@ -664,19 +916,47 @@ class AuthService:
         """Issue an API key for the user identified by ``email``."""
 
         canonical = normalise_email(email)
+        logger.debug(
+            "auth.api_key.issue_for_email.start",
+            extra=log_context(
+                email=canonical,
+                expires_in_days=expires_in_days,
+                has_label=bool(label),
+            ),
+        )
+
         user = await self._users.get_by_email(canonical)
         if user is None:
+            logger.warning(
+                "auth.api_key.issue_for_email.user_not_found",
+                extra=log_context(email=canonical),
+            )
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
         if not user.is_active:
+            logger.warning(
+                "auth.api_key.issue_for_email.user_inactive",
+                extra=log_context(user_id=cast(str, user.id), email=canonical),
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Target user is inactive")
 
         expires_at = None
         if expires_in_days is not None:
             expires_at = self._now() + timedelta(days=expires_in_days)
 
-        return await self.issue_api_key(
+        result = await self.issue_api_key(
             user=user, expires_at=expires_at, label=label
         )
+
+        logger.info(
+            "auth.api_key.issue_for_email.success",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                email=canonical,
+                api_key_id=cast(str, result.api_key.id),
+                has_expiry=expires_at is not None,
+            ),
+        )
+        return result
 
     async def issue_api_key(
         self,
@@ -690,6 +970,17 @@ class AuthService:
         prefix, secret = generate_api_key_components()
         token_hash = hash_api_key(secret)
         cleaned_label = normalise_api_key_label(label)
+
+        logger.debug(
+            "auth.api_key.issue.start",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                api_key_prefix=prefix,
+                has_expiry=expires_at is not None,
+                has_label=bool(cleaned_label),
+            ),
+        )
+
         record = await self._api_keys.create(
             user_id=cast(str, user.id),
             token_prefix=prefix,
@@ -697,6 +988,17 @@ class AuthService:
             expires_at=expires_at,
             label=cleaned_label,
         )
+
+        logger.info(
+            "auth.api_key.issue.success",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                api_key_id=cast(str, record.id),
+                api_key_prefix=prefix,
+                has_expiry=expires_at is not None,
+            ),
+        )
+
         return APIKeyIssueResult(
             raw_key=f"{prefix}.{secret}",
             api_key=record,
@@ -712,24 +1014,60 @@ class AuthService:
     ) -> APIKeyIssueResult:
         """Issue an API key for the active user identified by ``user_id``."""
 
+        logger.debug(
+            "auth.api_key.issue_for_user.start",
+            extra=log_context(
+                user_id=user_id,
+                expires_in_days=expires_in_days,
+                has_label=bool(label),
+            ),
+        )
+
         user = await self._users.get_by_id(user_id)
         if user is None:
+            logger.warning(
+                "auth.api_key.issue_for_user.user_not_found",
+                extra=log_context(user_id=user_id),
+            )
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
         if not user.is_active:
+            logger.warning(
+                "auth.api_key.issue_for_user.user_inactive",
+                extra=log_context(user_id=user_id),
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Target user is inactive")
 
         expires_at = None
         if expires_in_days is not None:
             expires_at = self._now() + timedelta(days=expires_in_days)
 
-        return await self.issue_api_key(
+        result = await self.issue_api_key(
             user=user, expires_at=expires_at, label=label
         )
+
+        logger.info(
+            "auth.api_key.issue_for_user.success",
+            extra=log_context(
+                user_id=user_id,
+                api_key_id=cast(str, result.api_key.id),
+                has_expiry=expires_at is not None,
+            ),
+        )
+        return result
 
     async def list_api_keys(self, *, include_revoked: bool = False) -> list[APIKey]:
         """Return all issued API keys ordered by creation time."""
 
-        return await self._api_keys.list_api_keys(include_revoked=include_revoked)
+        logger.debug(
+            "auth.api_key.list.start",
+            extra=log_context(include_revoked=include_revoked),
+        )
+        keys = await self._api_keys.list_api_keys(include_revoked=include_revoked)
+        logger.debug(
+            "auth.api_key.list.success",
+            extra=log_context(include_revoked=include_revoked, count=len(keys)),
+        )
+        return keys
 
     async def paginate_api_keys(
         self,
@@ -741,8 +1079,18 @@ class AuthService:
     ) -> Page[APIKey]:
         """Return paginated API keys."""
 
+        logger.debug(
+            "auth.api_key.paginate.start",
+            extra=log_context(
+                include_revoked=include_revoked,
+                page=page,
+                page_size=page_size,
+                include_total=include_total,
+            ),
+        )
+
         stmt = self._api_keys.query_api_keys(include_revoked=include_revoked)
-        return await paginate_sql(
+        result = await paginate_sql(
             self._session,
             stmt,
             page=page,
@@ -751,15 +1099,44 @@ class AuthService:
             order_by=(APIKey.created_at.desc(),),
         )
 
+        logger.debug(
+            "auth.api_key.paginate.success",
+            extra=log_context(
+                include_revoked=include_revoked,
+                page=page,
+                page_size=page_size,
+                include_total=include_total,
+                items=len(result.items),
+                total=result.total,
+            ),
+        )
+        return result
+
     async def revoke_api_key(self, api_key_id: str) -> None:
         """Remove the API key identified by ``api_key_id``."""
 
+        logger.debug(
+            "auth.api_key.revoke.start",
+            extra=log_context(api_key_id=api_key_id),
+        )
         record = await self._api_keys.get_by_id(api_key_id)
         if record is None:
+            logger.warning(
+                "auth.api_key.revoke.not_found",
+                extra=log_context(api_key_id=api_key_id),
+            )
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="API key not found")
         if record.revoked_at is not None:
+            logger.info(
+                "auth.api_key.revoke.noop_already_revoked",
+                extra=log_context(api_key_id=api_key_id),
+            )
             return
         await self._api_keys.revoke(record, revoked_at=self._now())
+        logger.info(
+            "auth.api_key.revoke.success",
+            extra=log_context(api_key_id=api_key_id, user_id=record.user_id),
+        )
 
     async def authenticate_api_key(
         self, raw_key: str, *, request: Request | None = None
@@ -769,31 +1146,73 @@ class AuthService:
         try:
             prefix, secret = raw_key.split(".", 1)
         except ValueError as exc:
+            logger.warning(
+                "auth.api_key.authenticate.invalid_format",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid API key",
             ) from exc
 
+        logger.debug(
+            "auth.api_key.authenticate.start",
+            extra=log_context(api_key_prefix=prefix),
+        )
+
         record = await self._api_keys.get_by_prefix(prefix)
         if record is None:
+            logger.warning(
+                "auth.api_key.authenticate.unknown_prefix",
+                extra=log_context(api_key_prefix=prefix),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
         now = self._now()
         expires_at = self._ensure_aware(record.expires_at)
         if expires_at and expires_at < now:
+            logger.warning(
+                "auth.api_key.authenticate.expired",
+                extra=log_context(
+                    api_key_id=cast(str, record.id),
+                    api_key_prefix=prefix,
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API key expired")
         revoked_at = self._ensure_aware(record.revoked_at)
         if revoked_at and revoked_at <= now:
+            logger.warning(
+                "auth.api_key.authenticate.revoked",
+                extra=log_context(
+                    api_key_id=cast(str, record.id),
+                    api_key_prefix=prefix,
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API key revoked")
 
         expected = hash_api_key(secret)
         if not secrets.compare_digest(expected, record.token_hash):
+            logger.warning(
+                "auth.api_key.authenticate.hash_mismatch",
+                extra=log_context(
+                    api_key_id=cast(str, record.id),
+                    api_key_prefix=prefix,
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
         user = record.user
         if user is None:
             user = await self._users.get_by_id(record.user_id)
         if user is None or not user.is_active:
+            logger.warning(
+                "auth.api_key.authenticate.user_invalid",
+                extra=log_context(
+                    api_key_id=cast(str, record.id),
+                    api_key_prefix=prefix,
+                    user_id=record.user_id,
+                ),
+            )
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
         principal = await ensure_user_principal(session=self._session, user=user)
         identity = AuthenticatedIdentity(
@@ -801,6 +1220,15 @@ class AuthService:
             principal=principal,
             api_key=record,
             credentials="api_key",
+        )
+
+        logger.info(
+            "auth.api_key.authenticate.success",
+            extra=log_context(
+                api_key_id=cast(str, record.id),
+                api_key_prefix=prefix,
+                user_id=cast(str, user.id),
+            ),
         )
 
         if request is not None:
@@ -824,6 +1252,15 @@ class AuthService:
             record.last_seen_user_agent = user_agent[:255]
         await self._session.flush()
 
+        logger.debug(
+            "auth.api_key.touch",
+            extra=log_context(
+                api_key_id=cast(str, record.id),
+                user_id=record.user_id,
+                last_seen_ip=record.last_seen_ip,
+            ),
+        )
+
     # ------------------------------------------------------------------
     # SSO helpers
 
@@ -832,6 +1269,11 @@ class AuthService:
 
         if not self.settings.oidc_enabled:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="SSO not configured")
+
+        logger.debug(
+            "auth.sso.prepare.start",
+            extra=log_context(return_to=return_to),
+        )
 
         metadata = await self._get_oidc_metadata()
         issued_at = self._now()
@@ -859,6 +1301,15 @@ class AuthService:
             "code_challenge_method": "S256",
         }
         redirect_url = f"{metadata.authorization_endpoint}?{urlencode(params)}"
+
+        logger.info(
+            "auth.sso.prepare.success",
+            extra=log_context(
+                return_to=normalised_return,
+                has_return_to=normalised_return is not None,
+            ),
+        )
+
         return SSOLoginChallenge(
             redirect_url=redirect_url,
             state_token=state_token,
@@ -883,8 +1334,16 @@ class AuthService:
                 options={"require": ["exp", "iat", "state", "code_verifier", "nonce"]},
             )
         except jwt.ExpiredSignatureError as exc:
+            logger.warning(
+                "auth.sso.state.expired",
+                extra=log_context(),
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="SSO state expired") from exc
         except jwt.InvalidTokenError as exc:
+            logger.warning(
+                "auth.sso.state.invalid",
+                extra=log_context(),
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid SSO state") from exc
 
         return_to_raw = payload.get("return_to")
@@ -908,8 +1367,17 @@ class AuthService:
     ) -> SSOCompletionResult:
         """Complete the SSO flow and return the authenticated user."""
 
+        logger.debug(
+            "auth.sso.complete.start",
+            extra=log_context(),
+        )
+
         stored_state = self.decode_sso_state(state_token)
         if stored_state.state != state:
+            logger.warning(
+                "auth.sso.complete.state_mismatch",
+                extra=log_context(),
+            )
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="State mismatch")
 
         token_response = await self._exchange_authorization_code(
@@ -922,6 +1390,10 @@ class AuthService:
         access_token = token_response.get("access_token")
         token_type = str(token_response.get("token_type", "")).lower()
         if not id_token or not access_token or token_type != "bearer":
+            logger.warning(
+                "auth.sso.complete.invalid_token_response",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Invalid token response from identity provider",
@@ -940,6 +1412,10 @@ class AuthService:
         email = str(id_claims.get("email") or "")
         subject = str(id_claims.get("sub") or "")
         if not email or not subject:
+            logger.warning(
+                "auth.sso.complete.missing_claims",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider response missing required claims",
@@ -955,6 +1431,14 @@ class AuthService:
         user.failed_login_count = 0
         user.locked_until = None
         await self._session.flush()
+
+        logger.info(
+            "auth.sso.complete.success",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                email=user.email_canonical,
+            ),
+        )
         return SSOCompletionResult(user=user, return_to=stored_state.return_to)
 
     # ------------------------------------------------------------------
@@ -1125,12 +1609,25 @@ class AuthService:
                 detail="Incomplete SSO discovery document",
             ) from exc
 
+        logger.debug(
+            "auth.sso.metadata.loaded",
+            extra=log_context(
+                authorization_endpoint=metadata.authorization_endpoint,
+                token_endpoint=metadata.token_endpoint,
+                jwks_uri=metadata.jwks_uri,
+            ),
+        )
         return metadata
 
     async def _fetch_provider_json(
         self, url: httpx.URL, *, purpose: str
     ) -> Mapping[str, Any]:
         """Fetch and validate a JSON document from the identity provider."""
+
+        logger.debug(
+            "auth.sso.fetch.start",
+            extra=log_context(url=str(url), purpose=purpose),
+        )
 
         try:
             async with httpx.AsyncClient(
@@ -1140,12 +1637,24 @@ class AuthService:
             ) as client:
                 response = await client.get(url, headers={"Accept": "application/json"})
         except httpx.HTTPError as exc:
+            logger.warning(
+                "auth.sso.fetch.http_error",
+                extra=log_context(url=str(url), purpose=purpose),
+            )
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail=f"Unable to contact identity provider during {purpose}",
             ) from exc
 
         if response.status_code != status.HTTP_200_OK:
+            logger.warning(
+                "auth.sso.fetch.bad_status",
+                extra=log_context(
+                    url=str(url),
+                    purpose=purpose,
+                    status_code=response.status_code,
+                ),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail=f"Identity provider returned an error during {purpose}",
@@ -1155,6 +1664,10 @@ class AuthService:
         if content_length:
             try:
                 if int(content_length) > _MAX_PROVIDER_RESPONSE_BYTES:
+                    logger.warning(
+                        "auth.sso.fetch.response_too_large_header",
+                        extra=log_context(url=str(url), purpose=purpose),
+                    )
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         detail=f"Identity provider response too large during {purpose}",
@@ -1162,6 +1675,10 @@ class AuthService:
             except ValueError:
                 pass
         if len(response.content) > _MAX_PROVIDER_RESPONSE_BYTES:
+            logger.warning(
+                "auth.sso.fetch.response_too_large_body",
+                extra=log_context(url=str(url), purpose=purpose),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail=f"Identity provider response too large during {purpose}",
@@ -1170,17 +1687,29 @@ class AuthService:
         try:
             data = response.json()
         except ValueError as exc:
+            logger.warning(
+                "auth.sso.fetch.invalid_json",
+                extra=log_context(url=str(url), purpose=purpose),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail=f"Identity provider returned invalid JSON during {purpose}",
             ) from exc
 
         if not isinstance(data, Mapping):
+            logger.warning(
+                "auth.sso.fetch.invalid_shape",
+                extra=log_context(url=str(url), purpose=purpose),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail=f"Identity provider returned invalid JSON during {purpose}",
             )
 
+        logger.debug(
+            "auth.sso.fetch.success",
+            extra=log_context(url=str(url), purpose=purpose),
+        )
         return data
 
     async def _exchange_authorization_code(
@@ -1213,6 +1742,11 @@ class AuthService:
             purpose="token exchange",
         )
 
+        logger.debug(
+            "auth.sso.exchange.start",
+            extra=log_context(url=str(token_endpoint)),
+        )
+
         try:
             async with httpx.AsyncClient(
                 timeout=_HTTP_TIMEOUT,
@@ -1226,12 +1760,23 @@ class AuthService:
                     auth=cast(tuple[str | bytes, str | bytes], auth),
                 )
         except httpx.HTTPError as exc:
+            logger.warning(
+                "auth.sso.exchange.http_error",
+                extra=log_context(url=str(token_endpoint)),
+            )
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail="Unable to contact identity provider",
             ) from exc
 
         if response.status_code != status.HTTP_200_OK:
+            logger.warning(
+                "auth.sso.exchange.bad_status",
+                extra=log_context(
+                    url=str(token_endpoint),
+                    status_code=response.status_code,
+                ),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="SSO token exchange failed",
@@ -1241,6 +1786,10 @@ class AuthService:
         if content_length:
             try:
                 if int(content_length) > _MAX_PROVIDER_RESPONSE_BYTES:
+                    logger.warning(
+                        "auth.sso.exchange.response_too_large_header",
+                        extra=log_context(url=str(token_endpoint)),
+                    )
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         detail="Identity provider response too large",
@@ -1248,18 +1797,32 @@ class AuthService:
             except ValueError:
                 pass
         if len(response.content) > _MAX_PROVIDER_RESPONSE_BYTES:
+            logger.warning(
+                "auth.sso.exchange.response_too_large_body",
+                extra=log_context(url=str(token_endpoint)),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider response too large",
             )
 
         try:
-            return response.json()
+            data = response.json()
         except ValueError as exc:
+            logger.warning(
+                "auth.sso.exchange.invalid_json",
+                extra=log_context(url=str(token_endpoint)),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider returned invalid JSON",
             ) from exc
+
+        logger.debug(
+            "auth.sso.exchange.success",
+            extra=log_context(url=str(token_endpoint)),
+        )
+        return data
 
     async def _verify_jwt_via_jwks(
         self,
@@ -1279,6 +1842,10 @@ class AuthService:
         try:
             header = jwt.get_unverified_header(token)
         except jwt.InvalidTokenError as exc:
+            logger.warning(
+                "auth.sso.jwt.invalid_header",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Invalid token from identity provider",
@@ -1286,6 +1853,10 @@ class AuthService:
 
         algorithm = str(header.get("alg") or "")
         if algorithm not in _ALLOWED_JWT_ALGORITHMS:
+            logger.warning(
+                "auth.sso.jwt.unsupported_algorithm",
+                extra=log_context(algorithm=algorithm),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider token used an unsupported algorithm",
@@ -1295,6 +1866,10 @@ class AuthService:
         keys = await self._get_jwks_keys(jwks_uri)
         jwk = self._select_jwk(keys, kid, algorithm)
         if jwk is None:
+            logger.warning(
+                "auth.sso.jwt.no_matching_key",
+                extra=log_context(kid=str(kid), algorithm=algorithm),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="No signing key matched the identity provider response",
@@ -1320,12 +1895,20 @@ class AuthService:
         try:
             payload = jwt.decode(token, **decode_kwargs)
         except jwt.InvalidTokenError as exc:
+            logger.warning(
+                "auth.sso.jwt.invalid_payload",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Invalid token from identity provider",
             ) from exc
 
         if nonce is not None and payload.get("nonce") != nonce:
+            logger.warning(
+                "auth.sso.jwt.invalid_nonce",
+                extra=log_context(),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Invalid SSO nonce",
@@ -1344,6 +1927,10 @@ class AuthService:
         document = await self._fetch_provider_json(url, purpose="JWKS retrieval")
         keys = document.get("keys")
         if not isinstance(keys, list) or not keys:
+            logger.warning(
+                "auth.sso.jwks.missing_keys",
+                extra=log_context(url=str(url)),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider JWKS document is missing keys",
@@ -1355,11 +1942,19 @@ class AuthService:
                 parsed.append({str(k): v for k, v in item.items()})
 
         if not parsed:
+            logger.warning(
+                "auth.sso.jwks.empty_keys",
+                extra=log_context(url=str(url)),
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail="Identity provider JWKS document is missing keys",
             )
 
+        logger.debug(
+            "auth.sso.jwks.loaded",
+            extra=log_context(url=str(url), key_count=len(parsed)),
+        )
         return parsed
 
     @staticmethod
@@ -1415,9 +2010,12 @@ class AuthService:
             user = await self._users.get_by_email(canonical)
             if user is None:
                 if not self.settings.auth_sso_auto_provision:
-                    self._logger.warning(
-                        "SSO login denied for %s: auto-provisioning disabled",
-                        canonical,
+                    logger.warning(
+                        "auth.sso.autoprovision.denied",
+                        extra=log_context(
+                            email=canonical,
+                            provider=provider,
+                        ),
                     )
                     raise HTTPException(
                         status.HTTP_403_FORBIDDEN,
@@ -1431,8 +2029,13 @@ class AuthService:
                 await self._assign_global_role(
                     user=user, slug=_GLOBAL_USER_ROLE_SLUG
                 )
-                self._logger.info(
-                    "Provisioned new SSO user %s via %s", canonical, provider
+                logger.info(
+                    "auth.sso.user.provisioned",
+                    extra=log_context(
+                        user_id=cast(str, user.id),
+                        email=canonical,
+                        provider=provider,
+                    ),
                 )
             elif not user.is_active:
                 raise HTTPException(
@@ -1453,9 +2056,13 @@ class AuthService:
                     None,
                 )
                 if conflicting_identity is not None:
-                    self._logger.error(
-                        "SSO identity conflict for %s: subject mismatch",
-                        canonical,
+                    logger.error(
+                        "auth.sso.identity_conflict",
+                        extra=log_context(
+                            user_id=cast(str, user.id),
+                            email=canonical,
+                            provider=provider,
+                        ),
                     )
                     raise HTTPException(
                         status.HTTP_409_CONFLICT,
@@ -1471,6 +2078,13 @@ class AuthService:
         else:
             user = identity.user or await self._users.get_by_id(identity.user_id)
             if user is None:
+                logger.error(
+                    "auth.sso.identity_orphaned",
+                    extra=log_context(
+                        provider=provider,
+                        subject=subject,
+                    ),
+                )
                 msg = "SSO identity is orphaned"
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail=msg)
             if not user.is_active:
@@ -1483,6 +2097,15 @@ class AuthService:
 
         identity.last_authenticated_at = self._now()
         await self._session.flush()
+
+        logger.debug(
+            "auth.sso.user.resolved",
+            extra=log_context(
+                user_id=cast(str, user.id),
+                email=user.email_canonical,
+                provider=provider,
+            ),
+        )
         return user
 
 

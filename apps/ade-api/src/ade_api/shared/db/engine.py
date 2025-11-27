@@ -136,6 +136,8 @@ def _load_alembic_config(settings: Settings) -> Config:
         msg = f"Alembic configuration not found at {config_path}"
         raise FileNotFoundError(msg)
     config = Config(str(config_path))
+    # Preserve the API's logging configuration when migrations run in-process.
+    config.attributes["configure_logger"] = False
     config.set_main_option("script_location", str(settings.alembic_migrations_dir))
     return config
 
