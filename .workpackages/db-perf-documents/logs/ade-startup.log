@@ -1,0 +1,15 @@
+(.venv) jkropp@JKROPP-M11:~/automatic-data-extractor$ ade start
+🚀 Starting ADE backend on http://0.0.0.0:8000
+↪️  /home/jkropp/automatic-data-extractor/.venv/bin/uvicorn ade_api.main:create_app --factory --host 0.0.0.0 --port 8000
+2025-11-27T22:15:52.806Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=True debug=False version=0.2.0
+2025-11-27T22:15:52.806Z WARNING ade_api.main [cid=-] auth.disabled auth_disabled=True
+2025-11-27T22:15:52.967Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=True debug=False version=0.2.0
+2025-11-27T22:15:52.967Z WARNING ade_api.main [cid=-] auth.disabled auth_disabled=True
+2025-11-27T22:15:53.124Z INFO  uvicorn.error [cid=-] Started server process [62869]
+2025-11-27T22:15:53.124Z INFO  uvicorn.error [cid=-] Waiting for application startup.
+2025-11-27T22:15:54.385Z INFO  alembic.runtime.migration [cid=-] Context impl MSSQLImpl.
+2025-11-27T22:15:54.386Z INFO  alembic.runtime.migration [cid=-] Will assume transactional DDL.
+2025-11-27T22:15:54.654Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.start
+2025-11-27T22:15:56.647Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.success permission_count=22 system_role_count=4
+2025-11-27T22:15:56.714Z INFO  uvicorn.error [cid=-] Application startup complete.
+2025-11-27T22:15:56.721Z INFO  uvicorn.error [cid=-] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
