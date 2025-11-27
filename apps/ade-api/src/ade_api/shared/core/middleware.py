@@ -13,6 +13,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from ade_api.settings import get_settings
+
 from .logging import bind_request_context, clear_request_context, log_context
 
 _REQUEST_LOGGER = logging.getLogger("ade_api.request")

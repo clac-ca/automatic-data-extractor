@@ -729,7 +729,7 @@ class BuildsService:
         engine_version_hint: str | None,
         python_interpreter: str | None,
         target_path: Path,
-    ) -> "_BuildPlan":
+    ) -> _BuildPlan:
         workspace_id = configuration.workspace_id
         configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
         configuration.last_build_started_at = self._now()  # type: ignore[attr-defined]
