@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
+
+from ade_api.shared.core.logging import log_context
 
 if TYPE_CHECKING:
     from .service import RunStreamFrame
@@ -25,6 +28,7 @@ class _RunHandle:
 
 
 _COMPLETE = object()
+logger = logging.getLogger(__name__)
 
 
 class RunExecutionSupervisor:
@@ -46,6 +50,10 @@ class RunExecutionSupervisor:
         """Return an iterator for ``run_id`` backed by a background task."""
 
         handle = await self._ensure_handle(run_id, generator)
+        logger.debug(
+            "run.supervisor.stream.start",
+            extra=log_context(run_id=run_id),
+        )
         try:
             while True:
                 item = await handle.queue.get()
@@ -56,6 +64,10 @@ class RunExecutionSupervisor:
                 yield item  # type: ignore[misc]
         finally:
             await self._finalize(run_id)
+            logger.debug(
+                "run.supervisor.stream.end",
+                extra=log_context(run_id=run_id),
+            )
 
     async def _ensure_handle(
         self, run_id: str, generator: _RunGenerator
@@ -69,6 +81,10 @@ class RunExecutionSupervisor:
             task = asyncio.create_task(self._drive(run_id, generator, queue))
             handle = _RunHandle(queue=queue, task=task)
             self._handles[run_id] = handle
+            logger.debug(
+                "run.supervisor.handle.created",
+                extra=log_context(run_id=run_id),
+            )
             return handle
 
     async def _drive(
@@ -81,6 +97,10 @@ class RunExecutionSupervisor:
             async for frame in generator_factory():
                 await queue.put(frame)
         except Exception as exc:  # pragma: no cover - surfaced to consumers
+            logger.exception(
+                "run.supervisor.drive.error",
+                extra=log_context(run_id=run_id),
+            )
             await queue.put(exc)
         finally:
             await queue.put(_COMPLETE)

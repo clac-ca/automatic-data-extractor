@@ -19,6 +19,7 @@ from ade_api.features.configs.models import Configuration
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.settings import Settings
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
 from ade_api.storage_layout import config_venv_path
 
@@ -145,6 +146,16 @@ class BuildsService:
         configuration_id: str,
         options: BuildCreateOptions,
     ) -> tuple[Build, BuildExecutionContext]:
+        logger.debug(
+            "build.prepare.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                force=options.force,
+                wait=options.wait,
+            ),
+        )
+
         configuration = await self._require_configuration(workspace_id, configuration_id)
         config_path = await self._storage.ensure_config_path(
             workspace_id=workspace_id,
@@ -165,10 +176,20 @@ class BuildsService:
 
         target_path = config_venv_path(self._settings, workspace_id, configuration_id)
 
+        logger.debug(
+            "build.prepare.decision",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                should_rebuild=should_rebuild,
+                engine_spec=engine_spec,
+                engine_version_hint=engine_version_hint,
+                python_bin=python_interpreter,
+            ),
+        )
+
         if not should_rebuild:
-            build = await self._create_reuse_build_row(
-                configuration=configuration,
-            )
+            build = await self._create_reuse_build_row(configuration=configuration)
             await self._session.commit()
             context = BuildExecutionContext(
                 build_id=build.id,
@@ -186,10 +207,26 @@ class BuildsService:
                 should_run=False,
                 reuse_summary="Reused existing build",
             )
+            logger.info(
+                "build.prepare.reuse",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    build_id=build.id,
+                    reuse_summary=context.reuse_summary,
+                ),
+            )
             return build, context
 
         if configuration.build_status is BuildStatus.BUILDING:
             if options.wait:
+                logger.debug(
+                    "build.prepare.wait_existing",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        configuration_id=configuration_id,
+                    ),
+                )
                 await self._wait_for_build(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
@@ -199,6 +236,14 @@ class BuildsService:
                     configuration_id=configuration_id,
                     options=BuildCreateOptions(force=options.force, wait=False),
                 )
+            logger.warning(
+                "build.prepare.already_in_progress",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    build_status=str(configuration.build_status),
+                ),
+            )
             raise BuildAlreadyInProgressError(
                 f"Build in progress for workspace={workspace_id} configuration={configuration_id}"
             )
@@ -212,6 +257,16 @@ class BuildsService:
             target_path=target_path,
         )
         await self._session.commit()
+
+        logger.info(
+            "build.prepare.plan_created",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                build_id=plan.build.id,
+                should_rebuild=True,
+            ),
+        )
         return plan.build, plan.context
 
     async def stream_build(
@@ -220,8 +275,20 @@ class BuildsService:
         context: BuildExecutionContext,
         options: BuildCreateOptions,
     ) -> AsyncIterator[AdeEvent]:
+        logger.debug(
+            "build.stream.start",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=context.build_id,
+                should_run=context.should_run,
+                force=options.force,
+            ),
+        )
+
         build = await self._require_build(context.build_id)
         reason = "force_rebuild" if options.force else "dirty_or_missing"
+
         yield self._ade_event(
             build=build,
             type_="build.created",
@@ -236,6 +303,15 @@ class BuildsService:
         )
 
         if not context.should_run:
+            logger.info(
+                "build.stream.reuse_short_circuit",
+                extra=log_context(
+                    workspace_id=context.workspace_id,
+                    configuration_id=context.configuration_id,
+                    build_id=context.build_id,
+                    reason="reuse_ok",
+                ),
+            )
             build = await self._complete_build(
                 build,
                 status=BuildStatus.ACTIVE,
@@ -259,6 +335,15 @@ class BuildsService:
             return
 
         build = await self._transition_status(build, BuildStatus.BUILDING)
+        logger.info(
+            "build.stream.started",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=build.id,
+                reason=reason,
+            ),
+        )
         yield self._ade_event(
             build=build,
             type_="build.started",
@@ -311,6 +396,15 @@ class BuildsService:
                 elif isinstance(event, BuilderArtifactsEvent):
                     artifacts = event.artifacts
         except BuildExecutionError as exc:
+            logger.error(
+                "build.stream.execution_error",
+                extra=log_context(
+                    workspace_id=context.workspace_id,
+                    configuration_id=context.configuration_id,
+                    build_id=context.build_id,
+                    error=str(exc),
+                ),
+            )
             await self._handle_failure(
                 build=build,
                 context=context,
@@ -330,6 +424,14 @@ class BuildsService:
             return
 
         if artifacts is None:
+            logger.error(
+                "build.stream.missing_artifacts",
+                extra=log_context(
+                    workspace_id=context.workspace_id,
+                    configuration_id=context.configuration_id,
+                    build_id=context.build_id,
+                ),
+            )
             await self._handle_failure(
                 build=build,
                 context=context,
@@ -356,6 +458,19 @@ class BuildsService:
         duration_ms = None
         if build.started_at and build.finished_at:
             duration_ms = int((build.finished_at - build.started_at).total_seconds() * 1000)
+
+        logger.info(
+            "build.stream.completed",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=build.id,
+                status=self._status_literal(build.status),
+                exit_code=build.exit_code,
+                duration_ms=duration_ms,
+            ),
+        )
+
         yield self._ade_event(
             build=build,
             type_="build.completed",
@@ -375,8 +490,24 @@ class BuildsService:
         context: BuildExecutionContext,
         options: BuildCreateOptions,
     ) -> None:
+        logger.debug(
+            "build.run_to_completion.start",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=context.build_id,
+            ),
+        )
         async for _ in self.stream_build(context=context, options=options):
             pass
+        logger.debug(
+            "build.run_to_completion.done",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=context.build_id,
+            ),
+        )
 
     async def get_build(self, build_id: str) -> Build | None:
         return await self._builds.get(build_id)
@@ -384,8 +515,20 @@ class BuildsService:
     async def get_build_or_raise(self, build_id: str, workspace_id: str | None = None) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
+            logger.warning(
+                "build.get.not_found",
+                extra=log_context(build_id=build_id, workspace_id=workspace_id),
+            )
             raise BuildNotFoundError(build_id)
         if workspace_id and build.workspace_id != workspace_id:
+            logger.warning(
+                "build.get.workspace_mismatch",
+                extra=log_context(
+                    build_id=build_id,
+                    workspace_id=workspace_id,
+                    build_workspace_id=build.workspace_id,
+                ),
+            )
             raise BuildWorkspaceMismatchError(build_id)
         return build
 
@@ -396,6 +539,10 @@ class BuildsService:
         after_id: int | None = None,
         limit: int = DEFAULT_STREAM_LIMIT,
     ) -> BuildLogsResponse:
+        logger.debug(
+            "build.logs.list.start",
+            extra=log_context(build_id=build_id, after_id=after_id, limit=limit),
+        )
         logs = await self._builds.list_logs(
             build_id=build_id,
             after_id=after_id,
@@ -411,6 +558,16 @@ class BuildsService:
             for log in logs
         ]
         next_after_id = entries[-1].id if entries and len(entries) == limit else None
+
+        logger.debug(
+            "build.logs.list.success",
+            extra=log_context(
+                build_id=build_id,
+                count=len(entries),
+                next_after_id=next_after_id,
+            ),
+        )
+
         return BuildLogsResponse(
             build_id=build_id,
             entries=entries,
@@ -452,19 +609,32 @@ class BuildsService:
     # Internal helpers
     # ------------------------------------------------------------------
     async def _require_configuration(
-        self, workspace_id: str, configuration_id: str
+        self,
+        workspace_id: str,
+        configuration_id: str,
     ) -> Configuration:
         configuration = await self._configs.get(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
         if configuration is None:
+            logger.warning(
+                "build.require_config.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                ),
+            )
             raise ConfigurationNotFoundError(configuration_id)
         return configuration
 
     async def _require_build(self, build_id: str) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
+            logger.warning(
+                "build.require_build.not_found",
+                extra=log_context(build_id=build_id),
+            )
             raise BuildNotFoundError(build_id)
         return build
 
@@ -484,8 +654,23 @@ class BuildsService:
         force: bool,
     ) -> bool:
         if force:
+            logger.debug(
+                "build.should_rebuild.force",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                ),
+            )
             return True
         if configuration.build_status is not BuildStatus.ACTIVE:
+            logger.debug(
+                "build.should_rebuild.status_not_active",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    build_status=str(configuration.build_status),
+                ),
+            )
             return True
         reasons = [
             configuration.built_configuration_version != configuration.configuration_version,
@@ -494,7 +679,16 @@ class BuildsService:
             configuration.engine_version != engine_version_hint,
             configuration.python_interpreter != python_interpreter,
         ]
-        return any(reasons)
+        should = any(reasons)
+        logger.debug(
+            "build.should_rebuild.result",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                should_rebuild=should,
+            ),
+        )
+        return should
 
     async def _create_reuse_build_row(
         self,
@@ -515,6 +709,15 @@ class BuildsService:
         )
         await self._builds.add(build)
         configuration.last_build_id = build.id  # type: ignore[attr-defined]
+
+        logger.debug(
+            "build.reuse.row_created",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                build_id=build.id,
+            ),
+        )
         return build
 
     async def _create_build_plan(
@@ -526,7 +729,7 @@ class BuildsService:
         engine_version_hint: str | None,
         python_interpreter: str | None,
         target_path: Path,
-    ) -> _BuildPlan:
+    ) -> "_BuildPlan":
         workspace_id = configuration.workspace_id
         configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
         configuration.last_build_started_at = self._now()  # type: ignore[attr-defined]
@@ -560,6 +763,15 @@ class BuildsService:
             timeout_seconds=float(self._settings.build_timeout.total_seconds()),
             should_run=True,
         )
+
+        logger.debug(
+            "build.plan.created",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration.id,
+                build_id=build.id,
+            ),
+        )
         return _BuildPlan(build=build, context=context)
 
     async def _transition_status(self, build: Build, status: BuildStatus) -> Build:
@@ -568,6 +780,15 @@ class BuildsService:
         build.status = status
         await self._session.commit()
         await self._session.refresh(build)
+        logger.debug(
+            "build.status.transition",
+            extra=log_context(
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+                build_id=build.id,
+                status=status.value,
+            ),
+        )
         return build
 
     async def _append_log(
@@ -585,6 +806,8 @@ class BuildsService:
         await self._builds.add_log(log)
         await self._session.commit()
         await self._session.refresh(log)
+        # We intentionally don't log per-line here; the engine event stream
+        # already captures console output at a finer granularity.
         return log
 
     async def _handle_failure(
@@ -600,13 +823,24 @@ class BuildsService:
         build.exit_code = 1
         build.error_message = error
         configuration = await self._require_configuration(
-            context.workspace_id, context.configuration_id
+            context.workspace_id,
+            context.configuration_id,
         )
         configuration.build_status = BuildStatus.FAILED  # type: ignore[assignment]
         configuration.last_build_error = error  # type: ignore[attr-defined]
         configuration.last_build_finished_at = now  # type: ignore[attr-defined]
         configuration.last_build_id = build.id  # type: ignore[attr-defined]
         await self._session.commit()
+
+        logger.error(
+            "build.failure",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=build.id,
+                error=error,
+            ),
+        )
 
     async def _finalize_success(
         self,
@@ -622,7 +856,8 @@ class BuildsService:
         build.exit_code = 0
         build.summary = "Build succeeded"
         configuration = await self._require_configuration(
-            context.workspace_id, context.configuration_id
+            context.workspace_id,
+            context.configuration_id,
         )
         configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
         configuration.engine_spec = context.engine_spec  # type: ignore[attr-defined]
@@ -636,15 +871,49 @@ class BuildsService:
         configuration.last_build_id = build.id  # type: ignore[attr-defined]
         await self._session.commit()
         await self._session.refresh(build)
+
+        logger.info(
+            "build.success",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                build_id=build.id,
+                engine_version=artifacts.engine_version,
+                python_version=artifacts.python_version,
+            ),
+        )
         return build
 
     async def _wait_for_build(self, *, workspace_id: str, configuration_id: str) -> None:
         deadline = self._now() + self._settings.build_ensure_wait
+        logger.debug(
+            "build.wait_for_existing.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                deadline=deadline.isoformat(),
+            ),
+        )
         while self._now() < deadline:
             configuration = await self._require_configuration(workspace_id, configuration_id)
             if configuration.build_status is not BuildStatus.BUILDING:
+                logger.debug(
+                    "build.wait_for_existing.complete",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        configuration_id=configuration_id,
+                        final_status=str(configuration.build_status),
+                    ),
+                )
                 return
             await asyncio.sleep(1)
+        logger.warning(
+            "build.wait_for_existing.timeout",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+            ),
+        )
         raise BuildAlreadyInProgressError(
             f"Build still in progress for workspace={workspace_id} configuration={configuration_id}"
         )
@@ -683,6 +952,16 @@ class BuildsService:
         build.exit_code = exit_code
         await self._session.commit()
         await self._session.refresh(build)
+        logger.debug(
+            "build.complete",
+            extra=log_context(
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+                build_id=build.id,
+                status=status.value,
+                exit_code=exit_code,
+            ),
+        )
         return build
 
     def _epoch_seconds(self, dt: datetime | None) -> int | None:

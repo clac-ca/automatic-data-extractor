@@ -13,8 +13,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from ade_api.settings import get_settings
-
-from .logging import bind_request_context, clear_request_context
+from .logging import bind_request_context, clear_request_context, log_context
 
 _REQUEST_LOGGER = logging.getLogger("ade_api.request")
 
@@ -26,44 +25,45 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
+
         correlation_id = request.headers.get("X-Request-ID", str(uuid4()))
         request.state.correlation_id = correlation_id
         bind_request_context(correlation_id)
 
         start = time.perf_counter()
         response: Response | None = None
-        error: Exception | None = None
+        error: bool = False
+
         try:
             response = await call_next(request)
-        except Exception as exc:  # pragma: no cover - defensive logging path
-            error = exc
+        except Exception:  # pragma: no cover - defensive logging path
+            error = True
+            # Stack trace will be logged by the global exception handler.
             raise
         finally:
-            duration_ms = (time.perf_counter() - start) * 1000
-            log_extra = {
-                "path": request.url.path,
-                "method": request.method,
-                "duration_ms": round(duration_ms, 2),
-                "correlation_id": correlation_id,
-            }
-            if response is not None:
-                log_extra["status_code"] = response.status_code
+            duration_ms = (time.perf_counter() - start) * 1000.0
 
-            if error is None and response is not None:
-                _REQUEST_LOGGER.info("request.complete", extra=log_extra)
+            extra = log_context(
+                path=request.url.path,
+                method=request.method,
+                duration_ms=round(duration_ms, 2),
+                status_code=response.status_code if response is not None else None,
+            )
+
+            if not error and response is not None:
+                _REQUEST_LOGGER.info("request.complete", extra=extra)
             else:
-                _REQUEST_LOGGER.error(
-                    "request.error",
-                    extra=log_extra,
-                    exc_info=error,
-                )
+                _REQUEST_LOGGER.error("request.error", extra=extra)
 
             clear_request_context()
 
         if response is None:  # pragma: no cover - defensive guard
             raise RuntimeError("Request handler returned no response")
+
         response.headers["X-Request-ID"] = correlation_id
         return response
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import deque
 from collections.abc import Collection, Iterable, Mapping, Sequence
@@ -18,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from ade_api.features.users.models import User
 from ade_api.features.workspaces.models import Workspace
+from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import Page, paginate_sql
 
 from .models import (
@@ -37,18 +39,17 @@ from .registry import (
 )
 from .schemas import RoleCreate, RoleUpdate
 
+logger = logging.getLogger(__name__)
+
 GLOBAL_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {
     "Roles.ReadWrite.All": ("Roles.Read.All",),
     "System.Settings.ReadWrite": ("System.Settings.Read",),
     "Workspaces.ReadWrite.All": ("Workspaces.Read.All",),
 }
 
-
 WORKSPACE_IMPLICATIONS: Mapping[str, tuple[str, ...]] = {}
 
-
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
-
 
 class AuthorizationError(ValueError):
     """Raised when permission inputs are invalid or unregistered."""
@@ -101,6 +102,7 @@ class AuthorizationDecision:
     granted: frozenset[str]
     required: tuple[str, ...]
     missing: tuple[str, ...]
+
 
     @property
     def is_authorized(self) -> bool:
@@ -239,15 +241,27 @@ async def resolve_permission_ids(
     if not keys:
         return {}
 
-    stmt = select(Permission.key, Permission.id).where(
-        Permission.key.in_(tuple(keys))
+    logger.debug(
+        "roles.permissions.resolve.start",
+        extra=log_context(permission_count=len(keys)),
     )
+
+    stmt = select(Permission.key, Permission.id).where(Permission.key.in_(tuple(keys)))
     result = await session.execute(stmt)
     mapping = {key: permission_id for key, permission_id in result.all()}
     missing = set(keys) - set(mapping)
     if missing:
         missing_list = ", ".join(sorted(missing))
+        logger.warning(
+            "roles.permissions.resolve.missing",
+            extra=log_context(missing_keys=missing_list),
+        )
         raise RoleValidationError(f"Permissions not found: {missing_list}")
+
+    logger.debug(
+        "roles.permissions.resolve.success",
+        extra=log_context(permission_count=len(mapping)),
+    )
     return mapping
 
 
@@ -273,11 +287,23 @@ def authorize_workspace(
     required_keys = collect_permission_keys(required)
     _validate_scope(required_keys, scope=ScopeType.WORKSPACE)
     missing = tuple(sorted(set(required_keys) - granted_keys))
-    return AuthorizationDecision(
+
+    decision = AuthorizationDecision(
         granted=granted_keys,
         required=tuple(dict.fromkeys(required_keys)),
         missing=missing,
     )
+
+    if missing:
+        logger.debug(
+            "auth.workspace.denied",
+            extra=log_context(
+                required=list(decision.required),
+                missing=list(decision.missing),
+                granted_count=len(decision.granted),
+            ),
+        )
+    return decision
 
 
 def authorize_global(
@@ -289,11 +315,23 @@ def authorize_global(
     required_keys = collect_permission_keys(required)
     _validate_scope(required_keys, scope=ScopeType.GLOBAL)
     missing = tuple(sorted(set(required_keys) - granted_keys))
-    return AuthorizationDecision(
+
+    decision = AuthorizationDecision(
         granted=granted_keys,
         required=tuple(dict.fromkeys(required_keys)),
         missing=missing,
     )
+
+    if missing:
+        logger.debug(
+            "auth.global.denied",
+            extra=log_context(
+                required=list(decision.required),
+                missing=list(decision.missing),
+                granted_count=len(decision.granted),
+            ),
+        )
+    return decision
 
 
 async def _select_principal_for_user(
@@ -310,10 +348,23 @@ async def ensure_user_principal(*, session: AsyncSession, user: User) -> Princip
 
     existing_principal = user.__dict__.get("principal")
     if existing_principal is not None:
+        logger.debug(
+            "roles.principal.ensure.cached",
+            extra=log_context(user_id=user.id, principal_id=existing_principal.id),
+        )
         return existing_principal
+
+    logger.debug(
+        "roles.principal.ensure.start",
+        extra=log_context(user_id=user.id),
+    )
 
     principal = await _select_principal_for_user(session=session, user_id=user.id)
     if principal is not None:
+        logger.debug(
+            "roles.principal.ensure.found",
+            extra=log_context(user_id=user.id, principal_id=principal.id),
+        )
         return principal
 
     principal = Principal(principal_type=PrincipalType.USER, user_id=user.id)
@@ -321,6 +372,11 @@ async def ensure_user_principal(*, session: AsyncSession, user: User) -> Princip
     await session.flush([principal])
     await session.refresh(principal)
     user.principal = principal
+
+    logger.info(
+        "roles.principal.ensure.created",
+        extra=log_context(user_id=user.id, principal_id=principal.id),
+    )
     return principal
 
 
@@ -336,6 +392,11 @@ async def get_global_permissions_for_principal(
     if user is None or user.is_service_account:
         return frozenset()
 
+    logger.debug(
+        "roles.permissions.global.for_principal.start",
+        extra=log_context(principal_id=principal.id, user_id=user.id),
+    )
+
     stmt: Select[str] = (
         select(Permission.key)
         .select_from(RolePermission)
@@ -350,8 +411,22 @@ async def get_global_permissions_for_principal(
     result = await session.execute(stmt)
     permissions = frozenset(result.scalars().all())
     if not permissions:
+        logger.debug(
+            "roles.permissions.global.for_principal.empty",
+            extra=log_context(principal_id=principal.id, user_id=user.id),
+        )
         return permissions
-    return _expand_implications(permissions, scope=ScopeType.GLOBAL)
+
+    expanded = _expand_implications(permissions, scope=ScopeType.GLOBAL)
+    logger.debug(
+        "roles.permissions.global.for_principal.success",
+        extra=log_context(
+            principal_id=principal.id,
+            user_id=user.id,
+            permission_count=len(expanded),
+        ),
+    )
+    return expanded
 
 
 async def get_global_permissions_for_user(
@@ -364,6 +439,10 @@ async def get_global_permissions_for_user(
 
     principal = await _select_principal_for_user(session=session, user_id=user.id)
     if principal is None:
+        logger.debug(
+            "roles.permissions.global.for_user.no_principal",
+            extra=log_context(user_id=user.id),
+        )
         return frozenset()
 
     return await get_global_permissions_for_principal(
@@ -383,6 +462,11 @@ async def get_workspace_permissions_for_principal(
     if user is None or user.is_service_account:
         return frozenset()
 
+    logger.debug(
+        "roles.permissions.workspace.for_principal.start",
+        extra=log_context(principal_id=principal.id, user_id=user.id, workspace_id=workspace_id),
+    )
+
     stmt: Select[str] = (
         select(Permission.key)
         .select_from(RolePermission)
@@ -398,7 +482,17 @@ async def get_workspace_permissions_for_principal(
     result = await session.execute(stmt)
     permissions = frozenset(result.scalars().all())
     if permissions:
-        return _expand_implications(permissions, scope=ScopeType.WORKSPACE)
+        expanded = _expand_implications(permissions, scope=ScopeType.WORKSPACE)
+        logger.debug(
+            "roles.permissions.workspace.for_principal.success",
+            extra=log_context(
+                principal_id=principal.id,
+                user_id=user.id,
+                workspace_id=workspace_id,
+                permission_count=len(expanded),
+            ),
+        )
+        return expanded
 
     global_permissions = await get_global_permissions_for_principal(
         session=session, principal=principal
@@ -409,10 +503,24 @@ async def get_workspace_permissions_for_principal(
                 definition.slug == "workspace-owner"
                 and definition.scope_type == ScopeType.WORKSPACE
             ):
-                return _expand_implications(
+                expanded = _expand_implications(
                     frozenset(definition.permissions), scope=ScopeType.WORKSPACE
                 )
+                logger.debug(
+                    "roles.permissions.workspace.for_principal.derived_from_global",
+                    extra=log_context(
+                        principal_id=principal.id,
+                        user_id=user.id,
+                        workspace_id=workspace_id,
+                        permission_count=len(expanded),
+                    ),
+                )
+                return expanded
 
+    logger.debug(
+        "roles.permissions.workspace.for_principal.empty",
+        extra=log_context(principal_id=principal.id, user_id=user.id, workspace_id=workspace_id),
+    )
     return permissions
 
 
@@ -426,6 +534,10 @@ async def get_workspace_permissions_for_user(
 
     principal = await _select_principal_for_user(session=session, user_id=user.id)
     if principal is None:
+        logger.debug(
+            "roles.permissions.workspace.for_user.no_principal",
+            extra=log_context(user_id=user.id, workspace_id=workspace_id),
+        )
         return frozenset()
 
     return await get_workspace_permissions_for_principal(
@@ -436,13 +548,24 @@ async def get_workspace_permissions_for_user(
 async def get_role(*, session: AsyncSession, role_id: str) -> Role | None:
     """Return a role with permissions eagerly loaded."""
 
+    logger.debug(
+        "roles.get.start",
+        extra=log_context(role_id=role_id),
+    )
+
     stmt = (
         select(Role)
         .options(selectinload(Role.permissions))
         .where(Role.id == role_id)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    role = result.scalar_one_or_none()
+
+    logger.debug(
+        "roles.get.completed",
+        extra=log_context(role_id=role_id, found=bool(role)),
+    )
+    return role
 
 
 async def get_global_role_slugs_for_user(
@@ -457,6 +580,11 @@ async def get_global_role_slugs_for_user(
     if principal is None:
         return frozenset()
 
+    logger.debug(
+        "roles.global_slugs.for_user.start",
+        extra=log_context(user_id=user.id, principal_id=principal.id),
+    )
+
     stmt: Select[str] = (
         select(Role.slug)
         .join(RoleAssignment, RoleAssignment.role_id == Role.id)
@@ -466,7 +594,17 @@ async def get_global_role_slugs_for_user(
         )
     )
     result = await session.execute(stmt)
-    return frozenset(result.scalars().all())
+    slugs = frozenset(result.scalars().all())
+
+    logger.debug(
+        "roles.global_slugs.for_user.completed",
+        extra=log_context(
+            user_id=user.id,
+            principal_id=principal.id,
+            role_count=len(slugs),
+        ),
+    )
+    return slugs
 
 
 async def get_global_role_by_slug(
@@ -474,19 +612,35 @@ async def get_global_role_by_slug(
 ) -> Role | None:
     """Return the global role matching ``slug`` if present."""
 
+    logger.debug(
+        "roles.global.get_by_slug.start",
+        extra=log_context(slug=slug),
+    )
+
     stmt = (
         select(Role)
         .where(Role.slug == slug, Role.scope_type == ScopeType.GLOBAL, Role.scope_id.is_(None))
         .limit(1)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    role = result.scalar_one_or_none()
+
+    logger.debug(
+        "roles.global.get_by_slug.completed",
+        extra=log_context(slug=slug, found=bool(role)),
+    )
+    return role
 
 
 async def count_users_with_global_role(
     *, session: AsyncSession, slug: str
 ) -> int:
     """Return the number of users assigned the global role ``slug``."""
+
+    logger.debug(
+        "roles.global.count_users.start",
+        extra=log_context(slug=slug),
+    )
 
     stmt = (
         select(func.count())
@@ -500,13 +654,24 @@ async def count_users_with_global_role(
         )
     )
     result = await session.execute(stmt)
-    return int(result.scalar_one() or 0)
+    count = int(result.scalar_one() or 0)
+
+    logger.debug(
+        "roles.global.count_users.completed",
+        extra=log_context(slug=slug, user_count=count),
+    )
+    return count
 
 
 async def has_users_with_global_role(
     *, session: AsyncSession, slug: str
 ) -> bool:
     """Return ``True`` when at least one user has the global role ``slug``."""
+
+    logger.debug(
+        "roles.global.has_users.start",
+        extra=log_context(slug=slug),
+    )
 
     stmt = (
         select(RoleAssignment.id)
@@ -520,7 +685,13 @@ async def has_users_with_global_role(
         .limit(1)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none() is not None
+    exists = result.scalar_one_or_none() is not None
+
+    logger.debug(
+        "roles.global.has_users.completed",
+        extra=log_context(slug=slug, has_users=exists),
+    )
+    return exists
 
 
 async def list_roles(
@@ -528,9 +699,20 @@ async def list_roles(
 ) -> list[Role]:
     """Return roles for the requested scope ordered by slug."""
 
+    logger.debug(
+        "roles.list.start",
+        extra=log_context(scope_type=scope_type.value, scope_id=scope_id),
+    )
+
     stmt = _roles_query(scope_type, scope_id).order_by(Role.slug)
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    roles = list(result.scalars().all())
+
+    logger.debug(
+        "roles.list.completed",
+        extra=log_context(scope_type=scope_type.value, scope_id=scope_id, count=len(roles)),
+    )
+    return roles
 
 
 async def paginate_roles(
@@ -542,8 +724,18 @@ async def paginate_roles(
     page_size: int,
     include_total: bool,
 ) -> Page[Role]:
+    logger.debug(
+        "roles.paginate.start",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        ),
+    )
     stmt = _roles_query(scope_type, scope_id)
-    return await paginate_sql(
+    result = await paginate_sql(
         session,
         stmt,
         page=page,
@@ -551,6 +743,18 @@ async def paginate_roles(
         include_total=include_total,
         order_by=(Role.slug,),
     )
+    logger.debug(
+        "roles.paginate.completed",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+            count=len(result.items),
+        ),
+    )
+    return result
 
 
 def _role_assignments_query(
@@ -600,6 +804,15 @@ async def create_global_role(
     if not slug:
         raise RoleValidationError("Role slug is required")
 
+    logger.debug(
+        "roles.global.create.start",
+        extra=log_context(
+            slug=slug,
+            name=normalized_name,
+            actor_id=getattr(actor, "id", None),
+        ),
+    )
+
     await _ensure_global_slug_available(session=session, slug=slug)
 
     try:
@@ -607,6 +820,10 @@ async def create_global_role(
             payload.permissions, scope=ScopeType.GLOBAL
         )
     except AuthorizationError as exc:
+        logger.warning(
+            "roles.global.create.permission_validation_failed",
+            extra=log_context(slug=slug, name=normalized_name),
+        )
         raise RoleValidationError(str(exc)) from exc
 
     role = Role(
@@ -637,6 +854,16 @@ async def create_global_role(
 
     await session.flush()
     await session.refresh(role, attribute_names=["permissions"])
+
+    logger.info(
+        "roles.global.create.success",
+        extra=log_context(
+            role_id=role.id,
+            slug=role.slug,
+            name=role.name,
+            permission_count=len(permission_keys),
+        ),
+    )
     return role
 
 
@@ -647,9 +874,26 @@ async def update_global_role(
 
     role = await session.get(Role, role_id)
     if role is None or role.scope_type != ScopeType.GLOBAL:
+        logger.warning(
+            "roles.global.update.not_found",
+            extra=log_context(role_id=role_id),
+        )
         raise RoleNotFoundError("Role not found")
     if role.built_in or not role.editable:
+        logger.warning(
+            "roles.global.update.immutable",
+            extra=log_context(role_id=role_id, slug=role.slug),
+        )
         raise RoleImmutableError("System roles cannot be edited")
+
+    logger.debug(
+        "roles.global.update.start",
+        extra=log_context(
+            role_id=role_id,
+            slug=role.slug,
+            actor_id=getattr(actor, "id", None),
+        ),
+    )
 
     role.name = _normalize_role_name(payload.name)
     role.description = _normalize_description(payload.description)
@@ -660,6 +904,10 @@ async def update_global_role(
             _normalize_permission_keys(payload.permissions, scope=ScopeType.GLOBAL)
         )
     except AuthorizationError as exc:
+        logger.warning(
+            "roles.global.update.permission_validation_failed",
+            extra=log_context(role_id=role_id, slug=role.slug),
+        )
         raise RoleValidationError(str(exc)) from exc
 
     current_map = {
@@ -696,6 +944,17 @@ async def update_global_role(
 
     await session.flush()
     await session.refresh(role, attribute_names=["permissions"])
+
+    logger.info(
+        "roles.global.update.success",
+        extra=log_context(
+            role_id=role.id,
+            slug=role.slug,
+            name=role.name,
+            added=len(additions),
+            removed=len(removals),
+        ),
+    )
     return role
 
 
@@ -704,9 +963,22 @@ async def delete_global_role(*, session: AsyncSession, role_id: str) -> None:
 
     role = await session.get(Role, role_id)
     if role is None or role.scope_type != ScopeType.GLOBAL:
+        logger.warning(
+            "roles.global.delete.not_found",
+            extra=log_context(role_id=role_id),
+        )
         raise RoleNotFoundError("Role not found")
     if role.built_in or not role.editable:
+        logger.warning(
+            "roles.global.delete.immutable",
+            extra=log_context(role_id=role_id, slug=role.slug),
+        )
         raise RoleImmutableError("System roles cannot be deleted")
+
+    logger.debug(
+        "roles.global.delete.start",
+        extra=log_context(role_id=role_id, slug=role.slug),
+    )
 
     assignment_exists = await session.execute(
         select(RoleAssignment.id).where(
@@ -715,10 +987,19 @@ async def delete_global_role(*, session: AsyncSession, role_id: str) -> None:
         )
     )
     if assignment_exists.first() is not None:
+        logger.warning(
+            "roles.global.delete.in_use",
+            extra=log_context(role_id=role_id, slug=role.slug),
+        )
         raise RoleConflictError("Role is assigned to one or more principals")
 
     await session.delete(role)
     await session.flush()
+
+    logger.info(
+        "roles.global.delete.success",
+        extra=log_context(role_id=role_id, slug=role.slug),
+    )
 
 
 async def list_role_assignments(
@@ -731,6 +1012,16 @@ async def list_role_assignments(
 ) -> list[RoleAssignment]:
     """Return assignments for the requested scope filtered by optional criteria."""
 
+    logger.debug(
+        "roles.assignments.list.start",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            principal_id=principal_id,
+            role_id=role_id,
+        ),
+    )
+
     stmt = _role_assignments_query(
         scope_type=scope_type,
         scope_id=scope_id,
@@ -738,7 +1029,19 @@ async def list_role_assignments(
         role_id=role_id,
     ).order_by(RoleAssignment.created_at, RoleAssignment.id)
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    assignments = list(result.scalars().all())
+
+    logger.debug(
+        "roles.assignments.list.completed",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            principal_id=principal_id,
+            role_id=role_id,
+            count=len(assignments),
+        ),
+    )
+    return assignments
 
 
 async def paginate_role_assignments(
@@ -752,13 +1055,25 @@ async def paginate_role_assignments(
     page_size: int,
     include_total: bool,
 ) -> Page[RoleAssignment]:
+    logger.debug(
+        "roles.assignments.paginate.start",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            principal_id=principal_id,
+            role_id=role_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        ),
+    )
     stmt = _role_assignments_query(
         scope_type=scope_type,
         scope_id=scope_id,
         principal_id=principal_id,
         role_id=role_id,
     )
-    return await paginate_sql(
+    result = await paginate_sql(
         session,
         stmt,
         page=page,
@@ -766,6 +1081,21 @@ async def paginate_role_assignments(
         include_total=include_total,
         order_by=(RoleAssignment.created_at, RoleAssignment.id),
     )
+
+    logger.debug(
+        "roles.assignments.paginate.completed",
+        extra=log_context(
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            principal_id=principal_id,
+            role_id=role_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+            count=len(result.items),
+        ),
+    )
+    return result
 
 
 async def get_role_assignment(
@@ -778,6 +1108,16 @@ async def get_role_assignment(
 ) -> RoleAssignment | None:
     """Return a single assignment for the provided identifiers."""
 
+    logger.debug(
+        "roles.assignments.get.start",
+        extra=log_context(
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
+
     assignments = await list_role_assignments(
         session=session,
         scope_type=scope_type,
@@ -785,15 +1125,30 @@ async def get_role_assignment(
         principal_id=principal_id,
         role_id=role_id,
     )
-    if not assignments:
-        return None
-    return assignments[0]
+    assignment = assignments[0] if assignments else None
+
+    logger.debug(
+        "roles.assignments.get.completed",
+        extra=log_context(
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+            found=bool(assignment),
+        ),
+    )
+    return assignment
 
 
 async def get_role_assignment_by_id(
     *, session: AsyncSession, assignment_id: str
 ) -> RoleAssignment | None:
     """Return a role assignment by its identifier with relationships loaded."""
+
+    logger.debug(
+        "roles.assignments.get_by_id.start",
+        extra=log_context(assignment_id=assignment_id),
+    )
 
     stmt = (
         select(RoleAssignment)
@@ -806,7 +1161,13 @@ async def get_role_assignment_by_id(
         .where(RoleAssignment.id == assignment_id)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
+    assignment = result.scalar_one_or_none()
+
+    logger.debug(
+        "roles.assignments.get_by_id.completed",
+        extra=log_context(assignment_id=assignment_id, found=bool(assignment)),
+    )
+    return assignment
 
 
 async def assign_role(
@@ -819,25 +1180,68 @@ async def assign_role(
 ) -> RoleAssignment:
     """Assign ``role_id`` to ``principal_id`` for the provided scope."""
 
+    logger.debug(
+        "roles.assignments.assign.start",
+        extra=log_context(
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
+
     principal = await session.get(Principal, principal_id)
     if principal is None:
         msg = f"Principal '{principal_id}' not found"
+        logger.warning(
+            "roles.assignments.assign.principal_not_found",
+            extra=log_context(principal_id=principal_id),
+        )
         raise PrincipalNotFoundError(msg)
 
     role = await session.get(Role, role_id)
     if role is None:
         msg = f"Role '{role_id}' not found"
+        logger.warning(
+            "roles.assignments.assign.role_not_found",
+            extra=log_context(role_id=role_id),
+        )
         raise RoleNotFoundError(msg)
 
     if role.scope_type != scope_type:
         msg = "Role scope_type mismatch"
+        logger.warning(
+            "roles.assignments.assign.scope_type_mismatch",
+            extra=log_context(
+                role_id=role_id,
+                role_scope_type=role.scope_type.value,
+                requested_scope_type=scope_type.value,
+            ),
+        )
         raise RoleScopeMismatchError(msg)
 
     if scope_type == ScopeType.GLOBAL and scope_id is not None:
         msg = "Global assignments must not specify scope_id"
+        logger.warning(
+            "roles.assignments.assign.global_with_scope_id",
+            extra=log_context(
+                principal_id=principal_id,
+                role_id=role_id,
+                scope_type=scope_type.value,
+                scope_id=scope_id,
+            ),
+        )
         raise RoleScopeMismatchError(msg)
     if scope_type == ScopeType.WORKSPACE and scope_id is None:
         msg = "Workspace assignments require a scope_id"
+        logger.warning(
+            "roles.assignments.assign.workspace_missing_scope_id",
+            extra=log_context(
+                principal_id=principal_id,
+                role_id=role_id,
+                scope_type=scope_type.value,
+            ),
+        )
         raise RoleScopeMismatchError(msg)
     if (
         scope_type == ScopeType.WORKSPACE
@@ -845,12 +1249,26 @@ async def assign_role(
         and role.scope_id != scope_id
     ):
         msg = "Role is bound to a different workspace"
+        logger.warning(
+            "roles.assignments.assign.workspace_mismatch",
+            extra=log_context(
+                principal_id=principal_id,
+                role_id=role_id,
+                scope_type=scope_type.value,
+                scope_id=scope_id,
+                role_scope_id=role.scope_id,
+            ),
+        )
         raise RoleScopeMismatchError(msg)
 
     if scope_type == ScopeType.WORKSPACE and scope_id is not None:
         workspace = await session.get(Workspace, scope_id)
         if workspace is None:
             msg = f"Workspace '{scope_id}' not found"
+            logger.warning(
+                "roles.assignments.assign.workspace_not_found",
+                extra=log_context(scope_id=scope_id),
+            )
             raise WorkspaceNotFoundError(msg)
 
     existing_stmt = select(RoleAssignment).where(
@@ -863,6 +1281,16 @@ async def assign_role(
     )
     existing_assignment = (await session.execute(existing_stmt)).scalar_one_or_none()
     if existing_assignment is not None:
+        logger.debug(
+            "roles.assignments.assign.already_exists",
+            extra=log_context(
+                assignment_id=existing_assignment.id,
+                principal_id=principal_id,
+                role_id=role_id,
+                scope_type=scope_type.value,
+                scope_id=scope_id,
+            ),
+        )
         return existing_assignment
 
     bind = session.get_bind()
@@ -893,6 +1321,16 @@ async def assign_role(
         if inserted_id is not None:
             assignment = await session.get(RoleAssignment, inserted_id)
             if assignment is not None:
+                logger.info(
+                    "roles.assignments.assign.created",
+                    extra=log_context(
+                        assignment_id=assignment.id,
+                        principal_id=principal_id,
+                        role_id=role_id,
+                        scope_type=scope_type.value,
+                        scope_id=scope_id,
+                    ),
+                )
                 return assignment
     elif dialect == "sqlite":
         stmt = sqlite_insert(RoleAssignment).values(**values)
@@ -906,17 +1344,52 @@ async def assign_role(
                 await session.flush([assignment])
             except IntegrityError:
                 # Another transaction created the same assignment concurrently.
-                pass
+                logger.debug(
+                    "roles.assignments.assign.integrity_conflict",
+                    extra=log_context(
+                        principal_id=principal_id,
+                        role_id=role_id,
+                        scope_type=scope_type.value,
+                        scope_id=scope_id,
+                    ),
+                )
             else:
                 await session.refresh(assignment)
+                logger.info(
+                    "roles.assignments.assign.created",
+                    extra=log_context(
+                        assignment_id=assignment.id,
+                        principal_id=principal_id,
+                        role_id=role_id,
+                        scope_type=scope_type.value,
+                        scope_id=scope_id,
+                    ),
+                )
                 return assignment
 
-    refreshed_assignment = (
-        await session.execute(existing_stmt)
-    ).scalar_one_or_none()
+    refreshed_assignment = (await session.execute(existing_stmt)).scalar_one_or_none()
     if refreshed_assignment is None:
         msg = "Role assignment insert failed to materialise"
+        logger.error(
+            "roles.assignments.assign.failed_to_materialise",
+            extra=log_context(
+                principal_id=principal_id,
+                role_id=role_id,
+                scope_type=scope_type.value,
+                scope_id=scope_id,
+            ),
+        )
         raise RuntimeError(msg)
+    logger.info(
+        "roles.assignments.assign.created_existing",
+        extra=log_context(
+            assignment_id=refreshed_assignment.id,
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
     return refreshed_assignment
 
 
@@ -925,19 +1398,39 @@ async def assign_global_role(
 ) -> RoleAssignment:
     """Assign a global role to the user ``user_id``."""
 
+    logger.debug(
+        "roles.assignments.assign_global.start",
+        extra=log_context(user_id=user_id, role_id=role_id),
+    )
+
     user = await session.get(User, user_id)
     if user is None:
         msg = f"User '{user_id}' not found"
+        logger.warning(
+            "roles.assignments.assign_global.user_not_found",
+            extra=log_context(user_id=user_id),
+        )
         raise ValueError(msg)
 
     principal = await ensure_user_principal(session=session, user=user)
-    return await assign_role(
+    assignment = await assign_role(
         session=session,
         principal_id=principal.id,
         role_id=role_id,
         scope_type=ScopeType.GLOBAL,
         scope_id=None,
     )
+
+    logger.info(
+        "roles.assignments.assign_global.success",
+        extra=log_context(
+            assignment_id=assignment.id,
+            user_id=user_id,
+            principal_id=principal.id,
+            role_id=role_id,
+        ),
+    )
+    return assignment
 
 
 async def delete_role_assignment(
@@ -949,11 +1442,32 @@ async def delete_role_assignment(
 ) -> None:
     """Delete a role assignment ensuring scope alignment."""
 
+    logger.debug(
+        "roles.assignments.delete.start",
+        extra=log_context(
+            assignment_id=assignment_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
+
     assignment = await session.get(RoleAssignment, assignment_id)
     if assignment is None:
+        logger.warning(
+            "roles.assignments.delete.not_found",
+            extra=log_context(assignment_id=assignment_id),
+        )
         raise RoleAssignmentNotFoundError("Role assignment not found")
 
     if assignment.scope_type != scope_type:
+        logger.warning(
+            "roles.assignments.delete.scope_type_mismatch",
+            extra=log_context(
+                assignment_id=assignment_id,
+                assignment_scope_type=assignment.scope_type.value,
+                requested_scope_type=scope_type.value,
+            ),
+        )
         raise RoleAssignmentNotFoundError("Role assignment not found")
 
     if scope_type == ScopeType.GLOBAL:
@@ -968,6 +1482,15 @@ async def delete_role_assignment(
     await session.delete(assignment)
     await session.flush()
 
+    logger.info(
+        "roles.assignments.delete.success",
+        extra=log_context(
+            assignment_id=assignment_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
+
 
 async def unassign_role(
     *,
@@ -978,6 +1501,16 @@ async def unassign_role(
     scope_id: str | None,
 ) -> None:
     """Remove a role assignment if present."""
+
+    logger.debug(
+        "roles.assignments.unassign.start",
+        extra=log_context(
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
 
     await session.execute(
         delete(RoleAssignment).where(
@@ -991,9 +1524,21 @@ async def unassign_role(
     )
     await session.flush()
 
+    logger.info(
+        "roles.assignments.unassign.success",
+        extra=log_context(
+            principal_id=principal_id,
+            role_id=role_id,
+            scope_type=scope_type.value,
+            scope_id=scope_id,
+        ),
+    )
+
 
 async def sync_permission_registry(*, session: AsyncSession) -> None:
     """Synchronise the ``permissions`` and system ``roles`` tables."""
+
+    logger.info("roles.registry.sync.start", extra=log_context())
 
     registry = {definition.key: definition for definition in PERMISSIONS}
     result = await session.execute(select(Permission))
@@ -1094,6 +1639,14 @@ async def sync_permission_registry(*, session: AsyncSession) -> None:
                 )
 
     await session.commit()
+
+    logger.info(
+        "roles.registry.sync.success",
+        extra=log_context(
+            permission_count=len(PERMISSIONS),
+            system_role_count=len(SYSTEM_ROLES),
+        ),
+    )
 
 
 __all__ = [

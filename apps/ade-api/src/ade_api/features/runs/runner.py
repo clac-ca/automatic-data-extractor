@@ -12,6 +12,7 @@ from typing import Literal
 
 from ade_engine.schemas import AdeEvent
 from pydantic import ValidationError
+from ade_api.shared.core.logging import log_context
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +106,12 @@ class EngineSubprocessRunner:
                         envelope = AdeEvent.model_validate_json(line)
                     except ValidationError as exc:
                         logger.warning(
-                            "Invalid telemetry payload",
-                            extra={"line": line, "error": str(exc)},
+                            "run.telemetry.invalid",
+                            extra=log_context(
+                                run_dir=str(self._run_dir),
+                                line=line,
+                                error=str(exc),
+                            ),
                         )
                         continue
                     await self._queue.put(envelope)

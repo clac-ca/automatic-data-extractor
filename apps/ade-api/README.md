@@ -29,3 +29,10 @@ POST /api/v1/workspaces/{workspace_id}/configurations
 ```
 
 The backend copies the requested template into `./data/workspaces/{workspace_id}/config_packages/{config_id}/`, ready for editing and activation. After activation, runs will build a virtual environment for the template and execute the engine with the manifest and detectors bundled in that directory. Use the **sandbox** template for a quick start on new environments; switch to **default** when you need the fuller set of detectors demonstrated in the engine docs.
+
+## Logging
+
+- The API uses a console formatter with correlation IDs: `2025-11-27T03:05:00.302Z INFO  ade_api.features.runs.service [cid=abcd1234] run.create.success workspace_id=... run_id=...`
+- Set `ADE_LOGGING_LEVEL=DEBUG` to see debug logs from services; default is `INFO`. Example: `ADE_LOGGING_LEVEL=DEBUG ade dev --backend-only`.
+- Request logs include the `X-Request-ID` correlation ID and request metadata; global exception handlers log unexpected errors and 5xx `HTTPException`s.
+- Attach domain IDs via `extra=log_context(...)` when logging (workspace/config/build/run/document/user IDs).

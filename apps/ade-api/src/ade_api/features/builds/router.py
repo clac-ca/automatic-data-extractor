@@ -21,6 +21,7 @@ from ade_api.shared.dependency import (
     require_csrf,
     require_workspace,
 )
+from ade_api.shared.core.logging import log_context
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildLogsResponse, BuildResource
@@ -68,8 +69,12 @@ async def _execute_build_background(
 
             logger = logging.getLogger(__name__)
             logger.exception(
-                "Background build execution failed",
-                extra={"build_id": context.build_id},
+                "build.background.failed",
+                extra=log_context(
+                    workspace_id=context.workspace_id,
+                    configuration_id=context.configuration_id,
+                    build_id=context.build_id,
+                ),
             )
 
 
