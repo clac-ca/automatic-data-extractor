@@ -529,6 +529,10 @@ class Settings(BaseSettings):
         if url.get_backend_name() == "mssql" and "driver" not in query:
             query["driver"] = "ODBC Driver 18 for SQL Server"
 
+        # SQL Server async connectivity: prefer aioodbc (required for SQLAlchemy async)
+        if url.get_backend_name() == "mssql" and not url.drivername.startswith("mssql+aioodbc"):
+            url = url.set(drivername="mssql+aioodbc")
+
         if self.database_auth_mode == "managed_identity":
             if url.get_backend_name() != "mssql":
                 raise ValueError(

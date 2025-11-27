@@ -116,6 +116,21 @@ Use this only for single‑instance setups. For Container Apps with multiple rev
 
 This is often the easiest way to get started with Azure SQL.
 
+### ODBC driver prerequisites (local/dev)
+
+To connect to Azure SQL from a local machine (or run Alembic migrations locally), install the ODBC driver first; otherwise `pyodbc` will fail with errors like `libodbc.so.2: cannot open shared object file`.
+
+* **Debian/Ubuntu**: add the Microsoft repo first (`curl -sSL -O https://packages.microsoft.com/config/ubuntu/$(grep VERSION_ID /etc/os-release | cut -d '"' -f 2)/packages-microsoft-prod.deb && sudo dpkg -i packages-microsoft-prod.deb && sudo apt-get update`) then `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`
+* **macOS**: `brew install unixodbc` and install the Microsoft ODBC Driver 18 for SQL Server package.
+* **Windows**: install the Microsoft ODBC Driver 18 for SQL Server (standard installer).
+
+If you see `Login timeout expired (HYT00)` during startup/migrations:
+
+* Verify the host/port is reachable (e.g., `nc -vz <server> 1433` or `sqlcmd -S <server> -U <user> -P <pass>`).
+* Check firewall/private endpoint rules to ensure your machine/container can reach the SQL Server endpoint.
+* Confirm the DSN matches your auth mode (SQL password vs managed identity) and has `driver=ODBC Driver 18 for SQL Server` plus `Encrypt`/`TrustServerCertificate` as required.
+* For local dev, switch to SQLite: `ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite`.
+
 ### 4.1. Prerequisites
 
 * An Azure SQL Database (e.g. `sqldb-automaticdataextractor-prod`) on a server (e.g. `sql-automaticdataextractor.database.windows.net`).

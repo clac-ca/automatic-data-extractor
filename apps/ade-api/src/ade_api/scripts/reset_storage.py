@@ -1,16 +1,19 @@
-"""CLI to purge ADE storage directories resolved from backend settings."""
+"""CLI to purge ADE storage directories and reset the database."""
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import shutil
 import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from sqlalchemy.engine import make_url
+from sqlalchemy import MetaData
+from sqlalchemy.engine import URL
 
 from ..settings import Settings
+from ..shared.db import build_database_url, get_engine, reset_database_state
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_STORAGE_ROOT = (REPO_ROOT / "data").resolve()
@@ -34,12 +37,11 @@ def _within_default_root(path: Path) -> bool:
     return True
 
 
-def _resolve_sqlite_database_path(settings: Settings) -> Path | None:
-    url = make_url(settings.database_dsn)
-    if url.get_backend_name() != "sqlite":
+def _resolve_sqlite_database_path(database_url: URL) -> Path | None:
+    if database_url.get_backend_name() != "sqlite":
         return None
 
-    database = (url.database or "").strip()
+    database = (database_url.database or "").strip()
     if not database or database == ":memory:" or database.startswith("file:"):
         return None
 
@@ -49,7 +51,7 @@ def _resolve_sqlite_database_path(settings: Settings) -> Path | None:
     return db_path
 
 
-def _gather_storage_targets(settings: Settings) -> list[Path]:
+def _gather_storage_targets(settings: Settings, database_url: URL) -> list[Path]:
     targets: set[Path] = set()
 
     def add(path: Path | str | None) -> None:
@@ -68,7 +70,7 @@ def _gather_storage_targets(settings: Settings) -> list[Path]:
     if pip_cache and _within_default_root(pip_cache):
         add(pip_cache.parent)
 
-    sqlite_path = _resolve_sqlite_database_path(settings)
+    sqlite_path = _resolve_sqlite_database_path(database_url)
     if sqlite_path:
         add(sqlite_path)
         if _within_default_root(sqlite_path):
@@ -79,7 +81,11 @@ def _gather_storage_targets(settings: Settings) -> list[Path]:
 
 def _describe_targets(targets: Iterable[Path]) -> None:
     print("Storage paths resolved from ADE settings:")
-    for path in targets:
+    items = list(targets)
+    if not items:
+        print("  (none)")
+        return
+    for path in items:
         status = "" if path.exists() else " (missing)"
         print(f"  - {path}{status}")
 
@@ -116,6 +122,35 @@ def _cleanup_targets(targets: Iterable[Path]) -> list[tuple[Path, Exception]]:
     return errors
 
 
+def _describe_database_target(database_url: URL, sqlite_path: Path | None) -> None:
+    backend = database_url.get_backend_name()
+    rendered = database_url.render_as_string(hide_password=True)
+    print("Database target:")
+    if backend == "sqlite":
+        if sqlite_path:
+            status = "" if sqlite_path.exists() else " (missing)"
+            print(f"  - SQLite database file: {sqlite_path}{status}")
+        else:
+            print(f"  - SQLite database: {rendered}")
+    else:
+        print(f"  - {backend} database: {rendered}")
+
+
+async def _drop_all_tables(settings: Settings) -> int:
+    engine = get_engine(settings=settings)
+
+    async with engine.begin() as connection:
+        def _reflect_and_drop(sync_connection) -> int:
+            metadata = MetaData()
+            metadata.reflect(bind=sync_connection)
+            table_count = len(metadata.tables)
+            if metadata.tables:
+                metadata.drop_all(bind=sync_connection)
+            return table_count
+
+        return await connection.run_sync(_reflect_and_drop)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Delete configured ADE storage directories and databases.",
@@ -134,16 +169,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = Settings()
-    targets = _gather_storage_targets(settings)
-
-    if not targets:
-        print("No storage paths resolved from ADE settings.")
-        return 0
+    database_url = build_database_url(settings)
+    sqlite_path = _resolve_sqlite_database_path(database_url)
+    targets = _gather_storage_targets(settings, database_url)
 
     _describe_targets(targets)
+    _describe_database_target(database_url, sqlite_path)
 
     if args.dry_run:
-        print("Dry run mode enabled; no paths were removed.")
+        print("Dry run mode enabled; no database tables or paths were removed.")
         return 0
 
     if not args.yes:
@@ -152,15 +186,47 @@ def main(argv: list[str] | None = None) -> int:
                 "⚠️  confirmation required; re-run with --yes or `npm run reset:force`.",
             )
             return 2
-        answer = input("Proceed with deletion? [y/N] ").strip().lower()
+        answer = input(
+            "Proceed with database reset and storage deletion? [y/N] "
+        ).strip().lower()
         if answer not in {"y", "yes"}:
             print("🛑 storage reset cancelled")
             return 2
 
-    print("Removing storage paths...")
-    errors = _cleanup_targets(targets)
-    if errors:
+    backend = database_url.get_backend_name()
+    drop_error: Exception | None = None
+    dropped_tables: int | None = None
+
+    if backend == "sqlite":
+        if sqlite_path:
+            print("SQLite database file will be removed from storage paths; skipping table drop.")
+        else:
+            print("SQLite in-memory or URI database detected; no tables to drop.")
+    else:
+        print("Dropping database tables...")
+        try:
+            dropped_tables = asyncio.run(_drop_all_tables(settings))
+        except Exception as exc:  # noqa: BLE001
+            drop_error = exc
+        finally:
+            reset_database_state()
+
+        if drop_error is None:
+            if dropped_tables:
+                print(f"🗑️  dropped {dropped_tables} table(s)")
+            else:
+                print("No tables found to drop.")
+
+    if targets:
+        print("Removing storage paths...")
+        errors = _cleanup_targets(targets)
+    else:
+        errors = []
+
+    if drop_error or errors:
         print("❌ storage reset incomplete:")
+        if drop_error:
+            print(f"  - database reset failed: {drop_error}")
         for path, exc in errors:
             print(f"  - {path}: {exc}")
         return 1

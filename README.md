@@ -151,6 +151,7 @@ docker rm ade
 * Python 3.12 (or compatible 3.x)
 * Node.js 20 (or latest LTS)
 * `git`
+* **Azure SQL / SQL Server only:** system ODBC driver. Install `unixodbc` + Microsoft ODBC Driver 18 for SQL Server. On Debian/Ubuntu add the Microsoft repo (`packages-microsoft-prod.deb`, `sudo dpkg -i`, `sudo apt-get update`) then `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`; on macOS: `brew install unixodbc` and install the Microsoft ODBC Driver 18 package.
 
 ### 5.2 macOS / Linux
 
