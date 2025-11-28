@@ -14,6 +14,7 @@ from ade_api.features.auth.service import (
     SSO_STATE_COOKIE,
     AuthService,
     OIDCProviderMetadata,
+    SsoService,
 )
 from ade_api.features.users.repository import UsersRepository
 from ade_api.settings import get_settings, reload_settings
@@ -474,10 +475,10 @@ async def test_sso_callback_rejects_state_mismatch(
         jwks_uri="https://issuer.example.com/jwks",
     )
 
-    async def fake_metadata(self: AuthService) -> OIDCProviderMetadata:
+    async def fake_metadata(self: SsoService) -> OIDCProviderMetadata:
         return metadata
 
-    monkeypatch.setattr(AuthService, "_get_oidc_metadata", fake_metadata)
+    monkeypatch.setattr(SsoService, "_get_oidc_metadata", fake_metadata)
 
     login = await async_client.get("/api/v1/auth/sso/login", follow_redirects=False)
     assert login.status_code in (302, 307)

@@ -13,13 +13,13 @@
 
 ## Work Package Checklist
 
-* [ ] Implement new `AuthService` façade and internal subservices (`SessionService`, `PasswordAuthService`, `ApiKeyService`, `SsoService`, `DevIdentityService`) in `service.py`
-* [ ] Refactor dev-identity (`auth_disabled` mode) to use `DevIdentityService` and remove per-request registry sync / global-role writes
-* [ ] Refactor session / password / API key / SSO logic to use subservices and update `router.py` to depend on `AuthService`
-* [ ] Update shared dependencies (`shared.dependency.py`) and `require_*` helpers to resolve identities via `AuthService` (including CSRF + session payload paths)
-* [ ] Update tests for auth (`tests/features/auth/test_service.py` and any others) to target the new architecture and keep them green
-* [ ] Standardise transaction boundaries so auth services do **not** call `commit()` / `refresh()` in hot paths (failed-login / lockout helpers should use `flush()` only and rely on the outer unit-of-work to commit)
-* [ ] Ensure API key auth does **not** rely on async lazy-loaded relationships (avoid implicit IO on `record.user`; use repository calls or eager loading instead)
+* [x] Implement new `AuthService` façade and internal subservices (`SessionService`, `PasswordAuthService`, `ApiKeyService`, `SsoService`, `DevIdentityService`) in `service.py`
+* [x] Refactor dev-identity (`auth_disabled` mode) to use `DevIdentityService` and remove per-request registry sync / global-role writes
+* [x] Refactor session / password / API key / SSO logic to use subservices and update `router.py` to depend on `AuthService`
+* [x] Update shared dependencies (`shared.dependency.py`) and `require_*` helpers to resolve identities via `AuthService` (including CSRF + session payload paths)
+* [x] Update tests for auth (`tests/features/auth/test_service.py` and any others) to target the new architecture and keep them green
+* [x] Standardise transaction boundaries so auth services do **not** call `commit()` / `refresh()` in hot paths (failed-login / lockout helpers should use `flush()` only and rely on the outer unit-of-work to commit)
+* [x] Ensure API key auth does **not** rely on async lazy-loaded relationships (avoid implicit IO on `record.user`; use repository calls or eager loading instead)
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
@@ -72,7 +72,7 @@ The existing auth code lives under `ade_api/features/auth/` and related dependen
     * runs `sync_permission_registry`,
     * checks/assigns global admin role,
     * ensures a principal.
-  * This hits the DB (and the slow SQL Server) on every request.
+  * This hits the DB (and the slow SQL Server) on every request.  When auth_disabled = True we essentially just want all routes to not require auth.
 * **Auth-enabled mode**:
   * Password login verifies credentials, updates failed login counters and lockouts, and writes DB state inside the hot path.
   * Session management (JWT + cookies) is mixed into the main `AuthService`.
@@ -81,7 +81,7 @@ The existing auth code lives under `ade_api/features/auth/` and related dependen
 * **Shared dependencies** (in `shared.dependency.py`):
   * Resolve the current identity, enforce authentication, CSRF, and roles by manually calling pieces of `AuthService` as well as some dev-identity logic.
 
-**Known issues / pain points:**
+**Known issues / pain points with the legacy code:**
 
 * **Performance**:
   * With `ADE_AUTH_DISABLED=true` on a slow SQL Server, each request does expensive work:
@@ -156,8 +156,6 @@ apps/ade-api/
     features/
       auth/
         test_service.py        # Tests for is_secure_request and other behaviours
-  scripts/
-    # (No changes required here, but migration scripts or tooling could live here if needed)
 `````
 
 Key points:

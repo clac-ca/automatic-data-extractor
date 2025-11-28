@@ -848,6 +848,8 @@ class PasswordAuthService:
             user.failed_login_count = threshold
             lock_duration = self._settings.failed_login_lock_duration
             user.locked_until = _now() + lock_duration
+        # Request transaction should commit even when the HTTP path raises.
+        self._session.info["force_commit_on_error"] = True
         await self._session.flush()
 
 
@@ -857,6 +859,9 @@ class DevIdentityService:
     Ensures expensive setup (registry sync, role assignment) only runs once per
     process; subsequent calls are read-mostly.
     """
+
+    _dev_user_id: str | None = None
+    _dev_setup_done: bool = False
 
     def __init__(
         self,
@@ -869,12 +874,10 @@ class DevIdentityService:
         self._settings = settings
         self._users = users
 
-        self._dev_user_id: str | None = None
-        self._dev_setup_done: bool = False
-
     async def ensure_dev_identity(self) -> AuthenticatedIdentity:
         """Ensure a development identity exists when auth is bypassed."""
         settings = self._settings
+        cls = self.__class__
 
         email_source = settings.auth_disabled_user_email or "developer@example.test"
         email = normalise_email(email_source)
@@ -891,8 +894,8 @@ class DevIdentityService:
         user: User | None = None
 
         # Try fast path via cached ID first.
-        if self._dev_user_id is not None:
-            user = await self._users.get_by_id(self._dev_user_id)
+        if cls._dev_user_id is not None:
+            user = await self._users.get_by_id(cls._dev_user_id)
 
         if user is None:
             user = await self._users.get_by_email(email)
@@ -919,18 +922,18 @@ class DevIdentityService:
                 await self._session.flush()
 
         # Expensive work: registry sync + global admin role; only once per process.
-        if not self._dev_setup_done:
+        if not cls._dev_setup_done:
             await sync_permission_registry(session=self._session)
             await _assign_global_role_if_missing_or_500(
                 session=self._session,
                 user=user,
                 slug=_GLOBAL_ADMIN_ROLE_SLUG,
             )
-            self._dev_setup_done = True
-            self._dev_user_id = cast(str, user.id)
+            cls._dev_setup_done = True
+            cls._dev_user_id = cast(str, user.id)
         else:
             # Keep ID cached up to date.
-            self._dev_user_id = cast(str, user.id)
+            cls._dev_user_id = cast(str, user.id)
 
         principal = await ensure_user_principal(session=self._session, user=user)
 
@@ -2369,6 +2372,10 @@ class AuthService:
     def is_secure_request(self, request: Request) -> bool:
         """Return True when the request originated over HTTPS."""
         return self._session_service.is_secure_request(request)
+
+    def _refresh_cookie_path(self, session_path: str) -> str:
+        """Compatibility helper for tests asserting refresh cookie paths."""
+        return self._session_service._refresh_cookie_path(session_path)
 
     async def start_session(self, *, user: User) -> SessionTokens:
         """Return freshly minted session cookies for user."""

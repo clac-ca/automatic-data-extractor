@@ -1,1 +1,0 @@
-Write tests as you build out portions of the auth system.

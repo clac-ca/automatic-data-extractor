@@ -5,7 +5,7 @@ from urllib.parse import parse_qsl, urlparse
 import pytest
 from fastapi import HTTPException
 
-from ade_api.features.auth.service import AuthService, OIDCProviderMetadata
+from ade_api.features.auth.service import AuthService, OIDCProviderMetadata, SsoService
 from ade_api.features.roles.service import sync_permission_registry
 from ade_api.settings import reload_settings
 from ade_api.shared.db.session import get_sessionmaker
@@ -31,10 +31,10 @@ async def test_prepare_sso_login_rejects_external_next(
         jwks_uri="https://issuer.example.com/jwks",
     )
 
-    async def _fake_metadata(self: AuthService) -> OIDCProviderMetadata:
+    async def _fake_metadata(self: SsoService) -> OIDCProviderMetadata:
         return metadata
 
-    monkeypatch.setattr(AuthService, "_get_oidc_metadata", _fake_metadata)
+    monkeypatch.setattr(SsoService, "_get_oidc_metadata", _fake_metadata)
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
@@ -75,10 +75,10 @@ async def test_prepare_sso_login_allows_same_origin_absolute_next(
         jwks_uri="https://issuer.example.com/jwks",
     )
 
-    async def _fake_metadata(self: AuthService) -> OIDCProviderMetadata:
+    async def _fake_metadata(self: SsoService) -> OIDCProviderMetadata:
         return metadata
 
-    monkeypatch.setattr(AuthService, "_get_oidc_metadata", _fake_metadata)
+    monkeypatch.setattr(SsoService, "_get_oidc_metadata", _fake_metadata)
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
@@ -116,15 +116,15 @@ async def test_resolve_sso_user_provisions_and_links_identity(
     async with session_factory() as session:
         await sync_permission_registry(session=session)
         service = AuthService(session=session, settings=settings)
-        user = await service._resolve_sso_user(
-            provider="https://issuer.example.com",
-            subject="sub-abc",
-            email="person@example.com",
-        )
-        assert user.email == "person@example.com"
-        identity = await service._users.get_identity("https://issuer.example.com", "sub-abc")
-        assert identity is not None
-        assert identity.user_id == user.id
+    user = await service._sso_service._resolve_sso_user(  # type: ignore[attr-defined]
+        provider="https://issuer.example.com",
+        subject="sub-abc",
+        email="person@example.com",
+    )
+    assert user.email == "person@example.com"
+    identity = await service._users.get_identity("https://issuer.example.com", "sub-abc")
+    assert identity is not None
+    assert identity.user_id == user.id
 
 
 @pytest.mark.asyncio()
@@ -141,7 +141,7 @@ async def test_resolve_sso_user_respects_auto_provision_toggle(
         await sync_permission_registry(session=session)
         service = AuthService(session=session, settings=settings)
         with pytest.raises(HTTPException) as exc:
-            await service._resolve_sso_user(
+            await service._sso_service._resolve_sso_user(  # type: ignore[attr-defined]
                 provider="https://issuer.example.com",
                 subject="sub-new",
                 email="new-user@example.com",
@@ -181,7 +181,7 @@ async def test_complete_sso_login_success(monkeypatch: pytest.MonkeyPatch) -> No
     exchange_calls = 0
 
     async def fake_exchange(
-        self: AuthService, *, code: str, code_verifier: str
+        self: SsoService, *, code: str, code_verifier: str
     ) -> dict[str, str]:
         nonlocal exchange_calls
         exchange_calls += 1
@@ -196,7 +196,7 @@ async def test_complete_sso_login_success(monkeypatch: pytest.MonkeyPatch) -> No
     verify_tokens: list[str] = []
 
     async def fake_verify(
-        self: AuthService,
+        self: SsoService,
         *,
         token: str,
         jwks_uri: str,
@@ -210,9 +210,9 @@ async def test_complete_sso_login_success(monkeypatch: pytest.MonkeyPatch) -> No
         assert issuer == settings.oidc_issuer
         return {"sub": "subject-123", "email": "person@example.com", "nonce": nonce or ""}
 
-    monkeypatch.setattr(AuthService, "_get_oidc_metadata", fake_metadata)
-    monkeypatch.setattr(AuthService, "_exchange_authorization_code", fake_exchange)
-    monkeypatch.setattr(AuthService, "_verify_jwt_via_jwks", fake_verify)
+    monkeypatch.setattr(SsoService, "_get_oidc_metadata", fake_metadata)
+    monkeypatch.setattr(SsoService, "_exchange_authorization_code", fake_exchange)
+    monkeypatch.setattr(SsoService, "_verify_jwt_via_jwks", fake_verify)
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
