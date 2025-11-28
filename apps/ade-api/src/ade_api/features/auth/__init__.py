@@ -13,13 +13,15 @@ from types import ModuleType
 from typing import TYPE_CHECKING
 
 _LEGACY_PACKAGE = "ade_api.features.auth_legacy"
+# Ensure security and service load before router so shared dependency imports succeed
+# during aliasing (UsersService depends on ade_api.features.auth.security).
 _ALIAS_MODULES = [
     "models",
     "repository",
-    "router",
-    "schemas",
     "security",
     "service",
+    "router",
+    "schemas",
     "utils",
 ]
 
@@ -38,10 +40,18 @@ if TYPE_CHECKING:
 
     models = auth_legacy.models
     repository = auth_legacy.repository
-    router = auth_legacy.router
-    schemas = auth_legacy.schemas
     security = auth_legacy.security
     service = auth_legacy.service
+    router = auth_legacy.router
+    schemas = auth_legacy.schemas
     utils = auth_legacy.utils
 
-__all__ = ["models", "repository", "router", "schemas", "security", "service", "utils"]
+__all__ = [
+    "models",
+    "repository",
+    "security",
+    "service",
+    "router",
+    "schemas",
+    "utils",
+]
