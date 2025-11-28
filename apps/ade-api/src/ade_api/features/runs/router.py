@@ -71,7 +71,7 @@ def _event_bytes(event: RunStreamFrame) -> bytes:
 
 
 async def _execute_run_background(
-    context_data: dict[str, str],
+    context_data: dict[str, Any],
     options_data: dict[str, Any],
     settings: Settings,
 ) -> None:
@@ -108,7 +108,9 @@ async def create_run_endpoint(
 
     try:
         run, context = await service.prepare_run(
-            configuration_id=configuration_id, options=payload.options
+            configuration_id=configuration_id,
+            options=payload.options,
+            stream_build=payload.stream,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
