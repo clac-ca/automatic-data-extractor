@@ -6,7 +6,8 @@ import json
 import secrets
 import shutil
 import tomllib
-from collections.abc import Iterable
+import os
+from collections.abc import Iterable, Callable
 from hashlib import sha256
 from pathlib import Path
 
@@ -48,6 +49,41 @@ _COPY_IGNORE_PATTERNS = (
     "dist",
     "build",
 )
+
+
+def _copytree_no_stat(
+    source: Path,
+    destination: Path,
+    *,
+    ignore: Callable[[str, list[str]], set[str]] | None = None,
+) -> None:
+    """Copy a tree without preserving metadata (chmod/chown/utime).
+
+    Some networked volumes (e.g., SMB) reject chmod/utime, causing copy2/copytree
+    to raise EPERM. This keeps the copy to simple data writes.
+    """
+
+    ignore = ignore or (lambda _src, _names: set())
+
+    for root, dirnames, filenames in os.walk(source):
+        root_path = Path(root)
+        relative_root = root_path.relative_to(source)
+        destination_root = destination / relative_root
+
+        names = dirnames + filenames
+        ignored = set(ignore(root, names))
+
+        # Avoid recursing into ignored directories
+        dirnames[:] = [name for name in dirnames if name not in ignored]
+        destination_root.mkdir(parents=True, exist_ok=True)
+
+        for filename in filenames:
+            if filename in ignored:
+                continue
+            source_file = root_path / filename
+            destination_file = destination_root / filename
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_file, destination_file)
 
 
 class ConfigStorage:
@@ -222,10 +258,9 @@ class ConfigStorage:
                 workspace_root.mkdir(parents=True, exist_ok=True)
                 if staging.exists():
                     shutil.rmtree(staging)
-                shutil.copytree(
+                _copytree_no_stat(
                     source,
                     staging,
-                    dirs_exist_ok=False,
                     ignore=shutil.ignore_patterns(*_COPY_IGNORE_PATTERNS),
                 )
 
