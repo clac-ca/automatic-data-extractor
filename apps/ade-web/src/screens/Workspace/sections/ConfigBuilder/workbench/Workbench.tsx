@@ -47,7 +47,7 @@ import type { RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { describeRunEvent, formatConsoleTimestamp } from "./utils/console";
+import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
@@ -779,11 +779,15 @@ export function Workbench({
         let currentRunId: string | null = null;
         try {
           for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
-            appendConsoleLine(describeRunEvent(event));
+            const type = event.type;
+            const isBuildEvent = typeof type === "string" && type.startsWith("build.");
+            appendConsoleLine(isBuildEvent ? describeBuildEvent(event) : describeRunEvent(event));
             if (!isMountedRef.current) {
               return;
             }
-            const type = event.type;
+            if (isBuildEvent) {
+              continue;
+            }
             if (!type?.startsWith("run.")) continue;
             if (type === "run.queued") {
               currentRunId = event.run_id ?? (event.id as string | undefined) ?? null;

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.builds.models import BuildStatus
 from ade_api.features.builds.schemas import BuildCreateOptions
-from ade_api.features.builds.service import BuildsService
+from ade_api.features.builds.service import BuildExecutionContext, BuildsService
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
@@ -115,8 +115,9 @@ class RunExecutionContext:
     venv_path: str
     build_id: str
     runs_dir: str | None = None
+    build_context: BuildExecutionContext | None = None
 
-    def as_dict(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "configuration_id": self.configuration_id,
@@ -124,10 +125,11 @@ class RunExecutionContext:
             "venv_path": self.venv_path,
             "build_id": self.build_id,
             "runs_dir": self.runs_dir or "",
+            "build_context": self.build_context.as_dict() if self.build_context else None,
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, str]) -> RunExecutionContext:
+    def from_dict(cls, payload: dict[str, Any]) -> RunExecutionContext:
         return cls(
             run_id=payload["run_id"],
             configuration_id=payload["configuration_id"],
@@ -135,6 +137,11 @@ class RunExecutionContext:
             venv_path=payload["venv_path"],
             build_id=payload["build_id"],
             runs_dir=payload.get("runs_dir") or None,
+            build_context=(
+                BuildExecutionContext.from_dict(payload["build_context"])
+                if payload.get("build_context")
+                else None
+            ),
         )
 
 
@@ -226,6 +233,7 @@ class RunsService:
         *,
         configuration_id: str,
         options: RunCreateOptions,
+        stream_build: bool = False,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
@@ -252,10 +260,21 @@ class RunsService:
             )
             document_descriptor = self._document_descriptor(document)
 
-        venv_path, build_id = await self._ensure_config_env_ready(
-            configuration,
-            force_rebuild=options.force_rebuild,
-        )
+        build_ctx: BuildExecutionContext | None = None
+        if stream_build:
+            build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
+            build, build_ctx = await self._builds_service.prepare_build(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                options=build_options,
+            )
+            build_id = build.id
+            venv_path = Path(build_ctx.venv_root) / ".venv"
+        else:
+            venv_path, build_id = await self._ensure_config_env_ready(
+                configuration,
+                force_rebuild=options.force_rebuild,
+            )
 
         selected_sheet_name = self._select_input_sheet_name(options)
 
@@ -297,6 +316,7 @@ class RunsService:
             venv_path=str(venv_path),
             build_id=build_id,
             runs_dir=str(runs_root),
+            build_context=build_ctx,
         )
 
         logger.info(
@@ -376,6 +396,63 @@ class RunsService:
                 "options": options.model_dump(),
             },
         )
+
+        if context.build_context:
+            build_context = context.build_context
+            build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
+            async for event in self._builds_service.stream_build(
+                context=build_context,
+                options=build_options,
+            ):
+                yield event
+            build = await self._builds_service.get_build_or_raise(
+                build_context.build_id,
+                workspace_id=build_context.workspace_id,
+            )
+            if build.status is not BuildStatus.ACTIVE:
+                error_message = build.error_message or (
+                    f"Configuration {build.configuration_id} build failed"
+                )
+                await self._append_log(run.id, error_message, stream="stderr")
+                completion = await self._complete_run(
+                    run,
+                    status=RunStatus.FAILED,
+                    exit_code=1,
+                    error_message=error_message,
+                )
+                yield self._ade_event(
+                    run=completion,
+                    type_="run.completed",
+                    payload={
+                        "status": self._status_literal(completion.status),
+                        "execution": {"exit_code": completion.exit_code},
+                        "error": {"message": error_message},
+                    },
+                )
+                return
+
+            venv_path = await self._builds_service.ensure_local_env(build=build)
+            build_done_message = "Configuration build completed; starting ADE run."
+            log = await self._append_log(run.id, build_done_message, stream="stdout")
+            yield self._ade_event(
+                run=run,
+                type_="run.console",
+                payload={
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": build_done_message,
+                    "created": self._epoch_seconds(log.created_at),
+                },
+            )
+            context = RunExecutionContext(
+                run_id=context.run_id,
+                configuration_id=context.configuration_id,
+                workspace_id=context.workspace_id,
+                venv_path=str(venv_path),
+                build_id=context.build_id,
+                runs_dir=context.runs_dir,
+                build_context=None,
+            )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
         safe_mode = await self._safe_mode_status()

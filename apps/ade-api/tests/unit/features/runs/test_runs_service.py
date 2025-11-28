@@ -408,6 +408,115 @@ async def test_stream_run_validate_only_short_circuits(
 
 
 @pytest.mark.asyncio()
+async def test_stream_run_emits_build_events_when_requested(
+    session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, context, document = await _prepare_service(session, tmp_path)
+    builds_service = service._builds_service
+    workspace_id = context.workspace_id
+    configuration_id = context.configuration_id
+
+    build_ctx = BuildExecutionContext(
+        build_id="build_stream",
+        configuration_id=configuration_id,
+        workspace_id=workspace_id,
+        config_path=str(tmp_path / "config"),
+        venv_root=str(tmp_path / "venvroot"),
+        python_bin=None,
+        engine_spec="engine-spec",
+        engine_version_hint="1.0.0",
+        pip_cache_dir=None,
+        timeout_seconds=60.0,
+        should_run=True,
+        fingerprint="abc",
+    )
+
+    async def fake_prepare_build(*, workspace_id: str, configuration_id: str, options):  # type: ignore[no-untyped-def]
+        build = Build(
+            id=build_ctx.build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            status=BuildStatus.QUEUED,
+            created_at=utc_now(),
+        )
+        return build, build_ctx
+
+    async def fake_stream_build(*, context, options):  # type: ignore[no-untyped-def]
+        yield AdeEvent(
+            type="build.console",
+            created_at=utc_now(),
+            workspace_id=context.workspace_id,
+            configuration_id=context.configuration_id,
+            build_id=context.build_id,
+            stream="stdout",
+            level="info",
+            message="building...",
+            object="ade.event",
+        )
+
+    async def fake_get_build_or_raise(build_id: str, workspace_id_arg: str | None = None):  # type: ignore[no-untyped-def]
+        return Build(
+            id=build_id,
+            workspace_id=workspace_id_arg or workspace_id,
+            configuration_id=configuration_id,
+            status=BuildStatus.ACTIVE,
+            created_at=utc_now(),
+        )
+
+    async def fake_ensure_local_env(*, build):  # type: ignore[no-untyped-def]
+        return tmp_path / "venvroot" / ".venv"
+
+    async def fake_execute_engine(
+        self: RunsService,
+        *,
+        run,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        safe_mode_enabled: bool = False,
+    ) -> AsyncIterator[AdeEvent]:
+        completion = await self._complete_run(
+            run,
+            status=RunStatus.SUCCEEDED,
+            exit_code=0,
+            summary=None,
+        )
+        yield self._ade_event(
+            run=completion,
+            type_="run.completed",
+            payload={
+                "status": "succeeded",
+                "execution": {"exit_code": completion.exit_code},
+            },
+        )
+
+    monkeypatch.setattr(builds_service, "prepare_build", fake_prepare_build)
+    monkeypatch.setattr(builds_service, "stream_build", fake_stream_build)
+    monkeypatch.setattr(builds_service, "get_build_or_raise", fake_get_build_or_raise)
+    monkeypatch.setattr(builds_service, "ensure_local_env", fake_ensure_local_env)
+    monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
+
+    run_options = RunCreateOptions(input_document_id=document.id)
+    _, stream_context = await service.prepare_run(
+        configuration_id=configuration_id,
+        options=run_options,
+        stream_build=True,
+    )
+
+    events = []
+    async for event in service.stream_run(context=stream_context, options=run_options):
+        events.append(event)
+
+    assert [e.type for e in events] == ["run.queued", "build.console", "run.console", "run.completed"]
+    run = await service.get_run(stream_context.run_id)
+    assert run is not None
+    assert run.status is RunStatus.SUCCEEDED
+    logs = await service.get_logs(run_id=stream_context.run_id)
+    assert any("Configuration build completed" in entry.message for entry in logs.entries)
+
+
+@pytest.mark.asyncio()
 async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
     service, context, document = await _prepare_service(session, tmp_path, safe_mode=True)
     run_options = RunCreateOptions(input_document_id=document.id)
