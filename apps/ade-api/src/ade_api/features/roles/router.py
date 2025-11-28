@@ -145,7 +145,7 @@ async def _ensure_principal_identifier(
         return cast(str, principal.id)
 
     raise HTTPException(
-        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="principal_id or user_id is required",
     )
 
@@ -305,7 +305,7 @@ async def list_global_roles(
         status.HTTP_409_CONFLICT: {
             "description": "Role slug already exists.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Role payload is invalid.",
         },
     },
@@ -336,7 +336,7 @@ async def create_global_role_endpoint(
         ) from exc
     except RoleValidationError as exc:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -391,7 +391,7 @@ async def read_role_detail(
         status.HTTP_409_CONFLICT: {
             "description": "Role slug or permissions conflict.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Role payload is invalid.",
         },
     },
@@ -419,7 +419,7 @@ async def update_role_definition(
             ) from exc
         except RoleValidationError as exc:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
         except RoleNotFoundError:
@@ -540,7 +540,7 @@ async def list_global_role_assignments(
 
     if principal_id and user_id:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Provide only one of principal_id or user_id",
         )
 
@@ -596,7 +596,7 @@ async def list_global_role_assignments(
         status.HTTP_404_NOT_FOUND: {
             "description": "Principal or role not found.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role assignment payload.",
         },
     },
@@ -637,9 +637,9 @@ async def create_global_role_assignment(
     except (PrincipalNotFoundError, RoleNotFoundError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RoleScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except RoleAssignmentError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     assignment = await get_role_assignment(
         session=session,
@@ -731,7 +731,7 @@ async def list_workspace_role_assignments(
 
     if principal_id and user_id:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Provide only one of principal_id or user_id",
         )
 
@@ -787,7 +787,7 @@ async def list_workspace_role_assignments(
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace, principal, or role not found.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role assignment payload.",
         },
     },
@@ -835,9 +835,9 @@ async def create_workspace_role_assignment(
     except (PrincipalNotFoundError, RoleNotFoundError, WorkspaceNotFoundError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RoleScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except RoleAssignmentError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     assignment = await get_role_assignment(
         session=session,
@@ -1032,7 +1032,7 @@ async def read_effective_permissions(
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found when scoped permissions are requested.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid permission keys or missing workspace identifier.",
         },
     },
@@ -1048,7 +1048,7 @@ async def check_permissions(
         keys = collect_permission_keys(payload.permissions)
     except AuthorizationError as exc:  # pragma: no cover - defensive guard
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -1060,7 +1060,7 @@ async def check_permissions(
 
     if requires_workspace and workspace_id is None:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="workspace_id is required when checking workspace permissions",
         )
 

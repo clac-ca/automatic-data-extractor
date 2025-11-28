@@ -79,7 +79,7 @@ def _serialize_role(role: Role) -> RoleOut:
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Workspace name or slug is invalid.",
         },
     },
@@ -268,7 +268,7 @@ async def list_workspace_roles(
         status.HTTP_409_CONFLICT: {
             "description": "Role slug already exists or conflicts with a system role.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role name, slug, or permissions.",
         },
     },
@@ -316,7 +316,7 @@ async def create_workspace_role(
         status.HTTP_409_CONFLICT: {
             "description": "Operation would violate governor guardrails.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role payload.",
         },
     },
@@ -449,7 +449,7 @@ async def add_member(
         status.HTTP_409_CONFLICT: {
             "description": "Workspace slug already exists.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Workspace name or slug is invalid.",
         },
     },

@@ -87,7 +87,7 @@ def get_document_filters(request: Request) -> DocumentFilters:
             }
             for key in extras
         ]
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
     raw: dict[str, Any] = {}
     for key in allowed:
@@ -162,7 +162,7 @@ def _build_download_disposition(filename: str) -> str:
         status.HTTP_403_FORBIDDEN: {
             "description": "Workspace permissions do not allow document uploads.",
         },
-        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {
+        status.HTTP_413_CONTENT_TOO_LARGE: {
             "description": "Uploaded file exceeds the configured size limit.",
         },
     },
@@ -194,7 +194,7 @@ async def upload_document(
             actor=_actor,
         )
     except DocumentTooLargeError as exc:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
     except InvalidDocumentExpirationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -342,7 +342,7 @@ async def download_document(
         status.HTTP_404_NOT_FOUND: {
             "description": "Document not found within the workspace.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "The workbook exists but could not be parsed for worksheets.",
         },
     },
@@ -371,7 +371,7 @@ async def list_document_sheets_endpoint(
     except (DocumentNotFoundError, DocumentFileMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DocumentWorksheetParseError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
 @router.delete(

@@ -337,7 +337,7 @@ class WorkspacesService:
                 "workspace.create.name_required",
                 extra=log_context(user_id=user_id),
             )
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name required")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Name required")
 
         slug_source = slug.strip() if slug is not None else normalized_name
         normalized_slug = _slugify(slug_source)
@@ -346,7 +346,7 @@ class WorkspacesService:
                 "workspace.create.slug_invalid",
                 extra=log_context(user_id=user_id, slug_source=slug_source),
             )
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid slug")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid slug")
 
         existing = await self._repo.get_workspace_by_slug(normalized_slug)
         if existing is not None:
@@ -454,7 +454,7 @@ class WorkspacesService:
                     "workspace.update.name_required",
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name required")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Name required")
 
         updated_slug: str | None = None
         if slug is not None:
@@ -465,7 +465,7 @@ class WorkspacesService:
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Invalid slug",
                 )
             candidate = _slugify(slug_source)
@@ -475,7 +475,7 @@ class WorkspacesService:
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Invalid slug",
                 )
             if candidate != workspace_record.slug:
@@ -855,7 +855,7 @@ class WorkspacesService:
                 extra=log_context(workspace_id=workspace_id, user_id=actor_id),
             )
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Role slug is required",
             )
 
@@ -1067,7 +1067,7 @@ class WorkspacesService:
         candidate = value.strip()
         if not candidate:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Role name is required",
             )
         return candidate
@@ -1087,7 +1087,7 @@ class WorkspacesService:
             collected = collect_permission_keys(permissions)
         except AuthorizationError as exc:  # pragma: no cover - validated via tests
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
 
@@ -1096,7 +1096,7 @@ class WorkspacesService:
             definition = PERMISSION_REGISTRY.get(key)
             if definition is None or definition.scope != "workspace":
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Permission '{key}' must be workspace-scoped",
                 )
         return unique

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from ade_api.shared.core.schema import BaseSchema
 
@@ -48,8 +48,7 @@ class BuildResource(BaseSchema):
     summary: str | None = None
     error_message: str | None = None
 
-    class Config:
-        json_encoders = {datetime: _timestamp}
+    model_config = ConfigDict(json_encoders={datetime: _timestamp})
 
 
 class BuildCreateOptions(BaseSchema):

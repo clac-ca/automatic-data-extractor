@@ -491,9 +491,14 @@ async def test_sso_callback_rejects_state_mismatch(
     assert params.get("nonce")
     assert params.get("state")
 
+    async_client.cookies.set(
+        SSO_STATE_COOKIE,
+        state_cookie,
+        path="/api/v1/auth/sso",
+        domain="testserver",
+    )
     callback = await async_client.get(
         "/api/v1/auth/sso/callback",
         params={"code": "auth-code", "state": "wrong-state"},
-        cookies={SSO_STATE_COOKIE: state_cookie},
     )
     assert callback.status_code == 400
