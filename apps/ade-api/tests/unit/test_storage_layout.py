@@ -1,8 +1,11 @@
 from pathlib import Path
 
-from ade_api.settings import Settings
+import pytest
+from ade_api.settings import DEFAULT_VENVS_DIR, Settings
 from ade_api.storage_layout import (
-    config_venv_path,
+    build_venv_path,
+    build_venv_root,
+    build_venv_temp_path,
     workspace_config_root,
     workspace_documents_root,
     workspace_root,
@@ -10,7 +13,8 @@ from ade_api.storage_layout import (
 )
 
 
-def test_workspace_layout_defaults(tmp_path: Path) -> None:
+def test_workspace_layout_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ADE_VENVS_DIR", raising=False)
     settings = Settings(workspaces_dir=tmp_path / "workspaces")
 
     workspace_id = "acme-ws"
@@ -27,11 +31,10 @@ def test_workspace_layout_defaults(tmp_path: Path) -> None:
     ) == base / "config_packages" / config_id
     assert workspace_run_root(settings, workspace_id) == base / "runs"
     assert workspace_run_root(settings, workspace_id, run_id) == base / "runs" / run_id
-    assert config_venv_path(
-        settings,
-        workspace_id,
-        config_id,
-    ) == base / "config_packages" / config_id / ".venv"
+    expected_root = (DEFAULT_VENVS_DIR / workspace_id / config_id / "build-1").resolve()
+    assert build_venv_root(settings, workspace_id, config_id, "build-1") == expected_root
+    assert build_venv_path(settings, workspace_id, config_id, "build-1") == expected_root / ".venv"
+    assert build_venv_temp_path(settings, workspace_id, config_id, "build-1") == expected_root / ".venv.tmp"
 
 
 def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
@@ -58,6 +61,9 @@ def test_workspace_layout_respects_overrides(tmp_path: Path) -> None:
     assert workspace_run_root(settings, workspace_id, "run-123") == (
         tmp_path / "runs-override" / workspace_id / "runs" / "run-123"
     ).resolve()
-    assert config_venv_path(settings, workspace_id, config_id) == (
-        tmp_path / "configs-override" / workspace_id / "config_packages" / config_id / ".venv"
+    expected_root = (
+        tmp_path / "venvs-override" / workspace_id / config_id / "build-abc"
     ).resolve()
+    assert build_venv_root(settings, workspace_id, config_id, "build-abc") == expected_root
+    assert build_venv_path(settings, workspace_id, config_id, "build-abc") == expected_root / ".venv"
+    assert build_venv_temp_path(settings, workspace_id, config_id, "build-abc") == expected_root / ".venv.tmp"

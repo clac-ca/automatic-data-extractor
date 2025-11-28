@@ -20,22 +20,21 @@ Once built, every run for that configuration runs inside this frozen environment
 
 ## Where Builds Are Stored
 
-Virtual environments live inside each configuration package at `<config_root>/.venv/`. There is no separate venv root to override; the environment is always co-located with the configuration it runs.
+Virtual environments live on local storage at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv/`. They are not co-located with the configuration or shared storage.
 
 ```text
-./data/workspaces/
+ADE_VENVS_DIR/                     # default: /tmp/ade-venvs (local, non-shared)
 └─ <workspace_id>/
-   └─ config_packages/
-      └─ <config_id>/
-         ├─ ...source files...
-         └─ .venv/                # single active environment
+   └─ <config_id>/
+      └─ <build_id>/
+         └─ .venv/                 # build-scoped environment
             ├─ bin/python
             └─ <site-packages>/
-               ├─ ade_engine/...  # installed engine
-               └─ ade_config/...  # installed config package
+               ├─ ade_engine/...   # installed engine
+               └─ ade_config/...   # installed config package
 ```
 
-ADE maintains **one active virtual environment per configuration**. The **configuration row** stores build state/metadata, and the venv is recreated in place when a rebuild is needed.
+ADE maintains **one active build pointer per configuration**. The configuration row stores build state/metadata, and each build gets its own folder; new builds never mutate old venvs.
 
 ---
 
@@ -43,7 +42,7 @@ ADE maintains **one active virtual environment per configuration**. The **config
 
 ```mermaid
 flowchart TD
-  A["Start build (configuration + version)"] --> B["Create/refresh venv at <config_root>/.venv/"]
+  A["Start build (configuration + version)"] --> B["Create temp venv at ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv.tmp"]
   B --> C["Install ADE Engine"]
   C --> D["Install config package (+ dependencies)"]
   D --> E["Verify imports (ade_engine, ade_config)"]
@@ -54,35 +53,34 @@ flowchart TD
 **Key points**
 
 * **Atomic by pointer:** ADE updates the **database pointer** only after a successful build and verification.
-* **No rename needed:** each build has its own folder; switching is a DB update.
-* **Safe on failure:** if the build fails, ADE **deletes** the partially built folder and leaves the previous active build unchanged.
+* **Atomic swap:** build happens in `.venv.tmp`, then is renamed to `.venv` per `build_id`.
+* **Safe on failure:** if the build fails, ADE **deletes** the temp folder and leaves previous builds untouched.
 * **Fast installs:** the pip cache (`ADE_PIP_CACHE_DIR`) accelerates rebuilds by reusing downloaded wheels.
 
 ---
 
 ## Database Tracking
 
-Build metadata now lives directly on the `configurations` table so there is a single source of truth per configuration:
+Build metadata lives on the configuration plus a build history table:
 
 | Field                       | Description                                            |
 | --------------------------- | ------------------------------------------------------ |
-| `build_status`              | `queued`, `building`, `active`, `failed`, `canceled`   |
-| `engine_spec` / `version`   | What was installed into the venv                       |
-| `python_version`            | Interpreter version captured from the venv             |
-| `python_interpreter`        | Interpreter path used to build                         |
-| `built_configuration_version` / `built_content_digest` | Fingerprint of what the venv represents |
-| `last_build_started_at`     | When the current build started                         |
-| `last_build_finished_at`    | When the current build finished                        |
-| `last_build_error`          | Error text from the last build (if failed)             |
-| `last_build_id`             | Latest build **job** identifier (for logs/history)     |
+| `active_build_id`           | Current build ID (immutable env path)                  |
+| `active_build_fingerprint`  | Hash of config digest + engine spec/version + python   |
+| `active_build_status`       | `building`, `active`, `failed`                         |
+| `active_build_started_at`   | When the active build began                            |
+| `active_build_finished_at`  | When the active build finished                         |
+| `active_build_error`        | Error text from last active build attempt              |
+| `builds` table              | History rows per build (fingerprint, status, errors)   |
+| `last_build_id`             | Legacy pointer retained for transition (matches active)|
 
-The active environment is always the `.venv/` directory inside the configuration package; no environment-level build ID or separate pointer table is required.
+The active environment lives at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv`; switching builds is a DB pointer update, not an in-place rebuild.
 
 ---
 
 ## Change Detection & Rebuild Triggers
 
-ADE maintains **one venv per configuration** and rebuilds only when needed.
+ADE maintains **one active build per configuration** and rebuilds only when fingerprints change or force is requested.
 
 ADE (re)builds when any of the following change:
 
@@ -92,7 +90,7 @@ ADE (re)builds when any of the following change:
 * `python_interpreter` changed.
 * The request sets `force=true`.
 
-Otherwise, ADE reuses the existing `.venv/`. Requests are **idempotent**—you get the current active environment.
+Otherwise, ADE reuses the existing build. Requests are **idempotent**—you get the current active environment.
 
 ---
 
@@ -141,31 +139,23 @@ This self‑healing logic guarantees that a crash during build does not permanen
 
 ## Cleanup
 
-**On failure:** delete the just‑created `.venv/` folder and set `status=failed` with an error message.
+**On failure:** delete the just‑created temp folder and set `status=failed` with an error message.
 
-**On success:** the `.venv/` remains the single active environment for that configuration.
+**On success:** the `.venv` stays alongside its `build_id`; previous builds remain immutable until pruned.
 
-**On startup / periodic sweep:** if `.venv/` is missing, the next build recreates it in place.
+**On startup / periodic sweep:** if a build folder is missing, the next ensure recreates it from DB metadata.
 
 ---
 
 ## Runs and Build Reuse
 
-Before each run, the backend calls `ensure_build(workspace_id, config_id)`:
-
-* If a valid active environment exists, it returns the current `.venv/` path.
-* Otherwise, it rebuilds in place and returns the new path.
-
-Runs launch using that venv:
+Before each run, the backend calls `ensure_active_build(workspace_id, config_id)`, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
 
 ```bash
-<config_root>/.venv/bin/python \
-  -I -B -m ade_engine.worker <run_id>
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine.run <run_id>
 ```
 
-Runs never install packages; they always run inside the verified configuration venv. The run record stores the latest build **job** ID for audit and reproducibility.
-
-> Auto-rebuild: when a run starts, ADE checks the configuration’s digest and `.venv/`. If the environment is missing, stale, or the digest changed, ADE rebuilds inline before launching the run.
+Runs never install packages; they always run inside the verified build venv. The run record stores the `build_id` used for audit and reproducibility.
 
 ---
 
@@ -221,7 +211,7 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 | `ADE_WORKSPACES_DIR`            | `./data/workspaces`    | Workspace root for ADE storage                  |
 | `ADE_DOCUMENTS_DIR`             | `./data/workspaces`    | Base for documents (`<ws>/documents/...`)       |
 | `ADE_CONFIGS_DIR`               | `./data/workspaces`    | Base for configs (`<ws>/config_packages/...`)   |
-| *(venvs)*                       | _fixed_                | Venv lives at `<config_root>/.venv/`            |
+| `ADE_VENVS_DIR`                 | `/tmp/ade-venvs`       | Local base for venvs (`<ws>/<cfg>/<build>/...`) |
 | `ADE_RUNS_DIR`                  | `./data/workspaces`    | Base for runs (`<ws>/runs/<run_id>/...`)        |
 | `ADE_PIP_CACHE_DIR`             | `./data/cache/pip`     | Cache for pip downloads (safe to delete)        |
 | `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
@@ -241,8 +231,8 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 
 * **Router** — `POST /workspaces/{workspace_id}/configs/{config_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses configuration `build_status="building"` to deduplicate concurrent requests**, and triggers the builder if needed.
-* **Builder** — creates `<config_root>/.venv/`, installs engine + config, verifies imports, **updates configuration build metadata on success**, deletes the folder on failure.
-* **Runs** — call `ensure_build()` then run the worker using the returned `venv_path`. Each run row stores the last build **job** ID.
+* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates configuration build metadata on success**, deletes the temp folder on failure.
+* **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
 * **Database** — `configurations` holds build metadata; `builds` + `build_logs` track job history.
 
 ---
@@ -252,6 +242,6 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 * Keep it simple: **DB‑based dedupe** guarantees **one** build at a time per configuration—no filesystem locks.
 * **Coalesce** concurrent requests: UI returns `"building"` quickly; runs wait briefly for the status to flip.
 * **Self‑heal** stale `building` states after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
-* Allow **rebuilds while runs run**; the `.venv/` is recreated in place when needed.
+* Allow **rebuilds while runs run**; new builds land in new folders and runs continue using their pinned build_id.
 * Runs **don’t pass** `build_id`—the server chooses and **records** the job ID for reproducibility.
 * No renames, no symlinks—just clean metadata updates, timeouts, and simple cleanup.

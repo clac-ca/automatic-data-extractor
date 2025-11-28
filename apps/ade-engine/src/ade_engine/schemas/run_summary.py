@@ -110,3 +110,7 @@ class RunSummaryV1(BaseModel):
     breakdowns: RunSummaryBreakdowns
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @property
+    def schema(self) -> str:
+        return self.schema_id

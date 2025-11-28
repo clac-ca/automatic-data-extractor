@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ade_api.features.builds.builder import (
@@ -14,16 +15,18 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.features.builds.models import BuildStatus
+from ade_api.features.builds.fingerprint import compute_build_fingerprint
+from ade_api.features.builds.models import Build, BuildStatus
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildsService
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
-from ade_api.features.configs.storage import ConfigStorage
+from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db import Base
 from ade_api.shared.db.mixins import generate_ulid
+from ade_api.storage_layout import build_venv_root
 
 
 @dataclass(slots=True)
@@ -36,14 +39,15 @@ class FakeBuilder:
         build_id: str,
         workspace_id: str,
         configuration_id: str,
-        target_path: Path,
+        venv_root: Path,
         config_path: Path,
         engine_spec: str,
         pip_cache_dir: Path | None,
         python_bin: str | None,
         timeout: float,
+        fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
-        target_path.mkdir(parents=True, exist_ok=True)
+        venv_root.mkdir(parents=True, exist_ok=True)
         for event in self.events:
             yield event
 
@@ -59,7 +63,7 @@ class TimeStub:
         return self.current
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture()
 async def session() -> AsyncSession:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
@@ -99,6 +103,7 @@ version = "0.2.0"
             update={
                 "workspaces_dir": workspaces_dir,
                 "configs_dir": workspaces_dir,
+                "venvs_dir": tmp_path / "venvs",
                 "pip_cache_dir": pip_cache_dir,
                 "engine_spec": str(engine_dir),
             }
@@ -141,6 +146,7 @@ async def _create_configuration(
     return workspace, configuration
 
 
+@pytest.mark.asyncio()
 async def test_prepare_build_reuses_active(
     session: AsyncSession,
     tmp_path: Path,
@@ -151,15 +157,51 @@ async def test_prepare_build_reuses_active(
     service = service_factory(session, builder=builder)
 
     config_path = service.storage.config_path(workspace.id, configuration.id)
-    config_path.mkdir(parents=True, exist_ok=True)
+    (config_path / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
+    (config_path / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n")
+    digest = compute_config_digest(config_path)
+    python_version = await service._python_version(service._resolve_python_interpreter())
+    engine_version = service._resolve_engine_version(service.settings.engine_spec)
+    fingerprint = compute_build_fingerprint(
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_bin=service._resolve_python_interpreter(),
+        extra={},
+    )
+
+    build = Build(
+        id=generate_ulid(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.ACTIVE,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        exit_code=0,
+        fingerprint=fingerprint,
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_interpreter=service._resolve_python_interpreter(),
+    )
+    session.add(build)
 
     configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.active_build_id = build.id  # type: ignore[attr-defined]
+    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
+    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
     configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
-    configuration.built_content_digest = configuration.content_digest  # type: ignore[attr-defined]
+    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.content_digest = digest
     configuration.engine_spec = service.settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.engine_version = engine_version  # type: ignore[attr-defined]
     configuration.python_interpreter = service.settings.python_bin  # type: ignore[attr-defined]
-    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
+    configuration.python_version = python_version  # type: ignore[attr-defined]
     configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
     await session.commit()
 
@@ -171,7 +213,8 @@ async def test_prepare_build_reuses_active(
 
     assert context.should_run is False
     assert build.status is BuildStatus.ACTIVE
-    assert build.summary == "Reused existing build"
+    assert build.id == configuration.active_build_id
+    assert context.fingerprint == fingerprint
 
 
 @pytest.mark.asyncio()

@@ -3,14 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+import tomllib
 
 import pytest
 from ade_engine.schemas import AdeEvent
 
-from ade_api.features.builds.models import BuildStatus
+from ade_api.features.builds.fingerprint import compute_build_fingerprint
+from ade_api.features.builds.models import Build, BuildStatus
+from ade_api.features.builds.service import BuildExecutionContext
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document, DocumentSource, DocumentStatus
@@ -23,7 +27,29 @@ from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
-from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
+from ade_api.storage_layout import (
+    build_venv_marker_path,
+    build_venv_path,
+    workspace_config_root,
+    workspace_documents_root,
+)
+
+
+def _engine_version_hint(spec: str) -> str | None:
+    """Mirror the build service's best-effort engine version detection."""
+
+    spec_path = Path(spec)
+    if spec_path.exists() and spec_path.is_dir():
+        pyproject = spec_path / "pyproject.toml"
+        if pyproject.exists():
+            try:
+                parsed = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+                return parsed.get("project", {}).get("version")
+            except Exception:
+                return None
+    if "==" in spec:
+        return spec.split("==", 1)[1]
+    return None
 
 
 async def _prepare_service(
@@ -59,10 +85,12 @@ async def _prepare_service(
             "safe_mode": safe_mode,
             "documents_dir": documents_dir,
             "runs_dir": runs_dir,
+            "venvs_dir": tmp_path / "venvs",
         }
     )
 
-    venv_dir = config_venv_path(settings, workspace.id, configuration.id)
+    build_id = generate_ulid()
+    venv_dir = build_venv_path(settings, workspace.id, configuration.id, build_id)
     bin_dir = venv_dir / ("Scripts" if os.name == "nt" else "bin")
     bin_dir.mkdir(parents=True, exist_ok=True)
     python_name = "python.exe" if os.name == "nt" else "python"
@@ -74,6 +102,34 @@ async def _prepare_service(
         encoding="utf-8",
     )
     digest = compute_config_digest(config_root)
+    engine_version = _engine_version_hint(settings.engine_spec)
+
+    fingerprint = compute_build_fingerprint(
+        config_digest=digest,
+        engine_spec=settings.engine_spec,
+        engine_version=engine_version,
+        python_version=".".join(map(str, sys.version_info[:3])),
+        python_bin=settings.python_bin,
+        extra={},
+    )
+
+    build = Build(
+        id=build_id,
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.ACTIVE,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        exit_code=0,
+        fingerprint=fingerprint,
+        config_digest=digest,
+        engine_spec=settings.engine_spec,
+        engine_version=engine_version,
+        python_version=".".join(map(str, sys.version_info[:3])),
+        python_interpreter=settings.python_bin or sys.executable,
+    )
+    session.add(build)
 
     document_id = generate_ulid()
     storage = DocumentStorage(workspace_documents_root(settings, workspace.id))
@@ -96,12 +152,25 @@ async def _prepare_service(
     )
     session.add(document)
 
+    marker = build_venv_marker_path(settings, workspace.id, configuration.id, build_id)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+        encoding="utf-8",
+    )
+
+    configuration.active_build_id = build_id  # type: ignore[attr-defined]
+    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
+    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
     configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
     configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
     configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
     configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
     configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+    configuration.last_build_id = build_id  # type: ignore[attr-defined]
     configuration.built_content_digest = digest  # type: ignore[attr-defined]
     configuration.content_digest = digest
     await session.commit()
@@ -256,17 +325,46 @@ async def test_force_rebuild_triggers_rebuild(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service, context, document = await _prepare_service(session, tmp_path)
+    builds_service = service._builds_service
+    existing_build = await builds_service.get_build_or_raise(
+        context.build_id, workspace_id=context.workspace_id
+    )
 
     rebuild_called = False
 
-    async def fake_rebuild(self, *, configuration, config_root, venv_path, digest):  # type: ignore[no-untyped-def]
+    async def fake_prepare_build(
+        *,  # type: ignore[no-untyped-def]
+        workspace_id: str,
+        configuration_id: str,
+        options,
+    ):
         nonlocal rebuild_called
-        rebuild_called = True
-        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
-        configuration.built_content_digest = digest  # type: ignore[attr-defined]
-        configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
+        rebuild_called = rebuild_called or bool(options.force)
+        return existing_build, BuildExecutionContext(
+            build_id=existing_build.id,
+            configuration_id=existing_build.configuration_id,
+            workspace_id=existing_build.workspace_id,
+            config_path=str(context.venv_path),
+            venv_root=str(Path(context.venv_path).parent),
+            python_bin=existing_build.python_interpreter,
+            engine_spec=existing_build.engine_spec or "",
+            engine_version_hint=existing_build.engine_version,
+            pip_cache_dir=None,
+            timeout_seconds=300.0,
+            should_run=False,
+            fingerprint=existing_build.fingerprint or "",
+            reuse_summary="reuse-stub",
+        )
 
-    monkeypatch.setattr(RunsService, "_rebuild_configuration_env", fake_rebuild)
+    async def fake_run_to_completion(*, context, options):  # type: ignore[no-untyped-def]
+        return None
+
+    async def fake_ensure_local_env(*, build):  # type: ignore[no-untyped-def]
+        return Path(context.venv_path)
+
+    monkeypatch.setattr(builds_service, "prepare_build", fake_prepare_build)
+    monkeypatch.setattr(builds_service, "run_to_completion", fake_run_to_completion)
+    monkeypatch.setattr(builds_service, "ensure_local_env", fake_ensure_local_env)
 
     options = RunCreateOptions(input_document_id=document.id, force_rebuild=True)
     run, _ = await service.prepare_run(configuration_id=context.configuration_id, options=options)

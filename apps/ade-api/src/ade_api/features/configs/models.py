@@ -80,6 +80,27 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    active_build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    active_build_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    active_build_status: Mapped[BuildStatus | None] = mapped_column(
+        SAEnum(
+            BuildStatus,
+            name="configuration_active_build_status",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=True,
+    )
+    active_build_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    active_build_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    active_build_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index("configurations_workspace_status_idx", "workspace_id", "status"),

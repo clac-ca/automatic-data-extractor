@@ -18,15 +18,13 @@ from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.builds.builder import (
-    BuilderArtifactsEvent,
-    VirtualEnvironmentBuilder,
-)
 from ade_api.features.builds.models import BuildStatus
+from ade_api.features.builds.schemas import BuildCreateOptions
+from ade_api.features.builds.service import BuildsService
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.configs.storage import compute_config_digest
+from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
@@ -40,7 +38,6 @@ from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.pagination import Page
 from ade_api.storage_layout import (
-    config_venv_path,
     workspace_config_root,
     workspace_documents_root,
     workspace_run_root,
@@ -193,6 +190,7 @@ class RunsService:
         settings: Settings,
         supervisor: RunExecutionSupervisor | None = None,
         safe_mode_service: SafeModeService | None = None,
+        storage: ConfigStorage | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
@@ -201,7 +199,16 @@ class RunsService:
         self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
-        self._builder = VirtualEnvironmentBuilder()
+        module_root = Path(__file__).resolve().parents[2]
+        self._storage = storage or ConfigStorage(
+            templates_root=module_root / "templates" / "config_packages",
+            settings=settings,
+        )
+        self._builds_service = BuildsService(
+            session=session,
+            settings=settings,
+            storage=self._storage,
+        )
 
         if settings.documents_dir is None:
             raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
@@ -288,7 +295,7 @@ class RunsService:
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             venv_path=str(venv_path),
-            build_id=build_id or "",
+            build_id=build_id,
             runs_dir=str(runs_root),
         )
 
@@ -744,6 +751,7 @@ class RunsService:
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
             configuration_version=run.configuration_version_id,
+            build_id=run.build_id,
             status=self._status_literal(run.status),
             failure_code=summary_run_dict.get("failure_code"),
             failure_stage=summary_run_dict.get("failure_stage"),
@@ -1808,158 +1816,30 @@ class RunsService:
         configuration: Configuration,
         *,
         force_rebuild: bool = False,
-    ) -> tuple[Path, str | None]:
-        config_root = workspace_config_root(
-            self._settings,
-            configuration.workspace_id,
-            configuration.id,
-        )
-        venv_path = config_venv_path(
-            self._settings,
-            configuration.workspace_id,
-            configuration.id,
-        )
-        digest = compute_config_digest(config_root)
-        dirty = (
-            not venv_path.exists()
-            or configuration.build_status is not BuildStatus.ACTIVE
-            or configuration.built_content_digest != digest
-            or force_rebuild
-        )
-
+    ) -> tuple[Path, str]:
         logger.debug(
             "run.env.ensure.start",
             extra=log_context(
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
-                current_build_status=getattr(configuration.build_status, "value", None),
                 force_rebuild=force_rebuild,
-                digest=digest,
-                venv_exists=venv_path.exists(),
             ),
         )
-
-        if dirty:
-            logger.info(
-                "run.env.ensure.rebuild_needed",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                    force_rebuild=force_rebuild,
-                ),
-            )
-            await self._rebuild_configuration_env(
-                configuration=configuration,
-                config_root=config_root,
-                venv_path=venv_path,
-                digest=digest,
-            )
-            if configuration.last_build_id is None:  # defensive for patched rebuilds
-                configuration.last_build_id = f"build_{uuid4().hex}"  # type: ignore[attr-defined]
-        else:
-            logger.info(
-                "run.env.ensure.reuse",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                    build_id=configuration.last_build_id,
-                ),
-            )
-        return venv_path, configuration.last_build_id
-
-    async def _rebuild_configuration_env(
-        self,
-        *,
-        configuration: Configuration,
-        config_root: Path,
-        venv_path: Path,
-        digest: str,
-    ) -> None:
-        build_id = f"build_{uuid4().hex}"
-        logger.info(
-            "run.env.build.start",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                build_id=build_id,
-            ),
+        options = BuildCreateOptions(force=force_rebuild, wait=True)
+        build, context = await self._builds_service.prepare_build(
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            options=options,
         )
-
-        configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
-        configuration.last_build_started_at = utc_now()  # type: ignore[attr-defined]
-        configuration.last_build_error = None  # type: ignore[attr-defined]
-        configuration.last_build_id = build_id  # type: ignore[attr-defined]
-        await self._session.flush()
-
-        artifacts: BuilderArtifactsEvent | None = None
-        try:
-            async for event in self._builder.build_stream(
-                build_id=build_id,
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                target_path=venv_path,
-                config_path=config_root,
-                engine_spec=self._settings.engine_spec,
-                pip_cache_dir=(
-                    Path(self._settings.pip_cache_dir)
-                    if self._settings.pip_cache_dir
-                    else None
-                ),
-                python_bin=self._settings.python_bin,
-                timeout=float(self._settings.build_timeout.total_seconds()),
-            ):
-                if isinstance(event, BuilderArtifactsEvent):
-                    artifacts = event
-        except Exception:
-            logger.exception(
-                "run.env.build.stream_error",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                    build_id=build_id,
-                ),
-            )
-            raise
-
-        if artifacts is None:
-            logger.warning(
-                "run.env.build.no_artifacts",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                    build_id=build_id,
-                ),
-            )
-            raise RunEnvironmentNotReadyError(
-                f"Build for configuration {configuration.id} did not return metadata"
-            )
-
-        now = utc_now()
-        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
-        configuration.engine_spec = self._settings.engine_spec  # type: ignore[attr-defined]
-        configuration.engine_version = artifacts.artifacts.engine_version  # type: ignore[attr-defined]
-        configuration.python_version = artifacts.artifacts.python_version  # type: ignore[attr-defined]
-        python_bin = (
-            venv_path
-            / ("Scripts" if os.name == "nt" else "bin")
-            / ("python.exe" if os.name == "nt" else "python")
+        await self._builds_service.run_to_completion(context=context, options=options)
+        build = await self._builds_service.get_build_or_raise(
+            build.id, workspace_id=configuration.workspace_id
         )
-        configuration.python_interpreter = str(python_bin)  # type: ignore[attr-defined]
-        configuration.content_digest = digest
-        configuration.built_content_digest = digest  # type: ignore[attr-defined]
-        configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
-        configuration.last_build_finished_at = now  # type: ignore[attr-defined]
-        configuration.last_build_error = None  # type: ignore[attr-defined]
-        await self._session.flush()
-
-        logger.info(
-            "run.env.build.success",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                build_id=build_id,
-            ),
-        )
+        if build.status is not BuildStatus.ACTIVE:
+            message = build.error_message or f"Configuration {configuration.id} build failed"
+            raise RunEnvironmentNotReadyError(message)
+        venv_path = await self._builds_service.ensure_local_env(build=build)
+        return venv_path, build.id
 
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:

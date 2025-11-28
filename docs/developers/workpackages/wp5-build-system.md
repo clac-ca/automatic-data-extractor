@@ -5,7 +5,7 @@ Track per-configuration virtual environments in SQL, build them deterministicall
 
 ## Scope
 * Create `configuration_builds` table to persist build metadata.
-* Manage virtual environments under `${ADE_VENVS_DIR}/{workspace}/{config}/{build_id}/`.
+* Manage virtual environments under `${ADE_VENVS_DIR}/{workspace}/{config}/{build_id}/` (default `/tmp/ade-venvs` on local storage).
 * Provide an `ensure_build()` service used by both API endpoints and run submission.
 * Implement REST endpoints to inspect, trigger, or delete builds.
 
@@ -25,7 +25,7 @@ Constraints:
 
 ## Settings
 Environment variables to honor (with defaults from the build guide):
-* `ADE_VENVS_DIR` (default `./data/workspaces`)
+* `ADE_VENVS_DIR` (default `/tmp/ade-venvs`)
 * `ADE_PIP_CACHE_DIR` (`./data/cache/pip`)
 * `ADE_ENGINE_SPEC` (`apps/ade-engine/`)
 * `ADE_PYTHON_BIN` (optional override)

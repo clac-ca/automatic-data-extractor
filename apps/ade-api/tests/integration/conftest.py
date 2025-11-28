@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
 
 from ade_api.settings import get_settings
 from ade_api.shared.db.session import get_sessionmaker
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture()
 async def session(app: FastAPI):
     """Return a database session bound to the test application's database."""
 

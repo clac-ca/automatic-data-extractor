@@ -52,15 +52,17 @@ def _configure_database(
 
     data_dir = tmp_path_factory.mktemp("api-app-data")
     workspaces_dir = data_dir / "workspaces"
+    venvs_dir = data_dir / "venvs"
     pip_cache_dir = data_dir / "cache" / "pip"
 
     os.environ["ADE_DATABASE_DSN"] = _database_url
     os.environ["ADE_WORKSPACES_DIR"] = str(workspaces_dir)
     os.environ["ADE_DOCUMENTS_DIR"] = str(workspaces_dir)
     os.environ["ADE_CONFIGS_DIR"] = str(workspaces_dir)
-    os.environ["ADE_VENVS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
     os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
+    os.environ["ADE_AUTH_DISABLED"] = "false"
     os.environ.setdefault("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
@@ -72,6 +74,7 @@ def _configure_database(
     os.environ["ADE_OIDC_REDIRECT_URL"] = ""
     os.environ["ADE_OIDC_SCOPES"] = ""
     settings = reload_settings()
+    assert settings.auth_disabled is False
     assert settings.database_dsn == _database_url
     ensure_runtime_dirs(settings)
     reset_database_state()
@@ -96,6 +99,7 @@ def _configure_database(
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",
         "ADE_JWT_SECRET",
+        "ADE_AUTH_DISABLED",
     ):
         os.environ.pop(env_var, None)
 
