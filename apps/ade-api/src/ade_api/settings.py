@@ -73,7 +73,6 @@ DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = timedelta(seconds=600)
 DEFAULT_BUILD_ENSURE_WAIT = timedelta(seconds=30)
-DEFAULT_BUILD_RETENTION = timedelta(days=30)
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
@@ -268,7 +267,6 @@ class Settings(BaseSettings):
 
     # Core
     debug: bool = False
-    dev_mode: bool = False
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "0.2.0"
     api_docs_enabled: bool = False
@@ -279,8 +277,6 @@ class Settings(BaseSettings):
     safe_mode: bool = False
 
     # Server
-    server_host: str = "localhost"
-    server_port: int = Field(8000, ge=1, le=65535)
     server_public_url: str = DEFAULT_PUBLIC_URL
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
 
@@ -310,7 +306,6 @@ class Settings(BaseSettings):
     build_timeout: timedelta = Field(default=DEFAULT_BUILD_TIMEOUT)
     build_ensure_wait: timedelta = Field(default=DEFAULT_BUILD_ENSURE_WAIT)
     build_ttl: timedelta | None = Field(default=None)
-    build_retention: timedelta | None = Field(default=DEFAULT_BUILD_RETENTION)
 
     # Database
     database_dsn: str | None = None
@@ -363,14 +358,6 @@ class Settings(BaseSettings):
     auth_sso_auto_provision: bool = True
 
     # ---- Validators ----
-
-    @field_validator("server_host", mode="before")
-    @classmethod
-    def _v_host(cls, v: Any) -> str:
-        s = str(v).strip()
-        if not s:
-            raise ValueError("ADE_SERVER_HOST must not be empty")
-        return s
 
     @field_validator("server_public_url", mode="before")
     @classmethod
@@ -433,7 +420,7 @@ class Settings(BaseSettings):
     def _v_build_required(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
 
-    @field_validator("build_ttl", "build_retention", mode="before")
+    @field_validator("build_ttl", mode="before")
     @classmethod
     def _v_build_optional(cls, v: Any, info: ValidationInfo) -> timedelta | None:
         if v in (None, ""):
