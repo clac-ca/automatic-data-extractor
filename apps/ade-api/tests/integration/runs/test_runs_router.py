@@ -13,12 +13,14 @@ from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+import tomllib
 
 import openpyxl
 import pytest
 from httpx import AsyncClient
 
-from ade_api.features.builds.models import BuildStatus
+from ade_api.features.builds.fingerprint import compute_build_fingerprint
+from ade_api.features.builds.models import Build, BuildStatus
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import compute_config_digest
 from ade_api.features.documents.models import Document
@@ -32,7 +34,12 @@ from ade_api.settings import Settings, get_settings
 from ade_api.shared.core.time import utc_now
 from ade_api.shared.db.mixins import generate_ulid
 from ade_api.shared.db.session import get_sessionmaker
-from ade_api.storage_layout import config_venv_path, workspace_config_root, workspace_documents_root
+from ade_api.storage_layout import (
+    build_venv_marker_path,
+    build_venv_path,
+    workspace_config_root,
+    workspace_documents_root,
+)
 from tests.utils import login
 from ade_engine.schemas import AdeEvent
 
@@ -52,6 +59,23 @@ _CONFIG_TEMPLATE = (
     / "config_packages"
     / "default"
 )
+
+
+def _engine_version_hint(spec: str) -> str | None:
+    """Best-effort version detection mirroring the builds service."""
+
+    spec_path = Path(spec)
+    if spec_path.exists() and spec_path.is_dir():
+        pyproject = spec_path / "pyproject.toml"
+        if pyproject.exists():
+            try:
+                parsed = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+                return parsed.get("project", {}).get("version")
+            except Exception:
+                return None
+    if "==" in spec:
+        return spec.split("==", 1)[1]
+    return None
 
 
 async def _prepare_service(
@@ -78,7 +102,7 @@ async def _prepare_service(
     await session.flush()
 
     build_id = generate_ulid()
-    venv_path = config_venv_path(settings, workspace.id, configuration.id)
+    venv_path = build_venv_path(settings, workspace.id, configuration.id, build_id)
     venv_path.mkdir(parents=True, exist_ok=True)
     config_root = workspace_config_root(settings, workspace.id, configuration.id)
     config_root.mkdir(parents=True, exist_ok=True)
@@ -86,10 +110,54 @@ async def _prepare_service(
         "[project]\nname='demo'\nversion='0.0.1'\n",
         encoding="utf-8",
     )
+    engine_version = _engine_version_hint(settings.engine_spec)
     digest = compute_config_digest(config_root)
+    fingerprint = compute_build_fingerprint(
+        config_digest=digest,
+        engine_spec=settings.engine_spec,
+        engine_version=engine_version,
+        python_version=".".join(map(str, sys.version_info[:3])),
+        python_bin=settings.python_bin,
+        extra={},
+    )
+
+    marker = build_venv_marker_path(settings, workspace.id, configuration.id, build_id)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+        encoding="utf-8",
+    )
+    bin_dir = venv_path / ("Scripts" if os.name == "nt" else "bin")
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    python_name = "python.exe" if os.name == "nt" else "python"
+    (bin_dir / python_name).write_text("", encoding="utf-8")
+
+    build = Build(
+        id=build_id,
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.ACTIVE,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        exit_code=0,
+        fingerprint=fingerprint,
+        engine_spec=settings.engine_spec,
+        engine_version=engine_version,
+        python_version=".".join(map(str, sys.version_info[:3])),
+        python_interpreter=settings.python_bin or sys.executable,
+        config_digest=digest,
+    )
+    session.add(build)
+
+    configuration.active_build_id = build_id  # type: ignore[attr-defined]
+    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+    configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
+    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
     configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
     configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = "0.2.0"  # type: ignore[attr-defined]
+    configuration.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
     configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
     configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
     configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
@@ -150,7 +218,7 @@ async def _seed_configuration(
         await session.flush()
 
         build_id = generate_ulid()
-        venv_path = config_venv_path(settings, workspace_id, config.id)
+        venv_path = build_venv_path(settings, workspace_id, config.id, build_id)
         venv_path.mkdir(parents=True, exist_ok=True)
         config_root = workspace_config_root(settings, workspace_id, config.id)
         config_root.mkdir(parents=True, exist_ok=True)
@@ -159,10 +227,53 @@ async def _seed_configuration(
             encoding="utf-8",
         )
         digest = compute_config_digest(config_root)
+        engine_version = _engine_version_hint(settings.engine_spec)
+        fingerprint = compute_build_fingerprint(
+            config_digest=digest,
+            engine_spec=settings.engine_spec,
+            engine_version=engine_version,
+            python_version=".".join(map(str, sys.version_info[:3])),
+            python_bin=settings.python_bin,
+            extra={},
+        )
 
+        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(
+            json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+            encoding="utf-8",
+        )
+        bin_dir = venv_path / ("Scripts" if os.name == "nt" else "bin")
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        python_name = "python.exe" if os.name == "nt" else "python"
+        (bin_dir / python_name).write_text("", encoding="utf-8")
+
+        build = Build(
+            id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=config.id,
+            status=BuildStatus.ACTIVE,
+            created_at=utc_now(),
+            started_at=utc_now(),
+            finished_at=utc_now(),
+            exit_code=0,
+            fingerprint=fingerprint,
+            engine_spec=settings.engine_spec,
+            engine_version=engine_version,
+            python_version=".".join(map(str, sys.version_info[:3])),
+            python_interpreter=settings.python_bin or sys.executable,
+            config_digest=digest,
+        )
+        session.add(build)
+
+        config.active_build_id = build_id  # type: ignore[attr-defined]
+        config.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+        config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+        config.active_build_started_at = utc_now()  # type: ignore[attr-defined]
+        config.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-        config.engine_version = "0.2.0"  # type: ignore[attr-defined]
+        config.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
         config.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
         config.python_version = "3.12.1"  # type: ignore[attr-defined]
         config.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
@@ -213,7 +324,7 @@ async def _seed_real_configuration(
         await session.flush()
 
         build_id = generate_ulid()
-        venv_path = config_venv_path(settings, workspace_id, config.id)
+        venv_path = build_venv_path(settings, workspace_id, config.id, build_id)
         if venv_path.exists():
             shutil.rmtree(venv_path)
         venv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,6 +350,43 @@ async def _seed_real_configuration(
         config.content_digest = digest  # type: ignore[attr-defined]
         config.built_content_digest = digest  # type: ignore[attr-defined]
         config.last_build_id = build_id  # type: ignore[attr-defined]
+        fingerprint = compute_build_fingerprint(
+            config_digest=digest,
+            engine_spec=settings.engine_spec,
+            engine_version="0.2.0",
+            python_version=config.python_version,
+            python_bin=str(python_exe),
+            extra={},
+        )
+        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(
+            json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+            encoding="utf-8",
+        )
+        build = Build(
+            id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=config.id,
+            status=BuildStatus.ACTIVE,
+            created_at=now,
+            started_at=now,
+            finished_at=now,
+            exit_code=0,
+            fingerprint=fingerprint,
+            engine_spec=settings.engine_spec,
+            engine_version="0.2.0",
+            python_version=config.python_version,
+            python_interpreter=str(python_exe),
+            config_digest=digest,
+        )
+        session.add(build)
+        config.active_build_id = build_id  # type: ignore[attr-defined]
+        config.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
+        config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+        config.active_build_started_at = now  # type: ignore[attr-defined]
+        config.active_build_finished_at = now  # type: ignore[attr-defined]
+        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         await session.commit()
         return config.id
 
@@ -398,6 +546,7 @@ async def test_stream_run_safe_mode(
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
+    assert run_payload["build_id"]
 
     logs_response = await async_client.get(f"/api/v1/runs/{run_id}/logs")
     assert logs_response.status_code == 200
@@ -482,6 +631,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
     assert run_payload.get("failure_message") is None
+    assert run_payload["build_id"]
 
 
 async def test_non_stream_run_executes_in_background(
@@ -561,6 +711,7 @@ async def test_stream_run_processes_real_documents(
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
+    assert run_payload["build_id"]
     assert run_payload["input"]["document_ids"] == [document.id]
     assert run_payload["input"]["input_sheet_names"] == []
 
@@ -638,6 +789,7 @@ async def test_stream_run_honors_input_sheet_override(
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
+    assert run_payload["build_id"]
     assert run_payload["input"]["document_ids"] == [document.id]
     assert run_payload["input"]["input_sheet_names"] == ["Selected"]
 
@@ -657,7 +809,7 @@ async def test_stream_run_honors_input_sheet_override(
     rows = list(sheet.iter_rows(values_only=True))
     workbook.close()
 
-    assert rows[0][:4] == ("Member ID", "Email", "First Name", "Last Name")
+    assert rows[0][:4] == ("member_id", "email", "first_name", "last_name")
     data_rows = rows[1:]
     flattened = [
         [str(cell) for cell in row if cell not in (None, "")]
@@ -843,6 +995,7 @@ async def test_stream_run_limits_to_requested_sheet_list(
     assert run_response.status_code == 200
     run_payload = run_response.json()
     assert run_payload["input"]["input_sheet_names"] == ["Selected"]
+    assert run_payload["build_id"]
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
     assert outputs_response.status_code == 200
@@ -860,7 +1013,7 @@ async def test_stream_run_limits_to_requested_sheet_list(
     rows = list(sheet.iter_rows(values_only=True))
     workbook.close()
 
-    assert rows[0][:4] == ("Member ID", "Email", "First Name", "Last Name")
+    assert rows[0][:4] == ("member_id", "email", "first_name", "last_name")
     data_rows = rows[1:]
     flattened = [
         [str(cell) for cell in row if cell not in (None, "")]

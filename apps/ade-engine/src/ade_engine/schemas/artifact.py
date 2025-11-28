@@ -111,7 +111,7 @@ class ArtifactV1(BaseModel):
     """Top-level artifact schema (v1)."""
 
     schema_id: str = Field(
-        default="ade.run_diagnostics/v1",
+        default="ade.artifact/v1",
         alias="schema",
         validation_alias=AliasChoices("schema", "schema_id"),
     )
@@ -122,3 +122,7 @@ class ArtifactV1(BaseModel):
     notes: list[ArtifactNote] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    @property
+    def schema(self) -> str:
+        return self.schema_id

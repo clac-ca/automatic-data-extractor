@@ -78,30 +78,33 @@ class VirtualEnvironmentBuilder:
         build_id: str,
         workspace_id: str,
         configuration_id: str,
-        target_path: Path,
+        venv_root: Path,
         config_path: Path,
         engine_spec: str,
         pip_cache_dir: Path | None,
         python_bin: str | None,
         timeout: float,
+        fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
         """Yield builder events while provisioning the virtual environment."""
 
         interpreter = python_bin or sys.executable
-        await self._prepare_target(target_path)
+        venv_path = venv_root / ".venv"
+        temp_path = venv_root / ".venv.tmp"
+        await self._prepare_target(venv_root, temp_path)
         env = self._build_env(pip_cache_dir)
 
         try:
             yield BuilderStepEvent(BuildStep.CREATE_VENV, "Creating virtual environment")
             async for event in self._stream_command(
-                [interpreter, "-m", "venv", str(target_path)],
+                [interpreter, "-m", "venv", str(temp_path)],
                 timeout=timeout,
                 env=None,
                 build_id=build_id,
             ):
                 yield event
 
-            venv_python = self._venv_python(target_path)
+            venv_python = self._venv_python(temp_path)
             yield BuilderStepEvent(BuildStep.UPGRADE_PIP, "Upgrading pip/setuptools/wheel")
             async for event in self._stream_command(
                 [
@@ -163,6 +166,7 @@ class VirtualEnvironmentBuilder:
                 build_id=build_id,
             ):
                 yield event
+            await self._run_smoke_tests(venv_python, timeout=timeout, build_id=build_id)
 
             yield BuilderStepEvent(BuildStep.COLLECT_METADATA, "Collecting interpreter metadata")
             python_version = (
@@ -193,19 +197,21 @@ class VirtualEnvironmentBuilder:
                 engine_version=engine_version,
             )
             await self._write_metadata(
-                target_path,
+                temp_path,
                 {
                     "build_id": build_id,
                     "workspace_id": workspace_id,
                     "configuration_id": configuration_id,
                     "python_version": python_version,
                     "engine_version": engine_version,
+                    "fingerprint": fingerprint,
                 },
             )
+            await self._finalize_target(temp_path, venv_path)
 
             yield BuilderArtifactsEvent(artifacts)
         except Exception as exc:  # pragma: no cover - defensive cleanup
-            await self._remove_target(target_path)
+            await self._remove_target(venv_root)
             message = (
                 "Failed to build venv "
                 f"for workspace={workspace_id} "
@@ -213,19 +219,27 @@ class VirtualEnvironmentBuilder:
             )
             raise BuildExecutionError(message, build_id=build_id) from exc
 
-    async def _prepare_target(self, target: Path) -> None:
+    async def _prepare_target(self, venv_root: Path, temp_target: Path) -> None:
         def _prepare() -> None:
-            if target.exists():
-                shutil.rmtree(target)
-            target.parent.mkdir(parents=True, exist_ok=True)
+            if temp_target.exists():
+                shutil.rmtree(temp_target)
+            venv_root.mkdir(parents=True, exist_ok=True)
 
         await run_in_threadpool(_prepare)
 
-    async def _remove_target(self, target: Path) -> None:
+    async def _remove_target(self, venv_root: Path) -> None:
         def _remove() -> None:
-            shutil.rmtree(target, ignore_errors=True)
+            shutil.rmtree(venv_root, ignore_errors=True)
 
         await run_in_threadpool(_remove)
+
+    async def _finalize_target(self, temp_target: Path, final_target: Path) -> None:
+        def _finalize() -> None:
+            if final_target.exists():
+                shutil.rmtree(final_target)
+            temp_target.replace(final_target)
+
+        await run_in_threadpool(_finalize)
 
     def _venv_python(self, target: Path) -> Path:
         executable = "python.exe" if os.name == "nt" else "python"
@@ -308,15 +322,17 @@ class VirtualEnvironmentBuilder:
             )
         return output.decode("utf-8", errors="replace")
 
-    async def _write_metadata(self, target: Path, payload: dict[str, str]) -> None:
+    async def _write_metadata(self, target: Path, payload: dict[str, str | None]) -> None:
         runtime_dir = target / "ade-runtime"
         metadata_path = runtime_dir / "build.json"
         packages_path = runtime_dir / "packages.txt"
+        marker_path = target / "ade_build.json"
 
         def _write() -> None:
             runtime_dir.mkdir(parents=True, exist_ok=True)
             metadata_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             packages_path.write_text("ade-engine\nade-config", encoding="utf-8")
+            marker_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
         await run_in_threadpool(_write)
 
@@ -334,3 +350,34 @@ class VirtualEnvironmentBuilder:
         merged = os.environ.copy()
         merged.update(env)
         return merged
+
+    async def _run_smoke_tests(self, venv_python: Path, *, timeout: float, build_id: str) -> None:
+        """Lightweight validation to ensure key packages import and report versions."""
+
+        checks = [
+            (
+                [
+                    str(venv_python),
+                    "-c",
+                    "import importlib.metadata as m; print(m.version('ade-engine'))",
+                ],
+                "ade-engine import",
+            ),
+            (
+                [
+                    str(venv_python),
+                    "-c",
+                    "import ade_config; print(getattr(ade_config, '__version__', 'ok'))",
+                ],
+                "ade-config import",
+            ),
+        ]
+        for command, label in checks:
+            try:
+                await self._capture(command, timeout=timeout, build_id=build_id)
+            except BuildExecutionError:
+                raise
+            except Exception as exc:  # pragma: no cover - defensive best-effort
+                raise BuildExecutionError(
+                    f"Smoke check failed ({label}): {exc}", build_id=build_id
+                ) from exc

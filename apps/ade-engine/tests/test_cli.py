@@ -9,8 +9,8 @@ from subprocess import run
 import pytest
 
 from ade_engine import __version__
-from tests.fixtures.config_factories import make_minimal_config
-from tests.fixtures.sample_inputs import sample_csv
+from fixtures.config_factories import make_minimal_config
+from fixtures.sample_inputs import sample_csv
 
 
 def _python_env(tmp_path: Path) -> dict[str, str]:

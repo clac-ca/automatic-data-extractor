@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import tempfile
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -65,7 +66,7 @@ DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
 DEFAULT_ALEMBIC_MIGRATIONS = DEFAULT_API_ROOT / "migrations"
 DEFAULT_DOCUMENTS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_CONFIGS_DIR = DEFAULT_WORKSPACES_DIR
-DEFAULT_VENVS_DIR = DEFAULT_WORKSPACES_DIR
+DEFAULT_VENVS_DIR = Path(tempfile.gettempdir()) / "ade-venvs"
 DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
@@ -260,8 +261,6 @@ class Settings(BaseSettings):
             self.documents_dir = self.workspaces_dir
         if "configs_dir" not in explicit_fields:
             self.configs_dir = self.workspaces_dir
-        if "venvs_dir" not in explicit_fields:
-            self.venvs_dir = self.workspaces_dir
         if "runs_dir" not in explicit_fields:
             self.runs_dir = self.workspaces_dir
 
@@ -494,15 +493,13 @@ class Settings(BaseSettings):
             self.documents_dir = self.workspaces_dir
         if "configs_dir" not in self.model_fields_set:
             self.configs_dir = self.workspaces_dir
-        if "venvs_dir" not in self.model_fields_set:
-            self.venvs_dir = self.workspaces_dir
         if "runs_dir" not in self.model_fields_set:
             self.runs_dir = self.workspaces_dir
         self.documents_dir = _resolve_path(
             self.documents_dir, default=self.workspaces_dir
         )
         self.configs_dir = _resolve_path(self.configs_dir, default=self.workspaces_dir)
-        self.venvs_dir = _resolve_path(self.venvs_dir, default=self.workspaces_dir)
+        self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
         self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
         self.pip_cache_dir = _resolve_path(
             self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR

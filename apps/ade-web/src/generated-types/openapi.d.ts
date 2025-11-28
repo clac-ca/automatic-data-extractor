@@ -1311,7 +1311,7 @@ export type components = {
         ArtifactV1: {
             /**
              * Schema
-             * @default ade.run_diagnostics/v1
+             * @default ade.artifact/v1
              */
             schema: string;
             /**
@@ -2508,6 +2508,8 @@ export type components = {
             configuration_id: string;
             /** Configuration Version */
             configuration_version?: string | null;
+            /** Build Id */
+            build_id?: string | null;
             /**
              * Status
              * @enum {string}
