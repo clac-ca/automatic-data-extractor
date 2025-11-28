@@ -587,6 +587,15 @@ def _create_documents(dialect: str) -> None:
         unique=False,
     )
     op.create_index(
+        "ix_documents_workspace_status_created_live",
+        "documents",
+        ["workspace_id", "status", "created_at"],
+        unique=False,
+        postgresql_where=sa.text("deleted_at IS NULL"),
+        sqlite_where=sa.text("deleted_at IS NULL"),
+        mssql_where=sa.text("deleted_at IS NULL"),
+    )
+    op.create_index(
         "ix_documents_workspace_created",
         "documents",
         ["workspace_id", "created_at"],
