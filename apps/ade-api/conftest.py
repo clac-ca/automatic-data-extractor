@@ -63,6 +63,8 @@ def _configure_database(
     os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
     os.environ["ADE_AUTH_DISABLED"] = "false"
+    # Speed up test password hashing (hash values remain self-describing via parameters).
+    os.environ["ADE_TEST_FAST_HASH"] = "1"
     os.environ.setdefault("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
@@ -100,6 +102,7 @@ def _configure_database(
         "ADE_SAFE_MODE",
         "ADE_JWT_SECRET",
         "ADE_AUTH_DISABLED",
+        "ADE_TEST_FAST_HASH",
     ):
         os.environ.pop(env_var, None)
 

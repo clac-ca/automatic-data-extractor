@@ -443,6 +443,8 @@ async def test_stream_run_emits_build_events_when_requested(
         )
         return build, build_ctx
 
+    outer_workspace_id = workspace_id
+
     async def fake_stream_build(*, context, options):  # type: ignore[no-untyped-def]
         yield AdeEvent(
             type="build.console",
@@ -456,10 +458,10 @@ async def test_stream_run_emits_build_events_when_requested(
             object="ade.event",
         )
 
-    async def fake_get_build_or_raise(build_id: str, workspace_id_arg: str | None = None):  # type: ignore[no-untyped-def]
+    async def fake_get_build_or_raise(build_id: str, workspace_id: str | None = None):  # type: ignore[no-untyped-def]
         return Build(
             id=build_id,
-            workspace_id=workspace_id_arg or workspace_id,
+            workspace_id=workspace_id or outer_workspace_id,
             configuration_id=configuration_id,
             status=BuildStatus.ACTIVE,
             created_at=utc_now(),
