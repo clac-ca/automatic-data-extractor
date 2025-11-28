@@ -37,8 +37,8 @@ WORKDIR /app
 # System deps for building Python packages (kept out of final image)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft-prod.gpg \
-    && echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/microsoft-prod.gpg] https://packages.microsoft.com/config/debian/12/prod.list" > /etc/apt/sources.list.d/microsoft-prod.list \
+    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends build-essential git unixodbc unixodbc-dev msodbcsql18 \
     && rm -rf /var/lib/apt/lists/*
@@ -77,8 +77,8 @@ WORKDIR /app
 # System deps for pyodbc / Azure SQL connectivity (runtime only)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft-prod.gpg \
-    && echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/microsoft-prod.gpg] https://packages.microsoft.com/config/debian/12/prod.list" > /etc/apt/sources.list.d/microsoft-prod.list \
+    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc msodbcsql18 \
     && rm -rf /var/lib/apt/lists/*
