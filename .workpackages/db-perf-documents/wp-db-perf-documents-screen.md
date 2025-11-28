@@ -10,7 +10,7 @@
 
 ## Work Package Checklist
 
-* [ ] Baseline current auth/roles/documents call timings and DB queries for the documents screen (session, workspaces, safe-mode, documents).
+* [ ] Baseline current auth/roles/documents call timings and DB queries for the documents screen (session, workspaces, safe-mode, documents). → Action: run `source .venv/bin/activate`, start the backend (`ade start` or equivalent), open a clean tab, load the documents screen once, and paste the console log into `.workpackages/db-perf-documents/logs/uploads/ade-documents-screen-post-caching.log` for comparison.
 * [x] Cache/short-circuit roles registry sync and global role slug lookup so they do not run per request.
 * [x] Make global role assignment + principal/permission resolution idempotent within a request (early exit when already assigned, reuse cached principal/permissions).
 * [x] Add a backend bootstrap path or shared cache to avoid multiple auth/roles round-trips for one screen; update OpenAPI types and frontend usage.
@@ -141,6 +141,7 @@ automatic-data-extractor/
 * If adding/changing endpoints, update OpenAPI and regenerate frontend types with `ade openapi-types`.
 * Validate with `ade test` (and `ade ci` if touching multiple layers) before merging; capture perf deltas (before/after logs or simple benchmarks).
 * Maintain existing permission semantics and dev identity ergonomics; ensure prod auth remains correct when dev identity is disabled.
+* **Baseline rerun needed:** After the caching + bootstrap changes, capture a fresh documents-screen load log (start app, load documents list once from a clean tab). Include the resulting log in `.workpackages/db-perf-documents/logs/` for comparison vs. the original traces.
 
 ---
 
@@ -196,13 +197,13 @@ Next steps (implementation plan):
 - Registry caching: add version/TTL guard to `sync_permission_registry` (persisted marker + process-local TTL) to avoid per-request sync; cover with tests. — implemented: SHA-256 fingerprint persisted via `roles-registry-version`; TTL 10m process cache + persisted skip; added reseed guard when DB tables are empty even if cache is warm.
 - Global role caching: add slug→role_id cache with TTL; introduce `assign_global_if_missing` to early-return when assignment exists; ensure `ensure_dev_identity` and initial-setup paths use it. — implemented (role cache with TTL, dev identity and initial setup paths use `assign_global_role_if_missing`; SSO auto-provision path updated too).
 - Request-scoped identity cache: FastAPI dependency/contextvar to memoize user/principal/permissions per request; wire session/workspaces/safe-mode/documents/runs to reuse. — implemented baseline contextvar memoization in `get_current_identity` plus cached global+workspace permissions in `require_global`/`require_workspace`; per-request caches now reset to avoid cross-request leakage.
-- Bootstrap endpoint: design `/api/v1/bootstrap` (user/profile, permissions, roles, workspaces, safe-mode) and update OpenAPI/types + frontend; or server-side cache if deferring frontend. — implemented endpoint/schema + registered router; OpenAPI/types regenerated; frontend wiring remains.
+- Bootstrap endpoint: design `/api/v1/bootstrap` (user/profile, permissions, roles, workspaces, safe-mode) and update OpenAPI/types + frontend; or server-side cache if deferring frontend. — implemented endpoint/schema + registered router; OpenAPI/types regenerated; frontend now consumes bootstrap in `useSessionQuery` to seed workspaces + safe-mode caches (fixed queryFn bug).
 - Last-run query/index: evaluate `runs` index on `(workspace_id, input_document_id, finished_at desc, started_at desc)` and optional CTE to pull latest run per document. — added index and simplified last_run query ordering.
 
 Next tactical steps:
 - Add a request-scoped identity dependency (e.g., in `features/auth/context.py`) that caches user, principal, permissions, and global roles in `request.state`/contextvar; update routes (session, workspaces, safe-mode, documents, runs, configs) to consume it instead of recalculating.
-- Frontend follow-up: switch documents screen to use bootstrap payload (or server-provided cache) to avoid parallel auth/roles calls. — partial: `useSessionQuery` now uses `/api/v1/bootstrap` and seeds workspaces + safe-mode caches; workspaces/safe-mode hooks now read from seeded cache to avoid extra fetches; further UI wiring may be needed.
-- Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev).
+- Frontend follow-up: switch documents screen to use bootstrap payload (or server-provided cache) to avoid parallel auth/roles calls. — `useSessionQuery` now uses `/api/v1/bootstrap`, seeds workspaces + safe-mode query caches, and returns the bootstrap user; React Query hooks for workspaces/safe-mode read the seeded data to avoid extra requests on load.
+- Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev). Bootstrap TypeError fixed by calling `get_global_permissions_for_principal` with the principal only; bootstrap integration test now passes.
 
 ---
 

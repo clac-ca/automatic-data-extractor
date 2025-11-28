@@ -206,7 +206,6 @@ async def bootstrap(
     # Note: caching handled in dependencies; this call is cheap
     global_permissions = await get_global_permissions_for_principal(
         session=session,
-        user=identity.user,
         principal=identity.principal,
     )
     global_roles = await get_global_role_slugs_for_user(
@@ -218,9 +217,9 @@ async def bootstrap(
     from ade_api.features.workspaces.service import WorkspacesService
     workspaces_service = WorkspacesService(session=session)
     workspaces_page = await workspaces_service.list_workspaces(
+        user=identity.user,
         page=page_params.page,
         page_size=page_params.page_size,
-        user=identity.user,
         include_total=True,
     )
 

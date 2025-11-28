@@ -21,8 +21,8 @@ export function useSessionQuery(options: UseSessionQueryOptions = {}) {
       }
       queryClient.setQueryData(workspacesKeys.list(WORKSPACE_LIST_DEFAULT_PARAMS), bootstrap.workspaces);
       queryClient.setQueryData(SAFE_MODE_QUERY_KEY, bootstrap.safe_mode);
-    return bootstrap.user;
-  },
+      return bootstrap.user;
+    },
     enabled: options.enabled ?? true,
     staleTime: 60_000,
     gcTime: 600_000,
