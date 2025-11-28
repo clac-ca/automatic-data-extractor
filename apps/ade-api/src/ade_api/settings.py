@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import json
+import secrets
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -212,6 +211,7 @@ class Settings(BaseSettings):
     )
 
     _explicit_init_fields: set[str] = PrivateAttr(default_factory=set)
+    _jwt_secret_generated: bool = PrivateAttr(default=False)
 
     def __init__(self, **data: Any):
         explicit = set(data.keys())
@@ -266,7 +266,6 @@ class Settings(BaseSettings):
             self.runs_dir = self.workspaces_dir
 
     # Core
-    debug: bool = False
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "0.2.0"
     api_docs_enabled: bool = False
@@ -295,10 +294,6 @@ class Settings(BaseSettings):
     pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
-    secret_key: SecretStr = Field(
-        default=SecretStr("ZGV2ZWxvcG1lbnQtY29uZmlnLXNlY3JldC1rZXktMzI="),
-        description="Base64-encoded 32 byte secret key",
-    )
 
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
@@ -319,7 +314,13 @@ class Settings(BaseSettings):
     database_mi_client_id: str | None = None
 
     # JWT
-    jwt_secret: SecretStr = Field(default=SecretStr("development-secret"))
+    jwt_secret: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Secret used to sign session cookies and bearer tokens; set to a long random string "
+            "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)"
+        ),
+    )
     jwt_algorithm: str = "HS256"
     jwt_access_ttl: timedelta = Field(default=timedelta(hours=1))
     jwt_refresh_ttl: timedelta = Field(default=timedelta(days=14))
@@ -403,6 +404,21 @@ class Settings(BaseSettings):
             return None
         return str(v).strip()
 
+    @field_validator("jwt_secret", mode="before")
+    @classmethod
+    def _v_jwt_secret(cls, v: Any) -> SecretStr:
+        if v is None:
+            return None  # handled in finalize
+        raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v or "").strip()
+        if raw and set(raw) == {"*"}:
+            return None
+        if raw and len(raw) < 32:
+            raise ValueError(
+                "ADE_JWT_SECRET must be at least 32 characters. Use a long random string "
+                "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)."
+            )
+        return SecretStr(raw) if raw else None
+
     @field_validator(
         "jwt_access_ttl",
         "jwt_refresh_ttl",
@@ -433,20 +449,6 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return int(_parse_duration(v, field_name="run_timeout_seconds").total_seconds())
-
-    @field_validator("secret_key", mode="before")
-    @classmethod
-    def _v_secret_key(cls, v: Any) -> SecretStr:
-        if v is None:
-            raise ValueError("ADE_SECRET_KEY must be provided")
-        raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v).strip()
-        try:
-            decoded = base64.b64decode(raw, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("ADE_SECRET_KEY must be base64 encoded") from exc
-        if len(decoded) != 32:
-            raise ValueError("ADE_SECRET_KEY must decode to exactly 32 bytes")
-        return SecretStr(raw)
 
     @field_validator("oidc_issuer", mode="before")
     @classmethod
@@ -539,6 +541,10 @@ class Settings(BaseSettings):
 
         self.database_dsn = url.render_as_string(hide_password=False)
 
+        if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
+            self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
+            self._jwt_secret_generated = True
+
         oidc_config = {
             "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
             "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
@@ -572,8 +578,8 @@ class Settings(BaseSettings):
         return self.jwt_secret.get_secret_value()
 
     @property
-    def secret_key_bytes(self) -> bytes:
-        return base64.b64decode(self.secret_key.get_secret_value(), validate=True)
+    def jwt_secret_generated(self) -> bool:
+        return self._jwt_secret_generated
 
 
 @lru_cache(maxsize=1)
