@@ -208,6 +208,17 @@ Next tactical steps:
 - Verify documents list latency with non-empty data (current capture: ~2.9s with 1 document including last_run attach). Windowed last_run query now limits to latest per document; re-measure with data and ensure runs index is used. Look for request-level cache reuse for workspace permissions if still slow.
 - Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev). Bootstrap TypeError fixed by calling `get_global_permissions_for_principal` with the principal only; bootstrap integration test now passes.
 
+Prod migration mismatch workaround + perf test repeatability:
+- Context: while capturing the new baseline, the live DB pointed at `ADE_DATABASE_DSN=.../ade.sqlite` emitted `Can't locate revision identified by '0002_live_docs_partial_idx'`. To avoid blocking perf runs, we used a clean SQLite DB (`ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade-baseline.sqlite`) so Alembic could apply the existing `0001` migration end-to-end.
+- Steps to repeat on “prod-like” env after fixing migrations:
+  1) Ensure port 8000 is free (stop Vite/dev servers if running).  
+  2) `source .venv/bin/activate`.  
+  3) Export env for prod-path test: `ADE_AUTH_DISABLED=false`, `ADE_DATABASE_DSN` pointing at the fixed prod DB, `ADE_SERVER_HOST=0.0.0.0`, `ADE_SERVER_PORT=8000`, `ADE_SERVER_PUBLIC_URL=http://localhost:8000`.  
+  4) Start backend with `ade start` (auto-builds static if missing) and wait for startup complete.  
+  5) Open a clean browser tab (incognito), load the documents screen once (no extra navigation).  
+  6) Capture backend console to `.workpackages/db-perf-documents/logs/uploads/ade-documents-screen-post-caching.log` (or new filename if multiple runs) and stop the server.  
+  7) If the `0002_live_docs_partial_idx` error reappears, either a) point `ADE_DATABASE_DSN` at a clean DB (as above) to unblock testing, or b) re-run `alembic upgrade head` after restoring the missing revision file, then retry `ade start`.
+
 ---
 
 ## 10. Request-scoped cache & bootstrap design (draft)
