@@ -41,8 +41,7 @@ def _unique_sheet_name(base: str, existing: set[str]) -> str:
 def _build_header(table: NormalizedTable, *, append_unmapped: bool, manifest: ManifestContext) -> list:
     headers = []
     for mapped in table.mapped.column_map.mapped_columns:
-        meta = manifest.columns.fields.get(mapped.field)
-        headers.append(meta.label if meta else mapped.field)
+        headers.append(mapped.field)
     if append_unmapped:
         headers.extend(unmapped.output_header for unmapped in table.mapped.column_map.unmapped_columns)
     return headers

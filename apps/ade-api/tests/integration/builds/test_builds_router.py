@@ -43,14 +43,15 @@ class StubBuilder:
         build_id: str,
         workspace_id: str,
         configuration_id: str,
-        target_path: Path,
+        venv_root: Path,
         config_path: Path,
         engine_spec: str,
         pip_cache_dir: Path | None,
         python_bin: str | None,
         timeout: float,
+        fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
-        target_path.mkdir(parents=True, exist_ok=True)
+        venv_root.mkdir(parents=True, exist_ok=True)
         for event in self._events:
             yield event
 

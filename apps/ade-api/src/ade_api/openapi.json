@@ -6906,7 +6906,7 @@
           "schema": {
             "type": "string",
             "title": "Schema",
-            "default": "ade.run_diagnostics/v1"
+            "default": "ade.artifact/v1"
           },
           "version": {
             "type": "string",
@@ -9718,6 +9718,17 @@
               }
             ],
             "title": "Configuration Version"
+          },
+          "build_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
           },
           "status": {
             "type": "string",

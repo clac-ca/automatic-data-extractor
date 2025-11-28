@@ -23,7 +23,7 @@ async def test_builder_installs_dependencies(
     builder = VirtualEnvironmentBuilder()
     commands: list[list[str]] = []
 
-    async def _prepare_target(target: Path) -> None:  # noqa: D401 - stubbed in test
+    async def _prepare_target(root: Path, temp_target: Path) -> None:  # noqa: D401
         return None
 
     async def _stream_command(  # noqa: D401 - stubbed in test
@@ -47,13 +47,17 @@ async def test_builder_installs_dependencies(
             return "3.12.1"
         return "0.2.0"
 
-    async def _write_metadata(target: Path, payload: dict[str, str]) -> None:  # noqa: D401
+    async def _write_metadata(target: Path, payload: dict[str, str | None]) -> None:  # noqa: D401
+        return None
+
+    async def _finalize_target(temp_target: Path, final_target: Path) -> None:  # noqa: D401
         return None
 
     monkeypatch.setattr(builder, "_prepare_target", _prepare_target)
     monkeypatch.setattr(builder, "_stream_command", _stream_command)
     monkeypatch.setattr(builder, "_capture", _capture)
     monkeypatch.setattr(builder, "_write_metadata", _write_metadata)
+    monkeypatch.setattr(builder, "_finalize_target", _finalize_target)
 
     engine_spec = "apps/ade-engine"
     config_root = tmp_path / "config"
@@ -65,12 +69,13 @@ async def test_builder_installs_dependencies(
             build_id="build",
             workspace_id="workspace",
             configuration_id="config",
-            target_path=tmp_path / "venv",
+            venv_root=tmp_path / "venv",
             config_path=config_root,
             engine_spec=engine_spec,
             pip_cache_dir=None,
             python_bin=None,
             timeout=1.0,
+            fingerprint=None,
         )
     ]
 

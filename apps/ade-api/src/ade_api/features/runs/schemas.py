@@ -120,6 +120,7 @@ class RunResource(BaseSchema):
     workspace_id: str
     configuration_id: str
     configuration_version: str | None = None
+    build_id: str | None = None
 
     status: RunStatusLiteral
     failure_code: str | None = None

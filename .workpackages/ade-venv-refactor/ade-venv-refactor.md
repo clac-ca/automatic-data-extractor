@@ -98,104 +98,104 @@ New design requirements:
 
 ### 3.1. Settings & Configuration
 
-* [ ] Add `ADE_VENVS_DIR` handling:
+* [x] Add `ADE_VENVS_DIR` handling:
 
-  * [ ] Read `ADE_VENVS_DIR` from environment.
-  * [ ] If not set, default to `/tmp/ade-venvs`.
-  * [ ] Ensure a `venvs_root` setting is exposed in the settings object.
-* [ ] Add startup validation:
+  * [x] Read `ADE_VENVS_DIR` from environment.
+  * [x] If not set, default to `/tmp/ade-venvs`.
+  * [x] Ensure a `venvs_root` setting is exposed in the settings object.
+* [x] Add startup validation:
 
-  * [ ] Check `venvs_root` is writable.
-  * [ ] Log a warning if `venvs_root` looks like a network/SMB mount (best-effort detection).
+  * [x] Check `venvs_root` is writable.
+  * [x] Log a warning if `venvs_root` looks like a network/SMB mount (best-effort detection).
 * [ ] Remove any old venv-related settings (e.g. venv under config root) from code and docs.
 
 ### 3.2. Database Schema & Models
 
-* [ ] Extend configuration metadata to track the active build:
+* [x] Extend configuration metadata to track the active build:
 
-  * [ ] `active_build_id` (string/ULID/UUID)
-  * [ ] `active_build_fingerprint` (string or JSON)
-  * [ ] `active_build_status` (`building | active | failed`)
-  * [ ] `active_build_started_at` (timestamp)
-  * [ ] `active_build_finished_at` (timestamp, nullable)
-  * [ ] `active_build_error` (nullable string)
+  * [x] `active_build_id` (string/ULID/UUID)
+  * [x] `active_build_fingerprint` (string or JSON)
+  * [x] `active_build_status` (`building | active | failed`)
+  * [x] `active_build_started_at` (timestamp)
+  * [x] `active_build_finished_at` (timestamp, nullable)
+  * [x] `active_build_error` (nullable string)
 
-* [ ] (Optional but recommended) Add a `builds` table for history:
+* [x] (Optional but recommended) Add a `builds` table for history:
 
-  * [ ] Columns:
+  * [x] Columns:
 
-    * [ ] `build_id` (PK)
-    * [ ] `workspace_id`
-    * [ ] `config_id`
-    * [ ] `fingerprint`
-    * [ ] `status` (`building | active | failed`)
-    * [ ] `started_at`, `finished_at`
-    * [ ] `error` (nullable)
-  * [ ] Index on `(workspace_id, config_id)`.
+    * [x] `build_id` (PK)
+    * [x] `workspace_id`
+    * [x] `config_id`
+    * [x] `fingerprint`
+    * [x] `status` (`building | active | failed`)
+    * [x] `started_at`, `finished_at`
+    * [x] `error` (nullable)
+  * [x] Index on `(workspace_id, config_id)`.
 
-* [ ] Add DB migrations for new fields / tables.
+* [x] Add DB migrations for new fields / tables.
 
-* [ ] Update ORM models and repositories to work with the new schema.
+* [x] Update ORM models and repositories to work with the new schema.
 
 ### 3.3. Build Fingerprint
 
-* [ ] Define what goes into a fingerprint (e.g.):
+* [x] Define what goes into a fingerprint (e.g.):
 
-  * [ ] Canonical config content digest.
-  * [ ] `ade_engine` dependency spec or resolved version.
-  * [ ] Python interpreter path + version.
-  * [ ] Any system-level flags that affect runtime behavior.
-* [ ] Implement `compute_build_fingerprint(config, engine_spec, python_info) -> str`:
+  * [x] Canonical config content digest.
+  * [x] `ade_engine` dependency spec or resolved version.
+  * [x] Python interpreter path + version.
+  * [x] Any system-level flags that affect runtime behavior.
+* [x] Implement `compute_build_fingerprint(config, engine_spec, python_info) -> str`:
 
-  * [ ] Normalize inputs and serialize to JSON or similar.
-  * [ ] Hash that representation to produce a stable fingerprint string.
-* [ ] Add unit tests for fingerprint:
+  * [x] Normalize inputs and serialize to JSON or similar.
+  * [x] Hash that representation to produce a stable fingerprint string.
+* [x] Add unit tests for fingerprint:
 
-  * [ ] Same inputs → same fingerprint.
-  * [ ] Any relevant change → different fingerprint.
+  * [x] Same inputs → same fingerprint.
+  * [x] Any relevant change → different fingerprint.
 
 ### 3.4. Global Build Lifecycle (`ensure_active_build`)
 
-* [ ] Implement `ensure_active_build(workspace_id, config_id, force=False) -> build_id`:
+* [x] Implement `ensure_active_build(workspace_id, config_id, force=False) -> build_id`:
 
-  * [ ] Load config + current build metadata.
+  * [x] Load config + current build metadata.
 
-  * [ ] Compute fingerprint `F`.
+  * [x] Compute fingerprint `F`.
 
-  * [ ] If **not** `force` and:
+  * [x] If **not** `force` and:
 
-    * [ ] `active_build_status == "active"`
-    * [ ] `active_build_fingerprint == F`
+    * [x] `active_build_status == "active"`
+    * [x] `active_build_fingerprint == F`
       → **Return** `active_build_id`.
 
-  * [ ] Otherwise (no active build, fingerprint changed, or `force=True`):
+  * [x] Otherwise (no active build, fingerprint changed, or `force=True`):
 
-    * [ ] Generate a new `build_id`.
-    * [ ] Insert/update metadata:
+    * [x] Generate a new `build_id`.
+    * [x] Insert/update metadata:
 
-      * [ ] `active_build_id = build_id`
-      * [ ] `active_build_fingerprint = F`
-      * [ ] `active_build_status = "building"`
-      * [ ] `active_build_started_at = now`
+      * [x] `active_build_id = build_id`
+      * [x] `active_build_fingerprint = F`
+      * [x] `active_build_status = "building"`
+      * [x] `active_build_started_at = now`
     * [ ] Persist to DB in a transaction.
     * [ ] Enqueue/dispatch a build job for this `build_id`.
 
-* [ ] Add concurrency control:
+* [x] Add concurrency control:
 
-  * [ ] Ensure only one `building` build per `(workspace_id, config_id)` via:
+  * [x] Ensure only one `building` build per `(workspace_id, config_id)` via:
 
     * [ ] DB constraint or
-    * [ ] transactional check + update
-  * [ ] If another request observes `active_build_status="building"`:
+    * [x] transactional check + update
+  * [x] If another request observes `active_build_status="building"`:
 
-    * [ ] Either wait for status change or
+    * [x] Either wait for status change or
     * [ ] Return a “build in progress” response and let clients poll.
 
 * [ ] Remove old build-init logic that assumed a single in-place `.venv`.
 
 ### 3.5. Builder (Global Build Execution)
 
-* [ ] Implement builder logic keyed by `build_id`:
+* [x] Implement builder logic keyed by `build_id`:
 
   1. Resolve paths:
 
@@ -207,47 +207,47 @@ New design requirements:
 
   2. Filesystem operations:
 
-     * [ ] `rm -rf temp_venv_path`
-     * [ ] `mkdir -p venv_root`
-     * [ ] Run `python -m venv temp_venv_path`.
+     * [x] `rm -rf temp_venv_path`
+     * [x] `mkdir -p venv_root`
+     * [x] Run `python -m venv temp_venv_path`.
 
   3. Install dependencies:
 
-     * [ ] Use `temp_venv_path`’s Python to install:
+     * [x] Use `temp_venv_path`’s Python to install:
 
-       * [ ] `ade_engine` according to `engine_spec`.
-       * [ ] Configuration package for this `(workspace_id, config_id)`.
-     * [ ] Write a small **marker file** in the env (e.g. `ade_build.json`) with:
+       * [x] `ade_engine` according to `engine_spec`.
+       * [x] Configuration package for this `(workspace_id, config_id)`.
+     * [x] Write a small **marker file** in the env (e.g. `ade_build.json`) with:
 
-       * [ ] `build_id`
-       * [ ] `fingerprint`
+       * [x] `build_id`
+       * [x] `fingerprint`
        * [ ] maybe `engine_version`, etc.
 
-  4. Validate:
+ 4. Validate:
 
-     * [ ] Import `ade_engine`.
-     * [ ] Import config module.
-     * [ ] Run minimal smoke checks if desired.
+     * [x] Import `ade_engine`.
+     * [x] Import config module.
+     * [x] Run minimal smoke checks if desired.
 
   5. On success:
 
-     * [ ] Atomically rename `temp_venv_path` → `venv_path`.
+     * [x] Atomically rename `temp_venv_path` → `venv_path`.
      * [ ] Update DB:
 
-       * [ ] `active_build_status = "active"`
-       * [ ] `active_build_finished_at = now`
-       * [ ] Clear `active_build_error`.
+       * [x] `active_build_status = "active"`
+       * [x] `active_build_finished_at = now`
+       * [x] Clear `active_build_error`.
 
   6. On failure:
 
-     * [ ] `rm -rf temp_venv_path`.
+     * [x] `rm -rf temp_venv_path`.
      * [ ] Update DB:
 
-       * [ ] `active_build_status = "failed"`
-       * [ ] `active_build_error` with a concise message.
-       * [ ] `active_build_finished_at = now`.
+       * [x] `active_build_status = "failed"`
+       * [x] `active_build_error` with a concise message.
+       * [x] `active_build_finished_at = now`.
 
-* [ ] Ensure builder **never** modifies `venv_path` for any other `build_id`.
+* [x] Ensure builder **never** modifies `venv_path` for any other `build_id`.
 
 * [ ] Remove all old builder logic that assumed venvs live under `<config_root>/.venv` or similar.
 
@@ -257,23 +257,25 @@ New design requirements:
 
   * [ ] When creating a run:
 
-    * [ ] Call `ensure_active_build(workspace_id, config_id, force=<from API>)`.
-    * [ ] If `active_build_status="failed"`, return an error (e.g. “configuration build failed”) and don’t create the run.
-    * [ ] If successful:
+    * [x] Call `ensure_active_build(workspace_id, config_id, force=<from API>)`.
+    * [x] If `active_build_status="failed"`, return an error (e.g. “configuration build failed”) and don’t create the run.
+    * [x] If successful:
 
-      * [ ] Attach `build_id` from `ensure_active_build` to the run record.
+      * [x] Attach `build_id` from `ensure_active_build` to the run record.
 
 * [ ] Update run DB schema:
 
-  * [ ] Add `build_id` column to runs table.
+  * [x] Add `build_id` column to runs table.
 
 * [ ] Ensure all run APIs (list, detail, logs) include `build_id`.
+  * [x] Include `build_id` on RunResource responses.
+  * [x] Add integration assertions that run detail responses include `build_id`.
 
 ### 3.7. Run Execution & Local Hydration
 
-* [ ] Implement worker helper: `ensure_local_env(workspace_id, config_id, build_id) -> venv_path`:
+* [x] Implement worker helper: `ensure_local_env(workspace_id, config_id, build_id) -> venv_path`:
 
-  * [ ] Compute:
+  * [x] Compute:
 
     ```text
     venv_root = ADE_VENVS_DIR/<workspace_id>/<config_id>/<build_id>/
@@ -281,28 +283,28 @@ New design requirements:
     marker    = venv_root/.venv/ade_build.json
     ```
 
-  * [ ] If `venv_path` exists and marker is valid:
+  * [x] If `venv_path` exists and marker is valid:
 
-    * [ ] Return `venv_path`.
+    * [x] Return `venv_path`.
 
-  * [ ] Otherwise (env missing or invalid):
+  * [x] Otherwise (env missing or invalid):
 
-    * [ ] Re-run the **builder logic** for this specific `build_id`, but:
+    * [x] Re-run the **builder logic** for this specific `build_id`, but:
 
-      * [ ] Use specs (fingerprint, engine config, etc.) read from DB for that build.
-      * [ ] Do **not** update `active_build_*` fields in DB.
-      * [ ] Only create/repair the local env.
+      * [x] Use specs (fingerprint, engine config, etc.) read from DB for that build.
+      * [x] Do **not** update `active_build_*` fields in DB.
+      * [x] Only create/repair the local env.
 
-* [ ] Add per-process (or per-worker) lock keyed by `(workspace_id, config_id, build_id)`:
+* [x] Add per-process (or per-worker) lock keyed by `(workspace_id, config_id, build_id)`:
 
-  * [ ] Prevent concurrent hydration attempts for the same build on one container.
+  * [x] Prevent concurrent hydration attempts for the same build on one container.
 
 * [ ] Integrate into run execution:
 
-  * [ ] Before running the job:
+  * [x] Before running the job:
 
-    * [ ] Load run → get `workspace_id`, `config_id`, `build_id`.
-    * [ ] Call `ensure_local_env(...)`.
+    * [x] Load run → get `workspace_id`, `config_id`, `build_id`.
+    * [x] Call `ensure_local_env(...)`.
     * [ ] Execute ADE engine with that venv (e.g. using that Python binary or via `subprocess` with appropriate env vars).
 
 ### 3.8. Cleanup / GC (Local Only)
@@ -334,6 +336,7 @@ New design requirements:
   * [ ] In-place `.venv` under config.
   * [ ] Azure Files as the location for venvs.
   * [ ] Any previous build semantics that differ from the new versioned design.
+  * [ ] (Status: core developer docs updated; sweep ancillary guides/templates for remaining stragglers.)
 
 ### 3.10. Observability & Error Reporting
 
@@ -400,24 +403,24 @@ New design requirements:
 
 ### 3.12. Documentation Updates
 
-* [ ] Update ADE developer docs:
+* [x] Update ADE developer docs:
 
-  * [ ] Explain:
+  * [x] Explain:
 
-    * [ ] Versioned builds (`build_id`).
-    * [ ] Fingerprints.
-    * [ ] `ADE_VENVS_DIR` location and requirements.
-    * [ ] Lazy local hydration.
-  * [ ] Provide examples of paths and lifecycle.
+    * [x] Versioned builds (`build_id`).
+    * [x] Fingerprints.
+    * [x] `ADE_VENVS_DIR` location and requirements.
+    * [x] Lazy local hydration.
+  * [x] Provide examples of paths and lifecycle.
 
-* [ ] Update operations runbooks:
+* [x] Update operations runbooks:
 
   * [ ] How to:
 
-    * [ ] Trigger rebuilds.
-    * [ ] Diagnose build failures.
-    * [ ] Diagnose hydration failures.
-    * [ ] Perform local cleanup if needed.
+    * [x] Trigger rebuilds.
+    * [x] Diagnose build failures.
+    * [x] Diagnose hydration failures.
+    * [x] Perform local cleanup if needed.
 
 * [ ] Remove all references to:
 

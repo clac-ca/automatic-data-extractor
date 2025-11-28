@@ -41,6 +41,12 @@ class Build(Base):
     configuration_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("configurations.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    engine_spec: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    engine_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    python_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    python_interpreter: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    config_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     status: Mapped[BuildStatus] = mapped_column(
         SAEnum(

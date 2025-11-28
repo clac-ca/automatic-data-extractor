@@ -150,13 +150,22 @@ def get_runs_service(
 ) -> RunsService:
     """Return a runs service wired to the current request dependencies."""
 
+    from ade_api.features.configs.storage import ConfigStorage
     from ade_api.features.runs.service import RunsService
+
+    module_root = FilePath(__file__).resolve().parents[1]
+    templates_root = module_root / "templates" / "config_packages"
+    storage = ConfigStorage(
+        templates_root=templates_root,
+        settings=settings,
+    )
 
     return RunsService(
         session=session,
         settings=settings,
         supervisor=_RUN_EXECUTION_SUPERVISOR,
         safe_mode_service=get_safe_mode_service(session=session, settings=settings),
+        storage=storage,
     )
 
 

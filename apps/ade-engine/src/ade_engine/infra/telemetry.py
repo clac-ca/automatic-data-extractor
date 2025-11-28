@@ -92,7 +92,7 @@ class FileEventSink:
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(event.model_dump(mode="json"), ensure_ascii=False)
+        line = json.dumps(event.model_dump(mode="json", by_alias=True), ensure_ascii=False)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
@@ -220,7 +220,15 @@ class PipelineLogger:
         mapped_columns = table.mapped.column_map.mapped_columns
         unmapped_columns = table.mapped.column_map.unmapped_columns
 
-        mapped_field_names = [column.field for column in mapped_columns if column.is_satisfied]
+        mapped_field_payloads = [
+            {
+                "field": column.field,
+                "header": column.header,
+                "score": column.score,
+                "source_column_index": column.source_column_index,
+            }
+            for column in mapped_columns
+        ]
         mapped_columns_payload = [
             {
                 "field": column.field,
@@ -252,9 +260,10 @@ class PipelineLogger:
                 "table_index": extracted.table_index,
                 "row_count": len(table.rows),
                 "column_count": column_count,
-                "mapped_fields": mapped_field_names,
+                "mapped_fields": mapped_field_payloads,
                 "mapped_column_count": len(mapped_columns),
                 "unmapped_column_count": len(unmapped_columns),
+                "unmapped_columns": unmapped_columns_payload,
                 "validation": validation,
                 "mapping": {
                     "mapped_columns": mapped_columns_payload,
@@ -351,6 +360,7 @@ def _aggregate_validation(issues: list[Any]) -> dict[str, Any]:
     }
 
     return {
+        "total": total,
         "issues_total": total,
         "issues_by_severity": dict(by_severity),
         "issues_by_code": dict(by_code),

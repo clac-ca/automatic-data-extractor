@@ -107,7 +107,11 @@ def _resolve_path(arg_value: Path | None, *, env_name: str, default: Path) -> Pa
 
 
 async def run_builder(args: argparse.Namespace) -> None:
-    from ade_api.features.builds.builder import VirtualEnvironmentBuilder
+    from ade_api.features.builds.builder import (
+        BuilderArtifactsEvent,
+        BuilderLogEvent,
+        VirtualEnvironmentBuilder,
+    )
     from ade_api.settings import DEFAULT_PIP_CACHE_DIR, DEFAULT_VENVS_DIR
 
     build_id = args.build_id or f"poc-{uuid4().hex[:8]}"
@@ -124,32 +128,40 @@ async def run_builder(args: argparse.Namespace) -> None:
     pip_cache_dir.mkdir(parents=True, exist_ok=True)
 
     builder = VirtualEnvironmentBuilder()
-    target_path = (venvs_root / args.workspace / ".venv" / args.config / build_id).resolve()
+    venv_root = (venvs_root / args.workspace / args.config / build_id).resolve()
     python_bin = args.python_bin
 
     print(f"[build] workspace={args.workspace} config={args.config} build_id={build_id}")
     print(f"[paths] venvs_root={venvs_root}")
-    print(f"[paths] target={target_path}")
+    print(f"[paths] venv_root={venv_root}")
     print(f"[config] config_path={config_path}")
     print(f"[engine] spec={args.engine_spec}")
     print(f"[pip] cache_dir={pip_cache_dir}")
 
-    artifacts = await builder.build(
+    artifacts = None
+    async for event in builder.build_stream(
         build_id=build_id,
         workspace_id=args.workspace,
-        config_id=args.config,
-        target_path=target_path,
+        configuration_id=args.config,
+        venv_root=venv_root,
         config_path=config_path,
         engine_spec=args.engine_spec,
         pip_cache_dir=pip_cache_dir,
         python_bin=python_bin,
         timeout=args.timeout,
-        stream_output=args.stream_logs,
-    )
+        fingerprint=None,
+    ):
+        if isinstance(event, BuilderLogEvent) and args.stream_logs:
+            print(event.message)
+        if isinstance(event, BuilderArtifactsEvent):
+            artifacts = event.artifacts
+
+    if artifacts is None:
+        raise RuntimeError("Build did not produce artifacts")
 
     print(
         "[result] venv ready at {path} (python={py}, engine={engine})".format(
-            path=target_path,
+            path=venv_root / ".venv",
             py=artifacts.python_version,
             engine=artifacts.engine_version,
         )

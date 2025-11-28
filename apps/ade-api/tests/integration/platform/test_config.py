@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import timedelta
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -89,10 +90,11 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.jwt_refresh_ttl == timedelta(days=14)
     expected_root = (tmp_path / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
+    expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces
     assert settings.configs_dir == expected_workspaces
-    assert settings.venvs_dir == expected_workspaces
+    assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_workspaces
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
 
@@ -110,10 +112,11 @@ def test_workspaces_dir_propagates_defaults(
     settings = get_settings()
 
     expected_root = (tmp_path / "custom" / "workspaces").resolve()
+    expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
     assert settings.workspaces_dir == expected_root
     assert settings.documents_dir == expected_root
     assert settings.configs_dir == expected_root
-    assert settings.venvs_dir == expected_root
+    assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_root
 
 

@@ -203,6 +203,6 @@ class FileArtifactSink:
         artifact_dir = self.artifact_path.parent
         artifact_dir.mkdir(parents=True, exist_ok=True)
         temp_path = self.artifact_path.with_suffix(self.artifact_path.suffix + ".tmp")
-        payload = json.dumps(self._artifact.model_dump(mode="json"), ensure_ascii=False)
+        payload = json.dumps(self._artifact.model_dump(mode="json", by_alias=True), ensure_ascii=False)
         temp_path.write_text(payload)
         temp_path.replace(self.artifact_path)
