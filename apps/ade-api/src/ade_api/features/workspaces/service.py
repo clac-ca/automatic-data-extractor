@@ -34,6 +34,7 @@ from ade_api.features.roles.service import (
     unassign_role,
 )
 from ade_api.shared.core.logging import log_context
+from ade_api.shared.pagination import Page, paginate_sequence
 
 from ..users.models import User
 from ..users.repository import UsersRepository
@@ -274,6 +275,32 @@ class WorkspacesService:
             ),
         )
         return profiles
+
+    async def list_workspaces(
+        self,
+        *,
+        user: User,
+        page: int,
+        page_size: int,
+        include_total: bool = False,
+    ) -> Page[WorkspaceOut]:
+        """Return a paginated workspace list for the user."""
+
+        memberships = await self.list_memberships(user=user)
+        page_result = paginate_sequence(
+            memberships,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
+        return Page[WorkspaceOut](
+            items=page_result.items,
+            page=page_result.page,
+            page_size=page_result.page_size,
+            has_next=page_result.has_next,
+            has_previous=page_result.has_previous,
+            total=page_result.total,
+        )
 
     async def create_workspace(
         self,

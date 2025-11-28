@@ -101,7 +101,12 @@ function normalizeBootstrapEnvelope(payload: unknown): BootstrapEnvelope {
     throw new Error("Unexpected bootstrap payload shape returned by the server.");
   }
   return {
-    user: normalizeSessionEnvelope(envelope.user as SessionEnvelopeWire),
+    user: normalizeSessionEnvelope({
+      user: envelope.user as SessionEnvelope["user"],
+      expires_at: null,
+      refresh_expires_at: null,
+      return_to: null,
+    }),
     global_roles: Array.isArray(envelope.global_roles) ? envelope.global_roles.map(String) : [],
     global_permissions: Array.isArray(envelope.global_permissions)
       ? envelope.global_permissions.map(String)
