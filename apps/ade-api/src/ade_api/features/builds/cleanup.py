@@ -15,8 +15,7 @@ def mark_stale_envs_for_cleanup(settings: Settings, now: datetime) -> Iterable[s
     Placeholder for future cleanup logic.
 
     Intended future behaviour:
-    - identify configuration environments (and documents) older than settings.build_retention
-      that have not been used recently.
+    - identify configuration environments (and documents) that have not been used recently.
     - schedule them for deletion and update database metadata.
 
     Current behaviour:

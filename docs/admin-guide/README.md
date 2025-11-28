@@ -12,7 +12,7 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.
 - Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_DSN`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
-- Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and provide a JSON array in `ADE_SERVER_CORS_ORIGINS` so browsers can connect (for example `["https://ade.example.com"]`).
+- Set the externally reachable origin with `ADE_SERVER_PUBLIC_URL` and configure browser access via `ADE_SERVER_CORS_ORIGINS` (for example `["https://ade.example.com"]`). The uvicorn listener binds to the entrypoint defaults (0.0.0.0:8000 in Docker).
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 - Account lockout policy is governed by `ADE_FAILED_LOGIN_LOCK_THRESHOLD` (attempts) and
