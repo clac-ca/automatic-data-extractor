@@ -34,6 +34,7 @@ from ade_api.features.roles.service import (
     unassign_role,
 )
 from ade_api.shared.core.logging import log_context
+from ade_api.shared.pagination import Page, paginate_sequence
 
 from ..users.models import User
 from ..users.repository import UsersRepository
@@ -205,7 +206,12 @@ class WorkspacesService:
         )
         return profile
 
-    async def list_memberships(self, *, user: User) -> list[WorkspaceOut]:
+    async def list_memberships(
+        self,
+        *,
+        user: User,
+        global_permissions: frozenset[str] | None = None,
+    ) -> list[WorkspaceOut]:
         """Return all workspace profiles associated with ``user`` in a stable order."""
 
         user_id = cast(str, user.id)
@@ -214,10 +220,11 @@ class WorkspacesService:
             extra=log_context(user_id=user_id),
         )
 
-        global_permissions = await get_global_permissions_for_user(
-            session=self._session,
-            user=user,
-        )
+        if global_permissions is None:
+            global_permissions = await get_global_permissions_for_user(
+                session=self._session,
+                user=user,
+            )
         if {
             "Workspaces.Read.All",
             "Workspaces.ReadWrite.All",
@@ -275,6 +282,36 @@ class WorkspacesService:
         )
         return profiles
 
+    async def list_workspaces(
+        self,
+        *,
+        user: User,
+        page: int,
+        page_size: int,
+        include_total: bool = False,
+        global_permissions: frozenset[str] | None = None,
+    ) -> Page[WorkspaceOut]:
+        """Return a paginated workspace list for the user."""
+
+        memberships = await self.list_memberships(
+            user=user,
+            global_permissions=global_permissions,
+        )
+        page_result = paginate_sequence(
+            memberships,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
+        return Page[WorkspaceOut](
+            items=page_result.items,
+            page=page_result.page,
+            page_size=page_result.page_size,
+            has_next=page_result.has_next,
+            has_previous=page_result.has_previous,
+            total=page_result.total,
+        )
+
     async def create_workspace(
         self,
         *,
@@ -300,7 +337,7 @@ class WorkspacesService:
                 "workspace.create.name_required",
                 extra=log_context(user_id=user_id),
             )
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name required")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Name required")
 
         slug_source = slug.strip() if slug is not None else normalized_name
         normalized_slug = _slugify(slug_source)
@@ -309,7 +346,7 @@ class WorkspacesService:
                 "workspace.create.slug_invalid",
                 extra=log_context(user_id=user_id, slug_source=slug_source),
             )
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid slug")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid slug")
 
         existing = await self._repo.get_workspace_by_slug(normalized_slug)
         if existing is not None:
@@ -417,7 +454,7 @@ class WorkspacesService:
                     "workspace.update.name_required",
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name required")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Name required")
 
         updated_slug: str | None = None
         if slug is not None:
@@ -428,7 +465,7 @@ class WorkspacesService:
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Invalid slug",
                 )
             candidate = _slugify(slug_source)
@@ -438,7 +475,7 @@ class WorkspacesService:
                     extra=log_context(user_id=user_id, workspace_id=workspace_id),
                 )
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Invalid slug",
                 )
             if candidate != workspace_record.slug:
@@ -818,7 +855,7 @@ class WorkspacesService:
                 extra=log_context(workspace_id=workspace_id, user_id=actor_id),
             )
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Role slug is required",
             )
 
@@ -1030,7 +1067,7 @@ class WorkspacesService:
         candidate = value.strip()
         if not candidate:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Role name is required",
             )
         return candidate
@@ -1050,7 +1087,7 @@ class WorkspacesService:
             collected = collect_permission_keys(permissions)
         except AuthorizationError as exc:  # pragma: no cover - validated via tests
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
 
@@ -1059,7 +1096,7 @@ class WorkspacesService:
             definition = PERMISSION_REGISTRY.get(key)
             if definition is None or definition.scope != "workspace":
                 raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Permission '{key}' must be workspace-scoped",
                 )
         return unique

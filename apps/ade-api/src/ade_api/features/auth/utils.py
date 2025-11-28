@@ -30,4 +30,3 @@ __all__ = [
     "normalise_api_key_label",
     "normalise_email",
 ]
-

@@ -23,12 +23,14 @@ from ade_api.settings import Settings, get_settings
 from ade_api.shared.db.session import get_session
 from ade_api.shared.dependency import (
     get_current_identity,
+    get_safe_mode_service,
     require_authenticated,
     require_csrf,
     require_global,
 )
 from ade_api.shared.pagination import PageParams
 
+from ..system_settings.service import SafeModeService
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
@@ -39,6 +41,7 @@ from .schemas import (
     APIKeyPage,
     APIKeySummary,
     AuthProvider,
+    BootstrapEnvelope,
     LoginRequest,
     ProviderDiscoveryResponse,
     SessionEnvelope,
@@ -53,6 +56,7 @@ from .service import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 setup_router = APIRouter(prefix="/setup", tags=["setup"])
+bootstrap_router = APIRouter(prefix="/bootstrap", tags=["bootstrap"])
 
 
 def _serialize_api_key(record: APIKey) -> APIKeySummary:
@@ -170,6 +174,55 @@ async def complete_setup(
         user=profile,
         expires_at=tokens.access_expires_at,
         refresh_expires_at=tokens.refresh_expires_at,
+    )
+
+
+@bootstrap_router.get(
+    "",
+    response_model=BootstrapEnvelope,
+    status_code=status.HTTP_200_OK,
+    summary="Bootstrap session, permissions, workspaces, and safe-mode status",
+    openapi_extra={"security": []},
+)
+async def bootstrap(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
+    safe_mode_service: Annotated[
+        SafeModeService, Depends(get_safe_mode_service)
+    ],
+    page_params: Annotated[PageParams, Depends(PageParams)],
+) -> BootstrapEnvelope:
+    """Return a consolidated payload for initial SPA bootstrap."""
+
+    # Reuse session envelope logic
+    user_profiles = UsersService(session=session)
+    profile = await user_profiles.get_profile(user=identity.user)
+
+    # Permissions and roles already resolved in the user profile builder
+    global_permissions = frozenset(profile.permissions)
+    global_roles = frozenset(profile.roles)
+
+    # Workspaces list (first page)
+    from ade_api.features.workspaces.service import WorkspacesService
+    workspaces_service = WorkspacesService(session=session)
+    workspaces_page = await workspaces_service.list_workspaces(
+        user=identity.user,
+        page=page_params.page,
+        page_size=page_params.page_size,
+        include_total=True,
+        global_permissions=global_permissions,
+    )
+
+    safe_mode_status = await safe_mode_service.get_status()
+
+    return BootstrapEnvelope(
+        user=profile,
+        global_roles=sorted(global_roles),
+        global_permissions=sorted(global_permissions),
+        workspaces=workspaces_page,
+        safe_mode=safe_mode_status,
     )
 
 

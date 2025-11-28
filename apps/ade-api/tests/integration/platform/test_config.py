@@ -20,12 +20,8 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for var in (
         "ADE_APP_NAME",
         "ADE_API_DOCS_ENABLED",
-        "ADE_DEBUG",
-        "ADE_DEV_MODE",
         "ADE_SAFE_MODE",
         "ADE_LOGGING_LEVEL",
-        "ADE_SERVER_HOST",
-        "ADE_SERVER_PORT",
         "ADE_SERVER_PUBLIC_URL",
         "ADE_SERVER_CORS_ORIGINS",
         "ADE_WORKSPACES_DIR",
@@ -36,9 +32,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_PIP_CACHE_DIR",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
-        "ADE_SECRET_KEY",
         "ADE_DATABASE_DSN",
-        "ADE_JWT_SECRET",
         "ADE_JWT_ACCESS_TTL",
         "ADE_JWT_REFRESH_TTL",
         "ADE_SESSION_LAST_SEEN_INTERVAL",
@@ -65,6 +59,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_AUTH_SSO_AUTO_PROVISION",
     ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
     try:
         reload_settings()
     except ValidationError:
@@ -87,8 +82,6 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert isinstance(settings, Settings)
     assert settings.app_name == "Automatic Data Extractor API"
     assert settings.api_docs_enabled is False
-    assert settings.server_host == "localhost"
-    assert settings.server_port == 8000
     assert settings.server_public_url == "http://localhost:8000"
     assert settings.server_cors_origins == ["http://localhost:5173"]
     assert settings.database_dsn.endswith("data/db/ade.sqlite")
@@ -132,8 +125,6 @@ def test_settings_reads_from_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         """
 ADE_APP_NAME=ADE Test
 ADE_API_DOCS_ENABLED=true
-ADE_SERVER_HOST=0.0.0.0
-ADE_SERVER_PORT=9000
 ADE_SERVER_PUBLIC_URL=https://api.dev.local
 ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
 ADE_JWT_ACCESS_TTL=5m
@@ -148,8 +139,6 @@ ADE_JWT_REFRESH_TTL=7d
 
     assert settings.app_name == "ADE Test"
     assert settings.api_docs_enabled is True
-    assert settings.server_host == "0.0.0.0"
-    assert settings.server_port == 9000
     assert settings.server_public_url == "https://api.dev.local"
     assert settings.server_cors_origins == [
         "http://localhost:3000",
@@ -164,8 +153,6 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("ADE_APP_NAME", "Env Override")
     monkeypatch.setenv("ADE_API_DOCS_ENABLED", "true")
-    monkeypatch.setenv("ADE_SERVER_HOST", "dev.internal")
-    monkeypatch.setenv("ADE_SERVER_PORT", "8100")
     monkeypatch.setenv("ADE_SERVER_PUBLIC_URL", "https://api.local")
     monkeypatch.setenv("ADE_SERVER_CORS_ORIGINS", "http://example.com")
     reload_settings()
@@ -174,8 +161,6 @@ def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.app_name == "Env Override"
     assert settings.api_docs_enabled is True
-    assert settings.server_host == "dev.internal"
-    assert settings.server_port == 8100
     assert settings.server_public_url == "https://api.local"
     assert settings.server_cors_origins == ["http://example.com"]
 

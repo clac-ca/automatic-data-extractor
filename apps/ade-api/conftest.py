@@ -61,6 +61,7 @@ def _configure_database(
     os.environ["ADE_VENVS_DIR"] = str(workspaces_dir)
     os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
+    os.environ.setdefault("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
     # Ensure tests run with OIDC disabled regardless of local .env values.
     os.environ["ADE_OIDC_ENABLED"] = "false"
     os.environ["ADE_SAFE_MODE"] = "false"
@@ -94,6 +95,7 @@ def _configure_database(
         "ADE_PIP_CACHE_DIR",
         "ADE_OIDC_ENABLED",
         "ADE_SAFE_MODE",
+        "ADE_JWT_SECRET",
     ):
         os.environ.pop(env_var, None)
 

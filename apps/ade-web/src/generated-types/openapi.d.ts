@@ -58,6 +58,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bootstrap session, permissions, workspaces, and safe-mode status
+         * @description Return a consolidated payload for initial SPA bootstrap.
+         */
+        get: operations["bootstrap_api_v1_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/providers": {
         parameters: {
             query?: never;
@@ -1331,6 +1351,19 @@ export type components = {
             metadata?: string | null;
             /** Expires At */
             expires_at?: string | null;
+        };
+        /**
+         * BootstrapEnvelope
+         * @description Consolidated bootstrap payload for SPA initialization.
+         */
+        BootstrapEnvelope: {
+            user: components["schemas"]["UserProfile"];
+            /** Global Roles */
+            global_roles: string[];
+            /** Global Permissions */
+            global_permissions: string[];
+            workspaces: components["schemas"]["WorkspacePage"];
+            safe_mode: components["schemas"]["SafeModeStatus"];
         };
         /**
          * BuildCreateOptions
@@ -3174,6 +3207,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bootstrap_api_v1_bootstrap_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapEnvelope"];
+                };
             };
             /** @description Validation Error */
             422: {

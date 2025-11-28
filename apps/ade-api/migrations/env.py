@@ -12,7 +12,7 @@ from sqlalchemy.exc import ArgumentError
 
 from ade_api.settings import get_settings
 from ade_api.shared.db import metadata
-from ade_api.shared.db.engine import render_sync_url
+from ade_api.shared.db.engine import attach_managed_identity, render_sync_url
 
 config = context.config
 
@@ -46,7 +46,16 @@ def _database_url() -> str:
         return override
 
     settings = get_settings()
-    return render_sync_url(settings.database_dsn)
+    return render_sync_url(settings)
+
+
+def _use_managed_identity(url: str) -> bool:
+    settings = get_settings()
+    try:
+        backend = make_url(url).get_backend_name()
+    except ArgumentError:
+        backend = "sqlite" if url.startswith("sqlite") else ""
+    return settings.database_auth_mode == "managed_identity" and backend == "mssql"
 
 
 def _should_render_as_batch(url: str) -> bool:
@@ -98,6 +107,9 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
         future=True,
     )
+
+    if _use_managed_identity(url):
+        attach_managed_identity(connectable, get_settings())
 
     try:
         with connectable.connect() as connection:

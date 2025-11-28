@@ -1,0 +1,54 @@
+(.venv) jkropp@JKROPP-M11:~/automatic-data-extractor$ ade start
+🚀 Starting ADE backend on http://0.0.0.0:8000
+↪️  /home/jkropp/automatic-data-extractor/.venv/bin/uvicorn ade_api.main:create_app --factory --host 0.0.0.0 --port 8000
+2025-11-28T00:55:21.173Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=False debug=False version=0.2.0
+2025-11-28T00:55:21.321Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=False debug=False version=0.2.0
+2025-11-28T00:55:21.487Z INFO  uvicorn.error [cid=-] Started server process [129975]
+2025-11-28T00:55:21.487Z INFO  uvicorn.error [cid=-] Waiting for application startup.
+2025-11-28T00:55:22.743Z INFO  alembic.runtime.migration [cid=-] Context impl MSSQLImpl.
+2025-11-28T00:55:22.744Z INFO  alembic.runtime.migration [cid=-] Will assume transactional DDL.
+2025-11-28T00:55:24.599Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.start
+2025-11-28T00:55:25.700Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.success permission_count=22 system_role_count=4
+2025-11-28T00:55:25.761Z INFO  uvicorn.error [cid=-] Application startup complete.
+2025-11-28T00:55:25.762Z INFO  uvicorn.error [cid=-] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-11-28T00:55:30.793Z INFO  ade_api.request [cid=81d864be-1f4d-4892-9cee-acc2340dc051] request.complete path=/workspaces/01KB3W3DKXTDRZ6C6V02HEH0WE/documents method=GET duration_ms=1.33 status_code=200
+2025-11-28T00:55:30.793Z INFO  uvicorn.access [cid=-] 127.0.0.1:46146 - "GET /workspaces/01KB3W3DKXTDRZ6C6V02HEH0WE/documents HTTP/1.1" 200
+2025-11-28T00:55:30.818Z INFO  ade_api.request [cid=5d0bea3f-dbfe-44ce-9f36-f7c261085985] request.complete path=/assets/index-DKFFeHLb.js method=GET duration_ms=1.89 status_code=304
+2025-11-28T00:55:30.818Z INFO  uvicorn.access [cid=-] 127.0.0.1:46146 - "GET /assets/index-DKFFeHLb.js HTTP/1.1" 304
+2025-11-28T00:55:30.818Z INFO  ade_api.request [cid=2a209291-0df6-48b7-84ff-e1f81e5965dd] request.complete path=/assets/index-M82PUZKm.css method=GET duration_ms=2.23 status_code=304
+2025-11-28T00:55:30.818Z INFO  uvicorn.access [cid=-] 127.0.0.1:46150 - "GET /assets/index-M82PUZKm.css HTTP/1.1" 304
+2025-11-28T00:55:30.839Z DEBUG ade_api.features.auth.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] auth.token.decode user_id=01KB3W2X9864QB6FNZY32B0Z87 session_id=1EOzVFChdDyMr_KH4cZRQA token_type=access expected_type=access
+2025-11-28T00:55:30.839Z DEBUG ade_api.features.auth.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] auth.resolve_user.start user_id=01KB3W2X9864QB6FNZY32B0Z87 session_id=1EOzVFChdDyMr_KH4cZRQA credentials=bearer_token
+2025-11-28T00:55:30.844Z INFO  ade_api.request [cid=de6cfba0-8bb0-49ec-b15b-192600ae3a9d] request.complete path=/favicon.ico method=GET duration_ms=0.67 status_code=200
+2025-11-28T00:55:30.844Z INFO  uvicorn.access [cid=-] 127.0.0.1:46146 - "GET /favicon.ico HTTP/1.1" 200
+2025-11-28T00:55:31.680Z DEBUG ade_api.features.auth.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] auth.resolve_user.success user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:31.680Z DEBUG ade_api.features.roles.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] roles.principal.ensure.cached user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8
+2025-11-28T00:55:31.681Z DEBUG ade_api.features.users.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] user.profile.get.start user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:31.681Z DEBUG ade_api.features.users.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] user.profile.build user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:32.058Z DEBUG ade_api.features.roles.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] roles.permissions.global.for_principal.start user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8
+2025-11-28T00:55:32.123Z DEBUG ade_api.features.roles.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] roles.permissions.global.for_principal.success user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8 permission_count=9
+2025-11-28T00:55:32.556Z DEBUG ade_api.features.roles.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] roles.global_slugs.for_user.start user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8
+2025-11-28T00:55:32.622Z DEBUG ade_api.features.roles.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] roles.global_slugs.for_user.completed user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8 role_count=1
+2025-11-28T00:55:32.684Z DEBUG ade_api.features.users.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] user.profile.get.success user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:32.684Z DEBUG ade_api.features.workspaces.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] workspace.memberships.list.start user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:32.750Z INFO  ade_api.features.workspaces.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] workspace.memberships.list.global_admin_success user_id=01KB3W2X9864QB6FNZY32B0Z87 count=1
+2025-11-28T00:55:32.750Z DEBUG ade_api.features.system_settings.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] safe_mode.get_status.start
+2025-11-28T00:55:32.750Z DEBUG ade_api.features.system_settings.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] system_settings.get.start setting_key=safe-mode
+2025-11-28T00:55:32.874Z DEBUG ade_api.features.system_settings.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] system_settings.get.result setting_key=safe-mode found=False
+2025-11-28T00:55:32.874Z INFO  ade_api.features.system_settings.service [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] safe_mode.get_status.result safe_mode_enabled=False persisted_overridden=False
+2025-11-28T00:55:32.937Z INFO  ade_api.request [cid=a3aca2cf-03c0-4c1c-bbd0-2ffe29bc0048] request.complete path=/api/v1/bootstrap method=GET duration_ms=2099.3 status_code=200
+2025-11-28T00:55:32.938Z INFO  uvicorn.access [cid=-] 127.0.0.1:46150 - "GET /api/v1/bootstrap HTTP/1.1" 200
+2025-11-28T00:55:32.959Z DEBUG ade_api.features.auth.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] auth.token.decode user_id=01KB3W2X9864QB6FNZY32B0Z87 session_id=1EOzVFChdDyMr_KH4cZRQA token_type=access expected_type=access
+2025-11-28T00:55:32.960Z DEBUG ade_api.features.auth.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] auth.resolve_user.start user_id=01KB3W2X9864QB6FNZY32B0Z87 session_id=1EOzVFChdDyMr_KH4cZRQA credentials=bearer_token
+2025-11-28T00:55:33.777Z DEBUG ade_api.features.auth.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] auth.resolve_user.success user_id=01KB3W2X9864QB6FNZY32B0Z87
+2025-11-28T00:55:33.777Z DEBUG ade_api.features.roles.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] roles.principal.ensure.cached user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8
+2025-11-28T00:55:33.779Z DEBUG ade_api.features.roles.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] roles.permissions.workspace.for_principal.start workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8
+2025-11-28T00:55:34.323Z DEBUG ade_api.features.roles.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] roles.permissions.workspace.for_principal.success workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE user_id=01KB3W2X9864QB6FNZY32B0Z87 principal_id=01KB3W2YC6SZ87EXW244CYX3X8 permission_count=13
+2025-11-28T00:55:34.384Z DEBUG ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.list.start workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE user_id=01KB3W2X9864QB6FNZY32B0Z87 page=1 page_size=50 include_total=False order_by=(<sqlalchemy.sql.elements.UnaryExpression object at 0x7294ab5c5c40>, <sqlalchemy.sql.elements.UnaryExpression object at 0x7294ab5c57c0>)
+2025-11-28T00:55:35.569Z DEBUG ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.last_run.attach.start workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE document_count=1
+2025-11-28T00:55:35.569Z DEBUG ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.last_run.query.start workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE document_count=1
+2025-11-28T00:55:35.635Z DEBUG ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.last_run.query.success workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE document_count=1 matched_runs=1
+2025-11-28T00:55:35.697Z DEBUG ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.last_run.attach.success workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE matched_documents=1
+2025-11-28T00:55:35.697Z INFO  ade_api.features.documents.service [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] document.list.success workspace_id=01KB3W3DKXTDRZ6C6V02HEH0WE user_id=01KB3W2X9864QB6FNZY32B0Z87 page=1 page_size=50 count=1 has_next=False has_previous=False total=null
+2025-11-28T00:55:35.825Z INFO  ade_api.request [cid=2dc22fea-072b-4db6-90d3-fd8c0e895665] request.complete path=/api/v1/workspaces/01KB3W3DKXTDRZ6C6V02HEH0WE/documents method=GET duration_ms=2866.82 status_code=200
+2025-11-28T00:55:35.825Z INFO  uvicorn.access [cid=-] 127.0.0.1:46150 - "GET /api/v1/workspaces/01KB3W3DKXTDRZ6C6V02HEH0WE/documents?sort=-created_at&page=1&page_size=50&include_total=false HTTP/1.1" 200

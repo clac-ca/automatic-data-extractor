@@ -94,6 +94,84 @@
         "security": []
       }
     },
+    "/api/v1/bootstrap": {
+      "get": {
+        "tags": [
+          "bootstrap"
+        ],
+        "summary": "Bootstrap session, permissions, workspaces, and safe-mode status",
+        "description": "Return a consolidated payload for initial SPA bootstrap.",
+        "operationId": "bootstrap_api_v1_bootstrap_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/providers": {
       "get": {
         "tags": [
@@ -6936,6 +7014,44 @@
           "file"
         ],
         "title": "Body_upload_document_api_v1_workspaces__workspace_id__documents_post"
+      },
+      "BootstrapEnvelope": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserProfile"
+          },
+          "global_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Global Roles"
+          },
+          "global_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Global Permissions"
+          },
+          "workspaces": {
+            "$ref": "#/components/schemas/WorkspacePage"
+          },
+          "safe_mode": {
+            "$ref": "#/components/schemas/SafeModeStatus"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "user",
+          "global_roles",
+          "global_permissions",
+          "workspaces",
+          "safe_mode"
+        ],
+        "title": "BootstrapEnvelope",
+        "description": "Consolidated bootstrap payload for SPA initialization."
       },
       "BuildCreateOptions": {
         "properties": {

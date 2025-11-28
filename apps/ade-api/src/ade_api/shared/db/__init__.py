@@ -2,6 +2,8 @@
 
 from .base import NAMING_CONVENTION, Base, metadata
 from .engine import (
+    attach_managed_identity,
+    build_database_url,
     engine_cache_key,
     ensure_database_ready,
     ensure_sqlite_database_directory,
@@ -18,6 +20,8 @@ __all__ = [
     "Base",
     "NAMING_CONVENTION",
     "metadata",
+    "attach_managed_identity",
+    "build_database_url",
     "ensure_database_ready",
     "reset_bootstrap_state",
     "engine_cache_key",

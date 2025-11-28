@@ -12,12 +12,17 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 ## Configuration snapshot
 - Settings are loaded once at startup through `get_settings()` and cached on `app.state.settings`. Routes read from this state rather than reloading environment variables on every request.
 - Environment variables use the `ADE_` prefix (for example `ADE_DATABASE_DSN`, `ADE_STORAGE_UPLOAD_MAX_BYTES`). A local `.env` file is respected during development.
-- Host and port configuration splits into `ADE_SERVER_HOST` / `ADE_SERVER_PORT` for the uvicorn listener and `ADE_SERVER_PUBLIC_URL` for the externally reachable origin. When ADE sits behind HTTPS on a domain such as `https://ade.example.com`, set the public URL and provide a JSON array in `ADE_SERVER_CORS_ORIGINS` so browsers can connect (for example `["https://ade.example.com"]`).
+- Set the externally reachable origin with `ADE_SERVER_PUBLIC_URL` and configure browser access via `ADE_SERVER_CORS_ORIGINS` (for example `["https://ade.example.com"]`). The uvicorn listener binds to the entrypoint defaults (0.0.0.0:8000 in Docker).
 - Documentation endpoints (`/docs`, `/redoc`, `/openapi.json`) default on for the `local` and `staging` environments and can be
   toggled explicitly through the `ADE_API_DOCS_ENABLED` flag to keep production surfaces minimal.
 - Account lockout policy is governed by `ADE_FAILED_LOGIN_LOCK_THRESHOLD` (attempts) and
   `ADE_FAILED_LOGIN_LOCK_DURATION` (lock length, supports suffixed durations like `5m`). Defaults lock a user for
   five minutes after five consecutive failures.
+
+### Database configuration
+- `ADE_DATABASE_DSN` defaults to SQLite (`sqlite+aiosqlite:///./data/db/ade.sqlite`). Point it at Azure SQL with an `mssql+pyodbc` URL when deploying.
+- `ADE_DATABASE_AUTH_MODE` chooses authentication: `sql_password` (default) uses credentials embedded in the DSN; `managed_identity` strips username/password and injects an Entra token for Azure SQL.
+- `ADE_DATABASE_MI_CLIENT_ID` optionally pins a user-assigned managed identity; omit it to use the system-assigned identity. Alembic migrations reuse the same settings and token flow as the runtime engine.
 
 ## Operational building blocks
 - Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/shared/db/engine.py`](../../apps/ade-api/src/ade_api/shared/db/engine.py) and scoped sessions from [`apps/ade-api/src/ade_api/shared/db/session.py`](../../apps/ade-api/src/ade_api/shared/db/session.py).

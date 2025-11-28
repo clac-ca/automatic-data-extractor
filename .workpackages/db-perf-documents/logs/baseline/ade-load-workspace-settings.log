@@ -1,0 +1,31 @@
+(.venv) jkropp@JKROPP-M11:~/automatic-data-extractor$ ade start
+🚀 Starting ADE backend on http://0.0.0.0:8000
+↪️  /home/jkropp/automatic-data-extractor/.venv/bin/uvicorn ade_api.main:create_app --factory --host 0.0.0.0 --port 8000
+2025-11-27T22:24:58.654Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=True debug=False version=0.2.0
+2025-11-27T22:24:58.654Z WARNING ade_api.main [cid=-] auth.disabled auth_disabled=True
+2025-11-27T22:24:58.817Z INFO  ade_api.main [cid=-] ade_api.startup logging_level=DEBUG safe_mode=False auth_disabled=True debug=False version=0.2.0
+2025-11-27T22:24:58.817Z WARNING ade_api.main [cid=-] auth.disabled auth_disabled=True
+2025-11-27T22:24:58.973Z INFO  uvicorn.error [cid=-] Started server process [65984]
+2025-11-27T22:24:58.974Z INFO  uvicorn.error [cid=-] Waiting for application startup.
+2025-11-27T22:25:00.300Z INFO  alembic.runtime.migration [cid=-] Context impl MSSQLImpl.
+2025-11-27T22:25:00.300Z INFO  alembic.runtime.migration [cid=-] Will assume transactional DDL.
+2025-11-27T22:25:00.558Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.start
+2025-11-27T22:25:02.662Z INFO  ade_api.features.roles.service [cid=-] roles.registry.sync.success permission_count=22 system_role_count=4
+2025-11-27T22:25:02.724Z INFO  uvicorn.error [cid=-] Application startup complete.
+2025-11-27T22:25:02.727Z INFO  uvicorn.error [cid=-] Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-11-27T22:25:13.085Z DEBUG ade_api.features.auth.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] auth.dev_identity.ensure.start user_email=developer@example.test display_name=Development User
+2025-11-27T22:25:13.987Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.global.get_by_slug.start slug=global-administrator
+2025-11-27T22:25:14.059Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.global.get_by_slug.completed slug=global-administrator found=True
+2025-11-27T22:25:14.123Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.assignments.assign_global.start user_id=01KB3PAN065656CT9G01WM9DE8 role_id=01KB3P9G0WG2PNEJSSGTG16S09
+2025-11-27T22:25:14.123Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.principal.ensure.cached user_id=01KB3PAN065656CT9G01WM9DE8 principal_id=01KB3PAP03C0C2QM3KNXK08ZGT
+2025-11-27T22:25:14.123Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.assignments.assign.start principal_id=01KB3PAP03C0C2QM3KNXK08ZGT role_id=01KB3P9G0WG2PNEJSSGTG16S09 scope_type=global scope_id=null
+2025-11-27T22:25:14.263Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.assignments.assign.already_exists assignment_id=01KB3PAPGTKQ1XM0KYGJRFXM5N principal_id=01KB3PAP03C0C2QM3KNXK08ZGT role_id=01KB3P9G0WG2PNEJSSGTG16S09 scope_type=global scope_id=null
+2025-11-27T22:25:14.264Z INFO  ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.assignments.assign_global.success user_id=01KB3PAN065656CT9G01WM9DE8 assignment_id=01KB3PAPGTKQ1XM0KYGJRFXM5N principal_id=01KB3PAP03C0C2QM3KNXK08ZGT role_id=01KB3P9G0WG2PNEJSSGTG16S09
+2025-11-27T22:25:14.264Z DEBUG ade_api.features.roles.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] roles.principal.ensure.cached user_id=01KB3PAN065656CT9G01WM9DE8 principal_id=01KB3PAP03C0C2QM3KNXK08ZGT
+2025-11-27T22:25:14.264Z INFO  ade_api.features.auth.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] auth.dev_identity.ensure.success user_id=01KB3PAN065656CT9G01WM9DE8 user_email=developer@example.test user_created=False is_service_account=False
+2025-11-27T22:25:14.265Z DEBUG ade_api.features.system_settings.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] safe_mode.get_status.start
+2025-11-27T22:25:14.265Z DEBUG ade_api.features.system_settings.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] system_settings.get.start setting_key=safe-mode
+2025-11-27T22:25:14.395Z DEBUG ade_api.features.system_settings.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] system_settings.get.result setting_key=safe-mode found=False
+2025-11-27T22:25:14.396Z INFO  ade_api.features.system_settings.service [cid=2e84c78e-7773-4c6f-9194-b09397310d34] safe_mode.get_status.result safe_mode_enabled=False persisted_overridden=False
+2025-11-27T22:25:14.459Z INFO  ade_api.request [cid=2e84c78e-7773-4c6f-9194-b09397310d34] request.complete path=/api/v1/system/safe-mode method=GET duration_ms=1375.21 status_code=200
+2025-11-27T22:25:14.459Z INFO  uvicorn.access [cid=-] 127.0.0.1:43618 - "GET /api/v1/system/safe-mode HTTP/1.1" 200

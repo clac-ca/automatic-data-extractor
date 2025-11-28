@@ -39,7 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url=docs_url,
         redoc_url=redoc_url,
         openapi_url=openapi_url,
-        debug=settings.debug,
+        debug=False,
         lifespan=lifespan,
     )
 
@@ -57,10 +57,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logging_level=settings.logging_level,
             safe_mode=bool(settings.safe_mode),
             auth_disabled=bool(settings.auth_disabled),
-            debug=settings.debug,
             version=settings.app_version,
         ),
     )
+    if settings.jwt_secret_generated:
+        logger.error(
+            (
+                "ADE_JWT_SECRET was not configured; generated a random secret. "
+                "Session cookies and bearer tokens will be invalidated on restart and "
+                "cannot be shared across replicas. Set ADE_JWT_SECRET to a long random "
+                "string (>=32 chars), e.g. python - <<'PY'\\nimport secrets; "
+                "print(secrets.token_urlsafe(64))\\nPY"
+            ),
+            extra=log_context(jwt_secret_generated=True),
+        )
 
     if settings.safe_mode:
         logger.warning(

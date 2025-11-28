@@ -70,12 +70,20 @@ def resolve_sort(
                 status_code=422,
                 detail=f"Unsupported sort field '{name}'. Allowed: {allowed_list}",
             )
-        order.append(columns[1] if descending else columns[0])
+        chosen = columns[1] if descending else columns[0]
+        if isinstance(chosen, (list, tuple)):
+            order.extend(chosen)
+        else:
+            order.append(chosen)
         if first_desc is None:
             first_desc = descending
 
     if "id" not in names:
-        order.append(id_field[1] if first_desc else id_field[0])
+        chosen = id_field[1] if first_desc else id_field[0]
+        if isinstance(chosen, (list, tuple)):
+            order.extend(chosen)
+        else:
+            order.append(chosen)
 
     return tuple(order)
 

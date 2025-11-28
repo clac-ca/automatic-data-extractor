@@ -71,7 +71,8 @@ async def get_session(
     finally:
         try:
             if session.in_transaction():
-                if error is None:
+                commit_on_error = session.info.pop("force_commit_on_error", False)
+                if error is None or commit_on_error:
                     try:
                         await session.commit()
                     except SQLAlchemyError:

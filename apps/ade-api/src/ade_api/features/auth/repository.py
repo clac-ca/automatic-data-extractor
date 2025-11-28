@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .models import APIKey
 
 
-class APIKeysRepository:
+class ApiKeyRepository:
     """Persistence helpers for ``APIKey`` records."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def base_query(self):
+    def base_query(self) -> Select[tuple[APIKey]]:
         return select(APIKey).options(selectinload(APIKey.user))
 
-    def query_api_keys(self, *, include_revoked: bool = False):
+    def query_api_keys(self, *, include_revoked: bool = False) -> Select[tuple[APIKey]]:
         stmt = self.base_query().order_by(APIKey.created_at.desc())
         if not include_revoked:
             stmt = stmt.where(APIKey.revoked_at.is_(None))
@@ -78,4 +78,7 @@ class APIKeysRepository:
         return api_key
 
 
-__all__ = ["APIKeysRepository"]
+# Backwards-compatible alias if needed by other modules.
+APIKeysRepository = ApiKeyRepository
+
+__all__ = ["ApiKeyRepository", "APIKeysRepository"]

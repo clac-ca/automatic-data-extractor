@@ -1,0 +1,655 @@
+## Work Package Checklist
+
+* [x] Add Azure SQL / pyodbc / azure-identity dependencies and container OS packages
+  - Pin `azure-core` / `azure-identity` in ade-api and install Microsoft ODBC 18 + unixODBC in build and runtime Docker stages.
+* [x] Extend ADE settings & environment variables to support Azure SQL + dual auth (SQL password / managed identity)
+* [x] Implement database URL builder + engine factory with SQL auth + managed identity support
+* [x] Update Alembic migrations (`migrations/env.py`) to use the same configuration and token flow
+* [x] Add documentation, sample `.env` entries, and basic connection/migration smoke tests for both auth modes
+* [x] Fix regressions in Alembic environment configuration and managed identity unit tests (missing imports)
+  - Confirmed Alembic env imports `os` and `fileConfig` to avoid NameErrors during migration runs (imports restored in code).
+* [x] Validate managed identity token encoding (UTF-16-LE with length prefix) and test coverage for Azure SQL connections
+
+> You / your agents can add extra checklist items as you discover more work.
+
+---
+
+# ADE Backend: Azure SQL with SQL Auth + Managed Identity
+
+## 1. Objective
+
+**Goal:**
+Allow ADE to use **Azure SQL Database** the primary database, with the ability to:
+
+* connect via **SQL username/password**, **or**
+* connect via **Azure managed identity** (system-assigned or user-assigned),
+
+while still supporting SQLite for local/dev, and keeping configuration **environment-driven**.
+
+You will:
+
+* Add dependencies and configuration to talk to Azure SQL via `mssql+pyodbc`.
+* Implement a **single database configuration layer** that chooses between SQLite, Azure SQL (SQL auth), and Azure SQL (managed identity).
+* Ensure **Alembic migrations** run correctly against Azure SQL using either auth mode.
+
+The result should:
+
+* Let ADE run in **Azure Container Apps** and connect to Azure SQL using:
+
+  * a SQL user and password, **or**
+  * the container app’s managed identity (no password).
+* Keep **SQLite** working out-of-the-box for local development (`ADE_DATABASE_DSN` default).
+
+---
+
+## 2. Context (What you are starting from)
+
+From your logs and env template we know:
+
+* Backend is **FastAPI + SQLAlchemy + Alembic**:
+
+  * `ade_api.shared.db.engine` builds the engine.
+  * Alembic env is at `apps/ade-api/migrations/env.py`.
+  * Migrations are run at startup via `_apply_migrations` in `ade_api.shared.db.engine` / lifecycle hooks.
+* Current default DB is **SQLite**:
+
+  * `ADE_DATABASE_DSN` defaults to `sqlite+aiosqlite:///./data/db/ade.sqlite` in settings/env.
+* You’re deploying to **Azure Container Apps**, and previously hit SQLite-on-Azure-Files problems.
+* You now have an **Azure SQL Database**:
+
+  * Server: 
+  * Database:
+  * You’ve been given several ADO.NET-style connection strings, including those with
+    `Authentication="Active Directory Default"` and classic SQL auth; in Python we’ll map these to **pyodbc** and **SQLAlchemy**.
+
+### Existing structure (relevant pieces, inferred)
+
+```text
+repo_root/
+  apps/
+    ade-api/
+      ade_api/
+        main.py
+        shared/
+          core/
+            lifecycles.py        # startup/shutdown -> ensure_database_ready()
+          db/
+            __init__.py
+            engine.py            # engine/session factory, migrations entry
+            models.py            # SQLAlchemy Base, models
+      migrations/
+        env.py                   # Alembic configuration
+        versions/
+          *.py                   # migration scripts
+  infra/                         # (bicep/terraform/scripts – not shown but assumed)
+  .env.example / env templates   # includes ADE_DATABASE_DSN, etc.
+```
+
+### Current behavior / expectations
+
+* Local/dev: `ADE_DATABASE_DSN` = SQLite DSN; app and migrations use SQLite.
+* Prod (today): SQLite on Azure Files via SMB; causes locking / concurrency issues during blue/green revisions.
+* Desired: move to **Azure SQL** for prod, but keep SQLite dev.
+
+### Constraints / pain points
+
+* Must run in **Azure Container Apps** with:
+
+  * **SQL username/password** auth *or*
+  * **Managed identity** (system- or user-assigned).
+* Must be **zero/near-zero code changes** for most of the app: only the DB wiring and configs should change.
+* Alembic must share the same configuration as runtime so schema stays in sync.
+* Managed identity solution should follow official patterns:
+
+  * `DefaultAzureCredential` from `azure-identity` – works locally and in Azure.
+  * Azure SQL access token via `SQL_COPT_SS_ACCESS_TOKEN` + `attrs_before` in pyodbc / SQLAlchemy.
+
+---
+
+## 3. Target architecture / structure (ideal)
+
+At a high level:
+
+* A **single DB config module** decides which backend to use (SQLite or Azure SQL) and which auth mode (SQL pwd vs managed identity).
+* Both **runtime engine** and **Alembic** use that config.
+* Managed identity is implemented via **SQLAlchemy’s `do_connect` event** injecting an **access token**.
+
+```text
+apps/
+  ade-api/
+    ade_api/
+      shared/
+        db/
+          __init__.py
+          config.py        # NEW: parse ADE_DATABASE_DSN + auth envs, expose DBSettings
+          engine.py        # UPDATED: create_engine/create_async_engine using config
+          models.py        # unchanged
+        core/
+          lifecycles.py    # unchanged interface; just calls ensure_database_ready()
+    migrations/
+      env.py              # UPDATED: use ade_api.shared.db.config for URL & auth
+tests/
+  db/
+    test_azure_sql_connection.py      # NEW: smoke tests (where possible)
+    test_sqlite_connection.py         # existing or new sanity tests
+scripts/
+  db/
+    manual_migrate.sh / .ps1          # optional helper to run Alembic against Azure SQL
+```
+
+---
+
+## 4. Design (for this workpackage)
+
+### 4.1 Design goals
+
+* **Clarity** – One obvious place to understand “what database are we using and how do we auth?”
+* **Maintainability** – Easy to add more backends later (Postgres, etc.) without rewriting callers.
+* **Security & resiliency** – Make it trivial to switch from SQL password to managed identity without touching code.
+
+---
+
+### 4.2 Key components / modules
+
+#### 1. `ade_api.shared.db.config.DBSettings` (NEW)
+
+Role:
+
+* Parse environment variables and produce a strongly-typed config object.
+* Decide:
+
+  * Which **SQLAlchemy URL** to use (`ADE_DATABASE_DSN`).
+  * What **auth mode** is active (`sql_password` vs `managed_identity`).
+  * Optional `managed_identity_client_id`.
+
+Inputs:
+
+* `ADE_DATABASE_DSN` (string; full SQLAlchemy URL).
+* `ADE_DATABASE_AUTH_MODE` (enum-like: `sql_password` | `managed_identity` | empty).
+* `ADE_DATABASE_MI_CLIENT_ID` (optional; for user-assigned managed identity).
+* Existing flags like `ADE_DEV_MODE` for local shortcuts.
+
+Output (example):
+
+```python
+@dataclass
+class DBSettings:
+    url: str                  # full SQLAlchemy URL
+    dialect: str              # e.g. "sqlite", "mssql+pyodbc"
+    auth_mode: str            # "sql_password" | "managed_identity" | "none"
+    mi_client_id: str | None  # user-assigned MI client id if set
+```
+
+#### 2. `ade_api.shared.db.engine` (UPDATED)
+
+Role:
+
+* Provide **engine (and/or async engine)** and sessions built from `DBSettings`.
+* Encapsulate Azure SQL specifics:
+
+  * For `mssql+pyodbc` + `sql_password`: normal connection.
+  * For `mssql+pyodbc` + `managed_identity`: attach an **event listener** that injects access tokens via `DefaultAzureCredential`.
+
+Key bits:
+
+* `create_sync_engine(settings: DBSettings) -> Engine`
+* Optional: `create_async_engine(settings: DBSettings) -> AsyncEngine`
+* `attach_managed_identity(engine, mi_client_id=None)` helper that:
+
+  * constructs `DefaultAzureCredential(...)` (using `AZURE_CLIENT_ID` env or explicit id)
+  * sets up `@event.listens_for(engine, "do_connect")` to inject `SQL_COPT_SS_ACCESS_TOKEN`.
+
+#### 3. `apps/ade-api/migrations/env.py` (UPDATED)
+
+Role:
+
+* Use the **same DBSettings** as runtime to connect Alembic to Azure SQL.
+* If auth mode is `managed_identity`, reuse `attach_managed_identity()` on the migration engine.
+
+---
+
+### 4.3 Key flows / pipelines
+
+#### Flow 1 – Application startup (runtime)
+
+1. `ade_api.shared.settings.Settings` loads `.env` (including `ADE_DATABASE_DSN`, `ADE_DATABASE_AUTH_MODE`, etc.).
+2. `DBSettings` is built from settings.
+3. `engine = create_sync_engine(db_settings)` (or async equivalent).
+
+   * If dialect is `sqlite`, use old `sqlite+aiosqlite` with `check_same_thread=False`.
+   * If dialect is `mssql+pyodbc`:
+
+     * For `sql_password`: nothing special; SQLAlchemy uses username/password in URL.
+     * For `managed_identity`: attach token-injection event (see below).
+4. Startup lifecycle calls `ensure_database_ready()` which:
+
+   * pings the DB,
+   * runs Alembic migrations (if configured to do so at startup),
+   * marks app as ready.
+
+#### Flow 2 – Alembic migration (CLI or startup)
+
+1. `env.py` imports `DBSettings` and builds it exactly the same way as runtime.
+2. Alembic config’s `sqlalchemy.url` is set to `db_settings.url`.
+3. `engine_from_config(...)` creates a **synchronous** engine.
+4. If `db_settings.auth_mode == "managed_identity"` and dialect is `mssql+pyodbc`, call `attach_managed_identity(engine, db_settings.mi_client_id)` before `context.configure`.
+5. Migrations run as usual.
+
+#### Flow 3 – Access token injection (Managed Identity)
+
+Using the official SQLAlchemy + Azure pattern:
+
+* Azure SQL expects access tokens provided to ODBC via `SQL_COPT_SS_ACCESS_TOKEN` in `attrs_before`. Token must be:
+
+  * acquired from `DefaultAzureCredential()`,
+  * for scope `"https://database.windows.net/.default"`,
+  * encoded as UTF‑16‑LE and length-prefixed via `struct.pack`.
+* SQLAlchemy’s `do_connect` event runs before each new DBAPI connection; we use it to:
+
+  * remove `;Trusted_Connection=Yes` (added by the dialect when no username/password)
+  * add `attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct}`.
+
+---
+
+### 4.4 Open questions / decisions (answered here)
+
+1. **Do we keep SQLite for dev?**
+   **Yes.** Default remains `sqlite+aiosqlite:///./data/db/ade.sqlite` for local dev; Azure SQL is opt-in via `ADE_DATABASE_DSN` in prod.
+
+2. **Sync or async engine for Azure SQL?**
+
+   * You *already* use `sqlite+aiosqlite` but migrations logs show synchronous SQLAlchemy code.
+   * Safest design:
+
+     * **Migrations**: use **sync `Engine`** only.
+     * Runtime: can keep async pattern, but attach events to `async_engine.sync_engine` as per SQLAlchemy asyncio docs.
+
+3. **How do we pick between SQL password and managed identity?**
+
+   * Via `ADE_DATABASE_AUTH_MODE`:
+
+     * `sql_password` → use URL’s username/password.
+     * `managed_identity` → URL must **not** include UID/PWD/Authentication; we inject token instead.
+
+---
+
+## 5. Implementation & notes for agents
+
+This section is the “how-to-do-it” for whoever implements the change.
+
+---
+
+### 5.1 Dependencies & container image changes
+
+**Python packages (add to requirements):**
+
+* `pyodbc` – DBAPI for SQL Server.
+* `azure-identity` – for `DefaultAzureCredential` (managed identity + local dev).
+
+**System packages (in Dockerfile):**
+
+Using Debian/Ubuntu base as example (tweak for your base image):
+
+```dockerfile
+# Add Microsoft package repo for ODBC driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
+    curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/msprod.list && \
+    apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+```
+
+* Use **ODBC Driver 18 for SQL Server** (`msodbcsql18`) as recommended in new Azure docs.
+
+---
+
+### 5.2 Environment variables & configuration
+
+#### 5.2.1 Extend `.env` / ADE env template
+
+In your template, under **Database**, update and extend:
+
+```env
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+# Default: local dev uses bundled SQLite
+# ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite
+
+############################################
+# Azure SQL — USING SQL USERNAME/PASSWORD
+############################################
+
+# ⚠️ Replace EVERYTHING IN ALL-CAPS below.
+# ⚠️ Password **must** be URL-encoded if it has special characters.
+
+ADE_DATABASE_DSN="mssql+pyodbc://YOUR_SQL_USERNAME:YOUR_URL_ENCODED_PASSWORD@YOUR_SERVER_NAME.database.windows.net:1433/YOUR_DATABASE_NAME?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30"
+
+ADE_DATABASE_AUTH_MODE="sql_password"
+
+
+############################################
+# Azure SQL — USING MANAGED IDENTITY
+############################################
+
+# ⚠️ No username/password required.
+# ⚠️ Just replace the SERVER and DATABASE names.
+
+ADE_DATABASE_DSN="mssql+pyodbc://@YOUR_SERVER_NAME.database.windows.net:1433/YOUR_DATABASE_NAME?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30"
+
+ADE_DATABASE_AUTH_MODE="managed_identity"
+
+# Optional: If using a *user-assigned* managed identity, put its client ID here:
+# ADE_DATABASE_MI_CLIENT_ID="YOUR_MANAGED_IDENTITY_CLIENT_ID"
+
+```
+
+Notes:
+
+* When using **access tokens / managed identity**, the connection string **must not** contain `UID`, `PWD`, `Authentication`, or `Trusted_Connection`. SQLAlchemy docs + Microsoft docs both call this out.
+* For **user-assigned MI**, Azure Identity recommends either:
+
+  * set `AZURE_CLIENT_ID=<managed-identity-client-id>` in the environment, **or**
+  * pass `managed_identity_client_id` to `DefaultAzureCredential`.
+
+This work package assumes you’ll:
+
+* Expose `ADE_DATABASE_MI_CLIENT_ID` in our settings, and
+* Also set `AZURE_CLIENT_ID` in your Container App for user-assigned managed identity (so other libraries can use it too).
+
+#### 5.2.2 Azure side (non-code but required)
+
+You (or infra code) must:
+
+1. Enable **managed identity** on the Container App (system-assigned or user-assigned).
+
+2. In Azure SQL, create a contained user for the identity and grant roles:
+
+   ```sql
+   CREATE USER [<container-app-name-or-mi-name>] FROM EXTERNAL PROVIDER;
+   ALTER ROLE db_datareader ADD MEMBER [<container-app-name-or-mi-name>];
+   ALTER ROLE db_datawriter ADD MEMBER [<container-app-name-or-mi-name>];
+   -- optionally db_ddladmin for migrations, or a custom least-privilege role
+   ```
+
+3. Ensure networking/firewall rules allow the Container App to reach Azure SQL.
+
+---
+
+### 5.3 `ade_api.shared.db.config` – DBSettings
+
+Create a new module, e.g. `ade_api/shared/db/config.py`:
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+import os
+from urllib.parse import urlparse
+
+AuthMode = Literal["sql_password", "managed_identity", "none"]
+
+@dataclass
+class DBSettings:
+    url: str
+    dialect: str
+    auth_mode: AuthMode
+    mi_client_id: str | None
+
+def load_db_settings() -> DBSettings:
+    url = os.getenv("ADE_DATABASE_DSN", "sqlite+aiosqlite:///./data/db/ade.sqlite")
+    auth_mode = os.getenv("ADE_DATABASE_AUTH_MODE", "none").lower()
+    mi_client_id = os.getenv("ADE_DATABASE_MI_CLIENT_ID") or None
+
+    parsed = urlparse(url)
+    dialect = parsed.scheme  # e.g. "sqlite+aiosqlite" or "mssql+pyodbc"
+
+    # Normalize auth mode
+    if dialect.startswith("sqlite"):
+        auth_mode = "none"
+    elif auth_mode not in ("sql_password", "managed_identity"):
+        # default to sql_password if user embedded credentials; else managed_identity
+        auth_mode = "sql_password" if parsed.username else "managed_identity"
+
+    return DBSettings(
+        url=url,
+        dialect=dialect,
+        auth_mode=auth_mode,  # type: ignore[arg-type]
+        mi_client_id=mi_client_id,
+    )
+```
+
+You can wire this into your existing `Settings` object or call `load_db_settings()` directly from `engine.py`.
+
+---
+
+### 5.4 `ade_api.shared.db.engine` – engine + managed identity hook
+
+In `engine.py`, refactor to something like:
+
+```python
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
+import struct
+from azure.identity import DefaultAzureCredential
+
+from ade_api.shared.db.config import DBSettings, load_db_settings
+
+SQL_COPT_SS_ACCESS_TOKEN = 1256
+TOKEN_SCOPE = "https://database.windows.net/.default"
+
+
+def attach_managed_identity(engine: Engine, mi_client_id: str | None = None) -> None:
+    """
+    Attach a SQLAlchemy do_connect listener that injects an Azure SQL access token
+    (via DefaultAzureCredential) for each new DBAPI connection.
+    """
+    credential_kwargs = {}
+    if mi_client_id:
+        # For user-assigned MI; DefaultAzureCredential picks this up
+        credential_kwargs["managed_identity_client_id"] = mi_client_id
+
+    azure_credential = DefaultAzureCredential(**credential_kwargs)
+
+    @event.listens_for(engine, "do_connect")
+    def provide_token(dialect, conn_rec, cargs, cparams):
+        # Strip Trusted_Connection that SQLAlchemy adds when no username/password
+        if cargs and isinstance(cargs[0], str):
+            cargs[0] = cargs[0].replace(";Trusted_Connection=Yes", "")
+
+        # Acquire token for Azure SQL
+        raw_token = azure_credential.get_token(TOKEN_SCOPE).token.encode("utf-16-le")
+        token_struct = struct.pack(f"<I{len(raw_token)}s", len(raw_token), raw_token)
+
+        attrs_before = cparams.setdefault("attrs_before", {})
+        attrs_before[SQL_COPT_SS_ACCESS_TOKEN] = token_struct
+
+
+def create_sync_engine_from_settings(db: DBSettings) -> Engine:
+    connect_args: dict = {}
+
+    if db.dialect.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+
+    engine = create_engine(
+        db.url,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+        future=True,
+    )
+
+    if db.dialect.startswith("mssql+pyodbc") and db.auth_mode == "managed_identity":
+        attach_managed_identity(engine, db.mi_client_id)
+
+    return engine
+
+
+def create_async_engine_from_settings(db: DBSettings) -> AsyncEngine:
+    """
+    Optional: if you use AsyncEngine in your FastAPI code.
+    Events must be attached to async_engine.sync_engine.
+    """
+    connect_args: dict = {}
+    if db.dialect.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+
+    async_engine = create_async_engine(
+        db.url,
+        connect_args=connect_args,
+        pool_pre_ping=True,
+        future=True,
+    )
+
+    if db.dialect.startswith("mssql+pyodbc") and db.auth_mode == "managed_identity":
+        attach_managed_identity(async_engine.sync_engine, db.mi_client_id)
+
+    return async_engine
+```
+
+This mirrors the pattern from SQLAlchemy’s own documentation for Azure SQL access tokens.
+
+Then update the rest of `engine.py` to use `load_db_settings()` and `create_sync_engine_from_settings` / `create_async_engine_from_settings` wherever appropriate.
+
+---
+
+### 5.5 Alembic `env.py` – reuse DBSettings + managed identity
+
+In `apps/ade-api/migrations/env.py`:
+
+1. Import `load_db_settings` and `attach_managed_identity`.
+2. Build the engine from settings instead of hardcoding the URL or reading Alembic’s own `.ini` file.
+
+Roughly:
+
+```python
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+from logging.config import fileConfig
+
+from ade_api.shared.db.models import Base
+from ade_api.shared.db.config import load_db_settings
+from ade_api.shared.db.engine import attach_managed_identity
+
+config = context.config
+fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+db = load_db_settings()
+config.set_main_option("sqlalchemy.url", db.url)
+
+
+def run_migrations_offline():
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online():
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    # If using managed identity, attach token injection
+    if db.dialect.startswith("mssql+pyodbc") and db.auth_mode == "managed_identity":
+        attach_managed_identity(connectable, db.mi_client_id)
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+```
+
+* This ensures **Alembic migrations work for both SQL auth and managed identity**, with zero changes to the migration scripts themselves.
+* Note: the `attach_managed_identity` function is re-used, so the token flow is identical to runtime.
+
+---
+
+### 5.6 Testing requirements
+
+You don’t need a full integration pipeline for this work package, but at minimum:
+
+1. **Local SQLite sanity check**
+
+   * `.env` with default SQLite DSN.
+   * Start ADE → confirm migrations run and app serves.
+
+2. **Azure SQL – SQL auth**
+
+   * Create test Azure SQL database or use a non-production DB.
+   * Set `ADE_DATABASE_DSN` to `mssql+pyodbc://user:pass@...` with URL-encoded password.
+   * Ensure `ADE_DATABASE_AUTH_MODE=sql_password`.
+   * Run Alembic migrations (CLI or via startup).
+   * Hit a simple API endpoint that touches the DB.
+
+3. **Azure SQL – managed identity**
+
+   * In a dev/stage Container App:
+
+     * Enable system-assigned MI.
+     * Create DB user from EXTERNAL PROVIDER and grant minimal roles.
+     * Set:
+
+       ```env
+       ADE_DATABASE_DSN=mssql+pyodbc://@[SERVER].database.windows.net:1433/[SQL_TABLE]?driver=ODBC+Driver+18+for+SQL+Server&Encrypt=yes&TrustServerCertificate=no&Connection+Timeout=30
+       ADE_DATABASE_AUTH_MODE=managed_identity
+       ```
+
+   * Deploy ADE.
+
+   * Confirm:
+
+     * startup logs show successful Alembic migrations,
+     * app can do basic CRUD.
+
+Optionally, add a tiny test (pytest) that mocks `DefaultAzureCredential.get_token` to assert that `attach_managed_identity`:
+
+* removes `Trusted_Connection=Yes`,
+* adds `attrs_before[1256]` to connection args.
+
+---
+
+### 5.7 Security & performance notes
+
+* **Secrets**:
+
+  * Do not commit SQL passwords into Git; use secret stores or Container App secrets.
+  * Prefer managed identity in prod as the long-term objective (no secrets, token-based).
+* **Token caching**:
+
+  * `DefaultAzureCredential` caches tokens in memory and refreshes them automatically. We simply call `get_token` in `do_connect` – no extra refresh logic needed.
+* **Connection pooling**:
+
+  * SQLAlchemy’s pooling + pyodbc + Azure SQL is a standard combination; keep `pool_pre_ping=True` to avoid stale connections.
+* **Migration permissions**:
+
+  * The identity / user used for production should have **DDL permissions** only in controlled environments, not necessarily in all environments. Consider:
+
+    * one identity with `db_ddladmin` for migrations,
+    * another with just `db_datareader`/`db_datawriter` for runtime, if you ever split roles.
+
+---
+
+If you’d like, I can next turn this into:
+
+* A concrete patch layout (file-by-file diffs),
+* Or a specific `.env` for your prod/stage Container App using your exact server & DB names.

@@ -41,7 +41,7 @@ def resolve_workspace_scope(
         }
         if permission is not None:
             detail["permission"] = permission
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
     return str(workspace_id)
 
 
