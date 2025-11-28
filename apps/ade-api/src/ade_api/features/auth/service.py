@@ -883,7 +883,8 @@ class AuthService:
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""
 
-        # Resolve without eager-loading credential/identities to avoid unnecessary joins on hot paths.
+        # Resolve without eager-loading credential/identities to avoid unnecessary joins
+        # on hot paths.
         logger.debug(
             "auth.resolve_user.start",
             extra=log_context(
