@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextvars import ContextVar
 from pathlib import Path as FilePath
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import jwt
 from fastapi import Depends, HTTPException, Path, Request, Security, status
@@ -18,6 +18,7 @@ from fastapi.security import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.features.auth.security import TokenPayload
 from ade_api.features.auth.service import AuthenticatedIdentity, AuthService
 from ade_api.features.roles.authorization import authorize
 from ade_api.features.roles.models import ScopeType
@@ -212,6 +213,22 @@ async def get_current_identity(
         request.state._cached_identity = identity
         return identity
 
+    async def _build_identity(
+        payload: TokenPayload,
+        *,
+        source: Literal["bearer_token", "session_cookie"],
+    ) -> AuthenticatedIdentity:
+        user = await service.resolve_user(payload)
+        principal = await ensure_user_principal(session=session, user=user)
+        identity = AuthenticatedIdentity(
+            user=user,
+            principal=principal,
+            credentials=source,
+        )
+        _IDENTITY_CTX.set(identity)
+        request.state._cached_identity = identity
+        return identity
+
     if credentials is not None:
         try:
             payload = service.decode_token(
@@ -223,40 +240,18 @@ async def get_current_identity(
                 status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
             ) from exc
-        user = await service.resolve_user(payload)
-        principal = await ensure_user_principal(session=session, user=user)
-        identity = AuthenticatedIdentity(
-            user=user,
-            principal=principal,
-            credentials="bearer_token",
-        )
-        _IDENTITY_CTX.set(identity)
-        request.state._cached_identity = identity
-        return identity
+        return await _build_identity(payload, source="bearer_token")
 
     raw_cookie = session_cookie or request.cookies.get(
         service.settings.session_cookie_name
     )
-    cookie_value = (raw_cookie or "").strip()
-    if cookie_value:
-        try:
-            payload = service.decode_token(cookie_value, expected_type="access")
-        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid session",
-            ) from exc
-        service.enforce_csrf(request, payload)
-        user = await service.resolve_user(payload)
-        principal = await ensure_user_principal(session=session, user=user)
-        identity = AuthenticatedIdentity(
-            user=user,
-            principal=principal,
-            credentials="session_cookie",
+    if (raw_cookie or "").strip():
+        access_payload, _ = service.extract_session_payloads(
+            request,
+            include_refresh=False,
         )
-        _IDENTITY_CTX.set(identity)
-        request.state._cached_identity = identity
-        return identity
+        service.enforce_csrf(request, access_payload)
+        return await _build_identity(access_payload, source="session_cookie")
 
     if api_key:
         identity = await service.authenticate_api_key(api_key, request=request)
