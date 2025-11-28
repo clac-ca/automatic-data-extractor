@@ -20,7 +20,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for var in (
         "ADE_APP_NAME",
         "ADE_API_DOCS_ENABLED",
-        "ADE_DEBUG",
         "ADE_SAFE_MODE",
         "ADE_LOGGING_LEVEL",
         "ADE_SERVER_PUBLIC_URL",
@@ -33,9 +32,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_PIP_CACHE_DIR",
         "ADE_STORAGE_UPLOAD_MAX_BYTES",
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
-        "ADE_SECRET_KEY",
         "ADE_DATABASE_DSN",
-        "ADE_JWT_SECRET",
         "ADE_JWT_ACCESS_TTL",
         "ADE_JWT_REFRESH_TTL",
         "ADE_SESSION_LAST_SEEN_INTERVAL",
@@ -62,6 +59,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_AUTH_SSO_AUTO_PROVISION",
     ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ADE_JWT_SECRET", "test-jwt-secret-for-tests-please-change")
     try:
         reload_settings()
     except ValidationError:
