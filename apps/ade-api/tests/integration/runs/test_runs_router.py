@@ -328,7 +328,10 @@ async def _seed_real_configuration(
         if venv_path.exists():
             shutil.rmtree(venv_path)
         venv_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
+        python_bin = settings.python_bin
+        resolved_python_bin = str(Path(python_bin).resolve()) if python_bin else None
+        venv_interpreter = resolved_python_bin or sys.executable
+        subprocess.run([venv_interpreter, "-m", "venv", str(venv_path)], check=True)
 
         pip_exe = _venv_executable(venv_path, "pip")
         _pip_install(pip_exe, _ENGINE_PACKAGE)
@@ -337,13 +340,22 @@ async def _seed_real_configuration(
         _pip_install(pip_exe, config_src)
 
         python_exe = _venv_executable(venv_path, "python")
+        engine_version = _engine_version_hint(settings.engine_spec)
+        try:
+            python_version = subprocess.check_output(
+                [resolved_python_bin or sys.executable, "-c", "import sys; print('.'.join(map(str, sys.version_info[:3])))"],
+                text=True,
+            ).strip()
+        except Exception:
+            python_version = None
+        python_interpreter = resolved_python_bin
         digest = compute_config_digest(config_src)
         now = utc_now()
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-        config.engine_version = "0.2.0"  # type: ignore[attr-defined]
-        config.python_version = sys.version.split()[0]  # type: ignore[attr-defined]
-        config.python_interpreter = str(python_exe)  # type: ignore[attr-defined]
+        config.engine_version = engine_version  # type: ignore[attr-defined]
+        config.python_version = python_version  # type: ignore[attr-defined]
+        config.python_interpreter = python_interpreter  # type: ignore[attr-defined]
         config.last_build_started_at = now  # type: ignore[attr-defined]
         config.last_build_finished_at = now  # type: ignore[attr-defined]
         config.built_configuration_version = config.configuration_version  # type: ignore[attr-defined]
@@ -353,9 +365,9 @@ async def _seed_real_configuration(
         fingerprint = compute_build_fingerprint(
             config_digest=digest,
             engine_spec=settings.engine_spec,
-            engine_version="0.2.0",
-            python_version=config.python_version,
-            python_bin=str(python_exe),
+            engine_version=engine_version,
+            python_version=python_version,
+            python_bin=resolved_python_bin,
             extra={},
         )
         marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
@@ -375,9 +387,9 @@ async def _seed_real_configuration(
             exit_code=0,
             fingerprint=fingerprint,
             engine_spec=settings.engine_spec,
-            engine_version="0.2.0",
-            python_version=config.python_version,
-            python_interpreter=str(python_exe),
+            engine_version=engine_version,
+            python_version=python_version,
+            python_interpreter=python_interpreter,
             config_digest=digest,
         )
         session.add(build)
