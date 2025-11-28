@@ -19,10 +19,11 @@ flags, and rollback considerations.
   execution and return a validation error. Disable the flag in production
   to permit engine execution. Document the toggle in your change
   management system when flipping it.
-- `ADE_VENVS_DIR` – ensure the directory exists and contains the virtual
-  environments produced by the build pipeline
-  (`${ADE_VENVS_DIR}/<workspace>/<config>/<build_id>`). Without the venv the
-  runner will emit `run.completed` with `exit_code=2` and an error message.
+- `ADE_VENVS_DIR` – ensure the directory exists on local storage and
+  matches the path used by the builder
+  (`${ADE_VENVS_DIR}/<workspace>/<config>/<build_id>/.venv`). Without the
+  venv the runner will emit `run.completed` with `exit_code=2` and an error
+  message (hydration will recreate it if DB metadata is intact).
 
 ## 3. Release sequence
 
@@ -34,6 +35,13 @@ flags, and rollback considerations.
    and database persistence.
 5. Notify frontend teams that the API is live so they can schedule their
    UI integration.
+
+## 4. Rebuilds and troubleshooting
+
+- **Trigger rebuilds:** POST `/api/v1/workspaces/{workspace}/configurations/{config}/builds` (optionally `{"stream":true}`) or submit a run with `force_rebuild=true`. Each rebuild produces a new `build_id` and venv under `ADE_VENVS_DIR`.
+- **Diagnose build failures:** Check build status via `GET /api/v1/builds/{build_id}` and logs via `GET /api/v1/builds/{build_id}/logs`. The marker `ade_build.json` under `ADE_VENVS_DIR/<ws>/<cfg>/<build_id>/.venv` captures fingerprint/versions.
+- **Diagnose hydration failures:** The worker will attempt to hydrate the venv locally from DB metadata; errors surface as run 409s or engine exits. Ensure `ADE_VENVS_DIR` is writable/local and has free space; deleting a stale build folder is safe—the next run rehydrates it.
+- **Local cleanup:** It is safe to delete old build folders under `ADE_VENVS_DIR` (prefer keeping the active `build_id`). Cache pruning does not affect correctness; the system will recreate missing venvs on demand.
 
 ## 4. Rollback strategy
 

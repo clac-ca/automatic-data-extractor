@@ -61,6 +61,10 @@ class AdeEvent(BaseModel):
     # Everything else is event-type-specific.
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
+    @property
+    def schema(self) -> str:
+        return self.schema_id
+
 
 # Legacy exports (kept for import compatibility; prefer AdeEvent).
 TelemetryEnvelope = AdeEvent

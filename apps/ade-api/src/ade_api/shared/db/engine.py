@@ -11,7 +11,6 @@ from typing import Any
 
 from alembic import command
 from alembic.config import Config
-from azure.identity import DefaultAzureCredential
 from sqlalchemy import event
 from sqlalchemy.engine import URL, Connection, Engine, make_url
 from sqlalchemy.exc import OperationalError
@@ -19,6 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from ade_api.settings import Settings, get_settings
+
+try:
+    from azure.identity import DefaultAzureCredential  # type: ignore
+except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+    DefaultAzureCredential = None  # type: ignore[assignment]
+    _default_credential_import_error = exc
+else:  # pragma: no cover - optional dependency
+    _default_credential_import_error = None
 
 _SQL_COPT_SS_ACCESS_TOKEN = 1256
 _AZURE_SQL_SCOPE = "https://database.windows.net/.default"
@@ -73,6 +80,12 @@ def build_database_url(settings: Settings) -> URL:
 
 
 def _managed_identity_token_provider(settings: Settings) -> Callable[[], bytes]:
+    if DefaultAzureCredential is None:  # pragma: no cover - optional dependency
+        raise RuntimeError(
+            "Managed identity requires azure-identity; install azure-identity to enable "
+            "ADE_DATABASE_AUTH_MODE=managed_identity"
+        ) from _default_credential_import_error
+
     credential = DefaultAzureCredential(
         managed_identity_client_id=settings.database_mi_client_id or None,
     )

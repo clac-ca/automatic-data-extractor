@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import subprocess
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,14 +17,15 @@ from uuid import uuid4
 from ade_engine.schemas import AdeEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.features.builds.fingerprint import compute_build_fingerprint
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.models import Configuration
 from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.configs.storage import ConfigStorage
+from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
-from ade_api.storage_layout import config_venv_path
+from ade_api.storage_layout import build_venv_root
 
 from .builder import (
     BuildArtifacts,
@@ -65,13 +69,14 @@ class BuildExecutionContext:
     configuration_id: str
     workspace_id: str
     config_path: str
-    target_path: str
+    venv_root: str
     python_bin: str | None
     engine_spec: str
     engine_version_hint: str | None
     pip_cache_dir: str | None
     timeout_seconds: float
     should_run: bool
+    fingerprint: str
     reuse_summary: str | None = None
 
     def as_dict(self) -> dict[str, str | bool | None | float]:
@@ -80,13 +85,14 @@ class BuildExecutionContext:
             "configuration_id": self.configuration_id,
             "workspace_id": self.workspace_id,
             "config_path": self.config_path,
-            "target_path": self.target_path,
+            "venv_root": self.venv_root,
             "python_bin": self.python_bin,
             "engine_spec": self.engine_spec,
             "engine_version_hint": self.engine_version_hint,
             "pip_cache_dir": self.pip_cache_dir,
             "timeout_seconds": self.timeout_seconds,
             "should_run": self.should_run,
+            "fingerprint": self.fingerprint,
             "reuse_summary": self.reuse_summary,
         }
 
@@ -97,13 +103,14 @@ class BuildExecutionContext:
             configuration_id=str(payload["configuration_id"]),
             workspace_id=str(payload["workspace_id"]),
             config_path=str(payload["config_path"]),
-            target_path=str(payload["target_path"]),
+            venv_root=str(payload["venv_root"]),
             python_bin=payload.get("python_bin") or None,
             engine_spec=str(payload["engine_spec"]),
             engine_version_hint=payload.get("engine_version_hint") or None,
             pip_cache_dir=payload.get("pip_cache_dir") or None,
             timeout_seconds=float(payload["timeout_seconds"]),
             should_run=bool(payload["should_run"]),
+            fingerprint=str(payload["fingerprint"]),
             reuse_summary=payload.get("reuse_summary") or None,
         )
 
@@ -127,6 +134,7 @@ class BuildsService:
         self._configs = ConfigurationsRepository(session)
         self._builds = BuildsRepository(session)
         self._now = now
+        self._hydration_locks: dict[str, asyncio.Lock] = {}
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -161,51 +169,47 @@ class BuildsService:
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
-
+        config_digest = compute_config_digest(config_path)
         python_interpreter = self._resolve_python_interpreter()
+        python_version = await self._python_version(python_interpreter)
         engine_spec = self._settings.engine_spec
         engine_version_hint = self._resolve_engine_version(engine_spec)
-
-        should_rebuild = self._should_rebuild(
-            configuration=configuration,
+        fingerprint = compute_build_fingerprint(
+            config_digest=config_digest,
             engine_spec=engine_spec,
-            engine_version_hint=engine_version_hint,
-            python_interpreter=python_interpreter,
-            force=options.force,
+            engine_version=engine_version_hint,
+            python_version=python_version,
+            python_bin=python_interpreter,
+            extra={},
         )
 
-        target_path = config_venv_path(self._settings, workspace_id, configuration_id)
-
         logger.debug(
-            "build.prepare.decision",
+            "build.prepare.fingerprint",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                should_rebuild=should_rebuild,
+                fingerprint=fingerprint,
                 engine_spec=engine_spec,
-                engine_version_hint=engine_version_hint,
+                engine_version=engine_version_hint,
                 python_bin=python_interpreter,
             ),
         )
 
-        if not should_rebuild:
-            build = await self._create_reuse_build_row(configuration=configuration)
-            await self._session.commit()
-            context = BuildExecutionContext(
-                build_id=build.id,
-                workspace_id=workspace_id,
-                configuration_id=configuration.id,
-                config_path=str(config_path),
-                target_path=str(target_path),
-                python_bin=python_interpreter,
+        if (
+            not options.force
+            and configuration.active_build_status is BuildStatus.ACTIVE
+            and configuration.active_build_fingerprint == fingerprint
+            and configuration.active_build_id
+        ):
+            build = await self._require_build(configuration.active_build_id)
+            context = self._reuse_context(
+                build=build,
+                configuration=configuration,
+                config_path=config_path,
+                python_interpreter=python_interpreter,
                 engine_spec=engine_spec,
                 engine_version_hint=engine_version_hint,
-                pip_cache_dir=str(self._settings.pip_cache_dir)
-                if self._settings.pip_cache_dir
-                else None,
-                timeout_seconds=float(self._settings.build_timeout.total_seconds()),
-                should_run=False,
-                reuse_summary="Reused existing build",
+                fingerprint=fingerprint,
             )
             logger.info(
                 "build.prepare.reuse",
@@ -218,13 +222,18 @@ class BuildsService:
             )
             return build, context
 
-        if configuration.build_status is BuildStatus.BUILDING:
+        if (
+            configuration.active_build_status is BuildStatus.BUILDING
+            and configuration.active_build_id
+            and not options.force
+        ):
             if options.wait:
                 logger.debug(
                     "build.prepare.wait_existing",
                     extra=log_context(
                         workspace_id=workspace_id,
                         configuration_id=configuration_id,
+                        build_id=configuration.active_build_id,
                     ),
                 )
                 await self._wait_for_build(
@@ -241,7 +250,7 @@ class BuildsService:
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    build_status=str(configuration.build_status),
+                    build_status=str(configuration.active_build_status),
                 ),
             )
             raise BuildAlreadyInProgressError(
@@ -254,7 +263,9 @@ class BuildsService:
             engine_spec=engine_spec,
             engine_version_hint=engine_version_hint,
             python_interpreter=python_interpreter,
-            target_path=target_path,
+            config_digest=config_digest,
+            python_version=python_version,
+            fingerprint=fingerprint,
         )
         await self._session.commit()
 
@@ -359,7 +370,7 @@ class BuildsService:
                 build_id=context.build_id,
                 workspace_id=context.workspace_id,
                 configuration_id=context.configuration_id,
-                target_path=Path(context.target_path),
+                venv_root=Path(context.venv_root),
                 config_path=Path(context.config_path),
                 engine_spec=context.engine_spec,
                 pip_cache_dir=Path(context.pip_cache_dir)
@@ -367,6 +378,7 @@ class BuildsService:
                 else None,
                 python_bin=context.python_bin,
                 timeout=context.timeout_seconds,
+                fingerprint=context.fingerprint,
             ):
                 if isinstance(event, BuilderStepEvent):
                     yield self._ade_event(
@@ -509,6 +521,76 @@ class BuildsService:
             ),
         )
 
+    async def ensure_local_env(self, *, build: Build) -> Path:
+        """Ensure the local venv for ``build`` exists and matches the marker."""
+
+        key = self._hydration_key(build)
+        lock = self._hydration_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            venv_root = build_venv_root(
+                self._settings,
+                build.workspace_id,
+                build.configuration_id,
+                build.id,
+            )
+            venv_path = venv_root / ".venv"
+            marker_path = venv_path / "ade_build.json"
+            if self._marker_matches(marker_path, build):
+                logger.info(
+                    "build.env.hydrate.cache_hit",
+                    extra=log_context(
+                        workspace_id=build.workspace_id,
+                        configuration_id=build.configuration_id,
+                        build_id=build.id,
+                        venv_path=str(venv_path),
+                    ),
+                )
+                return venv_path
+
+            logger.info(
+                "build.env.hydrate.start",
+                extra=log_context(
+                    workspace_id=build.workspace_id,
+                    configuration_id=build.configuration_id,
+                    build_id=build.id,
+                    venv_path=str(venv_path),
+                ),
+            )
+            config_path = await self._storage.ensure_config_path(
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+            )
+            async for _ in self._builder.build_stream(
+                build_id=build.id,
+                workspace_id=build.workspace_id,
+                configuration_id=build.configuration_id,
+                venv_root=venv_root,
+                config_path=config_path,
+                engine_spec=build.engine_spec or self._settings.engine_spec,
+                pip_cache_dir=(
+                    Path(self._settings.pip_cache_dir)
+                    if self._settings.pip_cache_dir
+                    else None
+                ),
+                python_bin=build.python_interpreter or self._resolve_python_interpreter(),
+                timeout=float(self._settings.build_timeout.total_seconds()),
+                fingerprint=build.fingerprint or "",
+            ):
+                # Hydration is best-effort and local-only; we intentionally do
+                # not persist per-step events or logs here.
+                pass
+
+            logger.info(
+                "build.env.hydrate.complete",
+                extra=log_context(
+                    workspace_id=build.workspace_id,
+                    configuration_id=build.configuration_id,
+                    build_id=build.id,
+                    venv_path=str(venv_path),
+                ),
+            )
+            return venv_path
+
     async def get_build(self, build_id: str) -> Build | None:
         return await self._builds.get(build_id)
 
@@ -644,81 +726,25 @@ class BuildsService:
             return str(Path(python_bin).resolve())
         return None
 
-    def _should_rebuild(
-        self,
-        *,
-        configuration: Configuration,
-        engine_spec: str,
-        engine_version_hint: str | None,
-        python_interpreter: str | None,
-        force: bool,
-    ) -> bool:
-        if force:
-            logger.debug(
-                "build.should_rebuild.force",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                ),
+    async def _python_version(self, python_bin: str | None) -> str | None:
+        interpreter = python_bin or sys.executable
+        try:
+            output = await asyncio.to_thread(
+                subprocess.check_output,
+                [
+                    interpreter,
+                    "-c",
+                    "import sys; print('.'.join(map(str, sys.version_info[:3])))",
+                ],
+                text=True,
             )
-            return True
-        if configuration.build_status is not BuildStatus.ACTIVE:
-            logger.debug(
-                "build.should_rebuild.status_not_active",
-                extra=log_context(
-                    workspace_id=configuration.workspace_id,
-                    configuration_id=configuration.id,
-                    build_status=str(configuration.build_status),
-                ),
+            return str(output).strip()
+        except Exception:  # pragma: no cover - best-effort metadata
+            logger.warning(
+                "build.python_version.detect_failed",
+                extra=log_context(python_bin=python_bin, interpreter=interpreter),
             )
-            return True
-        reasons = [
-            configuration.built_configuration_version != configuration.configuration_version,
-            configuration.built_content_digest != configuration.content_digest,
-            configuration.engine_spec != engine_spec,
-            configuration.engine_version != engine_version_hint,
-            configuration.python_interpreter != python_interpreter,
-        ]
-        should = any(reasons)
-        logger.debug(
-            "build.should_rebuild.result",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                should_rebuild=should,
-            ),
-        )
-        return should
-
-    async def _create_reuse_build_row(
-        self,
-        *,
-        configuration: Configuration,
-    ) -> Build:
-        now = self._now()
-        build = Build(
-            id=self._generate_build_id(),
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            status=BuildStatus.ACTIVE,
-            created_at=now,
-            started_at=now,
-            finished_at=now,
-            exit_code=0,
-            summary="Reused existing build",
-        )
-        await self._builds.add(build)
-        configuration.last_build_id = build.id  # type: ignore[attr-defined]
-
-        logger.debug(
-            "build.reuse.row_created",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                build_id=build.id,
-            ),
-        )
-        return build
+            return None
 
     async def _create_build_plan(
         self,
@@ -728,32 +754,50 @@ class BuildsService:
         engine_spec: str,
         engine_version_hint: str | None,
         python_interpreter: str | None,
-        target_path: Path,
+        config_digest: str,
+        python_version: str | None,
+        fingerprint: str,
     ) -> _BuildPlan:
         workspace_id = configuration.workspace_id
-        configuration.build_status = BuildStatus.BUILDING  # type: ignore[assignment]
-        configuration.last_build_started_at = self._now()  # type: ignore[attr-defined]
+        now = self._now()
+        configuration.active_build_status = BuildStatus.BUILDING  # type: ignore[assignment]
+        configuration.active_build_started_at = now  # type: ignore[attr-defined]
+        configuration.active_build_error = None  # type: ignore[attr-defined]
+        configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
+        configuration.active_build_finished_at = None  # type: ignore[attr-defined]
+        configuration.build_status = BuildStatus.BUILDING  # legacy field
+        configuration.last_build_started_at = now  # type: ignore[attr-defined]
         configuration.last_build_error = None  # type: ignore[attr-defined]
         configuration.engine_spec = engine_spec  # type: ignore[attr-defined]
         configuration.engine_version = engine_version_hint  # type: ignore[attr-defined]
         configuration.python_interpreter = python_interpreter  # type: ignore[attr-defined]
+        configuration.content_digest = config_digest
 
+        build_id = self._generate_build_id()
         build = Build(
-            id=self._generate_build_id(),
+            id=build_id,
             workspace_id=workspace_id,
             configuration_id=configuration.id,
             status=BuildStatus.QUEUED,
-            created_at=self._now(),
+            created_at=now,
+            fingerprint=fingerprint,
+            engine_spec=engine_spec,
+            engine_version=engine_version_hint,
+            python_version=python_version,
+            python_interpreter=python_interpreter,
+            config_digest=config_digest,
         )
         await self._builds.add(build)
+        configuration.active_build_id = build.id  # type: ignore[attr-defined]
         configuration.last_build_id = build.id  # type: ignore[attr-defined]
 
+        venv_root = build_venv_root(self._settings, workspace_id, configuration.id, build_id)
         context = BuildExecutionContext(
             build_id=build.id,
             workspace_id=workspace_id,
             configuration_id=configuration.id,
             config_path=str(config_path),
-            target_path=str(target_path),
+            venv_root=str(venv_root),
             python_bin=python_interpreter,
             engine_spec=engine_spec,
             engine_version_hint=engine_version_hint,
@@ -762,6 +806,7 @@ class BuildsService:
             else None,
             timeout_seconds=float(self._settings.build_timeout.total_seconds()),
             should_run=True,
+            fingerprint=fingerprint,
         )
 
         logger.debug(
@@ -826,7 +871,10 @@ class BuildsService:
             context.workspace_id,
             context.configuration_id,
         )
-        configuration.build_status = BuildStatus.FAILED  # type: ignore[assignment]
+        configuration.active_build_status = BuildStatus.FAILED  # type: ignore[assignment]
+        configuration.active_build_error = error  # type: ignore[attr-defined]
+        configuration.active_build_finished_at = now  # type: ignore[attr-defined]
+        configuration.build_status = BuildStatus.FAILED  # legacy
         configuration.last_build_error = error  # type: ignore[attr-defined]
         configuration.last_build_finished_at = now  # type: ignore[attr-defined]
         configuration.last_build_id = build.id  # type: ignore[attr-defined]
@@ -855,11 +903,18 @@ class BuildsService:
         build.finished_at = now
         build.exit_code = 0
         build.summary = "Build succeeded"
+        build.engine_version = artifacts.engine_version
+        build.python_version = artifacts.python_version
         configuration = await self._require_configuration(
             context.workspace_id,
             context.configuration_id,
         )
-        configuration.build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
+        configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
+        configuration.active_build_error = None  # type: ignore[attr-defined]
+        configuration.active_build_finished_at = now  # type: ignore[attr-defined]
+        configuration.active_build_id = build.id  # type: ignore[attr-defined]
+        configuration.active_build_fingerprint = context.fingerprint  # type: ignore[attr-defined]
+        configuration.build_status = BuildStatus.ACTIVE  # legacy field
         configuration.engine_spec = context.engine_spec  # type: ignore[attr-defined]
         configuration.engine_version = artifacts.engine_version  # type: ignore[attr-defined]
         configuration.python_version = artifacts.python_version  # type: ignore[attr-defined]
@@ -896,13 +951,13 @@ class BuildsService:
         )
         while self._now() < deadline:
             configuration = await self._require_configuration(workspace_id, configuration_id)
-            if configuration.build_status is not BuildStatus.BUILDING:
+            if configuration.active_build_status is not BuildStatus.BUILDING:
                 logger.debug(
                     "build.wait_for_existing.complete",
                     extra=log_context(
                         workspace_id=workspace_id,
                         configuration_id=configuration_id,
-                        final_status=str(configuration.build_status),
+                        final_status=str(configuration.active_build_status),
                     ),
                 )
                 return
@@ -936,6 +991,41 @@ class BuildsService:
             return spec.split("==", 1)[1]
         return None
 
+    def _reuse_context(
+        self,
+        *,
+        build: Build,
+        configuration: Configuration,
+        config_path: Path,
+        python_interpreter: str | None,
+        engine_spec: str,
+        engine_version_hint: str | None,
+        fingerprint: str,
+    ) -> BuildExecutionContext:
+        venv_root = build_venv_root(
+            self._settings,
+            configuration.workspace_id,
+            configuration.id,
+            build.id,
+        )
+        return BuildExecutionContext(
+            build_id=build.id,
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            config_path=str(config_path),
+            venv_root=str(venv_root),
+            python_bin=python_interpreter,
+            engine_spec=engine_spec,
+            engine_version_hint=engine_version_hint,
+            pip_cache_dir=str(self._settings.pip_cache_dir)
+            if self._settings.pip_cache_dir
+            else None,
+            timeout_seconds=float(self._settings.build_timeout.total_seconds()),
+            should_run=False,
+            fingerprint=fingerprint,
+            reuse_summary="Reused existing build",
+        )
+
     async def _complete_build(
         self,
         build: Build,
@@ -968,6 +1058,22 @@ class BuildsService:
         if dt is None:
             return None
         return int(dt.timestamp())
+
+    @staticmethod
+    def _hydration_key(build: Build) -> str:
+        return f"{build.workspace_id}:{build.configuration_id}:{build.id}"
+
+    @staticmethod
+    def _marker_matches(marker_path: Path, build: Build) -> bool:
+        try:
+            payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if payload.get("build_id") != build.id:
+            return False
+        if build.fingerprint and payload.get("fingerprint") != build.fingerprint:
+            return False
+        return True
 
     def _status_literal(self, status: BuildStatus) -> BuildStatusLiteral:
         from typing import cast

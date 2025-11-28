@@ -7,11 +7,15 @@ from pathlib import Path
 from ade_api.settings import Settings
 
 __all__ = [
-    "config_venv_path",
+    "build_venv_marker_path",
+    "build_venv_path",
+    "build_venv_root",
+    "build_venv_temp_path",
     "workspace_config_root",
     "workspace_documents_root",
     "workspace_root",
     "workspace_run_root",
+    "workspace_venvs_root",
 ]
 
 
@@ -53,11 +57,51 @@ def workspace_documents_root(settings: Settings, workspace_id: str) -> Path:
     return _workspace_base(settings.documents_dir, workspace_id) / "documents"
 
 
-def config_venv_path(
+def workspace_venvs_root(settings: Settings, workspace_id: str) -> Path:
+    """Root of all venvs for a workspace under ADE_VENVS_DIR."""
+
+    return _workspace_base(settings.venvs_dir, workspace_id)
+
+
+def build_venv_root(
     settings: Settings,
     workspace_id: str,
     configuration_id: str,
+    build_id: str,
 ) -> Path:
-    """Path to the single active venv for a configuration."""
+    """Root folder reserved for a specific build."""
 
-    return workspace_config_root(settings, workspace_id, configuration_id) / ".venv"
+    return workspace_venvs_root(settings, workspace_id) / configuration_id / build_id
+
+
+def build_venv_path(
+    settings: Settings,
+    workspace_id: str,
+    configuration_id: str,
+    build_id: str,
+) -> Path:
+    """Path to the finalized virtual environment directory for a build."""
+
+    return build_venv_root(settings, workspace_id, configuration_id, build_id) / ".venv"
+
+
+def build_venv_temp_path(
+    settings: Settings,
+    workspace_id: str,
+    configuration_id: str,
+    build_id: str,
+) -> Path:
+    """Temporary venv path used during build before atomic rename."""
+
+    return build_venv_root(settings, workspace_id, configuration_id, build_id) / ".venv.tmp"
+
+
+def build_venv_marker_path(
+    settings: Settings,
+    workspace_id: str,
+    configuration_id: str,
+    build_id: str,
+) -> Path:
+    """Marker file capturing build metadata inside the venv."""
+
+    return build_venv_path(settings, workspace_id, configuration_id, build_id) / "ade_build.json"

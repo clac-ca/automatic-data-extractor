@@ -3,7 +3,7 @@
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
 1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md))
-2. **Build** — set up a dedicated virtual environment (`.venv/<config_id>/<build_id>/`) with `ade_engine` and your `ade_config` installed
+2. **Build** — set up a dedicated virtual environment (`ADE_VENVS_DIR/<workspace_id>/<config_id>/<build_id>/.venv/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
 At run runtime, the **ADE Engine** and your versioned **ADE Config** are installed in an isolated virtual environment (venv) and produce a normalized Excel workbook.
@@ -59,7 +59,9 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
 
-Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Set `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, `ADE_RUNS_DIR`, or `ADE_DOCUMENTS_DIR` to relocate a specific storage type—ADE always nests the workspace ID beneath the override. In production, mount this folder to external storage so it persists across restarts.
+Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
+
+If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates** the required build from DB metadata on demand before executing runs.
 
 ```text
 ./data/
@@ -73,12 +75,8 @@ Everything ADE produces (config_packages, venvs, runs, logs, cache, etc.) is per
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
 │     │        ├─ manifest.json     # read via importlib.resources
-│     ├─ .venv/                     # Python virtual environments organized by workspace
-│     │  └─ <config_id>/<build_id>/ # unique per build
-│     │     ├─ bin/python
-│     │     └─ <site-packages>/
-│     │        ├─ ade_engine/
-│     │        └─ ade_config/
+│     ├─ .venv/                     # (legacy) not used for runtime venvs
+│     ├─ runs/
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
@@ -199,7 +197,7 @@ Click **Build** in the editor to lock your configuration into a self‑contained
 
 Behind the scenes ADE:
 
-1. Creates a fresh virtual environment at `.venv/<config_id>/` using Python’s built‑in `venv`.
+1. Creates a fresh virtual environment at `${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/` using Python’s built‑in `venv`.
 2. Installs the custom python **`ade_engine`** (the runtime that executes runs) and your custom configured **`ade_config`** (your rules created in step 1).
    If you declared dependencies in the config package `pyproject.toml`, those are installed here as well.
 
@@ -217,7 +215,7 @@ Once the configuration environment is built, ADE can process real spreadsheets s
 **Manifest check (current CLI)**
 
 ```bash
-${ADE_VENVS_DIR}/<workspace_id>/.venv/<config_id>/<build_id>/bin/python -I -B -m ade_engine
+${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine
 ```
 
 This placeholder command prints the engine version together with the installed
@@ -246,7 +244,7 @@ ADE is configured via environment variables so it remains simple and portable. D
 | `ADE_WORKSPACES_DIR`      | `./data/workspaces`             | Workspace root for ADE storage                              |
 | `ADE_DOCUMENTS_DIR`       | `./data/workspaces`             | Base for documents (`<ws>/documents/...`)                   |
 | `ADE_CONFIGS_DIR`         | `./data/workspaces`             | Base for configs (`<ws>/config_packages/...`)               |
-| `ADE_VENVS_DIR`           | `./data/workspaces`             | Base for venvs (`<ws>/.venv/<cfg>/<build>/...`)             |
+| `ADE_VENVS_DIR`           | `/tmp/ade-venvs`                | Base for venvs (`<ws>/<cfg>/<build>/.../.venv`) on local storage |
 | `ADE_RUNS_DIR`            | `./data/workspaces`             | Per‑run working directories (`<ws>/runs/<run_id>/...`)      |
 | `ADE_PIP_CACHE_DIR`       | `./data/cache/pip`              | pip cache for wheels/sdists (speeds up building)            |
 | `ADE_MAX_CONCURRENCY`     | `2`                             | Backend dispatcher parallelism                              |
@@ -277,14 +275,13 @@ ADE reads `.xlsx` and `.csv` inputs and always writes a normalized `.xlsx` workb
 You can exercise the complete path without the frontend. Copy the template to create a configuration, build the environment, and run a run by hand:
 
 ```bash
-# 1) Create a per-config virtual environment and install engine + config (production installs)
-python -m venv data/.venv/<config_id>
-data/.venv/<config_id>/bin/pip install apps/ade-engine/
-data/.venv/<config_id>/bin/pip install data/config_packages/<config_id>/
-data/.venv/<config_id>/bin/pip freeze > data/.venv/<config_id>/ade-runtime/packages.txt
+# 1) Create a build-scoped virtual environment and install engine + config (production installs)
+python -m venv /tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv
+/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install apps/ade-engine/
+/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/pip install data/config_packages/<config_id>/
 
 # 2) Smoke-test the installed manifest (placeholder runtime)
-data/.venv/<config_id>/bin/python -I -B -m ade_engine
+/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine
 ```
 
 The CLI prints the ADE engine version plus the packaged `ade_config` manifest.
@@ -293,10 +290,10 @@ orchestrator lands.
 
 ## Troubleshooting and Reproducibility
 
-If a build fails, re‑run the build action and check `packages.txt` to see the resolved dependency set. If imports fail inside the worker, verify that `ade_engine` and `ade_config` exist in the venv’s `site‑packages` and that this command succeeds:
+If a build fails, re‑run the build action and check `ade_build.json` and `packages.txt` under the build folder to see the resolved dependency set. If imports fail inside the worker, verify that `ade_engine` and `ade_config` exist in the venv’s `site‑packages` and that this command succeeds:
 
 ```bash
-data/.venv/<config_id>/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
+/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -c "import ade_engine, ade_config; print('ok')"
 ```
 
 If mapping results look unexpected, inspect `events.ndjson` (look for `run.table.summary` events); they record mapping scores, unmapped columns, and validation breakdowns. Performance issues usually trace back to heavy work in detectors; prefer sampling in detectors, move heavier cleanup into transforms, and keep validators light. Because every configuration has its own environment, installs are isolated; if you suspect a dependency clash, run `pip check` in the venv to diagnose.

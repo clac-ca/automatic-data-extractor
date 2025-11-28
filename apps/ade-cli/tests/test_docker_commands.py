@@ -7,7 +7,7 @@ from ade_tools.commands import common, docker
 
 def test_docker_up_uses_docker_cli(monkeypatch, tmp_path):
     compose = tmp_path / "compose.yaml"
-    compose.parent.mkdir(parents=True)
+    compose.parent.mkdir(parents=True, exist_ok=True)
     compose.write_text("services: {}")
 
     calls: dict[str, object] = {}
@@ -29,7 +29,7 @@ def test_docker_up_uses_docker_cli(monkeypatch, tmp_path):
 
 def test_docker_logs_passes_service(monkeypatch, tmp_path):
     compose = tmp_path / "compose.yaml"
-    compose.parent.mkdir(parents=True)
+    compose.parent.mkdir(parents=True, exist_ok=True)
     compose.write_text("services: {}")
 
     recorded: dict[str, object] = {}
