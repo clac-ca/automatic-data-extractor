@@ -164,6 +164,8 @@ automatic-data-extractor/
 - `logs/ade-filter-documents-by-status.log` — Startup shows roles registry sync (~2s). Auth disabled but dev identity still triggers `roles.global.get_by_slug` + `assign_global` (already_exists) on `/api/v1/system/safe-mode`, leading to ~1.3s request time; no document filter actions captured (log likely truncated/limited).
 - `logs/ade-filter-by-recently-run.log` — Startup roles registry sync ~2.1s. `/documents?sort=-last_run_at` takes ~4.37s with role lookup/assign. Safe-mode fetch ~1.4s also repeats `assign_global`. Same repeated role overhead pattern.
 - `logs/uploads/ade-documents-screen-post-caching.log` — Post-caching documents screen: single `/api/v1/bootstrap` (~3.4s) covering safe-mode/workspaces/roles, followed by documents GET (~1.76s). Registry sync only at startup; roles/principal cached; no extra workspaces/safe-mode calls.
+- `logs/uploads/ade-bootstrap-latency-post-cache.log` — Bootstrap + documents after cache fixes: `/api/v1/bootstrap` ~2.12s with most time in `auth.resolve_user` (~0.8s) then global perms/roles (~0.14s), workspaces (~0.07s), safe-mode (~0.13s). Documents GET ~2.9s for 1 document: workspace permission fetch (~0.55s) then list + last_run attach (~2.3s total). Registry sync only at startup; no redundant workspaces/safe-mode calls.
+- `logs/uploads/ade-documents-screen-last-run-windowed.log` — Post windowed last_run query: `/api/v1/bootstrap` ~2.10s (similar shape, `auth.resolve_user` ~0.84s). Documents GET ~2.86s for 1 document; last_run query now ~0.07s and attach completes in ~0.13s. Remaining time dominated by workspace permission fetch (~0.55s) plus base documents query. Registry sync remains startup-only.
 
 ---
 
@@ -171,7 +173,7 @@ automatic-data-extractor/
 
 - `features/auth/service.py` — Request-scoped identity cache now active; no `assign_global` chatter in the new baseline. Still worth confirming `get_current_identity` and bootstrap reuse the same permission payload to avoid repeated sub-calls.
 - `features/roles/service.py` — Registry sync now startup-only. New baseline shows multiple `roles.permissions.global.for_principal` + `roles.global_slugs.for_user` calls inside one bootstrap request; profile/hoist those to a single fetch per request if possible to trim the ~3.4s bootstrap duration. Registry sync now re-seeds when system roles are missing and global-role cache falls back to DB when cached IDs disappear.
-- `features/documents/service.py` — Documents GET now ~1.76s (empty list) after bootstrapping; consider profiling query plan/index usage if non-empty workspaces still exceed the <500ms target.
+- `features/documents/service.py` — Documents GET now ~1.76s (empty list) after bootstrapping; with data ~2.9s driven by last_run attach + workspace permission lookup. Last-run attachment now uses a windowed query (`row_number` over runs) to fetch only the latest per document.
 - Request fan-out — Frontend now uses `/api/v1/bootstrap` and avoids extra workspaces/safe-mode calls on load. Remaining goal is to shave bootstrap latency toward <1s by deduplicating permission/global-role reads and checking DB round-trips.
 
 ---
@@ -202,8 +204,8 @@ Next steps (implementation plan):
 - Last-run query/index: evaluate `runs` index on `(workspace_id, input_document_id, finished_at desc, started_at desc)` and optional CTE to pull latest run per document. — added index and simplified last_run query ordering.
 
 Next tactical steps:
-- Profile `/api/v1/bootstrap` (~3.4s in baseline) to pinpoint remaining DB hits; dedupe repeated permission/role lookups (profile now reused, workspaces accepts precomputed perms) so bootstrap stays under ~1s.
-- Verify documents list latency with real data after bootstrap cache warm-up; confirm the new runs index keeps last_run ordering cheap. Request-scoped role cache now avoids stale global-role IDs if the registry reseeds.
+- Profile `/api/v1/bootstrap` (~2.1s in latest capture) to isolate remaining time—`auth.resolve_user` dominates (~0.8s). Resolution path now uses a lightweight user fetch (no credential/identity join); re-measure bootstrap after this change and continue trimming global perms/roles duplication to target <1s.
+- Verify documents list latency with non-empty data (current capture: ~2.9s with 1 document including last_run attach). Windowed last_run query now limits to latest per document; re-measure with data and ensure runs index is used. Look for request-level cache reuse for workspace permissions if still slow.
 - Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev). Bootstrap TypeError fixed by calling `get_global_permissions_for_principal` with the principal only; bootstrap integration test now passes.
 
 ---

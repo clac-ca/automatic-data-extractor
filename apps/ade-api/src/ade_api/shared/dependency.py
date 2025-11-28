@@ -457,7 +457,7 @@ async def get_workspace_profile(
     normalized = workspace_id.strip()
     if not normalized:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Workspace identifier required",
         )
 

@@ -13,7 +13,7 @@ from typing import Any, cast
 import openpyxl
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.runs.models import Run, RunStatus
@@ -492,8 +492,7 @@ class DocumentsService:
             ),
         )
 
-        latest: dict[str, DocumentLastRun] = {}
-        stmt = (
+        ranked_runs = (
             select(
                 Run.id,
                 Run.input_document_id,
@@ -503,22 +502,43 @@ class DocumentsService:
                 Run.created_at,
                 Run.summary,
                 Run.error_message,
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=(
+                        *nulls_last(Run.finished_at.desc()),
+                        *nulls_last(Run.started_at.desc()),
+                        *nulls_last(Run.created_at.desc()),
+                    ),
+                )
+                .label("run_rank"),
             )
             .where(
                 Run.workspace_id == workspace_id,
                 Run.input_document_id.in_(ids),
             )
-            .order_by(
-                Run.input_document_id,
-                *nulls_last(Run.finished_at.desc()),
-                *nulls_last(Run.started_at.desc()),
+        ).subquery()
+
+        stmt = (
+            select(
+                ranked_runs.c.id,
+                ranked_runs.c.input_document_id,
+                ranked_runs.c.status,
+                ranked_runs.c.finished_at,
+                ranked_runs.c.started_at,
+                ranked_runs.c.created_at,
+                ranked_runs.c.summary,
+                ranked_runs.c.error_message,
             )
+            .where(ranked_runs.c.run_rank == 1)
         )
         result = await self._session.execute(stmt)
         rows = result.all()
+
+        latest: dict[str, DocumentLastRun] = {}
         for row in rows:
             doc_id = row.input_document_id
-            if doc_id is None or doc_id in latest:
+            if doc_id is None:
                 continue
             timestamp = row.finished_at or row.started_at or row.created_at
             status_value = (

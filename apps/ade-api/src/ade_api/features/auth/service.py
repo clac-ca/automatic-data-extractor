@@ -883,6 +883,7 @@ class AuthService:
     async def resolve_user(self, payload: TokenPayload) -> User:
         """Return the user represented by ``payload`` if active."""
 
+        # Resolve without eager-loading credential/identities to avoid unnecessary joins on hot paths.
         logger.debug(
             "auth.resolve_user.start",
             extra=log_context(
@@ -892,7 +893,7 @@ class AuthService:
             ),
         )
 
-        user = await self._users.get_by_id(payload.user_id)
+        user = await self._users.get_by_id_basic(payload.user_id)
         if user is None:
             logger.warning(
                 "auth.resolve_user.unknown",
