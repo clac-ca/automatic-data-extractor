@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import shutil
 import tomllib
-import os
-from collections.abc import Iterable, Callable
+from collections.abc import Callable, Iterable
 from hashlib import sha256
 from pathlib import Path
 
