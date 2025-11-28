@@ -23,17 +23,14 @@ from ade_api.settings import Settings, get_settings
 from ade_api.shared.db.session import get_session
 from ade_api.shared.dependency import (
     get_current_identity,
+    get_safe_mode_service,
     require_authenticated,
     require_csrf,
     require_global,
-    get_safe_mode_service,
 )
 from ade_api.shared.pagination import PageParams
-from ade_api.features.roles.service import (
-    get_global_permissions_for_principal,
-    get_global_role_slugs_for_user,
-)
 
+from ..system_settings.service import SafeModeService
 from ..users.models import User
 from ..users.schemas import UserProfile
 from ..users.service import UsersService
@@ -44,12 +41,12 @@ from .schemas import (
     APIKeyPage,
     APIKeySummary,
     AuthProvider,
+    BootstrapEnvelope,
     LoginRequest,
     ProviderDiscoveryResponse,
     SessionEnvelope,
     SetupRequest,
     SetupStatus,
-    BootstrapEnvelope,
 )
 from .service import (
     SSO_STATE_COOKIE,
@@ -192,26 +189,20 @@ async def bootstrap(
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    safe_mode_service=Depends(get_safe_mode_service),
-    page_params: PageParams = Depends(PageParams),
+    safe_mode_service: Annotated[
+        SafeModeService, Depends(get_safe_mode_service)
+    ],
+    page_params: Annotated[PageParams, Depends(PageParams)],
 ) -> BootstrapEnvelope:
     """Return a consolidated payload for initial SPA bootstrap."""
 
-    service = AuthService(session=session, settings=settings)
     # Reuse session envelope logic
     user_profiles = UsersService(session=session)
     profile = await user_profiles.get_profile(user=identity.user)
 
-    # Permissions cached via dependency layer; expose global roles/permissions
-    # Note: caching handled in dependencies; this call is cheap
-    global_permissions = await get_global_permissions_for_principal(
-        session=session,
-        principal=identity.principal,
-    )
-    global_roles = await get_global_role_slugs_for_user(
-        session=session,
-        user=identity.user,
-    )
+    # Permissions and roles already resolved in the user profile builder
+    global_permissions = frozenset(profile.permissions)
+    global_roles = frozenset(profile.roles)
 
     # Workspaces list (first page)
     from ade_api.features.workspaces.service import WorkspacesService
@@ -221,6 +212,7 @@ async def bootstrap(
         page=page_params.page,
         page_size=page_params.page_size,
         include_total=True,
+        global_permissions=global_permissions,
     )
 
     safe_mode_status = await safe_mode_service.get_status()

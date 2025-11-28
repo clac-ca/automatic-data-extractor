@@ -542,7 +542,11 @@ class DocumentsService:
             latest[doc_id] = DocumentLastRun(
                 run_id=row.id,
                 status=status_value,
-                run_at=timestamp if timestamp is None or timestamp.tzinfo else timestamp.replace(tzinfo=UTC),
+                run_at=(
+                    timestamp
+                    if timestamp is None or timestamp.tzinfo
+                    else timestamp.replace(tzinfo=UTC)
+                ),
                 message=message,
             )
 

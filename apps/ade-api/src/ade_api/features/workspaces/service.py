@@ -206,7 +206,12 @@ class WorkspacesService:
         )
         return profile
 
-    async def list_memberships(self, *, user: User) -> list[WorkspaceOut]:
+    async def list_memberships(
+        self,
+        *,
+        user: User,
+        global_permissions: frozenset[str] | None = None,
+    ) -> list[WorkspaceOut]:
         """Return all workspace profiles associated with ``user`` in a stable order."""
 
         user_id = cast(str, user.id)
@@ -215,10 +220,11 @@ class WorkspacesService:
             extra=log_context(user_id=user_id),
         )
 
-        global_permissions = await get_global_permissions_for_user(
-            session=self._session,
-            user=user,
-        )
+        if global_permissions is None:
+            global_permissions = await get_global_permissions_for_user(
+                session=self._session,
+                user=user,
+            )
         if {
             "Workspaces.Read.All",
             "Workspaces.ReadWrite.All",
@@ -283,10 +289,14 @@ class WorkspacesService:
         page: int,
         page_size: int,
         include_total: bool = False,
+        global_permissions: frozenset[str] | None = None,
     ) -> Page[WorkspaceOut]:
         """Return a paginated workspace list for the user."""
 
-        memberships = await self.list_memberships(user=user)
+        memberships = await self.list_memberships(
+            user=user,
+            global_permissions=global_permissions,
+        )
         page_result = paginate_sequence(
             memberships,
             page=page,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from .features.auth.router import bootstrap_router, setup_router
 from .features.auth.router import router as auth_router
-from .features.auth.router import setup_router, bootstrap_router
 from .features.builds.router import router as builds_router
 from .features.configs.router import router as configurations_router
 from .features.documents.router import router as documents_router

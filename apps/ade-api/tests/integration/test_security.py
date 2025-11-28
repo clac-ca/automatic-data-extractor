@@ -177,7 +177,7 @@ async def test_auth_disabled_returns_session_without_credentials(
     )
     response = await async_client.get("/api/v1/auth/session")
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["user"]["email"] == "dev@example.test"
     assert payload["expires_at"] is None
@@ -197,7 +197,7 @@ async def test_auth_disabled_bypasses_workspace_permissions(
     )
     response = await async_client.get(f"/api/v1/workspaces/{seed_identity['workspace_id']}")
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
 
 
 async def _load_identity(session, user_id: str) -> AuthenticatedIdentity:

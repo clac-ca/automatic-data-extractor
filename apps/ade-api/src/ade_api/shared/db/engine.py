@@ -165,10 +165,13 @@ def _assert_pyodbc_available(url: URL) -> None:
             "pyodbc could not load the ODBC driver. Install unixODBC and the "
             "Microsoft ODBC Driver 18 for SQL Server to use Azure SQL. "
             "On Debian/Ubuntu add the Microsoft repo "
-            "(`curl -sSL -O https://packages.microsoft.com/config/ubuntu/$(grep VERSION_ID /etc/os-release | cut -d '\"' -f 2)/packages-microsoft-prod.deb && "
+            "(`curl -sSL -O https://packages.microsoft.com/config/ubuntu/"
+            "$(grep VERSION_ID /etc/os-release | cut -d '\"' -f 2)/"
+            "packages-microsoft-prod.deb && "
             "sudo dpkg -i packages-microsoft-prod.deb && sudo apt-get update`) "
             "then install with `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`. "
-            "For local dev you can avoid this by using SQLite (ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite). "
+            "For local dev you can avoid this by using SQLite "
+            "(ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite). "
             f"DSN: {url.render_as_string(hide_password=True)}"
         )
         logger.error(msg)
@@ -279,13 +282,14 @@ def _apply_migrations(settings: Settings) -> None:
         ensure_sqlite_database_directory(url)
     try:
         _upgrade_database(settings)
-    except OperationalError as exc:
+    except OperationalError:
         if url.get_backend_name() == "mssql":
             msg = (
                 "Failed to connect to SQL Server / Azure SQL (login timeout). "
                 f"DSN: {url.render_as_string(hide_password=True)}. "
-                "Check network/firewall rules to port 1433, server name, credentials or managed identity, "
-                "and that the ODBC driver can reach the host. "
+                "Check network/firewall rules to port 1433, server name, "
+                "credentials or managed identity, and that the ODBC driver can "
+                "reach the host. "
                 "For local dev you can switch to SQLite with "
                 "ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite."
             )
