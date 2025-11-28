@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextvars import ContextVar
 from pathlib import Path as FilePath
 from typing import TYPE_CHECKING, Annotated
-from contextvars import ContextVar
 
 import jwt
 from fastapi import Depends, HTTPException, Path, Request, Security, status
@@ -170,9 +170,9 @@ _IDENTITY_CTX: ContextVar[AuthenticatedIdentity | None] = ContextVar(
     "_IDENTITY_CTX",
     default=None,
 )
-_PERMISSIONS_CTX: ContextVar[dict[str, set[str]]] = ContextVar(
+_PERMISSIONS_CTX: ContextVar[dict[str, set[str]] | None] = ContextVar(
     "_PERMISSIONS_CTX",
-    default={},
+    default=None,
 )
 
 def _is_dev_identity(identity: AuthenticatedIdentity) -> bool:
@@ -314,7 +314,7 @@ def require_global(
     ) -> User:
         if _is_dev_identity(identity):
             return identity.user
-        cached = _PERMISSIONS_CTX.get()
+        cached = _PERMISSIONS_CTX.get() or {}
         perms = cached.get("global")
         if perms is None:
             perms = await get_global_permissions_for_principal(
@@ -356,7 +356,7 @@ def require_workspace(
             default_param=scope_param,
             permission=permission,
         )
-        cache = _PERMISSIONS_CTX.get()
+        cache = _PERMISSIONS_CTX.get() or {}
         workspace_cache = cache.get("workspace", {})
         perms = workspace_cache.get(workspace_id)
         if perms is None:

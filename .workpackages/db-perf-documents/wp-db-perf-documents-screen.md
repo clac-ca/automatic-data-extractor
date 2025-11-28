@@ -10,7 +10,7 @@
 
 ## Work Package Checklist
 
-* [ ] Baseline current auth/roles/documents call timings and DB queries for the documents screen (session, workspaces, safe-mode, documents). → Action: run `source .venv/bin/activate`, start the backend (`ade start` or equivalent), open a clean tab, load the documents screen once, and paste the console log into `.workpackages/db-perf-documents/logs/uploads/ade-documents-screen-post-caching.log` for comparison.
+ * [x] Baseline current auth/roles/documents call timings and DB queries for the documents screen (session, workspaces, safe-mode, documents). → Action: run `source .venv/bin/activate`, start the backend (`ade start` or equivalent), open a clean tab, load the documents screen once, and paste the console log into `.workpackages/db-perf-documents/logs/uploads/ade-documents-screen-post-caching.log` for comparison. — captured post-caching baseline in `logs/uploads/ade-documents-screen-post-caching.log` (bootstrap + documents only).
 * [x] Cache/short-circuit roles registry sync and global role slug lookup so they do not run per request.
 * [x] Make global role assignment + principal/permission resolution idempotent within a request (early exit when already assigned, reuse cached principal/permissions).
 * [x] Add a backend bootstrap path or shared cache to avoid multiple auth/roles round-trips for one screen; update OpenAPI types and frontend usage.
@@ -141,7 +141,7 @@ automatic-data-extractor/
 * If adding/changing endpoints, update OpenAPI and regenerate frontend types with `ade openapi-types`.
 * Validate with `ade test` (and `ade ci` if touching multiple layers) before merging; capture perf deltas (before/after logs or simple benchmarks).
 * Maintain existing permission semantics and dev identity ergonomics; ensure prod auth remains correct when dev identity is disabled.
-* **Baseline rerun needed:** After the caching + bootstrap changes, capture a fresh documents-screen load log (start app, load documents list once from a clean tab). Include the resulting log in `.workpackages/db-perf-documents/logs/` for comparison vs. the original traces.
+* **Baseline rerun captured (2025-11-28):** `.workpackages/db-perf-documents/logs/uploads/ade-documents-screen-post-caching.log` — `/api/v1/bootstrap` ~3.4s plus documents GET ~1.76s with cached principal/roles and no extra safe-mode/workspaces calls. Continue to aim for <500ms per endpoint by profiling remaining hotspots.
 
 ---
 
@@ -163,15 +163,16 @@ automatic-data-extractor/
 - `logs/ade-upload-multiple-documents.log` — Sequence of document uploads: multiple `/documents` POSTs each ~3.7–4.2s, all repeating `assign_global` despite auth disabled. Safe-mode call ~1.83s also redoes role assignment. Final documents list GET ~3.6s. Throughput dominated by per-request role overhead.
 - `logs/ade-filter-documents-by-status.log` — Startup shows roles registry sync (~2s). Auth disabled but dev identity still triggers `roles.global.get_by_slug` + `assign_global` (already_exists) on `/api/v1/system/safe-mode`, leading to ~1.3s request time; no document filter actions captured (log likely truncated/limited).
 - `logs/ade-filter-by-recently-run.log` — Startup roles registry sync ~2.1s. `/documents?sort=-last_run_at` takes ~4.37s with role lookup/assign. Safe-mode fetch ~1.4s also repeats `assign_global`. Same repeated role overhead pattern.
+- `logs/uploads/ade-documents-screen-post-caching.log` — Post-caching documents screen: single `/api/v1/bootstrap` (~3.4s) covering safe-mode/workspaces/roles, followed by documents GET (~1.76s). Registry sync only at startup; roles/principal cached; no extra workspaces/safe-mode calls.
 
 ---
 
 ## 7. Backend code hotspots (in-progress)
 
-- `features/auth/service.py` — `ensure_dev_identity` always calls `sync_permission_registry` + `_assign_global_role` per request; no memoization of principal/permissions within a request. `_assign_global_role` does `get_global_role_by_slug` + `assign_global_role` every time; a per-request cache/short-circuit around the global admin assignment is needed.
-- `features/roles/service.py` — `sync_permission_registry` uses module globals but still runs in many requests (likely due to reload/multiprocess or lack of persisted marker); needs process-safe/TTL caching and a DB/versioned sentinel to avoid per-request sync. `get_global_role_by_slug` uncached. `assign_global_role` always goes through `ensure_user_principal` and `assign_role` (which relies on DB unique constraint); add existence check/early return to skip DB writes when assignment exists. Consider caching global role id/permissions. Pool warning observed elsewhere suggests DB connections not returned; worth checking runs service for leaks.
-- `features/documents/service.py` — queries are straightforward; `list_documents` + `_latest_stream_runs` fetch all runs per document and then first per doc. For larger datasets, consider `row_number`/CTE to get latest per document in one query plus indexes on `(workspace_id, input_document_id, finished_at DESC, started_at DESC)`. Latency in logs driven by auth/roles, not this query.
-- Request fan-out — no shared request cache for identity/permissions; parallel requests redo auth/roles. Need a request-scoped cache or bootstrap endpoint to serve user/profile/permissions/safe-mode/workspaces once and reuse across frontend calls.
+- `features/auth/service.py` — Request-scoped identity cache now active; no `assign_global` chatter in the new baseline. Still worth confirming `get_current_identity` and bootstrap reuse the same permission payload to avoid repeated sub-calls.
+- `features/roles/service.py` — Registry sync now startup-only. New baseline shows multiple `roles.permissions.global.for_principal` + `roles.global_slugs.for_user` calls inside one bootstrap request; profile/hoist those to a single fetch per request if possible to trim the ~3.4s bootstrap duration. Registry sync now re-seeds when system roles are missing and global-role cache falls back to DB when cached IDs disappear.
+- `features/documents/service.py` — Documents GET now ~1.76s (empty list) after bootstrapping; consider profiling query plan/index usage if non-empty workspaces still exceed the <500ms target.
+- Request fan-out — Frontend now uses `/api/v1/bootstrap` and avoids extra workspaces/safe-mode calls on load. Remaining goal is to shave bootstrap latency toward <1s by deduplicating permission/global-role reads and checking DB round-trips.
 
 ---
 
@@ -201,8 +202,8 @@ Next steps (implementation plan):
 - Last-run query/index: evaluate `runs` index on `(workspace_id, input_document_id, finished_at desc, started_at desc)` and optional CTE to pull latest run per document. — added index and simplified last_run query ordering.
 
 Next tactical steps:
-- Add a request-scoped identity dependency (e.g., in `features/auth/context.py`) that caches user, principal, permissions, and global roles in `request.state`/contextvar; update routes (session, workspaces, safe-mode, documents, runs, configs) to consume it instead of recalculating.
-- Frontend follow-up: switch documents screen to use bootstrap payload (or server-provided cache) to avoid parallel auth/roles calls. — `useSessionQuery` now uses `/api/v1/bootstrap`, seeds workspaces + safe-mode query caches, and returns the bootstrap user; React Query hooks for workspaces/safe-mode read the seeded data to avoid extra requests on load.
+- Profile `/api/v1/bootstrap` (~3.4s in baseline) to pinpoint remaining DB hits; dedupe repeated permission/role lookups (profile now reused, workspaces accepts precomputed perms) so bootstrap stays under ~1s.
+- Verify documents list latency with real data after bootstrap cache warm-up; confirm the new runs index keeps last_run ordering cheap. Request-scoped role cache now avoids stale global-role IDs if the registry reseeds.
 - Testing note: when running integration tests that assert permission enforcement, export `ADE_AUTH_DISABLED=false` (local env defaults may be true for dev). Bootstrap TypeError fixed by calling `get_global_permissions_for_principal` with the principal only; bootstrap integration test now passes.
 
 ---

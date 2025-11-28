@@ -7,10 +7,10 @@ import hashlib
 import json
 import logging
 import re
-from datetime import UTC, datetime, timedelta
 from collections import deque
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import cast
 
@@ -639,7 +639,10 @@ async def get_global_role_by_slug(
             "roles.global.get_by_slug.cached",
             extra=log_context(slug=slug, role_id=cached_id),
         )
-        return await session.get(Role, cached_id)
+        cached_role = await session.get(Role, cached_id)
+        if cached_role is not None:
+            return cached_role
+        _global_role_cache.pop(slug, None)
 
     logger.debug(
         "roles.global.get_by_slug.start",
@@ -1652,6 +1655,16 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
 
     existing_permission_count = await session.scalar(select(func.count()).select_from(Permission))
     existing_role_count = await session.scalar(select(func.count()).select_from(Role))
+    existing_role_slugs = set(
+        (
+            await session.execute(
+                select(Role.slug)
+            )
+        ).scalars()
+    )
+    missing_system_roles = {
+        definition.slug for definition in SYSTEM_ROLES
+    } - existing_role_slugs
 
     if (
         not force
@@ -1661,6 +1674,7 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
         and now < _registry_cache_expires_at
         and existing_permission_count
         and existing_role_count
+        and not missing_system_roles
     ):
         logger.debug(
             "roles.registry.sync.skip_cached",
@@ -1682,7 +1696,7 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
             current_role_count = await session.scalar(
                 select(func.count()).select_from(Role)
             )
-            if current_permission_count and current_role_count:
+            if current_permission_count and current_role_count and not missing_system_roles:
                 logger.debug(
                     "roles.registry.sync.skip_cached_locked",
                     extra=log_context(version=current_version),
@@ -1699,9 +1713,13 @@ async def sync_permission_registry(*, session: AsyncSession, force: bool = False
             force = True
 
         if not force and stored_version == current_version:
-            existing_permission_count = await session.scalar(select(func.count()).select_from(Permission))
-            existing_role_count = await session.scalar(select(func.count()).select_from(Role))
-            if existing_permission_count and existing_role_count:
+            existing_permission_count = await session.scalar(
+                select(func.count()).select_from(Permission)
+            )
+            existing_role_count = await session.scalar(
+                select(func.count()).select_from(Role)
+            )
+            if existing_permission_count and existing_role_count and not missing_system_roles:
                 _REGISTRY_SYNCED = True
                 _registry_cached_version = current_version
                 _registry_cache_expires_at = now + _REGISTRY_CACHE_TTL
