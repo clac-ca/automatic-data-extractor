@@ -118,6 +118,15 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             "created_at",
         ),
         Index(
+            "ix_documents_workspace_status_created_live",
+            "workspace_id",
+            "status",
+            "created_at",
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+            mssql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
             "documents_workspace_created_idx",
             "workspace_id",
             "created_at",

@@ -13,7 +13,7 @@ from typing import Any, cast
 import openpyxl
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.runs.models import Run, RunStatus
@@ -22,6 +22,7 @@ from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.db import generate_ulid
 from ade_api.shared.pagination import paginate_sql
+from ade_api.shared.sql import nulls_last
 from ade_api.shared.types import OrderBy
 from ade_api.storage_layout import workspace_documents_root
 
@@ -491,36 +492,66 @@ class DocumentsService:
             ),
         )
 
-        stmt = (
-            select(Run)
+        ranked_runs = (
+            select(
+                Run.id,
+                Run.input_document_id,
+                Run.status,
+                Run.finished_at,
+                Run.started_at,
+                Run.created_at,
+                Run.summary,
+                Run.error_message,
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=(
+                        *nulls_last(Run.finished_at.desc()),
+                        *nulls_last(Run.started_at.desc()),
+                        *nulls_last(Run.created_at.desc()),
+                    ),
+                )
+                .label("run_rank"),
+            )
             .where(
                 Run.workspace_id == workspace_id,
                 Run.input_document_id.in_(ids),
             )
-            .order_by(
-                Run.finished_at.desc().nullslast(),
-                Run.started_at.desc().nullslast(),
+        ).subquery()
+
+        stmt = (
+            select(
+                ranked_runs.c.id,
+                ranked_runs.c.input_document_id,
+                ranked_runs.c.status,
+                ranked_runs.c.finished_at,
+                ranked_runs.c.started_at,
+                ranked_runs.c.created_at,
+                ranked_runs.c.summary,
+                ranked_runs.c.error_message,
             )
+            .where(ranked_runs.c.run_rank == 1)
         )
         result = await self._session.execute(stmt)
-        rows = result.scalars().all()
+        rows = result.all()
+
         latest: dict[str, DocumentLastRun] = {}
-        for run in rows:
-            doc_id = run.input_document_id
-            if doc_id is None or doc_id in latest:
+        for row in rows:
+            doc_id = row.input_document_id
+            if doc_id is None:
                 continue
-            timestamp = run.finished_at or run.started_at or run.created_at
+            timestamp = row.finished_at or row.started_at or row.created_at
             status_value = (
-                RunStatus.CANCELED if run.status == RunStatus.CANCELED else run.status
+                RunStatus.CANCELED if row.status == RunStatus.CANCELED else row.status
             )
             summary_payload = None
-            if run.summary:
+            if row.summary:
                 try:
-                    parsed = json.loads(run.summary)
+                    parsed = json.loads(row.summary)
                     summary_payload = parsed if isinstance(parsed, dict) else None
                 except json.JSONDecodeError:
                     summary_payload = None
-            message = run.error_message
+            message = row.error_message
             if summary_payload:
                 run_block = summary_payload.get("run", {})
                 message = (
@@ -529,9 +560,13 @@ class DocumentsService:
                     or run_block.get("status")
                 )
             latest[doc_id] = DocumentLastRun(
-                run_id=run.id,
+                run_id=row.id,
                 status=status_value,
-                run_at=timestamp,
+                run_at=(
+                    timestamp
+                    if timestamp is None or timestamp.tzinfo
+                    else timestamp.replace(tzinfo=UTC)
+                ),
                 message=message,
             )
 

@@ -351,7 +351,7 @@ async def create_configuration(
             "error": "invalid_source_shape",
             "issues": [issue.model_dump() for issue in exc.issues],
         }
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigPublishConflictError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -597,7 +597,7 @@ async def activate_configuration_endpoint(
             "error": "validation_failed",
             "issues": [issue.model_dump() for issue in exc.issues],
         }
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -642,7 +642,7 @@ async def publish_configuration_endpoint(
             "error": "validation_failed",
             "issues": [issue.model_dump() for issue in exc.issues],
         }
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
     except ConfigStateError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -773,7 +773,7 @@ async def upsert_config_file(
     except PayloadTooLargeError as exc:
         _problem(
             "payload_too_large",
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"payload exceeds {exc.limit} bytes",
         )
 

@@ -33,6 +33,11 @@ class UsersRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_id_basic(self, user_id: str) -> User | None:
+        """Lightweight lookup without eager-loading relationships."""
+
+        return await self._session.get(User, user_id)
+
     async def get_by_email(self, email: str) -> User | None:
         stmt = (
             select(User)

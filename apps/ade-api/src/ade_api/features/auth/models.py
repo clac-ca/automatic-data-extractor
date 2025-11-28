@@ -14,6 +14,7 @@ class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     """Stored representation of an issued API key secret."""
 
     __tablename__ = "api_keys"
+
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
@@ -27,6 +28,7 @@ class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     last_seen_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     last_seen_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # We always eagerly join the user for admin-facing listing endpoints.
     user: Mapped[User | None] = relationship(User, lazy="joined")
 
 

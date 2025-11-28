@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import json
+import secrets
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
 from pydantic import Field, PrivateAttr, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import DotEnvSettingsSource, EnvSettingsSource
+from sqlalchemy.engine import URL, make_url
 
 # ---- Defaults ---------------------------------------------------------------
 
@@ -72,7 +72,6 @@ DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = timedelta(seconds=600)
 DEFAULT_BUILD_ENSURE_WAIT = timedelta(seconds=30)
-DEFAULT_BUILD_RETENTION = timedelta(days=30)
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
@@ -212,6 +211,7 @@ class Settings(BaseSettings):
     )
 
     _explicit_init_fields: set[str] = PrivateAttr(default_factory=set)
+    _jwt_secret_generated: bool = PrivateAttr(default=False)
 
     def __init__(self, **data: Any):
         explicit = set(data.keys())
@@ -266,8 +266,6 @@ class Settings(BaseSettings):
             self.runs_dir = self.workspaces_dir
 
     # Core
-    debug: bool = False
-    dev_mode: bool = False
     app_name: str = "Automatic Data Extractor API"
     app_version: str = "0.2.0"
     api_docs_enabled: bool = False
@@ -278,8 +276,6 @@ class Settings(BaseSettings):
     safe_mode: bool = False
 
     # Server
-    server_host: str = "localhost"
-    server_port: int = Field(8000, ge=1, le=65535)
     server_public_url: str = DEFAULT_PUBLIC_URL
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
 
@@ -298,10 +294,6 @@ class Settings(BaseSettings):
     pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
-    secret_key: SecretStr = Field(
-        default=SecretStr("ZGV2ZWxvcG1lbnQtY29uZmlnLXNlY3JldC1rZXktMzI="),
-        description="Base64-encoded 32 byte secret key",
-    )
 
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
@@ -309,7 +301,6 @@ class Settings(BaseSettings):
     build_timeout: timedelta = Field(default=DEFAULT_BUILD_TIMEOUT)
     build_ensure_wait: timedelta = Field(default=DEFAULT_BUILD_ENSURE_WAIT)
     build_ttl: timedelta | None = Field(default=None)
-    build_retention: timedelta | None = Field(default=DEFAULT_BUILD_RETENTION)
 
     # Database
     database_dsn: str | None = None
@@ -317,9 +308,19 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(5, ge=1)       # ignored by sqlite; relevant for Postgres
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
+    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(
+        default="sql_password"
+    )
+    database_mi_client_id: str | None = None
 
     # JWT
-    jwt_secret: SecretStr = Field(default=SecretStr("development-secret"))
+    jwt_secret: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Secret used to sign session cookies and bearer tokens; set to a long random string "
+            "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)"
+        ),
+    )
     jwt_algorithm: str = "HS256"
     jwt_access_ttl: timedelta = Field(default=timedelta(hours=1))
     jwt_refresh_ttl: timedelta = Field(default=timedelta(days=14))
@@ -359,14 +360,6 @@ class Settings(BaseSettings):
 
     # ---- Validators ----
 
-    @field_validator("server_host", mode="before")
-    @classmethod
-    def _v_host(cls, v: Any) -> str:
-        s = str(v).strip()
-        if not s:
-            raise ValueError("ADE_SERVER_HOST must not be empty")
-        return s
-
     @field_validator("server_public_url", mode="before")
     @classmethod
     def _v_public_url(cls, v: Any) -> str:
@@ -392,6 +385,40 @@ class Settings(BaseSettings):
     def _v_scopes(cls, v: Any) -> list[str]:
         return _list_from_env(v, default=["openid", "email", "profile"])
 
+    @field_validator("database_auth_mode", mode="before")
+    @classmethod
+    def _v_db_auth_mode(cls, v: Any) -> str:
+        if v in (None, ""):
+            return "sql_password"
+        mode = str(v).strip().lower()
+        if mode not in {"sql_password", "managed_identity"}:
+            raise ValueError(
+                "ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'"
+            )
+        return mode
+
+    @field_validator("database_mi_client_id", mode="before")
+    @classmethod
+    def _v_db_mi_client(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        return str(v).strip()
+
+    @field_validator("jwt_secret", mode="before")
+    @classmethod
+    def _v_jwt_secret(cls, v: Any) -> SecretStr:
+        if v is None:
+            return None  # handled in finalize
+        raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v or "").strip()
+        if raw and set(raw) == {"*"}:
+            return None
+        if raw and len(raw) < 32:
+            raise ValueError(
+                "ADE_JWT_SECRET must be at least 32 characters. Use a long random string "
+                "(e.g. python - <<'PY'\\nimport secrets; print(secrets.token_urlsafe(64))\\nPY)."
+            )
+        return SecretStr(raw) if raw else None
+
     @field_validator(
         "jwt_access_ttl",
         "jwt_refresh_ttl",
@@ -409,7 +436,7 @@ class Settings(BaseSettings):
     def _v_build_required(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
 
-    @field_validator("build_ttl", "build_retention", mode="before")
+    @field_validator("build_ttl", mode="before")
     @classmethod
     def _v_build_optional(cls, v: Any, info: ValidationInfo) -> timedelta | None:
         if v in (None, ""):
@@ -422,20 +449,6 @@ class Settings(BaseSettings):
         if v in (None, ""):
             return None
         return int(_parse_duration(v, field_name="run_timeout_seconds").total_seconds())
-
-    @field_validator("secret_key", mode="before")
-    @classmethod
-    def _v_secret_key(cls, v: Any) -> SecretStr:
-        if v is None:
-            raise ValueError("ADE_SECRET_KEY must be provided")
-        raw = v.get_secret_value() if isinstance(v, SecretStr) else str(v).strip()
-        try:
-            decoded = base64.b64decode(raw, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("ADE_SECRET_KEY must be base64 encoded") from exc
-        if len(decoded) != 32:
-            raise ValueError("ADE_SECRET_KEY must decode to exactly 32 bytes")
-        return SecretStr(raw)
 
     @field_validator("oidc_issuer", mode="before")
     @classmethod
@@ -499,6 +512,39 @@ class Settings(BaseSettings):
             sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)
             self.database_dsn = f"sqlite+aiosqlite:///{sqlite.as_posix()}"
 
+        url = make_url(self.database_dsn)
+        query = dict(url.query or {})
+
+        if url.get_backend_name() == "mssql" and "driver" not in query:
+            query["driver"] = "ODBC Driver 18 for SQL Server"
+
+        # SQL Server async connectivity: prefer aioodbc (required for SQLAlchemy async)
+        if url.get_backend_name() == "mssql" and not url.drivername.startswith("mssql+aioodbc"):
+            url = url.set(drivername="mssql+aioodbc")
+
+        if self.database_auth_mode == "managed_identity":
+            if url.get_backend_name() != "mssql":
+                raise ValueError(
+                    "ADE_DATABASE_AUTH_MODE=managed_identity requires an mssql+pyodbc DSN"
+                )
+            url = URL.create(
+                drivername=url.drivername,
+                username=None,
+                password=None,
+                host=url.host,
+                port=url.port,
+                database=url.database,
+                query=query,
+            )
+        elif query != url.query:
+            url = url.set(query=query)
+
+        self.database_dsn = url.render_as_string(hide_password=False)
+
+        if self.jwt_secret is None or not self.jwt_secret.get_secret_value().strip():
+            self.jwt_secret = SecretStr(secrets.token_urlsafe(64))
+            self._jwt_secret_generated = True
+
         oidc_config = {
             "ADE_OIDC_CLIENT_ID": self.oidc_client_id,
             "ADE_OIDC_CLIENT_SECRET": self.oidc_client_secret,
@@ -532,8 +578,8 @@ class Settings(BaseSettings):
         return self.jwt_secret.get_secret_value()
 
     @property
-    def secret_key_bytes(self) -> bytes:
-        return base64.b64decode(self.secret_key.get_secret_value(), validate=True)
+    def jwt_secret_generated(self) -> bool:
+        return self._jwt_secret_generated
 
 
 @lru_cache(maxsize=1)

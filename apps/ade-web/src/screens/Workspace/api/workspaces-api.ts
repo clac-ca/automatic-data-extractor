@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { client } from "@shared/api/client";
 import type { components, paths } from "@schema";
@@ -358,7 +358,10 @@ function workspacesListQueryOptions(options: WorkspacesQueryOptions = {}) {
 }
 
 export function useWorkspacesQuery(options: WorkspacesQueryOptions = {}) {
-  return useQuery<WorkspaceListPage>(workspacesListQueryOptions(options));
+  const queryClient = useQueryClient();
+  const queryOptions = workspacesListQueryOptions(options);
+  const initialData = queryClient.getQueryData<WorkspaceListPage>(queryOptions.queryKey);
+  return useQuery<WorkspaceListPage>({ ...queryOptions, initialData });
 }
 
 export const WORKSPACE_LIST_DEFAULT_PARAMS = {

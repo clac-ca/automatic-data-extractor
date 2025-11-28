@@ -3,27 +3,125 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import struct
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from alembic import command
 from alembic.config import Config
+from azure.identity import DefaultAzureCredential
 from sqlalchemy import event
-from sqlalchemy.engine import URL, Connection, make_url
+from sqlalchemy.engine import URL, Connection, Engine, make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from ade_api.settings import Settings, get_settings
+
+_SQL_COPT_SS_ACCESS_TOKEN = 1256
+_AZURE_SQL_SCOPE = "https://database.windows.net/.default"
 
 _ENGINE: AsyncEngine | None = None
 _ENGINE_KEY: tuple[Any, ...] | None = None
 _BOOTSTRAP_LOCK = asyncio.Lock()
 _BOOTSTRAPPED_URLS: set[str] = set()
 
+logger = logging.getLogger(__name__)
+
+
+def _is_managed_identity(settings: Settings, url: URL) -> bool:
+    return settings.database_auth_mode == "managed_identity" and url.get_backend_name() == "mssql"
+
+
+def _sanitize_mssql_query(query: dict[str, Any], *, managed_identity: bool) -> dict[str, Any]:
+    sanitized = dict(query)
+    if managed_identity:
+        for key in (
+            "Authentication",
+            "authentication",
+            "Trusted_Connection",
+            "trusted_connection",
+        ):
+            sanitized.pop(key, None)
+    return sanitized
+
+
+def build_database_url(settings: Settings) -> URL:
+    url = make_url(settings.database_dsn)
+    managed_identity = _is_managed_identity(settings, url)
+
+    if managed_identity and url.get_backend_name() != "mssql":
+        raise ValueError("Managed identity is only supported with mssql+pyodbc")
+
+    if url.get_backend_name() == "mssql":
+        query = _sanitize_mssql_query(dict(url.query or {}), managed_identity=managed_identity)
+        url = url.set(query=query)
+        if managed_identity:
+            url = URL.create(
+                drivername=url.drivername,
+                username=None,
+                password=None,
+                host=url.host,
+                port=url.port,
+                database=url.database,
+                query=url.query,
+            )
+
+    return url
+
+
+def _managed_identity_token_provider(settings: Settings) -> Callable[[], bytes]:
+    credential = DefaultAzureCredential(
+        managed_identity_client_id=settings.database_mi_client_id or None,
+    )
+
+    def _get_token() -> bytes:
+        token = credential.get_token(_AZURE_SQL_SCOPE).token
+        token_bytes = token.encode("utf-16-le")
+        return struct.pack("<I", len(token_bytes)) + token_bytes
+
+    return _get_token
+
+
+def _managed_identity_injector(token_provider: Callable[[], bytes]) -> Callable[..., None]:
+    def _inject(_dialect, _conn_rec, _cargs, cparams):
+        attrs_before = dict(cparams.pop("attrs_before", {}) or {})
+        attrs_before[_SQL_COPT_SS_ACCESS_TOKEN] = token_provider()
+
+        cparams.pop("user", None)
+        cparams.pop("username", None)
+        cparams.pop("password", None)
+        for key in (
+            "Authentication",
+            "authentication",
+            "Trusted_Connection",
+            "trusted_connection",
+        ):
+            cparams.pop(key, None)
+
+        cparams["attrs_before"] = attrs_before
+
+    return _inject
+
+
+def attach_managed_identity(sync_engine: Engine, settings: Settings) -> None:
+    if getattr(sync_engine, "_ade_mi_attached", False):
+        return
+
+    token_provider = _managed_identity_token_provider(settings)
+    injector = _managed_identity_injector(token_provider)
+    event.listen(sync_engine, "do_connect", injector, insert=True)
+    sync_engine._ade_mi_attached = True
+
 
 def _cache_key(settings: Settings) -> tuple[Any, ...]:
+    url = build_database_url(settings)
     return (
-        settings.database_dsn,
+        url.render_as_string(hide_password=False),
+        settings.database_auth_mode,
+        settings.database_mi_client_id,
         settings.database_echo,
         settings.database_pool_size,
         settings.database_max_overflow,
@@ -54,8 +152,35 @@ def ensure_sqlite_database_directory(url: URL) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _assert_pyodbc_available(url: URL) -> None:
+    """Raise a clearer error when pyodbc/system drivers are missing for MSSQL."""
+
+    if url.get_backend_name() != "mssql":
+        return
+
+    try:
+        import pyodbc  # noqa: F401
+    except ImportError as exc:  # pragma: no cover - depends on host system deps
+        msg = (
+            "pyodbc could not load the ODBC driver. Install unixODBC and the "
+            "Microsoft ODBC Driver 18 for SQL Server to use Azure SQL. "
+            "On Debian/Ubuntu add the Microsoft repo "
+            "(`curl -sSL -O https://packages.microsoft.com/config/ubuntu/"
+            "$(grep VERSION_ID /etc/os-release | cut -d '\"' -f 2)/"
+            "packages-microsoft-prod.deb && "
+            "sudo dpkg -i packages-microsoft-prod.deb && sudo apt-get update`) "
+            "then install with `sudo ACCEPT_EULA=Y apt-get install -y unixodbc msodbcsql18`. "
+            "For local dev you can avoid this by using SQLite "
+            "(ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite). "
+            f"DSN: {url.render_as_string(hide_password=True)}"
+        )
+        logger.error(msg)
+        raise RuntimeError(msg) from exc
+
+
 def _create_engine(settings: Settings) -> AsyncEngine:
-    url = make_url(settings.database_dsn)
+    url = build_database_url(settings)
+    _assert_pyodbc_available(url)
     connect_args: dict[str, Any] = {}
     engine_kwargs: dict[str, Any] = {
         "echo": settings.database_echo,
@@ -76,10 +201,10 @@ def _create_engine(settings: Settings) -> AsyncEngine:
     if connect_args:
         engine_kwargs["connect_args"] = connect_args
 
-    engine = create_async_engine(
-        url.render_as_string(hide_password=False),
-        **engine_kwargs,
-    )
+    engine = create_async_engine(url.render_as_string(hide_password=False), **engine_kwargs)
+
+    if _is_managed_identity(settings, url):
+        attach_managed_identity(engine.sync_engine, settings)
 
     if url.get_backend_name() == "sqlite":
 
@@ -144,30 +269,44 @@ def _load_alembic_config(settings: Settings) -> Config:
 
 def _upgrade_database(settings: Settings, connection: Connection | None = None) -> None:
     config = _load_alembic_config(settings)
-    config.set_main_option("sqlalchemy.url", render_sync_url(settings.database_dsn))
+    config.set_main_option("sqlalchemy.url", render_sync_url(settings))
     if connection is not None:
         config.attributes["connection"] = connection
     command.upgrade(config, "head")
 
 
 def _apply_migrations(settings: Settings) -> None:
-    url = make_url(settings.database_dsn)
+    url = build_database_url(settings)
+    _assert_pyodbc_available(url)
     if url.get_backend_name() == "sqlite":
         ensure_sqlite_database_directory(url)
-    _upgrade_database(settings)
+    try:
+        _upgrade_database(settings)
+    except OperationalError:
+        if url.get_backend_name() == "mssql":
+            msg = (
+                "Failed to connect to SQL Server / Azure SQL (login timeout). "
+                f"DSN: {url.render_as_string(hide_password=True)}. "
+                "Check network/firewall rules to port 1433, server name, "
+                "credentials or managed identity, and that the ODBC driver can "
+                "reach the host. "
+                "For local dev you can switch to SQLite with "
+                "ADE_DATABASE_DSN=sqlite+aiosqlite:///./data/db/ade.sqlite."
+            )
+            logger.error(msg, exc_info=True)
+        raise
 
 
 async def ensure_database_ready(settings: Settings | None = None) -> None:
     """Create the database and apply migrations if needed."""
 
     resolved = settings or get_settings()
-    database_url = resolved.database_dsn
+    url = build_database_url(resolved)
+    bootstrap_key = f"{resolved.database_auth_mode}:{render_sync_url(resolved)}"
 
     async with _BOOTSTRAP_LOCK:
-        if database_url in _BOOTSTRAPPED_URLS:
+        if bootstrap_key in _BOOTSTRAPPED_URLS:
             return
-
-        url = make_url(database_url)
 
         if url.get_backend_name() == "sqlite" and is_sqlite_memory_url(url):
             engine = get_engine(resolved)
@@ -180,7 +319,7 @@ async def ensure_database_ready(settings: Settings | None = None) -> None:
                 )
         else:
             await asyncio.to_thread(_apply_migrations, resolved)
-        _BOOTSTRAPPED_URLS.add(database_url)
+        _BOOTSTRAPPED_URLS.add(bootstrap_key)
 
 
 def reset_bootstrap_state() -> None:
@@ -195,16 +334,21 @@ def engine_cache_key(settings: Settings) -> tuple[Any, ...]:
     return _cache_key(settings)
 
 
-def render_sync_url(database_url: str) -> str:
+def render_sync_url(database: Settings | str) -> str:
     """Return a synchronous SQLAlchemy URL for Alembic migrations."""
 
-    url = make_url(database_url)
+    if isinstance(database, Settings):
+        url = build_database_url(database)
+    else:
+        url = make_url(database)
     driver = url.get_backend_name()
     sync_url = url.set(drivername=driver)
     return sync_url.render_as_string(hide_password=False)
 
 
 __all__ = [
+    "attach_managed_identity",
+    "build_database_url",
     "engine_cache_key",
     "ensure_database_ready",
     "ensure_sqlite_database_directory",

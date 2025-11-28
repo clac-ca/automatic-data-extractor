@@ -9,7 +9,10 @@ from ade_api.settings import Settings
 
 
 def _make_documents_service(tmp_path: Path) -> DocumentsService:
-    settings = Settings(documents_dir=tmp_path)
+    settings = Settings(
+        documents_dir=tmp_path,
+        jwt_secret="test-jwt-secret-for-tests-please-change",
+    )
     session = MagicMock()
     return DocumentsService(session=session, settings=settings)
 
