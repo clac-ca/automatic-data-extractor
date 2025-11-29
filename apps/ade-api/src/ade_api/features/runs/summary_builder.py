@@ -182,6 +182,10 @@ def build_run_summary(
 
         by_field = validation_summary.get("issues_by_field")
         if isinstance(by_field, dict):
+            # Validation summary is authoritative; reset field-level aggregates before applying.
+            field_issue_totals = defaultdict(int)
+            field_issue_counts = defaultdict(lambda: defaultdict(int))
+            field_issue_codes = defaultdict(lambda: defaultdict(int))
             for field_name, details in by_field.items():
                 if not isinstance(details, dict):
                     continue

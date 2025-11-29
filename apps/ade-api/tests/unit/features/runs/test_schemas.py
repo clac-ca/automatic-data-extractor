@@ -64,9 +64,9 @@ def test_run_create_request_defaults_to_no_stream() -> None:
 
 
 def test_run_events_page_serializes_cursor() -> None:
-    page = RunEventsPage(items=[], next_cursor="9")
+    page = RunEventsPage(items=[], next_after_sequence=9)
     payload = page.model_dump()
-    assert payload["next_cursor"] == "9"
+    assert payload["next_after_sequence"] == 9
 
 
 def test_run_output_listing_shapes_entries() -> None:

@@ -78,10 +78,10 @@ class RunEventStorage:
         after_sequence: int | None = None,
     ) -> Iterable[AdeEvent]:
         path = self.events_path(workspace_id=workspace_id, run_id=run_id, create=False)
-        if not path.exists():
-            return []
 
         def _iter() -> Iterable[AdeEvent]:
+            if not path.exists():
+                return
             with path.open("r", encoding="utf-8") as handle:
                 for raw in handle:
                     if not raw.strip():
@@ -150,7 +150,7 @@ class RunEventDispatcher:
             build_id=build_id,
             payload=payload,
         )
-        await self._storage.append(event)
+        await self.storage.append(event)
         await self._publish(event)
         return event
 
@@ -188,7 +188,7 @@ class RunEventDispatcher:
         async with lock:
             if run_id not in self._sequence_by_run:
                 self._sequence_by_run[run_id] = await asyncio.to_thread(
-                    self._storage.last_sequence,
+                    self.storage.last_sequence,
                     workspace_id=workspace_id,
                     run_id=run_id,
                 )

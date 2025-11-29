@@ -26,6 +26,7 @@ from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.db.session import get_sessionmaker
 from ade_api.shared.dependency import (
+    _get_run_event_dispatcher,
     get_runs_service,
     require_authenticated,
     require_csrf,
@@ -93,8 +94,14 @@ async def _execute_run_background(
     session_factory = get_sessionmaker(settings=settings)
     context = RunExecutionContext.from_dict(context_data)
     options = RunCreateOptions(**options_data)
+    dispatcher = _get_run_event_dispatcher(settings=settings)
     async with session_factory() as session:
-        service = RunsService(session=session, settings=settings)
+        service = RunsService(
+            session=session,
+            settings=settings,
+            event_dispatcher=dispatcher,
+            event_storage=dispatcher.storage,
+        )
         try:
             await service.run_to_completion(context=context, options=options)
         except Exception:  # pragma: no cover - defensive logging
@@ -236,16 +243,23 @@ async def get_run_events_endpoint(
                     workspace_id=run.workspace_id,
                     run_id=run.id,
                 )
-                sent = 0
                 last_replayed = after_sequence or 0
-                for event in reader.iter(after_sequence=after_sequence):
-                    yield _sse_event_bytes(event)
-                    sent += 1
-                    if event.sequence:
-                        last_replayed = max(last_replayed, event.sequence)
-                    if sent >= limit:
+
+                # Drain persisted backlog in pages to avoid dropping events beyond the first page.
+                while True:
+                    page_sent = 0
+                    for event in reader.iter(after_sequence=last_replayed):
+                        yield _sse_event_bytes(event)
+                        page_sent += 1
+                        if event.sequence:
+                            last_replayed = max(last_replayed, event.sequence)
+                        if page_sent >= limit:
+                            break
+
+                    if page_sent < limit:
                         break
 
+                # Then stream live events, skipping anything we've already replayed.
                 async for live_event in subscription:
                     if live_event.sequence and live_event.sequence <= last_replayed:
                         continue

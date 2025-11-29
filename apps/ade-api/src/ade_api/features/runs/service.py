@@ -1150,8 +1150,8 @@ class RunsService:
         # Events path: summary beats defaults, then fall back to logs/events.ndjson.
         logs_dir = run_dir / "logs"
         event_candidates: list[str | Path | None] = [
-            summary.get("events_path") if summary else None,
             logs_dir / "events.ndjson",
+            summary.get("events_path") if summary else None,
         ]
         for candidate in event_candidates:
             snapshot.events_path = self._relative_if_exists(candidate)
@@ -1514,10 +1514,13 @@ class RunsService:
             run_dir=run_dir,
         )
 
+        engine_logs_dir = run_dir / "engine-logs"
+        engine_logs_dir.mkdir(parents=True, exist_ok=True)
+
         command = [str(python), "-m", "ade_engine", "run"]
         command.extend(["--input", str(staged_input)])
         command.extend(["--output-dir", str(run_dir / "output")])
-        command.extend(["--logs-dir", str(run_dir / "logs")])
+        command.extend(["--logs-dir", str(engine_logs_dir)])
 
         sheets = options.input_sheet_names or []
         if options.input_sheet_name:
@@ -1540,7 +1543,11 @@ class RunsService:
         if safe_mode_enabled:
             command.append("--safe-mode")
 
-        runner = EngineSubprocessRunner(command=command, run_dir=run_dir, env=env)
+        runner = EngineSubprocessRunner(
+            command=command,
+            logs_dir=engine_logs_dir,
+            env=env,
+        )
 
         summary: dict[str, Any] | None = None
         paths_snapshot = RunPathsSnapshot()
@@ -1549,14 +1556,10 @@ class RunsService:
         async for frame in runner.stream():
             if isinstance(frame, StdoutFrame):
                 summary = self._parse_summary(frame.message, default=summary)
-                await self._append_log(run.id, frame.message, stream=frame.stream)
                 continue
 
             # Engine AdeEvents flow through unchanged, mirrored to logs in debug mode.
             self._log_event_debug(frame, origin="engine")
-
-            serialized = frame.model_dump_json()
-            await self._append_log(run.id, serialized, stream="stdout")
             yield frame
 
         # Process completion and summarize.

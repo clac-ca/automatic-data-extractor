@@ -36,12 +36,12 @@ class EngineSubprocessRunner:
         self,
         *,
         command: list[str],
-        run_dir: Path,
+        logs_dir: Path,
         env: dict[str, str],
         poll_interval: float = 0.2,
     ) -> None:
         self._command = command
-        self._run_dir = run_dir
+        self._logs_dir = logs_dir
         self._env = env
         self._poll_interval = poll_interval
         self._queue: asyncio.Queue[RunnerFrame | None] = asyncio.Queue()
@@ -91,7 +91,7 @@ class EngineSubprocessRunner:
             await self._queue.put(None)
 
     async def _capture_telemetry(self, process: asyncio.subprocess.Process) -> None:
-        events_path = self._run_dir / "logs" / "events.ndjson"
+        events_path = self._logs_dir / "events.ndjson"
         position = 0
         try:
             while True:
@@ -109,7 +109,7 @@ class EngineSubprocessRunner:
                         logger.warning(
                             "run.telemetry.invalid",
                             extra=log_context(
-                                run_dir=str(self._run_dir),
+                                logs_dir=str(self._logs_dir),
                                 line=line,
                                 error=str(exc),
                             ),
