@@ -48,7 +48,7 @@ export async function* streamRun(
   }
 }
 
-async function* streamRunEvents(
+export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
@@ -56,6 +56,7 @@ async function* streamRunEvents(
   const queue: Array<RunStreamEvent | null> = [];
   const awaiters: Array<() => void> = [];
 
+  let source: EventSource | null = null;
   let done = false;
   let error: unknown;
 
@@ -72,14 +73,17 @@ async function* streamRunEvents(
     if (reason) {
       error = reason;
     }
-    source.close();
+    if (source) {
+      source.removeEventListener?.("ade.event", handleRunEvent as EventListener);
+      source.onmessage = null;
+      source.onerror = null;
+      source.close();
+    }
     queue.push(null);
     flush();
   };
 
-  const source = new EventSource(url, { withCredentials: true });
-
-  source.onmessage = (msg) => {
+  const handleRunEvent = (msg: MessageEvent<string>) => {
     try {
       const event = JSON.parse(msg.data) as RunStreamEvent;
       queue.push(event);
@@ -91,6 +95,10 @@ async function* streamRunEvents(
       console.warn("Skipping malformed run event", err, msg.data);
     }
   };
+
+  source = new EventSource(url, { withCredentials: true });
+  source.addEventListener("ade.event", handleRunEvent as EventListener);
+  source.onmessage = handleRunEvent;
 
   source.onerror = () => {
     if (signal?.aborted) {
@@ -110,25 +118,29 @@ async function* streamRunEvents(
     }
   }
 
-  while (true) {
-    if (!queue.length) {
-      await new Promise<void>((resolve) => awaiters.push(resolve));
-    }
+  try {
+    while (true) {
+      if (!queue.length) {
+        await new Promise<void>((resolve) => awaiters.push(resolve));
+      }
 
-    const next = queue.shift();
-    if (next === null) {
+      const next = queue.shift();
+      if (next === null) {
+        if (error) {
+          throw error;
+        }
+        break;
+      }
+      if (!next) {
+        continue;
+      }
       if (error) {
         throw error;
       }
-      break;
+      yield next;
     }
-    if (!next) {
-      continue;
-    }
-    if (error) {
-      throw error;
-    }
-    yield next;
+  } finally {
+    close();
   }
 }
 
