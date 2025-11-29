@@ -633,7 +633,8 @@ async def test_stream_run_safe_mode(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "run.queued"
@@ -718,7 +719,8 @@ async def test_stream_run_respects_persisted_safe_mode_override(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[-1]["type"] == "run.completed"
@@ -798,11 +800,12 @@ async def test_stream_run_processes_real_documents(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
+    assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
     run_response = await async_client.get(f"/api/v1/runs/{run_id}")
@@ -934,11 +937,12 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
+    assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
@@ -1015,11 +1019,12 @@ async def test_stream_run_sheet_selection_variants(
             async for line in response.aiter_lines():
                 if not line:
                     continue
-                events.append(json.loads(line))
+                if line.startswith("data: "):
+                    events.append(json.loads(line.removeprefix("data: ")))
 
-        assert events and events[0]["type"] == "run.queued"
-        assert events[-1]["type"] == "run.completed"
-        assert events[-1]["status"] == "succeeded"
+            assert events and events[0]["type"] == "run.queued"
+            assert events[-1]["type"] == "run.completed"
+            assert events[-1].get("payload", {}).get("status") == "succeeded"
         run_id = events[0]["run_id"]
 
         outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")

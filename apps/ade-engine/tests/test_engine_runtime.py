@@ -52,9 +52,9 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
 
-    assert any(evt.type == "run.completed" and evt.model_extra.get("status") == "succeeded" for evt in events)
+    assert any(evt.type == "run.completed" and evt.payload_dict().get("status") == "succeeded" for evt in events)
     table_event = next(evt for evt in events if evt.type == "run.table.summary")
-    table = table_event.model_extra
+    table = table_event.payload_dict()
     assert table["row_count"] == 2
 
 
@@ -75,7 +75,7 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
     completion = next(evt for evt in events if evt.type == "run.completed")
-    assert completion.model_extra.get("status") == "failed"
+    assert completion.payload_dict().get("status") == "failed"
 
 
 def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,7 +92,7 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
     table_event = next(evt for evt in events if evt.type == "run.table.summary")
-    table = table_event.model_extra
+    table = table_event.payload_dict()
 
     mapped_fields = [
         {key: field.get(key) for key in ("field", "header", "score", "source_column_index")}
