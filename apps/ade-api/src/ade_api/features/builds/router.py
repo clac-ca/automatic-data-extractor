@@ -39,6 +39,16 @@ def _event_bytes(event: Any) -> bytes:
     return json.dumps(event).encode("utf-8") + b"\n"
 
 
+def _sse_event_bytes(event: AdeEvent) -> bytes:
+    payload = event.model_dump_json()
+    parts: list[str] = []
+    if event.sequence is not None:
+        parts.append(f"id: {event.sequence}")
+    parts.append("event: ade.event")
+    parts.append(f"data: {payload}")
+    return "\n".join(parts).encode("utf-8") + b"\n\n"
+
+
 async def _execute_build_background(
     context_data: dict[str, Any],
     options_data: dict[str, Any],
@@ -134,23 +144,29 @@ async def create_build_endpoint(
     async def event_stream() -> AsyncIterator[bytes]:
         try:
             async for event in service.stream_build(context=context, options=payload.options):
-                yield _event_bytes(event)
+                if isinstance(event, AdeEvent):
+                    yield _sse_event_bytes(event)
+                else:
+                    yield _event_bytes(event)
         except BuildNotFoundError:
             return
         except BuildExecutionError as exc:
             error_event = AdeEvent(
-                type="build.console",
+                type="console.line",
                 created_at=utc_now(),
                 build_id=build.id,
                 workspace_id=build.workspace_id,
                 configuration_id=build.configuration_id,
-                stream="stderr",
-                level="error",
-                message=str(exc),
+                payload={
+                    "scope": "build",
+                    "stream": "stderr",
+                    "level": "error",
+                    "message": str(exc),
+                },
             )
-            yield _event_bytes(error_event)
+            yield _sse_event_bytes(error_event)
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/builds/{build_id}", response_model=BuildResource)

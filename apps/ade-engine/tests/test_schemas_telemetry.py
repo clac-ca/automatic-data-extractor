@@ -10,12 +10,10 @@ def test_telemetry_envelope_defaults():
         run_id="run-uuid",
         workspace_id="ws-1",
         configuration_id="cfg-1",
-        engine_version="0.2.0",
+        payload={"engine_version": "0.2.0"},
     )
 
-    assert envelope.schema == "ade.event/v1"
-    assert envelope.version == "1.0.0"
-    assert envelope.model_extra["engine_version"] == "0.2.0"
+    assert envelope.payload_dict()["engine_version"] == "0.2.0"
     assert envelope.workspace_id == "ws-1"
     assert envelope.configuration_id == "cfg-1"
 
@@ -25,10 +23,9 @@ def test_telemetry_serialization_round_trip():
         type="run.phase.started",
         created_at=datetime(2024, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
         run_id="run-uuid",
-        phase="extracting",
-        level="debug",
+        payload={"phase": "extracting", "level": "debug"},
     )
 
     data = envelope.model_dump()
     assert data["type"] == "run.phase.started"
-    assert data["phase"] == "extracting"
+    assert data["payload"]["phase"] == "extracting"

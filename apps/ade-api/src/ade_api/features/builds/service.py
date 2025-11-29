@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import (
+    AdeEvent,
+    BuildCompletedPayload,
+    BuildPhaseStartedPayload,
+    BuildStartedPayload,
+    ConsoleLinePayload,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
@@ -358,10 +364,7 @@ class BuildsService:
         yield self._ade_event(
             build=build,
             type_="build.started",
-            payload={
-                "status": "building",
-                "reason": reason,
-            },
+            payload=BuildStartedPayload(status="building", reason=reason),
         )
 
         artifacts: BuildArtifacts | None = None
@@ -384,26 +387,26 @@ class BuildsService:
                     yield self._ade_event(
                         build=build,
                         type_="build.phase.started",
-                        payload={
-                            "phase": event.step.value,
-                            "message": event.message,
-                        },
+                        payload=BuildPhaseStartedPayload(
+                            phase=event.step.value,
+                            message=event.message,
+                        ),
                     )
                 elif isinstance(event, BuilderLogEvent):
-                    log = await self._append_log(
+                    await self._append_log(
                         build_id=build.id,
                         message=event.message,
                         stream=event.stream,
                     )
                     yield self._ade_event(
                         build=build,
-                        type_="build.console",
-                        payload={
-                            "stream": event.stream,
-                            "level": "warning" if event.stream == "stderr" else "info",
-                            "message": event.message,
-                            "created": self._epoch_seconds(log.created_at),
-                        },
+                        type_="console.line",
+                        payload=ConsoleLinePayload(
+                            scope="build",
+                            stream=event.stream,
+                            level="warning" if event.stream == "stderr" else "info",
+                            message=event.message,
+                        ),
                     )
                 elif isinstance(event, BuilderArtifactsEvent):
                     artifacts = event.artifacts
@@ -426,12 +429,14 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                payload={
-                    "status": self._status_literal(build.status),
-                    "exit_code": build.exit_code,
-                    "summary": build.summary,
-                    "error": {"message": build.error_message} if build.error_message else None,
-                },
+                payload=BuildCompletedPayload(
+                    status=self._status_literal(build.status),
+                    exit_code=build.exit_code,
+                    summary=build.summary,
+                    error={"message": build.error_message}
+                    if build.error_message
+                    else None,
+                ),
             )
             return
 
@@ -453,12 +458,14 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                payload={
-                    "status": self._status_literal(build.status),
-                    "exit_code": build.exit_code,
-                    "summary": build.summary,
-                    "error": {"message": build.error_message} if build.error_message else None,
-                },
+                payload=BuildCompletedPayload(
+                    status=self._status_literal(build.status),
+                    exit_code=build.exit_code,
+                    summary=build.summary,
+                    error={"message": build.error_message}
+                    if build.error_message
+                    else None,
+                ),
             )
             return
 
@@ -680,11 +687,12 @@ class BuildsService:
         return AdeEvent(
             type=type_,
             created_at=utc_now(),
+            source="api.builds",
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
             run_id=None,
             build_id=build.id,
-            **(payload or {}),
+            payload=payload or {},
         )
 
     # ------------------------------------------------------------------
