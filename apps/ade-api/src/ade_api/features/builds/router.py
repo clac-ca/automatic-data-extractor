@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from ade_engine.schemas import AdeEvent
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security, status
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
@@ -25,7 +25,7 @@ from ade_api.shared.dependency import (
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildResource
-from .service import DEFAULT_STREAM_LIMIT, BuildExecutionContext, BuildsService
+from .service import BuildExecutionContext, BuildsService
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)

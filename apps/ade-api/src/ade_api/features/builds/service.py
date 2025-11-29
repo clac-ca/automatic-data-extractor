@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from ade_engine.schemas import (
     AdeEvent,
+    AdeEventPayload,
     BuildCompletedPayload,
     BuildPhaseStartedPayload,
     BuildStartedPayload,
