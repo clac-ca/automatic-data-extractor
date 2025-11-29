@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import (
+    AdeEvent,
+    AdeEventPayload,
+    BuildCompletedPayload,
+    BuildPhaseStartedPayload,
+    BuildStartedPayload,
+    ConsoleLinePayload,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
@@ -40,15 +47,9 @@ from .exceptions import (
     BuildNotFoundError,
     BuildWorkspaceMismatchError,
 )
-from .models import Build, BuildLog, BuildStatus
+from .models import Build, BuildStatus
 from .repository import BuildsRepository
-from .schemas import (
-    BuildCreateOptions,
-    BuildLogEntry,
-    BuildLogsResponse,
-    BuildResource,
-    BuildStatusLiteral,
-)
+from .schemas import BuildCreateOptions, BuildResource, BuildStatusLiteral
 
 __all__ = [
     "BuildExecutionContext",
@@ -358,10 +359,7 @@ class BuildsService:
         yield self._ade_event(
             build=build,
             type_="build.started",
-            payload={
-                "status": "building",
-                "reason": reason,
-            },
+            payload=BuildStartedPayload(status="building", reason=reason),
         )
 
         artifacts: BuildArtifacts | None = None
@@ -384,26 +382,21 @@ class BuildsService:
                     yield self._ade_event(
                         build=build,
                         type_="build.phase.started",
-                        payload={
-                            "phase": event.step.value,
-                            "message": event.message,
-                        },
+                        payload=BuildPhaseStartedPayload(
+                            phase=event.step.value,
+                            message=event.message,
+                        ),
                     )
                 elif isinstance(event, BuilderLogEvent):
-                    log = await self._append_log(
-                        build_id=build.id,
-                        message=event.message,
-                        stream=event.stream,
-                    )
                     yield self._ade_event(
                         build=build,
-                        type_="build.console",
-                        payload={
-                            "stream": event.stream,
-                            "level": "warning" if event.stream == "stderr" else "info",
-                            "message": event.message,
-                            "created": self._epoch_seconds(log.created_at),
-                        },
+                        type_="console.line",
+                        payload=ConsoleLinePayload(
+                            scope="build",
+                            stream=event.stream,
+                            level="warning" if event.stream == "stderr" else "info",
+                            message=event.message,
+                        ),
                     )
                 elif isinstance(event, BuilderArtifactsEvent):
                     artifacts = event.artifacts
@@ -426,12 +419,14 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                payload={
-                    "status": self._status_literal(build.status),
-                    "exit_code": build.exit_code,
-                    "summary": build.summary,
-                    "error": {"message": build.error_message} if build.error_message else None,
-                },
+                payload=BuildCompletedPayload(
+                    status=self._status_literal(build.status),
+                    exit_code=build.exit_code,
+                    summary=build.summary,
+                    error={"message": build.error_message}
+                    if build.error_message
+                    else None,
+                ),
             )
             return
 
@@ -453,12 +448,14 @@ class BuildsService:
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
-                payload={
-                    "status": self._status_literal(build.status),
-                    "exit_code": build.exit_code,
-                    "summary": build.summary,
-                    "error": {"message": build.error_message} if build.error_message else None,
-                },
+                payload=BuildCompletedPayload(
+                    status=self._status_literal(build.status),
+                    exit_code=build.exit_code,
+                    summary=build.summary,
+                    error={"message": build.error_message}
+                    if build.error_message
+                    else None,
+                ),
             )
             return
 
@@ -614,48 +611,6 @@ class BuildsService:
             raise BuildWorkspaceMismatchError(build_id)
         return build
 
-    async def get_logs(
-        self,
-        *,
-        build_id: str,
-        after_id: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
-    ) -> BuildLogsResponse:
-        logger.debug(
-            "build.logs.list.start",
-            extra=log_context(build_id=build_id, after_id=after_id, limit=limit),
-        )
-        logs = await self._builds.list_logs(
-            build_id=build_id,
-            after_id=after_id,
-            limit=limit,
-        )
-        entries = [
-            BuildLogEntry(
-                id=log.id,
-                created=self._epoch_seconds(log.created_at),
-                stream=log.stream,
-                message=log.message,
-            )
-            for log in logs
-        ]
-        next_after_id = entries[-1].id if entries and len(entries) == limit else None
-
-        logger.debug(
-            "build.logs.list.success",
-            extra=log_context(
-                build_id=build_id,
-                count=len(entries),
-                next_after_id=next_after_id,
-            ),
-        )
-
-        return BuildLogsResponse(
-            build_id=build_id,
-            entries=entries,
-            next_after_id=next_after_id,
-        )
-
     def to_resource(self, build: Build) -> BuildResource:
         return BuildResource(
             id=build.id,
@@ -675,16 +630,17 @@ class BuildsService:
         *,
         build: Build,
         type_: str,
-        payload: dict[str, Any] | None = None,
+        payload: AdeEventPayload | dict[str, Any] | None = None,
     ) -> AdeEvent:
         return AdeEvent(
             type=type_,
             created_at=utc_now(),
+            source="api",
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
             run_id=None,
             build_id=build.id,
-            **(payload or {}),
+            payload=payload or {},
         )
 
     # ------------------------------------------------------------------
@@ -835,25 +791,6 @@ class BuildsService:
             ),
         )
         return build
-
-    async def _append_log(
-        self,
-        *,
-        build_id: str,
-        message: str,
-        stream: str,
-    ) -> BuildLog:
-        log = BuildLog(
-            build_id=build_id,
-            message=message,
-            stream=stream,
-        )
-        await self._builds.add_log(log)
-        await self._session.commit()
-        await self._session.refresh(log)
-        # We intentionally don't log per-line here; the engine event stream
-        # already captures console output at a finer granularity.
-        return log
 
     async def _handle_failure(
         self,

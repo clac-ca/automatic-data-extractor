@@ -9,7 +9,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ?? "";
 const baseUrl = rawBaseUrl.endsWith("/api/v1") ? rawBaseUrl.slice(0, -"/api/v1".length) : rawBaseUrl;
 
-function resolveApiUrl(path: string) {
+export function resolveApiUrl(path: string) {
   if (!path.startsWith("/")) {
     throw new Error("API paths must begin with '/' relative to the server root");
   }

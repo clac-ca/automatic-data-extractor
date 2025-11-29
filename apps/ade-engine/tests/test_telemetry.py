@@ -97,20 +97,16 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     sink = FileEventSink(path=path, min_level="info")
 
     info_event = AdeEvent(
-        type="run.console",
+        type="console.line",
         created_at=datetime.now(timezone.utc),
         run_id=run.run_id,
-        stream="stdout",
-        level="info",
-        message="started",
+        payload={"scope": "run", "stream": "stdout", "level": "info", "message": "started"},
     )
     debug_event = AdeEvent(
-        type="run.console",
+        type="console.line",
         created_at=datetime.now(timezone.utc),
         run_id=run.run_id,
-        stream="stdout",
-        level="debug",
-        message="verbose",
+        payload={"scope": "run", "stream": "stdout", "level": "debug", "message": "verbose"},
     )
 
     sink.emit(info_event)
@@ -120,9 +116,8 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     assert len(lines) == 1
 
     first = json.loads(lines[0])
-    assert first["schema"] == "ade.event/v1"
     assert first["run_id"] == run.run_id
-    assert first["message"] == "started"
+    assert first["payload"]["message"] == "started"
 
 
 def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
@@ -139,13 +134,13 @@ def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
 
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
 
-    assert events[0]["type"] == "run.console"
-    assert events[0]["message"] == "Started run"
+    assert events[0]["type"] == "console.line"
+    assert events[0]["payload"]["message"] == "Started run"
     assert events[1]["type"] == "run.phase.started"
-    assert events[1]["phase"] == "mapping"
+    assert events[1]["payload"]["phase"] == "mapping"
 
     table_event = events[2]
     assert table_event["type"] == "run.table.summary"
-    assert table_event["row_count"] == 2
-    assert table_event["validation"]["total"] == 0
-    assert table_event["mapped_fields"][0]["field"] == "id"
+    assert table_event["payload"]["row_count"] == 2
+    assert table_event["payload"]["validation"]["total"] == 0
+    assert table_event["payload"]["mapped_fields"][0]["field"] == "id"

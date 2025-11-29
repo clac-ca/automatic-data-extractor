@@ -256,7 +256,10 @@ async def test_stream_build_success(
     assert refreshed is not None
     assert refreshed.status is BuildStatus.ACTIVE
     assert refreshed.summary == "Build succeeded"
-    logs = await service.get_logs(build_id=build.id)
-    assert [entry.message for entry in logs.entries] == ["log 1", "log 2"]
-    assert logs.next_after_id is None
+    console_messages = [
+        evt.payload_dict().get("message")
+        for evt in events
+        if getattr(evt, "type", "") == "console.line"
+    ]
+    assert console_messages == ["log 1", "log 2"]
     assert any(getattr(evt, "type", "") == "build.completed" for evt in events)

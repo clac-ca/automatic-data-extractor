@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
-from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Build, BuildLog
+from .models import Build
 
 __all__ = [
     "BuildsRepository",
@@ -26,25 +23,3 @@ class BuildsRepository:
     async def add(self, build: Build) -> None:
         self._session.add(build)
         await self._session.flush()
-
-    async def add_log(self, log: BuildLog) -> BuildLog:
-        self._session.add(log)
-        await self._session.flush()
-        return log
-
-    def logs_query(self) -> Select[tuple[BuildLog]]:
-        return select(BuildLog)
-
-    async def list_logs(
-        self,
-        *,
-        build_id: str,
-        after_id: int | None = None,
-        limit: int = 1000,
-    ) -> Sequence[BuildLog]:
-        stmt = self.logs_query().where(BuildLog.build_id == build_id)
-        if after_id is not None:
-            stmt = stmt.where(BuildLog.id > after_id)
-        stmt = stmt.order_by(BuildLog.id.asc()).limit(limit)
-        result = await self._session.execute(stmt)
-        return result.scalars().all()

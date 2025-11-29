@@ -10,7 +10,7 @@ from pathlib import Path
 import tomllib
 
 import pytest
-from ade_engine.schemas import AdeEvent
+from ade_engine.schemas import AdeEvent, ConsoleLinePayload, RunCompletedPayload
 
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
 from ade_api.features.builds.models import Build, BuildStatus
@@ -204,20 +204,28 @@ async def test_stream_run_happy_path_yields_engine_events(
         context: RunExecutionContext,
         options: RunCreateOptions,
         ) -> AsyncIterator[AdeEvent]:
-            log = await self._append_log(run.id, "engine output", stream="stdout")
-            yield self._ade_event(
-                run=run,
-                type_="run.console",
-                payload={
-                    "stream": "stdout",
-                    "level": "info",
-                    "message": "engine output",
-                    "created": self._epoch_seconds(log.created_at),
-                },
+            await self._append_log(run.id, "engine output", stream="stdout")
+            yield await self._event_dispatcher.emit(
+                type="console.line",
+                source="engine",
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                build_id=run.build_id,
+                payload=ConsoleLinePayload(
+                    scope="run",
+                    stream="stdout",
+                    level="info",
+                    message="engine output",
+                ),
             )
-            telemetry = self._ade_event(
-                run=run,
-                type_="run.phase.started",
+            telemetry = await self._event_dispatcher.emit(
+                type="run.phase.started",
+                source="engine",
+                workspace_id=run.workspace_id,
+                configuration_id=run.configuration_id,
+                run_id=run.id,
+                build_id=run.build_id,
                 payload={"phase": "extracting"},
             )
             await self._append_log(run.id, telemetry.model_dump_json(), stream="stdout")
@@ -227,13 +235,17 @@ async def test_stream_run_happy_path_yields_engine_events(
                 status=RunStatus.SUCCEEDED,
                 exit_code=0,
             )
-            yield self._ade_event(
-                run=completion,
-                type_="run.completed",
-                payload={
-                    "status": "succeeded",
-                    "execution": {"exit_code": completion.exit_code},
-                },
+            yield await self._event_dispatcher.emit(
+                type="run.completed",
+                source="api",
+                workspace_id=completion.workspace_id,
+                configuration_id=completion.configuration_id,
+                run_id=completion.id,
+                build_id=completion.build_id,
+                payload=RunCompletedPayload(
+                    status="succeeded",
+                    execution={"exit_code": completion.exit_code},
+                ),
             )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
@@ -243,7 +255,7 @@ async def test_stream_run_happy_path_yields_engine_events(
         events.append(event)
 
     assert events[0].type == "run.queued"
-    assert events[1].type == "run.console"
+    assert events[1].type == "console.line"
     assert events[2].type == "run.phase.started"
     assert events[3].type == "run.completed"
 
@@ -279,7 +291,7 @@ async def test_stream_run_handles_engine_failure(
         events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].model_extra.get("status") == "failed"
+    assert events[-1].payload_dict().get("status") == "failed"
     failure_logs = await service.get_logs(run_id=context.run_id)
     assert failure_logs.entries[-1].message.startswith("ADE run failed: boom")
 
@@ -311,7 +323,7 @@ async def test_stream_run_handles_cancelled_execution(
             events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].model_extra.get("status") == "canceled"
+    assert events[-1].payload_dict().get("status") == "canceled"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -391,11 +403,13 @@ async def test_stream_run_validate_only_short_circuits(
     assert [event.type for event in events] == [
         "run.queued",
         "run.started",
-        "run.console",
+        "console.line",
         "run.completed",
     ]
-    assert events[-1].model_extra.get("status") == "succeeded"
-    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Validation-only execution"
+    payload = events[-1].payload_dict()
+    assert payload.get("status") == "succeeded"
+    summary = payload.get("summary", {})
+    assert summary.get("run", {}).get("failure_message") == "Validation-only execution"
 
     run = await service.get_run(context.run_id)
     assert run is not None
@@ -405,6 +419,129 @@ async def test_stream_run_validate_only_short_circuits(
     assert summary.get("run", {}).get("failure_message") == "Validation-only execution"
     logs = await service.get_logs(run_id=context.run_id)
     assert logs.entries[0].message == "Run options: validate-only mode"
+
+    # Validate that the persisted event log also captured completion.
+    stored_events, _ = await service.get_run_events(run_id=context.run_id, limit=10)
+    assert [event.type for event in stored_events][-1] == "run.completed"
+
+
+@pytest.mark.asyncio()
+async def test_stream_run_emits_build_events_when_requested(
+    session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, context, document = await _prepare_service(session, tmp_path)
+    builds_service = service._builds_service
+    workspace_id = context.workspace_id
+    configuration_id = context.configuration_id
+
+    build_ctx = BuildExecutionContext(
+        build_id="build_stream",
+        configuration_id=configuration_id,
+        workspace_id=workspace_id,
+        config_path=str(tmp_path / "config"),
+        venv_root=str(tmp_path / "venvroot"),
+        python_bin=None,
+        engine_spec="engine-spec",
+        engine_version_hint="1.0.0",
+        pip_cache_dir=None,
+        timeout_seconds=60.0,
+        should_run=True,
+        fingerprint="abc",
+    )
+
+    async def fake_prepare_build(*, workspace_id: str, configuration_id: str, options):  # type: ignore[no-untyped-def]
+        build = Build(
+            id=build_ctx.build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            status=BuildStatus.QUEUED,
+            created_at=utc_now(),
+        )
+        return build, build_ctx
+
+    outer_workspace_id = workspace_id
+
+    async def fake_stream_build(*, context, options):  # type: ignore[no-untyped-def]
+        yield AdeEvent(
+            type="console.line",
+            created_at=utc_now(),
+            workspace_id=context.workspace_id,
+            configuration_id=context.configuration_id,
+            build_id=context.build_id,
+            payload=ConsoleLinePayload(
+                scope="build", stream="stdout", level="info", message="building..."
+            ),
+        )
+
+    async def fake_get_build_or_raise(build_id: str, workspace_id: str | None = None):  # type: ignore[no-untyped-def]
+        return Build(
+            id=build_id,
+            workspace_id=workspace_id or outer_workspace_id,
+            configuration_id=configuration_id,
+            status=BuildStatus.ACTIVE,
+            created_at=utc_now(),
+        )
+
+    async def fake_ensure_local_env(*, build):  # type: ignore[no-untyped-def]
+        return tmp_path / "venvroot" / ".venv"
+
+    async def fake_execute_engine(
+        self: RunsService,
+        *,
+        run,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        safe_mode_enabled: bool = False,
+    ) -> AsyncIterator[AdeEvent]:
+        completion = await self._complete_run(
+            run,
+            status=RunStatus.SUCCEEDED,
+            exit_code=0,
+            summary=None,
+        )
+        yield await self._event_dispatcher.emit(
+            type="run.completed",
+            source="api",
+            workspace_id=completion.workspace_id,
+            configuration_id=completion.configuration_id,
+            run_id=completion.id,
+            build_id=completion.build_id,
+            payload=RunCompletedPayload(
+                status="succeeded",
+                execution={"exit_code": completion.exit_code},
+            ),
+        )
+
+    monkeypatch.setattr(builds_service, "prepare_build", fake_prepare_build)
+    monkeypatch.setattr(builds_service, "stream_build", fake_stream_build)
+    monkeypatch.setattr(builds_service, "get_build_or_raise", fake_get_build_or_raise)
+    monkeypatch.setattr(builds_service, "ensure_local_env", fake_ensure_local_env)
+    monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
+
+    run_options = RunCreateOptions(input_document_id=document.id)
+    _, stream_context = await service.prepare_run(
+        configuration_id=configuration_id,
+        options=run_options,
+        stream_build=True,
+    )
+
+    events = []
+    async for event in service.stream_run(context=stream_context, options=run_options):
+        events.append(event)
+
+    assert [e.type for e in events] == [
+        "run.queued",
+        "console.line",
+        "console.line",
+        "run.completed",
+    ]
+    run = await service.get_run(stream_context.run_id)
+    assert run is not None
+    assert run.status is RunStatus.SUCCEEDED
+    logs = await service.get_logs(run_id=stream_context.run_id)
+    assert any("Configuration build completed" in entry.message for entry in logs.entries)
 
 
 @pytest.mark.asyncio()
@@ -419,12 +556,16 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
     assert [event.type for event in events] == [
         "run.queued",
         "run.started",
-        "run.console",
+        "console.line",
         "run.completed",
     ]
-    assert events[-1].model_extra.get("status") == "succeeded"
-    assert (events[-1].model_extra.get("execution") or {}).get("exit_code") == 0
-    assert events[-1].model_extra.get("run_summary", {}).get("run", {}).get("failure_message") == "Safe mode skip"
+    payload = events[-1].payload_dict()
+    assert payload.get("status") == "succeeded"
+    assert (payload.get("execution") or {}).get("exit_code") == 0
+    artifacts = payload.get("artifacts", {})
+    assert "output_paths" in artifacts
+    summary = payload.get("summary", {})
+    assert summary.get("run", {}).get("failure_message") == "Safe mode skip"
 
     run = await service.get_run(context.run_id)
     assert run is not None

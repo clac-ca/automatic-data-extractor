@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from ade_engine.schemas import AdeEvent
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security, status
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
@@ -24,8 +24,8 @@ from ade_api.shared.dependency import (
 )
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
-from .schemas import BuildCreateOptions, BuildCreateRequest, BuildLogsResponse, BuildResource
-from .service import DEFAULT_STREAM_LIMIT, BuildExecutionContext, BuildsService
+from .schemas import BuildCreateOptions, BuildCreateRequest, BuildResource
+from .service import BuildExecutionContext, BuildsService
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)
@@ -37,6 +37,19 @@ def _event_bytes(event: Any) -> bytes:
     if hasattr(event, "json_bytes"):
         return event.json_bytes() + b"\n"
     return json.dumps(event).encode("utf-8") + b"\n"
+
+
+def _sse_event_bytes(event: AdeEvent) -> bytes:
+    """Format an AdeEvent for SSE (constant event: ade.event)."""
+
+    payload = event.model_dump_json()
+    lines = payload.splitlines() or [""]
+    parts: list[str] = []
+    if event.sequence is not None:
+        parts.append(f"id: {event.sequence}")
+    parts.append("event: ade.event")
+    parts.extend(f"data: {line}" for line in lines)
+    return "\n".join(parts).encode("utf-8") + b"\n\n"
 
 
 async def _execute_build_background(
@@ -134,23 +147,29 @@ async def create_build_endpoint(
     async def event_stream() -> AsyncIterator[bytes]:
         try:
             async for event in service.stream_build(context=context, options=payload.options):
-                yield _event_bytes(event)
+                if isinstance(event, AdeEvent):
+                    yield _sse_event_bytes(event)
+                else:
+                    yield _event_bytes(event)
         except BuildNotFoundError:
             return
         except BuildExecutionError as exc:
             error_event = AdeEvent(
-                type="build.console",
+                type="console.line",
                 created_at=utc_now(),
                 build_id=build.id,
                 workspace_id=build.workspace_id,
                 configuration_id=build.configuration_id,
-                stream="stderr",
-                level="error",
-                message=str(exc),
+                payload={
+                    "scope": "build",
+                    "stream": "stderr",
+                    "level": "error",
+                    "message": str(exc),
+                },
             )
-            yield _event_bytes(error_event)
+            yield _sse_event_bytes(error_event)
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/builds/{build_id}", response_model=BuildResource)
@@ -162,16 +181,3 @@ async def get_build_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
     return service.to_resource(build)
-
-
-@router.get("/builds/{build_id}/logs", response_model=BuildLogsResponse)
-async def get_build_logs_endpoint(
-    build_id: Annotated[str, PathParam(min_length=1, description="Build identifier")],
-    after_id: int | None = Query(default=None, ge=0),
-    limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
-    service: BuildsService = builds_service_dependency,
-) -> BuildLogsResponse:
-    build = await service.get_build(build_id)
-    if build is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
-    return await service.get_logs(build_id=build_id, after_id=after_id, limit=limit)

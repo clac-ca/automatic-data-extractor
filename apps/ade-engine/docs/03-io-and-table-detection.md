@@ -95,7 +95,7 @@ def list_input_files(input_dir: Path) -> list[Path]:
 
 Characteristics:
 
-* **Deterministic order** — ensures reproducible results and artifact output.
+* **Deterministic order** — ensures reproducible results and telemetry.
 * **Simple filter** — engine currently supports `.csv` and `.xlsx` only.
 * Discovery is **shallow vs recursive** based on implementation; whatever we
   choose should be documented and stable.
@@ -362,42 +362,22 @@ Details:
 * `data_rows` — full set of rows between `first_data_row_index` and
   `last_data_row_index` that the algorithm considers part of the table.
 * Indices are **1‑based** and correspond to original sheet row numbers; this
-  is important for traceability and artifact reporting.
+  is important for traceability in telemetry and downstream summaries.
 
 `ExtractedTable` is the only table‑level type passed into column mapping.
 
 ---
 
-## 7. Integration with artifact and telemetry
-
-### 7.1 Artifact entries
-
-During extraction, the engine records basic information in the artifact
-(via `ArtifactSink`), such as:
-
-* For each table:
-
-  * `input_file`
-  * `input_sheet`
-  * `header.row_index`
-  * `header.cells`
-  * row counts, etc.
-
-This allows later inspection of what the engine believed the table shape was,
-even before mapping/normalization.
-
-### 7.2 Telemetry events
+## 7. Integration with telemetry
 
 `PipelineLogger` is available during extraction and may emit events like:
 
-* `pipeline_transition` with phase `"EXTRACTING"`.
-* `table_completed` for each table once it is fully mapped/validated.
-* `note` for human-readable breadcrumbs.
-* Custom `logger.event(...)` payloads from configs if you want finer-grained
-  signals (e.g. per-row validation issues).
+* `run.phase.started` with phase `"extracting"`.
+* `console.line` breadcrumbs for human-readable progress.
 
-These events are written to `events.ndjson` and can be consumed by the ADE
-backend for realtime progress indicators or metrics.
+Extraction does **not** write artifacts; downstream observability comes from
+the event log (`events.ndjson`). Table shape and row indices are reflected in
+the later `run.table.summary` events emitted during normalization/mapping.
 
 ---
 
@@ -414,7 +394,7 @@ backend for realtime progress indicators or metrics.
   * Engine may:
 
     * Treat it as “no tables found on sheet,” and/or
-    * Emit a warning in artifact/telemetry.
+    * Emit a warning in telemetry (`console.line`).
 
 Policies should be consistent and covered by tests.
 
@@ -445,7 +425,7 @@ The IO and table detection layer is responsible for:
 3. Using **config‑provided row detectors** to identify table boundaries and
    emit `ExtractedTable` objects with precise sheet/row metadata.
 
-Everything beyond this point — column mapping, normalization, artifact detail —
+Everything beyond this point — column mapping, normalization, telemetry detail —
 is layered on top of these `ExtractedTable`s. If extraction is correct and well
 instrumented, the rest of the pipeline can reliably reason about what the
 engine “saw” in the original spreadsheets.

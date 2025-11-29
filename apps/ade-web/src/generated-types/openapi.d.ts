@@ -902,23 +902,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/builds/{build_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Build Logs Endpoint */
-        get: operations["get_build_logs_endpoint_api_v1_builds__build_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/configurations/{configuration_id}/runs": {
         parameters: {
             query?: never;
@@ -1050,23 +1033,6 @@ export type paths = {
         };
         /** List Run Outputs Endpoint */
         get: operations["list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/diagnostics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run Diagnostics Endpoint */
-        get: operations["get_run_diagnostics_endpoint_api_v1_runs__run_id__diagnostics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1220,32 +1186,13 @@ export type components = {
         };
         /**
          * AdeEvent
-         * @description ADE event envelope used for engine telemetry, runs, and builds.
-         *
-         *     This schema intentionally mirrors the ``ade.event/v1`` envelope described in
-         *     the event model docs. Additional event-specific fields are allowed and kept
-         *     flat at the top level.
+         * @description Canonical ADE event envelope for build + run streaming.
          */
         AdeEvent: {
             /** Type */
             type: string;
-            /**
-             * Object
-             * @default ade.event
-             * @constant
-             */
-            object: "ade.event";
-            /**
-             * Schema
-             * @default ade.event/v1
-             * @constant
-             */
-            schema: "ade.event/v1";
-            /**
-             * Version
-             * @default 1.0.0
-             */
-            version: string;
+            /** Event Id */
+            event_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1253,78 +1200,27 @@ export type components = {
             created_at: string;
             /** Sequence */
             sequence?: number | null;
+            /** Source */
+            source?: string | null;
             /** Workspace Id */
             workspace_id?: string | null;
             /** Configuration Id */
             configuration_id?: string | null;
-            /** Job Id */
-            job_id?: string | null;
             /** Run Id */
             run_id?: string | null;
             /** Build Id */
             build_id?: string | null;
-            /** Source */
-            source?: string | null;
-            /** Details */
-            details?: {
+            /** Payload */
+            payload?: components["schemas"]["AdeEventPayload"] | {
                 [key: string]: unknown;
             } | null;
-            /** Error */
-            error?: {
-                [key: string]: unknown;
-            } | null;
-        } & {
+        };
+        /**
+         * AdeEventPayload
+         * @description Base class for structured AdeEvent payloads.
+         */
+        AdeEventPayload: {
             [key: string]: unknown;
-        };
-        /**
-         * ArtifactError
-         * @description Error details recorded when a run fails.
-         */
-        ArtifactError: {
-            /** Code */
-            code: components["schemas"]["RunErrorCode"] | string;
-            stage?: components["schemas"]["RunPhase"] | null;
-            /** Message */
-            message: string;
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** ArtifactNote */
-        ArtifactNote: {
-            /** Timestamp */
-            timestamp: string;
-            /** Level */
-            level: string;
-            /** Message */
-            message: string;
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * ArtifactV1
-         * @description Top-level artifact schema (v1).
-         */
-        ArtifactV1: {
-            /**
-             * Schema
-             * @default ade.artifact/v1
-             */
-            schema: string;
-            /**
-             * Version
-             * @default 1.0.0
-             */
-            version: string;
-            run: components["schemas"]["RunArtifact"];
-            config: components["schemas"]["ConfigArtifact"];
-            /** Tables */
-            tables?: components["schemas"]["TableArtifact"][];
-            /** Notes */
-            notes?: components["schemas"]["ArtifactNote"][];
         };
         /**
          * AuthProvider
@@ -1396,38 +1292,6 @@ export type components = {
             options?: components["schemas"]["BuildCreateOptions"];
         };
         /**
-         * BuildLogEntry
-         * @description Single build log row returned by polling endpoints.
-         */
-        BuildLogEntry: {
-            /** Id */
-            id: number;
-            /** Created */
-            created: number;
-            /** Stream */
-            stream: string;
-            /** Message */
-            message: string;
-        };
-        /**
-         * BuildLogsResponse
-         * @description Envelope returned by GET /builds/{id}/logs.
-         */
-        BuildLogsResponse: {
-            /**
-             * Object
-             * @default ade.build.logs
-             * @constant
-             */
-            object: "ade.build.logs";
-            /** Build Id */
-            build_id: string;
-            /** Entries */
-            entries: components["schemas"]["BuildLogEntry"][];
-            /** Next After Id */
-            next_after_id?: number | null;
-        };
-        /**
          * BuildResource
          * @description API representation of a build row.
          */
@@ -1470,18 +1334,6 @@ export type components = {
             summary?: string | null;
             /** Error Message */
             error_message?: string | null;
-        };
-        /**
-         * ConfigArtifact
-         * @description Config metadata captured in the artifact.
-         */
-        ConfigArtifact: {
-            /** Schema */
-            schema: string;
-            /** Version */
-            version: string;
-            /** Name */
-            name?: string | null;
         };
         /**
          * ConfigSourceClone
@@ -1687,7 +1539,7 @@ export type components = {
              * @description Latest run identifier when the execution was streamed directly.
              */
             run_id?: string | null;
-            status: components["schemas"]["ade_api__features__runs__models__RunStatus"];
+            status: components["schemas"]["RunStatus"];
             /**
              * Run At
              * @description Timestamp for the latest run event (completion/start).
@@ -2029,19 +1881,6 @@ export type components = {
              */
             password: string;
         };
-        /** MappedColumn */
-        MappedColumn: {
-            /** Field */
-            field: string;
-            /** Header */
-            header: string;
-            /** Source Column Index */
-            source_column_index: number;
-            /** Score */
-            score: number;
-            /** Contributions */
-            contributions?: components["schemas"]["ScoreContribution"][];
-        };
         /**
          * PermissionCheckRequest
          * @description Batch permission check payload.
@@ -2260,24 +2099,6 @@ export type components = {
             permissions?: string[];
         };
         /**
-         * RunArtifact
-         * @description Run-level information in the artifact.
-         */
-        RunArtifact: {
-            /** Id */
-            id: string;
-            status: components["schemas"]["ade_engine__core__types__RunStatus"];
-            /** Started At */
-            started_at: string;
-            /** Completed At */
-            completed_at?: string | null;
-            /** Outputs */
-            outputs?: string[];
-            /** Engine Version */
-            engine_version: string;
-            error?: components["schemas"]["ArtifactError"] | null;
-        };
-        /**
          * RunCreateOptions
          * @description Optional execution toggles for ADE runs.
          */
@@ -2339,20 +2160,14 @@ export type components = {
             options?: components["schemas"]["RunCreateOptions"];
         };
         /**
-         * RunErrorCode
-         * @description Categorization for failures surfaced to callers.
-         * @enum {string}
-         */
-        RunErrorCode: "config_error" | "input_error" | "hook_error" | "pipeline_error" | "unknown_error";
-        /**
          * RunEventsPage
          * @description Paginated ADE events for a run.
          */
         RunEventsPage: {
             /** Items */
             items: components["schemas"]["AdeEvent"][];
-            /** Next Cursor */
-            next_cursor?: string | null;
+            /** Next After Sequence */
+            next_after_sequence?: number | null;
         };
         /**
          * RunInput
@@ -2385,8 +2200,6 @@ export type components = {
             logfile: string;
             /** Outputs */
             outputs: string;
-            /** Diagnostics */
-            diagnostics: string;
         };
         /**
          * RunLogEntry
@@ -2484,12 +2297,6 @@ export type components = {
             total?: number | null;
         };
         /**
-         * RunPhase
-         * @description Pipeline phases used for telemetry and error mapping.
-         * @enum {string}
-         */
-        RunPhase: "initialization" | "load_config" | "extracting" | "mapping" | "normalizing" | "writing_output" | "hooks" | "completed" | "failed";
-        /**
          * RunResource
          * @description API representation of a persisted ADE run.
          */
@@ -2546,6 +2353,12 @@ export type components = {
             output?: components["schemas"]["RunOutput"];
             links: components["schemas"]["RunLinks"];
         };
+        /**
+         * RunStatus
+         * @description Lifecycle states for ADE runs.
+         * @enum {string}
+         */
+        RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
         /**
          * RunSummaryBreakdowns
          * @description Nested breakdowns for files and fields.
@@ -2769,13 +2582,6 @@ export type components = {
          * @enum {string}
          */
         ScopeType: "global" | "workspace";
-        /** ScoreContribution */
-        ScoreContribution: {
-            /** Detector */
-            detector: string;
-            /** Delta */
-            delta: number;
-        };
         /**
          * SessionEnvelope
          * @description Envelope returned when a session is established or refreshed.
@@ -2818,38 +2624,6 @@ export type components = {
              * @default false
              */
             force_sso: boolean;
-        };
-        /** TableArtifact */
-        TableArtifact: {
-            /** Source File */
-            source_file: string;
-            /** Source Sheet */
-            source_sheet?: string | null;
-            /** Table Index */
-            table_index: number;
-            header: components["schemas"]["TableHeader"];
-            /** Mapped Columns */
-            mapped_columns?: components["schemas"]["MappedColumn"][];
-            /** Unmapped Columns */
-            unmapped_columns?: components["schemas"]["UnmappedColumn"][];
-            /** Validation Issues */
-            validation_issues?: components["schemas"]["ValidationIssue"][];
-        };
-        /** TableHeader */
-        TableHeader: {
-            /** Row Index */
-            row_index: number;
-            /** Cells */
-            cells: string[];
-        };
-        /** UnmappedColumn */
-        UnmappedColumn: {
-            /** Header */
-            header: string;
-            /** Source Column Index */
-            source_column_index: number;
-            /** Output Header */
-            output_header: string;
         };
         /**
          * UploaderOut
@@ -2958,23 +2732,6 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /** ValidationIssue */
-        ValidationIssue: {
-            /** Row Index */
-            row_index: number;
-            /** Field */
-            field: string;
-            /** Code */
-            code: string;
-            /** Severity */
-            severity: string;
-            /** Message */
-            message?: string | null;
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            } | null;
         };
         /**
          * WorkspaceCreate
@@ -3120,18 +2877,6 @@ export type components = {
                 [key: string]: unknown;
             } | null;
         };
-        /**
-         * RunStatus
-         * @description Lifecycle states for ADE runs.
-         * @enum {string}
-         */
-        ade_api__features__runs__models__RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
-        /**
-         * RunStatus
-         * @description Overall run outcome.
-         * @enum {string}
-         */
-        ade_engine__core__types__RunStatus: "running" | "succeeded" | "failed";
     };
     responses: never;
     parameters: never;
@@ -6365,41 +6110,6 @@ export interface operations {
             };
         };
     };
-    get_build_logs_endpoint_api_v1_builds__build_id__logs_get: {
-        parameters: {
-            query?: {
-                after_id?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Build identifier */
-                build_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildLogsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
@@ -6552,8 +6262,8 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "json" | "ndjson";
-                /** @description Opaque cursor from previous page */
-                cursor?: string | null;
+                stream?: boolean;
+                after_sequence?: number | null;
                 limit?: number;
             };
             header?: never;
@@ -6679,45 +6389,6 @@ export interface operations {
                 };
             };
             /** @description Outputs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_run_diagnostics_endpoint_api_v1_runs__run_id__diagnostics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ArtifactV1"];
-                };
-            };
-            /** @description Diagnostics not available */
             404: {
                 headers: {
                     [name: string]: unknown;

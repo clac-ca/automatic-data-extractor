@@ -150,7 +150,8 @@ async def test_stream_build_emits_events_and_logs(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "build.created"
@@ -164,13 +165,6 @@ async def test_stream_build_emits_events_and_logs(
     assert payload["status"] == "active"
     assert payload["exit_code"] == 0
     assert payload["summary"] == "Build succeeded"
-
-    logs = await async_client.get(f"/api/v1/builds/{build_id}/logs", headers=headers)
-    assert logs.status_code == 200
-    logs_payload = logs.json()
-    entries = logs_payload["entries"]
-    assert any(entry["message"] == "install log" for entry in entries)
-    assert logs_payload["next_after_id"] is None
 
 
 async def _wait_for_build_completion(
@@ -236,10 +230,3 @@ async def test_background_build_executes_to_completion(
     )
     assert completed["status"] == "active"
     assert completed["exit_code"] == 0
-
-    logs = await async_client.get(f"/api/v1/builds/{build_id}/logs", headers=headers)
-    assert logs.status_code == 200
-    logs_payload = logs.json()
-    entries = logs_payload["entries"]
-    assert any(entry["message"] == "background log" for entry in entries)
-    assert logs_payload["next_after_id"] is None

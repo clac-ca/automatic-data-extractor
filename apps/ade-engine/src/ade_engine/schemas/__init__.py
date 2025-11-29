@@ -1,14 +1,47 @@
-from ade_engine.schemas.artifact import ArtifactV1
 from ade_engine.schemas.manifest import ManifestV1
 from ade_engine.schemas.run_summary import RunSummaryV1
-from ade_engine.schemas.telemetry import ADE_EVENT_SCHEMA, AdeEvent, TelemetryEnvelope, TelemetryEvent
+from ade_engine.schemas.telemetry import (
+    AdeEvent,
+    AdeEventPayload,
+    BuildCompletedPayload,
+    BuildCreatedPayload,
+    BuildPhaseCompletedPayload,
+    BuildPhaseStartedPayload,
+    BuildStartedPayload,
+    ConsoleLinePayload,
+    RunCompletedPayload,
+    RunErrorPayload,
+    RunPhaseCompletedPayload,
+    RunPhaseStartedPayload,
+    RunQueuedPayload,
+    RunStartedPayload,
+    RunTableSummaryPayload,
+    RunValidationIssuePayload,
+    RunValidationSummaryPayload,
+    TelemetryEnvelope,
+    TelemetryEvent,
+)
 
 __all__ = [
-    "ADE_EVENT_SCHEMA",
     "AdeEvent",
-    "ArtifactV1",
+    "AdeEventPayload",
+    "BuildCompletedPayload",
+    "BuildCreatedPayload",
+    "BuildPhaseCompletedPayload",
+    "BuildPhaseStartedPayload",
+    "BuildStartedPayload",
+    "ConsoleLinePayload",
     "ManifestV1",
+    "RunCompletedPayload",
+    "RunErrorPayload",
+    "RunPhaseCompletedPayload",
+    "RunPhaseStartedPayload",
+    "RunQueuedPayload",
+    "RunStartedPayload",
     "RunSummaryV1",
+    "RunTableSummaryPayload",
+    "RunValidationIssuePayload",
+    "RunValidationSummaryPayload",
     "TelemetryEnvelope",
     "TelemetryEvent",
 ]

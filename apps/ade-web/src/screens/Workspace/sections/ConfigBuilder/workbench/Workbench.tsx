@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -43,15 +44,16 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
-import type { RunStatus } from "@shared/runs/types";
+import type { RunStatus, RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { describeRunEvent, formatConsoleTimestamp } from "./utils/console";
+import { formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
+import { createRunStreamState, runStreamReducer } from "./state/runStream";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -164,16 +166,20 @@ export function Workbench({
     return createWorkbenchTreeFromListing(filesQuery.data);
   }, [seed, filesQuery.data]);
 
-  const [consoleLines, setConsoleLines] = useState<WorkbenchConsoleLine[]>(() =>
-    seed?.console ? seed.console.slice(-MAX_CONSOLE_LINES) : [],
+  const [runStreamState, dispatchRunStream] = useReducer(
+    runStreamReducer,
+    seed?.console?.slice(-MAX_CONSOLE_LINES) ?? [],
+    (initialConsole) =>
+      createRunStreamState(
+        MAX_CONSOLE_LINES,
+        Array.isArray(initialConsole) ? (initialConsole as WorkbenchConsoleLine[]) : undefined,
+      ),
   );
-
+  const consoleLines = runStreamState.consoleLines;
+  const runStreamRef = useRef(runStreamState);
   useEffect(() => {
-    if (!seed?.console) {
-      return;
-    }
-    setConsoleLines(seed.console.slice(-MAX_CONSOLE_LINES));
-  }, [seed?.console]);
+    runStreamRef.current = runStreamState;
+  }, [runStreamState]);
 
   const [validationState, setValidationState] = useState<WorkbenchValidationState>(() => ({
     status: seed?.validation?.length ? "success" : "idle",
@@ -201,9 +207,12 @@ export function Workbench({
         return;
       }
       const timestamp = formatConsoleTimestamp(new Date());
-      setConsoleLines([{ level: "info", message, timestamp, origin: "run" }]);
+      dispatchRunStream({
+        type: "RESET",
+        initialLines: [{ level: "info", message, timestamp, origin: "run" }],
+      });
     },
-    [setConsoleLines],
+    [dispatchRunStream],
   );
 
   const appendConsoleLine = useCallback(
@@ -211,12 +220,9 @@ export function Workbench({
       if (!isMountedRef.current) {
         return;
       }
-      setConsoleLines((prev) => {
-        const next = [...prev, line];
-        return next.length > MAX_CONSOLE_LINES ? next.slice(next.length - MAX_CONSOLE_LINES) : next;
-      });
+      dispatchRunStream({ type: "APPEND_LINE", line });
     },
-    [setConsoleLines],
+    [dispatchRunStream],
   );
 
   useEffect(() => {
@@ -779,19 +785,42 @@ export function Workbench({
         let currentRunId: string | null = null;
         try {
           for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
-            appendConsoleLine(describeRunEvent(event));
+            dispatchRunStream({ type: "EVENT", event });
             if (!isMountedRef.current) {
               return;
             }
+
+            const payload =
+              event && typeof event === "object" && event.payload && typeof event.payload === "object"
+                ? (event.payload as Record<string, unknown>)
+                : {};
             const type = event.type;
-            if (!type?.startsWith("run.")) continue;
+            const scope = (payload.scope as string | undefined) ?? null;
+            const isBuildEvent =
+              (typeof type === "string" && type.startsWith("build.")) ||
+              (type === "console.line" && scope === "build");
+            if (isBuildEvent) {
+              continue;
+            }
+            const isRunEvent = typeof type === "string" && type.startsWith("run.");
+            if (isRunEvent && !currentRunId) {
+              currentRunId = event.run_id ?? null;
+            }
+            if (!isRunEvent) continue;
             if (type === "run.queued") {
-              currentRunId = event.run_id ?? (event.id as string | undefined) ?? null;
+              const fallbackId = (event as { id?: string }).id ?? null;
+              currentRunId = event.run_id ?? fallbackId ?? currentRunId;
             }
             if (type === "run.completed") {
-              const runStatus = (event.status as RunStatus | undefined) ?? "succeeded";
+              const runPayload = payload;
+              const runStatus = (runPayload.status as RunStatus | undefined) ?? "succeeded";
+              const failure = runPayload.failure as Record<string, unknown> | undefined;
+              const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+              const summaryMessage =
+                typeof runPayload.summary === "string" ? runPayload.summary.trim() : null;
               const errorMessage =
-                (event.error?.message as string | undefined)?.trim() ||
+                failureMessage ||
+                summaryMessage ||
                 "ADE run failed.";
               const notice =
                 runStatus === "succeeded"
@@ -807,13 +836,34 @@ export function Workbench({
                     : "danger";
               showConsoleBanner(notice, { intent });
 
-              if (metadata.mode === "extraction" && currentRunId) {
+              const resolvedRunId =
+                currentRunId ?? event.run_id ?? (event as { id?: string }).id ?? null;
+              if (resolvedRunId) {
+                try {
+                  const telemetry = await fetchRunTelemetry(resolvedRunId);
+                  const lastSeen = runStreamRef.current.lastSequence;
+                  const missing = telemetry.filter(
+                    (item) =>
+                      item &&
+                      typeof item === "object" &&
+                      typeof item.sequence === "number" &&
+                      item.sequence > lastSeen,
+                  );
+                  for (const extraEvent of missing) {
+                    dispatchRunStream({ type: "EVENT", event: extraEvent as RunStreamEvent });
+                  }
+                } catch (error) {
+                  // Best effort hydration; keep streaming path fast.
+                  console.warn("Unable to hydrate run telemetry", error);
+                }
+              }
+              if (metadata.mode === "extraction" && resolvedRunId) {
                 const completedAt = new Date();
                 const completedIso = completedAt.toISOString();
                 const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
-                const downloadBase = `/api/v1/runs/${encodeURIComponent(currentRunId)}`;
+                const downloadBase = `/api/v1/runs/${encodeURIComponent(resolvedRunId)}`;
                 setLatestRun({
-                  runId: currentRunId,
+                  runId: resolvedRunId,
                   status: runStatus,
                   downloadBase,
                   documentName: metadata.documentName,
@@ -841,7 +891,7 @@ export function Workbench({
                   origin: "run",
                 });
                 try {
-                  const listing = await fetchRunOutputs(currentRunId);
+                  const listing = await fetchRunOutputs(resolvedRunId);
                   const outputFiles = Array.isArray(listing.files) ? listing.files : [];
                   const files = outputFiles.map((file) => {
                     const path = (file as { path?: string }).path;
@@ -853,7 +903,7 @@ export function Workbench({
                     };
                   });
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, outputs: files, outputsLoaded: true }
                       : prev,
                   );
@@ -861,32 +911,32 @@ export function Workbench({
                   const message =
                     error instanceof Error ? error.message : "Unable to load run outputs.";
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, outputsLoaded: true, error: message }
                       : prev,
                   );
                 }
 
                 try {
-                  const summary = await fetchRunSummary(currentRunId);
+                  const summary = await fetchRunSummary(resolvedRunId);
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, summary, summaryLoaded: true }
                       : prev,
                   );
                 } catch (error) {
                   const message = error instanceof Error ? error.message : "Unable to load run summary.";
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, summaryLoaded: true, summaryError: message }
                       : prev,
                   );
                 }
 
                 try {
-                  const telemetry = await fetchRunTelemetry(currentRunId);
+                  const telemetry = await fetchRunTelemetry(resolvedRunId);
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, telemetry, telemetryLoaded: true }
                       : prev,
                   );
@@ -894,7 +944,7 @@ export function Workbench({
                   const message =
                     error instanceof Error ? error.message : "Unable to load run telemetry.";
                   setLatestRun((prev) =>
-                    prev && prev.runId === currentRunId
+                    prev && prev.runId === resolvedRunId
                       ? { ...prev, telemetryLoaded: true, telemetryError: message }
                       : prev,
                   );
@@ -1076,8 +1126,8 @@ export function Workbench({
   }, [outputCollapsed, openConsole, closeConsole]);
 
   const handleClearConsole = useCallback(() => {
-    setConsoleLines([]);
-  }, []);
+    dispatchRunStream({ type: "CLEAR_CONSOLE" });
+  }, [dispatchRunStream]);
 
   const handleShowRunSummary = useCallback(() => {
     if (!latestRun) {
@@ -1492,6 +1542,7 @@ export function Workbench({
                 latestRun={latestRun}
                 onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
+                runStatus={runStreamState.status}
               />
             </div>
           )}
