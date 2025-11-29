@@ -54,7 +54,7 @@ Normalization is:
 
 * **Config-driven** — transforms and validators live in `ade_config`.
 * **Row-oriented** — runs field-by-field for each input row.
-* **Pure pipeline** — no IO; just data transformation plus logging/artifact updates.
+* **Pure pipeline** — no IO; just data transformation plus telemetry updates.
 
 ---
 
@@ -94,7 +94,7 @@ Where:
     * `column_map: ColumnMap` (`mapped_columns` + `unmapped_columns`)
 * `logger: PipelineLogger`
 
-  * Unified logging/telemetry/artifact helper.
+  * Unified logging/telemetry helper.
 
 Returns:
 
@@ -172,7 +172,7 @@ row_index = mapped.extracted.first_data_row_index + i
 ```
 
 This index is passed into transforms and validators and appears in
-`ValidationIssue.row_index` and artifact records.
+`ValidationIssue.row_index` and telemetry records.
 
 ---
 
@@ -451,38 +451,24 @@ normalized workbook once at the end of `write_workbook`.
 
 ---
 
-## 7. Artifact & telemetry integration
+## 7. Telemetry integration
 
-Normalization is tightly coupled with artifact and telemetry for observability.
+Normalization is surfaced through telemetry events; there is no artifact
+writer in the current runtime.
 
-### 7.1 Artifact (`artifact.json`)
+Key events:
 
-During or after normalization, the artifact recorder (`ArtifactSink`) receives:
+- `console.line` — progress/errors emitted via `PipelineLogger.note`.
+- `run.phase.started` — phase transitions (e.g., `"normalizing"`, `"writing_output"`).
+- `run.table.summary` — per-table summary including mapped/unmapped columns and validation aggregates.
+- `run.validation.summary` — optional aggregate when issues exist.
+- `run.validation.issue` — optional per-issue events for deep debugging.
+- `run.error` — structured error context when failures occur.
+- `run.completed` — terminal status with outputs/errors.
 
-* For each table:
-
-  * Validation issues: written under `tables[*].validation_issues`.
-* For each issue:
-
-  * `row_index`, `field`, `code`, `severity`, `message`, `details`.
-
-This provides a human/audit-friendly record of data quality for each run.
-
-### 7.2 Telemetry events (`events.ndjson`)
-
-`PipelineLogger` may also emit telemetry events during normalization, e.g.:
-
-* `table_completed` (emitted by the engine for each table; includes
-  `validation_issue_count`).
-* `pipeline_transition` updates at phase boundaries.
-* Config- or hook-authored events via `logger.event(...)` (optional), such as
-  `validation_issue` or `normalization_stats` if you want per-issue streaming or
-  custom metrics.
-
-The exact event set is flexible, but the pattern is:
-
-* Telemetry → streaming / monitoring.
-* Artifact → durable audit and reporting.
+These events are written to `logs/events.ndjson` and later stamped/streamed by
+ade-api. They are the source of truth for normalization observability and for
+building `RunSummaryV1`.
 
 ---
 
@@ -531,9 +517,8 @@ The exact event set is flexible, but the pattern is:
   * Include `row_index`, `field`, and key details.
 * Compare:
 
-  * Input workbook → mapped headers (`artifact.mapping`) →
-    normalized rows (`NormalizedTable.rows`) →
-    validation issues (`artifact.validation_issues`).
+  * Input workbook → mapped headers → normalized rows (`NormalizedTable.rows`) →
+    validation issues (`NormalizedTable.validation_issues` and telemetry events).
 
 ---
 
@@ -560,8 +545,8 @@ Some known edge cases and potential future enhancements:
     * Table-level or run-level validators that operate over entire `NormalizedTable`.
 * **Additional outputs**:
 
-  * Future: normalized data exported as CSV/Parquet while keeping current
-    `NormalizedTable` and artifact contracts intact.
+  * Future: normalized data exported as CSV/Parquet while keeping
+    `NormalizedTable` and telemetry contracts intact.
 
 ---
 
