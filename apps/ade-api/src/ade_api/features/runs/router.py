@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 
-from ade_engine.schemas import RunSummaryV1
+from ade_engine.schemas import AdeEvent, RunSummaryV1
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -66,17 +66,20 @@ runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
 
-def _event_bytes(event: RunStreamFrame) -> bytes:
+def _event_bytes(event: AdeEvent) -> bytes:
     return event.model_dump_json().encode("utf-8") + b"\n"
 
 
-def _sse_event_bytes(event: RunStreamFrame) -> bytes:
+def _sse_event_bytes(event: AdeEvent) -> bytes:
+    """Format an AdeEvent for SSE (constant event: ade.event)."""
+
     data = event.model_dump_json()
+    lines = data.splitlines() or [""]
     parts: list[str] = []
     if event.sequence is not None:
         parts.append(f"id: {event.sequence}")
     parts.append("event: ade.event")
-    parts.append(f"data: {data}")
+    parts.extend(f"data: {line}" for line in lines)
     return "\n".join(parts).encode("utf-8") + b"\n\n"
 
 
@@ -222,25 +225,42 @@ async def get_run_events_endpoint(
     limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
     service: RunsService = runs_service_dependency,
 ) -> RunEventsPage | StreamingResponse:
+    if stream:
+        run = await service.get_run(run_id)
+        if run is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+        async def event_stream() -> AsyncIterator[bytes]:
+            async with service.subscribe_to_events(run.id) as subscription:
+                reader = service.event_log_reader(
+                    workspace_id=run.workspace_id,
+                    run_id=run.id,
+                )
+                sent = 0
+                last_replayed = after_sequence or 0
+                for event in reader.iter(after_sequence=after_sequence):
+                    yield _sse_event_bytes(event)
+                    sent += 1
+                    if event.sequence:
+                        last_replayed = max(last_replayed, event.sequence)
+                    if sent >= limit:
+                        break
+
+                async for live_event in subscription:
+                    if live_event.sequence and live_event.sequence <= last_replayed:
+                        continue
+                    yield _sse_event_bytes(live_event)
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
     try:
-        events, next_cursor = await service.get_run_events(
+        events, next_after_sequence = await service.get_run_events(
             run_id=run_id,
             after_sequence=after_sequence,
             limit=limit,
         )
     except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    if stream:
-        async def event_stream() -> AsyncIterator[bytes]:
-            for event in events:
-                yield _sse_event_bytes(event)
-
-            async with service.subscribe_to_events(run_id) as subscription:
-                async for live_event in subscription:
-                    yield _sse_event_bytes(live_event)
-
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     if format == "ndjson":
         async def event_stream() -> AsyncIterator[bytes]:
@@ -251,7 +271,7 @@ async def get_run_events_endpoint(
 
     return RunEventsPage(
         items=events,
-        next_cursor=str(next_cursor) if next_cursor is not None else None,
+        next_after_sequence=next_after_sequence,
     )
 
 

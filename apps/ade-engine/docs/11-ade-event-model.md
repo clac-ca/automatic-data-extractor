@@ -21,7 +21,7 @@ From the Responses streaming model we adopt:
 
 1. **Event types as contracts**
    Every event has a `type` like `response.created`, `response.output_text.delta`, etc.
-   For ADE we follow the same pattern: `run.console`, `run.table.summary`, `build.completed`, etc.
+   For ADE we follow the same pattern: `console.line`, `run.table.summary`, `build.completed`, etc.
 
 2. **Flat envelopes, focused payloads**
    Responses events are shallow:
@@ -37,7 +37,7 @@ From the Responses streaming model we adopt:
    For ADE:
 
    * lifecycle events (`run.completed`, `build.completed`) can carry a full *resource snapshot* (e.g. a run summary),
-   * granular events (`run.console`, `run.table.summary`, `run.validation.issue`) only carry just enough to render UI / metrics.
+   * granular events (`console.line`, `run.table.summary`, `run.validation.issue`) only carry just enough to render UI / metrics.
 
 4. **Sequence numbers for streaming order**
    Responses uses `sequence_number` so clients can reconstruct the stream.
@@ -66,7 +66,7 @@ From the Responses streaming model we adopt:
 
 4. **Console as first-class**
 
-   * `*.console` is the standard stdout/stderr event shape across build and run.
+   * `console.line` is the standard stdout/stderr event shape across build and run (`payload.scope` distinguishes).
 
 5. **Additive and versioned**
 
@@ -81,37 +81,35 @@ All ADE events share the same outer shape:
 
 ```jsonc
 {
-  "type": "run.console",               // primary discriminator
-  "schema": "ade.event/v1",
-  "version": "1.0.0",
+  "type": "console.line",               // primary discriminator
+  "event_id": "evt_01JK3J0YRKJ...",
   "created_at": "2025-11-26T12:00:00Z",
 
   // ordering within a stream (optional but recommended)
-  "sequence": 42,                      // monotonically increasing per (run_id or build_id) stream
+  "sequence": 42,                       // monotonically increasing per run stream
 
   // correlation context (nullable when not applicable)
   "workspace_id": "ws_123",
   "configuration_id": "cfg_123",
-  "job_id": "job_123",
   "build_id": "b_123",
   "run_id": "run_123",
 
   // event producer (optional)
-  "source": "engine",                  // engine | api | worker-X | cli | web
+  "source": "engine",                   // engine | api | worker-X | cli | web
 
-  // extensibility for cross-cutting context
-  "details": {
-    "emitter_version": "ade-engine@0.12.3"
+  // event-specific payload
+  "payload": {
+    "scope": "run",
+    "stream": "stdout",
+    "message": "Installing engine…"
   }
-
-  // --- event-specific fields follow ---
 }
 ```
 
 Notes:
 
 * **`type`**: always of the form `<subject>.<verb_or_noun>`, e.g.
-  `run.created`, `run.console`, `run.table.summary`, `build.completed`.
+  `console.line`, `run.started`, `run.table.summary`, `build.completed`.
 * **`sequence`**:
 
   * Optional in persisted NDJSON (file order may be enough).
@@ -132,7 +130,7 @@ We organize ADE events into a small set of domains:
 
 1. **Run lifecycle** (`run.*`)
 2. **Build lifecycle** (`build.*`)
-3. **Console / stdout events** (`run.console`, `build.console`)
+3. **Console / stdout events** (`console.line` with `scope`)
 4. **Table & validation events** (`run.table.*`, `run.validation.*`)
 5. **Job / queue events** (`job.*`) – optional, for the orchestrator
 6. **Error events** (`error`) – stream-level failures
@@ -417,59 +415,39 @@ If the build fails:
 
 ---
 
-## 6. Console / stdout events (`*.console`)
+## 6. Console / stdout events (`console.line`)
 
-Console events are ADE’s analogue to “stdout lines” and replace older shapes like `run.note` and `run.log.delta`.
-
-### 6.1 `run.console`
+Console events are ADE’s analogue to “stdout lines” and replace older shapes like `run.console` / `build.console`.
 
 ```jsonc
 {
-  "type": "run.console",
-  "schema": "ade.event/v1",
+  "type": "console.line",
   "created_at": "2025-11-26T12:01:00Z",
   "sequence": 5,
 
   "workspace_id": "ws_1",
   "configuration_id": "cfg_1",
   "run_id": "run_1",
-
-  "stream": "stdout",                   // stdout | stderr
-  "level": "info",                      // info | warning | error | success | debug
-  "message": "Mapping complete (tables=3, rows=4821)",
-  "phase": "mapping",                   // optional
-  "details": {
-    "mapped": 12,
-    "unmapped": 2
-  }
-}
-```
-
-### 6.2 `build.console`
-
-Same shape, keyed by `build_id` instead of `run_id`:
-
-```jsonc
-{
-  "type": "build.console",
-  "schema": "ade.event/v1",
-  "created_at": "2025-11-26T11:50:30Z",
-  "sequence": 7,
-
-  "workspace_id": "ws_1",
-  "configuration_id": "cfg_1",
   "build_id": "b_1",
 
-  "stream": "stderr",
-  "level": "warning",
-  "message": "pip: retrying after transient network error"
+  "payload": {
+    "scope": "run",                      // "run" | "build"
+    "stream": "stdout",                  // stdout | stderr
+    "level": "info",                     // info | warning | error | success | debug
+    "message": "Mapping complete (tables=3, rows=4821)",
+    "phase": "mapping",                  // optional
+    "details": {
+      "mapped": 12,
+      "unmapped": 2
+    }
+  }
 }
 ```
 
 **Frontend rule of thumb:**
 
-* Treat `*.console` events as **ordered console lines**.
-* New code should emit `run.console`/`build.console` only.
+* Treat `console.line` events as **ordered console lines**; rely on `sequence` for ordering when present.
+* Use `payload.scope` to split build vs run output in the UI.
 
 ---
 
@@ -656,7 +634,7 @@ The engine:
 * accepts a `RunRequest`,
 * emits `ade.event/v1` JSON lines to `events.ndjson`:
 
-  * `run.started`, `run.phase.*`, `run.table.summary`, `run.validation.*`, `run.console`, `run.completed` (engine’s view),
+  * `console.line`, `run.phase.*`, `run.table.summary`, `run.validation.*`, `run.completed` (engine’s view),
 * exits with an appropriate process exit code.
 
 The engine doesn’t need to know:
@@ -725,7 +703,7 @@ Breaking changes require:
   * small, focused payloads,
   * optional resource snapshots (`run_summary`) for lifecycle events,
   * `sequence` numbers for streaming order.
-* Console events are standardized as `run.console` and `build.console`.
+* Console events are standardized as `console.line` with `scope`.
 * Table and validation events are first-class, enabling rich UIs without waiting for `run.completed`.
 * Raw events are the **timeline**; `run_summary` and SQL tables are the **dashboard** built on top.
 

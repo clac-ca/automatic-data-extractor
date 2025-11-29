@@ -166,13 +166,6 @@ async def test_stream_build_emits_events_and_logs(
     assert payload["exit_code"] == 0
     assert payload["summary"] == "Build succeeded"
 
-    logs = await async_client.get(f"/api/v1/builds/{build_id}/logs", headers=headers)
-    assert logs.status_code == 200
-    logs_payload = logs.json()
-    entries = logs_payload["entries"]
-    assert any(entry["message"] == "install log" for entry in entries)
-    assert logs_payload["next_after_id"] is None
-
 
 async def _wait_for_build_completion(
     client: AsyncClient,
@@ -237,10 +230,3 @@ async def test_background_build_executes_to_completion(
     )
     assert completed["status"] == "active"
     assert completed["exit_code"] == 0
-
-    logs = await async_client.get(f"/api/v1/builds/{build_id}/logs", headers=headers)
-    assert logs.status_code == 200
-    logs_payload = logs.json()
-    entries = logs_payload["entries"]
-    assert any(entry["message"] == "background log" for entry in entries)
-    assert logs_payload["next_after_id"] is None

@@ -125,7 +125,7 @@ class PipelineLogger:
     """Unified facade for ADE events.
 
     This logger owns the per-run sequence counter and wraps low-level sinks so
-    callers can think in terms of semantic event types (run.console, run.table.summary, ...).
+    callers can think in terms of semantic event types (console.line, run.table.summary, ...).
     """
 
     run: RunContext

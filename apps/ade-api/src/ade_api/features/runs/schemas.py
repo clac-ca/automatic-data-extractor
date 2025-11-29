@@ -200,4 +200,4 @@ class RunEventsPage(BaseSchema):
     """Paginated ADE events for a run."""
 
     items: list[AdeEvent]
-    next_cursor: str | None = None
+    next_after_sequence: int | None = None

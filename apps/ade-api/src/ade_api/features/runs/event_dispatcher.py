@@ -118,7 +118,7 @@ class RunEventDispatcher:
         storage: RunEventStorage,
         id_factory: Callable[[], str] = generate_ulid,
     ) -> None:
-        self._storage = storage
+        self.storage = storage
         self._id_factory = id_factory
         self._sequence_by_run: dict[str, int] = {}
         self._subscribers: dict[str, set[asyncio.Queue[AdeEvent | None]]] = {}

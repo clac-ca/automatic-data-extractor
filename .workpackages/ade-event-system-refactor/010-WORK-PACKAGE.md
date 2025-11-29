@@ -26,8 +26,8 @@ Implementation
 - [x] Replace existing v1 run & build routes with new behavior (no `/v2`; new semantics are the default). Updated run/build endpoints to stream via SSE and run event retrieval to use dispatcher-backed logs.
 - [x] Integrate build + run orchestration with new events, including subprocess console streaming. (Wired console.line payloads and dispatcher-backed build/run emissions.)
 - [x] Implement `RunSummaryBuilder` and canonical `run.completed`, updating DB and UI. (Summary builder now consumes validation summaries/run errors; run.completed payloads carry execution, artifacts, and failure context.)
-- [ ] Update ade-web to consume unified run event stream and render build + run logs consistently.
-- [ ] Remove all v1 event types, streaming codepaths, and docs (ensure no stale references remain).
+- [x] Update ade-web to consume unified run event stream and render build + run logs consistently.
+- [x] Remove all v1 event types, streaming codepaths, and docs (ensure no stale references remain).
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:

@@ -64,8 +64,9 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
   }
 
   const levelCounts = events.reduce<Record<string, number>>((acc, event) => {
-    const streamLevel = (event.stream as string | undefined) === "stderr" ? "warning" : undefined;
-    const level = (event.level as string | undefined) ?? streamLevel ?? "info";
+    const payload = payloadOf(event);
+    const streamLevel = (payload.stream as string | undefined) === "stderr" ? "warning" : undefined;
+    const level = (payload.level as string | undefined) ?? streamLevel ?? "info";
     acc[level] = (acc[level] ?? 0) + 1;
     return acc;
   }, {});
@@ -89,11 +90,21 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
             key={`${event.created_at}-${event.type}`}
             className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-semibold">{event.type}</span>
-              <span className="text-[11px] text-slate-500">{formatTimestamp(event.created_at)}</span>
-            </div>
-            <p className="text-[11px] text-slate-600">Level: {levelFor(event)}</p>
+            {(() => {
+              const payload = payloadOf(event);
+              const message = (payload.message as string | undefined)?.trim();
+              return (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">{event.type}</span>
+                    <span className="text-[11px] text-slate-500">{formatTimestamp(event.created_at)}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    {message ? message : `Level: ${levelFor(event)}`}
+                  </p>
+                </>
+              );
+            })()}
           </li>
         ))}
       </ul>
@@ -108,8 +119,17 @@ function formatTimestamp(timestamp: string | number): string {
 }
 
 function levelFor(event: AdeEvent): string {
-  const streamLevel = (event.stream as string | undefined) === "stderr" ? "warning" : undefined;
-  return (event.level as string | undefined) ?? streamLevel ?? "info";
+  const payload = payloadOf(event);
+  const streamLevel = (payload.stream as string | undefined) === "stderr" ? "warning" : undefined;
+  return (payload.level as string | undefined) ?? streamLevel ?? "info";
+}
+
+function payloadOf(event: AdeEvent): Record<string, unknown> {
+  const payload = event.payload;
+  if (payload && typeof payload === "object") {
+    return payload as Record<string, unknown>;
+  }
+  return {};
 }
 
 function Metric({

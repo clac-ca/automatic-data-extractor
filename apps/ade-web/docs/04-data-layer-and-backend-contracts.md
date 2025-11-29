@@ -580,7 +580,7 @@ Streaming:
 
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
 * `GET  /api/v1/builds/{build_id}`
-* `GET  /api/v1/builds/{build_id}/logs` – NDJSON build logs.
+* Build logs are observed via the run event stream (`/runs/{run_id}/events?stream=true`, `console.line` with `scope:"build"`).
 
 The backend may rebuild environments automatically when:
 
@@ -617,8 +617,7 @@ Config files:
 Builds:
 
 * `createBuild(workspaceId, configurationId, options)`  // returns `buildId`
-* `readBuild(buildId)`
-* `streamBuildLogs(buildId)`
+* `readBuild(buildId)` (for metadata/status; events are streamed via runs)
 
 Hooks:
 
@@ -626,8 +625,7 @@ Hooks:
 * `useConfigurationQuery(workspaceId, configurationId)`
 * `useConfigurationVersionsQuery(workspaceId, configurationId)`
 * `useConfigurationFilesQuery(workspaceId, configurationId)`
-* `useCreateBuildMutation(workspaceId, configurationId)`
-* `useBuildLogsStream(buildId)`
+* `useCreateBuildMutation(workspaceId, configurationId)` (triggers build; observe via run event stream)
 
 ---
 
@@ -742,34 +740,35 @@ Benefits:
 
 ---
 
-## 6. Streaming NDJSON events
+## 6. Streaming events (SSE + NDJSON archive)
 
-Run and build streams emit events using the `ade.event/v1` envelope defined in `apps/ade-engine/docs/11-ade-event-model.md`.
+Run streams emit `AdeEvent` envelopes (live over SSE; persisted as NDJSON).
 
 Treat these as **ordered event streams**, not snapshot queries.
 
-### 6.1 Event envelope (`ade.event/v1`)
+### 6.1 Event envelope
 
-All events share a common envelope; only the tail payload varies per `type`:
+All events share a common envelope; only the tail `payload` varies per `type`:
 
 ```jsonc
 {
-  "type": "run.console",                 // <subject>.<verb_or_noun>
-  "schema": "ade.event/v1",
-  "version": "1.0.0",
+  "type": "console.line",                // e.g. run.started, build.completed, console.line
+  "event_id": "evt_01JK3J0YRKJ...",
   "created_at": "2025-11-26T12:00:00Z",
   "sequence": 42,                        // monotonic within one run/build stream
 
-  "workspace_id": "ws_1",                // optional in engine-only contexts
+  "workspace_id": "ws_1",
   "configuration_id": "cfg_1",
-  "job_id": "job_1",
   "build_id": "b_1",
   "run_id": "run_1",
 
-  "source": "engine",                    // engine | api | worker-X | cli | web
-  "details": { "emitter_version": "ade-engine@0.12.3" }
+  "source": "api",
 
-  // --- type-specific payload follows ---
+  "payload": {                           // type-specific payload
+    "scope": "run",
+    "stream": "stdout",
+    "message": "Installing engine…"
+  }
 }
 ```
 
@@ -793,7 +792,7 @@ Key families:
 
 * **Console**
 
-  * `run.console`, `build.console` – ordered lines of stdout/stderr
+  * `console.line` – ordered stdout/stderr lines; `payload.scope` distinguishes build vs run
 
 * **Build lifecycle (`build.*`)**
 
@@ -808,33 +807,27 @@ Key families:
 UI rules:
 
 * Use `sequence` for ordering when transport may deliver events slightly out of order.
-* Prefer the run stream (`/runs/{id}/logs`) for live consoles; fall back to archived log files only when streaming is unavailable.
+* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/logfile`) for offline replay.
 * Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.completed`.
 
 ### 6.3 Streaming helper
 
-A small helper in `src/shared/ndjson/` wraps NDJSON streams:
+The browser-native `EventSource` API is used for live run streams:
 
 ```ts
-export interface NdjsonEvent {
-  type?: string;
-  schema?: string;
-  [key: string]: unknown;
-}
-
-export function streamNdjson(
-  path: string,
-  options?: { signal?: AbortSignal },
-  onEvent?: (event: NdjsonEvent) => void,
-): Promise<void> {
-  // open fetch, read chunks, split by newline, JSON.parse, call onEvent
-}
+const es = new EventSource(`/api/v1/runs/${runId}/events?stream=true`);
+es.onmessage = (msg) => {
+  const event = JSON.parse(msg.data); // AdeEvent envelope with payload
+  // ...apply to reducer / UI
+};
+es.onerror = () => es.close();
 ```
 
 Characteristics:
 
-* Accepts an `AbortSignal` so callers can cancel.
-* Parses each line as JSON; lines that fail to parse are ignored or routed to an error path.
+* Close the stream on unmount or when the user hides the console.
+* Treat `run.completed` as terminal; callers can close the stream after it arrives.
+* For post-run analysis, `events.ndjson` is still available via `/runs/{run_id}/logfile`.
 
 ### 6.4 Run & build streams in practice
 
@@ -842,19 +835,19 @@ Used by:
 
 * **Configuration Builder**
 
-  * `streamBuildLogs(buildId)` → `/api/v1/builds/{build_id}/logs`
-    (emits `build.*` + `build.console`)
+  * `POST /api/v1/configurations/{configuration_id}/runs` then `GET /api/v1/runs/{run_id}/events?stream=true`
+    (emits `build.*`, `console.line` with `scope`, `run.*`, `run.table.*`, `run.validation.*`)
 
-* **Run consoles**
+* **Run consoles / details**
 
-  * `streamRunLogs(runId)` → `/api/v1/runs/{run_id}/logs`
-    (emits `run.*`, `run.table.*`, `run.validation.*`, `run.console`)
+  * `GET /api/v1/runs/{run_id}/events?stream=true`
+    (replay then live-stream `AdeEvent` envelopes; use `after_sequence` to resume)
 
 Because environments are usually rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` workflows and debugging. Normal workbench/test flows rely on the run stream.
 
 UI components (e.g. workbench console, run detail):
 
-* Append console lines from `*.console` events.
+* Append console lines from `console.line` events.
 * Update status/progress from lifecycle + validation events.
 
 ### 6.5 Cancellation & error UX

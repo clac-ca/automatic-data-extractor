@@ -181,8 +181,8 @@ Body:
 }
 ```
 
-* `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Poll the status/log endpoints for progress.
-* `stream: true` — execute inline and receive `application/x-ndjson` `BuildEvent` payloads (`build.created`, `build.step`, `build.log`, `build.completed`).
+* `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Progress is emitted as run events (see below).
+* `stream: true` — execute inline and stream `AdeEvent` envelopes (`build.*` + `console.line` with `scope:"build"`) over SSE.
 
 ### Get build status
 
@@ -192,15 +192,17 @@ GET /api/v1/builds/{build_id}
 
 Returns the persisted `Build` resource including timestamps, status, and exit metadata.
 
-### Fetch build logs
+### Stream build/run events
+
+Build activity is part of the run stream. After creating a run, attach to:
 
 ```
-GET /api/v1/builds/{build_id}/logs?after_id=<cursor>&limit=<count>
+GET /api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>
 ```
 
-Returns a paginated list of log entries and the `next_after_id` cursor for subsequent requests.
+This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build lifecycle + `console.line` + subsequent run events). Use `after_sequence` to resume.
 
-> **Runs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time. An optional `build_id` override may be supported for debugging.
+> **Runs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time.
 
 ---
 
@@ -233,7 +235,7 @@ Returns a paginated list of log entries and the `next_after_id` cursor for subse
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses configuration `build_status="building"` to deduplicate concurrent requests**, and triggers the builder if needed.
 * **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates configuration build metadata on success**, deletes the temp folder on failure.
 * **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
-* **Database** — `configurations` holds build metadata; `builds` + `build_logs` track job history.
+* **Database** — `configurations` holds build metadata; `builds` tracks job history. Build logs are streamed as `console.line` in the run event stream (the `build_logs` table remains for legacy migrations only).
 
 ---
 
