@@ -1,72 +1,165 @@
-"""Unified ADE event envelope (ade.event/v1).
-
-This module defines the common event envelope used for engine telemetry,
-run/build streaming, and analytics. Everything beyond the common fields is
-type-specific payload keyed off ``type``.
-"""
+"""Canonical ADE event envelope and payload helpers."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-ADE_EVENT_SCHEMA = "ade.event/v1"
+class AdeEventPayload(BaseModel):
+    """Base class for structured AdeEvent payloads."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ConsoleLinePayload(AdeEventPayload):
+    scope: str
+    stream: str
+    level: str = "info"
+    message: str
+    phase: str | None = None
+    logger: str | None = None
+    engine_timestamp: int | float | str | None = None
+
+
+class BuildCreatedPayload(AdeEventPayload):
+    status: str = "queued"
+    reason: str
+    engine_spec: str | None = None
+    engine_version_hint: str | None = None
+    python_bin: str | None = None
+    should_build: bool = True
+
+
+class BuildStartedPayload(AdeEventPayload):
+    status: str = "building"
+    reason: str | None = None
+
+
+class BuildPhaseStartedPayload(AdeEventPayload):
+    phase: str
+    message: str | None = None
+
+
+class BuildPhaseCompletedPayload(AdeEventPayload):
+    phase: str
+    status: str
+    duration_ms: int | None = None
+    message: str | None = None
+
+
+class BuildCompletedPayload(AdeEventPayload):
+    status: str
+    exit_code: int | None = None
+    summary: str | None = None
+    duration_ms: int | None = None
+    env: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+
+
+class RunQueuedPayload(AdeEventPayload):
+    status: str = "queued"
+    mode: str
+    options: dict[str, Any] = Field(default_factory=dict)
+    queued_by: dict[str, Any] | None = None
+
+
+class RunStartedPayload(AdeEventPayload):
+    status: str = "in_progress"
+    mode: str
+    engine_version: str | None = None
+    config_version: str | None = None
+    env: dict[str, Any] | None = None
+
+
+class RunPhaseStartedPayload(AdeEventPayload):
+    phase: str
+    message: str | None = None
+
+
+class RunPhaseCompletedPayload(AdeEventPayload):
+    phase: str
+    status: str
+    duration_ms: int | None = None
+    message: str | None = None
+    metrics: dict[str, Any] | None = None
+
+
+class RunTableSummaryPayload(AdeEventPayload):
+    table_id: str
+    source_file: str
+    source_sheet: str | None = None
+    file_index: int | None = None
+    sheet_index: int | None = None
+    table_index: int | None = None
+    row_count: int | None = None
+    column_count: int | None = None
+    mapping: dict[str, Any] | None = None
+    validation: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class RunValidationSummaryPayload(AdeEventPayload):
+    issues_total: int
+    issues_by_severity: dict[str, int]
+    issues_by_code: dict[str, int]
+    issues_by_field: dict[str, int]
+    max_severity: str | None
+
+
+class RunValidationIssuePayload(AdeEventPayload):
+    severity: str | None = None
+    code: str | None = None
+    field: str | None = None
+    row: int | None = None
+    message: str | None = None
+
+
+class RunErrorPayload(AdeEventPayload):
+    stage: str
+    code: str
+    message: str
+    phase: str | None = None
+    details: dict[str, Any] | None = None
+
+
+class RunCompletedPayload(AdeEventPayload):
+    status: str
+    failure: dict[str, Any] | None = None
+    execution: dict[str, Any] | None = None
+    artifacts: dict[str, Any] | None = None
+    summary: dict[str, Any] | None = None
 
 
 class AdeEvent(BaseModel):
-    """ADE event envelope used for engine telemetry, runs, and builds.
+    """Canonical ADE event envelope for build + run streaming."""
 
-    This schema intentionally mirrors the ``ade.event/v1`` envelope described in
-    the event model docs. Additional event-specific fields are allowed and kept
-    flat at the top level.
-    """
-
-    # Primary discriminator for downstream consumers.
     type: str
-
-    # Optional object tag for consumers that rely on a common OpenAI-style
-    # pattern. Kept for forward-compatibility, but not required by the ADE spec.
-    object: Literal["ade.event"] = Field(default="ade.event", alias="object")
-
-    # Schema and versioning.
-    schema_id: Literal["ade.event/v1"] = Field(
-        default=ADE_EVENT_SCHEMA,
-        alias="schema",
-        validation_alias=AliasChoices("schema", "schema_id"),
-    )
-    version: str = "1.0.0"
-
-    # Timestamp in UTC.
+    event_id: str | None = None
     created_at: datetime
-
-    # Ordering within a single run/build/job stream.
     sequence: int | None = None
+    source: str | None = None
 
-    # Correlation context (nullable when not applicable).
     workspace_id: str | None = None
     configuration_id: str | None = None
-    job_id: str | None = None
     run_id: str | None = None
     build_id: str | None = None
 
-    # Event producer and cross-cutting metadata.
-    source: str | None = None
-    details: dict[str, Any] | None = None
+    payload: AdeEventPayload | dict[str, Any] | None = None
 
-    # Optional error payload for failure events (e.g. run.completed, build.completed).
-    error: dict[str, Any] | None = None
+    model_config = ConfigDict(populate_by_name=True)
 
-    # Everything else is event-type-specific.
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    def payload_dict(self) -> dict[str, Any]:
+        if self.payload is None:
+            return {}
+        if isinstance(self.payload, BaseModel):
+            return self.payload.model_dump()
+        if isinstance(self.payload, dict):
+            return self.payload
+        return {}
 
-    @property
-    def schema(self) -> str:
-        return self.schema_id
 
-
-# Legacy exports (kept for import compatibility; prefer AdeEvent).
 TelemetryEnvelope = AdeEvent
 
 
@@ -79,8 +172,23 @@ class TelemetryEvent(BaseModel):  # pragma: no cover - legacy placeholder
 
 
 __all__ = [
-    "ADE_EVENT_SCHEMA",
     "AdeEvent",
+    "AdeEventPayload",
+    "BuildCompletedPayload",
+    "BuildCreatedPayload",
+    "BuildPhaseCompletedPayload",
+    "BuildPhaseStartedPayload",
+    "BuildStartedPayload",
+    "ConsoleLinePayload",
+    "RunCompletedPayload",
+    "RunErrorPayload",
+    "RunPhaseCompletedPayload",
+    "RunPhaseStartedPayload",
+    "RunQueuedPayload",
+    "RunStartedPayload",
+    "RunTableSummaryPayload",
+    "RunValidationIssuePayload",
+    "RunValidationSummaryPayload",
     "TelemetryEnvelope",
     "TelemetryEvent",
 ]

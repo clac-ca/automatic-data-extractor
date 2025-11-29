@@ -21,11 +21,11 @@ Architecture & spec
 
 Implementation
 
-- [ ] Implement canonical `AdeEvent` envelope, `console.line`, and new payload models in ade-api + ade-engine.
-- [ ] Implement central event dispatcher in ade-api (ID/sequence assignment, NDJSON sink, SSE fan-out).
-- [ ] Replace existing v1 run & build routes with new behavior (no `/v2`; new semantics are the default).
-- [ ] Integrate build + run orchestration with new events, including subprocess console streaming.
-- [ ] Implement `RunSummaryBuilder` and canonical `run.completed`, updating DB and UI.
+- [x] Implement canonical `AdeEvent` envelope, `console.line`, and new payload models in ade-api + ade-engine. (Introduced typed payload classes and nested payload usage across engine + API.)
+- [x] Implement central event dispatcher in ade-api (ID/sequence assignment, NDJSON sink, SSE fan-out). Added `RunEventDispatcher` + storage/log reader scaffolding.
+- [x] Replace existing v1 run & build routes with new behavior (no `/v2`; new semantics are the default). Updated run/build endpoints to stream via SSE and run event retrieval to use dispatcher-backed logs.
+- [x] Integrate build + run orchestration with new events, including subprocess console streaming. (Wired console.line payloads and dispatcher-backed build/run emissions.)
+- [x] Implement `RunSummaryBuilder` and canonical `run.completed`, updating DB and UI. (Summary builder now consumes validation summaries/run errors; run.completed payloads carry execution, artifacts, and failure context.)
 - [ ] Update ade-web to consume unified run event stream and render build + run logs consistently.
 - [ ] Remove all v1 event types, streaming codepaths, and docs (ensure no stale references remain).
 

@@ -150,7 +150,8 @@ async def test_stream_build_emits_events_and_logs(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "build.created"
