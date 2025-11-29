@@ -61,13 +61,20 @@ def build_run_summary(
 
     started_event: AdeEvent | None = None
     completed_event: AdeEvent | None = None
+    run_error_event: AdeEvent | None = None
+    validation_summary: dict[str, object] | None = None
 
     for event in events_list:
-        payload = event.model_extra or {}
+        payload = event.payload_dict()
         if event.type == "run.started":
             started_event = started_event or event
         elif event.type == "run.completed":
             completed_event = event
+        elif event.type == "run.error":
+            run_error_event = event
+        elif event.type == "run.validation.summary":
+            payload_dict = event.payload_dict()
+            validation_summary = payload_dict if isinstance(payload_dict, dict) else None
 
         if event.type != "run.table.summary":
             continue
@@ -156,6 +163,42 @@ def build_run_summary(
                     continue
                 field_issue_codes[str(field_name)][str(code)] += count
 
+    if validation_summary:
+        total = validation_summary.get("issues_total")
+        if isinstance(total, int):
+            validation_issue_count_total = total
+
+        by_severity = validation_summary.get("issues_by_severity")
+        if isinstance(by_severity, dict):
+            issue_counts_by_severity = defaultdict(
+                int, {str(k): int(v) for k, v in by_severity.items() if isinstance(v, int)}
+            )
+
+        by_code = validation_summary.get("issues_by_code")
+        if isinstance(by_code, dict):
+            issue_counts_by_code = defaultdict(
+                int, {str(k): int(v) for k, v in by_code.items() if isinstance(v, int)}
+            )
+
+        by_field = validation_summary.get("issues_by_field")
+        if isinstance(by_field, dict):
+            for field_name, details in by_field.items():
+                if not isinstance(details, dict):
+                    continue
+                total_for_field = details.get("total")
+                if isinstance(total_for_field, int):
+                    field_issue_totals[str(field_name)] += total_for_field
+                field_severity = details.get("by_severity") or {}
+                for severity, count in field_severity.items():
+                    if not isinstance(count, int):
+                        continue
+                    field_issue_counts[str(field_name)][str(severity)] += count
+                field_codes = details.get("by_code") or {}
+                for code, count in field_codes.items():
+                    if not isinstance(count, int):
+                        continue
+                    field_issue_codes[str(field_name)][str(code)] += count
+
     canonical_fields: dict[str, tuple[str | None, bool]] = {}
     if manifest:
         for name, field in manifest.columns.fields.items():
@@ -180,18 +223,17 @@ def build_run_summary(
         else None
     )
 
-    completion_payload = completed_event.model_extra or {} if completed_event else {}
-    completion_error = (
-        completed_event.error
-        if completed_event and completed_event.error is not None
-        else completion_payload.get("error") if isinstance(completion_payload, dict) else None
-    )
+    completion_payload = completed_event.payload_dict() if completed_event else {}
+    completion_error = completion_payload.get("failure") or completion_payload.get("error")
+    error_payload = run_error_event.payload_dict() if run_error_event else {}
     status_literal = None
     if isinstance(completion_payload, dict):
         status_literal = (
             completion_payload.get("status")
             or completion_payload.get("engine_status")
         )
+    if status_literal is None and run_error_event is not None:
+        status_literal = "failed"
     summary_run_status = status_literal or ("succeeded" if completed_event else "failed")
 
     by_file = []
@@ -246,9 +288,16 @@ def build_run_summary(
         )
 
     completion_error_dict = completion_error if isinstance(completion_error, dict) else {}
+    if isinstance(error_payload, dict):
+        merged_error = {**completion_error_dict}
+        for key in ("code", "stage", "message"):
+            value = error_payload.get(key)
+            if value is not None:
+                merged_error[key] = value
+        completion_error_dict = merged_error
     engine_version = None
     if started_event:
-        extras = started_event.model_extra or {}  # type: ignore[union-attr]
+        extras = started_event.payload_dict()
         engine_version = extras.get("engine_version")
 
     summary_run = {
