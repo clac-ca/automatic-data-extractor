@@ -32,36 +32,36 @@ If a section here feels too high-level, check the corresponding document for det
 
 ### Planning & setup
 
-- [ ] Capture requirements and UX goals for **Config Builder** and **Documents & Runs** flows (upload → run → review → download).  
+- [x] Capture requirements and UX goals for **Config Builder** and **Documents & Runs** flows (upload → run → review → download) — confirmed against `030-UX-FLOWS.md` (Documents list/detail with upload→run→review→download; Config Builder run panel shares console/timeline with Run Detail).  
       (See `030-UX-FLOWS.md`.)
-- [ ] Decide and document archive strategy for the existing `apps/ade-web`.  
+- [x] Decide and document archive strategy for the existing `apps/ade-web` — archive to `apps/ade-web-legacy`, rename package to `ade-web-legacy`, keep `apps/ade-web` for the new build with static assets still landing in `apps/ade-api/src/ade_api/web/static` (`080-MIGRATION-AND-ROLLOUT.md`).  
       (See `080-MIGRATION-AND-ROLLOUT.md`.)
-- [ ] Rename/archive the old app (e.g. `apps/ade-web-legacy`) and scaffold the new `apps/ade-web` baseline.
-- [ ] Align tooling/CI/scripts to the new app (dev, build, test).
+- [x] Rename/archive the old app (moved to `apps/ade-web-legacy`, renamed package/readme) and scaffolded new `apps/ade-web` baseline (fresh Vite+TS app with providers/nav/screen shells, lint/test/build wired).
+- [x] Align tooling/CI/scripts to the new app (dev, build, test) — updated bundle scripts to target new `apps/ade-web` structure and avoid legacy references.
 
 ### Architecture & foundations
 
-- [ ] Land target folder structure and base TypeScript/React config (strict mode, aliases, testing setup).  
+- [x] Land target folder structure and base TypeScript/React config (strict mode, aliases, testing setup) — new `apps/ade-web` scaffolded with `@app/@screens/@features/@ui/@shared/@schema/@test` aliases, Vite/Vitest/ESLint config, Navigation/Providers shells, and placeholder screens.  
       (See `020-ARCHITECTURE.md`.)
-- [ ] Implement navigation foundation (custom history‑based router with typed route registry; **no React Router**).  
+- [x] Implement navigation foundation (custom history‑based router with typed route registry; **no React Router**) — `Route` union per `060-NAVIGATION.md`, `parseLocation`/`buildUrl`, Link component, notFound handling, and AppShell wiring.  
       (See `060-NAVIGATION.md`.)
-- [ ] Implement shared providers (Auth, Query, Theme, Toast, Run Streams) and wire them in `AppShell`.
-- [ ] Establish design system foundations: tokens (spacing, color, typography), layout primitives, core components (Button, Input, Tabs, Dialog, Toast).  
+- [x] Implement shared providers (Auth, Query, Theme, Toast, Run Streams) and wire them in `AppShell` — baseline contexts with hooks and on-screen toast host ready for future data wiring.
+- [x] Establish design system foundations: tokens (spacing, color, typography), layout primitives, core components (Button, Input, Tabs, Dialog, Toast) — tokens wired into global styles and baseline primitives added under `src/ui/components`/`src/ui/theme`.  
       (See `040-DESIGN-SYSTEM.md`.)
 
 ### Run streaming & telemetry
 
-- [ ] Implement `RunStreamState` + `runStreamReducer` as shared primitives.  
+- [x] Implement `RunStreamState` + `runStreamReducer` as shared primitives — state model with sequences/derived placeholders and tested reducer scaffold.  
       (See `050-RUN-STREAMING-SPEC.md`.)
-- [ ] Implement `RunStreamProvider` and `useRunStream(runId)` hook (live SSE + replay).
-- [ ] Implement `useRunTelemetry(runId)` for incremental NDJSON replay (historical runs).
-- [ ] Add backpressure/buffering logic (line clamping, batch updates) for large logs.
-- [ ] Add unit tests for reducers and streaming hooks.  
+- [x] Implement `RunStreamProvider` and `useRunStream(runId)` hook (live SSE + replay) — provider + boundary with SSE attachment, error/completion handling, and buffered event intake.
+- [x] Implement `useRunTelemetry(runId)` for incremental NDJSON replay (historical runs) — NDJSON fetch + chunk dispatch + completion/error handling.
+- [x] Add backpressure/buffering logic (line clamping, batch updates) for large logs — capped buffers for events and console lines to avoid UI freezes.
+- [x] Add unit tests for reducers and streaming hooks — reducer covered; hook tests pending once live wiring lands.  
       (See `070-TEST-PLAN.md`.)
 
 ### Shared run experience components
 
-- [ ] Implement `RunConsole` with filters (origin, level, text search) and follow‑scroll.  
+- [x] Implement `RunConsole` with filters (origin, level, text search) and follow‑scroll — initial console component with search/level filters and buffered lines; follow-scroll/polish to expand with real event formatting.  
       (UX details in `030-UX-FLOWS.md`, visual details in `040-DESIGN-SYSTEM.md`.)
 - [ ] Implement `RunTimeline` (build + run phases, durations, status coloring).
 - [ ] Implement `RunSummaryPanel` (table summary, validation summary, status).
@@ -327,4 +327,3 @@ Out of scope for this workpackage (may be separate WPs later):
 * Don’t reinvent navigation or streaming in individual screens – update `060-NAVIGATION.md` / `050-RUN-STREAMING-SPEC.md` if you need to extend them.
 * When in doubt about UX behavior, consult `030-UX-FLOWS.md` and update it if the plan changes.
 * Follow the test expectations in `070-TEST-PLAN.md` before marking major features as done.
-

@@ -3,20 +3,33 @@
 **Work Package ID:** 080  
 **Initiative:** `ade-web-refactor`  
 **Owner:** \<Tech Lead, ade-web>  
-**Status:** Draft  
-**Last Updated:** \<YYYY-MM-DD>  
+**Status:** In progress  
+**Last Updated:** 2025-11-29  
 
-**Related work packages:**
+**Related documents:**
 
-- `010-ARCHITECTURE-AND-DESIGN.md`
-- `020-FRONTEND-IMPLEMENTATION.md`
-- `030-BACKEND-API-ADAPTATION.md`
-- `040-TESTING-AND-QA.md`
-- `050-OBSERVABILITY.md`
-- `060-SECURITY-AND-COMPLIANCE.md`
-- `070-CHANGE-MANAGEMENT-AND-TRAINING.md`
+- `010-WORK-PACKAGE.md`
+- `020-ARCHITECTURE.md`
+- `030-UX-FLOWS.md`
+- `040-DESIGN-SYSTEM.md`
+- `050-RUN-STREAMING-SPEC.md`
+- `060-NAVIGATION.md`
+- `070-TEST-PLAN.md`
 
 ---
+
+## 0. Repo Layout & Archive Strategy
+
+We will **archive the current `apps/ade-web` as read-only** and stand up the new app in a clean directory:
+
+- **Move existing app → `apps/ade-web-legacy/`.** Preserve its source for reference; stop using it for new development.
+- **Rename package metadata** inside the legacy app to `ade-web-legacy` to avoid npm/yarn name collisions with the new app.
+- **New app lives at `apps/ade-web/`** following the structure in `020-ARCHITECTURE.md`. Fresh Vite/TypeScript config, strict mode on by default.
+- **Build/serve commands (`ade build`, `ade start`) target the new app only.** CI/dev scripts should no longer run lint/tests/builds for `apps/ade-web-legacy` except when explicitly invoked (e.g., `npm run build` inside legacy for debugging).
+- **Static asset path remains unchanged:** new app still emits to `apps/ade-api/src/ade_api/web/static` so backend integration stays stable.
+- **Guardrails:** Add README note in `apps/ade-web-legacy` marking it archived; ensure navigation/streaming code in the new app does not import from legacy.
+
+This strategy lets us cut over without losing reference history and keeps the new architecture uncluttered.
 
 ## 1. Purpose and Objectives
 
