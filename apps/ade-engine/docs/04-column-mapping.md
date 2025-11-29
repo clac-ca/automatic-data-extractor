@@ -414,7 +414,7 @@ Column mapping quality is only as good as the signals it receives. When authorin
 5. **Fail usefully**
 
    * If a detector is unsure, prefer emitting a low‑confidence candidate rather than nothing.
-   * Mapping can drop it based on thresholds, but seeing the candidate in debug output helps diagnostics.
+  * Mapping can drop it based on thresholds, but seeing the candidate in debug output helps troubleshooting.
 
 ---
 

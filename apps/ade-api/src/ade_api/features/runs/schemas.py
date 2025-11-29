@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Literal
 
 from ade_engine.schemas import AdeEvent
-from ade_engine.schemas import ArtifactV1 as RunDiagnosticsV1
 from pydantic import Field, model_validator
 
 from ade_api.shared.core.ids import ULIDStr
@@ -30,7 +29,6 @@ __all__ = [
     "RunOutputFile",
     "RunOutputListing",
     "RunResource",
-    "RunDiagnosticsV1",
     "RunEventsPage",
     "RunStatusLiteral",
 ]
@@ -92,7 +90,6 @@ class RunLinks(BaseSchema):
     logs: str
     logfile: str
     outputs: str
-    diagnostics: str
 
 
 class RunInput(BaseSchema):

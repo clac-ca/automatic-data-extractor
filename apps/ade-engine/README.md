@@ -161,16 +161,14 @@ ade_engine/
     column_registry.py
     hook_registry.py
 
-  infra/                     # IO + telemetry plumbing (artifact helper lives here but is optional/legacy)
+  infra/                     # IO + telemetry plumbing
     io.py
-    artifact.py              # legacy/optional artifact sink
     telemetry.py
 
   schemas/                   # Python-first schemas (Pydantic)
     __init__.py
     manifest.py
     telemetry.py             # ade.event/v1 envelope + run/build/run-summary models as needed
-    artifact.py
 
   cli/                       # Typer-based CLI (`ade-engine`) with subcommands
     __init__.py
@@ -206,7 +204,7 @@ Layering rules:
 * Runtime/core depends on config types and infra helpers.
 * `config/` (formerly `config_runtime/`) can depend on schemas and infra where
   needed.
-* `infra/` holds IO + telemetry plumbing (artifact sink remains for optional/legacy use).
+* `infra/` holds IO + telemetry plumbing.
 * `cli/` is a thin wrapper over the public API; keep business logic in `core/`.
 * Hooks remain part of the core extension model via `config/hook_registry.py`
   (legacy path: `config_runtime/hook_registry.py`); hook invocation helpers can
@@ -217,7 +215,7 @@ If you know this layout, you know where everything lives:
 * **How do I run the engine?** → `core/engine.py`, `ade_engine/__init__.py`
 * **How do we load config scripts?** → `config/loader.py`
 * **How does the pipeline work?** → `core/pipeline/`
-* **Where is telemetry written?** → `infra/telemetry.py` (artifact helper in `infra/artifact.py` if needed)
+* **Where is telemetry written?** → `infra/telemetry.py`
 
 ### 2.1 Public API (top-level `ade_engine`)
 
@@ -263,7 +261,7 @@ result = run(
 ```
 
 You only need to dig into `pipeline` or `telemetry` if you are
-working on the engine internals (artifact sink is optional/legacy).
+working on the engine internals.
 
 Config packages live separately and look like:
 

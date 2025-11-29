@@ -1,4 +1,3 @@
-from ade_engine.schemas.artifact import ArtifactV1
 from ade_engine.schemas.manifest import ManifestV1
 from ade_engine.schemas.run_summary import RunSummaryV1
 from ade_engine.schemas.telemetry import (
@@ -26,7 +25,6 @@ from ade_engine.schemas.telemetry import (
 __all__ = [
     "AdeEvent",
     "AdeEventPayload",
-    "ArtifactV1",
     "BuildCompletedPayload",
     "BuildCreatedPayload",
     "BuildPhaseCompletedPayload",
