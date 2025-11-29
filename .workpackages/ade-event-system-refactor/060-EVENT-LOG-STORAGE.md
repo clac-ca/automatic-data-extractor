@@ -81,35 +81,26 @@ Conclusion: DB is **not** a good fit for full event history. Use it for **summar
 
 ## 4. Final storage design
 
-### 4.1 Event log layout
+### 4.1 Event log layout (current code)
 
-For each run:
+- Persisted by `RunEventStorage.append` via `RunEventDispatcher.emit`.
+- Path: `workspace_run_root(settings, workspace_id, run_id) / "logs" / "events.ndjson"` (auto-created).
+- File contents are serialized `AdeEvent` envelopes with `event_id`/`sequence` assigned by the dispatcher.
+- Engine writes its own telemetry to `<run_dir>/engine-logs/events.ndjson`; `EngineSubprocessRunner` tails that file and re-emits events through the dispatcher, so `logs/events.ndjson` remains the authoritative stream.
+- Dedicated build streaming bypasses the dispatcher, so build-only SSE is transient and not written to NDJSON unless the build is part of a streamed run.
 
-- NDJSON file:
-  - Path pattern (example):
+Example:
 
-    ```text
-    {storage_root}/workspaces/{workspace_id}/runs/{run_id}/logs/events.ndjson
-    ```
+```text
+{"type":"run.queued",...}
+{"type":"build.created",...}
+{"type":"build.started",...}
+{"type":"console.line",...}
+...
+{"type":"run.completed",...}
+```
 
-  - Contents:
-
-    ```text
-    {"type":"run.queued",...}
-    {"type":"build.created",...}
-    {"type":"build.started",...}
-    {"type":"console.line",...}
-    ...
-    {"type":"run.completed",...}
-    ```
-
-- Optional compression:
-  - We can:
-    - Keep it as plain text while the run is "recent".
-    - Move old logs to compressed storage (e.g., `events.ndjson.gz`) after N days.
-  - API code for replay should be written to:
-    - Handle plain NDJSON first.
-    - Later, we can add decompression without changing the envelope or frontend.
+- Optional compression/archival is still future work; current implementation keeps plain text.
 
 ### 4.2 DB schema (conceptual)
 

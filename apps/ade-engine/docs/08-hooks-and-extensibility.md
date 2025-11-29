@@ -28,7 +28,7 @@ the pipeline (`extract → mapping → normalize → write`).
 | Physical col   | column            | B / C / index 0,1,2… in a sheet                           |
 | Output workbook| normalized workbook| Written to `output_dir`; includes mapped + normalized data|
 
-Hooks follow this vocabulary for consistency with runtime, artifact, and telemetry.
+Hooks follow this vocabulary for consistency with runtime and telemetry.
 
 ---
 
@@ -43,7 +43,7 @@ At a high level:
   - the current `RunContext`,
   - shared per‑run `state` dict,
   - the manifest,
-  - artifact and telemetry sinks,
+  - telemetry logger,
   - and phase‑specific objects (tables, workbook, result).
 
 Hooks are **configuration-owned**:
@@ -443,7 +443,7 @@ def run(
 * Any uncaught exception in a hook:
 
   * marks the run as **failed**,
-  * records a `HookExecutionError` (or equivalent) in artifact/telemetry,
+* records a `HookExecutionError` (or equivalent) via telemetry,
   * stops further pipeline work.
 
 The engine **does not** swallow hook errors silently.
@@ -493,7 +493,7 @@ When adding or modifying hooks in a configuration:
 6. **Test end‑to‑end**:
 
    * run the engine locally on sample files,
-   * inspect `artifact.json` and `events.ndjson`,
+   * inspect `events.ndjson`,
    * verify hooks behave as expected.
 
 With this model, hooks give you powerful extension points while keeping the

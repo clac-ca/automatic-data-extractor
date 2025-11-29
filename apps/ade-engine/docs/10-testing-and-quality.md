@@ -31,8 +31,7 @@ Our testing strategy is built around a few simple ideas:
 
 - **Deterministic behavior**  
   Given the same `ade_config`, manifest, and source files, the engine should
-  produce the **same** normalized workbook and
-  `events.ndjson`.
+  produce the **same** normalized workbook and `events.ndjson`.
 
 - **Separation of concerns**  
   Each layer should be testable in isolation:
@@ -45,7 +44,6 @@ Our testing strategy is built around a few simple ideas:
 - **Stable contracts**  
   The shapes and semantics of:
   - `RunRequest` / `RunResult`,
-- `events.ndjson`,
   - `events.ndjson`,
   - script entrypoints in `ade_config`
   
@@ -80,7 +78,7 @@ apps/ade-engine/
     test_write.py
   test_engine_runtime.py
   test_config_loader.py  # legacy name in repo: test_config_runtime_loader.py
-  test_artifact.py
+  test_artifact.py       # legacy/optional artifact sink coverage
   test_telemetry.py
   test_cli.py
   fixtures/
@@ -103,7 +101,7 @@ Unit tests live close to the corresponding module:
 * `tests/pipeline/test_write.py` → `pipeline/write.py`
 * `tests/test_engine_runtime.py` → `engine.py`, `types.py`
 * `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) → `config/loader.py`, `schemas/manifest.py`
-* `tests/test_artifact.py` → `artifact.py`
+* `tests/test_artifact.py` → `artifact.py` (legacy/optional sink)
 * `tests/test_telemetry.py` → `telemetry.py`
 * `tests/test_cli.py` → `cli.py`, `__main__.py`
 
@@ -125,8 +123,8 @@ and real files:
 
   * `RunResult` status and paths,
   * workbook contents,
-  * `artifact.json`,
-  * `events.ndjson`.
+  * `events.ndjson` (telemetry timeline),
+  * (optional/legacy) `artifact.json` when using `FileArtifactSink` explicitly in tests.
 
 These tests live in the top‑level `tests/` folder (e.g., in
 `test_engine_runtime.py` and `test_cli.py`) and act as contract tests for the
@@ -205,7 +203,7 @@ Key tests:
 
     * `RunResult.status == "failed"`,
     * `error` is set,
-    * `artifact.json` exists and has `run.status == "failed"`.
+    * telemetry still records a `run.completed` with `status:"failed"` and error context.
 
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
@@ -310,26 +308,20 @@ Key tests:
 
   * Workbook saved to expected location under `output_dir`.
 
-### 4.7 Artifact and telemetry (`artifact.py`, `telemetry.py`)
+### 4.7 Telemetry (and legacy artifact) (`telemetry.py`, `artifact.py`)
 
 Key tests:
 
-* Artifact lifecycle:
-
-  * `start` → `mark_success` / `mark_failure` → `flush` produce a valid
-    `artifact.json`.
-* Run section:
-
-  * `run.status` matches the final `RunResult`.
-  * `outputs` are propagated correctly.
-* Tables section:
-
-  * `mapping`, `unmapped`, and `validation` entries reflect the given
-    `ExtractedTable`, `MappedTable`, and `NormalizedTable`.
 * Telemetry events:
 
   * `FileEventSink` writes well‑formed NDJSON.
   * `PipelineLogger.note` and `.event` respect `min_*_level` thresholds.
+  * `run.started`, `run.table.summary`, `run.completed` payloads validate against schema.
+
+* Legacy/optional artifact sink:
+
+  * `FileArtifactSink` can still serialize an `ArtifactV1` when used directly in tests.
+  * Artifact tests exist for backwards compatibility but the runtime’s primary contract is telemetry (`events.ndjson`).
 
 ---
 
@@ -366,12 +358,8 @@ Typical flow in `test_engine_runtime.py`:
 
    * `result.status == "succeeded"`.
    * Workbook exists at each `output_paths` entry and is a valid XLSX.
-   * `artifact.json` exists and contains:
-
-     * `run.status == "succeeded"`,
-     * one or more `tables` entries.
-   * `events.ndjson` exists and contains at least `run_started` and
-     `run_completed` events.
+   * `events.ndjson` exists and contains at least `run.started` and
+     `run.completed` events.
 
 ### 5.2 CLI integration
 
@@ -415,14 +403,11 @@ Recommended approach:
 
 * For selected configurations and inputs:
 
-  * Take a **snapshot** of:
-
-    * `artifact.tables[*].mapping`,
-    * `artifact.tables[*].unmapped`.
+  * Take a **snapshot** of `run.table.summary` payloads (mapped/unmapped columns, scores).
 * Add a test that:
 
   * Runs the engine with the same inputs/config.
-  * Compares the new mapping snapshot to the stored one.
+  * Compares the new telemetry snapshot to the stored one.
   * Fails if fields or scores differ unexpectedly.
 
 When mapping behavior must change intentionally:
@@ -430,21 +415,25 @@ When mapping behavior must change intentionally:
 * Update the stored snapshot as part of the change.
 * Mention the behavior change in the PR description / changelog.
 
-### 6.2 Artifact & telemetry schema contracts
+### 6.2 Telemetry schema contracts (and legacy artifact)
 
-We treat `artifact.json` and `events.ndjson` as external contracts.
+We treat `events.ndjson` as the primary external contract. Artifact support is
+legacy/optional and tested separately.
 
 Tests should:
 
-* Validate serialized JSON against the Pydantic models (and optional JSON
-  Schemas).
+* Validate telemetry JSON against Pydantic models (and optional JSON Schemas).
 * Assert key invariants, for example:
 
-  * `artifact.run.status` always present.
-  * `run.outputs` non‑empty on success.
-  * Every validation issue has `row_index`, `field`, `code`, `severity`.
-  * Every telemetry event envelope has `schema`, `version`, `run_id`,
-    `timestamp`, and `event`.
+  * Every telemetry event envelope has `type`, `created_at`, and payload.
+  * `run.table.summary` includes mapping + validation fields.
+  * `run.completed` carries status, outputs, and optional error context.
+
+Optional legacy checks (if using `FileArtifactSink` in tests):
+
+* `artifact.run.status` present and consistent.
+* `artifact.tables[*]` contains mapping/unmapped/validation details when provided.
+* `artifact.run.error` populated on failure.
 
 If a breaking change to these shapes is necessary, tests should make the
 breakage explicit and force a deliberate version bump.
@@ -487,10 +476,10 @@ When tests fail, a few patterns help quickly identify where the problem lives.
 
 ### 8.1 Mapping and validation issues
 
-* Use `artifact.json` produced by failing tests:
+* Inspect `events.ndjson` (or streamed events) for `run.table.summary` payloads:
 
-  * Inspect `tables[*].mapped_columns` for unexpected field/header matches.
-  * Inspect `tables[*].validation_issues` for unexpected issues.
+  * Check `mapped_columns` / `unmapped_columns` for unexpected field/header matches.
+  * Check validation aggregates for surprising issue counts.
 * Add temporary assertions or `PipelineLogger.note` calls in the failing area,
   then re‑run the specific test.
 

@@ -6,14 +6,16 @@ There is **no backward compatibility** requirement. Part of this work is to remo
 
 ---
 
-## Current code reference map (hotspots to change)
+## Current code reference map (post-refactor reality)
 
-- ade-api run endpoints: `apps/ade-api/src/ade_api/features/runs/router.py` (`create_run_endpoint`, `get_run_events_endpoint`); all streaming today is NDJSON via `RunStreamFrame`.
-- ade-api run orchestration: `apps/ade-api/src/ade_api/features/runs/service.py` (`stream_run`, `_stream_engine_run`, `_append_log`, `get_run_events`, `RunSummaryV1` rebuild); reads/writes `logs/events.ndjson`.
-- ade-api build endpoints: `apps/ade-api/src/ade_api/features/builds/router.py` and `.../service.py` (`stream_build`, `_stream_build_process`, NDJSON `build.console`).
-- ade-api tests that assert old event types: `apps/ade-api/tests/unit/features/runs/test_runs_service.py`.
-- ade-engine docs describing v1 events: `apps/ade-engine/docs/11-ade-event-model.md` (mentions `run.console`/`build.console`).
-- Frontend console/event helpers using v1 types: `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts` and `.../utils/__tests__/console.test.ts`; docs at `apps/ade-web/docs/04-data-layer-and-backend-contracts.md`.
+- Run endpoints: `apps/ade-api/src/ade_api/features/runs/router.py` (`create_run_endpoint`, `get_run_events_endpoint`, `_sse_event_bytes`, `get_run_summary_endpoint`).
+- Run orchestration: `apps/ade-api/src/ade_api/features/runs/service.py` (`prepare_run`, `stream_run`, `_stream_engine_run`, `_emit_api_event`, `_run_completed_payload`).
+- Event dispatcher/storage: `apps/ade-api/src/ade_api/features/runs/event_dispatcher.py` (`RunEventDispatcher`, `RunEventStorage`, `RunEventLogReader`, `RunEventSubscription`).
+- Engine subprocess tailer: `apps/ade-api/src/ade_api/features/runs/runner.py` (`EngineSubprocessRunner`, `StdoutFrame`).
+- Summary builder: `apps/ade-api/src/ade_api/features/runs/summary_builder.py` (`build_run_summary_from_paths`, `build_run_summary`).
+- Build endpoints + orchestration: `apps/ade-api/src/ade_api/features/builds/router.py` and `.../service.py` (`stream_build`, `_ade_event`), builder steps in `.../builds/builder.py`.
+- Shared schemas: `apps/ade-api/src/ade_api/features/runs/schemas.py` (`RunCreateRequest`, `RunEventsPage`, `RunResource`) and `apps/ade-engine/src/ade_engine/schemas/telemetry.py` (`AdeEvent`, payload classes).
+- Frontend streaming + reducer: `apps/ade-web/src/shared/runs/api.ts` (`streamRunEvents`) and `.../workbench/state/runStream.ts` (`runStreamReducer`, `applyEventToState`) with helpers in `.../workbench/utils/console.ts`.
 
 ---
 

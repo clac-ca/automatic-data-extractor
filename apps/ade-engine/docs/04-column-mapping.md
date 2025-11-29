@@ -60,7 +60,7 @@ Column mapping is designed to:
    If the configuration says a column is required, column mapping is the place where that gets enforced.
 
 5. **Be explainable and debuggable**
-   It should be obvious *why* a column was mapped where it was (or why it’s missing) by inspecting logs/artifacts.
+   It should be obvious *why* a column was mapped where it was (or why it’s missing) by inspecting telemetry (`run.table.summary`, `console.line`) and mapping scores.
 
 ---
 
@@ -223,7 +223,7 @@ When column mapping completes, the engine has:
 
 4. **Debug/observer data**
 
-   Mapping decisions are recorded into the run’s debug artifacts (run logs and artifact JSON) so that UIs and developers can understand what happened when a run misbehaves.
+   Mapping decisions are observable via telemetry (`run.table.summary` includes mapped/unmapped columns and validation breakdowns) and console logs. That information is what UIs and developers use to understand mis-mapping.
 
 ---
 
@@ -428,18 +428,15 @@ When column mapping goes wrong, you typically see one of:
 
 To debug:
 
-1. **Inspect the run artifact / logs**
+1. **Inspect the event log**
 
-   Look at the run’s artifact JSON and/or event log for:
+   Look at `events.ndjson` (or the streamed events) for:
 
-   * The final `ColumnMap`:
-
+   * `run.table.summary` payloads:
      * which physical columns were mapped,
-     * any missing required columns.
-   * Detector findings:
-
-     * did a detector emit a candidate at all?
-     * what score did it assign?
+     * unmapped columns,
+     * required vs satisfied flags.
+   * `console.line` / debug logs from detectors if emitted.
 
 2. **Compare the manifest to the sheet**
 

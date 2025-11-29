@@ -58,33 +58,44 @@ breakdowns to avoid guessing.
 - Version independently: `RunSummaryV1` is owned by `ade-engine` but evolves separately from events. If you add new fields to `run.table.summary` events, update the summary builder and bump the summary version.
 - When adding new validation/mapping dimensions, extend the `run.table.summary` payload first; then update the builder to aggregate it.
 
-## 5. Example `run.table.summary` event payload
+## 5. Example `run.table.summary` event payload (engine-emitted)
 
 ```json
 {
   "type": "run.table.summary",
-  "schema": "ade.event/v1",
-  "run_id": "run_123",
   "created_at": "2024-01-01T00:00:02Z",
-  "output_delta": {
-    "kind": "table_summary",
-    "table": {
-      "source_file": "input.xlsx",
-      "source_sheet": "Sheet1",
-      "table_index": 0,
-      "row_count": 10,
-      "mapped_fields": [
-        {"field": "member_id", "score": 1.0, "is_required": true, "is_satisfied": true}
+  "run_id": "run_123",
+  "payload": {
+    "table_id": "tbl_0",
+    "source_file": "input.xlsx",
+    "source_sheet": "Sheet1",
+    "table_index": 0,
+    "row_count": 10,
+    "column_count": 5,
+    "mapped_fields": [
+      {"field": "member_id", "score": 1.0, "is_required": true, "is_satisfied": true}
+    ],
+    "mapping": {
+      "mapped_columns": [
+        {"field": "member_id", "header": "Member ID", "source_column_index": 0, "score": 1.0, "is_required": true, "is_satisfied": true}
       ],
-      "unmapped_column_count": 1,
-      "validation": {
-        "total": 3,
-        "by_severity": {"error": 2, "warning": 1},
-        "by_code": {"missing": 1, "invalid": 1, "empty": 1},
-        "by_field": {
-          "email": {"total": 2, "by_severity": {"error": 2}, "by_code": {"missing": 1, "invalid": 1}}
-        }
+      "unmapped_columns": [
+        {"header": "Extra", "source_column_index": 4, "output_header": "raw_1"}
+      ]
+    },
+    "unmapped_column_count": 1,
+    "validation": {
+      "total": 3,
+      "by_severity": {"error": 2, "warning": 1},
+      "by_code": {"missing": 1, "invalid": 1, "empty": 1},
+      "by_field": {
+        "email": {"total": 2, "by_severity": {"error": 2}, "by_code": {"missing": 1, "invalid": 1}}
       }
+    },
+    "details": {
+      "header_row": 1,
+      "first_data_row": 2,
+      "last_data_row": 11
     }
   }
 }
