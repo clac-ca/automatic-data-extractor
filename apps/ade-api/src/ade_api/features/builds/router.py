@@ -24,7 +24,7 @@ from ade_api.shared.dependency import (
 )
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
-from .schemas import BuildCreateOptions, BuildCreateRequest, BuildLogsResponse, BuildResource
+from .schemas import BuildCreateOptions, BuildCreateRequest, BuildResource
 from .service import DEFAULT_STREAM_LIMIT, BuildExecutionContext, BuildsService
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
@@ -40,12 +40,15 @@ def _event_bytes(event: Any) -> bytes:
 
 
 def _sse_event_bytes(event: AdeEvent) -> bytes:
+    """Format an AdeEvent for SSE (constant event: ade.event)."""
+
     payload = event.model_dump_json()
+    lines = payload.splitlines() or [""]
     parts: list[str] = []
     if event.sequence is not None:
         parts.append(f"id: {event.sequence}")
     parts.append("event: ade.event")
-    parts.append(f"data: {payload}")
+    parts.extend(f"data: {line}" for line in lines)
     return "\n".join(parts).encode("utf-8") + b"\n\n"
 
 
@@ -178,16 +181,3 @@ async def get_build_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
     return service.to_resource(build)
-
-
-@router.get("/builds/{build_id}/logs", response_model=BuildLogsResponse)
-async def get_build_logs_endpoint(
-    build_id: Annotated[str, PathParam(min_length=1, description="Build identifier")],
-    after_id: int | None = Query(default=None, ge=0),
-    limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
-    service: BuildsService = builds_service_dependency,
-) -> BuildLogsResponse:
-    build = await service.get_build(build_id)
-    if build is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
-    return await service.get_logs(build_id=build_id, after_id=after_id, limit=limit)

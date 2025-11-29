@@ -18,23 +18,21 @@ describe("formatConsoleTimestamp", () => {
 describe("describeBuildEvent", () => {
   it("formats build step events", () => {
     const event: AdeEvent = {
-      object: "ade.event",
       type: "build.phase.started",
       created_at: "2024-01-01T00:00:01Z",
-      phase: "install_engine",
+      payload: { phase: "install_engine" },
     };
     const line = describeBuildEvent(event);
     expect(line.level).toBe("info");
+    expect(line.origin).toBe("build");
     expect(line.message).toContain("install_engine");
   });
 
   it("promotes stderr logs to warnings", () => {
     const event: AdeEvent = {
-      object: "ade.event",
-      type: "build.console",
+      type: "console.line",
       created_at: "2024-01-01T00:00:02Z",
-      stream: "stderr",
-      message: "pip install failed",
+      payload: { scope: "build", stream: "stderr", message: "pip install failed" },
     };
     const line = describeBuildEvent(event);
     expect(line.level).toBe("warning");
@@ -43,13 +41,9 @@ describe("describeBuildEvent", () => {
 
   it("marks successful completion as success", () => {
     const event: AdeEvent = {
-      object: "ade.event",
       type: "build.completed",
       created_at: "2024-01-01T00:00:10Z",
-      build_id: "build_123",
-      status: "active",
-      exit_code: 0,
-      summary: "ready",
+      payload: { status: "succeeded", summary: "ready" },
     };
     const line = describeBuildEvent(event);
     expect(line.level).toBe("success");
@@ -60,12 +54,9 @@ describe("describeBuildEvent", () => {
 describe("describeRunEvent", () => {
   it("treats stderr logs as warnings", () => {
     const event: AdeEvent = {
-      object: "ade.event",
-      type: "run.console",
+      type: "console.line",
       created_at: "2024-01-01T00:00:20Z",
-      stream: "stderr",
-      level: "warning",
-      message: "warning: detector failed",
+      payload: { scope: "run", stream: "stderr", level: "warning", message: "warning: detector failed" },
     };
     const line = describeRunEvent(event);
     expect(line.level).toBe("warning");
@@ -74,13 +65,10 @@ describe("describeRunEvent", () => {
 
   it("marks failed completion as error", () => {
     const event: AdeEvent = {
-      object: "ade.event",
       type: "run.completed",
       created_at: "2024-01-01T00:00:30Z",
       run_id: "run_123",
-      status: "failed",
-      execution: { exit_code: 2 },
-      error: { message: "Runtime error" },
+      payload: { status: "failed", execution: { exit_code: 2 }, failure: { message: "Runtime error" } },
     };
     const line = describeRunEvent(event);
     expect(line.level).toBe("error");
@@ -90,12 +78,10 @@ describe("describeRunEvent", () => {
 
   it("formats telemetry envelopes", () => {
     const event: AdeEvent = {
-      object: "ade.event",
       type: "run.phase.started",
       created_at: new Date().toISOString(),
       run_id: "run_123",
-      phase: "mapping",
-      level: "warning",
+      payload: { phase: "mapping", level: "warning" },
     };
     const line = describeRunEvent(event);
     expect(line.level).toBe("warning");

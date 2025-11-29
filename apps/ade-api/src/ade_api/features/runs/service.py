@@ -88,9 +88,21 @@ event_logger = logging.getLogger("ade_api.runs.events")
 DEFAULT_STREAM_LIMIT = 1000
 
 # Stream frames are AdeEvents as far as the public API is concerned. Internally
-# we also see StdoutFrame objects from the process runner, but those are mapped
-# back into AdeEvents before crossing the service boundary.
-RunStreamFrame = AdeEvent
+# we also see StdoutFrame objects from the process runner and RunExecutionResult
+# markers used to finalize runs.
+@dataclass(slots=True)
+class RunExecutionResult:
+    """Outcome of an engine-backed run execution."""
+
+    status: RunStatus
+    return_code: int | None
+    summary_model: RunSummaryV1
+    summary_json: str
+    paths_snapshot: RunPathsSnapshot
+    error_message: str | None = None
+
+
+RunStreamFrame = AdeEvent | StdoutFrame | RunExecutionResult
 
 
 # --------------------------------------------------------------------------- #
@@ -228,6 +240,8 @@ class RunsService:
             settings=settings,
             storage=self._storage,
         )
+        if event_dispatcher and event_storage is None:
+            event_storage = event_dispatcher.storage
         self._event_storage = event_storage or RunEventStorage(settings=settings)
         self._event_dispatcher = event_dispatcher or RunEventDispatcher(
             storage=self._event_storage
@@ -421,7 +435,7 @@ class RunsService:
             ):
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
-                    source=event.source or "build",
+                    source=event.source or "api",
                     workspace_id=run.workspace_id,
                     configuration_id=run.configuration_id,
                     run_id=run.id,
@@ -1563,34 +1577,24 @@ class RunsService:
         )
         summary_json = self._serialize_summary(summary_model)
 
-        completion = await self._complete_run(
-            run,
-            status=status,
-            exit_code=return_code,
-            summary=summary_json,
-            error_message=error_message,
-        )
-        yield await self._emit_api_event(
-            run=completion,
-            type_="run.completed",
-            payload=self._run_completed_payload(
-                run=completion,
-                summary=summary_model,
-                paths=paths_snapshot,
-                failure_stage="run" if status is RunStatus.FAILED else None,
-                failure_message=error_message,
-            ),
-        )
-
         logger.info(
             "run.engine.execute.completed",
             extra=log_context(
                 workspace_id=run.workspace_id,
                 configuration_id=run.configuration_id,
                 run_id=run.id,
-                status=completion.status.value,
-                exit_code=completion.exit_code,
+                status=status.value,
+                exit_code=return_code,
             ),
+        )
+
+        yield RunExecutionResult(
+            status=status,
+            return_code=return_code,
+            summary_model=summary_model,
+            summary_json=summary_json,
+            paths_snapshot=paths_snapshot,
+            error_message=error_message,
         )
 
     async def _stream_validate_only_run(
@@ -1764,6 +1768,26 @@ class RunsService:
             ):
                 if isinstance(event, StdoutFrame):
                     await self._append_log(run.id, event.message, stream=event.stream)
+                    continue
+                if isinstance(event, RunExecutionResult):
+                    completion = await self._complete_run(
+                        run,
+                        status=event.status,
+                        exit_code=event.return_code,
+                        summary=event.summary_json,
+                        error_message=event.error_message,
+                    )
+                    yield await self._emit_api_event(
+                        run=completion,
+                        type_="run.completed",
+                        payload=self._run_completed_payload(
+                            run=completion,
+                            summary=event.summary_model,
+                            paths=event.paths_snapshot,
+                            failure_stage="run" if event.status is RunStatus.FAILED else None,
+                            failure_message=event.error_message,
+                        ),
+                    )
                     continue
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,

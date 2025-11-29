@@ -46,15 +46,9 @@ from .exceptions import (
     BuildNotFoundError,
     BuildWorkspaceMismatchError,
 )
-from .models import Build, BuildLog, BuildStatus
+from .models import Build, BuildStatus
 from .repository import BuildsRepository
-from .schemas import (
-    BuildCreateOptions,
-    BuildLogEntry,
-    BuildLogsResponse,
-    BuildResource,
-    BuildStatusLiteral,
-)
+from .schemas import BuildCreateOptions, BuildResource, BuildStatusLiteral
 
 __all__ = [
     "BuildExecutionContext",
@@ -393,11 +387,6 @@ class BuildsService:
                         ),
                     )
                 elif isinstance(event, BuilderLogEvent):
-                    await self._append_log(
-                        build_id=build.id,
-                        message=event.message,
-                        stream=event.stream,
-                    )
                     yield self._ade_event(
                         build=build,
                         type_="console.line",
@@ -621,48 +610,6 @@ class BuildsService:
             raise BuildWorkspaceMismatchError(build_id)
         return build
 
-    async def get_logs(
-        self,
-        *,
-        build_id: str,
-        after_id: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
-    ) -> BuildLogsResponse:
-        logger.debug(
-            "build.logs.list.start",
-            extra=log_context(build_id=build_id, after_id=after_id, limit=limit),
-        )
-        logs = await self._builds.list_logs(
-            build_id=build_id,
-            after_id=after_id,
-            limit=limit,
-        )
-        entries = [
-            BuildLogEntry(
-                id=log.id,
-                created=self._epoch_seconds(log.created_at),
-                stream=log.stream,
-                message=log.message,
-            )
-            for log in logs
-        ]
-        next_after_id = entries[-1].id if entries and len(entries) == limit else None
-
-        logger.debug(
-            "build.logs.list.success",
-            extra=log_context(
-                build_id=build_id,
-                count=len(entries),
-                next_after_id=next_after_id,
-            ),
-        )
-
-        return BuildLogsResponse(
-            build_id=build_id,
-            entries=entries,
-            next_after_id=next_after_id,
-        )
-
     def to_resource(self, build: Build) -> BuildResource:
         return BuildResource(
             id=build.id,
@@ -682,12 +629,12 @@ class BuildsService:
         *,
         build: Build,
         type_: str,
-        payload: dict[str, Any] | None = None,
+        payload: AdeEventPayload | dict[str, Any] | None = None,
     ) -> AdeEvent:
         return AdeEvent(
             type=type_,
             created_at=utc_now(),
-            source="api.builds",
+            source="api",
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
             run_id=None,
@@ -843,25 +790,6 @@ class BuildsService:
             ),
         )
         return build
-
-    async def _append_log(
-        self,
-        *,
-        build_id: str,
-        message: str,
-        stream: str,
-    ) -> BuildLog:
-        log = BuildLog(
-            build_id=build_id,
-            message=message,
-            stream=stream,
-        )
-        await self._builds.add_log(log)
-        await self._session.commit()
-        await self._session.refresh(log)
-        # We intentionally don't log per-line here; the engine event stream
-        # already captures console output at a finer granularity.
-        return log
 
     async def _handle_failure(
         self,

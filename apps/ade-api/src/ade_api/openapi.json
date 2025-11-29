@@ -5480,91 +5480,6 @@
         }
       }
     },
-    "/api/v1/builds/{build_id}/logs": {
-      "get": {
-        "tags": [
-          "builds"
-        ],
-        "summary": "Get Build Logs Endpoint",
-        "operationId": "get_build_logs_endpoint_api_v1_builds__build_id__logs_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "build_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Build identifier",
-              "title": "Build Id"
-            },
-            "description": "Build identifier"
-          },
-          {
-            "name": "after_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 1000,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BuildLogsResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/configurations/{configuration_id}/runs": {
       "post": {
         "tags": [
@@ -5929,22 +5844,31 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "stream",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Stream"
+            }
+          },
+          {
+            "name": "after_sequence",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "integer",
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Opaque cursor from previous page",
-              "title": "Cursor"
-            },
-            "description": "Opaque cursor from previous page"
+              "title": "After Sequence"
+            }
           },
           {
             "name": "limit",
@@ -6683,22 +6607,16 @@
             "type": "string",
             "title": "Type"
           },
-          "object": {
-            "type": "string",
-            "const": "ade.event",
-            "title": "Object",
-            "default": "ade.event"
-          },
-          "schema": {
-            "type": "string",
-            "const": "ade.event/v1",
-            "title": "Schema",
-            "default": "ade.event/v1"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "default": "1.0.0"
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
           },
           "created_at": {
             "type": "string",
@@ -6715,6 +6633,17 @@
               }
             ],
             "title": "Sequence"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "workspace_id": {
             "anyOf": [
@@ -6738,17 +6667,6 @@
             ],
             "title": "Configuration Id"
           },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
           "run_id": {
             "anyOf": [
               {
@@ -6771,19 +6689,11 @@
             ],
             "title": "Build Id"
           },
-          "source": {
+          "payload": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/AdeEventPayload"
               },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "details": {
-            "anyOf": [
               {
                 "additionalProperties": true,
                 "type": "object"
@@ -6792,29 +6702,23 @@
                 "type": "null"
               }
             ],
-            "title": "Details"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
+            "title": "Payload"
           }
         },
-        "additionalProperties": true,
         "type": "object",
         "required": [
           "type",
           "created_at"
         ],
         "title": "AdeEvent",
-        "description": "ADE event envelope used for engine telemetry, runs, and builds.\n\nThis schema intentionally mirrors the ``ade.event/v1`` envelope described in\nthe event model docs. Additional event-specific fields are allowed and kept\nflat at the top level."
+        "description": "Canonical ADE event envelope for build + run streaming."
+      },
+      "AdeEventPayload": {
+        "properties": {},
+        "additionalProperties": true,
+        "type": "object",
+        "title": "AdeEventPayload",
+        "description": "Base class for structured AdeEvent payloads."
       },
       "ArtifactError": {
         "properties": {
@@ -7088,76 +6992,6 @@
         "type": "object",
         "title": "BuildCreateRequest",
         "description": "Request body for POST /builds."
-      },
-      "BuildLogEntry": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "created": {
-            "type": "integer",
-            "title": "Created"
-          },
-          "stream": {
-            "type": "string",
-            "title": "Stream"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "created",
-          "stream",
-          "message"
-        ],
-        "title": "BuildLogEntry",
-        "description": "Single build log row returned by polling endpoints."
-      },
-      "BuildLogsResponse": {
-        "properties": {
-          "object": {
-            "type": "string",
-            "const": "ade.build.logs",
-            "title": "Object",
-            "default": "ade.build.logs"
-          },
-          "build_id": {
-            "type": "string",
-            "title": "Build Id"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/BuildLogEntry"
-            },
-            "type": "array",
-            "title": "Entries"
-          },
-          "next_after_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next After Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "build_id",
-          "entries"
-        ],
-        "title": "BuildLogsResponse",
-        "description": "Envelope returned by GET /builds/{id}/logs."
       },
       "BuildResource": {
         "properties": {
@@ -9347,16 +9181,16 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "next_after_sequence": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Next Cursor"
+            "title": "Next After Sequence"
           }
         },
         "additionalProperties": false,

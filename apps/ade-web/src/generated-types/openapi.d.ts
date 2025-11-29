@@ -902,23 +902,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/builds/{build_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Build Logs Endpoint */
-        get: operations["get_build_logs_endpoint_api_v1_builds__build_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/configurations/{configuration_id}/runs": {
         parameters: {
             query?: never;
@@ -1220,32 +1203,13 @@ export type components = {
         };
         /**
          * AdeEvent
-         * @description ADE event envelope used for engine telemetry, runs, and builds.
-         *
-         *     This schema intentionally mirrors the ``ade.event/v1`` envelope described in
-         *     the event model docs. Additional event-specific fields are allowed and kept
-         *     flat at the top level.
+         * @description Canonical ADE event envelope for build + run streaming.
          */
         AdeEvent: {
             /** Type */
             type: string;
-            /**
-             * Object
-             * @default ade.event
-             * @constant
-             */
-            object: "ade.event";
-            /**
-             * Schema
-             * @default ade.event/v1
-             * @constant
-             */
-            schema: "ade.event/v1";
-            /**
-             * Version
-             * @default 1.0.0
-             */
-            version: string;
+            /** Event Id */
+            event_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1253,27 +1217,26 @@ export type components = {
             created_at: string;
             /** Sequence */
             sequence?: number | null;
+            /** Source */
+            source?: string | null;
             /** Workspace Id */
             workspace_id?: string | null;
             /** Configuration Id */
             configuration_id?: string | null;
-            /** Job Id */
-            job_id?: string | null;
             /** Run Id */
             run_id?: string | null;
             /** Build Id */
             build_id?: string | null;
-            /** Source */
-            source?: string | null;
-            /** Details */
-            details?: {
+            /** Payload */
+            payload?: components["schemas"]["AdeEventPayload"] | {
                 [key: string]: unknown;
             } | null;
-            /** Error */
-            error?: {
-                [key: string]: unknown;
-            } | null;
-        } & {
+        };
+        /**
+         * AdeEventPayload
+         * @description Base class for structured AdeEvent payloads.
+         */
+        AdeEventPayload: {
             [key: string]: unknown;
         };
         /**
@@ -1394,38 +1357,6 @@ export type components = {
              */
             stream: boolean;
             options?: components["schemas"]["BuildCreateOptions"];
-        };
-        /**
-         * BuildLogEntry
-         * @description Single build log row returned by polling endpoints.
-         */
-        BuildLogEntry: {
-            /** Id */
-            id: number;
-            /** Created */
-            created: number;
-            /** Stream */
-            stream: string;
-            /** Message */
-            message: string;
-        };
-        /**
-         * BuildLogsResponse
-         * @description Envelope returned by GET /builds/{id}/logs.
-         */
-        BuildLogsResponse: {
-            /**
-             * Object
-             * @default ade.build.logs
-             * @constant
-             */
-            object: "ade.build.logs";
-            /** Build Id */
-            build_id: string;
-            /** Entries */
-            entries: components["schemas"]["BuildLogEntry"][];
-            /** Next After Id */
-            next_after_id?: number | null;
         };
         /**
          * BuildResource
@@ -2351,8 +2282,8 @@ export type components = {
         RunEventsPage: {
             /** Items */
             items: components["schemas"]["AdeEvent"][];
-            /** Next Cursor */
-            next_cursor?: string | null;
+            /** Next After Sequence */
+            next_after_sequence?: number | null;
         };
         /**
          * RunInput
@@ -6365,41 +6296,6 @@ export interface operations {
             };
         };
     };
-    get_build_logs_endpoint_api_v1_builds__build_id__logs_get: {
-        parameters: {
-            query?: {
-                after_id?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Build identifier */
-                build_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BuildLogsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
@@ -6552,8 +6448,8 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "json" | "ndjson";
-                /** @description Opaque cursor from previous page */
-                cursor?: string | null;
+                stream?: boolean;
+                after_sequence?: number | null;
                 limit?: number;
             };
             header?: never;

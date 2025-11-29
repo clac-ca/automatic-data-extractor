@@ -7,13 +7,13 @@ status from this stream.
 
 ## 1. Event envelope
 
-All events use the shared `ade.event/v1` schema (`AdeEvent` in
-`schemas/telemetry.py`):
+All events use the shared `AdeEvent` envelope (`schemas/telemetry.py`):
 
-- `type`: string, e.g., `run.started`, `run.table.summary`, `run.completed`.
+- `type`: string, e.g., `console.line`, `run.phase.completed`, `run.table.summary`, `run.completed`.
 - `created_at`: timestamp (UTC).
+- `sequence`: monotonic per run (assigned by the API; engine leaves unset).
 - `workspace_id`, `configuration_id`, `run_id`: propagated from `RunRequest.metadata` when provided.
-- `run`, `env`, `execution`, `output_delta`, `log`, `error`, etc.: optional payload sections keyed by event type.
+- `payload`: type-specific fields (scope/stream/message for `console.line`, `phase/status/duration_ms` for `run.phase.completed`, etc.).
 
 Events are serialized one per line (NDJSON). Consumers must not assume ordering
 beyond `created_at` monotonicity.
@@ -29,17 +29,18 @@ You can add additional sinks (e.g., streaming over IPC or HTTP) by supplying
 
 ## 3. Event types emitted by the engine
 
-- `run.started` — emitted once per run at the beginning; includes `engine_version` and optional metadata.
-- `run.pipeline.progress` — phase transitions: `extracting`, `mapping`, `normalizing`, `writing_output`.
+- `console.line` — freeform console lines emitted via `PipelineLogger.note` (stdout/stderr-style); `payload.scope` is `"run"`.
+- `run.phase.started` / `run.phase.completed` — phase transitions: `extracting`, `mapping`, `normalizing`, `writing_output`, etc.
 - `run.table.summary` — per normalized table; includes:
   - source file/sheet/table_index
   - row_count
   - mapped_fields (field, score, required/satisfied flags)
   - unmapped_column_count and unmapped column descriptors
   - validation breakdowns (totals, by severity/code/field)
-- `run.completed` — terminal status; includes `status`, `output_paths`, `processed_files`, and optional error payload.
-- `run.console` — freeform console lines emitted via `PipelineLogger.note` (stdout/stderr-style).
-- `run.validation.issue.delta` — optional validation deltas emitted by transforms/validators.
+- `run.validation.summary` — aggregated validation counts emitted after validation completes.
+- `run.validation.issue` — optional validation issue events when individual issues are surfaced.
+- `run.error` — structured error payloads with `code`, `stage/phase`, and `message`.
+- `run.completed` — terminal status; includes `status`, `artifacts`, `execution` (exit_code), and optional failure context.
 
 ## 4. Correlation and metadata
 
