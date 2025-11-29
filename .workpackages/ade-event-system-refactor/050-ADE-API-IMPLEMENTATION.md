@@ -9,7 +9,7 @@ Scope: How `ade-api` should implement the new run + event streaming system end-t
 Related docs:
 
 * `020-EVENT-TYPES-REFERENCE.md` - Canonical event envelope and payload schemas.
-* `030-API-DESIGN-RUNS-AND-BUILDS.md` - Event types current vs new, keep/change/add.
+* `030-API-DESIGN-RUNS-AND-BUILDS.md` - HTTP surface for runs/builds and streaming behavior.
 * `060-EVENT-LOG-STORAGE.md` - NDJSON storage vs DB, retention, performance.
 * `080-BUILD-STREAMING.md` - Build streaming behavior and UX.
 
@@ -123,7 +123,7 @@ Same as non-streaming, but:
      ```text
      id: <sequence>
      event: ade.event
-     data: {<AdeEventEnvelope JSON>}
+     data: {<AdeEvent JSON>}
 
      ```
 
@@ -189,7 +189,7 @@ Accept: application/json
 
 ```json
 {
-  "events": [ /* AdeEventEnvelope[] */ ],
+  "events": [ /* AdeEvent[] */ ],
   "next_after_sequence": 100
 }
 ```
@@ -302,7 +302,7 @@ class RunEventDispatcher:
     def __init__(self, storage: EventStorage):
         self._storage = storage
         self._seq_by_run: dict[str, int] = {}
-        self._subscribers: dict[str, list[asyncio.Queue[AdeEventEnvelope]]] = {}
+        self._subscribers: dict[str, list[asyncio.Queue[AdeEvent]]] = {}
 
     def _next_sequence(self, run_id: str) -> int:
         current = self._seq_by_run.get(run_id, 0) + 1
@@ -319,12 +319,12 @@ class RunEventDispatcher:
         configuration_id: str,
         build_id: Optional[str],
         payload: dict,
-    ) -> AdeEventEnvelope:
+    ) -> AdeEvent:
         sequence = self._next_sequence(run_id)
         event_id = generate_ulid()
         created_at = datetime.utcnow()
 
-        envelope = AdeEventEnvelope(
+        envelope = AdeEvent(
             type=type,
             event_id=event_id,
             created_at=created_at,
@@ -341,13 +341,13 @@ class RunEventDispatcher:
         await self._broadcast(run_id=run_id, event=envelope)
         return envelope
 
-    async def _broadcast(self, run_id: str, event: AdeEventEnvelope) -> None:
+    async def _broadcast(self, run_id: str, event: AdeEvent) -> None:
         queues = self._subscribers.get(run_id, [])
         for q in queues:
             q.put_nowait(event)
 
-    def subscribe(self, run_id: str) -> "AsyncIterator[AdeEventEnvelope]":
-        queue: asyncio.Queue[AdeEventEnvelope] = asyncio.Queue()
+    def subscribe(self, run_id: str) -> "AsyncIterator[AdeEvent]":
+        queue: asyncio.Queue[AdeEvent] = asyncio.Queue()
         self._subscribers.setdefault(run_id, []).append(queue)
 
         async def iterator():
@@ -368,7 +368,7 @@ This is conceptual; exact code will depend on your async patterns.
 
 ```python
 class EventStorage(Protocol):
-    async def append(self, *, run_id: str, event: AdeEventEnvelope) -> None:
+    async def append(self, *, run_id: str, event: AdeEvent) -> None:
         ...
 
     async def read(
@@ -376,7 +376,7 @@ class EventStorage(Protocol):
         *,
         run_id: str,
         after_sequence: int = 0,
-    ) -> AsyncIterator[AdeEventEnvelope]:
+    ) -> AsyncIterator[AdeEvent]:
         ...
 ```
 
@@ -630,7 +630,7 @@ Because we have no external users, we can replace v1 in place:
 
 ## 10. Implementation Checklist (ade-api)
 
-* [ ] Implement `AdeEventEnvelope` + payload models in ade-api.
+* [ ] Implement `AdeEvent` + payload models in ade-api.
 * [ ] Implement `EventStorage` for NDJSON append/read (per run).
 * [ ] Implement `RunEventDispatcher` with sequence + subscriber management.
 * [ ] Update run/build services to emit new event types via dispatcher.

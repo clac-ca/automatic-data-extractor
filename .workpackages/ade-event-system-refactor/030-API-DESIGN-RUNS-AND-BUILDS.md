@@ -62,13 +62,13 @@ Returns:
 ### 1.3 Stream events for an existing run
 
 ```http
-GET /workspaces/{workspace_id}/configurations/{configuration_id}/runs/{run_id}/events?stream=true&from_sequence={n}
+GET /workspaces/{workspace_id}/configurations/{configuration_id}/runs/{run_id}/events?stream=true&after_sequence={n}
 Accept: text/event-stream
 ```
 
-* `from_sequence` (optional):
+* `after_sequence` (optional):
 
-  * If provided, server replays events with `sequence >= from_sequence`, then streams new ones.
+  * If provided, server replays events with `sequence > after_sequence`, then streams new ones.
 
 * Server uses SSE semantics:
 
@@ -82,7 +82,8 @@ Accept: text/event-stream
   data: {"type":"console.line",...}
   ```
 
-* If client reconnects with `Last-Event-ID: 24`, server resumes from `sequence = 25` (or from `from_sequence` if query param overrides).
+* If client reconnects with `Last-Event-ID: 24`, server resumes from `sequence = 25` (or respects an explicit `after_sequence` if provided).
+  * Prefer `after_sequence` query; `Last-Event-ID` is fallback.
 
 ---
 

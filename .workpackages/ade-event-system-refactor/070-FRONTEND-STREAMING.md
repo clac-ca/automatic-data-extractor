@@ -404,7 +404,7 @@ function RunSummaryView() {
 
   * On first mount:
 
-    * Option A: open SSE with `from_sequence=1` to replay.
+    * Option A: open SSE with `after_sequence=0` (or last seen) to replay.
     * Option B: fetch NDJSON and play it through the reducer (offline replay).
 * UI code is identical; only initialization differs.
 

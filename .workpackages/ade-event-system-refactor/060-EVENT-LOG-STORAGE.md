@@ -163,7 +163,7 @@ For non-live views (e.g., run details screen opened later):
 
   1. `GET /.../runs/{run_id}` -> summary + metadata.
   2. Optionally, `GET /.../runs/{run_id}/events?stream=true`:
-     - With `from_sequence=1` to get a replay in SSE form.
+     - With `after_sequence=0` (or higher) to get a replay in SSE form.
      - Or `GET /.../events` with `Accept: application/x-ndjson` to download the log.
 
 - Under the hood, API:

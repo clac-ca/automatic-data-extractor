@@ -64,7 +64,7 @@ Implementation
 - `030-API-DESIGN-RUNS-AND-BUILDS.md`
   - HTTP endpoints for creating runs, streaming events, and reading summaries.
   - How builds integrate into the run stream.
-  - Query params (`stream`, `from_sequence`, etc.) and media types.
+  - Query params (`stream`, `after_sequence`, etc.) and media types.
 
 - `040-IMPLEMENTATION-PLAN.md`
   - Concrete, phased plan to implement the new system.
@@ -117,8 +117,8 @@ Implementation
 - **API streaming pattern** (inspired by OpenAI /responses):
   - `POST /workspaces/{workspace_id}/configurations/{configuration_id}/runs?stream=true`
     - Starts the run **and** streams events as SSE (`text/event-stream`).
-  - `GET /.../runs/{run_id}/events?stream=true&from_sequence=...`
-    - Attach to an existing run's stream; replay from `sequence`.
+  - `GET /.../runs/{run_id}/events?stream=true&after_sequence=...`
+    - Attach to an existing run's stream; replay from `sequence` using `after_sequence`.
 
 - **Storage format**:
   - Event logs persisted as **NDJSON** per run:
