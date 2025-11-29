@@ -12,10 +12,12 @@
 
 Architecture & spec
 
-- [ ] Finalize & commit event catalog and migration table (`020-EVENT-TYPES-REFERENCE.md`).
-- [ ] Finalize HTTP API design for runs/builds & streaming (`030-API-DESIGN-RUNS-AND-BUILDS.md`).
-- [ ] Finalize build streaming & integration notes (`080-BUILD-STREAMING.md`).
-- [ ] Finalize console logging + subprocess streaming spec (`090-CONSOLE-LOGGING.md`).
+- [x] Finalize & commit event catalog and migration table (`020-EVENT-TYPES-REFERENCE.md`).
+- [x] Finalize HTTP API design for runs/builds & streaming (`030-API-DESIGN-RUNS-AND-BUILDS.md`).
+- [x] Finalize event log storage strategy and retention notes (`060-EVENT-LOG-STORAGE.md`).
+- [x] Finalize frontend streaming pattern and shared state plan (`070-FRONTEND-STREAMING.md`).
+- [x] Finalize build streaming & integration notes (`080-BUILD-STREAMING.md`).
+- [x] Finalize console logging + subprocess streaming spec (`090-CONSOLE-LOGGING.md`).
 
 Implementation
 
@@ -67,6 +69,16 @@ Implementation
   - Concrete, phased plan to implement the new system.
   - Where to add code in ade-api and ade-engine.
   - When/how to remove v1 code.
+
+- `060-EVENT-LOG-STORAGE.md`
+  - Storage split: DB metadata/summary + NDJSON logs.
+  - File layout, DB fields, retention, compression.
+  - What the frontend needs for live and replay paths.
+
+- `070-FRONTEND-STREAMING.md`
+  - React pattern: create run via POST, attach SSE via GET.
+  - Context + reducer state sharing and event application.
+  - UI usage patterns (console, progress, summary).
 
 - `080-BUILD-STREAMING.md`
   - Current build streaming behavior (v1).
