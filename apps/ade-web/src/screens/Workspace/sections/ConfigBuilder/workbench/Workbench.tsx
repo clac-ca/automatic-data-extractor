@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -47,11 +48,12 @@ import type { RunStatus } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { describeBuildEvent, describeRunEvent, formatConsoleTimestamp } from "./utils/console";
+import { formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
+import { createRunStreamState, runStreamReducer } from "./state/runStream";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -164,16 +166,16 @@ export function Workbench({
     return createWorkbenchTreeFromListing(filesQuery.data);
   }, [seed, filesQuery.data]);
 
-  const [consoleLines, setConsoleLines] = useState<WorkbenchConsoleLine[]>(() =>
-    seed?.console ? seed.console.slice(-MAX_CONSOLE_LINES) : [],
+  const [runStreamState, dispatchRunStream] = useReducer(
+    runStreamReducer,
+    seed?.console?.slice(-MAX_CONSOLE_LINES) ?? [],
+    (initialConsole) =>
+      createRunStreamState(
+        MAX_CONSOLE_LINES,
+        Array.isArray(initialConsole) ? (initialConsole as WorkbenchConsoleLine[]) : undefined,
+      ),
   );
-
-  useEffect(() => {
-    if (!seed?.console) {
-      return;
-    }
-    setConsoleLines(seed.console.slice(-MAX_CONSOLE_LINES));
-  }, [seed?.console]);
+  const consoleLines = runStreamState.consoleLines;
 
   const [validationState, setValidationState] = useState<WorkbenchValidationState>(() => ({
     status: seed?.validation?.length ? "success" : "idle",
@@ -201,9 +203,12 @@ export function Workbench({
         return;
       }
       const timestamp = formatConsoleTimestamp(new Date());
-      setConsoleLines([{ level: "info", message, timestamp, origin: "run" }]);
+      dispatchRunStream({
+        type: "RESET",
+        initialLines: [{ level: "info", message, timestamp, origin: "run" }],
+      });
     },
-    [setConsoleLines],
+    [dispatchRunStream],
   );
 
   const appendConsoleLine = useCallback(
@@ -211,12 +216,9 @@ export function Workbench({
       if (!isMountedRef.current) {
         return;
       }
-      setConsoleLines((prev) => {
-        const next = [...prev, line];
-        return next.length > MAX_CONSOLE_LINES ? next.slice(next.length - MAX_CONSOLE_LINES) : next;
-      });
+      dispatchRunStream({ type: "APPEND_LINE", line });
     },
-    [setConsoleLines],
+    [dispatchRunStream],
   );
 
   useEffect(() => {
@@ -779,6 +781,11 @@ export function Workbench({
         let currentRunId: string | null = null;
         try {
           for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
+            dispatchRunStream({ type: "EVENT", event });
+            if (!isMountedRef.current) {
+              return;
+            }
+
             const payload =
               event && typeof event === "object" && event.payload && typeof event.payload === "object"
                 ? (event.payload as Record<string, unknown>)
@@ -788,10 +795,6 @@ export function Workbench({
             const isBuildEvent =
               (typeof type === "string" && type.startsWith("build.")) ||
               (type === "console.line" && scope === "build");
-            appendConsoleLine(isBuildEvent ? describeBuildEvent(event) : describeRunEvent(event));
-            if (!isMountedRef.current) {
-              return;
-            }
             if (isBuildEvent) {
               continue;
             }
@@ -1099,8 +1102,8 @@ export function Workbench({
   }, [outputCollapsed, openConsole, closeConsole]);
 
   const handleClearConsole = useCallback(() => {
-    setConsoleLines([]);
-  }, []);
+    dispatchRunStream({ type: "CLEAR_CONSOLE" });
+  }, [dispatchRunStream]);
 
   const handleShowRunSummary = useCallback(() => {
     if (!latestRun) {
@@ -1515,6 +1518,7 @@ export function Workbench({
                 latestRun={latestRun}
                 onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
+                runStatus={runStreamState.status}
               />
             </div>
           )}

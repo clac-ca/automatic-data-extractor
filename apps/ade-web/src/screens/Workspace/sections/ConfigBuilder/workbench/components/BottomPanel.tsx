@@ -8,6 +8,7 @@ import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import type { WorkbenchConsoleLine, WorkbenchValidationState } from "../types";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
+import type { RunStreamStatus } from "../state/runStream";
 
 export interface WorkbenchRunSummary {
   readonly runId: string;
@@ -43,6 +44,7 @@ interface BottomPanelProps {
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onShowRunDetails?: () => void;
   readonly onClearConsole?: () => void;
+  readonly runStatus?: RunStreamStatus;
 }
 
 export function BottomPanel({
@@ -54,6 +56,7 @@ export function BottomPanel({
   latestRun,
   onShowRunDetails,
   onClearConsole,
+  runStatus,
 }: BottomPanelProps) {
   const [originFilter, setOriginFilter] = useState<"all" | "run" | "build" | "raw">("all");
   const [levelFilter, setLevelFilter] = useState<"all" | "info" | "warning" | "error" | "success">("all");
@@ -171,6 +174,7 @@ export function BottomPanel({
             latestRun={latestRun}
             onShowRunDetails={onShowRunDetails}
             followLogs={followLogs}
+            runStatus={runStatus}
           />
         </TabsContent>
 
@@ -199,6 +203,7 @@ function TerminalPanel({
   latestRun,
   onShowRunDetails,
   followLogs,
+  runStatus,
 }: {
   readonly consoleLines: readonly WorkbenchConsoleLine[];
   readonly hasConsoleLines: boolean;
@@ -206,6 +211,7 @@ function TerminalPanel({
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onShowRunDetails?: () => void;
   readonly followLogs: boolean;
+  readonly runStatus?: RunStreamStatus;
 }) {
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -214,12 +220,19 @@ function TerminalPanel({
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [consoleLines, followLogs]);
 
+  const statusLabel = runStatus && runStatus !== "idle" ? runStatus : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-slate-900/80 bg-slate-950 font-mono text-[13px] leading-relaxed text-slate-100 shadow-inner shadow-black/30">
       <div className="flex flex-col border-b border-white/5 bg-slate-950/80">
         <div className="flex items-center gap-3 px-4 py-1.5 text-[11px] uppercase tracking-[0.35em] text-slate-500">
           <span className="font-semibold tracking-[0.45em] text-slate-200">Terminal</span>
           <span className="text-[10px] tracking-[0.45em] text-emerald-400">live</span>
+          {statusLabel ? (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-100">
+              {statusLabel}
+            </span>
+          ) : null}
         </div>
         {latestRun ? (
           <div className="flex items-center justify-between gap-3 border-t border-white/5 px-4 py-1.5 text-[11px] text-slate-400">

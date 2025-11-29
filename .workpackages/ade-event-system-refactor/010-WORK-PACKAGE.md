@@ -28,6 +28,7 @@ Implementation
 - [x] Implement `RunSummaryBuilder` and canonical `run.completed`, updating DB and UI. (Summary builder now consumes validation summaries/run errors; run.completed payloads carry execution, artifacts, and failure context.)
 - [x] Update ade-web to consume unified run event stream and render build + run logs consistently.
 - [x] Remove all v1 event types, streaming codepaths, and docs (ensure no stale references remain).
+- [x] Rework ade-web streaming in config builder to follow the RunEvents reducer/context pattern and drive console + run status from SSE events (identified gaps in current UI wiring).
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
