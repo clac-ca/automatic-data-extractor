@@ -95,7 +95,7 @@ def list_input_files(input_dir: Path) -> list[Path]:
 
 Characteristics:
 
-* **Deterministic order** — ensures reproducible results and artifact output.
+* **Deterministic order** — ensures reproducible results and telemetry.
 * **Simple filter** — engine currently supports `.csv` and `.xlsx` only.
 * Discovery is **shallow vs recursive** based on implementation; whatever we
   choose should be documented and stable.
@@ -425,7 +425,7 @@ The IO and table detection layer is responsible for:
 3. Using **config‑provided row detectors** to identify table boundaries and
    emit `ExtractedTable` objects with precise sheet/row metadata.
 
-Everything beyond this point — column mapping, normalization, artifact detail —
+Everything beyond this point — column mapping, normalization, telemetry detail —
 is layered on top of these `ExtractedTable`s. If extraction is correct and well
 instrumented, the rest of the pipeline can reliably reason about what the
 engine “saw” in the original spreadsheets.

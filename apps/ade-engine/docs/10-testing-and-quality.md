@@ -496,8 +496,7 @@ Debugging steps:
 2. Check error details in:
 
    * `RunResult.error`,
-   * `artifact.run.error`,
-   * `events.ndjson` (`run_failed` event payload).
+   * `events.ndjson` (`run.error` / `run.completed` with failure payload).
 3. Add a minimal repro to `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.
