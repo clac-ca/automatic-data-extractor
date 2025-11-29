@@ -593,7 +593,20 @@ If engine fails:
 
 ---
 
-## 8. Removing v1 and Migration Plan
+## 8. Current v1 references to clean up (ade-api/engine/web)
+
+These still mention `run.console` / `build.console` or v1 streaming semantics and should be updated or removed during implementation:
+
+- ade-api: `apps/ade-api/src/ade_api/features/runs/router.py` and `.../service.py` emit `run.console`/`build.console`; tests at `apps/ade-api/tests/unit/features/runs/test_runs_service.py` assert old shapes.
+- ade-api: build streaming NDJSON path in `apps/ade-api/src/ade_api/features/builds/router.py` and `.../service.py` emits `build.console`.
+- ade-engine: telemetry docs/code/tests in `apps/ade-engine/docs/07-telemetry-events.md`, `docs/11-ade-event-model.md`, `src/ade_engine/infra/telemetry.py`, `tests/test_telemetry.py` describe/emit `run.console`/`build.console`.
+- ade-web: docs `apps/ade-web/docs/04-data-layer-and-backend-contracts.md`, `docs/07-documents-and-runs.md`; shared types `apps/ade-web/src/shared/runs/types.ts`; console utils `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts` and tests expect `run.console`/`build.console`.
+
+Use this list as a checklist when swapping everything to the unified `console.line` and new endpoints.
+
+---
+
+## 9. Removing v1 and Migration Plan
 
 Because we have no external users, we can replace v1 in place:
 
@@ -615,7 +628,7 @@ Because we have no external users, we can replace v1 in place:
 
 ---
 
-## 9. Implementation Checklist (ade-api)
+## 10. Implementation Checklist (ade-api)
 
 * [ ] Implement `AdeEventEnvelope` + payload models in ade-api.
 * [ ] Implement `EventStorage` for NDJSON append/read (per run).
