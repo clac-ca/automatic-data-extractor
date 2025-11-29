@@ -141,7 +141,7 @@ MappedColumn:
 ```
 
 The exact Python fields may vary, but the names above are used consistently in
-docs, artifact, and telemetry.
+docs and telemetry.
 
 ---
 
