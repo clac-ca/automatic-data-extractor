@@ -76,6 +76,18 @@ describe("describeRunEvent", () => {
     expect(line.message).toContain("exit code 2");
   });
 
+  it("handles structured summaries without crashing", () => {
+    const event: AdeEvent = {
+      type: "run.completed",
+      created_at: "2024-01-01T00:00:31Z",
+      run_id: "run_456",
+      payload: { status: "succeeded", summary: { run: { status: "succeeded" } } },
+    };
+    const line = describeRunEvent(event);
+    expect(line.level).toBe("success");
+    expect(line.message).toContain("Run succeeded");
+  });
+
   it("formats telemetry envelopes", () => {
     const event: AdeEvent = {
       type: "run.phase.started",

@@ -14,7 +14,7 @@ pytestmark = pytest.mark.asyncio()
 
 async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     script = tmp_path / "writer.py"
-    events_path = tmp_path / "logs" / "events.ndjson"
+    events_path = tmp_path / "engine-logs" / "events.ndjson"
     script.write_text(
         "import json, sys, time, pathlib\n"
         "events = pathlib.Path(sys.argv[1])\n"
@@ -32,7 +32,9 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     )
 
     command = [sys.executable, str(script), str(events_path)]
-    runner = EngineSubprocessRunner(command=command, run_dir=tmp_path, env=os.environ.copy())
+    runner = EngineSubprocessRunner(
+        command=command, logs_dir=events_path.parent, env=os.environ.copy()
+    )
 
     frames = []
     async for frame in runner.stream():

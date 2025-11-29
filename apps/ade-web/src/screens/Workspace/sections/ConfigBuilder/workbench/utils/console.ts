@@ -282,8 +282,11 @@ function formatRunCompletion(payload: Record<string, unknown>, timestamp: string
   const execution = (payload.execution as Record<string, unknown> | undefined) ?? {};
   const exit = typeof execution.exit_code === "number" ? execution.exit_code : undefined;
   const failure = payload.failure as Record<string, unknown> | undefined;
-  const failureMessage = (failure?.message as string | undefined)?.trim();
-  const summaryMessage = (payload.summary as string | undefined)?.trim();
+  const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+  const summaryMessage =
+    typeof payload.summary === "string"
+      ? payload.summary.trim()
+      : null;
   const level: WorkbenchConsoleLine["level"] =
     status === "failed"
       ? "error"

@@ -420,6 +420,10 @@ async def test_stream_run_validate_only_short_circuits(
     logs = await service.get_logs(run_id=context.run_id)
     assert logs.entries[0].message == "Run options: validate-only mode"
 
+    # Validate that the persisted event log also captured completion.
+    stored_events, _ = await service.get_run_events(run_id=context.run_id, limit=10)
+    assert [event.type for event in stored_events][-1] == "run.completed"
+
 
 @pytest.mark.asyncio()
 async def test_stream_run_emits_build_events_when_requested(

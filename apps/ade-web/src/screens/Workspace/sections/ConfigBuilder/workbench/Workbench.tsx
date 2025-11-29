@@ -44,7 +44,7 @@ import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
 import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
-import type { RunStatus } from "@shared/runs/types";
+import type { RunStatus, RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
@@ -176,6 +176,10 @@ export function Workbench({
       ),
   );
   const consoleLines = runStreamState.consoleLines;
+  const runStreamRef = useRef(runStreamState);
+  useEffect(() => {
+    runStreamRef.current = runStreamState;
+  }, [runStreamState]);
 
   const [validationState, setValidationState] = useState<WorkbenchValidationState>(() => ({
     status: seed?.validation?.length ? "success" : "idle",
@@ -811,8 +815,9 @@ export function Workbench({
               const runPayload = payload;
               const runStatus = (runPayload.status as RunStatus | undefined) ?? "succeeded";
               const failure = runPayload.failure as Record<string, unknown> | undefined;
-              const failureMessage = (failure?.message as string | undefined)?.trim();
-              const summaryMessage = (runPayload.summary as string | undefined)?.trim();
+              const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+              const summaryMessage =
+                typeof runPayload.summary === "string" ? runPayload.summary.trim() : null;
               const errorMessage =
                 failureMessage ||
                 summaryMessage ||
@@ -833,6 +838,25 @@ export function Workbench({
 
               const resolvedRunId =
                 currentRunId ?? event.run_id ?? (event as { id?: string }).id ?? null;
+              if (resolvedRunId) {
+                try {
+                  const telemetry = await fetchRunTelemetry(resolvedRunId);
+                  const lastSeen = runStreamRef.current.lastSequence;
+                  const missing = telemetry.filter(
+                    (item) =>
+                      item &&
+                      typeof item === "object" &&
+                      typeof item.sequence === "number" &&
+                      item.sequence > lastSeen,
+                  );
+                  for (const extraEvent of missing) {
+                    dispatchRunStream({ type: "EVENT", event: extraEvent as RunStreamEvent });
+                  }
+                } catch (error) {
+                  // Best effort hydration; keep streaming path fast.
+                  console.warn("Unable to hydrate run telemetry", error);
+                }
+              }
               if (metadata.mode === "extraction" && resolvedRunId) {
                 const completedAt = new Date();
                 const completedIso = completedAt.toISOString();
