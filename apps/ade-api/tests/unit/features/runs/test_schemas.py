@@ -32,7 +32,6 @@ def test_run_resource_serialization_uses_aliases() -> None:
             logs="/api/v1/runs/run_123/logs",
             logfile="/api/v1/runs/run_123/logfile",
             outputs="/api/v1/runs/run_123/outputs",
-            diagnostics="/api/v1/runs/run_123/diagnostics",
         ),
     )
 

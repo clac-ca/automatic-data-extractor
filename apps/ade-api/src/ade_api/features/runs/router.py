@@ -37,7 +37,6 @@ from .models import RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
-    RunDiagnosticsV1,
     RunEventsPage,
     RunFilters,
     RunLogsResponse,
@@ -351,21 +350,6 @@ async def list_run_outputs_endpoint(
             )
         )
     return RunOutputListing(files=entries)
-
-
-@router.get(
-    "/runs/{run_id}/diagnostics",
-    response_model=RunDiagnosticsV1,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Diagnostics not available"}},
-)
-async def get_run_diagnostics_endpoint(
-    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-) -> RunDiagnosticsV1:
-    try:
-        return await service.get_run_diagnostics(run_id=run_id)
-    except (RunNotFoundError, RunOutputMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(

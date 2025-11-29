@@ -78,7 +78,6 @@ apps/ade-engine/
     test_write.py
   test_engine_runtime.py
   test_config_loader.py  # legacy name in repo: test_config_runtime_loader.py
-  test_artifact.py       # legacy/optional artifact sink coverage
   test_telemetry.py
   test_cli.py
   fixtures/
@@ -101,7 +100,6 @@ Unit tests live close to the corresponding module:
 * `tests/pipeline/test_write.py` → `pipeline/write.py`
 * `tests/test_engine_runtime.py` → `engine.py`, `types.py`
 * `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) → `config/loader.py`, `schemas/manifest.py`
-* `tests/test_artifact.py` → `artifact.py` (legacy/optional sink)
 * `tests/test_telemetry.py` → `telemetry.py`
 * `tests/test_cli.py` → `cli.py`, `__main__.py`
 
@@ -123,8 +121,7 @@ and real files:
 
   * `RunResult` status and paths,
   * workbook contents,
-  * `events.ndjson` (telemetry timeline),
-  * (optional/legacy) `artifact.json` when using `FileArtifactSink` explicitly in tests.
+  * `events.ndjson` (telemetry timeline).
 
 These tests live in the top‑level `tests/` folder (e.g., in
 `test_engine_runtime.py` and `test_cli.py`) and act as contract tests for the
@@ -308,7 +305,7 @@ Key tests:
 
   * Workbook saved to expected location under `output_dir`.
 
-### 4.7 Telemetry (and legacy artifact) (`telemetry.py`, `artifact.py`)
+### 4.7 Telemetry (`telemetry.py`)
 
 Key tests:
 
@@ -317,11 +314,6 @@ Key tests:
   * `FileEventSink` writes well‑formed NDJSON.
   * `PipelineLogger.note` and `.event` respect `min_*_level` thresholds.
   * `run.started`, `run.table.summary`, `run.completed` payloads validate against schema.
-
-* Legacy/optional artifact sink:
-
-  * `FileArtifactSink` can still serialize an `ArtifactV1` when used directly in tests.
-  * Artifact tests exist for backwards compatibility but the runtime’s primary contract is telemetry (`events.ndjson`).
 
 ---
 
@@ -415,10 +407,9 @@ When mapping behavior must change intentionally:
 * Update the stored snapshot as part of the change.
 * Mention the behavior change in the PR description / changelog.
 
-### 6.2 Telemetry schema contracts (and legacy artifact)
+### 6.2 Telemetry schema contracts
 
-We treat `events.ndjson` as the primary external contract. Artifact support is
-legacy/optional and tested separately.
+We treat `events.ndjson` as the primary external contract.
 
 Tests should:
 
@@ -429,13 +420,7 @@ Tests should:
   * `run.table.summary` includes mapping + validation fields.
   * `run.completed` carries status, outputs, and optional error context.
 
-Optional legacy checks (if using `FileArtifactSink` in tests):
-
-* `artifact.run.status` present and consistent.
-* `artifact.tables[*]` contains mapping/unmapped/validation details when provided.
-* `artifact.run.error` populated on failure.
-
-If a breaking change to these shapes is necessary, tests should make the
+If a breaking change to telemetry shapes is necessary, tests should make the
 breakage explicit and force a deliberate version bump.
 
 ---
@@ -514,10 +499,10 @@ Before merging a non‑trivial change to `ade_engine`, check:
 
 2. **Contracts respected**
 
-   * `RunRequest` and `RunResult` semantics preserved, or versioned if
-     breaking.
-   * `artifact.json` and `events.ndjson` formats preserved, or versioned
-     with explicit tests.
+* `RunRequest` and `RunResult` semantics preserved, or versioned if
+  breaking.
+* `events.ndjson` format preserved, or versioned with explicit tests.
+* `events.ndjson` format preserved, or versioned with explicit tests.
 
 3. **Performance considered**
 

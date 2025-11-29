@@ -58,7 +58,6 @@ from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
     RunCreateOptions,
-    RunDiagnosticsV1,
     RunInput,
     RunLinks,
     RunLogEntry,
@@ -209,7 +208,7 @@ class RunsService:
     - ensure the configuration environment is built
     - stage input documents and invoke the engine
     - stream ADE events for live runs
-    - resolve artifacts, diagnostics, and summaries after completion
+    - resolve artifacts and summaries after completion
     """
 
     def __init__(
@@ -655,50 +654,6 @@ class RunsService:
         )
         return summary
 
-    async def get_run_diagnostics(self, run_id: str) -> RunDiagnosticsV1:
-        """Return detailed diagnostics (former artifact) for ``run_id``."""
-
-        logger.debug(
-            "run.diagnostics.get.start",
-            extra=log_context(run_id=run_id),
-        )
-        run = await self._require_run(run_id)
-        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
-        candidates = [
-            run_dir / "logs" / "diagnostics.json",
-            run_dir / "logs" / "artifact.json",
-            run_dir / "output" / "diagnostics.json",
-            run_dir / "output" / "artifact.json",
-        ]
-        for path in candidates:
-            if not path.is_file():
-                continue
-            try:
-                diagnostics = RunDiagnosticsV1.model_validate_json(
-                    path.read_text(encoding="utf-8")
-                )
-                logger.info(
-                    "run.diagnostics.get.success",
-                    extra=log_context(
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        path=str(path),
-                    ),
-                )
-                return diagnostics
-            except ValidationError:
-                continue
-        logger.warning(
-            "run.diagnostics.get.missing",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-            ),
-        )
-        raise RunOutputMissingError("Run diagnostics are unavailable")
-
     async def get_run_events(
         self,
         *,
@@ -889,7 +844,6 @@ class RunsService:
             logs=f"{base}/logs",
             logfile=f"{base}/logfile",
             outputs=f"{base}/outputs",
-            diagnostics=f"{base}/diagnostics",
         )
 
     async def get_logs(
