@@ -150,6 +150,17 @@ Everything above is visible in the **same SSE stream** when `stream=true`.
 
 ---
 
+### 3.3 Where to change in the codebase
+
+- ade-api build endpoints and streaming today: `apps/ade-api/src/ade_api/features/builds/router.py` (`stream_build`, NDJSON response) and `.../service.py` (`_stream_build_process`, emits `build.console`).
+- ade-api run orchestration proxies build stream: `apps/ade-api/src/ade_api/features/runs/service.py` (`stream_run`, `_builds_service.stream_build`, log banner).
+- Tests locking old shapes: `apps/ade-api/tests/unit/features/runs/test_runs_service.py` asserts `build.console` in streams.
+- ade-engine docs describing current events: `apps/ade-engine/docs/11-ade-event-model.md` references `build.console`.
+
+These spots need to switch to the unified `console.line` + SSE flow.
+
+---
+
 ## 4. Implementation notes
 
 * Build orchestration in ade-api should:

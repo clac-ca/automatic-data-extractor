@@ -50,6 +50,7 @@ Implementation
   - We **do not** keep old event shapes (`build.console`, `run.console`, etc.).
   - We **do not** add `/v2` endpoints. New semantics replace the old ones in-place.
   - We **do not** maintain NDJSON streaming as a primary protocol; we standardize on **SSE for live streaming**, NDJSON for storage and offline retrieval.
+- Principle: ship the clean, correct design. Back-compat is out of scope, so prefer removal/rewrites over layering shims if that reduces complexity.
 
 ---
 
@@ -69,6 +70,10 @@ Implementation
   - Concrete, phased plan to implement the new system.
   - Where to add code in ade-api and ade-engine.
   - When/how to remove v1 code.
+
+- `050-ADE-API-IMPLEMENTATION.md`
+  - ade-api implementation details for runs/events/streaming.
+  - Dispatcher/storage, SSE endpoints, subprocess log handling, migration steps.
 
 - `060-EVENT-LOG-STORAGE.md`
   - Storage split: DB metadata/summary + NDJSON logs.

@@ -429,7 +429,15 @@ function RunSummaryView() {
 
 ---
 
-## 8. Summary
+## 8. Current ade-web integration points to update
+
+- Console/rendering helpers that still expect `build.console` / `run.console`: `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts` and `.../utils/__tests__/console.test.ts`.
+- Docs that describe old run/build streams: `apps/ade-web/docs/04-data-layer-and-backend-contracts.md`.
+- Event types are imported from `@shared/runs/types`; align those with the new `AdeEvent` schema before wiring the reducer.
+
+---
+
+## 9. Summary
 
 Frontend pattern:
 

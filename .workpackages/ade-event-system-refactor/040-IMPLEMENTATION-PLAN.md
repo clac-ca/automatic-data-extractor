@@ -6,6 +6,17 @@ There is **no backward compatibility** requirement. Part of this work is to remo
 
 ---
 
+## Current code reference map (hotspots to change)
+
+- ade-api run endpoints: `apps/ade-api/src/ade_api/features/runs/router.py` (`create_run_endpoint`, `get_run_events_endpoint`); all streaming today is NDJSON via `RunStreamFrame`.
+- ade-api run orchestration: `apps/ade-api/src/ade_api/features/runs/service.py` (`stream_run`, `_stream_engine_run`, `_append_log`, `get_run_events`, `RunSummaryV1` rebuild); reads/writes `logs/events.ndjson`.
+- ade-api build endpoints: `apps/ade-api/src/ade_api/features/builds/router.py` and `.../service.py` (`stream_build`, `_stream_build_process`, NDJSON `build.console`).
+- ade-api tests that assert old event types: `apps/ade-api/tests/unit/features/runs/test_runs_service.py`.
+- ade-engine docs describing v1 events: `apps/ade-engine/docs/11-ade-event-model.md` (mentions `run.console`/`build.console`).
+- Frontend console/event helpers using v1 types: `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts` and `.../utils/__tests__/console.test.ts`; docs at `apps/ade-web/docs/04-data-layer-and-backend-contracts.md`.
+
+---
+
 ## Phase 1 - Shared types and envelope
 
 **Goal:** Introduce canonical event envelope and payload models in ade-api and ade-engine.
