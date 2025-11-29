@@ -10,7 +10,6 @@ from .schemas import (
     BuildCreateOptions,
     BuildCreateRequest,
     BuildEvent,
-    BuildLogsResponse,
     BuildResource,
 )
 from .service import BuildExecutionContext, BuildsService
@@ -25,6 +24,5 @@ __all__ = [
     "BuildCreateRequest",
     "BuildResource",
     "BuildEvent",
-    "BuildLogsResponse",
     "BuildsService",
 ]

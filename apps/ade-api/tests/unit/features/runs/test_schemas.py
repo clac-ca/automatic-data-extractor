@@ -32,7 +32,6 @@ def test_run_resource_serialization_uses_aliases() -> None:
             logs="/api/v1/runs/run_123/logs",
             logfile="/api/v1/runs/run_123/logfile",
             outputs="/api/v1/runs/run_123/outputs",
-            diagnostics="/api/v1/runs/run_123/diagnostics",
         ),
     )
 
@@ -64,9 +63,9 @@ def test_run_create_request_defaults_to_no_stream() -> None:
 
 
 def test_run_events_page_serializes_cursor() -> None:
-    page = RunEventsPage(items=[], next_cursor="9")
+    page = RunEventsPage(items=[], next_after_sequence=9)
     payload = page.model_dump()
-    assert payload["next_cursor"] == "9"
+    assert payload["next_after_sequence"] == 9
 
 
 def test_run_output_listing_shapes_entries() -> None:

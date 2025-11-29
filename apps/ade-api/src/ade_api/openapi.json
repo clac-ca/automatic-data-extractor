@@ -5480,91 +5480,6 @@
         }
       }
     },
-    "/api/v1/builds/{build_id}/logs": {
-      "get": {
-        "tags": [
-          "builds"
-        ],
-        "summary": "Get Build Logs Endpoint",
-        "operationId": "get_build_logs_endpoint_api_v1_builds__build_id__logs_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "build_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Build identifier",
-              "title": "Build Id"
-            },
-            "description": "Build identifier"
-          },
-          {
-            "name": "after_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "After Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 1000,
-              "minimum": 1,
-              "default": 1000,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BuildLogsResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/configurations/{configuration_id}/runs": {
       "post": {
         "tags": [
@@ -5929,22 +5844,31 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "stream",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Stream"
+            }
+          },
+          {
+            "name": "after_sequence",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "integer",
+                  "minimum": 0
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Opaque cursor from previous page",
-              "title": "Cursor"
-            },
-            "description": "Opaque cursor from previous page"
+              "title": "After Sequence"
+            }
           },
           {
             "name": "limit",
@@ -6165,65 +6089,6 @@
           },
           "404": {
             "description": "Outputs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/runs/{run_id}/diagnostics": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run Diagnostics Endpoint",
-        "operationId": "get_run_diagnostics_endpoint_api_v1_runs__run_id__diagnostics_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          },
-          {
-            "SessionCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArtifactV1"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Diagnostics not available"
           },
           "422": {
             "description": "Validation Error",
@@ -6683,22 +6548,16 @@
             "type": "string",
             "title": "Type"
           },
-          "object": {
-            "type": "string",
-            "const": "ade.event",
-            "title": "Object",
-            "default": "ade.event"
-          },
-          "schema": {
-            "type": "string",
-            "const": "ade.event/v1",
-            "title": "Schema",
-            "default": "ade.event/v1"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "default": "1.0.0"
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
           },
           "created_at": {
             "type": "string",
@@ -6715,6 +6574,17 @@
               }
             ],
             "title": "Sequence"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           },
           "workspace_id": {
             "anyOf": [
@@ -6738,17 +6608,6 @@
             ],
             "title": "Configuration Id"
           },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
           "run_id": {
             "anyOf": [
               {
@@ -6771,19 +6630,11 @@
             ],
             "title": "Build Id"
           },
-          "source": {
+          "payload": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/AdeEventPayload"
               },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "details": {
-            "anyOf": [
               {
                 "additionalProperties": true,
                 "type": "object"
@@ -6792,156 +6643,23 @@
                 "type": "null"
               }
             ],
-            "title": "Details"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
+            "title": "Payload"
           }
         },
-        "additionalProperties": true,
         "type": "object",
         "required": [
           "type",
           "created_at"
         ],
         "title": "AdeEvent",
-        "description": "ADE event envelope used for engine telemetry, runs, and builds.\n\nThis schema intentionally mirrors the ``ade.event/v1`` envelope described in\nthe event model docs. Additional event-specific fields are allowed and kept\nflat at the top level."
+        "description": "Canonical ADE event envelope for build + run streaming."
       },
-      "ArtifactError": {
-        "properties": {
-          "code": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RunErrorCode"
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "title": "Code"
-          },
-          "stage": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RunPhase"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "details": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Details"
-          }
-        },
-        "additionalProperties": false,
+      "AdeEventPayload": {
+        "properties": {},
+        "additionalProperties": true,
         "type": "object",
-        "required": [
-          "code",
-          "message"
-        ],
-        "title": "ArtifactError",
-        "description": "Error details recorded when a run fails."
-      },
-      "ArtifactNote": {
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "title": "Timestamp"
-          },
-          "level": {
-            "type": "string",
-            "title": "Level"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          },
-          "details": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Details"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "timestamp",
-          "level",
-          "message"
-        ],
-        "title": "ArtifactNote"
-      },
-      "ArtifactV1": {
-        "properties": {
-          "schema": {
-            "type": "string",
-            "title": "Schema",
-            "default": "ade.artifact/v1"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version",
-            "default": "1.0.0"
-          },
-          "run": {
-            "$ref": "#/components/schemas/RunArtifact"
-          },
-          "config": {
-            "$ref": "#/components/schemas/ConfigArtifact"
-          },
-          "tables": {
-            "items": {
-              "$ref": "#/components/schemas/TableArtifact"
-            },
-            "type": "array",
-            "title": "Tables"
-          },
-          "notes": {
-            "items": {
-              "$ref": "#/components/schemas/ArtifactNote"
-            },
-            "type": "array",
-            "title": "Notes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "run",
-          "config"
-        ],
-        "title": "ArtifactV1",
-        "description": "Top-level artifact schema (v1)."
+        "title": "AdeEventPayload",
+        "description": "Base class for structured AdeEvent payloads."
       },
       "AuthProvider": {
         "properties": {
@@ -7089,76 +6807,6 @@
         "title": "BuildCreateRequest",
         "description": "Request body for POST /builds."
       },
-      "BuildLogEntry": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "created": {
-            "type": "integer",
-            "title": "Created"
-          },
-          "stream": {
-            "type": "string",
-            "title": "Stream"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "created",
-          "stream",
-          "message"
-        ],
-        "title": "BuildLogEntry",
-        "description": "Single build log row returned by polling endpoints."
-      },
-      "BuildLogsResponse": {
-        "properties": {
-          "object": {
-            "type": "string",
-            "const": "ade.build.logs",
-            "title": "Object",
-            "default": "ade.build.logs"
-          },
-          "build_id": {
-            "type": "string",
-            "title": "Build Id"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/BuildLogEntry"
-            },
-            "type": "array",
-            "title": "Entries"
-          },
-          "next_after_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next After Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "build_id",
-          "entries"
-        ],
-        "title": "BuildLogsResponse",
-        "description": "Envelope returned by GET /builds/{id}/logs."
-      },
       "BuildResource": {
         "properties": {
           "id": {
@@ -7264,37 +6912,6 @@
         ],
         "title": "BuildResource",
         "description": "API representation of a build row."
-      },
-      "ConfigArtifact": {
-        "properties": {
-          "schema": {
-            "type": "string",
-            "title": "Schema"
-          },
-          "version": {
-            "type": "string",
-            "title": "Version"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "schema",
-          "version"
-        ],
-        "title": "ConfigArtifact",
-        "description": "Config metadata captured in the artifact."
       },
       "ConfigSourceClone": {
         "properties": {
@@ -7747,7 +7364,7 @@
             "description": "Latest run identifier when the execution was streamed directly."
           },
           "status": {
-            "$ref": "#/components/schemas/ade_api__features__runs__models__RunStatus"
+            "$ref": "#/components/schemas/RunStatus"
           },
           "run_at": {
             "anyOf": [
@@ -8523,42 +8140,6 @@
         "title": "LoginRequest",
         "description": "Credentials submitted when performing a password login."
       },
-      "MappedColumn": {
-        "properties": {
-          "field": {
-            "type": "string",
-            "title": "Field"
-          },
-          "header": {
-            "type": "string",
-            "title": "Header"
-          },
-          "source_column_index": {
-            "type": "integer",
-            "title": "Source Column Index"
-          },
-          "score": {
-            "type": "number",
-            "title": "Score"
-          },
-          "contributions": {
-            "items": {
-              "$ref": "#/components/schemas/ScoreContribution"
-            },
-            "type": "array",
-            "title": "Contributions"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "field",
-          "header",
-          "source_column_index",
-          "score"
-        ],
-        "title": "MappedColumn"
-      },
       "PermissionCheckRequest": {
         "properties": {
           "permissions": {
@@ -9151,63 +8732,6 @@
         "title": "RoleUpdate",
         "description": "Payload for updating an existing role."
       },
-      "RunArtifact": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ade_engine__core__types__RunStatus"
-          },
-          "started_at": {
-            "type": "string",
-            "title": "Started At"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "outputs": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Outputs"
-          },
-          "engine_version": {
-            "type": "string",
-            "title": "Engine Version"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ArtifactError"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "status",
-          "started_at",
-          "engine_version"
-        ],
-        "title": "RunArtifact",
-        "description": "Run-level information in the artifact."
-      },
       "RunCreateOptions": {
         "properties": {
           "dry_run": {
@@ -9326,18 +8850,6 @@
         "title": "RunCreateRequest",
         "description": "Payload accepted by the run creation endpoint."
       },
-      "RunErrorCode": {
-        "type": "string",
-        "enum": [
-          "config_error",
-          "input_error",
-          "hook_error",
-          "pipeline_error",
-          "unknown_error"
-        ],
-        "title": "RunErrorCode",
-        "description": "Categorization for failures surfaced to callers."
-      },
       "RunEventsPage": {
         "properties": {
           "items": {
@@ -9347,16 +8859,16 @@
             "type": "array",
             "title": "Items"
           },
-          "next_cursor": {
+          "next_after_sequence": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Next Cursor"
+            "title": "Next After Sequence"
           }
         },
         "additionalProperties": false,
@@ -9436,10 +8948,6 @@
           "outputs": {
             "type": "string",
             "title": "Outputs"
-          },
-          "diagnostics": {
-            "type": "string",
-            "title": "Diagnostics"
           }
         },
         "additionalProperties": false,
@@ -9450,8 +8958,7 @@
           "events",
           "logs",
           "logfile",
-          "outputs",
-          "diagnostics"
+          "outputs"
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
@@ -9672,22 +9179,6 @@
         "title": "RunPage",
         "description": "Paginated collection of ``RunResource`` items."
       },
-      "RunPhase": {
-        "type": "string",
-        "enum": [
-          "initialization",
-          "load_config",
-          "extracting",
-          "mapping",
-          "normalizing",
-          "writing_output",
-          "hooks",
-          "completed",
-          "failed"
-        ],
-        "title": "RunPhase",
-        "description": "Pipeline phases used for telemetry and error mapping."
-      },
       "RunResource": {
         "properties": {
           "id": {
@@ -9891,6 +9382,18 @@
         ],
         "title": "RunResource",
         "description": "API representation of a persisted ADE run."
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "canceled"
+        ],
+        "title": "RunStatus",
+        "description": "Lifecycle states for ADE runs."
       },
       "RunSummaryBreakdowns": {
         "properties": {
@@ -10357,25 +9860,6 @@
         "title": "ScopeType",
         "description": "Scope dimensions supported by RBAC."
       },
-      "ScoreContribution": {
-        "properties": {
-          "detector": {
-            "type": "string",
-            "title": "Detector"
-          },
-          "delta": {
-            "type": "number",
-            "title": "Delta"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "detector",
-          "delta"
-        ],
-        "title": "ScoreContribution"
-      },
       "SessionEnvelope": {
         "properties": {
           "user": {
@@ -10489,107 +9973,6 @@
         ],
         "title": "SetupStatus",
         "description": "Response payload describing the initial setup state."
-      },
-      "TableArtifact": {
-        "properties": {
-          "source_file": {
-            "type": "string",
-            "title": "Source File"
-          },
-          "source_sheet": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Sheet"
-          },
-          "table_index": {
-            "type": "integer",
-            "title": "Table Index"
-          },
-          "header": {
-            "$ref": "#/components/schemas/TableHeader"
-          },
-          "mapped_columns": {
-            "items": {
-              "$ref": "#/components/schemas/MappedColumn"
-            },
-            "type": "array",
-            "title": "Mapped Columns"
-          },
-          "unmapped_columns": {
-            "items": {
-              "$ref": "#/components/schemas/UnmappedColumn"
-            },
-            "type": "array",
-            "title": "Unmapped Columns"
-          },
-          "validation_issues": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationIssue"
-            },
-            "type": "array",
-            "title": "Validation Issues"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "source_file",
-          "table_index",
-          "header"
-        ],
-        "title": "TableArtifact"
-      },
-      "TableHeader": {
-        "properties": {
-          "row_index": {
-            "type": "integer",
-            "title": "Row Index"
-          },
-          "cells": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Cells"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "row_index",
-          "cells"
-        ],
-        "title": "TableHeader"
-      },
-      "UnmappedColumn": {
-        "properties": {
-          "header": {
-            "type": "string",
-            "title": "Header"
-          },
-          "source_column_index": {
-            "type": "integer",
-            "title": "Source Column Index"
-          },
-          "output_header": {
-            "type": "string",
-            "title": "Output Header"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "header",
-          "source_column_index",
-          "output_header"
-        ],
-        "title": "UnmappedColumn"
       },
       "UploaderOut": {
         "properties": {
@@ -10869,58 +10252,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "ValidationIssue": {
-        "properties": {
-          "row_index": {
-            "type": "integer",
-            "title": "Row Index"
-          },
-          "field": {
-            "type": "string",
-            "title": "Field"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "severity": {
-            "type": "string",
-            "title": "Severity"
-          },
-          "message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message"
-          },
-          "details": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Details"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "row_index",
-          "field",
-          "code",
-          "severity"
-        ],
-        "title": "ValidationIssue"
       },
       "WorkspaceCreate": {
         "properties": {
@@ -11306,28 +10637,6 @@
         "type": "object",
         "title": "WorkspaceUpdate",
         "description": "Payload for updating workspace metadata."
-      },
-      "ade_api__features__runs__models__RunStatus": {
-        "type": "string",
-        "enum": [
-          "queued",
-          "running",
-          "succeeded",
-          "failed",
-          "canceled"
-        ],
-        "title": "RunStatus",
-        "description": "Lifecycle states for ADE runs."
-      },
-      "ade_engine__core__types__RunStatus": {
-        "type": "string",
-        "enum": [
-          "running",
-          "succeeded",
-          "failed"
-        ],
-        "title": "RunStatus",
-        "description": "Overall run outcome."
       }
     },
     "securitySchemes": {

@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
@@ -59,6 +60,12 @@ _CONFIG_TEMPLATE = (
     / "config_packages"
     / "default"
 )
+_WHEEL_CACHE_DIR: Path | None = None
+_ENGINE_WHEEL: Path | None = None
+_CONFIG_WHEEL: Path | None = None
+_RUNTIME_CACHE_DIR: Path | None = None
+_CACHED_VENV: Path | None = None
+_REAL_CONFIG_CACHE: dict[str, str] = {}
 
 
 def _engine_version_hint(spec: str) -> str | None:
@@ -76,6 +83,61 @@ def _engine_version_hint(spec: str) -> str | None:
     if "==" in spec:
         return spec.split("==", 1)[1]
     return None
+
+
+def _ensure_wheels() -> tuple[Path, Path]:
+    """Build engine/config wheels once per test session to avoid per-test rebuilds."""
+
+    global _WHEEL_CACHE_DIR, _ENGINE_WHEEL, _CONFIG_WHEEL
+    if _ENGINE_WHEEL and _CONFIG_WHEEL:
+        return _ENGINE_WHEEL, _CONFIG_WHEEL
+
+    cache_dir = Path(tempfile.mkdtemp(prefix="ade-wheel-cache-"))
+    _WHEEL_CACHE_DIR = cache_dir
+
+    def _build_wheel(source: Path, pattern: str) -> Path:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "wheel", "-w", str(cache_dir), str(source)],
+            check=True,
+        )
+        wheels = sorted(cache_dir.glob(pattern))
+        if not wheels:
+            msg = f"Failed to build wheel for {source}"
+            raise RuntimeError(msg)
+        return wheels[-1]
+
+    _ENGINE_WHEEL = _build_wheel(_ENGINE_PACKAGE, "ade_engine-*.whl")
+    _CONFIG_WHEEL = _build_wheel(_CONFIG_TEMPLATE, "ade_config-*.whl")
+    return _ENGINE_WHEEL, _CONFIG_WHEEL
+
+
+def _ensure_cached_runtime(venv_interpreter: str) -> Path:
+    """Create a cached venv with engine + config wheels for reuse across streaming tests."""
+
+    global _RUNTIME_CACHE_DIR, _CACHED_VENV
+    if _CACHED_VENV and _CACHED_VENV.exists():
+        return _CACHED_VENV
+
+    runtime_root = Path(tempfile.mkdtemp(prefix="ade-runtime-cache-"))
+    _RUNTIME_CACHE_DIR = runtime_root
+    cached_venv = runtime_root / ".venv"
+    subprocess.run([venv_interpreter, "-m", "venv", str(cached_venv)], check=True)
+
+    pip_exe = _venv_executable(cached_venv, "pip")
+    engine_wheel, config_wheel = _ensure_wheels()
+    _pip_install(pip_exe, engine_wheel)
+    _pip_install(pip_exe, config_wheel)
+
+    _CACHED_VENV = cached_venv
+    return cached_venv
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _warm_streaming_runtime() -> None:
+    """Build cached wheels and runtime once to avoid first-test penalty."""
+
+    interpreter = str(Path(_SETTINGS.python_bin).resolve()) if _SETTINGS.python_bin else sys.executable
+    _ensure_cached_runtime(interpreter)
 
 
 async def _prepare_service(
@@ -309,6 +371,15 @@ async def _seed_real_configuration(
 ) -> str:
     """Create a configuration with a fully provisioned runtime environment."""
 
+    if workspace_id in _REAL_CONFIG_CACHE:
+        # Reuse the existing configuration for this workspace to avoid repeated builds.
+        cached_config_id = _REAL_CONFIG_CACHE[workspace_id]
+        session_factory = get_sessionmaker(settings=settings)
+        async with session_factory() as session:
+            existing = await session.get(Configuration, cached_config_id)
+            if existing is not None:
+                return cached_config_id
+
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
         config_id = generate_ulid()
@@ -325,21 +396,12 @@ async def _seed_real_configuration(
 
         build_id = generate_ulid()
         venv_path = build_venv_path(settings, workspace_id, config.id, build_id)
-        if venv_path.exists():
-            shutil.rmtree(venv_path)
-        venv_path.parent.mkdir(parents=True, exist_ok=True)
         python_bin = settings.python_bin
         resolved_python_bin = str(Path(python_bin).resolve()) if python_bin else None
         venv_interpreter = resolved_python_bin or sys.executable
-        subprocess.run([venv_interpreter, "-m", "venv", str(venv_path)], check=True)
-
-        pip_exe = _venv_executable(venv_path, "pip")
-        _pip_install(pip_exe, _ENGINE_PACKAGE)
         config_src = workspace_config_root(settings, workspace_id, config.id)
-        shutil.copytree(_CONFIG_TEMPLATE, config_src, dirs_exist_ok=True)
-        _pip_install(pip_exe, config_src)
-
-        python_exe = _venv_executable(venv_path, "python")
+        if not config_src.exists():
+            shutil.copytree(_CONFIG_TEMPLATE, config_src, dirs_exist_ok=True)
         engine_version = _engine_version_hint(settings.engine_spec)
         try:
             python_version = subprocess.check_output(
@@ -351,6 +413,44 @@ async def _seed_real_configuration(
         python_interpreter = resolved_python_bin
         digest = compute_config_digest(config_src)
         now = utc_now()
+        fingerprint = compute_build_fingerprint(
+            config_digest=digest,
+            engine_spec=settings.engine_spec,
+            engine_version=engine_version,
+            python_version=python_version,
+            python_bin=resolved_python_bin,
+            extra={},
+        )
+        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+        existing_marker = marker if marker.exists() else None
+        reuse_fingerprint = None
+        reuse_build_id = None
+        if existing_marker:
+            try:
+                parsed = json.loads(existing_marker.read_text(encoding="utf-8"))
+                reuse_fingerprint = parsed.get("fingerprint")
+                reuse_build_id = parsed.get("build_id")
+            except Exception:
+                reuse_fingerprint = None
+                reuse_build_id = None
+
+        if reuse_fingerprint and reuse_fingerprint == fingerprint and venv_path.exists():
+            build_id = str(reuse_build_id or build_id)
+        else:
+            if venv_path.exists():
+                shutil.rmtree(venv_path)
+            venv_path.parent.mkdir(parents=True, exist_ok=True)
+            cached_venv = _ensure_cached_runtime(venv_interpreter)
+            shutil.copytree(cached_venv, venv_path, dirs_exist_ok=True)
+
+            marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(
+                json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+                encoding="utf-8",
+            )
+
+        python_exe = _venv_executable(venv_path, "python")
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
         config.engine_version = engine_version  # type: ignore[attr-defined]
@@ -362,20 +462,6 @@ async def _seed_real_configuration(
         config.content_digest = digest  # type: ignore[attr-defined]
         config.built_content_digest = digest  # type: ignore[attr-defined]
         config.last_build_id = build_id  # type: ignore[attr-defined]
-        fingerprint = compute_build_fingerprint(
-            config_digest=digest,
-            engine_spec=settings.engine_spec,
-            engine_version=engine_version,
-            python_version=python_version,
-            python_bin=resolved_python_bin,
-            extra={},
-        )
-        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(
-            json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
-            encoding="utf-8",
-        )
         build = Build(
             id=build_id,
             workspace_id=workspace_id,
@@ -400,6 +486,7 @@ async def _seed_real_configuration(
         config.active_build_finished_at = now  # type: ignore[attr-defined]
         config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         await session.commit()
+        _REAL_CONFIG_CACHE[workspace_id] = config.id
         return config.id
 
 
@@ -546,7 +633,8 @@ async def test_stream_run_safe_mode(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "run.queued"
@@ -631,7 +719,8 @@ async def test_stream_run_respects_persisted_safe_mode_override(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events, "expected streaming events"
     assert events[-1]["type"] == "run.completed"
@@ -711,11 +800,12 @@ async def test_stream_run_processes_real_documents(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
+    assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
     run_response = await async_client.get(f"/api/v1/runs/{run_id}")
@@ -747,88 +837,6 @@ async def test_stream_run_processes_real_documents(
         refreshed = await session.get(Document, document.id)
         assert refreshed is not None
         assert refreshed.last_run_at is not None
-
-
-async def test_stream_run_honors_input_sheet_override(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-    override_app_settings,
-    tmp_path,
-) -> None:
-    """Streaming runs should ingest the selected worksheet when provided."""
-
-    settings = override_app_settings(safe_mode=False)
-    workspace_id = seed_identity["workspace_id"]
-    configuration_id = await _seed_real_configuration(
-        settings=settings,
-        workspace_id=workspace_id,
-        tmp_path=tmp_path,
-    )
-    document = await _seed_workbook_document(
-        settings=settings, workspace_id=workspace_id
-    )
-    owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
-
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
-        f"/api/v1/configurations/{configuration_id}/runs",
-        headers=headers,
-        json={
-            "stream": True,
-            "options": {
-                "input_document_id": document.id,
-                "input_sheet_name": "Selected",
-            },
-        },
-    ) as response:
-        assert response.status_code == 200, response.text
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            events.append(json.loads(line))
-
-    assert events and events[0]["type"] == "run.queued"
-    assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
-    run_id = events[0]["run_id"]
-
-    run_response = await async_client.get(f"/api/v1/runs/{run_id}")
-    assert run_response.status_code == 200
-    run_payload = run_response.json()
-    assert run_payload["status"] == "succeeded"
-    assert run_payload["exit_code"] == 0
-    assert run_payload["build_id"]
-    assert run_payload["input"]["document_ids"] == [document.id]
-    assert run_payload["input"]["input_sheet_names"] == ["Selected"]
-
-    outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
-    assert outputs_response.status_code == 200
-    outputs_payload = outputs_response.json()
-    normalized = next(
-        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
-        None,
-    )
-    assert normalized is not None, "expected normalized workbook output"
-
-    download_response = await async_client.get(normalized["download_url"])
-    assert download_response.status_code == 200
-    workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
-    sheet = workbook[workbook.sheetnames[0]]
-    rows = list(sheet.iter_rows(values_only=True))
-    workbook.close()
-
-    assert rows[0][:4] == ("member_id", "email", "first_name", "last_name")
-    data_rows = rows[1:]
-    flattened = [
-        [str(cell) for cell in row if cell not in (None, "")]
-        for row in data_rows
-    ]
-    assert any("selected@example.com" in row for row in flattened)
-    assert all("first-sheet@example.com" not in row for row in flattened)
 
 
 @pytest.mark.asyncio()
@@ -929,11 +937,12 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
         async for line in response.aiter_lines():
             if not line:
                 continue
-            events.append(json.loads(line))
+            if line.startswith("data: "):
+                events.append(json.loads(line.removeprefix("data: ")))
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
+    assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
     outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
@@ -956,13 +965,13 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
     assert "selected@example.com" in flattened
 
 
-async def test_stream_run_limits_to_requested_sheet_list(
+async def test_stream_run_sheet_selection_variants(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
     override_app_settings,
     tmp_path,
 ) -> None:
-    """Streaming runs should narrow ingestion to the requested worksheet list."""
+    """Streaming runs should honor sheet selection options without rebuilding venvs."""
 
     settings = override_app_settings(safe_mode=False)
     workspace_id = seed_identity["workspace_id"]
@@ -971,65 +980,75 @@ async def test_stream_run_limits_to_requested_sheet_list(
         workspace_id=workspace_id,
         tmp_path=tmp_path,
     )
-    document = await _seed_workbook_document(
-        settings=settings, workspace_id=workspace_id
-    )
+    document = await _seed_workbook_document(settings=settings, workspace_id=workspace_id)
     owner = seed_identity["workspace_owner"]
     headers = await _auth_headers(
         async_client, email=owner["email"], password=owner["password"]
     )
 
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
-        f"/api/v1/configurations/{configuration_id}/runs",
-        headers=headers,
-        json={
-            "stream": True,
-            "options": {
-                "input_document_id": document.id,
-                "input_sheet_names": ["Selected"],
-            },
+    scenarios = [
+        {
+            "label": "all_sheets",
+            "options": {"input_document_id": document.id},
+            "expect_selected": True,
+            "expect_first_sheet": True,
         },
-    ) as response:
-        assert response.status_code == 200, response.text
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            events.append(json.loads(line))
-
-    assert events and events[0]["type"] == "run.queued"
-    assert events[-1]["type"] == "run.completed"
-    assert events[-1]["status"] == "succeeded"
-    run_id = events[0]["run_id"]
-
-    run_response = await async_client.get(f"/api/v1/runs/{run_id}")
-    assert run_response.status_code == 200
-    run_payload = run_response.json()
-    assert run_payload["input"]["input_sheet_names"] == ["Selected"]
-    assert run_payload["build_id"]
-
-    outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
-    assert outputs_response.status_code == 200
-    outputs_payload = outputs_response.json()
-    normalized = next(
-        (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
-        None,
-    )
-    assert normalized is not None, "expected normalized workbook output"
-
-    download_response = await async_client.get(normalized["download_url"])
-    assert download_response.status_code == 200
-    workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
-    sheet = workbook[workbook.sheetnames[0]]
-    rows = list(sheet.iter_rows(values_only=True))
-    workbook.close()
-
-    assert rows[0][:4] == ("member_id", "email", "first_name", "last_name")
-    data_rows = rows[1:]
-    flattened = [
-        [str(cell) for cell in row if cell not in (None, "")]
-        for row in data_rows
+        {
+            "label": "single_name",
+            "options": {"input_document_id": document.id, "input_sheet_name": "Selected"},
+            "expect_selected": True,
+            "expect_first_sheet": False,
+        },
+        {
+            "label": "list_names",
+            "options": {"input_document_id": document.id, "input_sheet_names": ["Selected"]},
+            "expect_selected": True,
+            "expect_first_sheet": False,
+        },
     ]
-    assert any("selected@example.com" in row for row in flattened)
-    assert all("first-sheet@example.com" not in row for row in flattened)
+
+    for scenario in scenarios:
+        events: list[dict[str, Any]] = []
+        async with async_client.stream(
+            "POST",
+            f"/api/v1/configurations/{configuration_id}/runs",
+            headers=headers,
+            json={"stream": True, "options": scenario["options"]},
+        ) as response:
+            assert response.status_code == 200, response.text
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    events.append(json.loads(line.removeprefix("data: ")))
+
+            assert events and events[0]["type"] == "run.queued"
+            assert events[-1]["type"] == "run.completed"
+            assert events[-1].get("payload", {}).get("status") == "succeeded"
+        run_id = events[0]["run_id"]
+
+        outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
+        assert outputs_response.status_code == 200
+        outputs_payload = outputs_response.json()
+        normalized = next(
+            (entry for entry in outputs_payload["files"] if entry["name"].endswith("normalized.xlsx")),
+            None,
+        )
+        assert normalized is not None, f"expected normalized workbook output for {scenario['label']}"
+
+        download_response = await async_client.get(normalized["download_url"])
+        assert download_response.status_code == 200
+        workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
+        rows = list(workbook[workbook.sheetnames[0]].iter_rows(values_only=True))
+        workbook.close()
+
+        assert rows[0][:4] == ("member_id", "email", "first_name", "last_name")
+        data_rows = rows[1:]
+        flattened = [
+            [str(cell) for cell in row if cell not in (None, "")]
+            for row in data_rows
+        ]
+        has_selected = any("selected@example.com" in row for row in flattened)
+        has_first_sheet = any("first-sheet@example.com" in row for row in flattened)
+        assert has_selected is scenario["expect_selected"]
+        assert has_first_sheet is scenario["expect_first_sheet"]

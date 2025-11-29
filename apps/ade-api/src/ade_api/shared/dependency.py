@@ -27,6 +27,7 @@ from ade_api.features.roles.service import (
     get_global_permissions_for_principal,
     get_workspace_permissions_for_principal,
 )
+from ade_api.features.runs.event_dispatcher import RunEventDispatcher, RunEventStorage
 from ade_api.features.runs.supervisor import RunExecutionSupervisor
 from ade_api.features.users.models import User
 from ade_api.features.workspaces.schemas import WorkspaceOut
@@ -160,13 +161,29 @@ def get_runs_service(
         settings=settings,
     )
 
+    dispatcher = _get_run_event_dispatcher(settings=settings)
+
     return RunsService(
         session=session,
         settings=settings,
         supervisor=_RUN_EXECUTION_SUPERVISOR,
         safe_mode_service=get_safe_mode_service(session=session, settings=settings),
         storage=storage,
+        event_dispatcher=dispatcher,
     )
+
+
+_RUN_EVENT_DISPATCHER: RunEventDispatcher | None = None
+
+
+def _get_run_event_dispatcher(*, settings: Settings) -> RunEventDispatcher:
+    global _RUN_EVENT_DISPATCHER
+
+    if _RUN_EVENT_DISPATCHER is None:
+        _RUN_EVENT_DISPATCHER = RunEventDispatcher(
+            storage=RunEventStorage(settings=settings)
+        )
+    return _RUN_EVENT_DISPATCHER
 
 
 _bearer_scheme = HTTPBearer(auto_error=False)

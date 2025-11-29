@@ -73,21 +73,21 @@ calls.
 
 ## 5. Monitoring configuration builds
 
-The builds API now mirrors the runs interface with streaming NDJSON events
-and polling endpoints. Use the same troubleshooting workflow when verifying
-environment preparation:
+Build activity is emitted through the unified run event stream. Use the same
+troubleshooting workflow you use for runs:
 
-1. Trigger a build with `stream: true` using
-   `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`.
-   Watch for `build.created`, `build.step`, `build.log`, and
-   `build.completed` events.
-2. When automation needs to poll instead of stream, hit
-   `/api/v1/builds/{build_id}` for status snapshots and
-   `/api/v1/builds/{build_id}/logs` for buffered output (supports `after_id`).
-3. Database fallbacks mirror runs: inspect the `builds` and `build_logs`
-   tables if the API is unavailable. See
-   `apps/ade-api/src/ade_api/features/builds/models.py` for column definitions.
+1. Trigger a build (or run with `stream: true`) using
+   `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
+   or the run creation endpoint. Watch for `build.created`,
+   `build.started`, `build.phase.*`, `build.completed`, and `console.line`
+   events (`payload.scope: "build"`).
+2. For status snapshots, hit `/api/v1/builds/{build_id}`. For live logs/events,
+   attach to `/api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>`
+   (build + run + console output in one ordered stream).
+3. Database fallbacks mirror runs: inspect the `builds` table if the API is
+   unavailable. Build log polling endpoints are deprecated in favor of the run
+   event stream.
 
-Refer to `docs/ade_builds_api_spec.md` for the full schema/event catalog and
-the decision log in `docs/workpackages/WP12_ade_runs.md` for current
-operational policies (safe mode, deprecation schedule).
+Refer to the event catalog in `.workpackages/ade-event-system-refactor/020-EVENT-TYPES-REFERENCE.md`
+for canonical payloads and the decision log in `docs/workpackages/WP12_ade_runs.md`
+for current operational policies (safe mode, deprecation schedule).

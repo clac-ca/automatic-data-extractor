@@ -70,8 +70,8 @@ Recommended reading order (mirrors the pipeline flow):
     guidelines.
 
 10. [`11-ade-event-model.md`](./11-ade-event-model.md)  
-    Unified ADE event envelope, build/run streaming shape, env planning, and
-    persistence guidance.
+    Current ADE event envelope, engine-emitted catalog, and how ade-api stamps
+    and streams events.
 
 11. [`12-run-summary-and-reporting.md`](./12-run-summary-and-reporting.md)  
     Run summary schema (`ade.run_summary/v1`), how it’s computed from telemetry,

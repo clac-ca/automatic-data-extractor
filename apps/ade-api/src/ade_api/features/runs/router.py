@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 
-from ade_engine.schemas import RunSummaryV1
+from ade_engine.schemas import AdeEvent, RunSummaryV1
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -26,6 +26,7 @@ from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.db.session import get_sessionmaker
 from ade_api.shared.dependency import (
+    _get_run_event_dispatcher,
     get_runs_service,
     require_authenticated,
     require_csrf,
@@ -36,7 +37,6 @@ from .models import RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
-    RunDiagnosticsV1,
     RunEventsPage,
     RunFilters,
     RunLogsResponse,
@@ -55,7 +55,6 @@ from .service import (
     RunNotFoundError,
     RunOutputMissingError,
     RunsService,
-    RunStreamFrame,
 )
 
 router = APIRouter(
@@ -66,12 +65,25 @@ runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
 
-def _event_bytes(event: RunStreamFrame) -> bytes:
+def _event_bytes(event: AdeEvent) -> bytes:
     return event.model_dump_json().encode("utf-8") + b"\n"
 
 
+def _sse_event_bytes(event: AdeEvent) -> bytes:
+    """Format an AdeEvent for SSE (constant event: ade.event)."""
+
+    data = event.model_dump_json()
+    lines = data.splitlines() or [""]
+    parts: list[str] = []
+    if event.sequence is not None:
+        parts.append(f"id: {event.sequence}")
+    parts.append("event: ade.event")
+    parts.extend(f"data: {line}" for line in lines)
+    return "\n".join(parts).encode("utf-8") + b"\n\n"
+
+
 async def _execute_run_background(
-    context_data: dict[str, str],
+    context_data: dict[str, Any],
     options_data: dict[str, Any],
     settings: Settings,
 ) -> None:
@@ -80,8 +92,14 @@ async def _execute_run_background(
     session_factory = get_sessionmaker(settings=settings)
     context = RunExecutionContext.from_dict(context_data)
     options = RunCreateOptions(**options_data)
+    dispatcher = _get_run_event_dispatcher(settings=settings)
     async with session_factory() as session:
-        service = RunsService(session=session, settings=settings)
+        service = RunsService(
+            session=session,
+            settings=settings,
+            event_dispatcher=dispatcher,
+            event_storage=dispatcher.storage,
+        )
         try:
             await service.run_to_completion(context=context, options=options)
         except Exception:  # pragma: no cover - defensive logging
@@ -108,7 +126,9 @@ async def create_run_endpoint(
 
     try:
         run, context = await service.prepare_run(
-            configuration_id=configuration_id, options=payload.options
+            configuration_id=configuration_id,
+            options=payload.options,
+            stream_build=payload.stream,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -134,7 +154,7 @@ async def create_run_endpoint(
     async def event_stream() -> AsyncIterator[bytes]:
         try:
             async for event in service.stream_run(context=context, options=payload.options):
-                yield _event_bytes(event)
+                yield _sse_event_bytes(event)
         except RunNotFoundError:
             logger.warning(
                 "run.stream.missing",
@@ -142,7 +162,7 @@ async def create_run_endpoint(
             )
             return
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get(
@@ -205,19 +225,50 @@ async def get_run_summary_endpoint(
 async def get_run_events_endpoint(
     run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
     format: Literal["json", "ndjson"] = Query(default="json"),
-    cursor: str | None = Query(default=None, description="Opaque cursor from previous page"),
+    stream: bool = Query(default=False),
+    after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
     service: RunsService = runs_service_dependency,
 ) -> RunEventsPage | StreamingResponse:
-    try:
-        cursor_value = int(cursor) if cursor is not None else None
-    except ValueError as exc:  # pragma: no cover - defensive
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid cursor") from exc
+    if stream:
+        run = await service.get_run(run_id)
+        if run is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
+
+        async def event_stream() -> AsyncIterator[bytes]:
+            async with service.subscribe_to_events(run.id) as subscription:
+                reader = service.event_log_reader(
+                    workspace_id=run.workspace_id,
+                    run_id=run.id,
+                )
+                last_replayed = after_sequence or 0
+
+                # Drain persisted backlog in pages to avoid dropping events beyond the first page.
+                while True:
+                    page_sent = 0
+                    for event in reader.iter(after_sequence=last_replayed):
+                        yield _sse_event_bytes(event)
+                        page_sent += 1
+                        if event.sequence:
+                            last_replayed = max(last_replayed, event.sequence)
+                        if page_sent >= limit:
+                            break
+
+                    if page_sent < limit:
+                        break
+
+                # Then stream live events, skipping anything we've already replayed.
+                async for live_event in subscription:
+                    if live_event.sequence and live_event.sequence <= last_replayed:
+                        continue
+                    yield _sse_event_bytes(live_event)
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     try:
-        events, next_cursor = await service.get_run_events(
+        events, next_after_sequence = await service.get_run_events(
             run_id=run_id,
-            cursor=cursor_value,
+            after_sequence=after_sequence,
             limit=limit,
         )
     except RunNotFoundError as exc:
@@ -232,7 +283,7 @@ async def get_run_events_endpoint(
 
     return RunEventsPage(
         items=events,
-        next_cursor=str(next_cursor) if next_cursor is not None else None,
+        next_after_sequence=next_after_sequence,
     )
 
 
@@ -299,21 +350,6 @@ async def list_run_outputs_endpoint(
             )
         )
     return RunOutputListing(files=entries)
-
-
-@router.get(
-    "/runs/{run_id}/diagnostics",
-    response_model=RunDiagnosticsV1,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Diagnostics not available"}},
-)
-async def get_run_diagnostics_endpoint(
-    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-) -> RunDiagnosticsV1:
-    try:
-        return await service.get_run_diagnostics(run_id=run_id)
-    except (RunNotFoundError, RunOutputMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get(

@@ -1,6 +1,5 @@
 import { post } from "@shared/api";
-import { client } from "@shared/api/client";
-import { parseNdjsonStream } from "@shared/api/ndjson";
+import { client, resolveApiUrl } from "@shared/api/client";
 
 import type { RunSummaryV1, components } from "@schema";
 import type { AdeEvent as RunStreamEvent } from "./types";
@@ -13,10 +12,12 @@ export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 export interface RunStreamOptions {
   readonly dry_run?: boolean;
   readonly validate_only?: boolean;
-   readonly force_rebuild?: boolean;
+  readonly force_rebuild?: boolean;
+  readonly document_ids?: readonly string[];
   readonly input_document_id?: string;
   readonly input_sheet_name?: string;
   readonly input_sheet_names?: readonly string[];
+  readonly metadata?: Record<string, string>;
 }
 
 export async function* streamRun(
@@ -24,20 +25,122 @@ export async function* streamRun(
   options: RunStreamOptions = {},
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const path = `/configurations/${encodeURIComponent(configId)}/runs`;
-  const response = await post<Response>(
-    path,
-    { stream: true, options },
+  const run = await post<RunResource>(
+    `/configurations/${encodeURIComponent(configId)}/runs`,
     {
-      parseJson: false,
-      returnRawResponse: true,
-      headers: { Accept: "application/x-ndjson" },
-      signal,
+      stream: false,
+      options,
     },
+    { signal },
   );
 
-  for await (const event of parseNdjsonStream<RunStreamEvent>(response)) {
+  const runId = run.id ?? (run as { run_id?: string | null }).run_id;
+  if (!runId) {
+    throw new Error("Run ID missing from creation response");
+  }
+
+  const eventsUrl = resolveApiUrl(
+    `/api/v1/runs/${encodeURIComponent(runId)}/events?stream=true&after_sequence=0`,
+  );
+
+  for await (const event of streamRunEvents(eventsUrl, signal)) {
     yield event;
+  }
+}
+
+export async function* streamRunEvents(
+  url: string,
+  signal?: AbortSignal,
+): AsyncGenerator<RunStreamEvent> {
+  const abortError = new DOMException("Aborted", "AbortError");
+  const queue: Array<RunStreamEvent | null> = [];
+  const awaiters: Array<() => void> = [];
+
+  let source: EventSource | null = null;
+  let done = false;
+  let error: unknown;
+
+  const flush = () => {
+    while (awaiters.length) {
+      const resolve = awaiters.shift();
+      resolve?.();
+    }
+  };
+
+  const close = (reason?: unknown) => {
+    if (done) return;
+    done = true;
+    if (reason) {
+      error = reason;
+    }
+    if (source) {
+      source.removeEventListener?.("ade.event", handleRunEvent as EventListener);
+      source.onmessage = null;
+      source.onerror = null;
+      source.close();
+    }
+    queue.push(null);
+    flush();
+  };
+
+  const handleRunEvent = (msg: MessageEvent<string>) => {
+    try {
+      const event = JSON.parse(msg.data) as RunStreamEvent;
+      queue.push(event);
+      flush();
+      if (event.type === "run.completed") {
+        close();
+      }
+    } catch (err) {
+      console.warn("Skipping malformed run event", err, msg.data);
+    }
+  };
+
+  source = new EventSource(url, { withCredentials: true });
+  source.addEventListener("ade.event", handleRunEvent as EventListener);
+  source.onmessage = handleRunEvent;
+
+  source.onerror = () => {
+    if (signal?.aborted) {
+      close(abortError);
+      return;
+    }
+    if (!done) {
+      close(new Error("Run event stream interrupted"));
+    }
+  };
+
+  if (signal) {
+    if (signal.aborted) {
+      close(abortError);
+    } else {
+      signal.addEventListener("abort", () => close(abortError));
+    }
+  }
+
+  try {
+    while (true) {
+      if (!queue.length) {
+        await new Promise<void>((resolve) => awaiters.push(resolve));
+      }
+
+      const next = queue.shift();
+      if (next === null) {
+        if (error) {
+          throw error;
+        }
+        break;
+      }
+      if (!next) {
+        continue;
+      }
+      if (error) {
+        throw error;
+      }
+      yield next;
+    }
+  } finally {
+    close();
   }
 }
 

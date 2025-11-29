@@ -11,18 +11,14 @@ from ade_api.shared.core.schema import BaseSchema
 
 BuildObjectType = Literal["ade.build"]
 BuildEventObjectType = Literal["ade.build.event"]
-BuildLogsObjectType = Literal["ade.build.logs"]
 BuildStatusLiteral = Literal["queued", "building", "active", "failed", "canceled"]
 
 __all__ = [
     "BuildCreateOptions",
     "BuildCreateRequest",
     "BuildEvent",
-    "BuildLogsResponse",
-    "BuildLogEntry",
     "BuildResource",
     "BuildStatusLiteral",
-    "BuildStepEvent",
 ]
 
 
@@ -86,25 +82,6 @@ class BuildCreatedEvent(BuildEventBase):
     configuration_id: str
 
 
-class BuildStepEvent(BuildEventBase):
-    type: Literal["build.step"] = "build.step"
-    step: Literal[
-        "create_venv",
-        "upgrade_pip",
-        "install_engine",
-        "install_config",
-        "verify_imports",
-        "collect_metadata",
-    ]
-    message: str | None = None
-
-
-class BuildLogEvent(BuildEventBase):
-    type: Literal["build.log"] = "build.log"
-    stream: Literal["stdout", "stderr"] = "stdout"
-    message: str
-
-
 class BuildCompletedEvent(BuildEventBase):
     type: Literal["build.completed"] = "build.completed"
     status: BuildStatusLiteral
@@ -114,24 +91,6 @@ class BuildCompletedEvent(BuildEventBase):
 
 
 BuildEvent = Annotated[
-    BuildCreatedEvent | BuildStepEvent | BuildLogEvent | BuildCompletedEvent,
+    BuildCreatedEvent | BuildCompletedEvent,
     Field(discriminator="type"),
 ]
-
-
-class BuildLogEntry(BaseSchema):
-    """Single build log row returned by polling endpoints."""
-
-    id: int
-    created: int
-    stream: str
-    message: str
-
-
-class BuildLogsResponse(BaseSchema):
-    """Envelope returned by GET /builds/{id}/logs."""
-
-    object: BuildLogsObjectType = "ade.build.logs"
-    build_id: str
-    entries: list[BuildLogEntry]
-    next_after_id: int | None = None

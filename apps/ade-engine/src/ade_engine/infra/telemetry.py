@@ -28,13 +28,13 @@ def _now() -> datetime:
 def _event_level(event: AdeEvent) -> str:
     """Best-effort level extraction for filtering."""
 
-    extras = getattr(event, "model_extra", {}) or {}
-    level = extras.get("level")
+    payload = event.payload_dict()
+    level = payload.get("level")
     if isinstance(level, str):
         return level
 
     # Fall back to stderr implying warning when stream is present.
-    stream = extras.get("stream")
+    stream = payload.get("stream")
     if stream == "stderr":
         return "warning"
     return "info"
@@ -52,7 +52,6 @@ def _make_event(
     payload: dict[str, Any] | None = None,
     sequence: int | None = None,
     source: str | None = None,
-    details: dict[str, Any] | None = None,
 ) -> AdeEvent:
     """Construct a typed AdeEvent with the common envelope fields populated."""
 
@@ -67,8 +66,7 @@ def _make_event(
         configuration_id=configuration_id,
         run_id=run.run_id,
         source=source,
-        details=details,
-        **payload,
+        payload=payload,
     )
 
 
@@ -127,7 +125,7 @@ class PipelineLogger:
     """Unified facade for ADE events.
 
     This logger owns the per-run sequence counter and wraps low-level sinks so
-    callers can think in terms of semantic event types (run.console, run.table.summary, ...).
+    callers can think in terms of semantic event types (console.line, run.table.summary, ...).
     """
 
     run: RunContext
@@ -156,33 +154,12 @@ class PipelineLogger:
 
         payload = dict(payload or {})
 
-        # Pull any event-specific details off the payload so we can merge them
-        # with cross-cutting envelope details (emitter_version, correlation_id).
-        event_details = payload.pop("details", None)
-
-        base_details: dict[str, Any] = {}
-        if self.emitter or self.emitter_version:
-            name = self.emitter or "ade-engine"
-            if self.emitter_version:
-                base_details["emitter_version"] = f"{name}@{self.emitter_version}"
-            else:
-                base_details["emitter"] = name
-
-        if self.correlation_id:
-            base_details["correlation_id"] = self.correlation_id
-
-        if base_details and event_details:
-            merged_details: dict[str, Any] | None = {**base_details, **event_details}
-        else:
-            merged_details = event_details or base_details or None
-
         event = _make_event(
             run=self.run,
             type_=type_,
             payload=payload,
             sequence=self._next_sequence(),
             source=self.source,
-            details=merged_details,
         )
         self.event_sink.emit(event)
 
@@ -191,12 +168,17 @@ class PipelineLogger:
     # --------------------------------------------------------------------- #
 
     def note(self, message: str, *, level: str = "info", stream: str = "stdout", **details: Any) -> None:
-        """Emit a standardized run.console event (stdout/stderr line)."""
+        """Emit a standardized console.line event."""
 
-        payload: dict[str, Any] = {"message": message, "level": level, "stream": stream}
+        payload: dict[str, Any] = {
+            "scope": "run",
+            "message": message,
+            "level": level,
+            "stream": stream,
+        }
         if details:
             payload["details"] = details
-        self._emit("run.console", payload=payload)
+        self._emit("console.line", payload=payload)
 
     def event(self, type_suffix: str, *, level: str | None = "info", **payload: Any) -> None:
         """Emit a run.* lifecycle/metadata event."""

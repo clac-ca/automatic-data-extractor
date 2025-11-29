@@ -644,7 +644,7 @@ Build endpoints (kept for admin/backfill and specialised flows; normal workbench
 ```http
 POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
 GET  /api/v1/builds/{build_id}
-GET  /api/v1/builds/{build_id}/logs   # NDJSON stream
+GET  /api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>   # SSE (build + run + console.line)
 ```
 
 Validation endpoint:
@@ -656,10 +656,9 @@ POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validat
 Frontend wraps these in domain‑specific hooks, e.g.:
 
 * `useTriggerConfigBuild`
-* `useConfigBuildLogsStream`
 * `useValidateConfiguration`
 
-Day‑to‑day workbench usage typically skips the build hooks and instead starts a run with `force_rebuild` when a rebuild is required; the backend also rebuilds automatically when environments are missing or stale.
+Day‑to‑day workbench usage typically skips the build hooks and instead starts a run with `force_rebuild` when a rebuild is required; the backend also rebuilds automatically when environments are missing or stale. Use the run event stream to observe build + run logs (`console.line`) and lifecycle.
 
 Streaming details and React Query integration are described in
 `04-data-layer-and-backend-contracts.md` and `09-workbench-editor-and-scripting.md`.

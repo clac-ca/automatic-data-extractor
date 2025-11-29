@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -54,17 +55,23 @@ def hash_password(password: str) -> str:
         msg = "Password must not be empty"
         raise ValueError(msg)
 
+    # Allow faster hashing in test environments to cut suite runtime.
+    fast_hash = os.getenv("ADE_TEST_FAST_HASH") == "1"
+    n = 2**10 if fast_hash else _SCRYPT_N
+    r = 1 if fast_hash else _SCRYPT_R
+    p = 1 if fast_hash else _SCRYPT_P
+
     salt = secrets.token_bytes(_SALT_BYTES)
     key = hashlib.scrypt(
         candidate.encode("utf-8"),
         salt=salt,
-        n=_SCRYPT_N,
-        r=_SCRYPT_R,
-        p=_SCRYPT_P,
+        n=n,
+        r=r,
+        p=p,
         dklen=_KEY_LEN,
     )
     return (
-        f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}$"
+        f"scrypt${n}${r}${p}$"
         f"{_encode(salt)}${_encode(key)}"
     )
 

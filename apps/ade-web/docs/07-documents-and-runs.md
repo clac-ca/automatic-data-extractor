@@ -471,7 +471,7 @@ The Run detail view composes several sections:
 
 * **Logs / console**
 
-  * Backed by an NDJSON event stream or a log file.
+  * Backed by the run event stream (SSE) or the archived NDJSON log file.
   * Rendered similarly to the Configuration Builder console.
 
 * **Telemetry summary** (when available)
@@ -489,13 +489,13 @@ Data hooks:
 
 * `useRunQuery(runId)` → `GET /api/v1/runs/{run_id}` (global; `runId` is unique).
 * `useRunOutputsQuery(runId)` → `/api/v1/runs/{run_id}/outputs`.
-* `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/logs`:
+* `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/events?stream=true`:
 
-  * Parses NDJSON **ADE events** (`ade.event/v1`), such as:
+  * Parses `AdeEvent` envelopes emitted over SSE, such as:
 
     * `run.queued`
     * `run.phase.started`
-    * `run.console`
+    * `console.line` (payload carries `scope`, `stream`, `message`)
     * `run.table.summary`
     * `run.completed`
   * Updates console output incrementally as events arrive.
