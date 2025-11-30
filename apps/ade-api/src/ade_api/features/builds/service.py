@@ -49,7 +49,7 @@ from .exceptions import (
 )
 from .models import Build, BuildStatus
 from .repository import BuildsRepository
-from .schemas import BuildCreateOptions, BuildResource, BuildStatusLiteral
+from .schemas import BuildCreateOptions, BuildResource
 
 __all__ = [
     "BuildExecutionContext",
@@ -338,7 +338,7 @@ class BuildsService:
                 build=build,
                 type_="build.completed",
                 payload={
-                    "status": self._status_literal(build.status),
+                    "status": build.status,
                     "summary": summary,
                     "exit_code": build.exit_code,
                     "env": {
@@ -424,12 +424,10 @@ class BuildsService:
                 build=build,
                 type_="build.completed",
                 payload=BuildCompletedPayload(
-                    status=self._status_literal(build.status),
+                    status=build.status,
                     exit_code=build.exit_code,
                     summary=build.summary,
-                    error={"message": build.error_message}
-                    if build.error_message
-                    else None,
+                    error={"message": build.error_message} if build.error_message else None,
                 ),
             )
             return
@@ -453,12 +451,10 @@ class BuildsService:
                 build=build,
                 type_="build.completed",
                 payload=BuildCompletedPayload(
-                    status=self._status_literal(build.status),
+                    status=build.status,
                     exit_code=build.exit_code,
                     summary=build.summary,
-                    error={"message": build.error_message}
-                    if build.error_message
-                    else None,
+                    error={"message": build.error_message} if build.error_message else None,
                 ),
             )
             return
@@ -478,7 +474,7 @@ class BuildsService:
                 workspace_id=context.workspace_id,
                 configuration_id=context.configuration_id,
                 build_id=build.id,
-                status=self._status_literal(build.status),
+                status=build.status.value,
                 exit_code=build.exit_code,
                 duration_ms=duration_ms,
             ),
@@ -488,7 +484,7 @@ class BuildsService:
             build=build,
             type_="build.completed",
             payload={
-                "status": self._status_literal(build.status),
+                "status": build.status,
                 "exit_code": build.exit_code,
                 "summary": build.summary,
                 "duration_ms": duration_ms,
@@ -620,7 +616,7 @@ class BuildsService:
             id=build.id,
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
-            status=self._status_literal(build.status),
+            status=build.status,
             created=self._epoch_seconds(build.created_at),
             started=self._epoch_seconds(build.started_at),
             finished=self._epoch_seconds(build.finished_at),
@@ -646,10 +642,6 @@ class BuildsService:
             build_id=build.id,
             payload=payload or {},
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
     async def _require_configuration(
         self,
         workspace_id: str,
@@ -994,11 +986,6 @@ class BuildsService:
         if build.fingerprint and payload.get("fingerprint") != build.fingerprint:
             return False
         return True
-
-    def _status_literal(self, status: BuildStatus) -> BuildStatusLiteral:
-        from typing import cast
-
-        return cast(BuildStatusLiteral, status.value)
 
     def _generate_build_id(self) -> str:
         return f"build_{uuid4().hex}"

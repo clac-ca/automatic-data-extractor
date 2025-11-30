@@ -14,6 +14,7 @@ from ade_api.shared.db.enums import enum_values
 
 __all__ = [
     "BuildStatus",
+    "BuildLogStream",
     "Build",
     "BuildLog",
 ]
@@ -27,6 +28,13 @@ class BuildStatus(str, Enum):
     ACTIVE = "active"
     FAILED = "failed"
     CANCELED = "canceled"
+
+
+class BuildLogStream(str, Enum):
+    """Streams captured during build execution."""
+
+    STDOUT = "stdout"
+    STDERR = "stderr"
 
 
 class Build(Base):
@@ -98,7 +106,17 @@ class BuildLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
-    stream: Mapped[str] = mapped_column(String(20), nullable=False, default="stdout")
+    stream: Mapped[BuildLogStream] = mapped_column(
+        SAEnum(
+            BuildLogStream,
+            name="log_stream",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=BuildLogStream.STDOUT,
+    )
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     build: Mapped[Build] = relationship("Build", back_populates="logs")

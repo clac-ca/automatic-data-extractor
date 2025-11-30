@@ -5,21 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import (
-    JSON,
-    CheckConstraint,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    UniqueConstraint,
-    text,
-)
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db.enums import enum_values
 
 from ..users.models import User
 from ..workspaces.models import Workspace
@@ -75,17 +67,29 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
         foreign_keys=[uploaded_by_user_id],
     )
-    status: Mapped[str] = mapped_column(
-        String(20),
+    status: Mapped[DocumentStatus] = mapped_column(
+        SAEnum(
+            DocumentStatus,
+            name="document_status",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
         nullable=False,
-        default=DocumentStatus.UPLOADED.value,
-        server_default=text("'uploaded'"),
+        default=DocumentStatus.UPLOADED,
+        server_default=DocumentStatus.UPLOADED.value,
     )
-    source: Mapped[str] = mapped_column(
-        String(50),
+    source: Mapped[DocumentSource] = mapped_column(
+        SAEnum(
+            DocumentSource,
+            name="document_source",
+            native_enum=False,
+            length=50,
+            values_callable=enum_values,
+        ),
         nullable=False,
-        default=DocumentSource.MANUAL_UPLOAD.value,
-        server_default=text("'manual_upload'"),
+        default=DocumentSource.MANUAL_UPLOAD,
+        server_default=DocumentSource.MANUAL_UPLOAD.value,
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(
@@ -103,14 +107,6 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint(
-            "status IN (" + ", ".join(f"'{value}'" for value in DOCUMENT_STATUS_VALUES) + ")",
-            name="documents_status_ck",
-        ),
-        CheckConstraint(
-            "source IN (" + ", ".join(f"'{value}'" for value in DOCUMENT_SOURCE_VALUES) + ")",
-            name="documents_source_ck",
-        ),
         Index(
             "documents_workspace_status_created_idx",
             "workspace_id",

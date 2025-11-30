@@ -8,17 +8,16 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field
 
 from ade_api.shared.core.schema import BaseSchema
+from .models import BuildStatus
 
 BuildObjectType = Literal["ade.build"]
 BuildEventObjectType = Literal["ade.build.event"]
-BuildStatusLiteral = Literal["queued", "building", "active", "failed", "canceled"]
 
 __all__ = [
     "BuildCreateOptions",
     "BuildCreateRequest",
     "BuildEvent",
     "BuildResource",
-    "BuildStatusLiteral",
 ]
 
 
@@ -35,7 +34,7 @@ class BuildResource(BaseSchema):
     workspace_id: str
     configuration_id: str
 
-    status: BuildStatusLiteral
+    status: BuildStatus
     created: int = Field(..., description="Unix timestamp when the build request was created")
     started: int | None = Field(None, description="Unix timestamp when execution started")
     finished: int | None = Field(None, description="Unix timestamp when execution completed")
@@ -78,13 +77,13 @@ class BuildEventBase(BaseSchema):
 
 class BuildCreatedEvent(BuildEventBase):
     type: Literal["build.created"] = "build.created"
-    status: BuildStatusLiteral
+    status: BuildStatus
     configuration_id: str
 
 
 class BuildCompletedEvent(BuildEventBase):
     type: Literal["build.completed"] = "build.completed"
-    status: BuildStatusLiteral
+    status: BuildStatus
     exit_code: int | None = None
     error_message: str | None = None
     summary: str | None = None

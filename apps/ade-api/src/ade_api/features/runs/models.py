@@ -14,7 +14,7 @@ from ade_api.shared.core.time import utc_now
 from ade_api.shared.db import Base
 from ade_api.shared.db.enums import enum_values
 
-__all__ = ["Run", "RunLog", "RunStatus"]
+__all__ = ["Run", "RunLog", "RunLogStream", "RunStatus"]
 
 
 class RunStatus(str, Enum):
@@ -25,6 +25,13 @@ class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELED = "canceled"
+
+
+class RunLogStream(str, Enum):
+    """Streams captured while processing run output."""
+
+    STDOUT = "stdout"
+    STDERR = "stderr"
 
 
 class Run(Base):
@@ -117,7 +124,17 @@ class RunLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
-    stream: Mapped[str] = mapped_column(String(20), nullable=False, default="stdout")
+    stream: Mapped[RunLogStream] = mapped_column(
+        SAEnum(
+            RunLogStream,
+            name="log_stream",
+            native_enum=False,
+            length=20,
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=RunLogStream.STDOUT,
+    )
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     run: Mapped[Run] = relationship("Run", back_populates="logs")
