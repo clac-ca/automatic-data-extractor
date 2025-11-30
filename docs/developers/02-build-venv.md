@@ -61,18 +61,13 @@ flowchart TD
 
 ## Database Tracking
 
-Build metadata lives on the configuration plus a build history table:
+Build metadata lives primarily in the `builds` history table; the configuration keeps only the pointer to the current build:
 
 | Field                       | Description                                            |
 | --------------------------- | ------------------------------------------------------ |
 | `active_build_id`           | Current build ID (immutable env path)                  |
 | `active_build_fingerprint`  | Hash of config digest + engine spec/version + python   |
-| `active_build_status`       | `building`, `active`, `failed`                         |
-| `active_build_started_at`   | When the active build began                            |
-| `active_build_finished_at`  | When the active build finished                         |
-| `active_build_error`        | Error text from last active build attempt              |
-| `builds` table              | History rows per build (fingerprint, status, errors)   |
-| `last_build_id`             | Legacy pointer retained for transition (matches active)|
+| `builds` table              | Source of truth for status, timestamps, errors, python/engine/config metadata |
 
 The active environment lives at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv`; switching builds is a DB pointer update, not an in-place rebuild.
 
@@ -81,13 +76,13 @@ The active environment lives at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.
 ## Change Detection & Rebuild Triggers
 
 ADE maintains **one active build per configuration** and rebuilds only when fingerprints change or force is requested.
+The **build fingerprint** mixes the config digest with the engine spec/version and Python interpreter so reuse only happens when both the config and the runtime match; the config digest alone would miss engine/Python changes.
 
 ADE (re)builds when any of the following change:
 
 * No active build exists for the configuration.
 * `content_digest` changed since the last build.
-* `engine_spec` or recorded `engine_version` changed.
-* `python_interpreter` changed.
+* Engine spec/version or Python interpreter changed (fingerprint mismatch).
 * The request sets `force=true`.
 
 Otherwise, ADE reuses the existing build. Requests are **idempotent**—you get the current active environment.
@@ -98,8 +93,8 @@ Otherwise, ADE reuses the existing build. Requests are **idempotent**—you get 
 
 **Simple, DB‑based dedupe (no per‑config file locks):**
 
-* **Single‑builder rule:** the first request sets `build_status="building"` on the configuration. Subsequent requests **see** the `building` state and either wait briefly or return a conflict, depending on options.
-* **No half builds:** build metadata is updated to `active` only after the venv is successfully provisioned and imports are verified.
+* **Single‑builder rule:** a partial unique index ensures at most one `queued/building` row per configuration; requests against an inflight build either wait briefly or return a conflict, depending on options.
+* **No half builds:** build rows are marked `active` only after the venv is successfully provisioned and imports are verified; the configuration pointer flips to that build on success.
 
 This keeps behavior correct and predictable without introducing filesystem locks.
 
@@ -114,8 +109,8 @@ This keeps behavior correct and predictable without introducing filesystem locks
 
 **Ensure wait (server‑side runs):**
 
-* When a run calls `ensure_build()` and finds `status="building"`, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for the active pointer to flip.
-* If it flips within that window, the run proceeds. Otherwise, the run submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
+* When a run calls `ensure_build()` and finds an inflight build row, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for it to finish.
+* If it completes within that window, the run proceeds. Otherwise, the run submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
 
 **UI behavior (Build button):**
 
@@ -232,18 +227,18 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 ## Backend Architecture (Essentials)
 
 * **Router** — `POST /workspaces/{workspace_id}/configs/{config_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
-* **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses configuration `build_status="building"` to deduplicate concurrent requests**, and triggers the builder if needed.
-* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates configuration build metadata on success**, deletes the temp folder on failure.
+* **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses the `builds` table (one queued/building row per config) to deduplicate concurrent requests**, and triggers the builder if needed.
+* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
 * **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
-* **Database** — `configurations` holds build metadata; `builds` tracks job history. Build logs are streamed as `console.line` in the run event stream (the `build_logs` table remains for legacy migrations only).
+* **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream (the `build_logs` table remains for legacy migrations only).
 
 ---
 
 ## Summary
 
-* Keep it simple: **DB‑based dedupe** guarantees **one** build at a time per configuration—no filesystem locks.
-* **Coalesce** concurrent requests: UI returns `"building"` quickly; runs wait briefly for the status to flip.
-* **Self‑heal** stale `building` states after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
+* Keep it simple: **DB‑based dedupe** (queued/building rows) guarantees **one** build at a time per configuration—no filesystem locks.
+* **Coalesce** concurrent requests: UI returns `"building"` quickly; runs wait briefly for the status to flip via build rows.
+* **Self‑heal** stale in-progress states after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
 * Allow **rebuilds while runs run**; new builds land in new folders and runs continue using their pinned build_id.
 * Runs **don’t pass** `build_id`—the server chooses and **records** the job ID for reproducibility.
 * No renames, no symlinks—just clean metadata updates, timeouts, and simple cleanup.

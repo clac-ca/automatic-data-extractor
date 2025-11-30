@@ -171,6 +171,7 @@ class BuildsService:
             configuration_id=configuration_id,
         )
         config_digest = compute_config_digest(config_path)
+        configuration.content_digest = config_digest
         python_interpreter = self._resolve_python_interpreter()
         python_version = await self._python_version(python_interpreter)
         engine_spec = self._settings.engine_spec
@@ -196,15 +197,25 @@ class BuildsService:
             ),
         )
 
-        if (
-            not options.force
-            and configuration.active_build_status is BuildStatus.ACTIVE
-            and configuration.active_build_fingerprint == fingerprint
-            and configuration.active_build_id
-        ):
-            build = await self._require_build(configuration.active_build_id)
+        active_build: Build | None = None
+        if configuration.active_build_id:
+            existing = await self._builds.get(configuration.active_build_id)
+            if (
+                existing
+                and existing.status is BuildStatus.ACTIVE
+                and existing.fingerprint == fingerprint
+            ):
+                active_build = existing
+        if active_build is None and not options.force:
+            active_build = await self._builds.get_active_by_fingerprint(
+                configuration_id=configuration.id,
+                fingerprint=fingerprint,
+            )
+
+        if active_build and not options.force:
+            await self._sync_active_pointer(configuration, active_build, fingerprint)
             context = self._reuse_context(
-                build=build,
+                build=active_build,
                 configuration=configuration,
                 config_path=config_path,
                 python_interpreter=python_interpreter,
@@ -212,29 +223,27 @@ class BuildsService:
                 engine_version_hint=engine_version_hint,
                 fingerprint=fingerprint,
             )
+            await self._session.commit()
             logger.info(
                 "build.prepare.reuse",
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    build_id=build.id,
+                    build_id=active_build.id,
                     reuse_summary=context.reuse_summary,
                 ),
             )
-            return build, context
+            return active_build, context
 
-        if (
-            configuration.active_build_status is BuildStatus.BUILDING
-            and configuration.active_build_id
-            and not options.force
-        ):
+        inflight = await self._builds.get_latest_inflight(configuration_id=configuration.id)
+        if inflight and not options.force:
             if options.wait:
                 logger.debug(
                     "build.prepare.wait_existing",
                     extra=log_context(
                         workspace_id=workspace_id,
                         configuration_id=configuration_id,
-                        build_id=configuration.active_build_id,
+                        build_id=inflight.id,
                     ),
                 )
                 await self._wait_for_build(
@@ -251,7 +260,7 @@ class BuildsService:
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    build_status=str(configuration.active_build_status),
+                    build_status=str(inflight.status),
                 ),
             )
             raise BuildAlreadyInProgressError(
@@ -324,18 +333,13 @@ class BuildsService:
                     reason="reuse_ok",
                 ),
             )
-            build = await self._complete_build(
-                build,
-                status=BuildStatus.ACTIVE,
-                summary=context.reuse_summary,
-                exit_code=0,
-            )
+            summary = build.summary or context.reuse_summary
             yield self._ade_event(
                 build=build,
                 type_="build.completed",
                 payload={
-                    "status": "active",
-                    "summary": build.summary,
+                    "status": self._status_literal(build.status),
+                    "summary": summary,
                     "exit_code": build.exit_code,
                     "env": {
                         "reason": "reuse_ok",
@@ -716,17 +720,6 @@ class BuildsService:
     ) -> _BuildPlan:
         workspace_id = configuration.workspace_id
         now = self._now()
-        configuration.active_build_status = BuildStatus.BUILDING  # type: ignore[assignment]
-        configuration.active_build_started_at = now  # type: ignore[attr-defined]
-        configuration.active_build_error = None  # type: ignore[attr-defined]
-        configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-        configuration.active_build_finished_at = None  # type: ignore[attr-defined]
-        configuration.build_status = BuildStatus.BUILDING  # legacy field
-        configuration.last_build_started_at = now  # type: ignore[attr-defined]
-        configuration.last_build_error = None  # type: ignore[attr-defined]
-        configuration.engine_spec = engine_spec  # type: ignore[attr-defined]
-        configuration.engine_version = engine_version_hint  # type: ignore[attr-defined]
-        configuration.python_interpreter = python_interpreter  # type: ignore[attr-defined]
         configuration.content_digest = config_digest
 
         build_id = self._generate_build_id()
@@ -744,8 +737,6 @@ class BuildsService:
             config_digest=config_digest,
         )
         await self._builds.add(build)
-        configuration.active_build_id = build.id  # type: ignore[attr-defined]
-        configuration.last_build_id = build.id  # type: ignore[attr-defined]
 
         venv_root = build_venv_root(self._settings, workspace_id, configuration.id, build_id)
         context = BuildExecutionContext(
@@ -804,17 +795,6 @@ class BuildsService:
         build.finished_at = now
         build.exit_code = 1
         build.error_message = error
-        configuration = await self._require_configuration(
-            context.workspace_id,
-            context.configuration_id,
-        )
-        configuration.active_build_status = BuildStatus.FAILED  # type: ignore[assignment]
-        configuration.active_build_error = error  # type: ignore[attr-defined]
-        configuration.active_build_finished_at = now  # type: ignore[attr-defined]
-        configuration.build_status = BuildStatus.FAILED  # legacy
-        configuration.last_build_error = error  # type: ignore[attr-defined]
-        configuration.last_build_finished_at = now  # type: ignore[attr-defined]
-        configuration.last_build_id = build.id  # type: ignore[attr-defined]
         await self._session.commit()
 
         logger.error(
@@ -846,20 +826,7 @@ class BuildsService:
             context.workspace_id,
             context.configuration_id,
         )
-        configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[assignment]
-        configuration.active_build_error = None  # type: ignore[attr-defined]
-        configuration.active_build_finished_at = now  # type: ignore[attr-defined]
-        configuration.active_build_id = build.id  # type: ignore[attr-defined]
-        configuration.active_build_fingerprint = context.fingerprint  # type: ignore[attr-defined]
-        configuration.build_status = BuildStatus.ACTIVE  # legacy field
-        configuration.engine_spec = context.engine_spec  # type: ignore[attr-defined]
-        configuration.engine_version = artifacts.engine_version  # type: ignore[attr-defined]
-        configuration.python_version = artifacts.python_version  # type: ignore[attr-defined]
-        configuration.python_interpreter = context.python_bin  # type: ignore[attr-defined]
-        configuration.built_content_digest = configuration.content_digest  # type: ignore[attr-defined]
-        configuration.last_build_finished_at = now  # type: ignore[attr-defined]
-        configuration.last_build_error = None  # type: ignore[attr-defined]
-        configuration.last_build_id = build.id  # type: ignore[attr-defined]
+        await self._sync_active_pointer(configuration, build, context.fingerprint)
         await self._session.commit()
         await self._session.refresh(build)
 
@@ -886,14 +853,19 @@ class BuildsService:
             ),
         )
         while self._now() < deadline:
-            configuration = await self._require_configuration(workspace_id, configuration_id)
-            if configuration.active_build_status is not BuildStatus.BUILDING:
+            inflight = await self._builds.get_latest_inflight(
+                configuration_id=configuration_id
+            )
+            if inflight is None or inflight.status not in (
+                BuildStatus.QUEUED,
+                BuildStatus.BUILDING,
+            ):
                 logger.debug(
                     "build.wait_for_existing.complete",
                     extra=log_context(
                         workspace_id=workspace_id,
                         configuration_id=configuration_id,
-                        final_status=str(configuration.active_build_status),
+                        final_status=str(inflight.status) if inflight else "none",
                     ),
                 )
                 return
@@ -926,6 +898,18 @@ class BuildsService:
         if "==" in spec:
             return spec.split("==", 1)[1]
         return None
+
+    async def _sync_active_pointer(
+        self,
+        configuration: Configuration,
+        build: Build,
+        fingerprint: str,
+    ) -> None:
+        configuration.active_build_id = build.id
+        configuration.active_build_fingerprint = fingerprint
+        if configuration.activated_at is None:
+            configuration.activated_at = self._now()
+        await self._session.flush()
 
     def _reuse_context(
         self,

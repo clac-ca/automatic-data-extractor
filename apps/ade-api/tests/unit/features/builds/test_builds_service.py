@@ -188,19 +188,9 @@ async def test_prepare_build_reuses_active(
     )
     session.add(build)
 
-    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.active_build_id = build.id  # type: ignore[attr-defined]
-    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
-    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.active_build_id = build.id
+    configuration.active_build_fingerprint = fingerprint
     configuration.content_digest = digest
-    configuration.engine_spec = service.settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = engine_version  # type: ignore[attr-defined]
-    configuration.python_interpreter = service.settings.python_bin  # type: ignore[attr-defined]
-    configuration.python_version = python_version  # type: ignore[attr-defined]
-    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
     await session.commit()
 
     build, context = await service.prepare_build(

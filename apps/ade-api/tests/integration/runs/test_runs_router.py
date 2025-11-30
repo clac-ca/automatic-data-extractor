@@ -212,18 +212,7 @@ async def _prepare_service(
     session.add(build)
 
     configuration.active_build_id = build_id  # type: ignore[attr-defined]
-    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
     configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
-    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
-    configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
-    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
-    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.last_build_id = build_id  # type: ignore[attr-defined]
-    configuration.built_content_digest = digest  # type: ignore[attr-defined]
     configuration.content_digest = digest
     await session.flush()
 
@@ -328,18 +317,7 @@ async def _seed_configuration(
         session.add(build)
 
         config.active_build_id = build_id  # type: ignore[attr-defined]
-        config.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-        config.active_build_started_at = utc_now()  # type: ignore[attr-defined]
-        config.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-        config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-        config.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
-        config.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
-        config.python_version = "3.12.1"  # type: ignore[attr-defined]
-        config.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
-        config.last_build_id = build_id  # type: ignore[attr-defined]
-        config.built_content_digest = digest  # type: ignore[attr-defined]
         config.content_digest = digest
         await session.commit()
         return config.id
@@ -449,16 +427,7 @@ async def _seed_real_configuration(
             )
 
         python_exe = _venv_executable(venv_path, "python")
-        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-        config.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-        config.engine_version = engine_version  # type: ignore[attr-defined]
-        config.python_version = python_version  # type: ignore[attr-defined]
-        config.python_interpreter = python_interpreter  # type: ignore[attr-defined]
-        config.last_build_started_at = now  # type: ignore[attr-defined]
-        config.last_build_finished_at = now  # type: ignore[attr-defined]
         config.content_digest = digest  # type: ignore[attr-defined]
-        config.built_content_digest = digest  # type: ignore[attr-defined]
-        config.last_build_id = build_id  # type: ignore[attr-defined]
         build = Build(
             id=build_id,
             workspace_id=workspace_id,
@@ -477,11 +446,7 @@ async def _seed_real_configuration(
         )
         session.add(build)
         config.active_build_id = build_id  # type: ignore[attr-defined]
-        config.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-        config.active_build_started_at = now  # type: ignore[attr-defined]
-        config.active_build_finished_at = now  # type: ignore[attr-defined]
-        config.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
         await session.commit()
         _REAL_CONFIG_CACHE[workspace_id] = config.id
         return config.id

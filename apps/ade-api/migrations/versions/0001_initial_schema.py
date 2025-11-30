@@ -728,16 +728,8 @@ def _create_configurations() -> None:
             server_default=sa.text("'draft'"),
         ),
         sa.Column("content_digest", sa.String(length=80), nullable=True),
-        sa.Column("build_status", BUILDSTATUS, nullable=False, server_default="queued"),
-        sa.Column("engine_spec", sa.String(length=255), nullable=True),
-        sa.Column("engine_version", sa.String(length=50), nullable=True),
-        sa.Column("python_version", sa.String(length=50), nullable=True),
-        sa.Column("python_interpreter", sa.String(length=255), nullable=True),
-        sa.Column("built_content_digest", sa.String(length=80), nullable=True),
-        sa.Column("last_build_started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_build_finished_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_build_error", sa.Text(), nullable=True),
-        sa.Column("last_build_id", sa.String(length=40), nullable=True),
+        sa.Column("active_build_id", sa.String(length=40), nullable=True),
+        sa.Column("active_build_fingerprint", sa.String(length=128), nullable=True),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -763,6 +755,12 @@ def _create_configurations() -> None:
         "ix_configurations_workspace_status",
         "configurations",
         ["workspace_id", "status"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_configurations_active_build_id",
+        "configurations",
+        ["active_build_id"],
         unique=False,
     )
 
@@ -922,6 +920,12 @@ def _create_builds(dialect: str) -> None:
         sa.Column("id", sa.String(length=40), primary_key=True),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
+        sa.Column("fingerprint", sa.String(length=128), nullable=True),
+        sa.Column("engine_spec", sa.String(length=255), nullable=True),
+        sa.Column("engine_version", sa.String(length=50), nullable=True),
+        sa.Column("python_version", sa.String(length=50), nullable=True),
+        sa.Column("python_interpreter", sa.String(length=255), nullable=True),
+        sa.Column("config_digest", sa.String(length=80), nullable=True),
         sa.Column("status", BUILDSTATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column(
@@ -962,6 +966,21 @@ def _create_builds(dialect: str) -> None:
         "builds",
         ["status"],
         unique=False,
+    )
+    op.create_index(
+        "ix_builds_fingerprint",
+        "builds",
+        ["fingerprint"],
+        unique=False,
+    )
+    op.create_index(
+        "ux_builds_inflight_per_config",
+        "builds",
+        ["configuration_id"],
+        unique=True,
+        postgresql_where=sa.text("status in ('queued','building')"),
+        sqlite_where=sa.text("status in ('queued','building')"),
+        mssql_where=sa.text("status in ('queued','building')"),
     )
 
 
