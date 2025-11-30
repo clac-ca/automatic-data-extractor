@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -145,7 +145,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         return [entry.tag for entry in getattr(self, "tags", [])]
 
 
-class DocumentTag(ULIDPrimaryKeyMixin, Base):
+class DocumentTag(Base):
     """Join table capturing string tags applied to documents."""
 
     __tablename__ = "document_tags"
@@ -153,9 +153,9 @@ class DocumentTag(ULIDPrimaryKeyMixin, Base):
     document_id: Mapped[str] = mapped_column(
         String(26),
         ForeignKey("documents.id", ondelete="CASCADE"),
-        nullable=False,
+        primary_key=True,
     )
-    tag: Mapped[str] = mapped_column(String(100), nullable=False)
+    tag: Mapped[str] = mapped_column(String(100), primary_key=True, nullable=False)
 
     document: Mapped[Document] = relationship(
         "Document",
@@ -164,7 +164,6 @@ class DocumentTag(ULIDPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("document_id", "tag"),
         Index("document_tags_document_id_idx", "document_id"),
         Index("document_tags_tag_idx", "tag"),
     )

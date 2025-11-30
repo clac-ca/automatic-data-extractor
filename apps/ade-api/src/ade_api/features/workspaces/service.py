@@ -399,7 +399,7 @@ class WorkspacesService:
             )
 
         membership = await self._reload_membership(
-            membership_id=cast(str, membership.id),
+            user_id=cast(str, membership.user_id),
             workspace_id=cast(str, workspace.id),
         )
 
@@ -582,7 +582,7 @@ class WorkspacesService:
         )
 
         membership = await self._repo.get_membership_for_workspace(
-            membership_id=membership_id,
+            user_id=membership_id,
             workspace_id=workspace_id,
         )
         if membership is None:
@@ -599,7 +599,7 @@ class WorkspacesService:
 
         if not await self._workspace_has_governor(
             workspace_id,
-            ignore_membership_id=cast(str, membership.id),
+            ignore_membership_id=cast(str, membership.user_id),
         ) and not self._has_governor_permissions(
             self._permissions_from_roles(roles)
         ):
@@ -621,7 +621,7 @@ class WorkspacesService:
             desired_role_ids=[cast(str, role.id) for role in roles],
         )
         membership = await self._reload_membership(
-            membership_id=cast(str, membership.id),
+            user_id=cast(str, membership.user_id),
             workspace_id=workspace_id,
         )
         summaries = await self._summaries_for_workspace(workspace_id, [membership])
@@ -651,7 +651,7 @@ class WorkspacesService:
             extra=log_context(workspace_id=workspace_id, membership_id=membership_id),
         )
         membership = await self._repo.get_membership_for_workspace(
-            membership_id=membership_id,
+            user_id=membership_id,
             workspace_id=workspace_id,
         )
         if membership is None:
@@ -663,7 +663,7 @@ class WorkspacesService:
 
         if not await self._workspace_has_governor(
             workspace_id,
-            ignore_membership_id=cast(str, membership.id),
+            ignore_membership_id=cast(str, membership.user_id),
         ):
             logger.warning(
                 "workspace.members.remove.governor_violation",
@@ -770,7 +770,7 @@ class WorkspacesService:
             desired_role_ids=[cast(str, role.id) for role in roles],
         )
         membership = await self._reload_membership(
-            membership_id=cast(str, membership.id),
+            user_id=cast(str, membership.user_id),
             workspace_id=workspace_id,
         )
         summaries = await self._summaries_for_workspace(workspace_id, [membership])
@@ -1197,7 +1197,7 @@ class WorkspacesService:
         permissions = list(summary.permissions)
         role_slugs = list(summary.role_slugs)
         return WorkspaceMemberOut(
-            id=membership.id,
+            id=membership.user_id,
             workspace_id=membership.workspace_id,
             roles=role_slugs,
             permissions=permissions,
@@ -1218,11 +1218,11 @@ class WorkspacesService:
     async def _reload_membership(
         self,
         *,
-        membership_id: str,
+        user_id: str,
         workspace_id: str,
     ) -> WorkspaceMembership:
         refreshed = await self._repo.get_membership_for_workspace(
-            membership_id=membership_id,
+            user_id=user_id,
             workspace_id=workspace_id,
         )
         if refreshed is None:
@@ -1230,7 +1230,7 @@ class WorkspacesService:
                 "workspace.membership.reload.missing",
                 extra=log_context(
                     workspace_id=workspace_id,
-                    membership_id=membership_id,
+                    membership_id=user_id,
                 ),
             )
             raise HTTPException(
@@ -1466,7 +1466,7 @@ class WorkspacesService:
         memberships = await self._repo.list_members_for_update(workspace_id)
         summaries = await self._summaries_for_workspace(workspace_id, memberships)
         for membership in memberships:
-            if ignore_membership_id is not None and membership.id == ignore_membership_id:
+            if ignore_membership_id is not None and membership.user_id == ignore_membership_id:
                 continue
             summary = self._summary_for_membership(
                 membership=membership,

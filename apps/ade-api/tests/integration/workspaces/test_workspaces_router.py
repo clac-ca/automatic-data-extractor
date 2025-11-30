@@ -396,7 +396,7 @@ async def test_update_workspace_role_blocks_governor_loss(
                 )
             )
         ).scalar_one()
-        membership_id = membership.id
+        membership_id = membership.user_id
 
     update_membership = await async_client.put(
         f"/api/v1/workspaces/{workspace_id}/members/{membership_id}/roles",

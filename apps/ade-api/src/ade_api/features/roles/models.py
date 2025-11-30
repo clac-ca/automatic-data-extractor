@@ -141,16 +141,16 @@ class Role(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-class RolePermission(ULIDPrimaryKeyMixin, Base):
+class RolePermission(Base):
     """Bridge table linking roles to permissions."""
 
     __tablename__ = "role_permissions"
 
     role_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+        String(26), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
     )
     permission_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False
+        String(26), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
     )
 
     role: Mapped[Role] = relationship("Role", back_populates="permissions")
@@ -160,7 +160,7 @@ class RolePermission(ULIDPrimaryKeyMixin, Base):
         lazy="joined",
     )
 
-    __table_args__ = (UniqueConstraint("role_id", "permission_id"),)
+    __table_args__ = ()
 
 
 class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):

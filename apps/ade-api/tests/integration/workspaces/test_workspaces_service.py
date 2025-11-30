@@ -33,7 +33,7 @@ async def test_assign_member_roles_blocks_last_governor(seed_identity: dict[str,
         with pytest.raises(HTTPException) as exc:
             await service.assign_member_roles(
                 workspace_id=workspace_id,
-                membership_id=membership.id,
+                membership_id=membership.user_id,
                 payload=WorkspaceMemberRolesUpdate(role_ids=[]),
             )
 
@@ -58,7 +58,7 @@ async def test_remove_member_blocks_last_governor(seed_identity: dict[str, objec
         with pytest.raises(HTTPException) as exc:
             await service.remove_member(
                 workspace_id=workspace_id,
-                membership_id=membership.id,
+                membership_id=membership.user_id,
             )
 
         assert exc.value.status_code == status.HTTP_409_CONFLICT
@@ -87,7 +87,7 @@ async def test_assign_member_roles_allows_replacing_when_other_governor(
         assert member_membership is not None
         await service.assign_member_roles(
             workspace_id=workspace_id,
-            membership_id=member_membership.id,
+            membership_id=member_membership.user_id,
             payload=WorkspaceMemberRolesUpdate(role_ids=[owner_role.id]),
         )
 
@@ -105,11 +105,13 @@ async def test_assign_member_roles_allows_replacing_when_other_governor(
 
         await service.assign_member_roles(
             workspace_id=workspace_id,
-            membership_id=owner_membership.id,
+            membership_id=owner_membership.user_id,
             payload=WorkspaceMemberRolesUpdate(role_ids=[member_role.id]),
         )
 
-        refreshed_owner = await session.get(WorkspaceMembership, owner_membership.id)
+        refreshed_owner = await session.get(
+            WorkspaceMembership, (owner_membership.user_id, owner_membership.workspace_id)
+        )
         assert refreshed_owner is not None
         summaries = await service._summaries_for_workspace(
             workspace_id, [refreshed_owner]
