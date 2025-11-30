@@ -296,9 +296,8 @@ def _create_workspaces() -> None:
 def _create_workspace_memberships() -> None:
     op.create_table(
         "workspace_memberships",
-        sa.Column("id", sa.String(length=26), primary_key=True),
-        sa.Column("user_id", sa.String(length=26), nullable=False),
-        sa.Column("workspace_id", sa.String(length=26), nullable=False),
+        sa.Column("user_id", sa.String(length=26), primary_key=True, nullable=False),
+        sa.Column("workspace_id", sa.String(length=26), primary_key=True, nullable=False),
         sa.Column(
             "is_default",
             sa.Boolean(),
@@ -328,12 +327,17 @@ def _create_workspace_memberships() -> None:
             ["workspaces.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("user_id", "workspace_id"),
     )
     op.create_index(
         "ix_workspace_memberships_user_id",
         "workspace_memberships",
         ["user_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_workspace_memberships_workspace_id",
+        "workspace_memberships",
+        ["workspace_id"],
         unique=False,
     )
 
@@ -423,9 +427,8 @@ def _create_roles() -> None:
 def _create_role_permissions() -> None:
     op.create_table(
         "role_permissions",
-        sa.Column("id", sa.String(length=26), primary_key=True),
-        sa.Column("role_id", sa.String(length=26), nullable=False),
-        sa.Column("permission_id", sa.String(length=26), nullable=False),
+        sa.Column("role_id", sa.String(length=26), primary_key=True, nullable=False),
+        sa.Column("permission_id", sa.String(length=26), primary_key=True, nullable=False),
         sa.ForeignKeyConstraint(
             ["role_id"],
             ["roles.id"],
@@ -436,7 +439,6 @@ def _create_role_permissions() -> None:
             ["permissions.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("role_id", "permission_id"),
     )
     op.create_index(
         "ix_role_permissions_permission_id",
@@ -656,15 +658,13 @@ def _create_documents(dialect: str) -> None:
 def _create_document_tags() -> None:
     op.create_table(
         "document_tags",
-        sa.Column("id", sa.String(length=26), primary_key=True),
-        sa.Column("document_id", sa.String(length=26), nullable=False),
-        sa.Column("tag", sa.String(length=100), nullable=False),
+        sa.Column("document_id", sa.String(length=26), primary_key=True, nullable=False),
+        sa.Column("tag", sa.String(length=100), primary_key=True, nullable=False),
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["documents.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("document_id", "tag"),
     )
     op.create_index(
         "ix_document_tags_document_id",
@@ -723,8 +723,7 @@ def _create_api_keys() -> None:
 def _create_system_settings() -> None:
     op.create_table(
         "system_settings",
-        sa.Column("id", sa.String(length=26), primary_key=True),
-        sa.Column("key", sa.String(length=100), nullable=False, unique=True),
+        sa.Column("key", sa.String(length=100), primary_key=True),
         sa.Column(
             "value",
             sa.JSON(),
@@ -967,6 +966,12 @@ def _create_run_logs() -> None:
         ["stream"],
         unique=False,
     )
+    op.create_index(
+        "ix_run_logs_run_created",
+        "run_logs",
+        ["run_id", "created_at"],
+        unique=False,
+    )
 
 
 def _create_builds(dialect: str) -> None:
@@ -1077,5 +1082,11 @@ def _create_build_logs() -> None:
         "ix_build_logs_stream",
         "build_logs",
         ["stream"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_build_logs_build_created",
+        "build_logs",
+        ["build_id", "created_at"],
         unique=False,
     )

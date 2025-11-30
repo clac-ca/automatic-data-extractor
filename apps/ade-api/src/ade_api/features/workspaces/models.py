@@ -30,7 +30,7 @@ class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class WorkspaceMembership(TimestampMixin, Base):
     """Assignment of a user to a workspace with role/permission metadata."""
 
     __tablename__ = "workspace_memberships"
