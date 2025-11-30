@@ -1291,11 +1291,7 @@ export type components = {
             workspace_id: string;
             /** Configuration Id */
             configuration_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "building" | "active" | "failed" | "canceled";
+            status: components["schemas"]["BuildStatus"];
             /**
              * Created
              * @description Unix timestamp when the build request was created
@@ -1318,6 +1314,12 @@ export type components = {
             /** Error Message */
             error_message?: string | null;
         };
+        /**
+         * BuildStatus
+         * @description Lifecycle states for API-facing build resources.
+         * @enum {string}
+         */
+        BuildStatus: "queued" | "building" | "active" | "failed" | "canceled";
         /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
@@ -2151,14 +2153,16 @@ export type components = {
             id: number;
             /** Created */
             created: number;
-            /**
-             * Stream
-             * @enum {string}
-             */
-            stream: "stdout" | "stderr";
+            stream: components["schemas"]["RunLogStream"];
             /** Message */
             message: string;
         };
+        /**
+         * RunLogStream
+         * @description Streams captured while processing run output.
+         * @enum {string}
+         */
+        RunLogStream: "stdout" | "stderr";
         /**
          * RunLogsResponse
          * @description Envelope for run log fetch responses.
@@ -2256,11 +2260,7 @@ export type components = {
             configuration_id: string;
             /** Build Id */
             build_id?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+            status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
             /** Failure Stage */
@@ -6066,7 +6066,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": ("queued" | "running" | "succeeded" | "failed" | "canceled")[] | null;
+                "application/json": components["schemas"]["RunStatus"][] | null;
             };
         };
         responses: {

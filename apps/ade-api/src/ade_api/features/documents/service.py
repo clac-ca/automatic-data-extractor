@@ -107,8 +107,8 @@ class DocumentsService:
             stored_uri=stored_uri,
             attributes=metadata_payload,
             uploaded_by_user_id=actor_id,
-            status=DocumentStatus.UPLOADED.value,
-            source=DocumentSource.MANUAL_UPLOAD.value,
+            status=DocumentStatus.UPLOADED,
+            source=DocumentSource.MANUAL_UPLOAD,
             expires_at=expiration,
             last_run_at=None,
         )

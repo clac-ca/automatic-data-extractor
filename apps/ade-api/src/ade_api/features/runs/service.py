@@ -53,7 +53,7 @@ from ade_api.storage_layout import (
 )
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
-from .models import Run, RunLog, RunStatus
+from .models import Run, RunLog, RunLogStream, RunStatus
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
@@ -64,7 +64,6 @@ from .schemas import (
     RunLogsResponse,
     RunOutput,
     RunResource,
-    RunStatusLiteral,
 )
 from .summary_builder import build_run_summary_from_paths
 from .supervisor import RunExecutionSupervisor
@@ -803,7 +802,7 @@ class RunsService:
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
             build_id=run.build_id,
-            status=self._status_literal(run.status),
+            status=run.status,
             failure_code=summary_run_dict.get("failure_code"),
             failure_stage=summary_run_dict.get("failure_stage"),
             failure_message=failure_message,
@@ -1173,7 +1172,7 @@ class RunsService:
             }
 
         return RunCompletedPayload(
-            status=self._status_literal(run.status),
+            status=run.status,
             failure=failure,
             execution={
                 "exit_code": run.exit_code,
@@ -1343,13 +1342,7 @@ class RunsService:
         )
         started = self._ensure_utc(run.started_at) or utc_now()
         completed = self._ensure_utc(run.finished_at) or utc_now()
-        status_literal: RunStatusLiteral = (
-            "succeeded"
-            if status is RunStatus.SUCCEEDED
-            else "canceled"
-            if status is RunStatus.CANCELED
-            else "failed"
-        )
+        status_literal = status.value
         by_field: list[dict[str, Any]] = []
         if manifest:
             for field_name in manifest.columns.order:
@@ -2003,8 +1996,18 @@ class RunsService:
         )
         return run
 
-    async def _append_log(self, run_id: str, message: str, *, stream: str) -> RunLog:
-        log = RunLog(run_id=run_id, message=message, stream=stream)
+    async def _append_log(
+        self,
+        run_id: str,
+        message: str,
+        *,
+        stream: RunLogStream | str,
+    ) -> RunLog:
+        try:
+            stream_value = stream if isinstance(stream, RunLogStream) else RunLogStream(stream)
+        except ValueError:
+            stream_value = RunLogStream.STDOUT
+        log = RunLog(run_id=run_id, message=message, stream=stream_value)
         self._session.add(log)
         await self._session.commit()
         await self._session.refresh(log)
@@ -2014,7 +2017,7 @@ class RunsService:
         return RunLogEntry(
             id=log.id,
             created=self._epoch_seconds(log.created_at),
-            stream="stderr" if log.stream == "stderr" else "stdout",
+            stream=log.stream,
             message=log.message,
         )
 
@@ -2080,10 +2083,6 @@ class RunsService:
         if run.started_at and run.finished_at:
             return int((run.finished_at - run.started_at).total_seconds() * 1000)
         return None
-
-    @staticmethod
-    def _status_literal(status: RunStatus) -> RunStatusLiteral:
-        return status.value  # type: ignore[return-value]
 
     @staticmethod
     def _format_mode_message(options: RunCreateOptions) -> str | None:

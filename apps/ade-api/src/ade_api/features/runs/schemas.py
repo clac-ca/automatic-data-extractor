@@ -12,9 +12,10 @@ from ade_api.shared.core.ids import ULIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
+from .models import RunLogStream, RunStatus
+
 RunObjectType = Literal["ade.run"]
 RunLogsObjectType = Literal["ade.run.logs"]
-RunStatusLiteral = Literal["queued", "running", "succeeded", "failed", "canceled"]
 
 __all__ = [
     "RunCreateOptions",
@@ -30,7 +31,6 @@ __all__ = [
     "RunOutputListing",
     "RunResource",
     "RunEventsPage",
-    "RunStatusLiteral",
 ]
 
 
@@ -118,7 +118,7 @@ class RunResource(BaseSchema):
     configuration_id: str
     build_id: str | None = None
 
-    status: RunStatusLiteral
+    status: RunStatus
     failure_code: str | None = None
     failure_stage: str | None = None
     failure_message: str | None = None
@@ -142,7 +142,7 @@ class RunResource(BaseSchema):
 class RunFilters(BaseSchema):
     """Query parameters for filtering workspace-scoped run listings."""
 
-    status: list[RunStatusLiteral] | None = Field(
+    status: list[RunStatus] | None = Field(
         default=None,
         description="Optional run statuses to include (filters out others).",
     )
@@ -163,7 +163,7 @@ class RunLogEntry(BaseSchema):
 
     id: int
     created: int
-    stream: Literal["stdout", "stderr"]
+    stream: RunLogStream
     message: str
 
 

@@ -1,6 +1,6 @@
 """ADE run orchestration feature package."""
 
-from .models import Run, RunLog, RunStatus
+from .models import Run, RunLog, RunLogStream, RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -14,6 +14,7 @@ from .service import RunExecutionContext, RunsService
 __all__ = [
     "Run",
     "RunLog",
+    "RunLogStream",
     "RunStatus",
     "RunCreateOptions",
     "RunCreateRequest",

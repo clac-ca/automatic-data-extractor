@@ -64,6 +64,35 @@ BUILDSTATUS = sa.Enum(
     length=20,
 )
 
+DOCUMENTSTATUS = sa.Enum(
+    "uploaded",
+    "processing",
+    "processed",
+    "failed",
+    "archived",
+    name="document_status",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
+DOCUMENTSOURCE = sa.Enum(
+    "manual_upload",
+    name="document_source",
+    native_enum=False,
+    create_constraint=True,
+    length=50,
+)
+
+LOGSTREAM = sa.Enum(
+    "stdout",
+    "stderr",
+    name="log_stream",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
 
 def _dialect_name() -> str:
     bind = op.get_bind()
@@ -529,15 +558,15 @@ def _create_documents(dialect: str) -> None:
         sa.Column("uploaded_by_user_id", sa.String(length=26), nullable=True),
         sa.Column(
             "status",
-            sa.String(length=20),
+            DOCUMENTSTATUS,
             nullable=False,
-            server_default=sa.text("'uploaded'"),
+            server_default="uploaded",
         ),
         sa.Column(
             "source",
-            sa.String(length=50),
+            DOCUMENTSOURCE,
             nullable=False,
-            server_default=sa.text("'manual_upload'"),
+            server_default="manual_upload",
         ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_run_at", sa.DateTime(timezone=True), nullable=True),
@@ -570,14 +599,6 @@ def _create_documents(dialect: str) -> None:
             ["uploaded_by_user_id"],
             ["users.id"],
             ondelete=uploaded_ondelete,
-        ),
-        sa.CheckConstraint(
-            "status IN ('uploaded','processing','processed','failed','archived')",
-            name="ck_documents_status",
-        ),
-        sa.CheckConstraint(
-            "source IN ('manual_upload')",
-            name="ck_documents_source",
         ),
     )
     op.create_index(
@@ -885,9 +906,9 @@ def _create_run_logs() -> None:
         ),
         sa.Column(
             "stream",
-            sa.String(length=20),
+            LOGSTREAM,
             nullable=False,
-            server_default=sa.text("'stdout'"),
+            server_default="stdout",
         ),
         sa.Column("message", sa.Text(), nullable=False),
         sa.ForeignKeyConstraint(
@@ -997,9 +1018,9 @@ def _create_build_logs() -> None:
         ),
         sa.Column(
             "stream",
-            sa.String(length=20),
+            LOGSTREAM,
             nullable=False,
-            server_default=sa.text("'stdout'"),
+            server_default="stdout",
         ),
         sa.Column("message", sa.Text(), nullable=False),
         sa.ForeignKeyConstraint(
