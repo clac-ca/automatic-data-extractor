@@ -52,7 +52,7 @@ Key property: **Documents and Runs are loosely coupled.**
 
 ADE Web distinguishes three related concepts:
 
-* **Build** – prepares or refreshes the environment for a configuration version.
+* **Build** – prepares or refreshes the environment for a configuration.
 
   * Lives under `/builds` endpoints.
   * Represented by the `Build` type.
@@ -831,7 +831,7 @@ To keep Documents and Runs predictable (for both humans and agents), ADE Web rel
 
 3. **Runs are append‑only.**
    Runs are created, progress, and complete; they are not edited afterward.
-   “Run again” always creates a new run using the previous run’s configuration version, document set, and run options unless the user explicitly changes them.
+   “Run again” always creates a new run using the previous run’s configuration, document set, and run options unless the user explicitly changes them.
 
 4. **Per‑document run preferences are hints, not configuration.**
    Preferences only influence UI defaults. If configurations or versions disappear or become invalid, those preferences are ignored.

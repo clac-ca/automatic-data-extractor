@@ -710,23 +710,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configuration versions (drafts and published) */
-        get: operations["list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
         parameters: {
             query?: never;
@@ -1375,46 +1358,6 @@ export type components = {
             message: string;
         };
         /**
-         * ConfigVersionRecord
-         * @description Serialized configuration version metadata.
-         */
-        ConfigVersionRecord: {
-            /**
-             * Configuration Version Id
-             * @description ULID (26-character string).
-             */
-            configuration_version_id: string;
-            /**
-             * Configuration Id
-             * @description ULID (26-character string).
-             */
-            configuration_id: string;
-            /**
-             * Workspace Id
-             * @description ULID (26-character string).
-             */
-            workspace_id: string;
-            status: components["schemas"]["ConfigurationStatus"];
-            /** Semver */
-            semver?: string | null;
-            /** Content Digest */
-            content_digest?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Activated At */
-            activated_at?: string | null;
-            /** Deleted At */
-            deleted_at?: string | null;
-        };
-        /**
          * ConfigurationActivateRequest
          * @description Activation control flags.
          */
@@ -1471,8 +1414,6 @@ export type components = {
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
-            /** Configuration Version */
-            configuration_version: number;
             /** Content Digest */
             content_digest?: string | null;
             /**
@@ -2313,8 +2254,6 @@ export type components = {
             workspace_id: string;
             /** Configuration Id */
             configuration_id: string;
-            /** Configuration Version */
-            configuration_version?: string | null;
             /** Build Id */
             build_id?: string | null;
             /**
@@ -2493,8 +2432,6 @@ export type components = {
             workspace_id?: string | null;
             /** Configuration Id */
             configuration_id?: string | null;
-            /** Configuration Version */
-            configuration_version?: string | null;
             /**
              * Status
              * @enum {string}
@@ -5490,40 +5427,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigVersionRecord"][];
                 };
             };
             /** @description Validation Error */

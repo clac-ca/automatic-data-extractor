@@ -727,19 +727,12 @@ def _create_configurations() -> None:
             nullable=False,
             server_default=sa.text("'draft'"),
         ),
-        sa.Column(
-            "configuration_version",
-            sa.Integer(),
-            nullable=False,
-            server_default=sa.text("0"),
-        ),
         sa.Column("content_digest", sa.String(length=80), nullable=True),
         sa.Column("build_status", BUILDSTATUS, nullable=False, server_default="queued"),
         sa.Column("engine_spec", sa.String(length=255), nullable=True),
         sa.Column("engine_version", sa.String(length=50), nullable=True),
         sa.Column("python_version", sa.String(length=50), nullable=True),
         sa.Column("python_interpreter", sa.String(length=255), nullable=True),
-        sa.Column("built_configuration_version", sa.Integer(), nullable=True),
         sa.Column("built_content_digest", sa.String(length=80), nullable=True),
         sa.Column("last_build_started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_build_finished_at", sa.DateTime(timezone=True), nullable=True),
@@ -786,7 +779,6 @@ def _create_runs(dialect: str) -> None:
         sa.Column("id", sa.String(length=40), primary_key=True),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("configuration_version_id", sa.String(length=26), nullable=True),
         sa.Column("build_id", sa.String(length=40), nullable=True),
         sa.Column("status", RUNSTATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
@@ -866,12 +858,6 @@ def _create_runs(dialect: str) -> None:
         "ix_runs_workspace_input_finished",
         "runs",
         ["workspace_id", "input_document_id", "finished_at", "started_at"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_runs_configuration_version",
-        "runs",
-        ["configuration_version_id"],
         unique=False,
     )
     op.create_index(

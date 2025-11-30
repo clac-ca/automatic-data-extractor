@@ -153,12 +153,7 @@ export default function WorkspaceConfigsIndexRoute() {
                     <span className="text-xs font-medium uppercase tracking-wide text-brand-600">Last opened</span>
                   ) : null}
                 </div>
-                <p className="text-sm text-slate-500">
-                  Updated {new Date(config.updated_at).toLocaleString()} · Active version{" "}
-                  {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
-                    config.configuration_version ??
-                    "—"}
-                </p>
+                <p className="text-sm text-slate-500">Updated {new Date(config.updated_at).toLocaleString()}</p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button size="sm" variant="secondary" onClick={() => handleOpenConfig(config.id)}>

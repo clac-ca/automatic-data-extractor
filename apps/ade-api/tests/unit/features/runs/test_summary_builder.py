@@ -110,7 +110,6 @@ def test_build_run_summary_happy_path():
         manifest=_manifest(),
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="run_1",
     )
 
@@ -140,7 +139,6 @@ def test_build_run_summary_missing_row_counts_sets_none():
         manifest=_manifest(),
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="run_1",
     )
 
@@ -154,7 +152,6 @@ def test_build_run_summary_handles_failures():
         manifest=_manifest(),
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="run_2",
     )
 
@@ -180,7 +177,6 @@ def test_build_run_summary_prefers_run_error_details():
         manifest=_manifest(),
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="run_2",
     )
 
@@ -223,7 +219,6 @@ def test_build_run_summary_uses_validation_summary():
         manifest=_manifest(),
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="run_3",
     )
 
@@ -249,7 +244,6 @@ def test_build_run_summary_from_paths_reads_files(tmp_path: Path):
         manifest_path=manifest_path,
         workspace_id="ws_1",
         configuration_id="cfg_1",
-        configuration_version="1.2.3",
         run_id="external_run_id",
     )
 

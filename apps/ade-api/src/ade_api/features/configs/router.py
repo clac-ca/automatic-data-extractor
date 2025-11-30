@@ -46,7 +46,6 @@ from .schemas import (
     ConfigurationPage,
     ConfigurationRecord,
     ConfigurationValidateResponse,
-    ConfigVersionRecord,
     FileListing,
     FileReadJson,
     FileRenameRequest,
@@ -217,34 +216,6 @@ async def read_configuration(
             status.HTTP_404_NOT_FOUND, detail="configuration_not_found"
         ) from exc
     return ConfigurationRecord.model_validate(record)
-
-
-@router.get(
-    "/configurations/{configuration_id}/versions",
-    response_model=list[ConfigVersionRecord],
-    summary="List configuration versions (drafts and published)",
-    response_model_exclude_none=False,
-)
-async def list_configuration_versions_endpoint(
-    workspace_id: WorkspaceIdPath,
-    configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("Workspace.Configurations.Read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
-) -> list[ConfigVersionRecord]:
-    try:
-        versions = await service.list_configuration_versions(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    return [ConfigVersionRecord.model_validate(version) for version in versions]
 
 
 @router.get(

@@ -2,7 +2,7 @@
 
 When you press **Build** in the frontend config builder, ADE takes your editable configuration and turns it into a **ready‑to‑run runtime environment**.
 This process—called a **build**—packages your configuration together with the ADE Engine in an isolated Python environment.
-That environment is then reused for every run that runs against that configuration version.
+That environment is then reused for every run that uses that configuration.
 
 ---
 
@@ -85,7 +85,7 @@ ADE maintains **one active build per configuration** and rebuilds only when fing
 ADE (re)builds when any of the following change:
 
 * No active build exists for the configuration.
-* `configuration_version` or `content_digest` changed since the last build.
+* `content_digest` changed since the last build.
 * `engine_spec` or recorded `engine_version` changed.
 * `python_interpreter` changed.
 * The request sets `force=true`.

@@ -312,9 +312,6 @@ class RunsService:
             id=run_id,
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            configuration_version_id=str(configuration.configuration_version)
-            if configuration.configuration_version is not None
-            else None,
             status=RunStatus.QUEUED,
             attempt=1,
             retry_of_run_id=None,
@@ -805,7 +802,6 @@ class RunsService:
             id=run.id,
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
-            configuration_version=run.configuration_version_id,
             build_id=run.build_id,
             status=self._status_literal(run.status),
             failure_code=summary_run_dict.get("failure_code"),
@@ -1307,7 +1303,6 @@ class RunsService:
                 manifest_path=manifest_path if manifest_path.exists() else None,
                 workspace_id=run.workspace_id,
                 configuration_id=run.configuration_id,
-                configuration_version=run.configuration_version_id,
                 run_id=run.id,
             )
             logger.info(
@@ -1379,7 +1374,6 @@ class RunsService:
                 "id": run.id,
                 "workspace_id": run.workspace_id,
                 "configuration_id": run.configuration_id,
-                "configuration_version": run.configuration_version_id,
                 "status": status_literal,
                 "failure_code": "canceled" if status is RunStatus.CANCELED else None,
                 "failure_stage": None,

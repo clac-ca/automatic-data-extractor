@@ -75,7 +75,6 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
             workspace_id=workspace_id,
             display_name="Test Configuration",
             status=ConfigurationStatus.ACTIVE,
-            configuration_version=1,
             content_digest="test-digest",
         )
         session.add(configuration)

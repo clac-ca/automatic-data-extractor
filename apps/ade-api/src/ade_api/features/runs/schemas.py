@@ -116,7 +116,6 @@ class RunResource(BaseSchema):
     object: RunObjectType = Field(default="ade.run", alias="object")
     workspace_id: str
     configuration_id: str
-    configuration_version: str | None = None
     build_id: str | None = None
 
     status: RunStatusLiteral

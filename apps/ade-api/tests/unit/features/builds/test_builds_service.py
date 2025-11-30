@@ -138,7 +138,6 @@ async def _create_configuration(
         workspace_id=workspace.id,
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
@@ -195,7 +194,6 @@ async def test_prepare_build_reuses_active(
     configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
     configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
     configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
     configuration.built_content_digest = digest  # type: ignore[attr-defined]
     configuration.content_digest = digest
     configuration.engine_spec = service.settings.engine_spec  # type: ignore[attr-defined]
