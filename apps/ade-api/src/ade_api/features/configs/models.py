@@ -51,7 +51,11 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
-    active_build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    active_build_id: Mapped[str | None] = mapped_column(
+        String(40),
+        ForeignKey("builds.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     active_build_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     __table_args__ = (

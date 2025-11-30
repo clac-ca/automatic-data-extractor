@@ -64,6 +64,17 @@ BUILDSTATUS = sa.Enum(
     length=20,
 )
 
+CONFIGSTATUS = sa.Enum(
+    "draft",
+    "published",
+    "active",
+    "inactive",
+    name="configuration_status",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
 DOCUMENTSTATUS = sa.Enum(
     "uploaded",
     "processing",
@@ -123,9 +134,9 @@ def upgrade() -> None:
     _create_api_keys()
     _create_system_settings()
     _create_configurations()
+    _create_builds(dialect)
     _create_runs(dialect)
     _create_run_logs()
-    _create_builds(dialect)
     _create_build_logs()
 
 
@@ -744,9 +755,9 @@ def _create_configurations() -> None:
         sa.Column("display_name", sa.String(length=255), nullable=False),
         sa.Column(
             "status",
-            sa.String(length=20),
+            CONFIGSTATUS,
             nullable=False,
-            server_default=sa.text("'draft'"),
+            server_default="draft",
         ),
         sa.Column("content_digest", sa.String(length=80), nullable=True),
         sa.Column("active_build_id", sa.String(length=40), nullable=True),
@@ -784,6 +795,17 @@ def _create_configurations() -> None:
         ["active_build_id"],
         unique=False,
     )
+    # Add the optional FK to builds after both tables exist; SQLite cannot
+    # apply this without batch mode, so we only create it for other dialects.
+    if _dialect_name() != "sqlite":
+        op.create_foreign_key(
+            "fk_configurations_active_build_id",
+            source_table="configurations",
+            referent_table="builds",
+            local_cols=["active_build_id"],
+            remote_cols=["id"],
+            ondelete="SET NULL",
+        )
 
 
 def _create_runs(dialect: str) -> None:
@@ -798,7 +820,12 @@ def _create_runs(dialect: str) -> None:
         sa.Column("id", sa.String(length=40), primary_key=True),
         sa.Column("configuration_id", sa.String(length=26), nullable=False),
         sa.Column("workspace_id", sa.String(length=26), nullable=False),
-        sa.Column("build_id", sa.String(length=40), nullable=True),
+        sa.Column(
+            "build_id",
+            sa.String(length=40),
+            sa.ForeignKey("builds.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("status", RUNSTATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
         sa.Column(
@@ -807,7 +834,12 @@ def _create_runs(dialect: str) -> None:
             nullable=False,
             server_default=sa.text("1"),
         ),
-        sa.Column("retry_of_run_id", sa.String(length=40), nullable=True),
+        sa.Column(
+            "retry_of_run_id",
+            sa.String(length=40),
+            sa.ForeignKey("runs.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("input_document_id", sa.String(length=26), nullable=True),
         sa.Column("input_sheet_name", sa.String(length=64), nullable=True),
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
@@ -889,6 +921,12 @@ def _create_runs(dialect: str) -> None:
         "ix_runs_retry_of",
         "runs",
         ["retry_of_run_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_runs_build",
+        "runs",
+        ["build_id"],
         unique=False,
     )
 
