@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, String
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,19 +35,15 @@ class WorkspaceMembership(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "workspace_memberships"
     user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     workspace_id: Mapped[str] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")
     user: Mapped[User] = relationship(User, lazy="joined")
-    __table_args__ = (
-        UniqueConstraint("user_id", "workspace_id"),
-    )
+    __table_args__ = ()
 
 
 __all__ = ["Workspace", "WorkspaceMembership"]
