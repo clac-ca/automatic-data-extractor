@@ -157,7 +157,6 @@ async def _prepare_service(
         workspace_id=workspace.id,
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
@@ -388,7 +387,6 @@ async def _seed_real_configuration(
             workspace_id=workspace_id,
             display_name="Real Config",
             status=ConfigurationStatus.ACTIVE,
-            configuration_version=1,
             content_digest="integration-test",
         )
         session.add(config)
@@ -458,7 +456,6 @@ async def _seed_real_configuration(
         config.python_interpreter = python_interpreter  # type: ignore[attr-defined]
         config.last_build_started_at = now  # type: ignore[attr-defined]
         config.last_build_finished_at = now  # type: ignore[attr-defined]
-        config.built_configuration_version = config.configuration_version  # type: ignore[attr-defined]
         config.content_digest = digest  # type: ignore[attr-defined]
         config.built_content_digest = digest  # type: ignore[attr-defined]
         config.last_build_id = build_id  # type: ignore[attr-defined]
@@ -852,7 +849,6 @@ async def test_list_workspace_runs_filters_by_status_and_document(
         id=generate_ulid(),
         workspace_id=configuration.workspace_id,
         configuration_id=configuration.id,
-        configuration_version_id=str(configuration.configuration_version),
         input_document_id=document.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
@@ -861,7 +857,6 @@ async def test_list_workspace_runs_filters_by_status_and_document(
         id=generate_ulid(),
         workspace_id=configuration.workspace_id,
         configuration_id=configuration.id,
-        configuration_version_id=str(configuration.configuration_version),
         status=RunStatus.FAILED,
         created_at=utc_now(),
     )

@@ -63,26 +63,10 @@ class ConfigurationRecord(BaseSchema):
     workspace_id: ULIDStr
     display_name: str
     status: ConfigurationStatus
-    configuration_version: int
     content_digest: str | None = None
     created_at: datetime
     updated_at: datetime
     activated_at: datetime | None = None
-
-
-class ConfigVersionRecord(BaseSchema):
-    """Serialized configuration version metadata."""
-
-    configuration_version_id: ULIDStr
-    configuration_id: ULIDStr
-    workspace_id: ULIDStr
-    status: ConfigurationStatus
-    semver: str | None = None
-    content_digest: str | None = None
-    created_at: datetime
-    updated_at: datetime
-    activated_at: datetime | None = None
-    deleted_at: datetime | None = None
 
 
 class ConfigValidationIssue(BaseSchema):
@@ -208,7 +192,6 @@ __all__ = [
     "ConfigSource",
     "ConfigSourceClone",
     "ConfigSourceTemplate",
-    "ConfigVersionRecord",
     "ConfigValidationIssue",
     "ConfigurationPage",
     "ConfigurationCreate",

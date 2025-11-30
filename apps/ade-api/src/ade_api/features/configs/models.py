@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,7 +46,6 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=ConfigurationStatus.DRAFT,
     )
-    configuration_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     build_status: Mapped[BuildStatus] = mapped_column(
         SAEnum(
@@ -63,7 +62,6 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     engine_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     python_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     python_interpreter: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    built_configuration_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     built_content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_build_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

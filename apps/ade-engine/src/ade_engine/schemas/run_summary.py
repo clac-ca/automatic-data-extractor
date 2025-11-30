@@ -15,7 +15,6 @@ class RunSummaryRun(BaseModel):
     id: str
     workspace_id: str | None = None
     configuration_id: str | None = None
-    configuration_version: str | None = None
 
     status: RunStatusLiteral
     failure_code: str | None = None

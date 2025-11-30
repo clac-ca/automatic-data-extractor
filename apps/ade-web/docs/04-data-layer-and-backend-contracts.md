@@ -717,7 +717,7 @@ Domain models in `src/schema/` define shapes the UI actually consumes, e.g.:
 * `WorkspaceSummary`, `WorkspaceDetail`
 * `DocumentSummary`, `DocumentDetail`
 * `RunSummary`, `RunDetail`
-* `Configuration`, `ConfigVersion`
+* `Configuration`
 * `SafeModeStatus`, ...
 
 API modules handle mapping:

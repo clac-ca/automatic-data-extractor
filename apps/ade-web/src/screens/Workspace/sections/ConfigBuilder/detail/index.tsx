@@ -85,14 +85,6 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Updated</dt>
             <dd className="text-sm text-slate-700">{new Date(config.updated_at).toLocaleString()}</dd>
           </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active version</dt>
-            <dd className="text-sm text-slate-700">
-              {("active_version" in config ? (config as { active_version?: number | null }).active_version : null) ??
-                config.configuration_version ??
-                "—"}
-            </dd>
-          </div>
         </dl>
       </section>
       <section className="flex-1 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6">

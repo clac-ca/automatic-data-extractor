@@ -35,13 +35,7 @@ from .exceptions import (
 )
 from .models import Configuration, ConfigurationStatus
 from .repository import ConfigurationsRepository
-from .schemas import (
-    ConfigSource,
-    ConfigSourceClone,
-    ConfigSourceTemplate,
-    ConfigValidationIssue,
-    ConfigVersionRecord,
-)
+from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue
 from .storage import ConfigStorage
 
 logger = logging.getLogger(__name__)
@@ -61,25 +55,6 @@ _EXCLUDED_NAMES = {
 _EXCLUDED_SUFFIXES = {".pyc"}
 _MAX_FILE_SIZE = 512 * 1024  # 512 KiB
 _MAX_ASSET_FILE_SIZE = 5 * 1024 * 1024  # 5 MiB
-
-
-def _serialize_configuration_version(configuration: Configuration) -> ConfigVersionRecord:
-    return ConfigVersionRecord(
-        configuration_version_id=configuration.id,
-        configuration_id=configuration.id,
-        workspace_id=configuration.workspace_id,
-        status=configuration.status,
-        semver=(
-            str(configuration.configuration_version)
-            if configuration.configuration_version
-            else None
-        ),
-        content_digest=configuration.content_digest,
-        created_at=configuration.created_at,
-        updated_at=configuration.updated_at,
-        activated_at=configuration.activated_at,
-        deleted_at=None,
-    )
 
 
 @dataclass(slots=True)
@@ -110,31 +85,6 @@ class ConfigurationsService:
             extra=log_context(workspace_id=workspace_id, count=len(configs)),
         )
         return configs
-
-    async def list_configuration_versions(
-        self,
-        *,
-        workspace_id: str,
-        configuration_id: str,
-    ) -> list[ConfigVersionRecord]:
-        logger.debug(
-            "config.versions.list.start",
-            extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
-        )
-        configuration = await self._require_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-        versions = [_serialize_configuration_version(configuration)]
-        logger.debug(
-            "config.versions.list.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                count=len(versions),
-            ),
-        )
-        return versions
 
     async def get_configuration(
         self,
@@ -216,7 +166,6 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
-            configuration_version=0,
         )
         self._session.add(record)
         await self._session.flush()
@@ -320,27 +269,11 @@ class ConfigurationsService:
             )
             raise ConfigValidationFailedError(issues)
 
-        if configuration.status is ConfigurationStatus.DRAFT:
-            configuration.configuration_version = (
-                max(configuration.configuration_version or 0, 0) + 1
-            )
-            configuration.content_digest = digest
-        elif configuration.status in {
+        if configuration.status not in {
+            ConfigurationStatus.DRAFT,
             ConfigurationStatus.PUBLISHED,
             ConfigurationStatus.INACTIVE,
         }:
-            if configuration.content_digest and configuration.content_digest != digest:
-                logger.warning(
-                    "config.activate.digest_mismatch",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        configuration_id=configuration_id,
-                    ),
-                )
-                raise ConfigStateError("Configuration contents differ from published digest")
-            if configuration.content_digest is None:
-                configuration.content_digest = digest
-        else:
             logger.warning(
                 "config.activate.state_invalid",
                 extra=log_context(
@@ -354,7 +287,7 @@ class ConfigurationsService:
         await self._demote_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
-        configuration.content_digest = configuration.content_digest or digest
+        configuration.content_digest = digest
         configuration.activated_at = utc_now()
         await self._session.flush()
         await self._session.refresh(configuration)
@@ -365,7 +298,6 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 status=configuration.status.value,
-                configuration_version=configuration.configuration_version,
             ),
         )
         return configuration
@@ -410,7 +342,6 @@ class ConfigurationsService:
             raise ConfigValidationFailedError(issues)
 
         configuration.status = ConfigurationStatus.PUBLISHED
-        configuration.configuration_version = max(configuration.configuration_version or 0, 0) + 1
         configuration.content_digest = digest
         await self._session.flush()
         await self._session.refresh(configuration)
@@ -421,7 +352,6 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 status=configuration.status.value,
-                configuration_version=configuration.configuration_version,
             ),
         )
         return configuration

@@ -199,47 +199,6 @@ async def test_validate_missing_config_returns_not_found(
     assert response.json()["detail"] == "configuration_not_found"
 
 
-async def test_list_versions_reflects_status_transitions(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    workspace_id = seed_identity["workspace_id"]
-    owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
-
-    draft = await _create_from_template(
-        async_client,
-        workspace_id=workspace_id,
-        headers=headers,
-    )
-
-    draft_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
-        headers=headers,
-    )
-    assert draft_versions.status_code == 200, draft_versions.text
-    versions = draft_versions.json()
-    assert versions[0]["configuration_version_id"] == draft["id"]
-    assert versions[0]["status"] == "draft"
-    assert versions[0]["semver"] is None
-
-    publish = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/publish",
-        headers=headers,
-    )
-    assert publish.status_code == 200, publish.text
-
-    published_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
-        headers=headers,
-    )
-    assert published_versions.status_code == 200, published_versions.text
-    published = published_versions.json()
-    assert published[0]["status"] == "published"
-    assert published[0]["semver"] == "1"
-
-
 async def test_file_editor_endpoints(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -398,7 +357,6 @@ async def test_activate_configuration_sets_active_and_digest(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["status"] == "active"
-    assert payload["configuration_version"] == 1
     assert payload["content_digest"].startswith("sha256:")
 
     settings = get_settings()

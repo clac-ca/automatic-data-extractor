@@ -429,7 +429,7 @@ Immediately beneath `GlobalTopBar` is a **banner strip** reserved for:
 
 - **Other cross‑cutting banners**:
   - Connectivity issues (“Lost connection; retrying…”).
-  - Global warnings (e.g. “Using a deprecated configuration version”).
+  - Global warnings (e.g. “Using a deprecated configuration”).
 
 Ordering is:
 

@@ -856,7 +856,6 @@ class BuildsService:
         configuration.engine_version = artifacts.engine_version  # type: ignore[attr-defined]
         configuration.python_version = artifacts.python_version  # type: ignore[attr-defined]
         configuration.python_interpreter = context.python_bin  # type: ignore[attr-defined]
-        configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
         configuration.built_content_digest = configuration.content_digest  # type: ignore[attr-defined]
         configuration.last_build_finished_at = now  # type: ignore[attr-defined]
         configuration.last_build_error = None  # type: ignore[attr-defined]

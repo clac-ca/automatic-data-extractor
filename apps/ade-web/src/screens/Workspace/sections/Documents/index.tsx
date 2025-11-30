@@ -18,12 +18,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import { useSession } from "@shared/auth/context/SessionContext";
-import {
-  findActiveVersion,
-  findLatestInactiveVersion,
-  useConfigurationVersionsQuery,
-  useConfigurationsQuery,
-} from "@shared/configurations";
+import { useConfigurationsQuery } from "@shared/configurations";
 import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
@@ -708,7 +703,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
         ...all,
         [documentId]: {
           configId: next.configId,
-          configVersionId: next.configVersionId,
           sheetNames: next.sheetNames && next.sheetNames.length > 0 ? [...next.sheetNames] : null,
         },
       });
@@ -721,7 +715,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
 
 type DocumentRunPreferences = {
   readonly configId: string | null;
-  readonly configVersionId: string | null;
   readonly sheetNames: readonly string[] | null;
 };
 /* ------------------------ API helpers & small utilities ------------------------ */
@@ -805,12 +798,11 @@ function readRunPreferences(
 
       return {
         configId: entry.configId ?? null,
-        configVersionId: entry.configVersionId ?? null,
         sheetNames: mergedSheetNames,
       };
     }
   }
-  return { configId: null, configVersionId: null, sheetNames: null };
+  return { configId: null, sheetNames: null };
 }
 /* ---------------------- Command header + filter rail ---------------------- */
 
@@ -1447,7 +1439,6 @@ function RunExtractionDrawerContent({
   const descriptionId = useId();
   const configurationsQuery = useConfigurationsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
-  const [selectedVersionId, setSelectedVersionId] = useState<string>("");
   const submitRun = useSubmitRun(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
@@ -1484,71 +1475,15 @@ function RunExtractionDrawerContent({
     setSelectedConfigId(preferredConfigId);
   }, [preferredConfigId]);
 
-  const versionsQuery = useConfigurationVersionsQuery({
-    workspaceId,
-    configId: selectedConfigId,
-    enabled: Boolean(selectedConfigId),
-  });
-  const versionOptions = useMemo(
-    () => versionsQuery.data ?? [],
-    [versionsQuery.data],
-  );
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
-  const selectedVersion = useMemo(
-    () => versionOptions.find((version) => version.configuration_version_id === selectedVersionId) ?? null,
-    [versionOptions, selectedVersionId],
-  );
-  const activeVersion = useMemo(() => findActiveVersion(versionOptions), [versionOptions]);
-  const latestDraftVersion = useMemo(
-    () => findLatestInactiveVersion(versionOptions),
-    [versionOptions],
-  );
-  const preferredVersionId = useMemo(() => {
-    if (!selectedConfigId) return "";
-    if (preferences.configId === selectedConfigId && preferences.configVersionId) {
-      const preferred = versionOptions.find(
-        (version) => version.configuration_version_id === preferences.configVersionId,
-      );
-      if (preferred) {
-        return preferred.configuration_version_id;
-      }
-    }
-    if (activeVersion) return activeVersion.configuration_version_id;
-    if (latestDraftVersion) return latestDraftVersion.configuration_version_id;
-    return versionOptions[0]?.configuration_version_id ?? "";
-  }, [
-    activeVersion,
-    latestDraftVersion,
-    preferences.configId,
-    preferences.configVersionId,
-    selectedConfigId,
-    versionOptions,
-  ]);
-
-  useEffect(() => {
-    setSelectedVersionId(preferredVersionId);
-  }, [preferredVersionId]);
 
   const formatConfigLabel = useCallback((config: (typeof selectableConfigs)[number]) => {
     const statusLabel = typeof config.status === "string" ? config.status : "draft";
     const title = (config as { title?: string | null }).title ?? config.display_name ?? "Untitled configuration";
     return `${title} (${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)})`;
-  }, []);
-
-  const formatVersionLabel = useCallback((version: (typeof versionOptions)[number]) => {
-    const status =
-      version.status === "active"
-        ? "Active"
-        : version.status === "published"
-          ? "Published"
-          : version.status === "inactive"
-            ? "Inactive"
-            : "Draft";
-    const semver = version.semver ?? "–";
-    return `v${semver} (${status})`;
   }, []);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1631,15 +1566,14 @@ function RunExtractionDrawerContent({
   );
 
   useEffect(() => {
-    if (!selectedConfig || !selectedVersionId) {
+    if (!selectedConfig) {
       return;
     }
     setPreferences({
       configId: selectedConfig.id,
-      configVersionId: selectedVersionId,
       sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
     });
-  }, [normalizedSheetSelection, selectedConfig, selectedVersionId, setPreferences]);
+  }, [normalizedSheetSelection, selectedConfig, setPreferences]);
 
   const toggleWorksheet = useCallback((name: string) => {
     setSelectedSheets((current) =>
@@ -1706,7 +1640,7 @@ function RunExtractionDrawerContent({
     safeModeLoading ||
     safeModeEnabled ||
     !hasConfigurations ||
-    !selectedVersionId;
+    !selectedConfig;
   const runButtonTitle = safeModeEnabled
     ? safeModeDetail
     : safeModeLoading
@@ -1717,7 +1651,7 @@ function RunExtractionDrawerContent({
     if (safeModeEnabled || safeModeLoading) {
       return;
     }
-    if (!selectedConfig || !selectedVersion || !selectedVersionId) {
+    if (!selectedConfig) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
     }
@@ -1737,7 +1671,6 @@ function RunExtractionDrawerContent({
         onSuccess: (run) => {
           setPreferences({
             configId: selectedConfig.id,
-            configVersionId: selectedVersionId,
             sheetNames: sheetList.length ? sheetList : null,
           });
           onRunSuccess?.(run);
@@ -1812,7 +1745,6 @@ function RunExtractionDrawerContent({
                   onChange={(event) => {
                     const value = event.target.value;
                     setSelectedConfigId(value);
-                    setSelectedVersionId("");
                   }}
                   disabled={submitRun.isPending}
                 >
@@ -1823,34 +1755,6 @@ function RunExtractionDrawerContent({
                     </option>
                   ))}
                 </Select>
-
-                {selectedConfigId ? (
-                  versionsQuery.isLoading ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                      Loading versions…
-                    </div>
-                  ) : versionsQuery.isError ? (
-                    <Alert tone="danger">
-                      Unable to load configuration versions.{" "}
-                      {versionsQuery.error instanceof Error ? versionsQuery.error.message : "Try again later."}
-                    </Alert>
-                  ) : versionOptions.length > 0 ? (
-                    <Select
-                      value={selectedVersionId}
-                      onChange={(event) => setSelectedVersionId(event.target.value)}
-                      disabled={submitRun.isPending}
-                    >
-                      <option value="">Select version</option>
-                      {versionOptions.map((version) => (
-                        <option key={version.configuration_version_id} value={version.configuration_version_id}>
-                          {formatVersionLabel(version)}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Alert tone="info">No versions available for this configuration.</Alert>
-                  )
-                ) : null}
               </div>
             ) : (
               <Alert tone="info">No configurations available. Create one before running extraction.</Alert>

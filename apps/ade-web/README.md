@@ -16,7 +16,7 @@ ADE Web is intentionally **backend-agnostic**. This README describes **what** th
 Use these as your “don’t break the mental model” guardrails:
 
 - **Name things after the domain**  
-  Use `Workspace`, `Run`, `Configuration`, `ConfigVersion`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `screens/workspace-shell/sections`.  
+  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `screens/workspace-shell/sections`.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
@@ -106,7 +106,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#2-documents)
 
 - **Run**  
-  Single execution of ADE against one or more documents using a particular configuration version. The UI concept is **Run** with `runId`; the HTTP API uses `/runs` routes.  
+  Single execution of ADE against one or more documents using a particular configuration. The UI concept is **Run** with `runId`; the HTTP API uses `/runs` routes.  
   Supports `RunOptions` (camelCase in the UI; snake_case in the API) for `dryRun`, `validateOnly`, `forceRebuild`, and `inputSheetNames`, with an optional `mode` view-model helper (`"normal" | "validation" | "test"`).  
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-runs)
 
@@ -115,7 +115,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#33-configuration), [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)
 
 - **Build**  
-  Environment build for a given configuration version (virtualenv with `ade_engine` + configuration). Builds are backend entities; ADE Web mostly interacts with them indirectly via runs and streaming events.  
+  Environment build for a given configuration (virtualenv with `ade_engine` + configuration). Builds are backend entities; ADE Web mostly interacts with them indirectly via runs and streaming events.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#34-build), [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md#47-configurations--builds-configurationsapi-buildsapi)
 
 - **Manifest & schema**  
@@ -199,7 +199,7 @@ Responsibilities:
 - List and filter documents in the workspace.
 - Upload new documents (`⌘U` / `Ctrl+U`).
 - Show status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and last run summary.
-- Trigger runs for a selected configuration version, optionally per-document run preferences (preferred configuration/version and sheet selection).
+- Trigger runs for a selected configuration, optionally per-document run preferences (preferred configuration and sheet selection).
 
 See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-documents-screen-architecture)
 
@@ -232,7 +232,7 @@ Responsibilities:
 
 - Show configurations per workspace and their active/draft/inactive versions.
 - Provide actions: create, clone, export, activate/deactivate configurations.
-- Launch the **Configuration Builder workbench** for editing a specific configuration version (file tree + Monaco editor + console + validation).
+- Launch the **Configuration Builder workbench** for editing a specific configuration (file tree + Monaco editor + console + validation).
 
 ### Workbench
 

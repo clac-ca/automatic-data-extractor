@@ -68,7 +68,6 @@ async def _prepare_service(
         workspace_id=workspace.id,
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)

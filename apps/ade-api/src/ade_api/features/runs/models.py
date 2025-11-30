@@ -39,7 +39,6 @@ class Run(Base):
     workspace_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    configuration_version_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
     build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
     input_document_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
@@ -101,7 +100,6 @@ class Run(Base):
             "finished_at",
             "started_at",
         ),
-        Index("runs_configuration_version_idx", "configuration_version_id"),
         Index("runs_workspace_created_idx", "workspace_id", "created_at"),
         Index("runs_retry_of_idx", "retry_of_run_id"),
     )
