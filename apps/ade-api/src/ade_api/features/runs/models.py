@@ -46,7 +46,9 @@ class Run(Base):
     workspace_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
     )
-    build_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    build_id: Mapped[str | None] = mapped_column(
+        String(40), ForeignKey("builds.id", ondelete="SET NULL"), nullable=True
+    )
     input_document_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
     )
@@ -69,7 +71,11 @@ class Run(Base):
     )
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    retry_of_run_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    retry_of_run_id: Mapped[str | None] = mapped_column(
+        String(40),
+        ForeignKey("runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     submitted_by_user_id: Mapped[str | None] = mapped_column(
         String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -109,6 +115,7 @@ class Run(Base):
         ),
         Index("runs_workspace_created_idx", "workspace_id", "created_at"),
         Index("runs_retry_of_idx", "retry_of_run_id"),
+        Index("runs_build_idx", "build_id"),
     )
 
 
