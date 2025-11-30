@@ -79,12 +79,13 @@ If a section here feels too high-level, check the corresponding document for det
 - [x] Implement Workspace Home screen (entry point, navigation to Documents/Config Builder) — placeholder cards with shortcuts ready to be wired to data.
       (Flows in `030-UX-FLOWS.md`.)
 
-- [ ] Implement Documents screen:
+- [x] Implement Documents screen:
   - [x] Document list with status, last run summary, and quick actions — placeholder list with status badges and selection wired to detail panel.
   - [x] File upload flow with clear state (queued, uploaded, validation pending, last run) — upload panel stub adds documents and selects them (local storage stub pending real API).
   - [x] Per‑document “Runs & Outputs” drawer/panel (run history + download surface) — detail panel renders shared run components for selected doc.
   - [x] Run creation from document (start run, show live streaming progress) — stub start-run CTA updates runId/status and attaches stream.
   - [x] Download surface (original file, normalized output, log archive, error reports) — placeholder downloads list per run.
+  - Note: Documents detail now auto-attaches shared stream/telemetry, shows live run overview/log tail, and promotes terminal statuses back into document list.
 
 - [ ] Implement Run Detail screen:
   - [x] Live + replay view (SSE + NDJSON) — deep-link sequence replays NDJSON, live SSE otherwise.
@@ -95,7 +96,7 @@ If a section here feels too high-level, check the corresponding document for det
   - [x] `useWorkbenchRun` wired to `useRunStream` and `useRunTelemetry` — stub hook manages runId/startRun and attaches streaming boundary.
   - [x] Shared console/timeline/summary components in the bottom panel.
   - [ ] Validation error linking:
-    - From run/validation results back to specific config sections/fields.
+    - From run/validation results back to specific config sections/fields. (Sequence jump wired from validation click; editor focus mapping still pending.)
 
 ### Integration & cleanup
 
