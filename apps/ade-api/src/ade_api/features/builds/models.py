@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,16 @@ class Build(Base):
     """Persist build executions surfaced via the API."""
 
     __tablename__ = "builds"
+    __table_args__ = (
+        Index(
+            "ux_builds_inflight_per_config",
+            "configuration_id",
+            unique=True,
+            postgresql_where=text("status in ('queued','building')"),
+            sqlite_where=text("status in ('queued','building')"),
+            mssql_where=text("status in ('queued','building')"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     workspace_id: Mapped[str] = mapped_column(

@@ -159,18 +159,7 @@ async def _prepare_service(
     )
 
     configuration.active_build_id = build_id  # type: ignore[attr-defined]
-    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
     configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
-    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.engine_spec = settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = engine_version or "0.2.0"  # type: ignore[attr-defined]
-    configuration.python_interpreter = settings.python_bin  # type: ignore[attr-defined]
-    configuration.python_version = "3.12.1"  # type: ignore[attr-defined]
-    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.last_build_id = build_id  # type: ignore[attr-defined]
-    configuration.built_content_digest = digest  # type: ignore[attr-defined]
     configuration.content_digest = digest
     await session.commit()
 
