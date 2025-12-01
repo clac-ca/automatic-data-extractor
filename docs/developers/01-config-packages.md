@@ -300,7 +300,7 @@ name = "ade-config-membership"
 version = "1.9.0"
 description = "ADE configuration: detectors, row-level transforms, validators, and hooks"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 authors = [{ name = "Data Quality Team", email = "dq@example.com" }]
 license = { text = "Proprietary" }
 

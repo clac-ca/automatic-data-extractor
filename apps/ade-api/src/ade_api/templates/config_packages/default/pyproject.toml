@@ -18,7 +18,7 @@ build-backend = "setuptools.build_meta"
 name = "ade-config"
 version = "0.2.0"
 description = "Default ADE config package template"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 
 # Add any extra libraries your config needs here. They will be installed
 # into the same venv as `ade_engine`.

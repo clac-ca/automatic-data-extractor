@@ -44,7 +44,7 @@ async def test_builder_installs_dependencies(
         build_id: str,
     ) -> str:
         if "sys.version_info" in command[-1]:
-            return "3.12.1"
+            return "3.14.0"
         return "0.2.0"
 
     async def _write_metadata(target: Path, payload: dict[str, str | None]) -> None:  # noqa: D401
