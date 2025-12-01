@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
-
+from uuid import UUID
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
-
-if TYPE_CHECKING:
-    from ade_api.features.roles.models import Principal
+from ade_api.shared.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 
 
 def _normalise_email(value: str) -> str:
@@ -37,7 +33,7 @@ def _clean_display_name(value: str | None) -> str | None:
     return cleaned
 
 
-class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Single identity model for humans and service accounts."""
 
     __tablename__ = "users"
@@ -61,13 +57,6 @@ class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     credential: Mapped[UserCredential | None] = relationship(
         "UserCredential",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        uselist=False,
-    )
-    principal: Mapped[Principal | None] = relationship(
-        "Principal",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -99,12 +88,12 @@ class User(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         return credential.password_hash
 
 
-class UserCredential(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class UserCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Hashed password secret associated with a user."""
 
     __tablename__ = "user_credentials"
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     last_rotated_at: Mapped[datetime | None] = mapped_column(
@@ -116,12 +105,12 @@ class UserCredential(ULIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (UniqueConstraint("user_id"),)
 
 
-class UserIdentity(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class UserIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """External identity mapping for SSO and federated logins."""
 
     __tablename__ = "user_identities"
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)

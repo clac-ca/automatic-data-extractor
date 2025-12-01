@@ -35,9 +35,8 @@ non-streaming endpoints:
    `Run` schema documented in `docs/ade_runs_api_spec.md`.
 2. Poll `/api/v1/runs/{run_id}` until the `status` transitions from
    `queued`/`running` to a terminal state.
-3. Fetch buffered logs from `/api/v1/runs/{run_id}/logs?after_id=<last_id>`
-   to tail progress. The endpoint returns batches of 1000 log entries in
-   chronological order.
+3. Retrieve the raw run event log via `/api/v1/runs/{run_id}/logfile`
+   to review console output and events captured during execution.
 
 ## 3. Direct database inspection
 
@@ -51,13 +50,6 @@ FROM runs
 WHERE configuration_id = :configuration_id
 ORDER BY created_at DESC
 LIMIT 20;
-```
-
-```sql
-SELECT id, created_at, stream, message
-FROM run_logs
-WHERE run_id = :run_id
-ORDER BY id ASC;
 ```
 
 > ⚠️ Database writes should still go through the service. Avoid deleting

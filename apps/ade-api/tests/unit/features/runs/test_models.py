@@ -3,11 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.configs.models import Configuration, ConfigurationStatus
-from ade_api.features.runs.models import Run, RunLog, RunStatus
+from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.workspaces.models import Workspace
 from ade_api.shared.db.mixins import generate_ulid
 
@@ -31,7 +30,7 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
 
 
 @pytest.mark.asyncio()
-async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
+async def test_run_defaults(session: AsyncSession) -> None:
     workspace, configuration = await _create_configuration(session)
 
     run = Run(
@@ -42,7 +41,6 @@ async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
     session.add(run)
     await session.commit()
     await session.refresh(run)
-    await session.refresh(run, attribute_names=["logs"])
 
     assert run.status is RunStatus.QUEUED
     assert run.attempt == 1
@@ -56,20 +54,3 @@ async def test_run_defaults_and_log_cascade(session: AsyncSession) -> None:
     assert run.artifact_uri is None
     assert run.output_uri is None
     assert run.logs_uri is None
-    assert run.logs == []
-
-    log = RunLog(run_id=run.id, message="hello world")
-    session.add(log)
-    await session.commit()
-    await session.refresh(run, attribute_names=["logs"])
-
-    assert len(run.logs) == 1
-    stored_log = run.logs[0]
-    assert stored_log.stream == "stdout"
-    assert stored_log.message == "hello world"
-
-    await session.delete(run)
-    await session.commit()
-
-    remaining_logs = await session.execute(select(RunLog).where(RunLog.run_id == run.id))
-    assert remaining_logs.scalars().all() == []

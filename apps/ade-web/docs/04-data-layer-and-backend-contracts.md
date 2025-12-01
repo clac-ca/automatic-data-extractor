@@ -498,12 +498,10 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 
 #### Canonical run detail & assets (global)
 
-* `GET  /api/v1/runs/{run_id}` – canonical run detail.
-* `GET  /api/v1/runs/{run_id}/logfile` – download telemetry log.
-* `GET  /api/v1/runs/{run_id}/logfile` – download log file.
-* `GET  /api/v1/runs/{run_id}/logs` – NDJSON event stream.
-* `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
-* `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download specific output.
+- `GET  /api/v1/runs/{run_id}` – canonical run detail.
+- `GET  /api/v1/runs/{run_id}/logfile` – download telemetry log.
+- `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
+- `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download specific output.
 
 #### Configuration-scoped triggers
 
@@ -519,12 +517,11 @@ Workspace ledger:
 
 Run-centric:
 
-* `readRun(runId)`
-* `listRunOutputs(runId)`
-* `downloadRunOutput(runId, outputPath)`
-* `downloadRunArtifact(runId)`
-* `downloadRunLogFile(runId)`
-* `streamRunLogs(runId)`   // NDJSON event stream
+- `readRun(runId)`
+- `listRunOutputs(runId)`
+- `downloadRunOutput(runId, outputPath)`
+- `downloadRunArtifact(runId)`
+- `downloadRunLogFile(runId)`
 
 Configuration triggers:
 
@@ -540,7 +537,7 @@ Hooks:
 
 Streaming:
 
-* `useRunLogsStream(runId)` – live run console and events.
+- `useRunLogsStream(runId)` – live run console and events.
 
 ---
 

@@ -172,7 +172,7 @@ async def list_configurations(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -201,7 +201,7 @@ async def read_configuration(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -232,7 +232,7 @@ async def list_config_files(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -299,7 +299,7 @@ async def create_configuration(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -346,7 +346,7 @@ async def validate_configuration(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -392,7 +392,7 @@ async def read_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -493,7 +493,7 @@ async def head_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -543,7 +543,7 @@ async def activate_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -589,7 +589,7 @@ async def publish_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -634,7 +634,7 @@ async def deactivate_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -662,7 +662,7 @@ async def export_config(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -702,7 +702,7 @@ async def upsert_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -780,7 +780,7 @@ async def delete_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -829,7 +829,7 @@ async def create_config_directory(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -866,7 +866,7 @@ async def delete_config_directory(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -909,7 +909,7 @@ async def rename_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+import uuid
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -82,9 +82,9 @@ class BuildExecutionContext:
 
     def as_dict(self) -> dict[str, str | bool | None | float]:
         return {
-            "build_id": self.build_id,
-            "configuration_id": self.configuration_id,
-            "workspace_id": self.workspace_id,
+            "build_id": str(self.build_id),
+            "configuration_id": str(self.configuration_id),
+            "workspace_id": str(self.workspace_id),
             "config_path": self.config_path,
             "venv_root": self.venv_root,
             "python_bin": self.python_bin,
@@ -988,7 +988,7 @@ class BuildsService:
         return True
 
     def _generate_build_id(self) -> str:
-        return f"build_{uuid4().hex}"
+        return str(uuid.uuid7())
 
 
 @dataclass(slots=True)

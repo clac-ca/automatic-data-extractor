@@ -21,9 +21,9 @@ from pathlib import Path, PurePosixPath
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.shared.core.ids import generate_uuid7
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.core.time import utc_now
-from ade_api.shared.db.mixins import generate_ulid
 
 from .etag import canonicalize_etag
 from .exceptions import (
@@ -117,7 +117,7 @@ class ConfigurationsService:
         display_name: str,
         source: ConfigSource,
     ) -> Configuration:
-        configuration_id = generate_ulid()
+        configuration_id = generate_uuid7()
         logger.debug(
             "config.create.start",
             extra=log_context(

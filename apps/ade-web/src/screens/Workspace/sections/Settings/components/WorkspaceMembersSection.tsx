@@ -21,7 +21,7 @@ import { Avatar } from "@ui/Avatar";
 
 export function WorkspaceMembersSection() {
   const { workspace, hasPermission } = useWorkspaceContext();
-  const canManageMembers = hasPermission("Workspace.Members.ReadWrite");
+  const canManageMembers = hasPermission("workspace.members.manage");
   const membersQuery = useWorkspaceMembersQuery(workspace.id);
   const rolesQuery = useWorkspaceRolesQuery(workspace.id);
 

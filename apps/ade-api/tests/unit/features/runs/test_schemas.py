@@ -7,7 +7,6 @@ from ade_api.features.runs.schemas import (
     RunCreateRequest,
     RunEventsPage,
     RunLinks,
-    RunLogsResponse,
     RunOutputFile,
     RunOutputListing,
     RunResource,
@@ -29,7 +28,6 @@ def test_run_resource_serialization_uses_aliases() -> None:
             self="/api/v1/runs/run_123",
             summary="/api/v1/runs/run_123/summary",
             events="/api/v1/runs/run_123/events",
-            logs="/api/v1/runs/run_123/logs",
             logfile="/api/v1/runs/run_123/logfile",
             outputs="/api/v1/runs/run_123/outputs",
         ),
@@ -42,18 +40,6 @@ def test_run_resource_serialization_uses_aliases() -> None:
     assert payload["output"]["output_count"] == 0
     assert payload["links"]["summary"].endswith("/summary")
     assert "failure_message" not in payload
-
-
-def test_run_logs_response_tracks_pagination_marker() -> None:
-    response = RunLogsResponse(
-        run_id="run_123",
-        entries=[],
-        next_after_id=42,
-    )
-
-    payload = response.model_dump()
-    assert payload["object"] == "ade.run.logs"
-    assert payload["next_after_id"] == 42
 
 
 def test_run_create_request_defaults_to_no_stream() -> None:

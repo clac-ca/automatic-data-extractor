@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from ade_api.shared.core.ids import ULIDStr
+from ade_api.shared.core.ids import UUIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
@@ -14,12 +14,12 @@ from ade_api.shared.pagination import Page
 class UserProfile(BaseSchema):
     """Minimal view of the authenticated user."""
 
-    id: ULIDStr
+    id: UUIDStr
     email: str
     is_active: bool
     is_service_account: bool
     display_name: str | None = None
-    preferred_workspace_id: ULIDStr | None = Field(
+    preferred_workspace_id: UUIDStr | None = Field(
         default=None,
         validation_alias="preferred_workspace_id",
     )

@@ -10,13 +10,13 @@ describe("runStreamReducer", () => {
     const event: AdeEvent = {
       type: "run.queued",
       created_at: "2024-01-01T00:00:00Z",
-      run_id: "run_test",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10",
       payload: { status: "queued" },
     };
 
     const next = runStreamReducer(state, { type: "EVENT", event });
     expect(next.status).toBe("queued");
-    expect(next.runId).toBe("run_test");
+    expect(next.runId).toBe("018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10");
     expect(next.consoleLines.length).toBe(1);
   });
 

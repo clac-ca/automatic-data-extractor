@@ -12,7 +12,7 @@ from fastapi.routing import Lifespan
 
 from ade_api.settings import Settings, get_settings
 
-from ...features.roles.service import sync_permission_registry
+from ...features.roles import RbacService
 from ..db.engine import ensure_database_ready
 from ..db.session import get_sessionmaker
 
@@ -114,7 +114,8 @@ def create_application_lifespan(
         await ensure_database_ready(settings)
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:
-            await sync_permission_registry(session=session, force=True)
+            rbac = RbacService(session=session)
+            await rbac.sync_registry()
         yield
 
     return lifespan

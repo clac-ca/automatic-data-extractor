@@ -1,156 +1,127 @@
-"""SQLAlchemy models implementing the unified RBAC schema."""
+"""SQLAlchemy models for the redesigned RBAC system."""
 
 from __future__ import annotations
 
 from enum import Enum
+from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
+    false,
+    true,
 )
-from sqlalchemy import (
-    Enum as SAEnum,
-)
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db import Base
 from ade_api.shared.db.enums import enum_values
+from ade_api.shared.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
+from ade_api.shared.db.types import UUIDType
 
 from ..users.models import User
+from ..workspaces.models import Workspace
 
 
 class ScopeType(str, Enum):
-    """Scope dimensions supported by RBAC."""
+    """Scopes supported by RBAC-aware resources."""
 
     GLOBAL = "global"
     WORKSPACE = "workspace"
 
 
-class PrincipalType(str, Enum):
-    """Kinds of principals that can hold assignments."""
+permission_scope_enum = SAEnum(
+    ScopeType,
+    name="permission_scope",
+    native_enum=False,
+    length=20,
+    values_callable=enum_values,
+)
 
-    USER = "user"
-
-
-class Principal(ULIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Subject that can receive role assignments."""
-
-    __tablename__ = "principals"
-    principal_type: Mapped[PrincipalType] = mapped_column(
-        SAEnum(
-            PrincipalType,
-            name="principal_type",
-            native_enum=False,
-            length=20,
-            values_callable=enum_values,
-        ),
-        nullable=False,
-        default=PrincipalType.USER,
-    )
-    user_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("users.id", ondelete="CASCADE"), unique=True
-    )
-
-    user: Mapped[User | None] = relationship(
-        User, back_populates="principal", lazy="joined"
-    )
-    assignments: Mapped[list[RoleAssignment]] = relationship(
-        "RoleAssignment",
-        back_populates="principal",
-        cascade="all, delete-orphan",
-    )
-
-    __table_args__ = (
-        CheckConstraint(
-            f"(principal_type = '{PrincipalType.USER.value}' AND user_id IS NOT NULL)",
-            name="principals_user_fk_required",
-        ),
-    )
+assignment_scope_enum = SAEnum(
+    ScopeType,
+    name="rbac_scope",
+    native_enum=False,
+    length=20,
+    values_callable=enum_values,
+)
 
 
-class Permission(ULIDPrimaryKeyMixin, Base):
-    """Permission definition following the ADE registry."""
+class Permission(UUIDPrimaryKeyMixin, Base):
+    """Canonical permission catalog entry."""
 
     __tablename__ = "permissions"
 
-    key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    key: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     resource: Mapped[str] = mapped_column(String(120), nullable=False)
     action: Mapped[str] = mapped_column(String(120), nullable=False)
-    scope_type: Mapped[ScopeType] = mapped_column(
-        SAEnum(
-            ScopeType,
-            name="permission_scope_type",
-            native_enum=False,
-            length=20,
-            values_callable=enum_values,
-        ),
-        nullable=False,
-    )
+    scope_type: Mapped[ScopeType] = mapped_column(permission_scope_enum, nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
-    role_permissions: Mapped[list[RolePermission]] = relationship(
+    role_permissions: Mapped[list["RolePermission"]] = relationship(
         "RolePermission",
         back_populates="permission",
         cascade="all, delete-orphan",
     )
 
 
-class Role(ULIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Role that aggregates permissions for a specific scope."""
+class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Role definition that aggregates permissions."""
 
     __tablename__ = "roles"
-    scope_type: Mapped[ScopeType] = mapped_column(
-        SAEnum(
-            ScopeType,
-            name="role_scope_type",
-            native_enum=False,
-            length=20,
-            values_callable=enum_values,
-        ),
-        nullable=False,
-    )
-    scope_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
-    )
-    slug: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    built_in: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    editable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_by: Mapped[str | None] = mapped_column(String(26), nullable=True)
-    updated_by: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    is_system: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+    is_editable: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true(),
+    )
+    created_by_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
-    permissions: Mapped[list[RolePermission]] = relationship(
+    permissions: Mapped[list["RolePermission"]] = relationship(
         "RolePermission",
         back_populates="role",
         cascade="all, delete-orphan",
     )
-    assignments: Mapped[list[RoleAssignment]] = relationship(
-        "RoleAssignment",
+    assignments: Mapped[list["UserRoleAssignment"]] = relationship(
+        "UserRoleAssignment",
         back_populates="role",
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (
-        UniqueConstraint("scope_type", "scope_id", "slug"),
-    )
+    __table_args__ = (Index("ix_roles_slug", "slug"),)
 
 
 class RolePermission(Base):
-    """Bridge table linking roles to permissions."""
+    """Bridge table linking roles and permissions."""
 
     __tablename__ = "role_permissions"
 
-    role_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
+    role_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
     )
-    permission_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
+    permission_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
     )
 
     role: Mapped[Role] = relationship("Role", back_populates="permissions")
@@ -163,51 +134,51 @@ class RolePermission(Base):
     __table_args__ = ()
 
 
-class RoleAssignment(ULIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Assignment of a role to a principal at a specific scope."""
+class UserRoleAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Assignment of a role to a user within a scope."""
 
-    __tablename__ = "role_assignments"
-    principal_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("principals.id", ondelete="CASCADE"), nullable=False
+    __tablename__ = "user_role_assignments"
+
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    role_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    role_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
     )
     scope_type: Mapped[ScopeType] = mapped_column(
-        SAEnum(
-            ScopeType,
-            name="assignment_scope_type",
-            native_enum=False,
-            length=20,
-            values_callable=enum_values,
-        ),
+        assignment_scope_enum,
         nullable=False,
     )
-    scope_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+    scope_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
     )
 
-    principal: Mapped[Principal] = relationship(
-        "Principal", back_populates="assignments"
-    )
+    user: Mapped[User] = relationship("User")
     role: Mapped[Role] = relationship("Role", back_populates="assignments")
+    workspace: Mapped[Workspace | None] = relationship("Workspace")
 
     __table_args__ = (
-        UniqueConstraint("principal_id", "role_id", "scope_type", "scope_id"),
-        CheckConstraint(
-            f"(scope_type = '{ScopeType.GLOBAL.value}' AND scope_id IS NULL) OR"
-            f" (scope_type = '{ScopeType.WORKSPACE.value}' AND scope_id IS NOT NULL)",
-            name="role_assignments_scope_consistency",
+        UniqueConstraint(
+            "user_id",
+            "role_id",
+            "scope_type",
+            "scope_id",
+            name="uq_user_role_scope",
         ),
+        CheckConstraint(
+            "(scope_type = 'global' AND scope_id IS NULL) OR "
+            "(scope_type = 'workspace' AND scope_id IS NOT NULL)",
+            name="chk_user_role_scope",
+        ),
+        Index("ix_user_scope", "user_id", "scope_type", "scope_id"),
+        Index("ix_role_scope", "role_id", "scope_type", "scope_id"),
     )
 
 
 __all__ = [
     "Permission",
-    "Principal",
-    "PrincipalType",
     "Role",
-    "RoleAssignment",
     "RolePermission",
     "ScopeType",
+    "UserRoleAssignment",
 ]

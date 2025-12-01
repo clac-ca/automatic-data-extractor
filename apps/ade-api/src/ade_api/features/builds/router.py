@@ -112,7 +112,7 @@ async def create_build_endpoint(
     _actor: Annotated[
         object,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],

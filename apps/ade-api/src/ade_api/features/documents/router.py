@@ -175,7 +175,7 @@ async def upload_document(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.ReadWrite"),
+            require_workspace("workspace.documents.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -228,7 +228,7 @@ async def list_documents(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.Read"),
+            require_workspace("workspace.documents.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -273,7 +273,7 @@ async def read_document(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.Read"),
+            require_workspace("workspace.documents.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -313,7 +313,7 @@ async def download_document(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.Read"),
+            require_workspace("workspace.documents.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -358,7 +358,7 @@ async def list_document_sheets_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.Read"),
+            require_workspace("workspace.documents.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -402,7 +402,7 @@ async def delete_document(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Documents.ReadWrite"),
+            require_workspace("workspace.documents.manage"),
             scopes=["{workspace_id}"],
         ),
     ],

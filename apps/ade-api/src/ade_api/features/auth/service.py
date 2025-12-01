@@ -18,14 +18,7 @@ from fastapi import HTTPException, Request, Response, status
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.roles.service import (
-    assign_global_role,
-    assign_global_role_if_missing,
-    ensure_user_principal,
-    get_global_role_by_slug,
-    has_users_with_global_role,
-    sync_permission_registry,
-)
+from ade_api.features.roles import RbacService, ScopeType
 from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import Page, paginate_sql
@@ -46,9 +39,6 @@ from .security import (
     verify_password,
 )
 from .utils import normalise_api_key_label, normalise_email
-
-if TYPE_CHECKING:
-    from ade_api.features.roles.models import Principal
 
 
 logger = logging.getLogger(__name__)
@@ -81,7 +71,6 @@ class AuthenticatedIdentity:
     """Identity resolved during authentication."""
 
     user: User
-    principal: Principal
     credentials: Literal["session_cookie", "bearer_token", "api_key", "development"]
     api_key: APIKey | None = None
 
@@ -181,7 +170,7 @@ _SSO_METADATA_TTL_SECONDS = 600
 _SSO_JWKS_TTL_SECONDS = 600
 
 _INITIAL_SETUP_SETTING_KEY = "initial_setup"
-_GLOBAL_ADMIN_ROLE_SLUG = "global-administrator"
+_GLOBAL_ADMIN_ROLE_SLUG = "global-admin"
 _GLOBAL_USER_ROLE_SLUG = "global-user"
 
 
@@ -255,16 +244,18 @@ async def _assign_global_role_or_500(
     user: User,
     slug: str,
 ) -> None:
-    role = await get_global_role_by_slug(session=session, slug=slug)
+    rbac = RbacService(session=session)
+    role = await rbac.get_role_by_slug(slug=slug)
     if role is None:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Global role '{slug}' is not configured",
         )
-    await assign_global_role(
-        session=session,
+    await rbac.assign_role(
         user_id=cast(str, user.id),
         role_id=cast(str, role.id),
+        scope_type=ScopeType.GLOBAL,
+        scope_id=None,
     )
 
 
@@ -274,16 +265,18 @@ async def _assign_global_role_if_missing_or_500(
     user: User,
     slug: str,
 ) -> None:
-    role = await get_global_role_by_slug(session=session, slug=slug)
+    rbac = RbacService(session=session)
+    role = await rbac.get_role_by_slug(slug=slug)
     if role is None:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Global role '{slug}' is not configured",
         )
-    await assign_global_role_if_missing(
-        session=session,
+    await rbac.assign_role_if_missing(
         user_id=cast(str, user.id),
         role_id=cast(str, role.id),
+        scope_type=ScopeType.GLOBAL,
+        scope_id=None,
     )
 
 
@@ -923,7 +916,8 @@ class DevIdentityService:
 
         # Expensive work: registry sync + global admin role; only once per process.
         if not cls._dev_setup_done:
-            await sync_permission_registry(session=self._session)
+            rbac = RbacService(session=self._session)
+            await rbac.sync_registry()
             await _assign_global_role_if_missing_or_500(
                 session=self._session,
                 user=user,
@@ -934,8 +928,6 @@ class DevIdentityService:
         else:
             # Keep ID cached up to date.
             cls._dev_user_id = cast(str, user.id)
-
-        principal = await ensure_user_principal(session=self._session, user=user)
 
         logger.info(
             "auth.dev_identity.ensure.success",
@@ -949,7 +941,6 @@ class DevIdentityService:
 
         return AuthenticatedIdentity(
             user=user,
-            principal=principal,
             credentials="development",
         )
 
@@ -1299,10 +1290,8 @@ class ApiKeyService:
                 detail="Invalid API key",
             )
 
-        principal = await ensure_user_principal(session=self._session, user=user)
         identity = AuthenticatedIdentity(
             user=user,
-            principal=principal,
             api_key=record,
             credentials="api_key",
         )
@@ -2298,7 +2287,8 @@ class AuthService:
 
         # Ensure the canonical permission and role registry exists before
         # provisioning the first administrator.
-        await sync_permission_registry(session=session, force=True)
+        rbac = RbacService(session=session)
+        await rbac.sync_registry()
 
         async with session.begin():
             setting = await self._system_settings.get_for_update(
@@ -2321,9 +2311,16 @@ class AuthService:
                     status.HTTP_409_CONFLICT,
                     detail="Initial setup already completed",
                 )
-            has_admin = await has_users_with_global_role(
-                session=session,
-                slug=_GLOBAL_ADMIN_ROLE_SLUG,
+            role = await rbac.get_role_by_slug(slug=_GLOBAL_ADMIN_ROLE_SLUG)
+            if role is None:
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Global admin role is not configured",
+                )
+            has_admin = await rbac.has_assignments_for_role(
+                role_id=cast(str, role.id),
+                scope_type=ScopeType.GLOBAL,
+                scope_id=None,
             )
             if has_admin:
                 logger.warning(

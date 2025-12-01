@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from pydantic import Field
-from ulid import ULID
 
-__all__ = ["ULID_PATTERN", "ULIDStr", "generate_ulid"]
+__all__ = ["UUID_DESCRIPTION", "UUIDStr", "generate_uuid7"]
 
-ULID_PATTERN = r"[0-9A-HJKMNP-TV-Z]{26}"
-ULID_DESCRIPTION = "ULID (26-character string)."
+UUID_DESCRIPTION = "UUIDv7 (RFC 9562) generated in the application layer."
 
-# Reusable Annotated type to keep ULID validation consistent across schemas.
-ULIDStr = Annotated[
-    str,
+# Reusable Annotated type to keep UUID validation consistent across schemas.
+UUIDStr = Annotated[
+    uuid.UUID,
     Field(
-        min_length=26,
-        max_length=26,
-        pattern=ULID_PATTERN,
-        description=ULID_DESCRIPTION,
+        description=UUID_DESCRIPTION,
     ),
 ]
 
 
-def generate_ulid() -> str:
-    """Return a lexicographically sortable ULID string."""
+def generate_uuid7() -> uuid.UUID:
+    """Return an RFC 9562 UUIDv7 generated in the application layer."""
 
-    return str(ULID())
+    if not hasattr(uuid, "uuid7"):  # pragma: no cover - guard for unexpected runtimes
+        msg = "Python 3.14+ is required for uuid.uuid7()"
+        raise RuntimeError(msg)
+    return uuid.uuid7()

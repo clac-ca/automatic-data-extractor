@@ -3,26 +3,28 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
-from ade_api.shared.core.ids import generate_ulid
+from ade_api.shared.core.ids import generate_uuid7
 from ade_api.shared.core.time import utc_now
+from ade_api.shared.db.types import UUIDType
 
-__all__ = ["generate_ulid", "TimestampMixin", "ULIDPrimaryKeyMixin"]
+__all__ = ["TimestampMixin", "UUIDPrimaryKeyMixin", "generate_uuid7"]
 
 
-class ULIDPrimaryKeyMixin:
-    """Mixin that supplies a ULID-backed primary key column."""
+class UUIDPrimaryKeyMixin:
+    """Mixin that supplies a UUIDv7-backed primary key column."""
 
     @declared_attr.directive
-    def id(cls) -> Mapped[str]:  # noqa: N805 - SQLAlchemy declared attr
+    def id(cls) -> Mapped[UUID]:  # noqa: N805 - SQLAlchemy declared attr
         return mapped_column(
             "id",
-            String(26),
+            UUIDType(),
             primary_key=True,
-            default=generate_ulid,
+            default=generate_uuid7,
         )
 
 

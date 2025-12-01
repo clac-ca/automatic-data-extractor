@@ -1,20 +1,10 @@
-"""HTTP endpoints for role and permission management."""
+"""HTTP endpoints for RBAC role, assignment, and permission management."""
 
 from __future__ import annotations
 
-from typing import Annotated, cast
+from typing import Annotated
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Path,
-    Query,
-    Response,
-    Security,
-    status,
-)
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.shared.core.security import forbidden_response
@@ -32,16 +22,8 @@ from ade_api.shared.pagination import PageParams, paginate_sequence
 from ..auth.service import AuthenticatedIdentity
 from ..users.models import User
 from ..workspaces.service import WorkspacesService
-from .authorization import authorize
-from .models import (
-    Permission,
-    Principal,
-    PrincipalType,
-    Role,
-    RoleAssignment,
-    ScopeType,
-)
-from .registry import PERMISSION_REGISTRY, PermissionScope
+from .models import Permission, Role, ScopeType, UserRoleAssignment
+from .registry import PERMISSION_REGISTRY
 from .schemas import (
     EffectivePermissionsResponse,
     PermissionCheckRequest,
@@ -57,32 +39,25 @@ from .schemas import (
     RoleUpdate,
 )
 from .service import (
+    AssignmentError,
+    AssignmentNotFoundError,
     AuthorizationError,
-    PrincipalNotFoundError,
-    RoleAssignmentError,
-    RoleAssignmentNotFoundError,
+    RbacService,
+    ScopeMismatchError,
     RoleConflictError,
     RoleImmutableError,
     RoleNotFoundError,
-    RoleScopeMismatchError,
     RoleValidationError,
-    WorkspaceNotFoundError,
-    assign_role,
+    authorize as authorize_permission,
     collect_permission_keys,
-    create_global_role,
-    delete_global_role,
-    delete_role_assignment,
-    ensure_user_principal,
-    get_global_permissions_for_principal,
-    get_role,
-    get_role_assignment,
-    get_workspace_permissions_for_principal,
-    paginate_role_assignments,
-    paginate_roles,
-    update_global_role,
 )
 
 router = APIRouter(tags=["roles"], dependencies=[Security(require_authenticated)])
+
+
+# ---------------------------------------------------------------------------
+# Serialization helpers
+# ---------------------------------------------------------------------------
 
 
 def _serialize_role(role: Role) -> RoleOut:
@@ -91,30 +66,22 @@ def _serialize_role(role: Role) -> RoleOut:
         slug=role.slug,
         name=role.name,
         description=role.description,
-        scope_type=role.scope_type,
-        scope_id=role.scope_id,
         permissions=[
             permission.permission.key
             for permission in role.permissions
             if permission.permission is not None
         ],
-        built_in=role.built_in,
-        editable=role.editable,
+        is_system=role.is_system,
+        is_editable=role.is_editable,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
     )
 
 
-def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentOut:
-    principal = assignment.principal
-    user = principal.user if principal is not None else None
+def _serialize_assignment(assignment: UserRoleAssignment) -> RoleAssignmentOut:
     return RoleAssignmentOut(
         id=assignment.id,
-        principal_id=assignment.principal_id,
-        principal_type=(
-            principal.principal_type if principal is not None else PrincipalType.USER
-        ),
-        user_id=user.id if user is not None else None,
-        user_email=user.email if user is not None else None,
-        user_display_name=user.display_name if user is not None else None,
+        user_id=assignment.user_id,
         role_id=assignment.role_id,
         role_slug=assignment.role.slug if assignment.role is not None else "",
         scope_type=assignment.scope_type,
@@ -123,157 +90,38 @@ def _serialize_assignment(assignment: RoleAssignment) -> RoleAssignmentOut:
     )
 
 
-async def _ensure_principal_identifier(
-    *,
-    session: AsyncSession,
-    principal_id: str | None,
-    user_id: str | None,
-) -> str:
-    if principal_id:
-        result = await session.execute(
-            select(Principal.id).where(Principal.id == principal_id)
-        )
-        if result.scalar_one_or_none() is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Principal not found")
-        return principal_id
-
-    if user_id:
-        user = await session.get(User, user_id)
-        if user is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
-        principal = await ensure_user_principal(session=session, user=user)
-        return cast(str, principal.id)
-
-    raise HTTPException(
-        status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail="principal_id or user_id is required",
-    )
-
-
-async def _resolve_principal_filter(
-    *,
-    session: AsyncSession,
-    principal_id: str | None,
-    user_id: str | None,
-) -> str | None:
-    if principal_id:
-        return principal_id
-
-    if user_id:
-        result = await session.execute(
-            select(Principal.id).where(Principal.user_id == user_id)
-        )
-        principal = result.scalar_one_or_none()
-        return principal
-
-    return None
-
-
-def _role_permission_requirements(role: Role, *, write: bool) -> tuple[str, str, str | None]:
-    if role.scope_type == ScopeType.GLOBAL:
-        permission = "Roles.ReadWrite.All" if write else "Roles.Read.All"
-        return permission, ScopeType.GLOBAL, None
-
-    if role.scope_id is None:
-        permission = "Roles.ReadWrite.All" if write else "Roles.Read.All"
-        return permission, ScopeType.GLOBAL, None
-
-    permission = "Workspace.Roles.ReadWrite" if write else "Workspace.Roles.Read"
-    return permission, ScopeType.WORKSPACE, role.scope_id
-
-
-async def _load_role(
-    role_id: Annotated[str, Path(..., min_length=1)],
-    *,
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> Role:
-    role = await get_role(session=session, role_id=role_id)
-    if role is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
-    return role
-
-
-async def require_role_read_access(
-    role: Annotated[Role, Depends(_load_role)],
-    identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> Role:
-    if identity.credentials == "development":
-        return role
-    permission, scope_type, scope_id = _role_permission_requirements(role, write=False)
-    decision = await authorize(
-        session=session,
-        principal_id=str(identity.principal.id),
-        permission_key=permission,
-        scope_type=scope_type,
-        scope_id=scope_id,
-    )
-    if not decision.is_authorized:
-        raise forbidden_response(
-            permission=permission,
-            scope_type=scope_type,
-            scope_id=scope_id,
-        )
-    return role
-
-
-async def require_role_write_access(
-    role: Annotated[Role, Depends(_load_role)],
-    identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> tuple[User, Role]:
-    if identity.credentials == "development":
-        return identity.user, role
-    permission, scope_type, scope_id = _role_permission_requirements(role, write=True)
-    decision = await authorize(
-        session=session,
-        principal_id=str(identity.principal.id),
-        permission_key=permission,
-        scope_type=scope_type,
-        scope_id=scope_id,
-    )
-    if not decision.is_authorized:
-        raise forbidden_response(
-            permission=permission,
-            scope_type=scope_type,
-            scope_id=scope_id,
-        )
-    return identity.user, role
+# ---------------------------------------------------------------------------
+# Role endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.get(
     "/roles",
     response_model=RolePage,
     response_model_exclude_none=True,
-    summary="List global role definitions",
+    summary="List role definitions",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to list roles.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "Caller lacks global role read permission.",
+            "description": "Caller lacks role read permission.",
         },
     },
 )
-async def list_global_roles(
+async def list_roles(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
     scope: Annotated[
         ScopeType,
-        Query(
-            description="Role scope to list (global only)",
-            alias="scope",
-        ),
+        Query(description="Scope to filter roles by"),
     ] = ScopeType.GLOBAL,
     page: Annotated[PageParams, Depends()],
-    _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
+    _actor: Annotated[User, Security(require_global("roles.read_all"))],
 ) -> RolePage:
-    """Return the catalog of global roles."""
-
-    role_page = await paginate_roles(
-        session=session,
-        scope_type=ScopeType.GLOBAL,
-        scope_id=None,
+    service = RbacService(session=session)
+    role_page = await service.list_roles_for_scope(
+        scope=scope,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
@@ -293,14 +141,14 @@ async def list_global_roles(
     response_model=RoleOut,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a global role",
+    summary="Create a role",
     dependencies=[Security(require_csrf)],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to manage roles.",
         },
         status.HTTP_403_FORBIDDEN: {
-            "description": "Caller lacks global role management permission.",
+            "description": "Caller lacks role management permission.",
         },
         status.HTTP_409_CONFLICT: {
             "description": "Role slug already exists.",
@@ -310,37 +158,38 @@ async def list_global_roles(
         },
     },
 )
-async def create_global_role_endpoint(
+async def create_role(
     payload: RoleCreate,
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
-    scope: Annotated[
-        ScopeType,
-        Query(
-            description="Role scope to create (global only)",
-            alias="scope",
-        ),
-    ] = ScopeType.GLOBAL,
-    actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
+    actor: Annotated[User, Security(require_global("roles.manage_all"))],
 ) -> RoleOut:
-    """Create a new global role definition."""
-
+    service = RbacService(session=session)
     try:
-        role = await create_global_role(
-            session=session, payload=payload, actor=actor
+        role = await service.create_role(
+            name=payload.name,
+            slug=payload.slug,
+            description=payload.description,
+            permissions=payload.permissions,
+            actor=actor,
         )
-    except RoleConflictError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except RoleValidationError as exc:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
+    except (RoleConflictError, RoleValidationError) as exc:
+        status_code = status.HTTP_409_CONFLICT if isinstance(exc, RoleConflictError) else status.HTTP_422_UNPROCESSABLE_CONTENT
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
     return _serialize_role(role)
+
+
+async def _load_role(
+    role_id: Annotated[str, Path(..., min_length=1)],
+    *,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Role:
+    service = RbacService(session=session)
+    role = await service.get_role(role_id)
+    if role is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found")
+    return role
 
 
 @router.get(
@@ -360,12 +209,10 @@ async def create_global_role_endpoint(
         },
     },
 )
-async def read_role_detail(
-    role: Annotated[Role, Security(require_role_read_access)],
-    role_id: str = Path(..., min_length=1),
+async def read_role(
+    role: Annotated[Role, Depends(_load_role)],
+    _actor: Annotated[User, Security(require_global("roles.read_all"))],
 ) -> RoleOut:
-    """Return a single role definition with permissions."""
-
     return _serialize_role(role)
 
 
@@ -396,53 +243,29 @@ async def read_role_detail(
         },
     },
 )
-async def update_role_definition(
+async def update_role(
     payload: RoleUpdate,
-    actor_and_role: Annotated[tuple[User, Role], Security(require_role_write_access)],
-    role_id: Annotated[str, Path(..., min_length=1)],
+    role: Annotated[Role, Depends(_load_role)],
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
+    actor: Annotated[User, Security(require_global("roles.manage_all"))],
 ) -> RoleOut:
-    """Update the specified role in its scope."""
-
-    actor, role = actor_and_role
-
-    if role.scope_type == ScopeType.GLOBAL:
-        try:
-            updated = await update_global_role(
-                session=session, role_id=role_id, payload=payload, actor=actor
-            )
-        except RoleImmutableError as exc:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RoleValidationError as exc:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=str(exc),
-            ) from exc
-        except RoleNotFoundError:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Role not found",
-            ) from None
-
-        return _serialize_role(updated)
-
-    if role.scope_id is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="System roles cannot be edited",
+    service = RbacService(session=session)
+    try:
+        updated = await service.update_role(
+            role_id=str(role.id),
+            name=payload.name,
+            description=payload.description,
+            permissions=payload.permissions,
+            actor=actor,
         )
+    except RoleImmutableError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RoleValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except RoleNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found") from None
 
-    workspaces = WorkspacesService(session=session)
-    updated = await workspaces.update_workspace_role(
-        workspace_id=role.scope_id,
-        role_id=role_id,
-        payload=payload,
-        actor=actor,
-    )
     return _serialize_role(updated)
 
 
@@ -465,52 +288,30 @@ async def update_role_definition(
             "description": "Role not found.",
         },
         status.HTTP_409_CONFLICT: {
-            "description": "Role is still assigned to principals.",
+            "description": "Role is still assigned to users.",
         },
     },
 )
-async def delete_role_definition(
-    actor_and_role: Annotated[tuple[User, Role], Security(require_role_write_access)],
+async def delete_role(
     role_id: Annotated[str, Path(..., min_length=1)],
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
+    _actor: Annotated[User, Security(require_global("roles.manage_all"))],
 ) -> None:
-    """Delete the specified role definition."""
+    service = RbacService(session=session)
+    try:
+        await service.delete_role(role_id=role_id)
+    except RoleImmutableError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RoleConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RoleNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Role not found") from None
 
-    _actor, role = actor_and_role
 
-    if role.scope_type == ScopeType.GLOBAL:
-        try:
-            await delete_global_role(session=session, role_id=role_id)
-        except RoleImmutableError as exc:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except RoleConflictError as exc:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                detail=str(exc),
-            ) from exc
-        except RoleNotFoundError:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Role not found",
-            ) from None
-
-        return
-
-    if role.scope_id is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="System roles cannot be deleted",
-        )
-
-    workspaces = WorkspacesService(session=session)
-    await workspaces.delete_workspace_role(
-        workspace_id=role.scope_id,
-        role_id=role_id,
-    )
+# ---------------------------------------------------------------------------
+# Assignments
+# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -530,52 +331,28 @@ async def delete_role_definition(
 async def list_global_role_assignments(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
-    principal_id: Annotated[str | None, Query(min_length=1)] = None,
     user_id: Annotated[str | None, Query(min_length=1)] = None,
     role_id: Annotated[str | None, Query(min_length=1)] = None,
     page: Annotated[PageParams, Depends()],
-    _actor: Annotated[User, Security(require_global("Roles.Read.All"))],
+    _actor: Annotated[User, Security(require_global("roles.read_all"))],
 ) -> RoleAssignmentPage:
-    """Return global role assignments filtered by optional identifiers."""
-
-    if principal_id and user_id:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Provide only one of principal_id or user_id",
-        )
-
-    principal_filter = await _resolve_principal_filter(
-        session=session, principal_id=principal_id, user_id=user_id
-    )
-
-    if user_id and principal_filter is None:
-        total = 0 if page.include_total else None
-        return RoleAssignmentPage(
-            items=[],
-            page=page.page,
-            page_size=page.page_size,
-            has_next=False,
-            has_previous=page.page > 1,
-            total=total,
-        )
-
-    assignments_page = await paginate_role_assignments(
-        session=session,
+    service = RbacService(session=session)
+    assignments = await service.list_assignments(
         scope_type=ScopeType.GLOBAL,
         scope_id=None,
-        principal_id=principal_filter,
+        user_id=user_id,
         role_id=role_id,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
     )
     return RoleAssignmentPage(
-        items=[_serialize_assignment(assignment) for assignment in assignments_page.items],
-        page=assignments_page.page,
-        page_size=assignments_page.page_size,
-        has_next=assignments_page.has_next,
-        has_previous=assignments_page.has_previous,
-        total=assignments_page.total,
+        items=[_serialize_assignment(item) for item in assignments.items],
+        page=assignments.page,
+        page_size=assignments.page_size,
+        has_next=assignments.has_next,
+        has_previous=assignments.has_previous,
+        total=assignments.total,
     )
 
 
@@ -583,8 +360,8 @@ async def list_global_role_assignments(
     "/role-assignments",
     response_model=RoleAssignmentOut,
     response_model_exclude_none=True,
-    status_code=status.HTTP_200_OK,
-    summary="Assign a global role to a principal",
+    status_code=status.HTTP_201_CREATED,
+    summary="Assign a global role to a user",
     dependencies=[Security(require_csrf)],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -594,67 +371,37 @@ async def list_global_role_assignments(
             "description": "Caller lacks global role assignment permission.",
         },
         status.HTTP_404_NOT_FOUND: {
-            "description": "Principal or role not found.",
+            "description": "User or role not found.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role assignment payload.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Assignment already exists.",
         },
     },
 )
 async def create_global_role_assignment(
     payload: RoleAssignmentCreate,
-    response: Response,
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
+    _actor: Annotated[User, Security(require_global("roles.manage_all"))],
 ) -> RoleAssignmentOut:
-    """Create or return an existing global role assignment."""
-
-    principal_identifier = await _ensure_principal_identifier(
-        session=session,
-        principal_id=payload.principal_id,
-        user_id=payload.user_id,
-    )
-
-    existing = await get_role_assignment(
-        session=session,
-        principal_id=principal_identifier,
-        role_id=payload.role_id,
-        scope_type=ScopeType.GLOBAL,
-        scope_id=None,
-    )
-    if existing is not None:
-        return _serialize_assignment(existing)
-
+    service = RbacService(session=session)
     try:
-        await assign_role(
-            session=session,
-            principal_id=principal_identifier,
+        assignment = await service.assign_role(
+            user_id=payload.user_id,
             role_id=payload.role_id,
             scope_type=ScopeType.GLOBAL,
             scope_id=None,
         )
-    except (PrincipalNotFoundError, RoleNotFoundError) as exc:
+    except (RoleNotFoundError, AssignmentError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RoleScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-    except RoleAssignmentError as exc:
+    except RoleConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
-    assignment = await get_role_assignment(
-        session=session,
-        principal_id=principal_identifier,
-        role_id=payload.role_id,
-        scope_type=ScopeType.GLOBAL,
-        scope_id=None,
-    )
-    if assignment is None:  # pragma: no cover - defensive guard
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Role assignment could not be created",
-        )
-
-    response.status_code = status.HTTP_201_CREATED
     return _serialize_assignment(assignment)
 
 
@@ -679,19 +426,19 @@ async def delete_global_role_assignment(
     assignment_id: Annotated[str, Path(..., min_length=1)],
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _actor: Annotated[User, Security(require_global("Roles.ReadWrite.All"))],
+    _actor: Annotated[User, Security(require_global("roles.manage_all"))],
 ) -> None:
-    """Delete a global role assignment by identifier."""
-
+    service = RbacService(session=session)
     try:
-        await delete_role_assignment(
-            session=session,
+        await service.delete_assignment(
             assignment_id=assignment_id,
             scope_type=ScopeType.GLOBAL,
             scope_id=None,
         )
-    except RoleAssignmentNotFoundError as exc:
+    except AssignmentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScopeMismatchError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
 @router.get(
@@ -713,7 +460,6 @@ async def delete_global_role_assignment(
 )
 async def list_workspace_role_assignments(
     workspace_id: Annotated[str, Path(..., min_length=1)],
-    principal_id: Annotated[str | None, Query(min_length=1)] = None,
     user_id: Annotated[str | None, Query(min_length=1)] = None,
     role_id: Annotated[str | None, Query(min_length=1)] = None,
     *,
@@ -722,51 +468,28 @@ async def list_workspace_role_assignments(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.Read"),
+            require_workspace("workspace.members.read"),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> RoleAssignmentPage:
-    """Return workspace role assignments filtered by optional identifiers."""
-
-    if principal_id and user_id:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Provide only one of principal_id or user_id",
-        )
-
-    principal_filter = await _resolve_principal_filter(
-        session=session, principal_id=principal_id, user_id=user_id
-    )
-
-    if user_id and principal_filter is None:
-        total = 0 if page.include_total else None
-        return RoleAssignmentPage(
-            items=[],
-            page=page.page,
-            page_size=page.page_size,
-            has_next=False,
-            has_previous=page.page > 1,
-            total=total,
-        )
-
-    assignments_page = await paginate_role_assignments(
-        session=session,
+    service = RbacService(session=session)
+    assignments = await service.list_assignments(
         scope_type=ScopeType.WORKSPACE,
         scope_id=workspace_id,
-        principal_id=principal_filter,
+        user_id=user_id,
         role_id=role_id,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
     )
     return RoleAssignmentPage(
-        items=[_serialize_assignment(assignment) for assignment in assignments_page.items],
-        page=assignments_page.page,
-        page_size=assignments_page.page_size,
-        has_next=assignments_page.has_next,
-        has_previous=assignments_page.has_previous,
-        total=assignments_page.total,
+        items=[_serialize_assignment(item) for item in assignments.items],
+        page=assignments.page,
+        page_size=assignments.page_size,
+        has_next=assignments.has_next,
+        has_previous=assignments.has_previous,
+        total=assignments.total,
     )
 
 
@@ -774,8 +497,8 @@ async def list_workspace_role_assignments(
     "/workspaces/{workspace_id}/role-assignments",
     response_model=RoleAssignmentOut,
     response_model_exclude_none=True,
-    status_code=status.HTTP_200_OK,
-    summary="Assign a workspace role to a principal",
+    status_code=status.HTTP_201_CREATED,
+    summary="Assign a workspace role to a user",
     dependencies=[Security(require_csrf)],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -785,74 +508,44 @@ async def list_workspace_role_assignments(
             "description": "Caller lacks workspace membership management permission.",
         },
         status.HTTP_404_NOT_FOUND: {
-            "description": "Workspace, principal, or role not found.",
+            "description": "Workspace, user, or role not found.",
         },
         status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid role assignment payload.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Assignment already exists.",
         },
     },
 )
 async def create_workspace_role_assignment(
     payload: RoleAssignmentCreate,
-    response: Response,
     workspace_id: Annotated[str, Path(..., min_length=1)],
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.ReadWrite"),
+            require_workspace("workspace.members.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> RoleAssignmentOut:
-    """Create or return an existing workspace role assignment."""
-
-    principal_identifier = await _ensure_principal_identifier(
-        session=session,
-        principal_id=payload.principal_id,
-        user_id=payload.user_id,
-    )
-
-    existing = await get_role_assignment(
-        session=session,
-        principal_id=principal_identifier,
-        role_id=payload.role_id,
-        scope_type=ScopeType.WORKSPACE,
-        scope_id=workspace_id,
-    )
-    if existing is not None:
-        return _serialize_assignment(existing)
-
+    service = RbacService(session=session)
     try:
-        await assign_role(
-            session=session,
-            principal_id=principal_identifier,
+        assignment = await service.assign_role(
+            user_id=payload.user_id,
             role_id=payload.role_id,
             scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
-    except (PrincipalNotFoundError, RoleNotFoundError, WorkspaceNotFoundError) as exc:
+    except (RoleNotFoundError, AssignmentError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except RoleScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-    except RoleAssignmentError as exc:
+    except RoleConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ScopeMismatchError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
-    assignment = await get_role_assignment(
-        session=session,
-        principal_id=principal_identifier,
-        role_id=payload.role_id,
-        scope_type=ScopeType.WORKSPACE,
-        scope_id=workspace_id,
-    )
-    if assignment is None:  # pragma: no cover - defensive guard
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Role assignment could not be created",
-        )
-
-    response.status_code = status.HTTP_201_CREATED
     return _serialize_assignment(assignment)
 
 
@@ -881,22 +574,27 @@ async def delete_workspace_role_assignment(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.ReadWrite"),
+            require_workspace("workspace.members.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> None:
-    """Delete a workspace role assignment by identifier."""
-
+    service = RbacService(session=session)
     try:
-        await delete_role_assignment(
-            session=session,
+        await service.delete_assignment(
             assignment_id=assignment_id,
             scope_type=ScopeType.WORKSPACE,
             scope_id=workspace_id,
         )
-    except RoleAssignmentNotFoundError as exc:
+    except AssignmentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ScopeMismatchError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Permission catalog + evaluation
+# ---------------------------------------------------------------------------
 
 
 @router.get(
@@ -914,7 +612,7 @@ async def delete_workspace_role_assignment(
 )
 async def list_permissions(
     scope: Annotated[
-        PermissionScope,
+        ScopeType,
         Query(
             description="Permission scope to list",
             examples={"default": {"value": ScopeType.WORKSPACE.value}},
@@ -934,28 +632,22 @@ async def list_permissions(
         User,
         Security(
             require_permissions_catalog_access(
-                global_permission="Roles.Read.All",
-                workspace_permission="Workspace.Roles.Read",
+                global_permission="roles.read_all",
+                workspace_permission="workspace.roles.read",
             ),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> PermissionPage:
-    """Return permission registry entries filtered by ``scope``."""
-
     if scope == ScopeType.WORKSPACE and workspace_id is not None:
-        service = WorkspacesService(session=session)
-        await service.get_workspace_profile(user=actor, workspace_id=workspace_id)
+        workspaces = WorkspacesService(session=session)
+        await workspaces.get_workspace_profile(user=actor, workspace_id=workspace_id)
 
-    stmt = (
-        select(Permission)
-        .where(Permission.scope_type == scope)
-        .order_by(Permission.key)
-    )
-    result = await session.execute(stmt)
-    permissions = [PermissionOut.model_validate(p) for p in result.scalars().all()]
+    service = RbacService(session=session)
+    permissions = await service.list_permissions(scope=scope)
+    permission_out = [PermissionOut.model_validate(p) for p in permissions]
     page_result = paginate_sequence(
-        permissions,
+        permission_out,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
@@ -991,23 +683,18 @@ async def read_effective_permissions(
     *,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> EffectivePermissionsResponse:
-    """Return global and optional workspace permissions for the active user."""
+    service = RbacService(session=session)
 
-    user = identity.user
-    principal = identity.principal
-
-    global_permissions = await get_global_permissions_for_principal(
-        session=session,
-        principal=principal,
+    global_permissions = await service.get_global_permissions_for_user(
+        user=identity.user,
     )
     workspace_permissions: frozenset[str] = frozenset()
 
     if workspace_id is not None:
         workspaces = WorkspacesService(session=session)
-        await workspaces.get_workspace_profile(user=user, workspace_id=workspace_id)
-        workspace_permissions = await get_workspace_permissions_for_principal(
-            session=session,
-            principal=principal,
+        await workspaces.get_workspace_profile(user=identity.user, workspace_id=workspace_id)
+        workspace_permissions = await service.get_workspace_permissions_for_user(
+            user=identity.user,
             workspace_id=workspace_id,
         )
 
@@ -1042,18 +729,16 @@ async def check_permissions(
     identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> PermissionCheckResponse:
-    """Return a permission map describing whether the caller has each key."""
-
     try:
         keys = collect_permission_keys(payload.permissions)
-    except AuthorizationError as exc:  # pragma: no cover - defensive guard
+    except AuthorizationError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
     requires_workspace = any(
-        PERMISSION_REGISTRY[key].scope == ScopeType.WORKSPACE for key in keys
+        PERMISSION_REGISTRY[key].scope_type == ScopeType.WORKSPACE for key in keys
     )
     workspace_permissions: frozenset[str] = frozenset()
     workspace_id = payload.workspace_id
@@ -1064,30 +749,27 @@ async def check_permissions(
             detail="workspace_id is required when checking workspace permissions",
         )
 
-    user = identity.user
-    principal = identity.principal
+    service = RbacService(session=session)
 
     if workspace_id is not None:
         workspaces = WorkspacesService(session=session)
-        await workspaces.get_workspace_profile(user=user, workspace_id=workspace_id)
-        workspace_permissions = await get_workspace_permissions_for_principal(
-            session=session,
-            principal=principal,
+        await workspaces.get_workspace_profile(user=identity.user, workspace_id=workspace_id)
+        workspace_permissions = await service.get_workspace_permissions_for_user(
+            user=identity.user,
             workspace_id=workspace_id,
         )
 
-    global_permissions = await get_global_permissions_for_principal(
-        session=session,
-        principal=principal,
+    global_permissions = await service.get_global_permissions_for_user(
+        user=identity.user,
     )
 
     results: dict[str, bool] = {}
     for key in keys:
         definition = PERMISSION_REGISTRY[key]
-        if definition.scope == ScopeType.GLOBAL:
+        if definition.scope_type == ScopeType.GLOBAL:
             results[key] = key in global_permissions
         else:
-            results[key] = key in workspace_permissions
+            results[key] = key in workspace_permissions or "workspaces.manage_all" in global_permissions
 
     return PermissionCheckResponse(results=results)
 

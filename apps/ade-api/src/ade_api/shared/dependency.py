@@ -20,13 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.features.auth.security import TokenPayload
 from ade_api.features.auth.service import AuthenticatedIdentity, AuthService
-from ade_api.features.roles.authorization import authorize
-from ade_api.features.roles.models import ScopeType
-from ade_api.features.roles.service import (
-    ensure_user_principal,
-    get_global_permissions_for_principal,
-    get_workspace_permissions_for_principal,
-)
+from ade_api.features.roles import RbacService, ScopeType
 from ade_api.features.runs.event_dispatcher import RunEventDispatcher, RunEventStorage
 from ade_api.features.runs.supervisor import RunExecutionSupervisor
 from ade_api.features.users.models import User
@@ -245,10 +239,8 @@ async def get_current_identity(
         source: Literal["bearer_token", "session_cookie"],
     ) -> AuthenticatedIdentity:
         user = await service.resolve_user(payload)
-        principal = await ensure_user_principal(session=session, user=user)
         identity = AuthenticatedIdentity(
             user=user,
-            principal=principal,
             credentials=source,
         )
         _IDENTITY_CTX.set(identity)
@@ -338,10 +330,8 @@ def require_global(
         cached = _PERMISSIONS_CTX.get() or {}
         perms = cached.get("global")
         if perms is None:
-            perms = await get_global_permissions_for_principal(
-                session=session,
-                principal=identity.principal,
-            )
+            service = RbacService(session=session)
+            perms = await service.get_global_permissions_for_user(user=identity.user)
             next_cache = dict(cached)
             next_cache["global"] = perms
             _PERMISSIONS_CTX.set(next_cache)
@@ -381,9 +371,9 @@ def require_workspace(
         workspace_cache = cache.get("workspace", {})
         perms = workspace_cache.get(workspace_id)
         if perms is None:
-            perms = await get_workspace_permissions_for_principal(
-                session=session,
-                principal=identity.principal,
+            service = RbacService(session=session)
+            perms = await service.get_workspace_permissions_for_user(
+                user=identity.user,
                 workspace_id=workspace_id,
             )
             workspace_cache = dict(workspace_cache)
@@ -404,8 +394,8 @@ def require_workspace(
 
 def require_permissions_catalog_access(
     *,
-    global_permission: str = "Roles.Read.All",
-    workspace_permission: str = "Workspace.Roles.Read",
+    global_permission: str = "roles.read_all",
+    workspace_permission: str = "workspace.roles.read",
     workspace_param: str = "workspace_id",
 ) -> Callable[
     [Request, SecurityScopes, str, str | None, AuthenticatedIdentity, AsyncSession],
@@ -423,12 +413,12 @@ def require_permissions_catalog_access(
     ) -> User:
         if _is_dev_identity(identity):
             return identity.user
+        service = RbacService(session=session)
         if scope == ScopeType.GLOBAL:
-            decision = await authorize(
-                session=session,
-                principal_id=str(identity.principal.id),
+            decision = await service.authorize(
+                user=identity.user,
                 permission_key=global_permission,
-                scope_type=ScopeType.GLOBAL,
+                workspace_id=None,
             )
             if not decision.is_authorized:
                 raise forbidden_response(
@@ -444,12 +434,10 @@ def require_permissions_catalog_access(
             default_param=workspace_param,
             permission=workspace_permission,
         )
-        decision = await authorize(
-            session=session,
-            principal_id=str(identity.principal.id),
+        decision = await service.authorize(
+            user=identity.user,
             permission_key=workspace_permission,
-            scope_type=ScopeType.WORKSPACE,
-            scope_id=candidate,
+            workspace_id=candidate,
         )
         if not decision.is_authorized:
             raise forbidden_response(

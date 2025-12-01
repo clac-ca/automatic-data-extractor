@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from ade_api.shared.core.ids import ULIDStr
+from ade_api.shared.core.ids import UUIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
@@ -30,7 +30,7 @@ class ConfigSourceClone(BaseSchema):
     """Reference to an existing workspace config."""
 
     type: Literal["clone"]
-    configuration_id: ULIDStr
+    configuration_id: UUIDStr
 
     @field_validator("configuration_id", mode="before")
     @classmethod
@@ -59,8 +59,8 @@ class ConfigurationCreate(BaseSchema):
 class ConfigurationRecord(BaseSchema):
     """Serialized configuration metadata."""
 
-    id: ULIDStr
-    workspace_id: ULIDStr
+    id: UUIDStr
+    workspace_id: UUIDStr
     display_name: str
     status: ConfigurationStatus
     content_digest: str | None = None
@@ -83,8 +83,8 @@ class ConfigurationPage(Page[ConfigurationRecord]):
 class ConfigurationValidateResponse(BaseSchema):
     """Result of running validation."""
 
-    id: ULIDStr
-    workspace_id: ULIDStr
+    id: UUIDStr
+    workspace_id: UUIDStr
     status: ConfigurationStatus
     content_digest: str | None = None
     issues: list[ConfigValidationIssue]
@@ -139,8 +139,8 @@ class FileEntry(BaseSchema):
 
 
 class FileListing(BaseSchema):
-    workspace_id: ULIDStr
-    configuration_id: ULIDStr
+    workspace_id: UUIDStr
+    configuration_id: UUIDStr
     status: ConfigurationStatus
     capabilities: FileCapabilities
     root: str
