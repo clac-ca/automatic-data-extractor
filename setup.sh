@@ -1,8 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Create and activate virtual environment
-python3 -m venv .venv
+# Create and activate virtual environment (Python 3.14)
+python -m venv .venv
 source .venv/bin/activate
 
 # Install backend packages

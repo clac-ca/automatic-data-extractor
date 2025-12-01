@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ade-engine"
 version = "0.2.0"
 description = "ADE engine runtime package (scaffold)."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 readme = { text = "Placeholder runtime package; implementation forthcoming.", content-type = "text/plain" }
 license = { text = "Proprietary" }
 dependencies = [

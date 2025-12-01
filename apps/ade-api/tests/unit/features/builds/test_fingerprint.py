@@ -6,7 +6,7 @@ def test_fingerprint_stable_for_same_inputs() -> None:
         config_digest="abc123",
         engine_spec="apps/ade-engine",
         engine_version="1.0.0",
-        python_version="3.12.1",
+        python_version="3.14.0",
         python_bin="/usr/bin/python3",
         extra={"flag": True},
     )
@@ -21,7 +21,7 @@ def test_fingerprint_changes_when_inputs_change() -> None:
         config_digest="abc123",
         engine_spec="apps/ade-engine",
         engine_version="1.0.0",
-        python_version="3.12.1",
+        python_version="3.14.0",
         python_bin="/usr/bin/python3",
         extra={"flag": True},
     )

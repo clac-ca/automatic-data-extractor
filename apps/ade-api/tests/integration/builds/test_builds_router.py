@@ -125,7 +125,7 @@ async def test_stream_build_emits_events_and_logs(
         BuilderLogEvent(message="install log"),
         BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install engine"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.11.8", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
         ),
     ]
 
@@ -201,7 +201,7 @@ async def test_background_build_executes_to_completion(
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderLogEvent(message="background log"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.11.8", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
         ),
     ]
 
