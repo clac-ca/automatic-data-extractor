@@ -449,7 +449,7 @@ async def create_api_key(
     payload: APIKeyIssueRequest,
     _admin: Annotated[
         User,
-        Security(require_global("System.Settings.ReadWrite")),
+        Security(require_global("system.settings.manage")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -501,7 +501,7 @@ async def create_api_key(
 async def list_api_keys(
     _admin: Annotated[
         User,
-        Security(require_global("System.Settings.ReadWrite")),
+        Security(require_global("system.settings.manage")),
     ],
     page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -551,7 +551,7 @@ async def revoke_api_key(
     api_key_id: str,
     _admin: Annotated[
         User,
-        Security(require_global("System.Settings.ReadWrite")),
+        Security(require_global("system.settings.manage")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],

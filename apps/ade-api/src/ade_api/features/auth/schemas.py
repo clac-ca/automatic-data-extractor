@@ -8,7 +8,7 @@ from typing import Literal
 from email_validator import EmailNotValidError, validate_email
 from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 
-from ade_api.shared.core.ids import ULIDStr
+from ade_api.shared.core.ids import UUIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
@@ -140,7 +140,7 @@ class ProviderDiscoveryResponse(BaseSchema):
 class APIKeyIssueRequest(BaseSchema):
     """Payload for issuing a new API key."""
 
-    user_id: ULIDStr | None = Field(default=None)
+    user_id: UUIDStr | None = Field(default=None)
     email: str | None = None
     expires_in_days: int | None = Field(default=None, ge=1, le=3650)
     label: str | None = Field(default=None, max_length=100)
@@ -168,7 +168,7 @@ class APIKeyIssueResponse(BaseSchema):
 
     api_key: str
     principal_type: Literal["user", "service_account"]
-    principal_id: ULIDStr
+    principal_id: UUIDStr
     principal_label: str
     expires_at: datetime | None = None
     label: str | None = None
@@ -177,9 +177,9 @@ class APIKeyIssueResponse(BaseSchema):
 class APIKeySummary(BaseSchema):
     """Metadata describing an issued API key."""
 
-    id: ULIDStr
+    id: UUIDStr
     principal_type: Literal["user", "service_account"]
-    principal_id: ULIDStr
+    principal_id: UUIDStr
     principal_label: str
     token_prefix: str
     label: str | None = None

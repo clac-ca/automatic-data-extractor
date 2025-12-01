@@ -39,7 +39,6 @@ from .schemas import (
     RunCreateRequest,
     RunEventsPage,
     RunFilters,
-    RunLogsResponse,
     RunOutputFile,
     RunOutputListing,
     RunPage,
@@ -285,19 +284,6 @@ async def get_run_events_endpoint(
         items=events,
         next_after_sequence=next_after_sequence,
     )
-
-
-@router.get("/runs/{run_id}/logs", response_model=RunLogsResponse)
-async def get_run_logs_endpoint(
-    run_id: Annotated[str, Path(min_length=1, description="Run identifier")],
-    after_id: int | None = Query(default=None, ge=0),
-    limit: int = Query(default=DEFAULT_STREAM_LIMIT, ge=1, le=DEFAULT_STREAM_LIMIT),
-    service: RunsService = runs_service_dependency,
-) -> RunLogsResponse:
-    run = await service.get_run(run_id)
-    if run is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return await service.get_logs(run_id=run_id, after_id=after_id, limit=limit)
 
 
 @router.get(

@@ -47,7 +47,7 @@ async def read_safe_mode(
 async def update_safe_mode(
     payload: SafeModeUpdateRequest,
     service: Annotated[SafeModeService, Depends(get_safe_mode_service)],
-    _actor: Annotated[object, Security(require_global("System.Settings.ReadWrite"))],
+    _actor: Annotated[object, Security(require_global("system.settings.manage"))],
 ) -> SafeModeStatus:
     """Persist and broadcast an updated ADE safe mode state."""
 

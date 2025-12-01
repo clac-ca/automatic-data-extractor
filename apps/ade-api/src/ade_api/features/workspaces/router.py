@@ -16,9 +16,10 @@ from ade_api.shared.dependency import (
 )
 from ade_api.shared.pagination import PageParams, paginate_sequence
 
-from ..roles.models import Role, ScopeType
+from ..roles import ScopeType
+from ..roles.models import Role
 from ..roles.schemas import RoleCreate, RoleOut, RolePage, RoleUpdate
-from ..roles.service import paginate_roles
+from ..roles.service import RbacService
 from ..users.models import User
 from .schemas import (
     WorkspaceCreate,
@@ -47,15 +48,15 @@ def _serialize_role(role: Role) -> RoleOut:
         slug=role.slug,
         name=role.name,
         description=role.description,
-        scope_type=role.scope_type,
-        scope_id=role.scope_id,
         permissions=[
             permission.permission.key
             for permission in role.permissions
             if permission.permission is not None
         ],
-        built_in=role.built_in,
-        editable=role.editable,
+        is_system=role.is_system,
+        is_editable=role.is_editable,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
     )
 
 
@@ -87,7 +88,7 @@ def _serialize_role(role: Role) -> RoleOut:
 async def create_workspace(
     admin_user: Annotated[
         User,
-        Security(require_global("Workspaces.Create")),
+        Security(require_global("workspaces.create")),
     ],
     session: Annotated[AsyncSession, Depends(get_session)],
     *,
@@ -157,7 +158,7 @@ async def read_workspace(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Read"),
+            require_workspace("workspace.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -185,7 +186,7 @@ async def list_members(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.Read"),
+            require_workspace("workspace.members.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -224,17 +225,16 @@ async def list_workspace_roles(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Roles.Read"),
+            require_workspace("workspace.roles.read"),
             scopes=["{workspace_id}"],
         ),
     ],
     page: Annotated[PageParams, Depends()],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> RolePage:
-    role_page = await paginate_roles(
-        session=session,
-        scope_type=ScopeType.WORKSPACE,
-        scope_id=workspace.id,
+    rbac = RbacService(session=session)
+    role_page = await rbac.list_roles_for_scope(
+        scope=ScopeType.WORKSPACE,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
@@ -278,7 +278,7 @@ async def create_workspace_role(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Roles.ReadWrite"),
+            require_workspace("workspace.roles.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -326,7 +326,7 @@ async def update_workspace_role(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Roles.ReadWrite"),
+            require_workspace("workspace.roles.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -372,7 +372,7 @@ async def delete_workspace_role(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Roles.ReadWrite"),
+            require_workspace("workspace.roles.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -412,7 +412,7 @@ async def add_member(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.ReadWrite"),
+            require_workspace("workspace.members.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -459,7 +459,7 @@ async def update_workspace(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Settings.ReadWrite"),
+            require_workspace("workspace.settings.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -501,7 +501,7 @@ async def delete_workspace(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Delete"),
+            require_workspace("workspace.delete"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -539,7 +539,7 @@ async def update_member(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.ReadWrite"),
+            require_workspace("workspace.members.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -583,7 +583,7 @@ async def remove_member(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Members.ReadWrite"),
+            require_workspace("workspace.members.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -617,7 +617,7 @@ async def set_default_workspace(
     actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Read"),
+            require_workspace("workspace.read"),
             scopes=["{workspace_id}"],
         ),
     ],

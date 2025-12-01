@@ -46,7 +46,11 @@ function WorkspaceCreateContent() {
   const workspacesQuery = useWorkspacesQuery();
   const createWorkspace = useCreateWorkspaceMutation();
 
-  const canSelectOwner = session.user.permissions?.includes("Users.Read.All") ?? false;
+  const normalizedPermissions = useMemo(
+    () => (session.user.permissions ?? []).map((key) => key.toLowerCase()),
+    [session.user.permissions],
+  );
+  const canSelectOwner = normalizedPermissions.includes("users.read_all");
   const usersQuery = useUsersQuery({ enabled: canSelectOwner, pageSize: 50 });
   const ownerOptions = useMemo<UserSummary[]>(() => usersQuery.users, [usersQuery.users]);
   const filteredOwnerOptions = useMemo(() => {

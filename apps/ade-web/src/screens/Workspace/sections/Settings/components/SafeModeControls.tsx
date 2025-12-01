@@ -25,8 +25,8 @@ export function SafeModeControls() {
   }, [currentStatus?.detail]);
 
   const canManageSafeMode = useMemo(() => {
-    const permissions = session.user.permissions ?? [];
-    return permissions.includes("System.Settings.ReadWrite");
+    const permissions = (session.user.permissions ?? []).map((key) => key.toLowerCase());
+    return permissions.includes("system.settings.manage");
   }, [session.user.permissions]);
 
   const isPending = safeModeStatus.isFetching || updateSafeMode.isPending;
@@ -59,7 +59,7 @@ export function SafeModeControls() {
 
       {!canManageSafeMode ? (
         <Alert tone="warning">
-          You need the <strong>System.Settings.ReadWrite</strong> permission to change safe mode.
+          You need the <strong>system.settings.manage</strong> permission to change safe mode.
         </Alert>
       ) : null}
 

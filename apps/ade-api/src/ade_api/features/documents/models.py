@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 from ade_api.shared.db.enums import enum_values
 
 from ..users.models import User
@@ -37,12 +38,12 @@ DOCUMENT_STATUS_VALUES = tuple(status.value for status in DocumentStatus)
 DOCUMENT_SOURCE_VALUES = tuple(source.value for source in DocumentSource)
 
 
-class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Uploaded document metadata with deterministic storage paths."""
 
     __tablename__ = "documents"
-    workspace_id: Mapped[str] = mapped_column(
-        String(26),
+    workspace_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -59,8 +60,8 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=dict,
     )
-    uploaded_by_user_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    uploaded_by_user_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     uploaded_by_user: Mapped[User | None] = relationship(
         "User",
@@ -96,8 +97,8 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_by_user_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    deleted_by_user_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     tags: Mapped[list[DocumentTag]] = relationship(
         "DocumentTag",
@@ -108,7 +109,7 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __table_args__ = (
         Index(
-            "documents_workspace_status_created_idx",
+            "ix_documents_workspace_status_created",
             "workspace_id",
             "status",
             "created_at",
@@ -123,18 +124,18 @@ class Document(ULIDPrimaryKeyMixin, TimestampMixin, Base):
             mssql_where=text("deleted_at IS NULL"),
         ),
         Index(
-            "documents_workspace_created_idx",
+            "ix_documents_workspace_created",
             "workspace_id",
             "created_at",
         ),
         Index(
-            "documents_workspace_last_run_idx",
+            "ix_documents_workspace_last_run",
             "workspace_id",
             "last_run_at",
         ),
-        Index("documents_workspace_source_idx", "workspace_id", "source"),
+        Index("ix_documents_workspace_source", "workspace_id", "source"),
         Index(
-            "documents_workspace_uploader_idx", "workspace_id", "uploaded_by_user_id"
+            "ix_documents_workspace_uploader", "workspace_id", "uploaded_by_user_id"
         ),
     )
 
@@ -150,8 +151,8 @@ class DocumentTag(Base):
 
     __tablename__ = "document_tags"
 
-    document_id: Mapped[str] = mapped_column(
-        String(26),
+    document_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
         ForeignKey("documents.id", ondelete="CASCADE"),
         primary_key=True,
     )

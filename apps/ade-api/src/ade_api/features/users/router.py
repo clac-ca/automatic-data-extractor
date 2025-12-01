@@ -54,7 +54,7 @@ async def read_me(
     response_model_exclude_none=True,
 )
 async def list_users(
-    _: Annotated[User, Security(require_global("Users.Read.All"))],
+    _: Annotated[User, Security(require_global("users.read_all"))],
     page: Annotated[PageParams, Depends()],
     filters: Annotated[UserFilters, Depends()],
     order_by: Annotated[OrderBy, Depends(get_sort_order)],

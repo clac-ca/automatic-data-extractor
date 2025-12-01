@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ade_api.shared.db import Base
+from ade_api.shared.db import Base, UUIDPrimaryKeyMixin, UUIDType
 from ade_api.shared.db.enums import enum_values
-from ade_api.shared.db.mixins import TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db.mixins import TimestampMixin
 
 
 class ConfigurationStatus(str, Enum):
@@ -23,13 +24,13 @@ class ConfigurationStatus(str, Enum):
     INACTIVE = "inactive"
 
 
-class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Workspace-owned configuration package metadata."""
 
     __tablename__ = "configurations"
 
-    workspace_id: Mapped[str] = mapped_column(
-        String(26),
+    workspace_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -44,6 +45,7 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
         nullable=False,
         default=ConfigurationStatus.DRAFT,
+        server_default=ConfigurationStatus.DRAFT.value,
     )
     content_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -51,8 +53,8 @@ class Configuration(ULIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
-    active_build_id: Mapped[str | None] = mapped_column(
-        String(40),
+    active_build_id: Mapped[UUID | None] = mapped_column(
+        UUIDType(),
         ForeignKey("builds.id", ondelete="SET NULL"),
         nullable=True,
     )

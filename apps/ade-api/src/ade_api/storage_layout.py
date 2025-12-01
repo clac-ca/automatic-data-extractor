@@ -19,8 +19,8 @@ __all__ = [
 ]
 
 
-def _workspace_base(root: Path, workspace_id: str) -> Path:
-    return Path(root) / workspace_id
+def _workspace_base(root: Path, workspace_id: str | object) -> Path:
+    return Path(root) / str(workspace_id)
 
 
 def workspace_root(settings: Settings, workspace_id: str) -> Path:
@@ -37,7 +37,7 @@ def workspace_config_root(
     """Path to a workspace's config packages root or a specific config."""
 
     root = _workspace_base(settings.configs_dir, workspace_id) / "config_packages"
-    return root if configuration_id is None else root / configuration_id
+    return root if configuration_id is None else root / str(configuration_id)
 
 
 def workspace_run_root(
@@ -48,7 +48,7 @@ def workspace_run_root(
     """Path to a workspace's runs root or a specific run directory."""
 
     root = _workspace_base(settings.runs_dir, workspace_id) / "runs"
-    return root if run_id is None else root / run_id
+    return root if run_id is None else root / str(run_id)
 
 
 def workspace_documents_root(settings: Settings, workspace_id: str) -> Path:
@@ -71,7 +71,7 @@ def build_venv_root(
 ) -> Path:
     """Root folder reserved for a specific build."""
 
-    return workspace_venvs_root(settings, workspace_id) / configuration_id / build_id
+    return workspace_venvs_root(settings, workspace_id) / str(configuration_id) / str(build_id)
 
 
 def build_venv_path(

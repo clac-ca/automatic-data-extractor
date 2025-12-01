@@ -26,8 +26,13 @@ function WorkspacesIndexContent() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
-  const userPermissions = session.user.permissions ?? [];
-  const canCreateWorkspace = userPermissions.includes("Workspaces.Create");
+  const normalizedPermissions = useMemo(
+    () => (session.user.permissions ?? []).map((key) => key.toLowerCase()),
+    [session.user.permissions],
+  );
+  const canCreateWorkspace =
+    normalizedPermissions.includes("workspaces.create") ||
+    normalizedPermissions.includes("workspaces.manage_all");
   const [searchQuery, setSearchQuery] = useState("");
   const shortcutHint = useShortcutHint();
   const workspacesPage = workspacesQuery.data;

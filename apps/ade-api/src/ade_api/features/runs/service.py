@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+import uuid
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -53,15 +53,13 @@ from ade_api.storage_layout import (
 )
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
-from .models import Run, RunLog, RunLogStream, RunStatus
+from .models import Run, RunStatus
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
     RunCreateOptions,
     RunInput,
     RunLinks,
-    RunLogEntry,
-    RunLogsResponse,
     RunOutput,
     RunResource,
 )
@@ -139,11 +137,11 @@ class RunExecutionContext:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "run_id": self.run_id,
-            "configuration_id": self.configuration_id,
-            "workspace_id": self.workspace_id,
+            "run_id": str(self.run_id),
+            "configuration_id": str(self.configuration_id),
+            "workspace_id": str(self.workspace_id),
             "venv_path": self.venv_path,
-            "build_id": self.build_id,
+            "build_id": str(self.build_id),
             "runs_dir": self.runs_dir or "",
             "build_context": self.build_context.as_dict() if self.build_context else None,
         }
@@ -446,7 +444,16 @@ class RunsService:
                 error_message = build.error_message or (
                     f"Configuration {build.configuration_id} build failed"
                 )
-                await self._append_log(run.id, error_message, stream="stderr")
+                yield await self._emit_api_event(
+                    run=run,
+                    type_="console.line",
+                    payload=ConsoleLinePayload(
+                        scope="run",
+                        stream="stderr",
+                        level="error",
+                        message=error_message,
+                    ),
+                )
                 run_dir = self._run_dir_for_run(
                     workspace_id=run.workspace_id,
                     run_id=run.id,
@@ -478,7 +485,6 @@ class RunsService:
 
             venv_path = await self._builds_service.ensure_local_env(build=build)
             build_done_message = "Configuration build completed; starting ADE run."
-            await self._append_log(run.id, build_done_message, stream="stdout")
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
@@ -511,7 +517,6 @@ class RunsService:
         # Emit a one-time console banner describing the mode, if applicable.
         mode_message = self._format_mode_message(options)
         if mode_message:
-            await self._append_log(run.id, mode_message, stream="stdout")
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
@@ -570,7 +575,7 @@ class RunsService:
             yield event
 
     # --------------------------------------------------------------------- #
-    # Public read APIs (runs, summaries, events, logs, outputs)
+    # Public read APIs (runs, summaries, events, outputs)
     # --------------------------------------------------------------------- #
 
     async def get_run(self, run_id: str) -> Run | None:
@@ -836,45 +841,9 @@ class RunsService:
             self=base,
             summary=f"{base}/summary",
             events=f"{base}/events",
-            logs=f"{base}/logs",
             logfile=f"{base}/logfile",
             outputs=f"{base}/outputs",
         )
-
-    async def get_logs(
-        self,
-        *,
-        run_id: str,
-        after_id: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
-    ) -> RunLogsResponse:
-        """Return persisted log entries for ``run_id``."""
-
-        logger.debug(
-            "run.logs.list.start",
-            extra=log_context(run_id=run_id, after_id=after_id, limit=limit),
-        )
-        records = await self._runs.list_logs(
-            run_id=run_id,
-            after_id=after_id,
-            limit=limit,
-        )
-        entries = [self._log_to_entry(log) for log in records]
-        next_after = entries[-1].id if entries and len(entries) == limit else None
-        response = RunLogsResponse(
-            run_id=run_id,
-            entries=entries,
-            next_after_id=next_after,
-        )
-        logger.info(
-            "run.logs.list.success",
-            extra=log_context(
-                run_id=run_id,
-                count=len(entries),
-                next_after_id=response.next_after_id,
-            ),
-        )
-        return response
 
     async def get_logs_file_path(self, *, run_id: str) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
@@ -1435,7 +1404,7 @@ class RunsService:
             if context.runs_dir
             else workspace_run_root(self._settings, context.workspace_id)
         )
-        run_dir = runs_root / run.id
+        run_dir = runs_root / str(run.id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
@@ -1614,11 +1583,6 @@ class RunsService:
         )
 
         message = f"Safe mode enabled: {safe_mode.detail}"
-        await self._append_log(
-            run.id,
-            message,
-            stream="stdout",
-        )
         placeholder_summary = await self._build_placeholder_summary(
             run=run,
             status=RunStatus.SUCCEEDED,
@@ -1710,9 +1674,6 @@ class RunsService:
                 run.id,
                 generator=generator,
             ):
-                if isinstance(event, StdoutFrame):
-                    await self._append_log(run.id, event.message, stream=event.stream)
-                    continue
                 if isinstance(event, RunExecutionResult):
                     completion = await self._complete_run(
                         run,
@@ -1792,11 +1753,6 @@ class RunsService:
                     configuration_id=run.configuration_id,
                     run_id=run.id,
                 ),
-            )
-            await self._append_log(
-                run.id,
-                f"ADE run failed: {exc}",
-                stream="stderr",
             )
             placeholder_summary = await self._build_placeholder_summary(
                 run=run,
@@ -1996,31 +1952,6 @@ class RunsService:
         )
         return run
 
-    async def _append_log(
-        self,
-        run_id: str,
-        message: str,
-        *,
-        stream: RunLogStream | str,
-    ) -> RunLog:
-        try:
-            stream_value = stream if isinstance(stream, RunLogStream) else RunLogStream(stream)
-        except ValueError:
-            stream_value = RunLogStream.STDOUT
-        log = RunLog(run_id=run_id, message=message, stream=stream_value)
-        self._session.add(log)
-        await self._session.commit()
-        await self._session.refresh(log)
-        return log
-
-    def _log_to_entry(self, log: RunLog) -> RunLogEntry:
-        return RunLogEntry(
-            id=log.id,
-            created=self._epoch_seconds(log.created_at),
-            stream=log.stream,
-            message=log.message,
-        )
-
     @staticmethod
     def _resolve_python(venv_path: Path) -> Path:
         bin_dir = "Scripts" if os.name == "nt" else "bin"
@@ -2057,7 +1988,7 @@ class RunsService:
 
     def _run_dir_for_run(self, *, workspace_id: str, run_id: str) -> Path:
         root = workspace_run_root(self._settings, workspace_id).resolve()
-        candidate = (root / run_id).resolve()
+        candidate = (root / str(run_id)).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
@@ -2070,7 +2001,7 @@ class RunsService:
 
     @staticmethod
     def _generate_run_id() -> str:
-        return f"run_{uuid4().hex}"
+        return str(uuid.uuid7())
 
     @staticmethod
     def _epoch_seconds(dt: datetime | None) -> int | None:

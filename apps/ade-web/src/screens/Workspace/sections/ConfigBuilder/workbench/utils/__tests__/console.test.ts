@@ -67,7 +67,7 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.completed",
       created_at: "2024-01-01T00:00:30Z",
-      run_id: "run_123",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10",
       payload: { status: "failed", execution: { exit_code: 2 }, failure: { message: "Runtime error" } },
     };
     const line = describeRunEvent(event);
@@ -80,7 +80,7 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.completed",
       created_at: "2024-01-01T00:00:31Z",
-      run_id: "run_456",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d20",
       payload: { status: "succeeded", summary: { run: { status: "succeeded" } } },
     };
     const line = describeRunEvent(event);
@@ -92,7 +92,7 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.phase.started",
       created_at: new Date().toISOString(),
-      run_id: "run_123",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10",
       payload: { phase: "mapping", level: "warning" },
     };
     const line = describeRunEvent(event);

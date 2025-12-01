@@ -20,7 +20,7 @@ from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.users.models import User
 from ade_api.settings import Settings
 from ade_api.shared.core.logging import log_context
-from ade_api.shared.db import generate_ulid
+from ade_api.shared.core.ids import generate_uuid7
 from ade_api.shared.pagination import paginate_sql
 from ade_api.shared.sql import nulls_last
 from ade_api.shared.types import OrderBy
@@ -83,9 +83,9 @@ class DocumentsService:
         metadata_payload = dict(metadata or {})
         now = datetime.now(tz=UTC)
         expiration = self._resolve_expiration(expires_at, now)
-        document_id = generate_ulid()
+        document_id = generate_uuid7()
         storage = self._storage_for(workspace_id)
-        stored_uri = storage.make_stored_uri(document_id)
+        stored_uri = storage.make_stored_uri(str(document_id))
 
         if upload.file is None:  # pragma: no cover - UploadFile always supplies file
             raise RuntimeError("Upload stream is not available")
@@ -124,7 +124,7 @@ class DocumentsService:
             "document.create.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                document_id=document_id,
+                document_id=str(document_id),
                 user_id=actor_id,
                 content_type=document.content_type,
                 byte_size=document.byte_size,

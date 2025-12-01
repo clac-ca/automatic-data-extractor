@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 
 from ..users.models import User
 
 
-class APIKey(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class APIKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Stored representation of an issued API key secret."""
 
     __tablename__ = "api_keys"
 
-    user_id: Mapped[str] = mapped_column(
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )

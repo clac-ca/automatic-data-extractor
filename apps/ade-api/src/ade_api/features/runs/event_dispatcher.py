@@ -11,7 +11,7 @@ from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
 
 from ade_api.settings import Settings
-from ade_api.shared.core.ids import generate_ulid
+from ade_api.shared.core.ids import generate_uuid7
 from ade_api.shared.core.time import utc_now
 from ade_api.storage_layout import workspace_run_root
 
@@ -117,7 +117,7 @@ class RunEventDispatcher:
         self,
         *,
         storage: RunEventStorage,
-        id_factory: Callable[[], str] = generate_ulid,
+        id_factory: Callable[[], str] = generate_uuid7,
     ) -> None:
         self.storage = storage
         self._id_factory = id_factory

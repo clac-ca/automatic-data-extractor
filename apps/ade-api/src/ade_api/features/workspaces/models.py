@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+from uuid import UUID
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, ForeignKey, String
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ade_api.shared.db import Base, TimestampMixin, ULIDPrimaryKeyMixin
+from ade_api.shared.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
 
 from ..users.models import User
 
 
-class Workspace(ULIDPrimaryKeyMixin, TimestampMixin, Base):
+class Workspace(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Container grouping documents and workspace members."""
 
     __tablename__ = "workspaces"
@@ -34,11 +35,11 @@ class WorkspaceMembership(TimestampMixin, Base):
     """Assignment of a user to a workspace with role/permission metadata."""
 
     __tablename__ = "workspace_memberships"
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    workspace_id: Mapped[str] = mapped_column(
-        ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    workspace_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")

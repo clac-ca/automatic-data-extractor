@@ -610,11 +610,12 @@ async def test_stream_run_safe_mode(
     assert run_payload["exit_code"] == 0
     assert run_payload["build_id"]
 
-    logs_response = await async_client.get(f"/api/v1/runs/{run_id}/logs")
-    assert logs_response.status_code == 200
-    logs_payload = logs_response.json()
-    messages = [entry["message"] for entry in logs_payload["entries"]]
-    assert any("safe mode" in message.lower() for message in messages)
+    console_messages = [
+        event["payload"]["message"]
+        for event in events
+        if event.get("type") == "console.line" and "payload" in event
+    ]
+    assert any("safe mode" in message.lower() for message in console_messages)
 
 
 async def test_stream_run_respects_persisted_safe_mode_override(
@@ -789,10 +790,8 @@ async def test_stream_run_processes_real_documents(
     )
     assert normalized is not None
 
-    logs_response = await async_client.get(f"/api/v1/runs/{run_id}/logs")
-    assert logs_response.status_code == 200
-    log_messages = [entry["message"] for entry in logs_response.json()["entries"]]
-    assert log_messages, "expected ADE engine logs to be persisted"
+    console_events = [event for event in events if event.get("type") == "console.line"]
+    assert console_events, "expected ADE engine logs to appear in the event stream"
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:

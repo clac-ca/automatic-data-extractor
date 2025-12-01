@@ -146,7 +146,7 @@ describe("RequireSession", () => {
         is_active: true,
         is_service_account: false,
         display_name: "Test User",
-        permissions: ["Workspaces.Create"],
+        permissions: ["workspaces.create"],
       },
       expires_at: new Date(Date.now() + 120_000).toISOString(),
       refresh_expires_at: new Date(Date.now() + 300_000).toISOString(),

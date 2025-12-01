@@ -9,7 +9,7 @@ from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
 from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
-from ade_api.shared.core.ids import ULIDStr
+from ade_api.shared.core.ids import UUIDStr
 from ade_api.shared.filters import FilterBase
 from ade_api.shared.validators import normalize_utc, parse_csv_or_repeated
 
@@ -49,7 +49,7 @@ class DocumentFilters(FilterBase):
         None,
         description="Restrict results to the literal 'me' to scope to the caller.",
     )
-    uploader_id_in: set[ULIDStr] | None = Field(
+    uploader_id_in: set[UUIDStr] | None = Field(
         None,
         alias="uploader_id_in",
         description="Filter by one or more uploader identifiers.",

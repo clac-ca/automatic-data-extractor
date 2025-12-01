@@ -118,10 +118,10 @@ class ConfigStorage:
     def workspace_root(self, workspace_id: str) -> Path:
         if self._settings is not None:
             return workspace_config_root(self._settings, workspace_id)
-        return self._configs_root / workspace_id / "config_packages"
+        return self._configs_root / str(workspace_id) / "config_packages"
 
     def config_path(self, workspace_id: str, configuration_id: str) -> Path:
-        return self.workspace_root(workspace_id) / configuration_id
+        return self.workspace_root(workspace_id) / str(configuration_id)
 
     async def materialize_from_template(
         self,
@@ -250,7 +250,7 @@ class ConfigStorage:
         configuration_id: str,
     ) -> None:
         workspace_root = self.workspace_root(workspace_id)
-        destination = workspace_root / configuration_id
+        destination = workspace_root / str(configuration_id)
         staging = workspace_root / f".staging-{configuration_id}-{secrets.token_hex(4)}"
 
         async def _copy_to_stage() -> None:

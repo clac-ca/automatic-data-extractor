@@ -9,10 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.roles.service import (
-    get_global_permissions_for_user,
-    get_global_role_slugs_for_user,
-)
+from ade_api.features.roles import RbacService
 from ade_api.shared.core.logging import log_context
 from ade_api.shared.pagination import paginate_sql
 from ade_api.shared.types import OrderBy
@@ -117,14 +114,9 @@ class UsersService:
             extra=log_context(user_id=str(user.id)),
         )
 
-        permissions = await get_global_permissions_for_user(
-            session=self._session,
-            user=user,
-        )
-        roles = await get_global_role_slugs_for_user(
-            session=self._session,
-            user=user,
-        )
+        rbac = RbacService(session=self._session)
+        permissions = await rbac.get_global_permissions_for_user(user=user)
+        roles = await rbac.get_global_role_slugs_for_user(user=user)
         return UserProfile(
             id=str(user.id),
             email=user.email,

@@ -625,7 +625,7 @@ Configuration Builder uses configuration‑scoped runs mainly for **validation**
 * ADE Web streams that run’s events into the workbench console via:
 
   ```text
-  GET /api/v1/runs/{run_id}/logs
+  GET /api/v1/runs/{run_id}/events?stream=true
   ```
 
 Semantics (status transitions, options, outputs) are identical to workspace runs; only the **entry point** and **visual context** differ. More detail lives in `09-workbench-editor-and-scripting.md`.
@@ -757,8 +757,8 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs/{output_path}`
   Download a single output file.
 
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs`
-  Run event stream (NDJSON preferred; log file is acceptable fallback).
+* `GET /api/v1/runs/{run_id}/events?stream=true`
+  Run event stream (NDJSON SSE; log file is acceptable fallback).
 
 ### 9.3 Configuration‑scoped runs
 
@@ -778,9 +778,6 @@ Used primarily by Configuration Builder:
 
 * `GET /api/v1/runs/{run_id}/outputs/{output_path}`
   Download a single output file.
-
-* `GET /api/v1/runs/{run_id}/logs`
-  NDJSON event stream.
 
 All run endpoints should share consistent `RunStatus` values and event semantics.
 

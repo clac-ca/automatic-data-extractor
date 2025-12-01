@@ -230,7 +230,7 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses the `builds` table (one queued/building row per config) to deduplicate concurrent requests**, and triggers the builder if needed.
 * **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
 * **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
-* **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream (the `build_logs` table remains for legacy migrations only).
+* **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream.
 
 ---
 

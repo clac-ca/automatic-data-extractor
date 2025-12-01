@@ -8,7 +8,7 @@ from .exceptions import (
 )
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildEvent, BuildResource
 from .service import BuildExecutionContext, BuildsService
-from .models import BuildLogStream, BuildStatus
+from .models import BuildStatus
 
 __all__ = [
     "BuildAlreadyInProgressError",
@@ -21,6 +21,5 @@ __all__ = [
     "BuildResource",
     "BuildEvent",
     "BuildStatus",
-    "BuildLogStream",
     "BuildsService",
 ]

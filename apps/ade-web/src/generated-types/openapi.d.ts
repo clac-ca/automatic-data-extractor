@@ -270,17 +270,11 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List global role definitions
-         * @description Return the catalog of global roles.
-         */
-        get: operations["list_global_roles_api_v1_roles_get"];
+        /** List role definitions */
+        get: operations["list_roles_api_v1_roles_get"];
         put?: never;
-        /**
-         * Create a global role
-         * @description Create a new global role definition.
-         */
-        post: operations["create_global_role_endpoint_api_v1_roles_post"];
+        /** Create a role */
+        post: operations["create_role_api_v1_roles_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -294,25 +288,16 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Retrieve a role definition
-         * @description Return a single role definition with permissions.
-         */
-        get: operations["read_role_detail_api_v1_roles__role_id__get"];
+        /** Retrieve a role definition */
+        get: operations["read_role_api_v1_roles__role_id__get"];
         put?: never;
         post?: never;
-        /**
-         * Delete a role
-         * @description Delete the specified role definition.
-         */
-        delete: operations["delete_role_definition_api_v1_roles__role_id__delete"];
+        /** Delete a role */
+        delete: operations["delete_role_api_v1_roles__role_id__delete"];
         options?: never;
         head?: never;
-        /**
-         * Update a role
-         * @description Update the specified role in its scope.
-         */
-        patch: operations["update_role_definition_api_v1_roles__role_id__patch"];
+        /** Update a role */
+        patch: operations["update_role_api_v1_roles__role_id__patch"];
         trace?: never;
     };
     "/api/v1/role-assignments": {
@@ -322,16 +307,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List global role assignments
-         * @description Return global role assignments filtered by optional identifiers.
-         */
+        /** List global role assignments */
         get: operations["list_global_role_assignments_api_v1_role_assignments_get"];
         put?: never;
-        /**
-         * Assign a global role to a principal
-         * @description Create or return an existing global role assignment.
-         */
+        /** Assign a global role to a user */
         post: operations["create_global_role_assignment_api_v1_role_assignments_post"];
         delete?: never;
         options?: never;
@@ -349,10 +328,7 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete a global role assignment
-         * @description Delete a global role assignment by identifier.
-         */
+        /** Delete a global role assignment */
         delete: operations["delete_global_role_assignment_api_v1_role_assignments__assignment_id__delete"];
         options?: never;
         head?: never;
@@ -366,16 +342,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List workspace role assignments
-         * @description Return workspace role assignments filtered by optional identifiers.
-         */
+        /** List workspace role assignments */
         get: operations["list_workspace_role_assignments_api_v1_workspaces__workspace_id__role_assignments_get"];
         put?: never;
-        /**
-         * Assign a workspace role to a principal
-         * @description Create or return an existing workspace role assignment.
-         */
+        /** Assign a workspace role to a user */
         post: operations["create_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments_post"];
         delete?: never;
         options?: never;
@@ -393,10 +363,7 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete a workspace role assignment
-         * @description Delete a workspace role assignment by identifier.
-         */
+        /** Delete a workspace role assignment */
         delete: operations["delete_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments__assignment_id__delete"];
         options?: never;
         head?: never;
@@ -410,10 +377,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List permission catalog entries
-         * @description Return permission registry entries filtered by ``scope``.
-         */
+        /** List permission catalog entries */
         get: operations["list_permissions_api_v1_permissions_get"];
         put?: never;
         post?: never;
@@ -430,10 +394,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Return the caller's effective permission set
-         * @description Return global and optional workspace permissions for the active user.
-         */
+        /** Return the caller's effective permission set */
         get: operations["read_effective_permissions_api_v1_me_permissions_get"];
         put?: never;
         post?: never;
@@ -452,10 +413,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /**
-         * Check whether the caller has specific permissions
-         * @description Return a permission map describing whether the caller has each key.
-         */
+        /** Check whether the caller has specific permissions */
         post: operations["check_permissions_api_v1_me_permissions_check_post"];
         delete?: never;
         options?: never;
@@ -973,23 +931,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run Logs Endpoint */
-        get: operations["get_run_logs_endpoint_api_v1_runs__run_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{run_id}/logfile": {
         parameters: {
             query?: never;
@@ -1097,7 +1038,8 @@ export type components = {
             principal_type: "user" | "service_account";
             /**
              * Principal Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             principal_id: string;
             /** Principal Label */
@@ -1132,7 +1074,8 @@ export type components = {
         APIKeySummary: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
@@ -1142,7 +1085,8 @@ export type components = {
             principal_type: "user" | "service_account";
             /**
              * Principal Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             principal_id: string;
             /** Principal Label */
@@ -1332,7 +1276,8 @@ export type components = {
             type: "clone";
             /**
              * Configuration Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
         };
@@ -1405,12 +1350,14 @@ export type components = {
         ConfigurationRecord: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /** Display Name */
@@ -1444,12 +1391,14 @@ export type components = {
         ConfigurationValidateResponse: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             status: components["schemas"]["ConfigurationStatus"];
@@ -1501,12 +1450,14 @@ export type components = {
         DocumentOut: {
             /**
              * Id
-             * @description Document ULID (26-character string).
+             * Format: uuid
+             * @description Document UUIDv7 (RFC 9562).
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /**
@@ -1606,10 +1557,7 @@ export type components = {
          * @enum {string}
          */
         DocumentStatus: "uploaded" | "processing" | "processed" | "failed" | "archived";
-        /**
-         * EffectivePermissionsResponse
-         * @description Effective permissions for the authenticated principal.
-         */
+        /** EffectivePermissionsResponse */
         EffectivePermissionsResponse: {
             /** Global Permissions */
             global_permissions?: string[];
@@ -1662,12 +1610,14 @@ export type components = {
         FileListing: {
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /**
              * Configuration Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
             status: components["schemas"]["ConfigurationStatus"];
@@ -1824,34 +1774,26 @@ export type components = {
              */
             password: string;
         };
-        /**
-         * PermissionCheckRequest
-         * @description Batch permission check payload.
-         */
+        /** PermissionCheckRequest */
         PermissionCheckRequest: {
             /** Permissions */
             permissions: string[];
             /** Workspace Id */
             workspace_id?: string | null;
         };
-        /**
-         * PermissionCheckResponse
-         * @description Result map produced by the batch permission check.
-         */
+        /** PermissionCheckResponse */
         PermissionCheckResponse: {
             /** Results */
             results?: {
                 [key: string]: boolean;
             };
         };
-        /**
-         * PermissionOut
-         * @description Serialized permission registry entry.
-         */
+        /** PermissionOut */
         PermissionOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Key */
@@ -1885,12 +1827,6 @@ export type components = {
             total?: number | null;
         };
         /**
-         * PrincipalType
-         * @description Kinds of principals that can hold assignments.
-         * @enum {string}
-         */
-        PrincipalType: "user";
-        /**
          * ProviderDiscoveryResponse
          * @description Response payload returned by `/auth/providers`.
          */
@@ -1900,46 +1836,39 @@ export type components = {
             /** Force Sso */
             force_sso: boolean;
         };
-        /**
-         * RoleAssignmentCreate
-         * @description Payload for creating a role assignment.
-         */
+        /** RoleAssignmentCreate */
         RoleAssignmentCreate: {
             /**
              * Role Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             role_id: string;
-            /** Principal Id */
-            principal_id?: string | null;
-            /** User Id */
-            user_id?: string | null;
+            /**
+             * User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            user_id: string;
         };
-        /**
-         * RoleAssignmentOut
-         * @description Serialized representation of a role assignment.
-         */
+        /** RoleAssignmentOut */
         RoleAssignmentOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
-             * Principal Id
-             * @description ULID (26-character string).
+             * User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
-            principal_id: string;
-            principal_type: components["schemas"]["PrincipalType"];
-            /** User Id */
-            user_id?: string | null;
-            /** User Email */
-            user_email?: string | null;
-            /** User Display Name */
-            user_display_name?: string | null;
+            user_id: string;
             /**
              * Role Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             role_id: string;
             /** Role Slug */
@@ -1971,10 +1900,7 @@ export type components = {
             /** Total */
             total?: number | null;
         };
-        /**
-         * RoleCreate
-         * @description Payload for creating a workspace or global role.
-         */
+        /** RoleCreate */
         RoleCreate: {
             /** Name */
             name: string;
@@ -1985,14 +1911,12 @@ export type components = {
             /** Permissions */
             permissions?: string[];
         };
-        /**
-         * RoleOut
-         * @description Serialized representation of a role definition.
-         */
+        /** RoleOut */
         RoleOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Slug */
@@ -2001,15 +1925,22 @@ export type components = {
             name: string;
             /** Description */
             description?: string | null;
-            scope_type: components["schemas"]["ScopeType"];
-            /** Scope Id */
-            scope_id?: string | null;
             /** Permissions */
             permissions: string[];
-            /** Built In */
-            built_in: boolean;
-            /** Editable */
-            editable: boolean;
+            /** Is System */
+            is_system: boolean;
+            /** Is Editable */
+            is_editable: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * RolePage
@@ -2029,10 +1960,7 @@ export type components = {
             /** Total */
             total?: number | null;
         };
-        /**
-         * RoleUpdate
-         * @description Payload for updating an existing role.
-         */
+        /** RoleUpdate */
         RoleUpdate: {
             /** Name */
             name: string;
@@ -2137,49 +2065,10 @@ export type components = {
             summary: string;
             /** Events */
             events: string;
-            /** Logs */
-            logs: string;
             /** Logfile */
             logfile: string;
             /** Outputs */
             outputs: string;
-        };
-        /**
-         * RunLogEntry
-         * @description Single run log entry returned by the logs endpoint.
-         */
-        RunLogEntry: {
-            /** Id */
-            id: number;
-            /** Created */
-            created: number;
-            stream: components["schemas"]["RunLogStream"];
-            /** Message */
-            message: string;
-        };
-        /**
-         * RunLogStream
-         * @description Streams captured while processing run output.
-         * @enum {string}
-         */
-        RunLogStream: "stdout" | "stderr";
-        /**
-         * RunLogsResponse
-         * @description Envelope for run log fetch responses.
-         */
-        RunLogsResponse: {
-            /** Run Id */
-            run_id: string;
-            /**
-             * Object
-             * @default ade.run.logs
-             * @constant
-             */
-            object: "ade.run.logs";
-            /** Entries */
-            entries: components["schemas"]["RunLogEntry"][];
-            /** Next After Id */
-            next_after_id?: number | null;
         };
         /**
          * RunOutput
@@ -2246,7 +2135,11 @@ export type components = {
          * @description API representation of a persisted ADE run.
          */
         RunResource: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             id: string;
             /**
              * Object
@@ -2254,9 +2147,17 @@ export type components = {
              * @constant
              */
             object: "ade.run";
-            /** Workspace Id */
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             workspace_id: string;
-            /** Configuration Id */
+            /**
+             * Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             configuration_id: string;
             /** Build Id */
             build_id?: string | null;
@@ -2515,7 +2416,7 @@ export type components = {
         };
         /**
          * ScopeType
-         * @description Scope dimensions supported by RBAC.
+         * @description Scopes supported by RBAC-aware resources.
          * @enum {string}
          */
         ScopeType: "global" | "workspace";
@@ -2569,7 +2470,8 @@ export type components = {
         UploaderOut: {
             /**
              * Id
-             * @description Uploader ULID (26-character string).
+             * Format: uuid
+             * @description Uploader UUID (RFC 9562 UUIDv7).
              */
             id: string;
             /**
@@ -2590,7 +2492,8 @@ export type components = {
         UserOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Email */
@@ -2643,7 +2546,8 @@ export type components = {
         UserProfile: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Email */
@@ -2693,7 +2597,8 @@ export type components = {
         WorkspaceDefaultSelectionOut: {
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /** Is Default */
@@ -2706,7 +2611,8 @@ export type components = {
         WorkspaceMemberCreate: {
             /**
              * User Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             user_id: string;
             /** Role Ids */
@@ -2719,12 +2625,14 @@ export type components = {
         WorkspaceMemberOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /** Roles */
@@ -2768,7 +2676,8 @@ export type components = {
         WorkspaceOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Name */
@@ -3441,10 +3350,10 @@ export interface operations {
             };
         };
     };
-    list_global_roles_api_v1_roles_get: {
+    list_roles_api_v1_roles_get: {
         parameters: {
             query?: {
-                /** @description Role scope to list (global only) */
+                /** @description Scope to filter roles by */
                 scope?: components["schemas"]["ScopeType"];
                 page?: number;
                 page_size?: number;
@@ -3472,7 +3381,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Caller lacks global role read permission. */
+            /** @description Caller lacks role read permission. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3490,12 +3399,9 @@ export interface operations {
             };
         };
     };
-    create_global_role_endpoint_api_v1_roles_post: {
+    create_role_api_v1_roles_post: {
         parameters: {
-            query?: {
-                /** @description Role scope to create (global only) */
-                scope?: components["schemas"]["ScopeType"];
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3522,7 +3428,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Caller lacks global role management permission. */
+            /** @description Caller lacks role management permission. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3545,7 +3451,7 @@ export interface operations {
             };
         };
     };
-    read_role_detail_api_v1_roles__role_id__get: {
+    read_role_api_v1_roles__role_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3597,7 +3503,7 @@ export interface operations {
             };
         };
     };
-    delete_role_definition_api_v1_roles__role_id__delete: {
+    delete_role_api_v1_roles__role_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -3643,7 +3549,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Role is still assigned to principals. */
+            /** @description Role is still assigned to users. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3661,7 +3567,7 @@ export interface operations {
             };
         };
     };
-    update_role_definition_api_v1_roles__role_id__patch: {
+    update_role_api_v1_roles__role_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -3732,7 +3638,6 @@ export interface operations {
     list_global_role_assignments_api_v1_role_assignments_get: {
         parameters: {
             query?: {
-                principal_id?: string | null;
                 user_id?: string | null;
                 role_id?: string | null;
                 page?: number;
@@ -3793,7 +3698,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3815,8 +3720,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Principal or role not found. */
+            /** @description User or role not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Assignment already exists. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3884,7 +3796,6 @@ export interface operations {
     list_workspace_role_assignments_api_v1_workspaces__workspace_id__role_assignments_get: {
         parameters: {
             query?: {
-                principal_id?: string | null;
                 user_id?: string | null;
                 role_id?: string | null;
                 page?: number;
@@ -3956,7 +3867,7 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3978,8 +3889,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Workspace, principal, or role not found. */
+            /** @description Workspace, user, or role not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Assignment already exists. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6185,41 +6103,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunEventsPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_run_logs_endpoint_api_v1_runs__run_id__logs_get: {
-        parameters: {
-            query?: {
-                after_id?: number | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunLogsResponse"];
                 };
             };
             /** @description Validation Error */

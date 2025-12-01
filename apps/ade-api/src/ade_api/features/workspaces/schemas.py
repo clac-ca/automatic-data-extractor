@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field
 
-from ade_api.shared.core.ids import ULIDStr
+from ade_api.shared.core.ids import UUIDStr
 from ade_api.shared.core.schema import BaseSchema
 from ade_api.shared.pagination import Page
 
@@ -16,7 +16,7 @@ from ..users.schemas import UserOut
 class WorkspaceOut(BaseSchema):
     """Workspace information decorated with membership metadata."""
 
-    id: ULIDStr
+    id: UUIDStr
     name: str
     slug: str
     roles: list[str]
@@ -29,7 +29,7 @@ class WorkspaceCreate(BaseSchema):
 
     name: str = Field(min_length=1, max_length=255)
     slug: str | None = Field(default=None, min_length=1, max_length=100)
-    owner_user_id: ULIDStr | None = Field(default=None, alias="owner_user_id")
+    owner_user_id: UUIDStr | None = Field(default=None, alias="owner_user_id")
     settings: dict[str, Any] | None = None
 
 
@@ -44,21 +44,21 @@ class WorkspaceUpdate(BaseSchema):
 class WorkspaceMemberCreate(BaseSchema):
     """Payload for adding a member to a workspace."""
 
-    user_id: ULIDStr
-    role_ids: list[ULIDStr] | None = Field(default=None, min_length=0)
+    user_id: UUIDStr
+    role_ids: list[UUIDStr] | None = Field(default=None, min_length=0)
 
 
 class WorkspaceMemberRolesUpdate(BaseSchema):
     """Payload used to replace the set of roles for a membership."""
 
-    role_ids: list[ULIDStr] = Field(default_factory=list)
+    role_ids: list[UUIDStr] = Field(default_factory=list)
 
 
 class WorkspaceMemberOut(BaseSchema):
     """Representation of a workspace membership."""
 
-    id: ULIDStr
-    workspace_id: ULIDStr
+    id: UUIDStr
+    workspace_id: UUIDStr
     roles: list[str]
     permissions: list[str]
     is_default: bool
@@ -68,7 +68,7 @@ class WorkspaceMemberOut(BaseSchema):
 class WorkspaceDefaultSelectionOut(BaseSchema):
     """Response indicating the caller's default workspace selection."""
 
-    workspace_id: ULIDStr
+    workspace_id: UUIDStr
     is_default: bool
 
 

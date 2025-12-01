@@ -32,7 +32,7 @@ type RoleFormValues = z.infer<typeof roleFormSchema>;
 
 export function WorkspaceRolesSection() {
   const { workspace, hasPermission } = useWorkspaceContext();
-  const canManageRoles = hasPermission("Workspace.Roles.ReadWrite");
+  const canManageRoles = hasPermission("workspace.roles.manage");
 
   const rolesQuery = useWorkspaceRolesQuery(workspace.id);
   const permissionsQuery = usePermissionsQuery();
