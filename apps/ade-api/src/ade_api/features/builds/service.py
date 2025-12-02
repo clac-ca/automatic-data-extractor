@@ -8,7 +8,7 @@ import logging
 import subprocess
 import sys
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +26,7 @@ from ade_engine.schemas import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import log_context
+from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
 from ade_api.core.models import Build, BuildStatus, Configuration
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
@@ -34,6 +35,7 @@ from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.infra.storage import build_venv_root
 from ade_api.settings import Settings
+from .event_dispatcher import BuildEventDispatcher, BuildEventLogReader, BuildEventStorage
 
 from .builder import (
     BuildArtifacts,
@@ -49,7 +51,7 @@ from .exceptions import (
     BuildWorkspaceMismatchError,
 )
 from .repository import BuildsRepository
-from .schemas import BuildCreateOptions, BuildResource
+from .schemas import BuildCreateOptions, BuildLinks, BuildResource
 
 __all__ = [
     "BuildExecutionContext",
@@ -59,7 +61,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_STREAM_LIMIT = 1000
+DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 
 @dataclass(slots=True, frozen=True)
@@ -127,6 +129,8 @@ class BuildsService:
         storage: ConfigStorage,
         builder: VirtualEnvironmentBuilder | None = None,
         now: callable[[], datetime] = utc_now,
+        event_dispatcher: BuildEventDispatcher | None = None,
+        event_storage: BuildEventStorage | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
@@ -136,6 +140,12 @@ class BuildsService:
         self._builds = BuildsRepository(session)
         self._now = now
         self._hydration_locks: dict[str, asyncio.Lock] = {}
+        if event_dispatcher and event_storage is None:
+            event_storage = event_dispatcher.storage
+        self._event_storage = event_storage or BuildEventStorage(settings=settings)
+        self._event_dispatcher = event_dispatcher or BuildEventDispatcher(
+            storage=self._event_storage
+        )
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -288,6 +298,14 @@ class BuildsService:
                 should_rebuild=True,
             ),
         )
+        await self._ensure_build_queued_event(
+            build=plan.build,
+            reason="force_rebuild" if options.force else "dirty_or_missing",
+            should_build=plan.context.should_run,
+            engine_spec=engine_spec,
+            engine_version_hint=engine_version_hint,
+            python_bin=python_interpreter,
+        )
         return plan.build, plan.context
 
     async def stream_build(
@@ -310,18 +328,16 @@ class BuildsService:
         build = await self._require_build(context.build_id)
         reason = "force_rebuild" if options.force else "dirty_or_missing"
 
-        yield self._ade_event(
+        queued_event = await self._ensure_build_queued_event(
             build=build,
-            type_="build.created",
-            payload={
-                "status": "queued",
-                "reason": reason,
-                "should_build": context.should_run,
-                "engine_spec": context.engine_spec,
-                "engine_version_hint": context.engine_version_hint,
-                "python_bin": context.python_bin,
-            },
+            reason=reason,
+            should_build=context.should_run,
+            engine_spec=context.engine_spec,
+            engine_version_hint=context.engine_version_hint,
+            python_bin=context.python_bin,
         )
+        if queued_event:
+            yield queued_event
 
         if not context.should_run:
             logger.info(
@@ -334,7 +350,7 @@ class BuildsService:
                 ),
             )
             summary = build.summary or context.reuse_summary
-            yield self._ade_event(
+            yield await self._emit_event(
                 build=build,
                 type_="build.completed",
                 payload={
@@ -360,7 +376,7 @@ class BuildsService:
                 reason=reason,
             ),
         )
-        yield self._ade_event(
+        yield await self._emit_event(
             build=build,
             type_="build.started",
             payload=BuildStartedPayload(status="building", reason=reason),
@@ -383,7 +399,7 @@ class BuildsService:
                 fingerprint=context.fingerprint,
             ):
                 if isinstance(event, BuilderStepEvent):
-                    yield self._ade_event(
+                    yield await self._emit_event(
                         build=build,
                         type_="build.phase.started",
                         payload=BuildPhaseStartedPayload(
@@ -392,7 +408,7 @@ class BuildsService:
                         ),
                     )
                 elif isinstance(event, BuilderLogEvent):
-                    yield self._ade_event(
+                    yield await self._emit_event(
                         build=build,
                         type_="console.line",
                         payload=ConsoleLinePayload(
@@ -420,7 +436,7 @@ class BuildsService:
                 error=str(exc),
             )
             build = await self._require_build(build.id)
-            yield self._ade_event(
+            yield await self._emit_event(
                 build=build,
                 type_="build.completed",
                 payload=BuildCompletedPayload(
@@ -447,7 +463,7 @@ class BuildsService:
                 error="Build terminated without metadata",
             )
             build = await self._require_build(build.id)
-            yield self._ade_event(
+            yield await self._emit_event(
                 build=build,
                 type_="build.completed",
                 payload=BuildCompletedPayload(
@@ -480,7 +496,7 @@ class BuildsService:
             ),
         )
 
-        yield self._ade_event(
+        yield await self._emit_event(
             build=build,
             type_="build.completed",
             payload={
@@ -517,6 +533,89 @@ class BuildsService:
                 build_id=context.build_id,
             ),
         )
+
+    async def list_builds(
+        self,
+        *,
+        workspace_id: str,
+        configuration_id: str,
+        statuses: Sequence[BuildStatus] | None,
+        page: int,
+        page_size: int,
+        include_total: bool,
+    ) -> Page[BuildResource]:
+        """Return paginated builds for ``configuration_id``."""
+
+        logger.debug(
+            "build.list.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                statuses=[status.value for status in statuses] if statuses else None,
+                page=page,
+                page_size=page_size,
+                include_total=include_total,
+            ),
+        )
+
+        await self._require_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        page_result = await self._builds.list_by_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            statuses=statuses,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
+        resources = [self.to_resource(build) for build in page_result.items]
+        response = Page(
+            items=resources,
+            page=page_result.page,
+            page_size=page_result.page_size,
+            has_next=page_result.has_next,
+            has_previous=page_result.has_previous,
+            total=page_result.total,
+        )
+
+        logger.info(
+            "build.list.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                page=response.page,
+                page_size=response.page_size,
+                count=len(response.items),
+                total=response.total,
+            ),
+        )
+        return response
+
+    async def get_build_events(
+        self,
+        *,
+        build_id: str,
+        after_sequence: int | None = None,
+        limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
+    ) -> tuple[list[AdeEvent], int | None]:
+        """Return ADE telemetry events for ``build_id`` with optional paging."""
+
+        build = await self._require_build(build_id)
+        events: list[AdeEvent] = []
+        next_after: int | None = None
+        reader = self.event_log_reader(
+            workspace_id=str(build.workspace_id),
+            configuration_id=str(build.configuration_id),
+            build_id=str(build.id),
+        )
+        for event in reader.iter(after_sequence=after_sequence):
+            events.append(event)
+            if len(events) >= limit:
+                next_after = event.sequence
+                break
+        return events, next_after
 
     async def ensure_local_env(self, *, build: Build) -> Path:
         """Ensure the local venv for ``build`` exists and matches the marker."""
@@ -625,24 +724,88 @@ class BuildsService:
             exit_code=build.exit_code,
             summary=build.summary,
             error_message=build.error_message,
+            links=self._links(str(build.id)),
         )
 
-    def _ade_event(
+    @staticmethod
+    def _links(build_id: str):
+        base = f"/api/v1/builds/{build_id}"
+        return BuildLinks(
+            self=base,
+            events=f"{base}/events",
+            events_stream=f"{base}/events/stream",
+        )
+
+    def event_log_reader(
+        self,
+        *,
+        workspace_id: str,
+        configuration_id: str,
+        build_id: str,
+    ) -> BuildEventLogReader:
+        return BuildEventLogReader(
+            storage=self._event_storage,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            build_id=build_id,
+        )
+
+    def subscribe_to_events(self, build_id: str):
+        return self._event_dispatcher.subscribe(build_id)
+
+    async def _emit_event(
         self,
         *,
         build: Build,
         type_: str,
         payload: AdeEventPayload | dict[str, Any] | None = None,
+        run_id: str | None = None,
     ) -> AdeEvent:
-        return AdeEvent(
+        return await self._event_dispatcher.emit(
             type=type_,
-            created_at=utc_now(),
             source="api",
             workspace_id=str(build.workspace_id),
             configuration_id=str(build.configuration_id),
-            run_id=None,
+            run_id=run_id,
             build_id=str(build.id),
             payload=payload or {},
+        )
+
+    async def _ensure_build_queued_event(
+        self,
+        *,
+        build: Build,
+        reason: str,
+        should_build: bool | None = None,
+        engine_spec: str | None = None,
+        engine_version_hint: str | None = None,
+        python_bin: str | None = None,
+    ) -> AdeEvent | None:
+        """Ensure the first event for a build is persisted."""
+
+        last_sequence = self._event_storage.last_sequence(
+            workspace_id=str(build.workspace_id),
+            configuration_id=str(build.configuration_id),
+            build_id=str(build.id),
+        )
+        if last_sequence > 0:
+            reader = self.event_log_reader(
+                workspace_id=str(build.workspace_id),
+                configuration_id=str(build.configuration_id),
+                build_id=str(build.id),
+            )
+            return next(iter(reader.iter(after_sequence=0)), None)
+        return await self._emit_event(
+            build=build,
+            type_="build.queued",
+            payload={
+                "status": "queued",
+                "reason": reason,
+                "should_build": should_build,
+                "engine_spec": engine_spec,
+                "engine_version_hint": engine_version_hint,
+                "python_bin": python_bin,
+            },
         )
     async def _require_configuration(
         self,
