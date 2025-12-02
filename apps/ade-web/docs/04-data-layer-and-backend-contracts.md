@@ -450,14 +450,13 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 
 **Two key ideas:**
 
-1. Use workspace-scoped `/workspaces/{id}/runs` for **listing/creating** runs.
-2. Use global `/runs/{run_id}` for **detail, outputs, and logs** once you know `runId`.
+1. Run creation is **configuration-scoped**: `POST /configurations/{id}/runs`.
+2. Use workspace-scoped `/workspaces/{id}/runs` for **listing** runs.
+3. Use global `/runs/{run_id}` for **detail, events, outputs, and logs** once you know `runId`.
 
-#### Workspace run ledger
+#### Workspace run ledger (list only)
 
 * `GET  /api/v1/workspaces/{workspace_id}/runs` – list runs in a workspace.
-* `POST /api/v1/workspaces/{workspace_id}/runs` – create a new run.
-* `GET  /api/v1/workspaces/{workspace_id}/runs/{run_id}` – optional workspace-scoped detail (for tenancy enforcement).
 
 #### Canonical run detail & assets (global)
 
@@ -475,8 +474,6 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 Workspace ledger:
 
 * `listWorkspaceRuns(workspaceId, params)`
-* `createWorkspaceRun(workspaceId, payload)`
-* `readWorkspaceRun(workspaceId, runId)`  // use only if backend enforces workspace scopes
 
 Run-centric:
 
@@ -494,8 +491,6 @@ Hooks:
 
 * `useWorkspaceRunsQuery(workspaceId, filters)`
 * `useRunQuery(runId)`                 // canonical detail
-* Optional: `useWorkspaceRunQuery(workspaceId, runId)`
-* `useCreateWorkspaceRunMutation(workspaceId)`
 * `useCreateConfigurationRunMutation(configurationId)`
 
 Streaming:

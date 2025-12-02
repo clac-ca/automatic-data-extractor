@@ -519,7 +519,6 @@ async def test_stream_run_emits_build_events_when_requested(
     _, stream_context = await service.prepare_run(
         configuration_id=configuration_id,
         options=run_options,
-        stream_build=True,
     )
 
     events = []
@@ -544,12 +543,11 @@ async def test_stream_run_respects_safe_mode(session, tmp_path: Path) -> None:
     async for event in service.stream_run(context=context, options=run_options):
         events.append(event)
 
-    assert [event.type for event in events] == [
-        "run.queued",
-        "run.started",
-        "console.line",
-        "run.completed",
-    ]
+    types = [event.type for event in events]
+    assert types[0] == "run.queued"
+    assert "run.started" in types
+    assert "run.completed" in types
+    assert any(evt.type == "console.line" for evt in events)
     payload = events[-1].payload_dict()
     assert payload.get("status") == "succeeded"
     assert (payload.get("execution") or {}).get("exit_code") == 0

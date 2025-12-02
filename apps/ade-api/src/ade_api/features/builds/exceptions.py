@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 __all__ = [
     "BuildAlreadyInProgressError",
     "BuildExecutionError",
@@ -25,6 +27,6 @@ class BuildWorkspaceMismatchError(Exception):
 class BuildExecutionError(Exception):
     """Raised when the builder fails to produce a working virtual environment."""
 
-    def __init__(self, message: str, *, build_id: str) -> None:
+    def __init__(self, message: str, *, build_id: UUID) -> None:
         super().__init__(message)
         self.build_id = build_id

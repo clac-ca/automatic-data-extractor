@@ -87,12 +87,6 @@ class DocumentOut(BaseSchema):
         data.pop("worksheets", None)
         return data
 
-    @property
-    def original_filename(self) -> str:
-        """Retain compatibility with existing callers expecting ``original_filename``."""
-
-        return self.name
-
 
 class DocumentLastRun(BaseSchema):
     """Minimal representation of the last engine execution for a document."""

@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
 from pydantic import ValidationError
@@ -31,9 +32,9 @@ def build_run_summary(
     *,
     events: Iterable[AdeEvent],
     manifest: ManifestV1 | None,
-    workspace_id: str | None,
-    configuration_id: str | None,
-    run_id: str,
+    workspace_id: UUID | None,
+    configuration_id: UUID | None,
+    run_id: UUID,
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:
@@ -345,9 +346,9 @@ def build_run_summary_from_paths(
     *,
     events_path: Path | None,
     manifest_path: Path | None,
-    workspace_id: str | None,
-    configuration_id: str | None,
-    run_id: str,
+    workspace_id: UUID | None,
+    configuration_id: UUID | None,
+    run_id: UUID,
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:

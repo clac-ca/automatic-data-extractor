@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from uuid import UUID
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +18,7 @@ class DocumentsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def base_query(self, workspace_id: str) -> Select[tuple[Document]]:
+    def base_query(self, workspace_id: UUID) -> Select[tuple[Document]]:
         """Return the base selectable for workspace document lookups."""
 
         return (
@@ -32,8 +33,8 @@ class DocumentsRepository:
     async def get_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
         include_deleted: bool = False,
     ) -> Document | None:
         """Return the document matching ``document_id`` for ``workspace_id``."""

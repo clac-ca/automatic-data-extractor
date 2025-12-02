@@ -16,4 +16,4 @@ export type FileReadJson = {
 };
 export type FileWriteResponse = components["schemas"]["FileWriteResponse"];
 export type FileRenameResponse = components["schemas"]["FileRenameResponse"];
-export type DirectoryWriteResponse = { path: string };
+export type DirectoryWriteResponse = components["schemas"]["DirectoryWriteResponse"];

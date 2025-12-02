@@ -641,6 +641,32 @@ async def _wait_for_completion(
     return payload
 
 
+async def _collect_run_events(
+    client: AsyncClient,
+    run_id: str,
+    *,
+    headers: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Stream run events via SSE until completion and return the payloads."""
+
+    events: list[dict[str, Any]] = []
+    async with client.stream(
+        "GET",
+        f"/api/v1/runs/{run_id}/events/stream",
+        headers=headers,
+        params={"after_sequence": 0},
+    ) as response:
+        assert response.status_code == 200
+        async for line in response.aiter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            event = json.loads(line.removeprefix("data: "))
+            events.append(event)
+            if event.get("type") == "run.completed":
+                break
+    return events
+
+
 async def test_stream_run_safe_mode(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -660,25 +686,19 @@ async def test_stream_run_safe_mode(
         async_client, email=owner["email"], password=owner["password"]
     )
 
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
+    create_response = await async_client.post(
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
-        json={"stream": True},
-    ) as response:
-        assert response.status_code == 200
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            if line.startswith("data: "):
-                events.append(json.loads(line.removeprefix("data: ")))
+        json={},
+    )
+    assert create_response.status_code == 201
+    run_id = create_response.json()["id"]
+    events = await _collect_run_events(async_client, run_id, headers=headers)
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
 
-    run_id = events[0]["run_id"]
     run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
     run_payload = run_response.json()
@@ -752,24 +772,18 @@ async def test_stream_run_respects_persisted_safe_mode_override(
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
+    create_response = await async_client.post(
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
-        json={"stream": True},
-    ) as response:
-        assert response.status_code == 200
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            if line.startswith("data: "):
-                events.append(json.loads(line.removeprefix("data: ")))
+        json={},
+    )
+    assert create_response.status_code == 201
+    run_id = create_response.json()["id"]
+    events = await _collect_run_events(async_client, run_id, headers=headers)
 
     assert events, "expected streaming events"
     assert events[-1]["type"] == "run.completed"
 
-    run_id = events[0]["run_id"]
     run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
     run_payload = run_response.json()
@@ -801,7 +815,7 @@ async def test_non_stream_run_executes_in_background(
     response = await async_client.post(
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
-        json={"stream": False},
+        json={},
     )
     assert response.status_code == 201
     payload = response.json()
@@ -833,24 +847,18 @@ async def test_stream_run_processes_real_documents(
         async_client, email=owner["email"], password=owner["password"]
     )
 
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
+    create_response = await async_client.post(
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
-        json={"stream": True, "options": {"input_document_id": str(document.id)}},
-    ) as response:
-        assert response.status_code == 200, response.text
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            if line.startswith("data: "):
-                events.append(json.loads(line.removeprefix("data: ")))
+        json={"options": {"input_document_id": str(document.id)}},
+    )
+    assert create_response.status_code == 201, create_response.text
+    run_id = create_response.json()["id"]
+    events = await _collect_run_events(async_client, run_id, headers=headers)
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1].get("payload", {}).get("status") == "succeeded"
-    run_id = events[0]["run_id"]
 
     run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
@@ -940,6 +948,96 @@ async def test_list_workspace_runs_filters_by_status_and_document(
     assert [str(run.id) for run in filtered.items] == [str(run_success.id)]
 
 
+async def test_list_configuration_runs_scopes_and_filters(
+    async_client: AsyncClient,
+    session,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Configuration-scoped run listings should filter within the workspace."""
+
+    workspace_id = seed_identity["workspace_id"]
+    owner = seed_identity["workspace_owner"]
+    headers = await _auth_headers(
+        async_client, email=owner["email"], password=owner["password"]
+    )
+
+    configuration = Configuration(
+        workspace_id=workspace_id,
+        display_name="Primary",
+        status=ConfigurationStatus.ACTIVE,
+    )
+    other_configuration = Configuration(
+        workspace_id=workspace_id,
+        display_name="Secondary",
+        status=ConfigurationStatus.ACTIVE,
+    )
+    session.add_all([configuration, other_configuration])
+    await session.flush()
+
+    run_succeeded = Run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        status=RunStatus.SUCCEEDED,
+        created_at=utc_now(),
+    )
+    run_failed = Run(
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        status=RunStatus.FAILED,
+        created_at=utc_now(),
+    )
+    run_other = Run(
+        workspace_id=workspace_id,
+        configuration_id=other_configuration.id,
+        status=RunStatus.SUCCEEDED,
+        created_at=utc_now(),
+    )
+    session.add_all([run_succeeded, run_failed, run_other])
+    await session.commit()
+
+    list_response = await async_client.get(
+        f"/api/v1/configurations/{configuration.id}/runs",
+        headers=headers,
+        params={"include_total": "true"},
+    )
+
+    assert list_response.status_code == 200, list_response.text
+    payload = list_response.json()
+    assert payload["total"] == 2
+    assert {item["id"] for item in payload["items"]} == {
+        str(run_succeeded.id),
+        str(run_failed.id),
+    }
+
+    filtered_response = await async_client.get(
+        f"/api/v1/configurations/{configuration.id}/runs",
+        headers=headers,
+        params={"status": RunStatus.SUCCEEDED.value},
+    )
+    assert filtered_response.status_code == 200, filtered_response.text
+    filtered_payload = filtered_response.json()
+    assert [item["id"] for item in filtered_payload["items"]] == [
+        str(run_succeeded.id)
+    ]
+
+
+async def test_list_configuration_runs_returns_not_found(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    owner = seed_identity["workspace_owner"]
+    headers = await _auth_headers(
+        async_client, email=owner["email"], password=owner["password"]
+    )
+    missing_id = generate_uuid7()
+
+    response = await async_client.get(
+        f"/api/v1/configurations/{missing_id}/runs", headers=headers
+    )
+
+    assert response.status_code == 404
+
+
 async def test_stream_run_processes_all_worksheets_when_unspecified(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -963,29 +1061,22 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
         async_client, email=owner["email"], password=owner["password"]
     )
 
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
+    create_response = await async_client.post(
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
         json={
-            "stream": True,
             "options": {
                 "input_document_id": str(document.id),
             },
         },
-    ) as response:
-        assert response.status_code == 200, response.text
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            if line.startswith("data: "):
-                events.append(json.loads(line.removeprefix("data: ")))
+    )
+    assert create_response.status_code == 201, create_response.text
+    run_id = create_response.json()["id"]
+    events = await _collect_run_events(async_client, run_id, headers=headers)
 
     assert events and events[0]["type"] == "run.queued"
     assert events[-1]["type"] == "run.completed"
     assert events[-1].get("payload", {}).get("status") == "succeeded"
-    run_id = events[0]["run_id"]
 
     outputs_response = await async_client.get(
         f"/api/v1/runs/{run_id}/outputs", headers=headers
@@ -1055,24 +1146,18 @@ async def test_stream_run_sheet_selection_variants(
     ]
 
     for scenario in scenarios:
-        events: list[dict[str, Any]] = []
-        async with async_client.stream(
-            "POST",
+        create_response = await async_client.post(
             f"/api/v1/configurations/{configuration_id}/runs",
             headers=headers,
-            json={"stream": True, "options": scenario["options"]},
-        ) as response:
-            assert response.status_code == 200, response.text
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-                if line.startswith("data: "):
-                    events.append(json.loads(line.removeprefix("data: ")))
+            json={"options": scenario["options"]},
+        )
+        assert create_response.status_code == 201, create_response.text
+        run_id = create_response.json()["id"]
+        events = await _collect_run_events(async_client, run_id, headers=headers)
 
-            assert events and events[0]["type"] == "run.queued"
-            assert events[-1]["type"] == "run.completed"
-            assert events[-1].get("payload", {}).get("status") == "succeeded"
-        run_id = events[0]["run_id"]
+        assert events and events[0]["type"] == "run.queued"
+        assert events[-1]["type"] == "run.completed"
+        assert events[-1].get("payload", {}).get("status") == "succeeded"
 
         outputs_response = await async_client.get(
             f"/api/v1/runs/{run_id}/outputs", headers=headers

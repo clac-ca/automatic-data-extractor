@@ -73,7 +73,6 @@ class RunCreateOptions(BaseSchema):
 class RunCreateRequest(BaseSchema):
     """Payload accepted by the run creation endpoint."""
 
-    stream: bool = False
     options: RunCreateOptions = Field(default_factory=RunCreateOptions)
 
 
@@ -83,6 +82,7 @@ class RunLinks(BaseSchema):
     self: str
     summary: str
     events: str
+    events_stream: str
     logs: str
     outputs: str
 

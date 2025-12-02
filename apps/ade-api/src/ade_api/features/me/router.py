@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,35 +113,20 @@ async def get_me_bootstrap(
     "/permissions",
     response_model=EffectivePermissions,
     status_code=status.HTTP_200_OK,
-    summary="Return the caller's effective permission set",
+    summary="Return the caller's effective global and workspace permissions",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to inspect permissions."
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Workspace not found when scoped permissions are requested."
         },
     },
 )
 async def get_me_permissions(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
-    workspace_id: Annotated[
-        UUID | None,
-        Query(
-            description=(
-                "Optional workspace identifier. When provided, the response "
-                "includes workspace-scoped permissions for this workspace."
-            ),
-        ),
-    ] = None,
 ) -> EffectivePermissions:
     """Return the effective permissions for the current principal."""
 
-    return await service.get_effective_permissions(
-        principal=principal,
-        workspace_id=workspace_id,
-    )
+    return await service.get_effective_permissions(principal=principal)
 
 
 @router.post(

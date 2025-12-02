@@ -8,8 +8,8 @@ before making UI changes.
 
 ## Goals
 
-- Surface `POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds`
-and `POST /api/v1/configs/{config_id}/runs` streaming output inside the
+- Surface `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
+and `POST /api/v1/configurations/{configuration_id}/runs` streaming output inside the
 workbench panel (Terminal tab).
 - Keep validation messaging in the `Problems` tab while adding real-time
 console updates for build/run events.

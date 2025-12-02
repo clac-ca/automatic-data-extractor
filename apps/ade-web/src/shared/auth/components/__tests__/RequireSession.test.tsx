@@ -159,11 +159,12 @@ describe("RequireSession", () => {
         has_next: false,
         has_previous: false,
       },
-      global_roles: [],
-      global_permissions: [],
+      roles: [],
+      permissions: ["workspaces.create"],
       expires_at: new Date(Date.now() + 120_000).toISOString(),
       refresh_expires_at: new Date(Date.now() + 300_000).toISOString(),
       return_to: null,
+      state: null,
     };
 
     mockUseSessionQuery.mockReturnValue({

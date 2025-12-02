@@ -14,10 +14,12 @@ export type operations = GeneratedOperations;
 // Frequently used schema fragments. Extend this list as new app-level contracts emerge.
 export type AuthLoginRequest = GeneratedComponents["schemas"]["AuthLoginRequest"];
 export type AuthRefreshRequest = GeneratedComponents["schemas"]["AuthRefreshRequest"];
-export type AuthTokensResponse = GeneratedComponents["schemas"]["AuthTokensResponse"];
 export type AuthSetupStatus = GeneratedComponents["schemas"]["AuthSetupStatusResponse"];
 export type AuthSetupRequest = GeneratedComponents["schemas"]["AuthSetupRequest"];
 export type AuthProviderListResponse = GeneratedComponents["schemas"]["AuthProviderListResponse"];
+export type SessionTokens = GeneratedComponents["schemas"]["SessionTokens"];
+export type SessionEnvelope = GeneratedComponents["schemas"]["SessionEnvelope"];
+export type SessionStatusResponse = GeneratedComponents["schemas"]["SessionStatusResponse"];
 export type MeContext = GeneratedComponents["schemas"]["MeContext"];
 export type MeProfile = GeneratedComponents["schemas"]["MeProfile"];
 export type User = GeneratedComponents["schemas"]["UserOut"];

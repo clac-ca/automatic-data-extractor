@@ -88,29 +88,3 @@ class UserRolesEnvelope(BaseSchema):
 
     user_id: UUID
     roles: list[UserRoleSummary]
-
-
-class WorkspaceMemberOut(BaseSchema):
-    """Workspace member with their role IDs and slugs."""
-
-    user_id: UUID
-    role_ids: list[UUID]
-    role_slugs: list[str]
-    created_at: datetime
-
-
-class WorkspaceMemberCreate(BaseSchema):
-    """Payload for adding a new workspace member with roles."""
-
-    user_id: UUID
-    role_ids: list[UUID]
-
-
-class WorkspaceMemberUpdate(BaseSchema):
-    """Payload for updating workspace member roles."""
-
-    role_ids: list[UUID]
-
-
-class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
-    """Paginated collection of workspace members."""

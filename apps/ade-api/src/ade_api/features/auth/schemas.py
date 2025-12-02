@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import EmailStr, Field, SecretStr
 
@@ -29,28 +31,6 @@ class AuthRefreshRequest(BaseSchema):
     )
 
 
-class AuthTokensResponse(BaseSchema):
-    """Response payload containing a freshly issued session token pair."""
-
-    access_token: str = Field(..., description="JWT access token.")
-    refresh_token: str | None = Field(
-        default=None,
-        description="Refresh token, if one is issued.",
-    )
-    token_type: str = Field(
-        default="bearer",
-        description="Token type, usually 'bearer'.",
-    )
-    expires_in: int = Field(
-        ...,
-        description="Seconds until the access token expires.",
-    )
-    refresh_expires_in: int | None = Field(
-        default=None,
-        description="Seconds until the refresh token expires, if applicable.",
-    )
-
-
 class AuthSetupStatusResponse(BaseSchema):
     """Describes whether initial administrator setup is required."""
 
@@ -73,6 +53,72 @@ class AuthSetupRequest(BaseSchema):
         default=None,
         max_length=255,
         description="Optional display name for the administrator.",
+    )
+
+
+class SessionTokens(BaseSchema):
+    """Session token pair issued to a client."""
+
+    access_token: str = Field(..., description="JWT access token.")
+    refresh_token: str | None = Field(
+        default=None,
+        description="Refresh token, if one is issued.",
+    )
+    token_type: str = Field(
+        default="bearer",
+        description="Token type, usually 'bearer'.",
+    )
+    expires_at: datetime = Field(
+        ...,
+        description="When the access token expires (UTC).",
+    )
+    refresh_expires_at: datetime | None = Field(
+        default=None,
+        description="When the refresh token expires (UTC), if applicable.",
+    )
+    expires_in: int = Field(
+        ...,
+        ge=0,
+        description="Seconds until the access token expires.",
+    )
+    refresh_expires_in: int | None = Field(
+        default=None,
+        ge=0,
+        description="Seconds until the refresh token expires, if applicable.",
+    )
+
+
+class SessionEnvelope(BaseSchema):
+    """Wrapper around issued session tokens."""
+
+    session: SessionTokens = Field(..., description="Issued session token pair.")
+    csrf_token: str | None = Field(
+        default=None,
+        description="CSRF token mirrored in the ade_csrf cookie for double-submit.",
+    )
+
+
+class SessionSnapshot(BaseSchema):
+    """Minimal view of the current session."""
+
+    user_id: UUID = Field(..., description="Subject of the session.")
+    principal_type: Literal["user", "service_account"] = Field(
+        ...,
+        description="Type of principal represented by the session.",
+    )
+    issued_at: datetime | None = Field(
+        default=None,
+        description="When the session was issued (UTC), if known.",
+    )
+    expires_at: datetime = Field(..., description="When the session expires (UTC).")
+
+
+class SessionStatusResponse(BaseSchema):
+    """Snapshot response for GET /auth/session."""
+
+    session: SessionSnapshot = Field(
+        ...,
+        description="Details about the currently authenticated session.",
     )
 
 
@@ -108,9 +154,12 @@ class AuthProviderListResponse(BaseSchema):
 __all__ = [
     "AuthLoginRequest",
     "AuthRefreshRequest",
-    "AuthTokensResponse",
     "AuthSetupStatusResponse",
     "AuthSetupRequest",
+    "SessionEnvelope",
+    "SessionSnapshot",
+    "SessionStatusResponse",
+    "SessionTokens",
     "AuthProvider",
     "AuthProviderListResponse",
 ]

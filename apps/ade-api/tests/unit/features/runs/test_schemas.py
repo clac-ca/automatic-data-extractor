@@ -32,6 +32,7 @@ def test_run_resource_serialization_uses_aliases() -> None:
             self=f"/api/v1/runs/{run_id}",
             summary=f"/api/v1/runs/{run_id}/summary",
             events=f"/api/v1/runs/{run_id}/events",
+            events_stream=f"/api/v1/runs/{run_id}/events/stream",
             logs=f"/api/v1/runs/{run_id}/logs",
             outputs=f"/api/v1/runs/{run_id}/outputs",
         ),
@@ -46,10 +47,10 @@ def test_run_resource_serialization_uses_aliases() -> None:
     assert "failure_message" not in payload
 
 
-def test_run_create_request_defaults_to_no_stream() -> None:
+def test_run_create_request_defaults_include_options() -> None:
     request = RunCreateRequest()
-    assert request.stream is False
     assert isinstance(request.options, RunCreateOptions)
+    assert "stream" not in request.model_dump()
 
 
 def test_run_events_page_serializes_cursor() -> None:

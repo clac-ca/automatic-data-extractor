@@ -39,10 +39,41 @@ from .service import DocumentsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
-    prefix="/workspaces/{workspace_id}",
+    prefix="/workspaces/{workspace_id}/documents",
     tags=["documents"],
     dependencies=[Security(require_authenticated)],
 )
+
+
+WorkspacePath = Annotated[
+    str,
+    Path(
+        min_length=1,
+        description="Workspace identifier",
+    ),
+]
+DocumentPath = Annotated[
+    str,
+    Path(
+        min_length=1,
+        description="Document identifier",
+    ),
+]
+DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
+DocumentReader = Annotated[
+    User,
+    Security(
+        require_workspace("workspace.documents.read"),
+        scopes=["{workspace_id}"],
+    ),
+]
+DocumentManager = Annotated[
+    User,
+    Security(
+        require_workspace("workspace.documents.manage"),
+        scopes=["{workspace_id}"],
+    ),
+]
 
 
 get_sort_order = make_sort_dependency(
@@ -142,7 +173,7 @@ def _build_download_disposition(filename: str) -> str:
 
 
 @router.post(
-    "/documents",
+    "",
     dependencies=[Security(require_csrf)],
     response_model=DocumentOut,
     status_code=status.HTTP_201_CREATED,
@@ -164,17 +195,9 @@ def _build_download_disposition(filename: str) -> str:
     },
 )
 async def upload_document(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.manage"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
     *,
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
@@ -196,7 +219,7 @@ async def upload_document(
 
 
 @router.get(
-    "/documents",
+    "",
     response_model=DocumentPage,
     status_code=status.HTTP_200_OK,
     summary="List documents",
@@ -214,20 +237,12 @@ async def upload_document(
     },
 )
 async def list_documents(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
+    workspace_id: WorkspacePath,
     page: Annotated[PageParams, Depends()],
     filters: Annotated[DocumentFilters, Depends(get_document_filters)],
     order_by: Annotated[OrderBy, Depends(get_sort_order)],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    service: DocumentsServiceDep,
+    actor: DocumentReader,
 ) -> DocumentPage:
     return await service.list_documents(
         workspace_id=workspace_id,
@@ -241,7 +256,7 @@ async def list_documents(
 
 
 @router.get(
-    "/documents/{document_id}",
+    "/{document_id}",
     response_model=DocumentOut,
     status_code=status.HTTP_200_OK,
     summary="Retrieve document metadata",
@@ -259,20 +274,10 @@ async def list_documents(
     },
 )
 async def read_document(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
-    document_id: Annotated[
-        str, Path(min_length=1, description="Document identifier")
-    ],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
 ) -> DocumentOut:
     try:
         return await service.get_document(
@@ -284,7 +289,7 @@ async def read_document(
 
 
 @router.get(
-    "/documents/{document_id}/download",
+    "/{document_id}/download",
     summary="Download a stored document",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
@@ -299,20 +304,10 @@ async def read_document(
     },
 )
 async def download_document(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
-    document_id: Annotated[
-        str, Path(min_length=1, description="Document identifier")
-    ],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
 ) -> StreamingResponse:
     try:
         record, stream = await service.stream_document(
@@ -326,12 +321,12 @@ async def download_document(
 
     media_type = record.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = _build_download_disposition(record.original_filename)
+    response.headers["Content-Disposition"] = _build_download_disposition(record.name)
     return response
 
 
 @router.get(
-    "/documents/{document_id}/sheets",
+    "/{document_id}/sheets",
     response_model=list[DocumentSheet],
     summary="List worksheets for a document",
     responses={
@@ -344,20 +339,10 @@ async def download_document(
     },
 )
 async def list_document_sheets_endpoint(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
-    document_id: Annotated[
-        str, Path(min_length=1, description="Document identifier")
-    ],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
 ) -> list[DocumentSheet]:
     try:
         return await service.list_document_sheets(
@@ -371,7 +356,7 @@ async def list_document_sheets_endpoint(
 
 
 @router.delete(
-    "/documents/{document_id}",
+    "/{document_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Soft delete a document",
@@ -388,20 +373,10 @@ async def list_document_sheets_endpoint(
     },
 )
 async def delete_document(
-    workspace_id: Annotated[
-        str, Path(min_length=1, description="Workspace identifier")
-    ],
-    document_id: Annotated[
-        str, Path(min_length=1, description="Document identifier")
-    ],
-    service: Annotated[DocumentsService, Depends(get_documents_service)],
-    actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.documents.manage"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    actor: DocumentManager,
 ) -> None:
     try:
         await service.delete_document(

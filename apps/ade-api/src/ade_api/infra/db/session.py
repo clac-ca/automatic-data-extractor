@@ -45,7 +45,7 @@ def get_sessionmaker(settings: Settings | None = None) -> async_sessionmaker[Asy
 def _get_sessionmaker_from_request(
     request: Request,
 ) -> async_sessionmaker[AsyncSession]:
-    settings = get_settings()
+    settings = getattr(request.app.state, "settings", None) or get_settings()
     return get_sessionmaker(settings=settings)
 
 

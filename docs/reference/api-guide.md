@@ -12,33 +12,95 @@ ADE exposes a JSON REST API under a versioned base path:
 
 Future versions will follow the same resource model. When breaking changes are required, a new version path (for example `/api/v2`) will be introduced.
 
-## Authentication
+## Authentication and RBAC
 
-ADE uses bearer tokens issued by the administrator of your workspace.
+- **Session + bearer tokens**: `POST /api/v1/auth/session` (and `/session/refresh`) return a `SessionEnvelope` with tokens and
+  session context. Browser callers also receive `httponly` cookies; API/CLI callers use the `Authorization: Bearer <token>`
+  header.
+- **API keys**: Issue long-lived credentials via `/api/v1/me/api-keys` for self-service or `/api/v1/users/{user_id}/api-keys`
+  for admins. Submit them via `X-API-Key` (or the bearer header for compatibility).
+- **Permissions**: Every route enforces RBAC. Global permissions (for example `users.read_all`) apply across the tenant; workspace
+  permissions (for example `workspace.documents.manage`) apply to the workspace ID in the URL path.
+- **CSRF**: Not enforced yet. The dependency is wired for future use but currently no-ops.
 
-1. Request a token via the admin console or service account provisioning flow.
-2. Send the token in the `Authorization` header: `Authorization: Bearer <token>`.
-3. Tokens are scoped to a single workspace. Include the workspace ULID in the URL path for scoped routes, e.g. `/workspaces/{workspace_id}/...`.
-
-Requests without valid tokens receive HTTP `401 Unauthorized` responses. If the token is valid but lacks permissions for a resource you will receive `403 Forbidden`.
+Requests without valid credentials receive HTTP `401 Unauthorized`. If the token is valid but lacks permissions for a resource you
+will receive `403 Forbidden`.
 
 ## Core resources
+
+### Users and identity
+
+- `GET /users` – list users (requires `users.read_all`).
+- `GET /users/{user_id}` – retrieve a single user's profile, including roles and permissions.
+- `PATCH /users/{user_id}` – update display name or activation (`users.manage_all`).
+- `GET /users/{user_id}/roles` – list global role assignments; `PUT`/`DELETE` manage assignments.
+- `GET /users/{user_id}/api-keys` – list user-owned API keys; `POST` issues, `DELETE /users/{user_id}/api-keys/{api_key_id}` revokes.
+- `/me` endpoints return the caller’s profile, effective permissions, and workspace list for bootstrap flows.
+
+### RBAC catalog and assignments
+
+- `GET /rbac/permissions` – list permission definitions by scope.
+- `GET/POST /rbac/roles` – list or create roles (scope via query parameter).
+- `GET/PATCH/DELETE /rbac/roles/{role_id}` – manage a specific role.
+- `GET /rbac/role-assignments` – admin view of assignments across users.
+- Workspace membership and role bindings live under `/workspaces/{workspace_id}/members` (list/create/update/delete) and are scoped by workspace permissions.
 
 ### Documents
 
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
-- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint.
+- `GET /workspaces/{workspace_id}/documents` – list documents with pagination, sorting, and filters.
+- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration).
 - `GET /workspaces/{workspace_id}/documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
+- `GET /workspaces/{workspace_id}/documents/{document_id}/download` – download the stored file with a safe `Content-Disposition` header.
+- `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads (falls back to a single-sheet descriptor for other file types).
 - `DELETE /workspaces/{workspace_id}/documents/{document_id}` – remove a document, if permitted.
 
 ### Runs
 
-Trigger and monitor extraction runs.
+Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
-- `POST /workspaces/{workspace_id}/runs` – start an extraction by referencing an existing `document_id` or by including a file upload in the request. Runs run inline, so the API returns once processing completes or fails.
-- `GET /workspaces/{workspace_id}/runs/{run_id}` – retrieve status (`pending`, `running`, `succeeded`, `failed`) and progress metrics.
-- `GET /workspaces/{workspace_id}/runs` – list recent runs, filterable by status, document, or submitter using query parameters.
+- `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; supports inline streaming or background execution depending on `stream`.
+- `GET /workspaces/{workspace_id}/runs` – list recent runs for a workspace, filterable by status or source document.
+- `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
+- `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).
+- `GET /runs/{run_id}/summary` – retrieve the run summary payload when available.
+- `GET /runs/{run_id}/logs` – download the NDJSON log file captured during the run.
+- `GET /runs/{run_id}/outputs` – list available output files with download URLs.
+- `GET /runs/{run_id}/outputs/{output_path}` – download a specific output artifact.
+
+### Configurations
+
+Author and manage ADE configuration packages. All routes are workspace-scoped.
+
+- `GET /workspaces/{workspace_id}/configurations` – list configurations in the workspace (paged envelope).
+- `POST /workspaces/{workspace_id}/configurations` – create from a bundled template or clone an existing config.
+- `GET /workspaces/{workspace_id}/configurations/{configuration_id}` – fetch configuration metadata.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/validate` – validate the working tree and return issues/content digest.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/activate` – mark as the active configuration for the workspace.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/publish` – freeze the draft into a published version.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/deactivate` – mark the configuration inactive.
+- `GET /workspaces/{workspace_id}/configurations/{configuration_id}/export` – download a ZIP of the editable tree.
+
+**File editor surface**
+
+- `GET /workspaces/{workspace_id}/configurations/{configuration_id}/files` – list files/directories with pagination, include/exclude globs, and weak list ETag (`If-None-Match` → `304`).
+- `GET|HEAD /workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}` – read bytes or JSON helper (`Accept: application/json`); supports strong `ETag`, range reads, and `Last-Modified`.
+- `PUT /workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}` – create or update bytes; honors `If-None-Match: *` for create and `If-Match` for updates; returns `ETag` and `Location` on create.
+- `PATCH /workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}` – rename/move atomically with source/dest preconditions.
+- `DELETE /workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}` – delete a file or empty directory (use `If-Match` for safety).
+- `PUT /workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}` – ensure an empty directory exists (idempotent; returns `created` flag).
+- `DELETE /workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}` – remove a directory; `?recursive=true` allowed.
+
+### Builds
+
+Provision isolated virtual environments for configurations. Builds are configuration-scoped, with global lookup by `build_id`.
+
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/builds` – enqueue or stream a build (`stream: true|false`, `options.force`, `options.wait`).
+- `GET /workspaces/{workspace_id}/configurations/{configuration_id}/builds` – list build history for a configuration (filters: `status`, pagination, optional totals).
+- `GET /builds/{build_id}` – fetch a build snapshot (status, timestamps, exit code, engine/python metadata).
+
+> Build console output is emitted as `AdeEvent` envelopes; attach to `/runs/{run_id}/events?stream=true` after submitting a run or use streaming build creation (`stream: true`) to receive events inline.
 
 ## Error handling
 

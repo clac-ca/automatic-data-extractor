@@ -20,6 +20,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 from ade_api.app.dependencies import get_configurations_service
 from ade_api.common.pagination import PageParams, paginate_sequence
@@ -47,6 +48,7 @@ from .schemas import (
     FileRenameRequest,
     FileRenameResponse,
     FileWriteResponse,
+    DirectoryWriteResponse,
 )
 from .service import (
     ConfigurationsService,
@@ -153,6 +155,24 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
     else:
         end = total_size - 1
     return start, end
+
+
+def _upsert_response(
+    payload: BaseModel,
+    *,
+    created: bool,
+    request: Request,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    response_headers = dict(headers or {})
+    if created:
+        response_headers.setdefault("Location", str(request.url.path))
+    status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return JSONResponse(
+        status_code=status_code,
+        content=payload.model_dump(mode="json"),
+        headers=response_headers,
+    )
 
 
 @router.get(
@@ -751,14 +771,11 @@ async def upsert_config_file(
         mtime=result["mtime"],
         etag=result["etag"],
     )
-    headers = {"ETag": format_etag(result["etag"]) or ""}
-    status_code = status.HTTP_201_CREATED if payload.created else status.HTTP_200_OK
-    if payload.created:
-        headers["Location"] = request.url.path
-    return JSONResponse(
-        status_code=status_code,
-        content=payload.model_dump(mode="json"),
-        headers=headers,
+    return _upsert_response(
+        payload,
+        created=payload.created,
+        request=request,
+        headers={"ETag": format_etag(result["etag"]) or ""},
     )
 
 
@@ -815,15 +832,23 @@ async def delete_config_file(
 @router.put(
     "/configurations/{configuration_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
-    status_code=status.HTTP_201_CREATED,
+    response_model=DirectoryWriteResponse,
     responses={
-        status.HTTP_200_OK: {"description": "Directory already exists"},
+        status.HTTP_200_OK: {
+            "model": DirectoryWriteResponse,
+            "description": "Directory already exists",
+        },
+        status.HTTP_201_CREATED: {
+            "model": DirectoryWriteResponse,
+            "description": "Directory created",
+        },
     },
 )
 async def create_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     directory_path: str,
+    request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
@@ -832,7 +857,7 @@ async def create_config_directory(
             scopes=["{workspace_id}"],
         ),
     ],
-) -> dict:
+) -> Response:
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
@@ -849,8 +874,8 @@ async def create_config_directory(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except PathNotAllowedError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-    return JSONResponse({"path": directory_path}, status_code=status_code)
+    payload = DirectoryWriteResponse(path=directory_path, created=created)
+    return _upsert_response(payload, created=payload.created, request=request)
 
 
 @router.delete(

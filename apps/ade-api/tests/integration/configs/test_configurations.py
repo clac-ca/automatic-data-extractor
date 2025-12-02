@@ -232,6 +232,10 @@ async def test_file_editor_endpoints(
         content=b"hello world",
     )
     assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["created"] is True
+    assert body["path"] == "assets/new.txt"
+    assert resp.headers.get("Location", "").endswith("/files/assets/new.txt")
     etag = resp.headers.get("ETag")
 
     resp = await async_client.get(
@@ -252,6 +256,9 @@ async def test_file_editor_endpoints(
         content=b"updated",
     )
     assert resp.status_code == 200
+    updated_body = resp.json()
+    assert updated_body["created"] is False
+    assert "Location" not in resp.headers
     new_etag = resp.headers.get("ETag")
 
     resp = await async_client.get(
@@ -273,12 +280,20 @@ async def test_file_editor_endpoints(
         headers=headers,
     )
     assert resp.status_code == 201
+    dir_body = resp.json()
+    assert dir_body["created"] is True
+    assert dir_body["path"] == "assets/new_folder"
+    assert resp.headers.get("Location", "").endswith("/directories/assets/new_folder")
 
     resp = await async_client.put(
         f"{base_url}/directories/assets/new_folder",
         headers=headers,
     )
     assert resp.status_code == 200
+    dir_existing = resp.json()
+    assert dir_existing["created"] is False
+    assert dir_existing["path"] == "assets/new_folder"
+    assert "Location" not in resp.headers
 
     resp = await async_client.delete(
         f"{base_url}/directories/assets/new_folder",

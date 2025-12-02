@@ -13,7 +13,7 @@ relies on the legacy runs endpoints. Key touchpoints:
 - `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
     keys and displays the "Run" button per document. Update the request
-    handlers to call `POST /api/v1/configs/{config_id}/runs` and stream
+    handlers to call `POST /api/v1/configurations/{configuration_id}/runs` and stream
     events into the console once the backend is wired up.
   - `useDocumentRunsQuery` (search for `runsQuery`) polls the runs router
     to show historical runs. Replace it with the new runs log endpoint and

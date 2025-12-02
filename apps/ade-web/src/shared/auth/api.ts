@@ -10,11 +10,13 @@ export const sessionKeys = {
 };
 
 type AuthLoginRequestSchema = components["schemas"]["AuthLoginRequest"];
-type AuthTokens = components["schemas"]["AuthTokensResponse"];
+type AuthTokens = components["schemas"]["SessionTokens"];
+type ApiSessionEnvelope = components["schemas"]["SessionEnvelope"];
 export type AuthProvider = components["schemas"]["AuthProvider"];
 export type AuthProviderResponse = components["schemas"]["AuthProviderListResponse"];
 type MeContext = components["schemas"]["MeContext"];
 type MeWorkspacePage = MeContext["workspaces"];
+type MeWorkspaceSummary = components["schemas"]["MeWorkspaceSummary"];
 type MeProfile = components["schemas"]["MeProfile"];
 type MeBootstrap = MeContext;
 
@@ -39,14 +41,17 @@ export type SessionUser = Readonly<
   }
 >;
 
+type SessionWorkspaces = Omit<MeWorkspacePage, "items"> & { items: MeWorkspaceSummary[] };
+
 export type SessionEnvelope = Readonly<{
   user: SessionUser;
-  workspaces: MeWorkspacePage;
-  global_roles: string[];
-  global_permissions: string[];
+  workspaces: SessionWorkspaces;
+  roles: string[];
+  permissions: string[];
   expires_at: string | null;
   refresh_expires_at: string | null;
   return_to: string | null;
+  state: string | null;
 }>;
 
 const TOKEN_STORAGE_KEY = "ade.auth.tokens";
@@ -76,14 +81,28 @@ function readTokensFromStorage(): StoredTokens | null {
   }
 }
 
+function resolveExpiryMs(
+  isoTimestamp: string | null | undefined,
+  fallbackSeconds: number | null | undefined,
+): number | null {
+  if (isoTimestamp) {
+    const parsed = Date.parse(isoTimestamp);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  if (typeof fallbackSeconds === "number") {
+    return Date.now() + fallbackSeconds * 1000;
+  }
+  return null;
+}
+
 function persistTokens(tokens: AuthTokens): StoredTokens {
-  const now = Date.now();
   const stored: StoredTokens = {
     access_token: tokens.access_token,
     token_type: tokens.token_type ?? "bearer",
-    expires_at: typeof tokens.expires_in === "number" ? now + tokens.expires_in * 1000 : null,
-    refresh_expires_at:
-      typeof tokens.refresh_expires_in === "number" ? now + tokens.refresh_expires_in * 1000 : null,
+    expires_at: resolveExpiryMs(tokens.expires_at, tokens.expires_in),
+    refresh_expires_at: resolveExpiryMs(tokens.refresh_expires_at, tokens.refresh_expires_in),
   };
 
   cachedTokens = stored;
@@ -132,6 +151,35 @@ function toIso(timestamp: number | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function preferredWorkspaceId(workspaces: SessionWorkspaces): string | null {
+  const preferred = workspaces.items.find((workspace) => workspace.is_default);
+  return preferred ? preferred.id : null;
+}
+
+function normalizeStringList(values?: string[] | null): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values.filter((value) => typeof value === "string");
+}
+
+function normalizeWorkspaces(page: MeWorkspacePage | null | undefined): SessionWorkspaces {
+  if (!page) {
+    return {
+      items: [],
+      page: 1,
+      page_size: 0,
+      total: 0,
+      has_next: false,
+      has_previous: false,
+    };
+  }
+  return {
+    ...page,
+    items: page.items ?? [],
+  };
+}
+
 async function fetchMeBootstrap(tokens: StoredTokens | null, signal?: AbortSignal): Promise<MeBootstrap | null> {
   const path = "/api/v1/me/bootstrap" as const;
   try {
@@ -158,21 +206,40 @@ async function fetchMeBootstrap(tokens: StoredTokens | null, signal?: AbortSigna
 function normalizeSessionEnvelope(
   context: MeBootstrap,
   tokens: StoredTokens | null = cachedTokens,
+  returnTo: string | null = null,
+  state: string | null = null,
 ): SessionEnvelope {
+  const roles = normalizeStringList(context.roles);
+  const permissions = normalizeStringList(context.permissions);
+  const workspaces = normalizeWorkspaces(context.workspaces);
   return {
     user: {
       ...context.user,
-      roles: [...(context.global_roles ?? [])],
-      permissions: [...(context.global_permissions ?? [])],
-      preferred_workspace_id: null,
+      roles,
+      permissions,
+      preferred_workspace_id: preferredWorkspaceId(workspaces) ?? null,
     },
-    workspaces: context.workspaces,
-    global_roles: context.global_roles ?? [],
-    global_permissions: context.global_permissions ?? [],
+    workspaces,
+    roles,
+    permissions,
     expires_at: toIso(tokens?.expires_at ?? null),
     refresh_expires_at: toIso(tokens?.refresh_expires_at ?? null),
-    return_to: null,
+    return_to: returnTo,
+    state,
   };
+}
+
+export async function establishSessionFromEnvelope(
+  envelope: ApiSessionEnvelope,
+  options: RequestOptions = {},
+): Promise<SessionEnvelope> {
+  const stored = persistTokens(envelope.session);
+  const context = await fetchMeBootstrap(stored, options.signal);
+  if (!context) {
+    clearAuthTokens();
+    throw new Error("Unable to load session after authentication.");
+  }
+  return normalizeSessionEnvelope(context, stored, null, null);
 }
 
 async function bootstrapSessionFromTokens(
@@ -219,17 +286,20 @@ export async function fetchSession(options: RequestOptions = {}): Promise<Sessio
   return normalizeSessionEnvelope(context, tokens);
 }
 
-export async function createSession(payload: LoginPayload, options: RequestOptions = {}): Promise<SessionEnvelope> {
+export async function createSession(
+  payload: LoginPayload,
+  options: RequestOptions = {},
+): Promise<SessionEnvelope> {
   const { data } = await client.POST("/api/v1/auth/session", {
     body: payload,
     signal: options.signal,
   });
 
   if (!data) {
-    throw new Error("Expected tokens from login response.");
+    throw new Error("Expected session payload from login response.");
   }
 
-  return bootstrapSessionFromTokens(data, options.signal);
+  return establishSessionFromEnvelope(data, options);
 }
 
 export async function refreshSession(options: RequestOptions = {}): Promise<SessionEnvelope> {
@@ -239,10 +309,10 @@ export async function refreshSession(options: RequestOptions = {}): Promise<Sess
   });
 
   if (!data) {
-    throw new Error("Expected tokens from refresh response.");
+    throw new Error("Expected session payload from refresh response.");
   }
 
-  return bootstrapSessionFromTokens(data, options.signal);
+  return establishSessionFromEnvelope(data, options);
 }
 
 export async function completeSsoLogin(params: {
@@ -261,10 +331,10 @@ export async function completeSsoLogin(params: {
   });
 
   if (!data) {
-    throw new Error("Expected tokens from SSO callback.");
+    throw new Error("Expected session payload from SSO callback.");
   }
 
-  return bootstrapSessionFromTokens(data, signal);
+  return establishSessionFromEnvelope(data, { signal });
 }
 
 export async function performLogout(options: RequestOptions = {}): Promise<void> {

@@ -85,6 +85,12 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         description="Inspect user profiles, status, and assignments across the tenant.",
     ),
     _permission(
+        key="users.manage_all",
+        scope=ScopeType.GLOBAL,
+        label="Manage users",
+        description="Update user profiles or activation state across the tenant.",
+    ),
+    _permission(
         key="users.invite",
         scope=ScopeType.GLOBAL,
         label="Invite users",

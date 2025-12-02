@@ -277,6 +277,7 @@ class Settings(BaseSettings):
 
     # Server
     server_public_url: str = DEFAULT_PUBLIC_URL
+    frontend_url: str | None = None
     server_cors_origins: list[str] = Field(default_factory=lambda: list(DEFAULT_CORS_ORIGINS))
 
     # Paths
@@ -370,6 +371,17 @@ class Settings(BaseSettings):
         p = urlparse(s)
         if p.scheme not in {"http", "https"} or not p.netloc:
             raise ValueError("ADE_SERVER_PUBLIC_URL must be an http(s) URL")
+        return s.rstrip("/")
+
+    @field_validator("frontend_url", mode="before")
+    @classmethod
+    def _v_frontend_url(cls, v: Any) -> str | None:
+        if v in (None, ""):
+            return None
+        s = str(v).strip()
+        p = urlparse(s)
+        if p.scheme not in {"http", "https"} or not p.netloc:
+            raise ValueError("ADE_FRONTEND_URL must be an http(s) URL")
         return s.rstrip("/")
 
     @field_validator("logging_level", mode="before")
@@ -511,6 +523,9 @@ class Settings(BaseSettings):
         self.pip_cache_dir = _resolve_path(
             self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR
         )
+
+        if not self.frontend_url:
+            self.frontend_url = self.server_public_url
 
         if not self.database_dsn:
             sqlite = _resolve_path(DEFAULT_SQLITE_PATH, default=DEFAULT_SQLITE_PATH)

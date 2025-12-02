@@ -20,7 +20,8 @@ async def login(
     )
     assert response.status_code == 200, response.text
     payload = response.json()
-    token = payload.get("access_token")
+    tokens = payload.get("tokens") or {}
+    token = tokens.get("access_token")
     assert token, "Access token missing"
     return token, payload
 

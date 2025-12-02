@@ -51,7 +51,7 @@ export type paths = {
         /** Return whether initial administrator setup is required */
         get: operations["read_setup_status_api_v1_auth_setup_get"];
         put?: never;
-        /** Create the first administrator account */
+        /** Create the first administrator account and start a session */
         post: operations["complete_setup_api_v1_auth_setup_post"];
         delete?: never;
         options?: never;
@@ -66,9 +66,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Return the current session snapshot */
+        get: operations["read_session_api_v1_auth_session_get"];
         put?: never;
-        /** Create a session via email/password and issue tokens */
+        /** Create a session via email/password */
         post: operations["create_session_api_v1_auth_session_post"];
         /** Terminate the current session */
         delete: operations["end_session_api_v1_auth_session_delete"];
@@ -101,10 +102,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Initiate the SSO login flow
-         * @description Initiate SSO / OIDC login.
-         */
+        /** Initiate the SSO login flow */
         get: operations["start_sso_login_api_v1_auth_sso__provider__authorize_get"];
         put?: never;
         post?: never;
@@ -121,10 +119,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Handle the SSO callback and issue tokens
-         * @description Complete the SSO login flow.
-         */
+        /** Handle the SSO callback and issue tokens */
         get: operations["finish_sso_login_api_v1_auth_sso__provider__callback_get"];
         put?: never;
         post?: never;
@@ -255,6 +250,24 @@ export type paths = {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a user (administrator only) */
+        get: operations["get_user_api_v1_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a user (administrator only) */
+        patch: operations["update_user_api_v1_users__user_id__patch"];
         trace?: never;
     };
     "/api/v1/rbac/permissions": {
@@ -411,7 +424,7 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * Return the caller's effective permission set
+         * Return the caller's effective global and workspace permissions
          * @description Return the effective permissions for the current principal.
          */
         get: operations["get_me_permissions_api_v1_me_permissions_get"];
@@ -786,7 +799,8 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Builds Endpoint */
+        get: operations["list_builds_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_get"];
         put?: never;
         /** Create Build Endpoint */
         post: operations["create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post"];
@@ -813,6 +827,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/builds/{build_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Build Events Endpoint */
+        get: operations["list_build_events_endpoint_api_v1_builds__build_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/builds/{build_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Build Events Endpoint */
+        get: operations["stream_build_events_endpoint_api_v1_builds__build_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/configurations/{configuration_id}/runs": {
         parameters: {
             query?: never;
@@ -820,11 +868,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Configuration Runs Endpoint */
+        get: operations["list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"];
         put?: never;
         /**
          * Create Run Endpoint
-         * @description Create a run for ``configuration_id`` and optionally stream execution events.
+         * @description Create a run for ``configuration_id`` and enqueue execution.
          */
         post: operations["create_run_endpoint_api_v1_configurations__configuration_id__runs_post"];
         delete?: never;
@@ -893,6 +942,23 @@ export type paths = {
         };
         /** Get Run Events Endpoint */
         get: operations["get_run_events_endpoint_api_v1_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Run Events Endpoint */
+        get: operations["stream_run_events_endpoint_api_v1_runs__run_id__events_stream_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1298,38 +1364,6 @@ export type components = {
              */
             has_users: boolean;
         };
-        /**
-         * AuthTokensResponse
-         * @description Response payload containing a freshly issued session token pair.
-         */
-        AuthTokensResponse: {
-            /**
-             * Access Token
-             * @description JWT access token.
-             */
-            access_token: string;
-            /**
-             * Refresh Token
-             * @description Refresh token, if one is issued.
-             */
-            refresh_token?: string | null;
-            /**
-             * Token Type
-             * @description Token type, usually 'bearer'.
-             * @default bearer
-             */
-            token_type: string;
-            /**
-             * Expires In
-             * @description Seconds until the access token expires.
-             */
-            expires_in: number;
-            /**
-             * Refresh Expires In
-             * @description Seconds until the refresh token expires, if applicable.
-             */
-            refresh_expires_in?: number | null;
-        };
         /** Body_upload_document_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_document_api_v1_workspaces__workspace_id__documents_post: {
             /**
@@ -1365,12 +1399,47 @@ export type components = {
          * @description Request body for POST /builds.
          */
         BuildCreateRequest: {
-            /**
-             * Stream
-             * @default false
-             */
-            stream: boolean;
             options?: components["schemas"]["BuildCreateOptions"];
+        };
+        /**
+         * BuildEventsPage
+         * @description Paginated ADE events for a build.
+         */
+        BuildEventsPage: {
+            /** Items */
+            items: components["schemas"]["AdeEvent"][];
+            /** Next After Sequence */
+            next_after_sequence?: number | null;
+        };
+        /**
+         * BuildLinks
+         * @description Hypermedia links for build-related resources.
+         */
+        BuildLinks: {
+            /** Self */
+            self: string;
+            /** Events */
+            events: string;
+            /** Events Stream */
+            events_stream: string;
+        };
+        /**
+         * BuildPage
+         * @description Paginated collection of ``BuildResource`` items.
+         */
+        BuildPage: {
+            /** Items */
+            items: components["schemas"]["BuildResource"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * BuildResource
@@ -1411,6 +1480,7 @@ export type components = {
             summary?: string | null;
             /** Error Message */
             error_message?: string | null;
+            links: components["schemas"]["BuildLinks"];
         };
         /**
          * BuildStatus
@@ -1561,6 +1631,13 @@ export type components = {
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
         };
+        /** DirectoryWriteResponse */
+        DirectoryWriteResponse: {
+            /** Path */
+            path: string;
+            /** Created */
+            created: boolean;
+        };
         /**
          * DocumentLastRun
          * @description Minimal representation of the last engine execution for a document.
@@ -1703,20 +1780,17 @@ export type components = {
          */
         EffectivePermissions: {
             /**
-             * Global Permissions
+             * Global
              * @description Global permission keys granted to the principal.
              */
-            global_permissions: string[];
+            global?: string[];
             /**
-             * Workspace Id
-             * @description Workspace for which workspace_permissions were evaluated.
+             * Workspaces
+             * @description Workspace-scoped permissions keyed by workspace id.
              */
-            workspace_id?: string | null;
-            /**
-             * Workspace Permissions
-             * @description Workspace-scoped permission keys granted to the principal for the specified workspace.
-             */
-            workspace_permissions?: string[];
+            workspaces?: {
+                [key: string]: string[];
+            };
         };
         /** FileCapabilities */
         FileCapabilities: {
@@ -1921,21 +1995,21 @@ export type components = {
             /** @description Current principal profile. */
             user: components["schemas"]["MeProfile"];
             /**
-             * Global Roles
-             * @description Slugs of global roles assigned to the principal.
+             * Roles
+             * @description Global role slugs assigned to the principal.
              */
-            global_roles?: string[];
+            roles?: string[];
             /**
-             * Global Permissions
+             * Permissions
              * @description Global permission keys granted to the principal.
              */
-            global_permissions?: string[];
+            permissions?: string[];
             /** @description Workspaces visible to the principal. */
             workspaces: components["schemas"]["MeWorkspacePage"];
         };
         /**
          * MeProfile
-         * @description Minimal profile for the currently authenticated principal.
+         * @description Profile for the authenticated principal.
          */
         MeProfile: {
             /**
@@ -1961,6 +2035,21 @@ export type components = {
              */
             is_service_account: boolean;
             /**
+             * Preferred Workspace Id
+             * @description Default workspace selection for this principal, when set.
+             */
+            preferred_workspace_id?: string | null;
+            /**
+             * Roles
+             * @description Global role slugs assigned to the principal.
+             */
+            roles?: string[];
+            /**
+             * Permissions
+             * @description Global permission keys granted to the principal.
+             */
+            permissions?: string[];
+            /**
              * Created At
              * Format: date-time
              * @description User creation timestamp.
@@ -1981,7 +2070,7 @@ export type components = {
              * Items
              * @description Workspace entries.
              */
-            items: components["schemas"]["MeWorkspaceSummary"][];
+            items?: components["schemas"]["MeWorkspaceSummary"][];
             /**
              * Page
              * @description Current page (1-based).
@@ -2286,11 +2375,6 @@ export type components = {
          * @description Payload accepted by the run creation endpoint.
          */
         RunCreateRequest: {
-            /**
-             * Stream
-             * @default false
-             */
-            stream: boolean;
             options?: components["schemas"]["RunCreateOptions"];
         };
         /**
@@ -2328,6 +2412,8 @@ export type components = {
             summary: string;
             /** Events */
             events: string;
+            /** Events Stream */
+            events_stream: string;
             /** Logs */
             logs: string;
             /** Outputs */
@@ -2684,6 +2770,99 @@ export type components = {
          */
         ScopeType: "global" | "workspace";
         /**
+         * SessionEnvelope
+         * @description Wrapper around issued session tokens.
+         */
+        SessionEnvelope: {
+            /** @description Issued session token pair. */
+            session: components["schemas"]["SessionTokens"];
+            /**
+             * Csrf Token
+             * @description CSRF token mirrored in the ade_csrf cookie for double-submit.
+             */
+            csrf_token?: string | null;
+        };
+        /**
+         * SessionSnapshot
+         * @description Minimal view of the current session.
+         */
+        SessionSnapshot: {
+            /**
+             * User Id
+             * Format: uuid
+             * @description Subject of the session.
+             */
+            user_id: string;
+            /**
+             * Principal Type
+             * @description Type of principal represented by the session.
+             * @enum {string}
+             */
+            principal_type: "user" | "service_account";
+            /**
+             * Issued At
+             * @description When the session was issued (UTC), if known.
+             */
+            issued_at?: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the session expires (UTC).
+             */
+            expires_at: string;
+        };
+        /**
+         * SessionStatusResponse
+         * @description Snapshot response for GET /auth/session.
+         */
+        SessionStatusResponse: {
+            /** @description Details about the currently authenticated session. */
+            session: components["schemas"]["SessionSnapshot"];
+        };
+        /**
+         * SessionTokens
+         * @description Session token pair issued to a client.
+         */
+        SessionTokens: {
+            /**
+             * Access Token
+             * @description JWT access token.
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @description Refresh token, if one is issued.
+             */
+            refresh_token?: string | null;
+            /**
+             * Token Type
+             * @description Token type, usually 'bearer'.
+             * @default bearer
+             */
+            token_type: string;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the access token expires (UTC).
+             */
+            expires_at: string;
+            /**
+             * Refresh Expires At
+             * @description When the refresh token expires (UTC), if applicable.
+             */
+            refresh_expires_at?: string | null;
+            /**
+             * Expires In
+             * @description Seconds until the access token expires.
+             */
+            expires_in: number;
+            /**
+             * Refresh Expires In
+             * @description Seconds until the refresh token expires, if applicable.
+             */
+            refresh_expires_in?: number | null;
+        };
+        /**
          * UploaderOut
          * @description Minimal representation of the user who uploaded the document.
          */
@@ -2790,6 +2969,22 @@ export type components = {
             /** Roles */
             roles: components["schemas"]["UserRoleSummary"][];
         };
+        /**
+         * UserUpdate
+         * @description Fields administrators can update for a user.
+         */
+        UserUpdate: {
+            /**
+             * Display Name
+             * @description Human-friendly display name for the user.
+             */
+            display_name?: string | null;
+            /**
+             * Is Active
+             * @description Whether the account is active and allowed to authenticate.
+             */
+            is_active?: boolean | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -2823,6 +3018,7 @@ export type components = {
             /**
              * User Id
              * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             user_id: string;
             /** Role Ids */
@@ -2836,6 +3032,7 @@ export type components = {
             /**
              * User Id
              * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             user_id: string;
             /** Role Ids */
@@ -3011,12 +3208,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensResponse"];
+                    "application/json": components["schemas"]["SessionEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -3026,6 +3223,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_session_api_v1_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionStatusResponse"];
                 };
             };
         };
@@ -3049,7 +3266,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensResponse"];
+                    "application/json": components["schemas"]["SessionEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -3113,7 +3330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensResponse"];
+                    "application/json": components["schemas"]["SessionEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -3165,6 +3382,7 @@ export interface operations {
             query?: {
                 code?: string | null;
                 state?: string | null;
+                response_mode?: ("json" | "redirect") | null;
             };
             header?: never;
             path: {
@@ -3180,8 +3398,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthTokensResponse"];
+                    "application/json": components["schemas"]["SessionEnvelope"];
                 };
+            };
+            /** @description Redirect to the frontend after establishing a browser session. Includes session cookies. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3736,6 +3961,114 @@ export interface operations {
             };
         };
     };
+    get_user_api_v1_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to read users. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.read_all permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_api_v1_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to update users. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.manage_all permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No valid fields were provided for update. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_permissions_api_v1_rbac_permissions_get: {
         parameters: {
             query?: {
@@ -4169,10 +4502,7 @@ export interface operations {
     };
     get_me_permissions_api_v1_me_permissions_get: {
         parameters: {
-            query?: {
-                /** @description Optional workspace identifier. When provided, the response includes workspace-scoped permissions for this workspace. */
-                workspace_id?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -4194,22 +4524,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Workspace not found when scoped permissions are requested. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -5600,17 +5914,17 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DirectoryWriteResponse"];
+                };
             };
-            /** @description Successful Response */
+            /** @description Directory created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DirectoryWriteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5647,6 +5961,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_builds_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_get: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number */
+                page?: number;
+                page_size?: number | null;
+                limit?: number | null;
+                /** @description Include total item count */
+                include_total?: boolean;
+                status?: components["schemas"]["BuildStatus"][] | null;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildPage"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -5729,6 +6085,114 @@ export interface operations {
             };
         };
     };
+    list_build_events_endpoint_api_v1_builds__build_id__events_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "ndjson";
+                after_sequence?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Build identifier */
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildEventsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_build_events_endpoint_api_v1_builds__build_id__events_stream_get: {
+        parameters: {
+            query?: {
+                after_sequence?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Build identifier */
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+                status?: components["schemas"]["RunStatus"][] | null;
+                input_document_id?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
@@ -5771,6 +6235,7 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
+                status?: components["schemas"]["RunStatus"][] | null;
                 input_document_id?: string | null;
             };
             header?: never;
@@ -5780,11 +6245,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RunStatus"][] | null;
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -5881,7 +6342,6 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "json" | "ndjson";
-                stream?: boolean;
                 after_sequence?: number | null;
                 limit?: number;
             };
@@ -5901,6 +6361,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunEventsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_run_events_endpoint_api_v1_runs__run_id__events_stream_get: {
+        parameters: {
+            query?: {
+                after_sequence?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -6062,13 +6556,11 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["SafeModeStatus"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

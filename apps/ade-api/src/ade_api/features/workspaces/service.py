@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
@@ -25,6 +26,7 @@ from ade_api.core.models import (
     WorkspaceMembership,
 )
 from ade_api.features.rbac import (
+    AssignmentError,
     RbacService,
     RoleConflictError,
     RoleImmutableError,
@@ -35,7 +37,14 @@ from ade_api.features.rbac import (
 
 from ..users.repository import UsersRepository
 from .repository import WorkspacesRepository
-from .schemas import WorkspaceDefaultSelectionOut, WorkspaceOut
+from .schemas import (
+    WorkspaceDefaultSelectionOut,
+    WorkspaceMemberCreate,
+    WorkspaceMemberOut,
+    WorkspaceMemberPage,
+    WorkspaceMemberUpdate,
+    WorkspaceOut,
+)
 
 if TYPE_CHECKING:
     from ade_api.features.rbac.schemas import RoleCreate, RoleUpdate
@@ -473,6 +482,156 @@ class WorkspacesService:
         )
 
     # ------------------------------------------------------------------
+    # Workspace members
+    # ------------------------------------------------------------------
+    async def list_workspace_members(
+        self,
+        *,
+        workspace_id: str,
+        page: int,
+        page_size: int,
+        include_total: bool,
+        user_id: str | None = None,
+    ) -> WorkspaceMemberPage:
+        await self._ensure_workspace(workspace_id)
+        assignments = await self._get_workspace_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        members = self._group_members(assignments)
+        page_result = paginate_sequence(
+            members,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
+        return WorkspaceMemberPage(**page_result.model_dump())
+
+    async def add_workspace_member(
+        self,
+        *,
+        workspace_id: str,
+        payload: WorkspaceMemberCreate,
+    ) -> WorkspaceMemberOut:
+        await self._ensure_workspace(workspace_id)
+
+        if not payload.role_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="role_ids must include at least one role",
+            )
+
+        for role_id in payload.role_ids:
+            try:
+                await self._rbac.assign_role_if_missing(
+                    user_id=cast(str, payload.user_id),
+                    role_id=cast(str, role_id),
+                    scope_type=ScopeType.WORKSPACE,
+                    scope_id=workspace_id,
+                )
+            except (RoleNotFoundError, AssignmentError) as exc:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+            except ScopeMismatchError as exc:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
+
+        membership = await self._repo.get_membership_for_workspace(
+            user_id=cast(str, payload.user_id),
+            workspace_id=workspace_id,
+        )
+        if membership is None:
+            await self._repo.create_membership(
+                workspace_id=workspace_id,
+                user_id=cast(str, payload.user_id),
+                is_default=False,
+            )
+
+        assignments = await self._get_workspace_assignments(
+            workspace_id=workspace_id,
+            user_id=cast(str, payload.user_id),
+        )
+        if not assignments:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create workspace member",
+            )
+        return self._serialize_member(assignments)
+
+    async def update_workspace_member_roles(
+        self,
+        *,
+        workspace_id: str,
+        user_id: str,
+        payload: WorkspaceMemberUpdate,
+    ) -> WorkspaceMemberOut:
+        await self._ensure_workspace(workspace_id)
+
+        if not payload.role_ids:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="role_ids must include at least one role",
+            )
+
+        membership = await self._repo.get_membership_for_workspace(
+            user_id=user_id,
+            workspace_id=workspace_id,
+        )
+        if membership is None:
+            await self._repo.create_membership(
+                workspace_id=workspace_id,
+                user_id=user_id,
+                is_default=False,
+            )
+
+        await self._replace_member_roles(
+            user_id=user_id,
+            workspace_id=workspace_id,
+            role_ids=[cast(str, role_id) for role_id in payload.role_ids],
+        )
+
+        assignments = await self._get_workspace_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        if not assignments:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="Workspace member not found",
+            )
+        return self._serialize_member(assignments)
+
+    async def remove_workspace_member(
+        self,
+        *,
+        workspace_id: str,
+        user_id: str,
+    ) -> None:
+        await self._ensure_workspace(workspace_id)
+
+        assignments = await self._get_workspace_assignments(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+        if not assignments:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="Workspace member not found",
+            )
+
+        for assignment in assignments:
+            await self._rbac.delete_assignment(
+                assignment_id=cast(str, assignment.id),
+                scope_type=ScopeType.WORKSPACE,
+                scope_id=workspace_id,
+            )
+        await self._delete_membership_if_exists(
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+
+    # ------------------------------------------------------------------
     # Role definitions scoped for workspace use
     # ------------------------------------------------------------------
     async def create_workspace_role(
@@ -586,6 +745,65 @@ class WorkspacesService:
             )
         return workspace
 
+    async def _get_workspace_assignments(
+        self,
+        *,
+        workspace_id: str,
+        user_id: str | None = None,
+    ) -> list[UserRoleAssignment]:
+        stmt = (
+            select(UserRoleAssignment)
+            .options(
+                selectinload(UserRoleAssignment.role).selectinload(RolePermission.permission),
+                selectinload(UserRoleAssignment.user),
+            )
+            .where(
+                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
+                UserRoleAssignment.scope_id == workspace_id,
+            )
+        )
+        if user_id:
+            stmt = stmt.where(UserRoleAssignment.user_id == user_id)
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    def _serialize_member(self, assignments: Sequence[UserRoleAssignment]) -> WorkspaceMemberOut:
+        assignments = list(assignments)
+        if not assignments:
+            raise ValueError("workspace member requires at least one assignment")
+        user_id = assignments[0].user_id
+        role_ids = [assignment.role_id for assignment in assignments]
+        role_slugs = [
+            assignment.role.slug if assignment.role is not None else ""
+            for assignment in assignments
+        ]
+        created_at = min(assignment.created_at for assignment in assignments)
+        return WorkspaceMemberOut(
+            user_id=cast(str, user_id),
+            role_ids=[cast(str, role_id) for role_id in role_ids],
+            role_slugs=role_slugs,
+            created_at=created_at,
+        )
+
+    def _group_members(self, assignments: list[UserRoleAssignment]) -> list[WorkspaceMemberOut]:
+        grouped: dict[str, list[UserRoleAssignment]] = defaultdict(list)
+        for assignment in assignments:
+            grouped[cast(str, assignment.user_id)].append(assignment)
+        return [self._serialize_member(group) for group in grouped.values()]
+
+    async def _delete_membership_if_exists(
+        self,
+        *,
+        workspace_id: str,
+        user_id: str,
+    ) -> None:
+        membership = await self._repo.get_membership_for_workspace(
+            user_id=user_id,
+            workspace_id=workspace_id,
+        )
+        if membership is not None:
+            await self._repo.delete_membership(membership)
+
     async def _workspace_roles_for_user(
         self,
         *,
@@ -647,7 +865,12 @@ class WorkspacesService:
                     scope_type=ScopeType.WORKSPACE,
                     scope_id=workspace_id,
                 )
-            except (RoleNotFoundError, ScopeMismatchError) as exc:
+            except RoleNotFoundError as exc:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    detail=str(exc),
+                ) from exc
+            except ScopeMismatchError as exc:
                 raise HTTPException(
                     status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=str(exc),

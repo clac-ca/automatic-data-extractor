@@ -7,7 +7,6 @@ import json
 import logging
 import subprocess
 import sys
-import uuid
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
+from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.core.models import Build, BuildStatus, Configuration
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
@@ -68,9 +68,9 @@ DEFAULT_EVENTS_PAGE_LIMIT = 1000
 class BuildExecutionContext:
     """Data required to execute a build outside the request scope."""
 
-    build_id: str | UUID
-    configuration_id: str | UUID
-    workspace_id: str | UUID
+    build_id: UUID
+    configuration_id: UUID
+    workspace_id: UUID
     config_path: str
     venv_root: str
     python_bin: str | None
@@ -139,7 +139,7 @@ class BuildsService:
         self._configs = ConfigurationsRepository(session)
         self._builds = BuildsRepository(session)
         self._now = now
-        self._hydration_locks: dict[str, asyncio.Lock] = {}
+        self._hydration_locks: dict[tuple[UUID, UUID, UUID], asyncio.Lock] = {}
         if event_dispatcher and event_storage is None:
             event_storage = event_dispatcher.storage
         self._event_storage = event_storage or BuildEventStorage(settings=settings)
@@ -161,8 +161,8 @@ class BuildsService:
     async def prepare_build(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         options: BuildCreateOptions,
     ) -> tuple[Build, BuildExecutionContext]:
         logger.debug(
@@ -537,8 +537,8 @@ class BuildsService:
     async def list_builds(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         statuses: Sequence[BuildStatus] | None,
         page: int,
         page_size: int,
@@ -596,7 +596,7 @@ class BuildsService:
     async def get_build_events(
         self,
         *,
-        build_id: str,
+        build_id: UUID,
         after_sequence: int | None = None,
         limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
     ) -> tuple[list[AdeEvent], int | None]:
@@ -606,9 +606,9 @@ class BuildsService:
         events: list[AdeEvent] = []
         next_after: int | None = None
         reader = self.event_log_reader(
-            workspace_id=str(build.workspace_id),
-            configuration_id=str(build.configuration_id),
-            build_id=str(build.id),
+            workspace_id=build.workspace_id,
+            configuration_id=build.configuration_id,
+            build_id=build.id,
         )
         for event in reader.iter(after_sequence=after_sequence):
             events.append(event)
@@ -687,11 +687,11 @@ class BuildsService:
             )
             return venv_path
 
-    async def get_build(self, build_id: str | UUID) -> Build | None:
+    async def get_build(self, build_id: UUID) -> Build | None:
         return await self._builds.get(build_id)
 
     async def get_build_or_raise(
-        self, build_id: str | UUID, workspace_id: str | UUID | None = None
+        self, build_id: UUID, workspace_id: UUID | None = None
     ) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
@@ -714,9 +714,9 @@ class BuildsService:
 
     def to_resource(self, build: Build) -> BuildResource:
         return BuildResource(
-            id=str(build.id),
-            workspace_id=str(build.workspace_id),
-            configuration_id=str(build.configuration_id),
+            id=build.id,
+            workspace_id=build.workspace_id,
+            configuration_id=build.configuration_id,
             status=build.status,
             created=self._epoch_seconds(build.created_at),
             started=self._epoch_seconds(build.started_at),
@@ -724,11 +724,11 @@ class BuildsService:
             exit_code=build.exit_code,
             summary=build.summary,
             error_message=build.error_message,
-            links=self._links(str(build.id)),
+            links=self._links(build.id),
         )
 
     @staticmethod
-    def _links(build_id: str):
+    def _links(build_id: UUID):
         base = f"/api/v1/builds/{build_id}"
         return BuildLinks(
             self=base,
@@ -739,9 +739,9 @@ class BuildsService:
     def event_log_reader(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
-        build_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        build_id: UUID,
     ) -> BuildEventLogReader:
         return BuildEventLogReader(
             storage=self._event_storage,
@@ -750,7 +750,7 @@ class BuildsService:
             build_id=build_id,
         )
 
-    def subscribe_to_events(self, build_id: str):
+    def subscribe_to_events(self, build_id: UUID):
         return self._event_dispatcher.subscribe(build_id)
 
     async def _emit_event(
@@ -759,15 +759,15 @@ class BuildsService:
         build: Build,
         type_: str,
         payload: AdeEventPayload | dict[str, Any] | None = None,
-        run_id: str | None = None,
+        run_id: UUID | None = None,
     ) -> AdeEvent:
         return await self._event_dispatcher.emit(
             type=type_,
             source="api",
-            workspace_id=str(build.workspace_id),
-            configuration_id=str(build.configuration_id),
+            workspace_id=build.workspace_id,
+            configuration_id=build.configuration_id,
             run_id=run_id,
-            build_id=str(build.id),
+            build_id=build.id,
             payload=payload or {},
         )
 
@@ -809,8 +809,8 @@ class BuildsService:
         )
     async def _require_configuration(
         self,
-        workspace_id: str | UUID,
-        configuration_id: str | UUID,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         configuration = await self._configs.get(
             workspace_id=workspace_id,
@@ -827,7 +827,7 @@ class BuildsService:
             raise ConfigurationNotFoundError(configuration_id)
         return configuration
 
-    async def _require_build(self, build_id: str | UUID) -> Build:
+    async def _require_build(self, build_id: UUID) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
             logger.warning(
@@ -999,7 +999,7 @@ class BuildsService:
         )
         return build
 
-    async def _wait_for_build(self, *, workspace_id: str, configuration_id: str) -> None:
+    async def _wait_for_build(self, *, workspace_id: UUID, configuration_id: UUID) -> None:
         deadline = self._now() + self._settings.build_ensure_wait
         logger.debug(
             "build.wait_for_existing.start",
@@ -1137,8 +1137,8 @@ class BuildsService:
         return int(dt.timestamp())
 
     @staticmethod
-    def _hydration_key(build: Build) -> str:
-        return f"{build.workspace_id}:{build.configuration_id}:{build.id}"
+    def _hydration_key(build: Build) -> tuple[UUID, UUID, UUID]:
+        return (build.workspace_id, build.configuration_id, build.id)
 
     @staticmethod
     def _marker_matches(marker_path: Path, build: Build) -> bool:
@@ -1152,8 +1152,8 @@ class BuildsService:
             return False
         return True
 
-    def _generate_build_id(self) -> str:
-        return str(uuid.uuid7())
+    def _generate_build_id(self) -> UUID:
+        return generate_uuid7()
 
 
 @dataclass(slots=True)

@@ -1,6 +1,6 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
-import { establishSessionFromTokens, type SessionEnvelope } from "@shared/auth/api";
+import { establishSessionFromEnvelope, type SessionEnvelope } from "@shared/auth/api";
 import type { AuthSetupRequest, AuthSetupStatus, components } from "@schema";
 
 export async function fetchSetupStatus(options: RequestOptions = {}): Promise<AuthSetupStatus> {
@@ -26,10 +26,10 @@ export async function completeSetup(payload: SetupPayload): Promise<SessionEnvel
   });
 
   if (!data) {
-    throw new Error("Expected tokens from setup response.");
+    throw new Error("Expected session payload from setup response.");
   }
 
-  return establishSessionFromTokens(data);
+  return establishSessionFromEnvelope(data);
 }
 
 type SetupPayload = components["schemas"]["AuthSetupRequest"];
