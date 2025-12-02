@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator
-from pathlib import Path
 from typing import Annotated, Any
 
 from ade_engine.schemas import AdeEvent
@@ -12,16 +10,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Security
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
+from ade_api.app.dependencies import get_builds_service
+from ade_api.common.logging import log_context
+from ade_api.common.time import utc_now
+from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.common.encoding import json_bytes
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.shared.dependency import (
-    get_builds_service,
-    require_authenticated,
-    require_csrf,
-    require_workspace,
-)
+from ade_api.infra.db.session import get_sessionmaker
 
 from .exceptions import BuildAlreadyInProgressError, BuildExecutionError, BuildNotFoundError
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildResource
@@ -36,7 +31,7 @@ def _event_bytes(event: Any) -> bytes:
         return event.model_dump_json().encode("utf-8") + b"\n"
     if hasattr(event, "json_bytes"):
         return event.json_bytes() + b"\n"
-    return json.dumps(event).encode("utf-8") + b"\n"
+    return json_bytes(event) + b"\n"
 
 
 def _sse_event_bytes(event: AdeEvent) -> bytes:
@@ -56,17 +51,13 @@ async def _execute_build_background(
     context_data: dict[str, Any],
     options_data: dict[str, Any],
     settings_payload: dict[str, Any],
-    storage_payload: dict[str, str],
 ) -> None:
     from ade_api.features.configs.storage import ConfigStorage
     from ade_api.settings import Settings
 
     settings = Settings(**settings_payload)
     session_factory = get_sessionmaker(settings=settings)
-    storage = ConfigStorage(
-        templates_root=Path(storage_payload["templates_root"]),
-        configs_root=Path(storage_payload["configs_root"]),
-    )
+    storage = ConfigStorage(settings=settings)
     context = BuildExecutionContext.from_dict(context_data)
     options = BuildCreateOptions(**options_data)
     async with session_factory() as session:
@@ -117,7 +108,7 @@ async def create_build_endpoint(
         ),
     ],
     service: BuildsService = builds_service_dependency,
-) -> BuildResource | StreamingResponse:
+    ) -> BuildResource | StreamingResponse:
     try:
         build, context = await service.prepare_build(
             workspace_id=workspace_id,
@@ -131,16 +122,11 @@ async def create_build_endpoint(
 
     resource = service.to_resource(build)
     if not payload.stream:
-        storage_payload = {
-            "templates_root": str(service.storage.templates_root),
-            "configs_root": str(service.storage.configs_root),
-        }
         background_tasks.add_task(
             _execute_build_background,
             context.as_dict(),
             payload.options.model_dump(),
             service.settings.model_dump(mode="python"),
-            storage_payload,
         )
         return resource
 

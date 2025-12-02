@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from ade_api.settings import DEFAULT_VENVS_DIR, Settings
-from ade_api.storage_layout import (
+from ade_api.infra.storage import (
     build_venv_path,
     build_venv_root,
     build_venv_temp_path,

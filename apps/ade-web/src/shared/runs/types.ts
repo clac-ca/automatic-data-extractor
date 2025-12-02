@@ -49,3 +49,5 @@ export function eventTimestamp(event: AdeEvent): string {
   }
   return new Date().toISOString();
 }
+
+export type RunStatus = import("@schema").RunStatus;

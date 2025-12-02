@@ -45,9 +45,6 @@ export function useUsersQuery(options: UseUsersQueryOptions = {}) {
 }
 
 function normalizeFetchOptions(options: FetchUsersOptions): FetchUsersOptions {
-  const next: FetchUsersOptions = { ...options };
-  if (!next.page || next.page < 1) {
-    next.page = 1;
-  }
-  return next;
+  const page = !options.page || options.page < 1 ? 1 : options.page;
+  return { ...options, page };
 }

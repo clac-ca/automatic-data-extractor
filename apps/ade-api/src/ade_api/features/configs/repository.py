@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Configuration, ConfigurationStatus
+from ade_api.core.models import Configuration, ConfigurationStatus
 
 
 class ConfigurationsRepository:

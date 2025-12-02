@@ -7,11 +7,10 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from ade_api.shared.core.ids import UUIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from .models import ConfigurationStatus
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
+from ade_api.core.models import ConfigurationStatus
 
 
 class ConfigSourceTemplate(BaseSchema):

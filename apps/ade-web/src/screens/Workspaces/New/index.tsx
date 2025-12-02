@@ -233,7 +233,7 @@ function WorkspaceCreateContent() {
           ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button type="button" variant="secondary" onClick={() => navigate(-1)} disabled={isSubmitting}>
+            <Button type="button" variant="secondary" onClick={() => navigate("/workspaces")} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" isLoading={isSubmitting}>

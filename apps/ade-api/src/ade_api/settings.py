@@ -57,6 +57,7 @@ def _detect_api_root() -> Path:
 
 DEFAULT_API_ROOT = _detect_api_root()
 DEFAULT_WEB_DIR = MODULE_DIR / "web"
+DEFAULT_CONFIG_TEMPLATES_DIR = MODULE_DIR / "templates" / "config_packages"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
@@ -281,6 +282,7 @@ class Settings(BaseSettings):
     # Paths
     api_root: Path = Field(default=DEFAULT_API_ROOT)
     web_dir: Path = Field(default=DEFAULT_WEB_DIR)
+    config_templates_dir: Path = Field(default=DEFAULT_CONFIG_TEMPLATES_DIR)
     alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
@@ -333,10 +335,12 @@ class Settings(BaseSettings):
     session_last_seen_interval: timedelta = Field(default=timedelta(minutes=5))
 
     # Auth policy
+    api_key_prefix_length: int = Field(12, ge=6, le=32)
+    api_key_secret_bytes: int = Field(32, ge=16, le=128)
     failed_login_lock_threshold: int = Field(5, ge=1)
     failed_login_lock_duration: timedelta = Field(default=timedelta(minutes=5))
     auth_disabled: bool = False
-    auth_disabled_user_email: str = "developer@example.test"
+    auth_disabled_user_email: str = "developer@example.com"
     auth_disabled_user_name: str | None = "Development User"
 
     # Runs & workers
@@ -479,6 +483,9 @@ class Settings(BaseSettings):
     def _finalize(self) -> Settings:
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
         self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
+        self.config_templates_dir = _resolve_path(
+            self.config_templates_dir, default=DEFAULT_CONFIG_TEMPLATES_DIR
+        )
         self.alembic_ini_path = _resolve_path(
             self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI
         )

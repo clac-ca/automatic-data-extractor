@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Build, BuildStatus
+from ade_api.core.models import Build, BuildStatus
 
 __all__ = [
     "BuildsRepository",
@@ -18,7 +20,7 @@ class BuildsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self, build_id: str) -> Build | None:
+    async def get(self, build_id: str | UUID) -> Build | None:
         return await self._session.get(Build, build_id)
 
     async def add(self, build: Build) -> None:

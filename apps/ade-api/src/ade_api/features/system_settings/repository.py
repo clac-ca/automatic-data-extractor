@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import SystemSetting
+from ade_api.core.models import SystemSetting
 
 
 class SystemSettingsRepository:

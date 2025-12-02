@@ -25,7 +25,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     shouldBypassUnsavedGuard,
   } = useWorkbenchWindow();
   const configId = params?.configId;
-  const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configId });
+  const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configurationId: configId });
 
   useEffect(() => {
     if (configId) {

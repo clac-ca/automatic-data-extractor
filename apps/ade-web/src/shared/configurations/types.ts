@@ -6,6 +6,14 @@ export type ConfigurationValidateResponse = components["schemas"]["Configuration
 
 export type FileEntry = components["schemas"]["FileEntry"];
 export type FileListing = components["schemas"]["FileListing"];
-export type FileReadJson = components["schemas"]["FileReadJson"];
+export type FileReadJson = {
+  content: string;
+  encoding?: string | null;
+  etag?: string | null;
+  size?: number | null;
+  mtime?: string | null;
+  content_type?: string | null;
+};
 export type FileWriteResponse = components["schemas"]["FileWriteResponse"];
 export type FileRenameResponse = components["schemas"]["FileRenameResponse"];
+export type DirectoryWriteResponse = { path: string };

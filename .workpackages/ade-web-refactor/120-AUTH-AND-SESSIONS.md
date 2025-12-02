@@ -23,7 +23,7 @@ and the auth-related routes in the backend:
 - `/api/v1/bootstrap`
 - `/api/v1/auth/session`, `/api/v1/auth/session/refresh`
 - `/api/v1/auth/providers`
-- `/api/v1/auth/me`, `/api/v1/users/me`
+- `/api/v1/me`
 - `/api/v1/auth/sso/login`, `/api/v1/auth/sso/callback`
 - `/api/v1/auth/api-keys`
 - `/api/v1/me/permissions`, `/api/v1/me/permissions/check`
@@ -119,7 +119,7 @@ and the auth-related routes in the backend:
 
 ### 1.5 User & Permissions
 
-- `GET /api/v1/auth/me` or `GET /api/v1/users/me`
+- `GET /api/v1/me`
   - Response: `UserProfile`:
     - `id`, `email`, `is_active`, `is_service_account`
     - `display_name?`
@@ -464,7 +464,7 @@ We should **not** gate everything client-side only; the backend is authoritative
     - `/auth/session` (GET/POST/DELETE)
     - `/auth/session/refresh` (POST)
     - `/auth/providers` (GET)
-    - `/auth/me` (GET)
+    - `/me` (GET)
     - `/setup/status` (GET)
     - `/setup` (POST)
     - `/bootstrap` (GET)

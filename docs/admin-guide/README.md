@@ -25,7 +25,7 @@ Administrators install, configure, and operate the Automatic Data Extractor. Thi
 - `ADE_DATABASE_MI_CLIENT_ID` optionally pins a user-assigned managed identity; omit it to use the system-assigned identity. Alembic migrations reuse the same settings and token flow as the runtime engine.
 
 ## Operational building blocks
-- Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/shared/db/engine.py`](../../apps/ade-api/src/ade_api/shared/db/engine.py) and scoped sessions from [`apps/ade-api/src/ade_api/shared/db/session.py`](../../apps/ade-api/src/ade_api/shared/db/session.py).
+- Database connections are created via the async SQLAlchemy engine in [`apps/ade-api/src/ade_api/infra/db/engine.py`](../../apps/ade-api/src/ade_api/infra/db/engine.py) and scoped sessions from [`apps/ade-api/src/ade_api/infra/db/session.py`](../../apps/ade-api/src/ade_api/infra/db/session.py).
 - Structured logging and correlation IDs are configured through [`apps/ade-api/src/ade_api/shared/core/logging.py`](../../apps/ade-api/src/ade_api/shared/core/logging.py) and middleware in [`apps/ade-api/src/ade_api/shared/core/middleware.py`](../../apps/ade-api/src/ade_api/shared/core/middleware.py).
 - Run observability workflows (streaming, polling, DB inspection) are documented in [Observing ADE Runs](runs_observability.md) for on-call reference.
 

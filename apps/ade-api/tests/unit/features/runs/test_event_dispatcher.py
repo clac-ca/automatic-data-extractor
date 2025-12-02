@@ -10,7 +10,7 @@ from ade_api.features.runs.event_dispatcher import (
     RunEventStorage,
 )
 from ade_api.settings import Settings
-from ade_api.shared.core.time import utc_now
+from ade_api.common.time import utc_now
 
 
 pytestmark = pytest.mark.asyncio()

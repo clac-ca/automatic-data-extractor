@@ -21,15 +21,11 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from ade_api.shared.dependency import (
-    get_configurations_service,
-    require_authenticated,
-    require_csrf,
-    require_workspace,
-)
-from ade_api.shared.pagination import PageParams, paginate_sequence
+from ade_api.app.dependencies import get_configurations_service
+from ade_api.common.pagination import PageParams, paginate_sequence
+from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.core.models import User
 
-from ..users.models import User
 from .etag import canonicalize_etag, format_etag, format_weak_etag
 from .exceptions import (
     ConfigPublishConflictError,
@@ -816,10 +812,13 @@ async def delete_config_file(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post(
+@router.put(
     "/configurations/{configuration_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_200_OK: {"description": "Directory already exists"},
+    },
 )
 async def create_config_directory(
     workspace_id: WorkspaceIdPath,
@@ -837,7 +836,7 @@ async def create_config_directory(
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        await service.create_directory(
+        _, created = await service.create_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -850,7 +849,8 @@ async def create_config_directory(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except PathNotAllowedError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    return {"path": directory_path}
+    status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return JSONResponse({"path": directory_path}, status_code=status_code)
 
 
 @router.delete(

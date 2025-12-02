@@ -7,12 +7,13 @@ import json
 import logging
 import subprocess
 import sys
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-import uuid
+from uuid import UUID
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -24,15 +25,15 @@ from ade_engine.schemas import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.logging import log_context
+from ade_api.common.time import utc_now
+from ade_api.core.models import Build, BuildStatus, Configuration
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.configs.models import Configuration
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
+from ade_api.infra.storage import build_venv_root
 from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
-from ade_api.storage_layout import build_venv_root
 
 from .builder import (
     BuildArtifacts,
@@ -47,7 +48,6 @@ from .exceptions import (
     BuildNotFoundError,
     BuildWorkspaceMismatchError,
 )
-from .models import Build, BuildStatus
 from .repository import BuildsRepository
 from .schemas import BuildCreateOptions, BuildResource
 
@@ -66,9 +66,9 @@ DEFAULT_STREAM_LIMIT = 1000
 class BuildExecutionContext:
     """Data required to execute a build outside the request scope."""
 
-    build_id: str
-    configuration_id: str
-    workspace_id: str
+    build_id: str | UUID
+    configuration_id: str | UUID
+    workspace_id: str | UUID
     config_path: str
     venv_root: str
     python_bin: str | None
@@ -100,9 +100,9 @@ class BuildExecutionContext:
     @classmethod
     def from_dict(cls, payload: dict[str, str | bool | None | float]) -> BuildExecutionContext:
         return cls(
-            build_id=str(payload["build_id"]),
-            configuration_id=str(payload["configuration_id"]),
-            workspace_id=str(payload["workspace_id"]),
+            build_id=UUID(str(payload["build_id"])),
+            configuration_id=UUID(str(payload["configuration_id"])),
+            workspace_id=UUID(str(payload["workspace_id"])),
             config_path=str(payload["config_path"]),
             venv_root=str(payload["venv_root"]),
             python_bin=payload.get("python_bin") or None,
@@ -588,10 +588,12 @@ class BuildsService:
             )
             return venv_path
 
-    async def get_build(self, build_id: str) -> Build | None:
+    async def get_build(self, build_id: str | UUID) -> Build | None:
         return await self._builds.get(build_id)
 
-    async def get_build_or_raise(self, build_id: str, workspace_id: str | None = None) -> Build:
+    async def get_build_or_raise(
+        self, build_id: str | UUID, workspace_id: str | UUID | None = None
+    ) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
             logger.warning(
@@ -599,7 +601,7 @@ class BuildsService:
                 extra=log_context(build_id=build_id, workspace_id=workspace_id),
             )
             raise BuildNotFoundError(build_id)
-        if workspace_id and build.workspace_id != workspace_id:
+        if workspace_id and str(build.workspace_id) != str(workspace_id):
             logger.warning(
                 "build.get.workspace_mismatch",
                 extra=log_context(
@@ -613,9 +615,9 @@ class BuildsService:
 
     def to_resource(self, build: Build) -> BuildResource:
         return BuildResource(
-            id=build.id,
-            workspace_id=build.workspace_id,
-            configuration_id=build.configuration_id,
+            id=str(build.id),
+            workspace_id=str(build.workspace_id),
+            configuration_id=str(build.configuration_id),
             status=build.status,
             created=self._epoch_seconds(build.created_at),
             started=self._epoch_seconds(build.started_at),
@@ -636,16 +638,16 @@ class BuildsService:
             type=type_,
             created_at=utc_now(),
             source="api",
-            workspace_id=build.workspace_id,
-            configuration_id=build.configuration_id,
+            workspace_id=str(build.workspace_id),
+            configuration_id=str(build.configuration_id),
             run_id=None,
-            build_id=build.id,
+            build_id=str(build.id),
             payload=payload or {},
         )
     async def _require_configuration(
         self,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: str | UUID,
+        configuration_id: str | UUID,
     ) -> Configuration:
         configuration = await self._configs.get(
             workspace_id=workspace_id,
@@ -662,7 +664,7 @@ class BuildsService:
             raise ConfigurationNotFoundError(configuration_id)
         return configuration
 
-    async def _require_build(self, build_id: str) -> Build:
+    async def _require_build(self, build_id: str | UUID) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
             logger.warning(

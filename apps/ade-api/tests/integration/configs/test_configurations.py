@@ -11,17 +11,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_api.features.configs.models import Configuration
+from ade_api.core.models import Configuration, ConfigurationStatus
 from ade_api.settings import get_settings
-from ade_api.shared.db import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
-
-_settings = get_settings()
-CSRF_COOKIE = _settings.session_csrf_cookie_name
-
 
 async def _auth_headers(
     client: AsyncClient,
@@ -29,10 +25,8 @@ async def _auth_headers(
     email: str,
     password: str,
 ) -> dict[str, str]:
-    await login(client, email=email, password=password)
-    token = client.cookies.get(CSRF_COOKIE)
-    assert token, "Missing CSRF cookie"
-    return {"X-CSRF-Token": token}
+    token, _ = await login(client, email=email, password=password)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _create_from_template(
@@ -57,9 +51,9 @@ async def _create_from_template(
 def _config_path(workspace_id: str, configuration_id: str) -> Path:
     return (
         Path(get_settings().configs_dir)
-        / workspace_id
+        / str(workspace_id)
         / "config_packages"
-        / configuration_id
+        / str(configuration_id)
     )
 
 
@@ -189,7 +183,7 @@ async def test_validate_missing_config_returns_not_found(
     headers = await _auth_headers(
         async_client, email=owner["email"], password=owner["password"]
     )
-    random_id = generate_ulid()
+    random_id = str(generate_uuid7())
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{random_id}/validate",
@@ -274,11 +268,17 @@ async def test_file_editor_endpoints(
     )
     assert resp.status_code == 204
 
-    resp = await async_client.post(
+    resp = await async_client.put(
         f"{base_url}/directories/assets/new_folder",
         headers=headers,
     )
     assert resp.status_code == 201
+
+    resp = await async_client.put(
+        f"{base_url}/directories/assets/new_folder",
+        headers=headers,
+    )
+    assert resp.status_code == 200
 
     resp = await async_client.delete(
         f"{base_url}/directories/assets/new_folder",
@@ -414,9 +414,9 @@ async def test_activate_demotes_previous_active(
     async with session_factory() as session:
         stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
         result = await session.execute(stmt)
-        configs = {row.id: row for row in result.scalars()}
-        assert configs[first["id"]].status == "inactive"
-        assert configs[second["id"]].status == "active"
+        configs = {str(row.id): row for row in result.scalars()}
+        assert configs[str(first["id"])].status is ConfigurationStatus.INACTIVE
+        assert configs[str(second["id"])].status is ConfigurationStatus.ACTIVE
 
 
 async def test_activate_returns_422_when_validation_fails(

@@ -13,7 +13,7 @@ from typing import Literal
 from ade_engine.schemas import AdeEvent
 from pydantic import ValidationError
 
-from ade_api.shared.core.logging import log_context
+from ade_api.common.logging import log_context
 
 logger = logging.getLogger(__name__)
 

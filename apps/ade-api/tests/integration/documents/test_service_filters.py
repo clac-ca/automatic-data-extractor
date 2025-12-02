@@ -3,18 +3,25 @@ from uuid import uuid4
 
 import pytest
 
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
-from ade_api.features.documents.filters import DocumentFilters, DocumentSource, DocumentStatus
-from ade_api.features.documents.models import Document, DocumentTag
+from ade_api.core.models import (
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    DocumentTag,
+    Run,
+    RunStatus,
+    User,
+    Workspace,
+)
+from ade_api.features.documents.filters import DocumentFilters
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.features.runs.models import Run, RunStatus
-from ade_api.features.users.models import User
-from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import get_settings
-from ade_api.shared.db import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.shared.sorting import resolve_sort
+from ade_api.infra.db import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
+from ade_api.common.sorting import resolve_sort
 
 pytestmark = pytest.mark.asyncio
 
@@ -22,14 +29,14 @@ pytestmark = pytest.mark.asyncio
 async def _build_documents_fixture(session):
     workspace = Workspace(name="Workspace", slug=f"ws-{uuid4().hex[:6]}")
     uploader = User(
-        id=generate_ulid(),
-        email="uploader@example.test",
+        id=generate_uuid7(),
+        email="uploader@example.com",
         display_name="Uploader One",
         is_active=True,
     )
     colleague = User(
-        id=generate_ulid(),
-        email="colleague@example.test",
+        id=generate_uuid7(),
+        email="colleague@example.com",
         display_name="Colleague Two",
         is_active=True,
     )
@@ -40,7 +47,7 @@ async def _build_documents_fixture(session):
     expires = now + timedelta(days=30)
 
     processed = Document(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=str(workspace.id),
         original_filename="alpha-report.pdf",
         content_type="application/pdf",
@@ -49,15 +56,15 @@ async def _build_documents_fixture(session):
         stored_uri="alpha-report",
         attributes={},
         uploaded_by_user_id=uploader.id,
-        status=DocumentStatus.PROCESSED.value,
-        source=DocumentSource.MANUAL_UPLOAD.value,
+        status=DocumentStatus.PROCESSED,
+        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
         last_run_at=now - timedelta(days=1),
     )
     processed.tags.append(DocumentTag(document_id=processed.id, tag="finance"))
 
     uploaded = Document(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=str(workspace.id),
         original_filename="zeta-draft.docx",
         content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -66,8 +73,8 @@ async def _build_documents_fixture(session):
         stored_uri="zeta-draft",
         attributes={},
         uploaded_by_user_id=colleague.id,
-        status=DocumentStatus.UPLOADED.value,
-        source=DocumentSource.MANUAL_UPLOAD.value,
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
         expires_at=expires,
         last_run_at=None,
     )
@@ -222,7 +229,7 @@ async def test_list_documents_includes_last_run_summary() -> None:
         now = datetime.now(tz=UTC)
         configuration_id = await _ensure_configuration(session, str(workspace.id))
         run = Run(
-            id=generate_ulid(),
+            id=generate_uuid7(),
             workspace_id=str(workspace.id),
             configuration_id=configuration_id,
             submitted_by_user_id=uploader.id,
@@ -231,7 +238,7 @@ async def test_list_documents_includes_last_run_summary() -> None:
             retry_of_run_id=None,
             input_document_id=processed.id,
             input_documents=[
-                {"document_id": processed.id, "name": processed.original_filename},
+                {"document_id": str(processed.id), "name": processed.original_filename},
             ],
             trace_id=None,
             artifact_uri=None,
@@ -263,12 +270,16 @@ async def test_list_documents_includes_last_run_summary() -> None:
             actor=uploader,
         )
 
-        processed_record = next(item for item in result.items if item.id == processed.id)
+        processed_record = next(
+            item for item in result.items if str(item.id) == str(processed.id)
+        )
         assert processed_record.last_run is not None
-        assert processed_record.last_run.run_id == run.id
+        assert str(processed_record.last_run.run_id) == str(run.id)
         assert processed_record.last_run.status == RunStatus.FAILED
         assert processed_record.last_run.message == "Request failed with status 404"
         assert processed_record.last_run.run_at == run.finished_at
 
-        uploaded_record = next(item for item in result.items if item.id == uploaded.id)
+        uploaded_record = next(
+            item for item in result.items if str(item.id) == str(uploaded.id)
+        )
         assert uploaded_record.last_run is None

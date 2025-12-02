@@ -80,7 +80,7 @@ export function WorkspaceRolesSection() {
   };
 
   const handleDeleteRole = (role: RoleDefinition) => {
-    if (!canManageRoles || role.built_in) {
+    if (!canManageRoles || role.is_system || !role.is_editable) {
       return;
     }
     const confirmed = window.confirm(`Delete the role "${role.name}"? This action cannot be undone.`);
@@ -193,12 +193,12 @@ export function WorkspaceRolesSection() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <h3 className="text-base font-semibold text-slate-900">{role.name}</h3>
-                        {role.built_in ? (
+                        {role.is_system ? (
                           <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                            Built-in
+                            System
                           </span>
                         ) : null}
-                        {!role.editable ? (
+                        {!role.is_editable ? (
                           <span className="inline-flex items-center rounded-full bg-warning-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warning-700">
                             Locked
                           </span>
@@ -209,7 +209,7 @@ export function WorkspaceRolesSection() {
                         <p className="text-sm text-slate-600">{role.description}</p>
                       ) : null}
                     </div>
-                    {canManageRoles && role.editable ? (
+                    {canManageRoles && role.is_editable ? (
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
@@ -220,13 +220,13 @@ export function WorkspaceRolesSection() {
                         >
                           {isEditing ? "Cancel" : "Edit"}
                         </Button>
-                        {!role.built_in ? (
+                        {!role.is_system ? (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteRole(role)}
-                            disabled={deleteRole.isPending}
+                            disabled={deleteRole.isPending || role.is_system || !role.is_editable}
                           >
                             Delete
                           </Button>

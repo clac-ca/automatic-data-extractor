@@ -8,7 +8,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Document
+from ade_api.core.models import Document
 
 
 class DocumentsRepository:
@@ -58,4 +58,3 @@ class DocumentsRepository:
 
 
 __all__ = ["DocumentsRepository"]
-

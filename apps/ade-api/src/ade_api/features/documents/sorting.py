@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import func
 
-from ade_api.shared.sql import nulls_last
-
-from .models import Document
+from ade_api.common.sql import nulls_last
+from ade_api.core.models import Document
 
 SORT_FIELDS = {
     "id": (Document.id.asc(), Document.id.desc()),

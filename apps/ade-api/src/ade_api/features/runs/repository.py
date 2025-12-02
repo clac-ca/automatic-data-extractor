@@ -7,10 +7,8 @@ from collections.abc import Sequence
 from sqlalchemy import Select, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.runs.models import RunStatus
-from ade_api.shared.pagination import Page, paginate_sql
-
-from .models import Run
+from ade_api.common.pagination import Page, paginate_sql
+from ade_api.core.models import Run, RunStatus
 
 __all__ = ["RunsRepository"]
 

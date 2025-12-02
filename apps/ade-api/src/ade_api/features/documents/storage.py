@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from ade_api.shared.adapters.storage import (
+from ade_api.infra.storage import (
     FilesystemStorage,
     StorageError,
     StorageLimitError,

@@ -516,22 +516,45 @@ def _create_api_keys() -> None:
         "api_keys",
         _uuid_pk(),
         sa.Column(
-            "user_id",
+            "owner_user_id",
             UUIDType(),
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("token_prefix", sa.String(length=12), nullable=False, unique=True),
-        sa.Column("token_hash", sa.String(length=64), nullable=False, unique=True),
+        sa.Column(
+            "created_by_user_id",
+            UUIDType(),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column("scope_type", RBAC_SCOPE, nullable=False, server_default="global"),
+        sa.Column(
+            "scope_id",
+            UUIDType(),
+            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+        sa.Column("token_prefix", sa.String(length=32), nullable=False, unique=True),
+        sa.Column("token_hash", sa.String(length=128), nullable=False, unique=True),
         sa.Column("label", sa.String(length=100), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_seen_ip", sa.String(length=45), nullable=True),
-        sa.Column("last_seen_user_agent", sa.String(length=255), nullable=True),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_used_ip", sa.String(length=45), nullable=True),
+        sa.Column("last_used_user_agent", sa.String(length=255), nullable=True),
         *_timestamps(),
+        sa.CheckConstraint(
+            "(scope_type = 'global' AND scope_id IS NULL) OR "
+            "(scope_type = 'workspace' AND scope_id IS NOT NULL)",
+            name="chk_api_key_scope",
+        ),
     )
-    op.create_index("ix_api_keys_user_id", "api_keys", ["user_id"], unique=False)
+    op.create_index(
+        "ix_api_keys_owner_scope",
+        "api_keys",
+        ["owner_user_id", "scope_type", "scope_id"],
+        unique=False,
+    )
 
 
 def _create_system_settings() -> None:

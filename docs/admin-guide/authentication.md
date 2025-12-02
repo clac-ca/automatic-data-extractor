@@ -6,28 +6,29 @@ identity, session, and credential handling.
 
 ## Identity Sources
 
-ADE recognises three credential types and normalises them into an `AuthenticatedIdentity` object before any route code runs:
+ADE recognises three credential types and normalises them into an `AuthenticatedPrincipal` before any route code runs:
 
 1. **Session cookies** – the primary browser flow. The access token lives in the session cookie and the refresh token is issued in
-a sibling cookie with the same session identifier. CSRF tokens are minted alongside the JWT pair and must accompany mutating
-requests.【F:apps/ade-api/src/ade_api/features/auth/service.py†L305-L370】
+   a sibling cookie with the same session identifier. CSRF tokens are minted alongside the JWT pair and must accompany mutating
+   requests.【F:apps/ade-api/src/ade_api/features/auth/service.py†L305-L370】
 2. **Bearer access tokens** – typically produced by the `/auth/session` endpoints. They are decoded with the same signing secret as
-sessions and skip CSRF enforcement because they are intended for non-browser clients.【F:apps/ade-api/src/ade_api/shared/dependency.py†L94-L145】
+   sessions and skip CSRF enforcement because they are intended for non-browser clients.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L110-L178】
 3. **API keys** – created through the admin UI or API. The raw token is shown once and clients must provide it via the
-`X-API-Key` header. API keys reuse the principal model so they participate in the same RBAC assignments.【F:apps/ade-api/src/ade_api/shared/dependency.py†L147-L150】【F:apps/ade-api/src/ade_api/features/auth/service.py†L52-L103】
+   `X-API-Key` header. API keys reuse the principal model so they participate in the same RBAC assignments.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L79-L108】【F:apps/ade-api/src/ade_api/features/auth/service.py†L52-L103】
 
-`get_current_identity` prefers bearer tokens, then session cookies, then API keys. Regardless of the path, the dependency
-ensures the backing `User` has a corresponding `Principal` record so downstream permission checks operate on principals
-exclusively.【F:apps/ade-api/src/ade_api/shared/dependency.py†L94-L150】
+`get_current_principal` prefers bearer tokens, then session cookies, then API keys. Regardless of the path, the dependency
+ensures the backing `User` exists so downstream permission checks operate on principals exclusively.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L180-L226】
 
 ## Session Lifecycle
 
 * `AuthService.start_session` issues a new session identifier, access token, refresh token, and CSRF token. The tokens embed the
 session identifier and hashed CSRF token so a refresh can rotate everything while keeping the same session id when desired.
+* `POST /api/v1/auth/session/refresh` accepts a JSON body containing ``refresh_token`` for API/CLI callers and falls back to the
+refresh cookie when no body is supplied.
 * `AuthService.apply_session_cookies` writes the access and refresh cookies with `httponly`, `lax` SameSite, and a refresh path
 tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the request is served over HTTPS.【F:apps/ade-api/src/ade_api/features/auth/service.py†L305-L370】【F:apps/ade-api/src/ade_api/features/auth/service.py†L420-L468】
 * `require_csrf` runs on every mutating endpoint. It only enforces CSRF for session-cookie identities and delegates to
-`AuthService.enforce_csrf`, which compares the hashed token in the JWT with the submitted value.【F:apps/ade-api/src/ade_api/shared/dependency.py†L170-L187】
+  `AuthService.enforce_csrf`, which compares the hashed token in the JWT with the submitted value.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L243-L260】
 
 ## Single Sign-On (OpenID Connect)
 
@@ -42,7 +43,7 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 * `AuthService.prepare_sso_login` signs a short-lived state token, requires PKCE S256, and only permits return targets that resolve to same-origin paths before redirecting to the provider.【F:apps/ade-api/src/ade_api/features/auth/service.py†L700-L756】【F:apps/ade-api/src/ade_api/features/auth/service.py†L816-L860】
 * The state cookie is issued as `Secure`, `HttpOnly`, `SameSite=Lax`, and scoped to the API SSO prefix so the callback can validate it without exposing it to other routes.【F:apps/ade-api/src/ade_api/features/auth/router.py†L487-L566】
 * Provider discovery and JWKS fetches enforce HTTPS, block private hosts, respect bounded timeouts, and reject oversized or non-JSON responses.【F:apps/ade-api/src/ade_api/features/auth/service.py†L628-L698】【F:apps/ade-api/src/ade_api/features/auth/service.py†L758-L817】【F:apps/ade-api/src/ade_api/features/auth/service.py†L1032-L1112】
-* The SPA callback route reads the IdP query parameters, invokes `/api/v1/auth/sso/callback`, and redirects to either the stored `return_to` hint or the user’s preferred workspace once the backend issues cookies.【F:apps/ade-web/src/app/routes/auth.callback.tsx†L1-L74】【F:apps/ade-web/src/app/routes/login.tsx†L1-L74】
+* The SPA callback route reads the IdP query parameters, invokes `/api/v1/auth/sso/{provider}/callback`, and redirects to either the stored `return_to` hint or the user’s preferred workspace once the backend issues cookies.【F:apps/ade-web/src/app/routes/auth.callback.tsx†L1-L74】【F:apps/ade-web/src/app/routes/login.tsx†L1-L74】
 * Token exchange responses must include a bearer `id_token`/`access_token` pair; the service allows only RS256/ES256 signatures, validates issuer, audience, nonce, and time claims with small leeway, and refreshes JWKS data when a signing key is unknown.【F:apps/ade-api/src/ade_api/features/auth/service.py†L817-L939】【F:apps/ade-api/src/ade_api/features/auth/service.py†L939-L1031】
 
 ### Provisioning policy
@@ -53,18 +54,18 @@ tied to `/api/v1/auth/session/refresh`. Secure cookies are used whenever the req
 
 ## Security Dependencies
 
-All feature routers include the shared dependencies from the auth and roles modules so that OpenAPI documents the
-requirements and the responses are consistent.【F:apps/ade-api/src/ade_api/shared/dependency.py†L154-L307】
+All feature routers include the shared dependencies from the auth and RBAC modules so that OpenAPI documents the
+requirements and the responses are consistent.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L180-L305】
 
-* `require_authenticated` guarantees a `User` is attached to the request. All routers mount this dependency once so individual
-handlers can assume an authenticated context.【F:apps/ade-api/src/ade_api/shared/dependency.py†L154-L167】
+* `require_authenticated` guarantees a `User` is attached to the request. Routers mount this dependency so individual handlers
+  can assume an authenticated context.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L189-L227】
 * `require_global(<permission>)` and `require_workspace(<permission>)` call the principal-aware `authorize` helper to enforce
-RBAC assignments. Workspace guards derive the scope identifier from path or query parameters and emit structured 403 payloads
-when access is denied.【F:apps/ade-api/src/ade_api/shared/dependency.py†L189-L240】
-* `require_permissions_catalog_access` protects the permissions catalogue endpoints and handles both global and workspace
-scopes. It reuses the same forbidden payload shape and performs scope validation for workspace requests.【F:apps/ade-api/src/ade_api/shared/dependency.py†L242-L305】
+  RBAC assignments. Workspace guards derive the scope identifier from path or query parameters and emit structured 403 payloads
+  when access is denied.【F:apps/ade-api/src/ade_api/core/http/dependencies.py†L229-L242】
 * `require_csrf` must wrap every mutating route. A regression test walks the FastAPI routing table to ensure that any POST,
-PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for session bootstrap flows.【F:apps/ade-api/tests/api/test_csrf_guards.py†L1-L51】
+  PUT, PATCH, or DELETE endpoint is guarded, excluding a small allowlist for bootstrap flows like login and setup.【F:apps/ade-api/tests/integration/test_csrf_guards.py†L1-L80】
+* OpenAPI now marks only `/health`, `/auth/providers`, `/auth/setup` (GET/POST), `/auth/session` (POST), and SSO authorize/callback as
+  public. Everything else carries an explicit security requirement, keeping the “auth” column in route inventories correct by default.【F:apps/ade-api/src/ade_api/common/openapi.py†L12-L69】
 
 ## RBAC Integration
 
@@ -82,7 +83,7 @@ When introducing a new endpoint:
 key that should gate access.
 3. Include `dependencies=[Security(require_csrf)]` (or add it to the decorator) for any mutating route that should honour CSRF.
 4. If the endpoint accepts a workspace id outside the default `workspace_id` parameter name, pass `scopes=["{<param>}"]` to the
-workspace guard so `_resolve_workspace_param` picks it up.
+   workspace guard so `_resolve_workspace_param` picks it up.
 5. Update tests to cover success and denial cases, and extend the RBAC work package if the permission model changes.
 
 When adjusting authentication behaviour, update:

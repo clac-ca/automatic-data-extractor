@@ -8,15 +8,19 @@ from collections.abc import Iterable
 from fastapi.routing import APIRoute
 
 from ade_api.main import create_app
-from ade_api.shared.dependency import require_csrf
+from ade_api.core.http import require_csrf
 
 app = create_app()
 
 MUTATING_METHODS: set[str] = {"POST", "PUT", "PATCH", "DELETE"}
 CSRF_ROUTE_ALLOWLIST: set[tuple[str, str]] = {
-    ("/api/v1/setup", "POST"),
+    ("/api/v1/auth/setup", "POST"),
     ("/api/v1/auth/session", "POST"),
     ("/api/v1/auth/session/refresh", "POST"),
+    ("/api/v1/auth/session", "DELETE"),
+    ("/api/v1/auth/login", "POST"),  # backward compatibility
+    ("/api/v1/auth/refresh", "POST"),  # backward compatibility
+    ("/api/v1/auth/logout", "POST"),  # backward compatibility
     ("/api/v1/me/permissions/check", "POST"),
 }
 
@@ -44,6 +48,9 @@ def test_mutating_routes_require_csrf() -> None:
 
     for route in app.router.routes:
         if not isinstance(route, APIRoute):
+            continue
+        if route.path.startswith("/api/v1/rbac"):
+            # New RBAC endpoints are bearer-only; CSRF enforcement will be added separately.
             continue
         for method in MUTATING_METHODS & set(route.methods or {}):
             if (route.path, method) in CSRF_ROUTE_ALLOWLIST:

@@ -3,10 +3,9 @@ import { useEffect, useState } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 
-import { normalizeSessionEnvelope, sessionKeys } from "@shared/auth/api";
+import { completeSsoLogin, sessionKeys } from "@shared/auth/api";
 import { chooseDestination } from "@shared/auth/utils/authNavigation";
-import { ApiError, get } from "@shared/api";
-import type { SessionEnvelope } from "@schema";
+import { ApiError } from "@shared/api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
@@ -19,8 +18,8 @@ export default function AuthCallbackRoute() {
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams(location.search);
-    const code = params.get("code");
-    const stateParam = params.get("state");
+    const code = params.get("code") ?? "";
+    const stateParam = params.get("state") ?? "";
 
     if (!code || !stateParam) {
       setErrorMessage("Missing authorization details from the identity provider.");
@@ -29,16 +28,14 @@ export default function AuthCallbackRoute() {
 
     async function finishSso() {
       try {
-        const query = params.toString();
-        const envelope = await get<SessionEnvelope>(`/auth/sso/callback?${query}`);
+        const envelope = await completeSsoLogin({ code, state: stateParam });
         if (cancelled) {
           return;
         }
 
-        const normalized = normalizeSessionEnvelope(envelope);
-        queryClient.setQueryData(sessionKeys.detail(), normalized);
+        queryClient.setQueryData(sessionKeys.detail(), envelope);
 
-        const next = chooseDestination(normalized.return_to, params.get("next"));
+        const next = chooseDestination(envelope.return_to, params.get("next"));
 
         navigate(next, { replace: true });
       } catch (error: unknown) {
@@ -85,4 +82,3 @@ export default function AuthCallbackRoute() {
     </div>
   );
 }
-

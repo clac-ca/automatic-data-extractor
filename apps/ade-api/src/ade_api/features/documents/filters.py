@@ -8,20 +8,19 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
 
-from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
-from ade_api.shared.core.ids import UUIDStr
-from ade_api.shared.filters import FilterBase
-from ade_api.shared.validators import normalize_utc, parse_csv_or_repeated
-
-from ..users.models import User
-from .models import (
+from ade_api.common.filters import FilterBase
+from ade_api.common.ids import UUIDStr
+from ade_api.common.validators import normalize_utc, parse_csv_or_repeated
+from ade_api.core.models import (
     DOCUMENT_SOURCE_VALUES,
     DOCUMENT_STATUS_VALUES,
     Document,
     DocumentSource,
     DocumentStatus,
     DocumentTag,
+    User,
 )
+from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
 
 
 class DocumentFilters(FilterBase):

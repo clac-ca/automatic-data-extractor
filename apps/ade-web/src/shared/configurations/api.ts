@@ -10,12 +10,15 @@ import type {
   FileWriteResponse,
   FileRenameResponse,
   ConfigurationPage,
+  DirectoryWriteResponse,
 } from "./types";
 import type { paths } from "@schema";
 
 const textEncoder = new TextEncoder();
 
 type ListConfigurationsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
+type DeleteDirectoryQuery =
+  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}"]["delete"]["parameters"]["query"];
 
 export interface ListConfigurationsOptions {
   readonly page?: number;
@@ -266,6 +269,54 @@ export async function deleteConfigurationFile(
     },
     headers: options.etag ? { "If-Match": options.etag } : undefined,
   });
+}
+
+export async function createConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+): Promise<DirectoryWriteResponse> {
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          configuration_id: configId,
+          directory_path: directoryPath,
+        },
+      },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected directory response payload.");
+  }
+  return data as DirectoryWriteResponse;
+}
+
+export async function deleteConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+  options: { recursive?: boolean } = {},
+): Promise<void> {
+  const query: DeleteDirectoryQuery = {};
+  if (options.recursive) {
+    query.recursive = true;
+  }
+  await client.DELETE(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          configuration_id: configId,
+          directory_path: directoryPath,
+        },
+        query,
+      },
+    },
+  );
 }
 
 export type ConfigurationSourceInput =

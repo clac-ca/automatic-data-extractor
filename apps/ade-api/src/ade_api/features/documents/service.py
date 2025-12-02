@@ -16,15 +16,14 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.runs.models import Run, RunStatus
-from ade_api.features.users.models import User
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import paginate_sql
+from ade_api.common.sql import nulls_last
+from ade_api.common.types import OrderBy
+from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, RunStatus, User
+from ade_api.infra.storage import workspace_documents_root
 from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.ids import generate_uuid7
-from ade_api.shared.pagination import paginate_sql
-from ade_api.shared.sql import nulls_last
-from ade_api.shared.types import OrderBy
-from ade_api.storage_layout import workspace_documents_root
 
 from .exceptions import (
     DocumentFileMissingError,
@@ -32,8 +31,7 @@ from .exceptions import (
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
 )
-from .filters import DocumentFilters, DocumentSource, DocumentStatus, apply_document_filters
-from .models import Document
+from .filters import DocumentFilters, apply_document_filters
 from .repository import DocumentsRepository
 from .schemas import DocumentLastRun, DocumentOut, DocumentPage, DocumentSheet
 from .storage import DocumentStorage

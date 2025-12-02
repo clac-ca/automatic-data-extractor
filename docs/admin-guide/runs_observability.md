@@ -35,7 +35,7 @@ non-streaming endpoints:
    `Run` schema documented in `docs/ade_runs_api_spec.md`.
 2. Poll `/api/v1/runs/{run_id}` until the `status` transitions from
    `queued`/`running` to a terminal state.
-3. Retrieve the raw run event log via `/api/v1/runs/{run_id}/logfile`
+3. Retrieve the raw run event log via `/api/v1/runs/{run_id}/logs`
    to review console output and events captured during execution.
 
 ## 3. Direct database inspection

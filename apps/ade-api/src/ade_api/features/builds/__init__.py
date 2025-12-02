@@ -1,5 +1,7 @@
 """Virtual environment build management for configurations."""
 
+from ade_api.core.models import BuildStatus
+
 from .exceptions import (
     BuildAlreadyInProgressError,
     BuildExecutionError,
@@ -8,7 +10,6 @@ from .exceptions import (
 )
 from .schemas import BuildCreateOptions, BuildCreateRequest, BuildEvent, BuildResource
 from .service import BuildExecutionContext, BuildsService
-from .models import BuildStatus
 
 __all__ = [
     "BuildAlreadyInProgressError",

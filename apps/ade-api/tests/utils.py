@@ -6,11 +6,6 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from ade_api.settings import get_settings
-
-ADE_SESSION_COOKIE = get_settings().session_cookie_name
-
-
 async def login(
     client: AsyncClient,
     *,
@@ -24,9 +19,10 @@ async def login(
         json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
-    token = client.cookies.get(ADE_SESSION_COOKIE)
-    assert token, "Session cookie missing"
-    return token, response.json()
+    payload = response.json()
+    token = payload.get("access_token")
+    assert token, "Access token missing"
+    return token, payload
 
 
-__all__ = ["login", "ADE_SESSION_COOKIE"]
+__all__ = ["login"]

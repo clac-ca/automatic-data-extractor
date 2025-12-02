@@ -31,6 +31,8 @@ import {
   fetchRunOutputs,
   fetchRunSummary,
   fetchRunTelemetry,
+  runLogsUrl,
+  runOutputsUrl,
   runQueryKeys,
   type RunOutputListing,
   type RunResource,
@@ -1502,10 +1504,13 @@ function RunExtractionDrawerContent({
 
   const outputsQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.outputs(activeRunId) : ["run-outputs", "none"],
-    queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunOutputs(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+    queryFn: ({ signal }) => {
+      if (!activeRunId) {
+        return Promise.reject(new Error("No run selected"));
+      }
+      const run = runQuery.data ?? activeRunId;
+      return fetchRunOutputs(run, signal);
+    },
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1524,10 +1529,13 @@ function RunExtractionDrawerContent({
 
   const telemetryQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.telemetry(activeRunId) : ["run-telemetry", "none"],
-    queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunTelemetry(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+    queryFn: ({ signal }) => {
+      if (!activeRunId) {
+        return Promise.reject(new Error("No run selected"));
+      }
+      const run = runQuery.data ?? activeRunId;
+      return fetchRunTelemetry(run, signal);
+    },
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1584,9 +1592,8 @@ function RunExtractionDrawerContent({
   const currentRun = runQuery.data ?? null;
   const runStatus = currentRun?.status ?? null;
   const runRunning = runStatus === "running" || runStatus === "queued";
-  const downloadBase = activeRunId
-    ? `/api/v1/runs/${encodeURIComponent(activeRunId)}`
-    : null;
+  const outputsBase = currentRun ? runOutputsUrl(currentRun) : null;
+  const logsUrl = currentRun ? runLogsUrl(currentRun) : null;
   const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
   const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
@@ -1658,10 +1665,11 @@ function RunExtractionDrawerContent({
     setErrorMessage(null);
     setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
+    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false } as const;
     const runOptions =
       sheetList.length > 0
-        ? { dry_run: false, validate_only: false, input_sheet_names: sheetList }
-        : { dry_run: false, validate_only: false };
+        ? { ...baseRunOptions, input_sheet_names: sheetList }
+        : baseRunOptions;
     submitRun.mutate(
       {
         configId: selectedConfig.id,
@@ -1861,18 +1869,16 @@ function RunExtractionDrawerContent({
                   {runRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <a
-                    href={downloadBase ? `${downloadBase}/logs` : undefined}
-                    className={clsx(
-                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase ? "border-slate-300 text-slate-700 hover:bg-slate-100" : "cursor-not-allowed border-slate-200 text-slate-400",
-                    )}
-                    aria-disabled={!downloadBase}
-                  >
-                    Download telemetry
-                  </a>
-                </div>
+                {logsUrl ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      href={logsUrl}
+                      className="inline-flex items-center rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Download logs
+                    </a>
+                  </div>
+                ) : null}
 
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
                   <p className="text-xs font-semibold text-slate-700">Output files</p>
@@ -1885,21 +1891,21 @@ function RunExtractionDrawerContent({
                         const size = typeof file.byte_size === "number" ? file.byte_size : 0;
                         const href =
                           file.download_url ??
-                          (downloadBase
-                            ? `${downloadBase}/outputs/${path.split("/").map(encodeURIComponent).join("/")}`
+                          (outputsBase
+                            ? `${outputsBase}/${path.split("/").map(encodeURIComponent).join("/")}`
                             : undefined);
                         return (
                           <li
                             key={path}
                             className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
                           >
-                            <a
-                              href={href}
-                              className="text-emerald-700 hover:underline"
-                              aria-disabled={!href}
-                            >
-                              {file.name}
-                            </a>
+                            {href ? (
+                              <a href={href} className="text-emerald-700 hover:underline">
+                                {file.name}
+                              </a>
+                            ) : (
+                              <span className="text-slate-500">{file.name}</span>
+                            )}
                             <span className="text-[11px] text-slate-500">
                               {size.toLocaleString()} bytes
                             </span>

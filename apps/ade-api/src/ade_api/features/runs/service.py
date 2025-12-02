@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 import logging
 import os
+import uuid
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-import uuid
+from typing import Any
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -27,11 +26,21 @@ from ade_engine.schemas import (
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.builds.models import BuildStatus
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import Page
+from ade_api.common.encoding import json_dumps
+from ade_api.common.time import utc_now
+from ade_api.core.models import (
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    Run,
+    RunStatus,
+)
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildExecutionContext, BuildsService
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
@@ -42,18 +51,14 @@ from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
 )
-from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.pagination import Page
-from ade_api.storage_layout import (
+from ade_api.infra.storage import (
     workspace_config_root,
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
-from .models import Run, RunStatus
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
@@ -117,10 +122,6 @@ class RunPathsSnapshot:
     events_path: str | None = None
     output_paths: list[str] = field(default_factory=list)
     processed_files: list[str] = field(default_factory=list)
-
-
-if TYPE_CHECKING:  # pragma: no cover - import guard for circular dependencies
-    from ade_api.features.documents.models import Document
 
 
 @dataclass(slots=True, frozen=True)
@@ -226,9 +227,7 @@ class RunsService:
         self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
-        module_root = Path(__file__).resolve().parents[2]
         self._storage = storage or ConfigStorage(
-            templates_root=module_root / "templates" / "config_packages",
             settings=settings,
         )
         self._builds_service = BuildsService(
@@ -333,11 +332,11 @@ class RunsService:
 
         runs_root = workspace_run_root(self._settings, configuration.workspace_id)
         context = RunExecutionContext(
-            run_id=run.id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
+            run_id=str(run.id),
+            workspace_id=str(configuration.workspace_id),
+            configuration_id=str(configuration.id),
             venv_path=str(venv_path),
-            build_id=build_id,
+            build_id=str(build_id),
             runs_dir=str(runs_root),
             build_context=build_ctx,
         )
@@ -429,10 +428,10 @@ class RunsService:
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
                     source=event.source or "api",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=event.build_id or build_context.build_id,
+                    workspace_id=str(run.workspace_id),
+                    configuration_id=str(run.configuration_id),
+                    run_id=str(run.id),
+                    build_id=str(event.build_id or build_context.build_id),
                     payload=event.payload,
                 )
                 yield forwarded
@@ -841,7 +840,7 @@ class RunsService:
             self=base,
             summary=f"{base}/summary",
             events=f"{base}/events",
-            logfile=f"{base}/logfile",
+            logs=f"{base}/logs",
             outputs=f"{base}/outputs",
         )
 
@@ -1042,7 +1041,7 @@ class RunsService:
     @staticmethod
     def _document_descriptor(document: Document) -> dict[str, Any]:
         return {
-            "document_id": document.id,
+            "document_id": str(document.id),
             "display_name": document.original_filename,
             "name": document.original_filename,
             "original_filename": document.original_filename,
@@ -1333,9 +1332,9 @@ class RunsService:
 
         return RunSummaryV1(
             run={
-                "id": run.id,
-                "workspace_id": run.workspace_id,
-                "configuration_id": run.configuration_id,
+                "id": str(run.id),
+                "workspace_id": str(run.workspace_id),
+                "configuration_id": str(run.configuration_id),
                 "status": status_literal,
                 "failure_code": "canceled" if status is RunStatus.CANCELED else None,
                 "failure_stage": None,
@@ -1697,10 +1696,14 @@ class RunsService:
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
                     source=event.source or "engine",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=event.build_id or getattr(run, "build_id", None),
+                    workspace_id=str(run.workspace_id),
+                    configuration_id=str(run.configuration_id),
+                    run_id=str(run.id),
+                    build_id=(
+                        str(event.build_id or getattr(run, "build_id", None))
+                        if (event.build_id or getattr(run, "build_id", None))
+                        else None
+                    ),
                     payload=event.payload,
                 )
                 yield forwarded
@@ -1978,7 +1981,7 @@ class RunsService:
         if options.input_sheet_name:
             env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
         if options.input_sheet_names:
-            env["ADE_RUN_INPUT_SHEETS"] = json.dumps(options.input_sheet_names)
+            env["ADE_RUN_INPUT_SHEETS"] = json_dumps(options.input_sheet_names)
             if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
                 env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
         if context.run_id:
@@ -2074,13 +2077,14 @@ class RunsService:
     ) -> AdeEvent:
         """Emit an AdeEvent originating from the API orchestrator."""
 
+        build_identifier = build_id or getattr(run, "build_id", None)
         event = await self._event_dispatcher.emit(
             type=type_,
             source="api",
-            workspace_id=run.workspace_id,
-            configuration_id=run.configuration_id,
-            run_id=run.id,
-            build_id=build_id or getattr(run, "build_id", None),
+            workspace_id=str(run.workspace_id),
+            configuration_id=str(run.configuration_id),
+            run_id=str(run.id),
+            build_id=str(build_identifier) if build_identifier else None,
             payload=payload,
         )
         self._log_event_debug(event, origin="api")

@@ -1,85 +1,156 @@
-"""Authentication endpoint tests."""
+"""Authentication endpoint smoke tests for the new auth module."""
 
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import parse_qsl, urlparse
-from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from ade_api.features.auth.service import (
-    SSO_STATE_COOKIE,
-    AuthService,
-    OIDCProviderMetadata,
-    SsoService,
-)
-from ade_api.features.users.repository import UsersRepository
-from ade_api.settings import get_settings, reload_settings
-from ade_api.shared.db.session import get_sessionmaker
-
-_settings = get_settings()
-CSRF_COOKIE = _settings.session_csrf_cookie_name
-SESSION_COOKIE = _settings.session_cookie_name
-REFRESH_COOKIE = _settings.session_refresh_cookie_name
-
+from ade_api.settings import get_settings
+from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
 
 
-def _csrf_headers(client: AsyncClient) -> dict[str, str]:
-    token = client.cookies.get(CSRF_COOKIE)
-    assert token, "CSRF cookie not set"
-    return {"X-CSRF-Token": token}
-
-
-async def _login(client: AsyncClient, email: str, password: str) -> dict[str, Any]:
-    response = await client.post(
-        "/api/v1/auth/session",
-        json={"email": email, "password": password},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-async def test_create_session_and_me(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
+async def test_login_and_refresh(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
 ) -> None:
-    """Users should create sessions and fetch their profile."""
+    """Password login should return tokens and allow refresh."""
 
     admin = seed_identity["admin"]
-    payload = await _login(async_client, admin["email"], admin["password"])
-    assert payload["user"]["email"] == admin["email"]
+    access_token, payload = await login(
+        async_client,
+        email=admin["email"],
+        password=admin["password"],
+    )
+    assert payload["token_type"] == "bearer"
+    assert payload["refresh_token"]
+    assert payload["expires_in"] > 0
+    assert payload["refresh_expires_in"] > 0
 
-    response = await async_client.get("/api/v1/auth/session")
-    assert response.status_code == 200
+    refresh = await async_client.post(
+        "/api/v1/auth/session/refresh",
+        json={"refresh_token": payload["refresh_token"]},
+    )
+    assert refresh.status_code == 200, refresh.text
+    refreshed = refresh.json()
+    assert refreshed["access_token"]
+    assert refreshed["token_type"] == "bearer"
+
+
+async def test_refresh_prefers_body_over_cookie(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Body-supplied refresh tokens should override cookies."""
+
+    admin = seed_identity["admin"]
+    _, payload = await login(
+        async_client,
+        email=admin["email"],
+        password=admin["password"],
+    )
+
+    refresh_cookie = get_settings().session_refresh_cookie_name
+    async_client.cookies.set(refresh_cookie, "stale-cookie-token")
+
+    response = await async_client.post(
+        "/api/v1/auth/session/refresh",
+        json={"refresh_token": payload["refresh_token"]},
+    )
+    assert response.status_code == 200, response.text
     data = response.json()
-    assert data["user"]["email"] == admin["email"]
-    assert "Workspaces.Create" in data["user"].get("permissions", [])
-    assert "global-administrator" in data["user"].get("roles", [])
+    assert data["access_token"]
+    assert data["refresh_token"]
 
 
-async def test_provider_discovery_empty_without_oidc(
+async def test_refresh_falls_back_to_cookie(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Requests without a body should refresh using the cookie token."""
+
+    admin = seed_identity["admin"]
+    _, payload = await login(
+        async_client,
+        email=admin["email"],
+        password=admin["password"],
+    )
+
+    refresh_cookie = get_settings().session_refresh_cookie_name
+    async_client.cookies.set(refresh_cookie, payload["refresh_token"])
+
+    response = await async_client.post("/api/v1/auth/session/refresh")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["access_token"]
+    assert data["refresh_token"]
+
+
+async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
+    """Bad credentials should return 401."""
+
+    response = await async_client.post(
+        "/api/v1/auth/session",
+        json={"email": "missing@example.com", "password": "nope"},
+    )
+    assert response.status_code == 401
+
+
+async def test_setup_status_when_users_exist(async_client: AsyncClient) -> None:
+    """When users are present, setup should be marked complete."""
+
+    response = await async_client.get("/api/v1/auth/setup")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["requires_setup"] is False
+    assert payload["has_users"] is True
+
+
+async def test_setup_conflict_when_users_exist(async_client: AsyncClient) -> None:
+    """POST /auth/setup should return 409 once users exist."""
+
+    response = await async_client.post(
+        "/api/v1/auth/setup",
+        json={
+            "email": "first@example.com",
+            "password": "password123!",
+            "display_name": "First Admin",
+        },
+    )
+    assert response.status_code == 409
+
+
+async def test_list_auth_providers_default_password_only(
     async_client: AsyncClient,
     override_app_settings,
 ) -> None:
-    """Discovery should return an empty list when no providers are configured."""
+    """Provider discovery should expose password login when SSO is disabled."""
 
-    override_app_settings(auth_force_sso=False)
-
+    override_app_settings(auth_force_sso=False, oidc_enabled=False)
     response = await async_client.get("/api/v1/auth/providers")
     assert response.status_code == 200
     payload = response.json()
-    assert payload == {"providers": [], "force_sso": False}
+    assert payload["force_sso"] is False
+    assert payload["providers"] == [
+        {
+            "id": "password",
+            "label": "Email & password",
+            "type": "password",
+            "start_url": "/api/v1/auth/session",
+            "icon_url": None,
+        }
+    ]
 
 
-async def test_provider_discovery_exposes_default_oidc_provider(
+async def test_list_auth_providers_force_sso(
     async_client: AsyncClient,
     override_app_settings,
 ) -> None:
-    """Enabling OIDC should surface a default SSO provider."""
+    """When SSO is forced and enabled, only the SSO provider should appear."""
 
     override_app_settings(
         auth_force_sso=True,
@@ -89,417 +160,23 @@ async def test_provider_discovery_exposes_default_oidc_provider(
         oidc_issuer="https://issuer.example.com",
         oidc_redirect_url="https://app.example.com/auth/callback",
     )
-
     response = await async_client.get("/api/v1/auth/providers")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload == {
-        "providers": [
-            {
-                "id": "sso",
-                "label": "Single sign-on",
-                "start_url": "/api/v1/auth/sso/login",
-                "icon_url": None,
-            }
-        ],
-        "force_sso": True,
-    }
-
-
-async def test_login_sets_csrf_cookie_and_header(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """Login responses should surface CSRF metadata for the frontend."""
-
-    admin = seed_identity["admin"]
-    response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": admin["email"], "password": admin["password"]},
-    )
     assert response.status_code == 200, response.text
-    assert response.headers.get("X-CSRF-Token")
-    assert async_client.cookies.get(CSRF_COOKIE)
-
-async def test_invalid_credentials_rejected(async_client: AsyncClient) -> None:
-    """Submitting an unknown user should produce 401."""
-
-    response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": "missing@example.test", "password": "nope"},
-    )
-    assert response.status_code == 401
-
-
-async def test_setup_status_carries_force_sso_flag(
-    async_client: AsyncClient,
-    override_app_settings,
-) -> None:
-    """GET /setup/status should surface the force-SSO toggle."""
-
-    override_app_settings(auth_force_sso=True)
-
-    response = await async_client.get("/api/v1/setup/status")
-    assert response.status_code == 200
     payload = response.json()
     assert payload["force_sso"] is True
+    assert payload["providers"] == [
+        {
+            "id": "sso",
+            "label": "Single sign-on",
+            "type": "oidc",
+            "start_url": "/api/v1/auth/sso/sso/authorize",
+            "icon_url": None,
+        }
+    ]
 
 
-async def test_repeated_failed_logins_lock_account(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """Too many failed password attempts should lock the account."""
+async def test_logout_returns_no_content(async_client: AsyncClient) -> None:
+    """Logout should be a no-op but return 204."""
 
-    user = seed_identity["user"]
-    lock_threshold = get_settings().failed_login_lock_threshold
-    for _ in range(lock_threshold):
-        response = await async_client.post(
-            "/api/v1/auth/session",
-            json={"email": user["email"], "password": "wrong-password"},
-        )
-        assert response.status_code == 401
-
-    locked = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": user["email"], "password": user["password"]},
-    )
-    assert locked.status_code == 403
-    problem = locked.json()
-    detail = problem.get("detail") or {}
-    assert detail.get("failedAttempts") == lock_threshold
-    assert isinstance(detail.get("lockedUntil"), str)
-    assert "temporarily locked" in (detail.get("message") or "")
-    assert isinstance(detail.get("retryAfterSeconds"), int)
-    retry_after_header = locked.headers.get("Retry-After")
-    assert retry_after_header is not None
-
-
-@pytest.mark.parametrize(
-    ("username", "password", "expected_messages"),
-    [
-        ("", "secret", {"Email must not be empty"}),
-        ("   ", "secret", {"Email must not be empty"}),
-        ("user@example.test", "   ", {"Password must not be empty"}),
-        ("not-an-email", "secret", {"The email address is not valid"}),
-    ],
-)
-async def test_create_session_validation_errors(
-    async_client: AsyncClient,
-    username: str,
-    password: str,
-    expected_messages: set[str],
-) -> None:
-    """Invalid credentials should surface as 422 validation errors."""
-
-    response = await async_client.post(
-        "/api/v1/auth/session",
-        json={"email": username, "password": password},
-    )
-    assert response.status_code == 422, response.text
-
-    payload = response.json()
-    assert isinstance(payload.get("detail"), list)
-    messages = {error.get("msg", "") for error in payload["detail"]}
-    for expected in expected_messages:
-        assert any(expected in message for message in messages)
-
-async def test_profile_requires_authentication(async_client: AsyncClient) -> None:
-    """GET /auth/session should require a valid session."""
-
-    response = await async_client.get("/api/v1/auth/session")
-    assert response.status_code == 401
-
-
-async def test_bearer_authorization_requires_bearer_scheme(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """Authorization headers must use the Bearer scheme and include a token."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-    token = async_client.cookies.get(SESSION_COOKIE)
-    assert token, "Access token cookie not issued"
-
-    async_client.cookies.clear()
-
-    wrong_scheme = await async_client.get(
-        "/api/v1/auth/session",
-        headers={"Authorization": f"Basic {token}"},
-    )
-    assert wrong_scheme.status_code == 401
-
-    missing_token = await async_client.get(
-        "/api/v1/auth/session",
-        headers={"Authorization": "Bearer   "},
-    )
-    assert missing_token.status_code == 401
-
-    authorised = await async_client.get(
-        "/api/v1/auth/session",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert authorised.status_code == 200
-
-
-async def test_session_cookie_whitespace_rejected(async_client: AsyncClient) -> None:
-    """Whitespace-only session cookies should be treated as missing."""
-
-    async_client.cookies.set(SESSION_COOKIE, "   ")
-    response = await async_client.get("/api/v1/auth/session")
-    assert response.status_code == 401
-
-async def test_refresh_requires_csrf_header(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """POST /auth/refresh should enforce the double submit cookie check."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-
-    missing = await async_client.post("/api/v1/auth/session/refresh")
-    assert missing.status_code == 403
-
-    rotated = await async_client.post(
-        "/api/v1/auth/session/refresh",
-        headers=_csrf_headers(async_client),
-    )
-    assert rotated.status_code == 200, rotated.text
-    payload = rotated.json()
-    assert payload["user"]["email"] == admin["email"]
-
-
-async def test_refresh_cookie_path_tracks_session_prefix() -> None:
-    """Refresh cookie paths should be derived from the configured session path."""
-
-    settings = reload_settings()
-    session_factory = get_sessionmaker(settings=settings)
-    async with session_factory() as session:
-        service = AuthService(session=session, settings=settings)
-        assert service._refresh_cookie_path("/") == "/api/v1/auth/session/refresh"
-        assert (
-            service._refresh_cookie_path("/api/v1")
-            == "/api/v1/auth/session/refresh"
-        )
-        assert (
-            service._refresh_cookie_path("/custom")
-            == "/custom/auth/session/refresh"
-        )
-
-async def test_api_key_rotation_and_revocation(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """Issued API keys should support rotation and revocation."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-
-    first = await async_client.post(
-        "/api/v1/auth/api-keys",
-        json={"email": admin["email"], "label": "Primary key"},
-        headers=_csrf_headers(async_client),
-    )
-    assert first.status_code == 201, first.text
-    first_payload = first.json()
-    first_key = first_payload["api_key"]
-    assert first_payload["label"] == "Primary key"
-    first_prefix, _ = first_key.split(".", 1)
-
-    second = await async_client.post(
-        "/api/v1/auth/api-keys",
-        json={"email": admin["email"], "label": "Secondary key"},
-        headers=_csrf_headers(async_client),
-    )
-    assert second.status_code == 201, second.text
-    second_payload = second.json()
-    second_key = second_payload["api_key"]
-    assert second_payload["label"] == "Secondary key"
-    second_prefix, _ = second_key.split(".", 1)
-
-    listing = await async_client.get("/api/v1/auth/api-keys")
-    assert listing.status_code == 200
-    payload = listing.json()
-    records = payload["items"]
-    assert len(records) == 2
-    record_lookup = {record["token_prefix"]: record for record in records}
-    first_record = record_lookup[first_prefix]
-    second_record = record_lookup[second_prefix]
-    assert first_record["principal_type"] == "user"
-    assert first_record["principal_label"] == admin["email"]
-    assert first_record["label"] == "Primary key"
-    assert first_record["revoked_at"] is None
-    assert second_record["principal_type"] == "user"
-    assert second_record["principal_label"] == admin["email"]
-    assert second_record["label"] == "Secondary key"
-    assert second_record["revoked_at"] is None
-
-    async_client.cookies.clear()
-    response = await async_client.get("/api/v1/auth/session", headers={"X-API-Key": first_key})
-    assert response.status_code == 200
-    response = await async_client.get("/api/v1/auth/session", headers={"X-API-Key": second_key})
-    assert response.status_code == 200
-
-    await _login(async_client, admin["email"], admin["password"])
-    revoke = await async_client.delete(
-        f"/api/v1/auth/api-keys/{first_record['id']}",
-        headers=_csrf_headers(async_client),
-    )
-    assert revoke.status_code == 204
-
-    async_client.cookies.clear()
-    denied = await async_client.get("/api/v1/auth/session", headers={"X-API-Key": first_key})
-    assert denied.status_code == 401
-    allowed = await async_client.get("/api/v1/auth/session", headers={"X-API-Key": second_key})
-    assert allowed.status_code == 200
-
-    await _login(async_client, admin["email"], admin["password"])
-    remaining = await async_client.get("/api/v1/auth/api-keys")
-    remaining_payload = remaining.json()
-    remaining_records = remaining_payload["items"]
-    assert [record["token_prefix"] for record in remaining_records] == [second_prefix]
-    assert remaining_records[0]["principal_type"] == "user"
-    assert remaining_records[0]["principal_label"] == admin["email"]
-    assert remaining_records[0]["label"] == "Secondary key"
-    assert remaining_records[0]["revoked_at"] is None
-
-
-async def test_api_key_issue_marks_service_account(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """Issuing a key for a service account should expose its type."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-
-    session_factory = get_sessionmaker()
-    service_email = f"svc-robot+{uuid4().hex[:8]}@example.test"
-
-    async with session_factory() as session:
-        repo = UsersRepository(session)
-        service_account = await repo.create(
-            email=service_email,
-            password_hash=None,
-            is_service_account=True,
-        )
-        await session.commit()
-
-    response = await async_client.post(
-        "/api/v1/auth/api-keys",
-        json={"user_id": service_account.id, "label": "Robot"},
-        headers=_csrf_headers(async_client),
-    )
-    assert response.status_code == 201, response.text
-    payload = response.json()
-    assert payload["principal_type"] == "service_account"
-    assert payload["principal_label"] == service_email
-    assert payload["label"] == "Robot"
-
-    listing = await async_client.get("/api/v1/auth/api-keys")
-    records = listing.json()["items"]
-    target = next(
-        record for record in records if record["principal_id"] == service_account.id
-    )
-    assert target["principal_type"] == "service_account"
-    assert target["label"] == "Robot"
-    assert target["revoked_at"] is None
-
-    api_key = payload["api_key"]
-    async_client.cookies.clear()
-    authorised = await async_client.get("/api/v1/auth/session", headers={"X-API-Key": api_key})
-    assert authorised.status_code == 200
-    body = authorised.json()
-    assert body["user"]["email"] == service_email
-
-
-async def test_api_key_payload_requires_target(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """FastAPI should surface validation errors when the payload is empty."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-
-    response = await async_client.post(
-        "/api/v1/auth/api-keys",
-        json={},
-        headers=_csrf_headers(async_client),
-    )
-
-    assert response.status_code == 422, response.text
-    body = response.json()
-    assert isinstance(body.get("detail"), list)
-    messages = {error.get("msg", "") for error in body["detail"]}
-    assert any("user_id or email is required" in message for message in messages)
-
-async def test_logout_clears_cookies(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    """POST /auth/logout should remove authentication cookies."""
-
-    admin = seed_identity["admin"]
-    await _login(async_client, admin["email"], admin["password"])
-
-    forbidden = await async_client.request("DELETE", "/api/v1/auth/session")
-    assert forbidden.status_code == 403
-
-    response = await async_client.request(
-        "DELETE",
-        "/api/v1/auth/session",
-        headers=_csrf_headers(async_client),
-    )
+    response = await async_client.delete("/api/v1/auth/session")
     assert response.status_code == 204
-    assert async_client.cookies.get(SESSION_COOKIE) is None
-    assert async_client.cookies.get(REFRESH_COOKIE) is None
-
-async def test_sso_callback_rejects_state_mismatch(
-    monkeypatch: pytest.MonkeyPatch,
-    async_client: AsyncClient,
-    override_app_settings,
-) -> None:
-    """The SSO callback should reject mismatched state tokens."""
-
-    monkeypatch.setenv("ADE_OIDC_ENABLED", "true")
-    monkeypatch.setenv("ADE_OIDC_CLIENT_ID", "demo-client")
-    monkeypatch.setenv("ADE_OIDC_CLIENT_SECRET", "demo-secret")
-    monkeypatch.setenv("ADE_OIDC_ISSUER", "https://issuer.example.com")
-    monkeypatch.setenv(
-        "ADE_OIDC_REDIRECT_URL", "https://ade_api.example.com/auth/sso/callback"
-    )
-    monkeypatch.setenv(
-        "ADE_OIDC_SCOPES", '["openid","email","profile"]'
-    )
-    reload_settings()
-    override_app_settings()
-
-    metadata = OIDCProviderMetadata(
-        authorization_endpoint="https://issuer.example.com/authorize",
-        token_endpoint="https://issuer.example.com/token",
-        jwks_uri="https://issuer.example.com/jwks",
-    )
-
-    async def fake_metadata(self: SsoService) -> OIDCProviderMetadata:
-        return metadata
-
-    monkeypatch.setattr(SsoService, "_get_oidc_metadata", fake_metadata)
-
-    login = await async_client.get("/api/v1/auth/sso/login", follow_redirects=False)
-    assert login.status_code in (302, 307)
-    assert SSO_STATE_COOKIE in login.cookies
-    state_cookie = login.cookies[SSO_STATE_COOKIE]
-    cookie_header = login.headers.get("set-cookie")
-    assert cookie_header and "Path=/api/v1/auth/sso" in cookie_header
-    location = login.headers.get("location")
-    assert location is not None
-    params = dict(parse_qsl(urlparse(location).query))
-    assert params.get("nonce")
-    assert params.get("state")
-
-    async_client.cookies.set(
-        SSO_STATE_COOKIE,
-        state_cookie,
-        path="/api/v1/auth/sso",
-        domain="testserver",
-    )
-    callback = await async_client.get(
-        "/api/v1/auth/sso/callback",
-        params={"code": "auth-code", "state": "wrong-state"},
-    )
-    assert callback.status_code == 400

@@ -7,8 +7,8 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
-from ade_api.shared.core.schema import BaseSchema
-from .models import BuildStatus
+from ade_api.common.schema import BaseSchema
+from ade_api.core.models import BuildStatus
 
 BuildObjectType = Literal["ade.build"]
 BuildEventObjectType = Literal["ade.build.event"]
