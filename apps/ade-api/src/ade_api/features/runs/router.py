@@ -134,7 +134,7 @@ async def _execute_run_background(
 )
 async def create_run_endpoint(
     *,
-    configuration_id: Annotated[UUID, Path(min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
     payload: RunCreateRequest,
     background_tasks: BackgroundTasks,
     service: RunsService = runs_service_dependency,
@@ -171,7 +171,7 @@ async def create_run_endpoint(
     response_model_exclude_none=True,
 )
 async def list_configuration_runs_endpoint(
-    configuration_id: Annotated[UUID, Path(min_length=1, description="Configuration identifier")],
+    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
     page: Annotated[PageParams, Depends()],
     filters: Annotated[RunFilters, Depends(resolve_run_filters)],
     service: RunsService = runs_service_dependency,
@@ -196,7 +196,7 @@ async def list_configuration_runs_endpoint(
     response_model_exclude_none=True,
 )
 async def list_workspace_runs_endpoint(
-    workspace_id: Annotated[UUID, Path(min_length=1, description="Workspace identifier")],
+    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
     page: Annotated[PageParams, Depends()],
     filters: Annotated[RunFilters, Depends(resolve_run_filters)],
     service: RunsService = runs_service_dependency,
@@ -214,7 +214,7 @@ async def list_workspace_runs_endpoint(
 
 @router.get("/runs/{run_id}", response_model=RunResource)
 async def get_run_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     run = await service.get_run(run_id)
@@ -229,7 +229,7 @@ async def get_run_endpoint(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Run summary not found"}},
 )
 async def get_run_summary_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
 ) -> RunSummaryV1:
     try:
@@ -248,7 +248,7 @@ async def get_run_summary_endpoint(
     response_model_exclude_none=True,
 )
 async def get_run_events_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -278,7 +278,7 @@ async def get_run_events_endpoint(
 
 @router.get("/runs/{run_id}/events/stream")
 async def stream_run_events_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
@@ -322,7 +322,7 @@ async def stream_run_events_endpoint(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Logs unavailable"}},
 )
 async def download_run_logs_file_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
 ):
     try:
@@ -342,7 +342,7 @@ async def download_run_logs_file_endpoint(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Outputs unavailable"}},
 )
 async def list_run_outputs_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
 ) -> RunOutputListing:
     try:
@@ -374,7 +374,7 @@ async def list_run_outputs_endpoint(
     responses={status.HTTP_404_NOT_FOUND: {"description": "Output not found"}},
 )
 async def download_run_output_endpoint(
-    run_id: Annotated[UUID, Path(min_length=1, description="Run identifier")],
+    run_id: Annotated[UUID, Path(description="Run identifier")],
     output_path: str,
     service: RunsService = runs_service_dependency,
 ):
