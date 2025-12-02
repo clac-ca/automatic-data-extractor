@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import uuid
@@ -38,6 +39,7 @@ from ade_api.core.models import (
     Run,
     RunStatus,
 )
+from ade_api.features.builds.event_dispatcher import BuildEventDispatcher
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildExecutionContext, BuildsService
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -75,7 +77,6 @@ __all__ = [
     "RunExecutionContext",
     "RunInputMissingError",
     "RunDocumentMissingError",
-    "RunEnvironmentNotReadyError",
     "RunLogsFileMissingError",
     "RunNotFoundError",
     "RunOutputMissingError",
@@ -86,7 +87,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 event_logger = logging.getLogger("ade_api.runs.events")
 
-DEFAULT_STREAM_LIMIT = 1000
+DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 # Stream frames are AdeEvents as far as the public API is concerned. Internally
 # we also see StdoutFrame objects from the process runner and RunExecutionResult
@@ -169,10 +170,6 @@ class RunExecutionContext:
 # --------------------------------------------------------------------------- #
 
 
-class RunEnvironmentNotReadyError(RuntimeError):
-    """Raised when a configuration lacks an active build to execute."""
-
-
 class RunNotFoundError(RuntimeError):
     """Raised when a requested run row cannot be located."""
 
@@ -219,6 +216,7 @@ class RunsService:
         storage: ConfigStorage | None = None,
         event_dispatcher: RunEventDispatcher | None = None,
         event_storage: RunEventStorage | None = None,
+        build_event_dispatcher: BuildEventDispatcher | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
@@ -234,6 +232,8 @@ class RunsService:
             session=session,
             settings=settings,
             storage=self._storage,
+            event_dispatcher=build_event_dispatcher,
+            event_storage=(build_event_dispatcher.storage if build_event_dispatcher else None),
         )
         if event_dispatcher and event_storage is None:
             event_storage = event_dispatcher.storage
@@ -258,7 +258,6 @@ class RunsService:
         *,
         configuration_id: str,
         options: RunCreateOptions,
-        stream_build: bool = False,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
@@ -285,21 +284,14 @@ class RunsService:
             )
             document_descriptor = self._document_descriptor(document)
 
-        build_ctx: BuildExecutionContext | None = None
-        if stream_build:
-            build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            build, build_ctx = await self._builds_service.prepare_build(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                options=build_options,
-            )
-            build_id = build.id
-            venv_path = Path(build_ctx.venv_root) / ".venv"
-        else:
-            venv_path, build_id = await self._ensure_config_env_ready(
-                configuration,
-                force_rebuild=options.force_rebuild,
-            )
+        build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
+        build, build_ctx = await self._builds_service.prepare_build(
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            options=build_options,
+        )
+        build_id = build.id
+        venv_path = Path(build_ctx.venv_root) / ".venv"
 
         selected_sheet_name = self._select_input_sheet_name(options)
 
@@ -339,6 +331,17 @@ class RunsService:
             build_id=str(build_id),
             runs_dir=str(runs_root),
             build_context=build_ctx,
+        )
+
+        mode_literal = "validate" if options.validate_only else "execute"
+        await self._emit_api_event(
+            run=run,
+            type_="run.queued",
+            payload=RunQueuedPayload(
+                status="queued",
+                mode=mode_literal,
+                options=options.model_dump(),
+            ),
         )
 
         logger.info(
@@ -405,18 +408,35 @@ class RunsService:
             ),
         )
 
+        try:
+            async for event in self._stream_run_steps(context=context, options=options):
+                yield event
+        except Exception as exc:  # pragma: no cover - defensive orchestration guard
+            async for event in self._handle_stream_failure(
+                context=context,
+                options=options,
+                error=exc,
+            ):
+                yield event
+
+    async def _stream_run_steps(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+    ) -> AsyncIterator[RunStreamFrame]:
+        """Orchestrate run execution and yield events; raised exceptions are handled upstream."""
+
         run = await self._require_run(context.run_id)
         mode_literal = "validate" if options.validate_only else "execute"
 
-        yield await self._emit_api_event(
+        queued_event = await self._ensure_run_queued_event(
             run=run,
-            type_="run.queued",
-            payload=RunQueuedPayload(
-                status="queued",
-                mode=mode_literal,
-                options=options.model_dump(),
-            ),
+            mode_literal=mode_literal,
+            options=options,
         )
+        if queued_event:
+            yield queued_event
 
         if context.build_context:
             build_context = context.build_context
@@ -573,6 +593,93 @@ class RunsService:
         ):
             yield event
 
+    async def _handle_stream_failure(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        error: Exception,
+    ) -> AsyncIterator[RunStreamFrame]:
+        """Emit console + completion events when unexpected orchestration errors occur."""
+
+        logger.exception(
+            "run.stream.unhandled_error",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                run_id=context.run_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+            ),
+            exc_info=error,
+        )
+
+        run = await self._runs.get(context.run_id)
+        if run is None:
+            return
+        if run.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELED):
+            return
+
+        message = f"ADE run orchestration failed: {error}"
+        yield await self._emit_api_event(
+            run=run,
+            type_="console.line",
+            payload=ConsoleLinePayload(
+                scope="run",
+                stream="stderr",
+                level="error",
+                message=message,
+            ),
+        )
+
+        placeholder_summary = await self._build_placeholder_summary(
+            run=run,
+            status=RunStatus.FAILED,
+            message=str(error),
+        )
+        summary_json = self._serialize_summary(placeholder_summary)
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+        paths_snapshot = self._finalize_paths(
+            summary=placeholder_summary.model_dump(mode="json"),
+            run_dir=run_dir,
+            default_paths=RunPathsSnapshot(),
+        )
+        completion = await self._complete_run(
+            run,
+            status=RunStatus.FAILED,
+            exit_code=None,
+            summary=summary_json,
+            error_message=str(error),
+        )
+        yield await self._emit_api_event(
+            run=completion,
+            type_="run.completed",
+            payload=self._run_completed_payload(
+                run=completion,
+                summary=placeholder_summary,
+                paths=paths_snapshot,
+                failure_stage="run",
+                failure_code="orchestration_error",
+                failure_message=str(error),
+            ),
+        )
+
+    async def handle_background_failure(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        error: Exception,
+    ) -> AsyncIterator[AdeEvent]:
+        """Surface background task failures via console + completion events."""
+
+        async for event in self._handle_stream_failure(
+            context=context,
+            options=options,
+            error=error,
+        ):
+            yield event
+
     # --------------------------------------------------------------------- #
     # Public read APIs (runs, summaries, events, outputs)
     # --------------------------------------------------------------------- #
@@ -659,7 +766,7 @@ class RunsService:
         *,
         run_id: str,
         after_sequence: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
+        limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
     ) -> tuple[list[AdeEvent], int | None]:
         """Return ADE telemetry events for ``run_id`` with optional paging."""
 
@@ -697,6 +804,7 @@ class RunsService:
         self,
         *,
         workspace_id: str,
+        configuration_id: str | None = None,
         statuses: Sequence[RunStatus] | None,
         input_document_id: str | None,
         page: int,
@@ -709,6 +817,7 @@ class RunsService:
             "run.list.start",
             extra=log_context(
                 workspace_id=workspace_id,
+                configuration_id=configuration_id,
                 statuses=[s.value for s in statuses] if statuses else None,
                 input_document_id=input_document_id,
                 page=page,
@@ -719,6 +828,7 @@ class RunsService:
 
         page_result = await self._runs.list_by_workspace(
             workspace_id=workspace_id,
+            configuration_id=configuration_id,
             statuses=statuses,
             input_document_id=input_document_id,
             page=page,
@@ -739,6 +849,7 @@ class RunsService:
             "run.list.success",
             extra=log_context(
                 workspace_id=workspace_id,
+                configuration_id=configuration_id,
                 page=response.page,
                 page_size=response.page_size,
                 count=len(response.items),
@@ -746,6 +857,29 @@ class RunsService:
             ),
         )
         return response
+
+    async def list_runs_for_configuration(
+        self,
+        *,
+        configuration_id: str,
+        statuses: Sequence[RunStatus] | None,
+        input_document_id: str | None,
+        page: int,
+        page_size: int,
+        include_total: bool,
+    ) -> Page[RunResource]:
+        """Return paginated runs for ``configuration_id`` scoped to its workspace."""
+
+        configuration = await self._resolve_configuration(configuration_id)
+        return await self.list_runs(
+            workspace_id=configuration.workspace_id,
+            configuration_id=str(configuration.id),
+            statuses=statuses,
+            input_document_id=input_document_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
 
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
@@ -840,6 +974,7 @@ class RunsService:
             self=base,
             summary=f"{base}/summary",
             events=f"{base}/events",
+            events_stream=f"{base}/events/stream",
             logs=f"{base}/logs",
             outputs=f"{base}/outputs",
         )
@@ -1875,36 +2010,6 @@ class RunsService:
             )
         return configuration
 
-    async def _ensure_config_env_ready(
-        self,
-        configuration: Configuration,
-        *,
-        force_rebuild: bool = False,
-    ) -> tuple[Path, str]:
-        logger.debug(
-            "run.env.ensure.start",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                force_rebuild=force_rebuild,
-            ),
-        )
-        options = BuildCreateOptions(force=force_rebuild, wait=True)
-        build, context = await self._builds_service.prepare_build(
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            options=options,
-        )
-        await self._builds_service.run_to_completion(context=context, options=options)
-        build = await self._builds_service.get_build_or_raise(
-            build.id, workspace_id=configuration.workspace_id
-        )
-        if build.status is not BuildStatus.ACTIVE:
-            message = build.error_message or f"Configuration {configuration.id} build failed"
-            raise RunEnvironmentNotReadyError(message)
-        venv_path = await self._builds_service.ensure_local_env(build=build)
-        return venv_path, build.id
-
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
             run.started_at = run.started_at or utc_now()
@@ -2089,6 +2194,35 @@ class RunsService:
         )
         self._log_event_debug(event, origin="api")
         return event
+
+    async def _ensure_run_queued_event(
+        self,
+        *,
+        run: Run,
+        mode_literal: str,
+        options: RunCreateOptions,
+    ) -> AdeEvent | None:
+        """Guarantee a single run.queued event exists for the run."""
+
+        last_sequence = self._event_storage.last_sequence(
+            workspace_id=str(run.workspace_id),
+            run_id=str(run.id),
+        )
+        if last_sequence > 0:
+            reader = self.event_log_reader(
+                workspace_id=str(run.workspace_id),
+                run_id=str(run.id),
+            )
+            return next(iter(reader.iter(after_sequence=0)), None)
+        return await self._emit_api_event(
+            run=run,
+            type_="run.queued",
+            payload=RunQueuedPayload(
+                status="queued",
+                mode=mode_literal,
+                options=options.model_dump(),
+            ),
+        )
 
     def event_log_reader(self, *, workspace_id: str, run_id: str) -> RunEventLogReader:
         """Return a reader for persisted run events."""

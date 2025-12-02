@@ -56,7 +56,7 @@ class RunEventStorage:
         self._settings = settings
 
     def events_path(self, *, workspace_id: str, run_id: str, create: bool = True) -> Path:
-        run_dir = workspace_run_root(self._settings, workspace_id, run_id)
+        run_dir = workspace_run_root(self._settings, str(workspace_id), str(run_id))
         logs_dir = run_dir / "logs"
         if create:
             logs_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +78,11 @@ class RunEventStorage:
         run_id: str,
         after_sequence: int | None = None,
     ) -> Iterable[AdeEvent]:
-        path = self.events_path(workspace_id=workspace_id, run_id=run_id, create=False)
+        path = self.events_path(
+            workspace_id=str(workspace_id),
+            run_id=str(run_id),
+            create=False,
+        )
 
         def _iter() -> Iterable[AdeEvent]:
             if not path.exists():
