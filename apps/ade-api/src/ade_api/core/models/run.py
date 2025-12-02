@@ -21,6 +21,7 @@ class RunStatus(str, Enum):
     """Lifecycle states for ADE runs."""
 
     QUEUED = "queued"
+    WAITING_FOR_BUILD = "waiting_for_build"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"

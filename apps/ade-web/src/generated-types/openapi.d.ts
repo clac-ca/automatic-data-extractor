@@ -1487,7 +1487,7 @@ export type components = {
          * @description Lifecycle states for API-facing build resources.
          * @enum {string}
          */
-        BuildStatus: "queued" | "building" | "active" | "failed" | "canceled";
+        BuildStatus: "queued" | "building" | "ready" | "failed" | "canceled";
         /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
@@ -2547,7 +2547,7 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
+        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "canceled";
         /**
          * RunSummaryBreakdowns
          * @description Nested breakdowns for files and fields.

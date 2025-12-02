@@ -106,6 +106,7 @@ def _timestamps() -> tuple[sa.Column, sa.Column]:
 
 RUN_STATUS = sa.Enum(
     "queued",
+    "waiting_for_build",
     "running",
     "succeeded",
     "failed",
@@ -119,7 +120,7 @@ RUN_STATUS = sa.Enum(
 BUILD_STATUS = sa.Enum(
     "queued",
     "building",
-    "active",
+    "ready",
     "failed",
     "canceled",
     name="build_status",

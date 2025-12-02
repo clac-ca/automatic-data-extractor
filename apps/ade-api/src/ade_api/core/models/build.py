@@ -21,7 +21,7 @@ class BuildStatus(str, Enum):
 
     QUEUED = "queued"
     BUILDING = "building"
-    ACTIVE = "active"
+    READY = "ready"
     FAILED = "failed"
     CANCELED = "canceled"
 

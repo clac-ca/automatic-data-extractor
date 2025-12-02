@@ -52,4 +52,16 @@ describe("runStreamReducer", () => {
     const next = runStreamReducer(state, { type: "EVENT", event });
     expect(next.validationSummary).toEqual(event.payload);
   });
+
+  it("captures run mode hints from events", () => {
+    const state = createRunStreamState(4);
+    const event: AdeEvent = {
+      type: "run.started",
+      created_at: "2024-01-01T00:00:04Z",
+      payload: { mode: "validation" },
+    };
+
+    const next = runStreamReducer(state, { type: "EVENT", event });
+    expect(next.runMode).toBe("validation");
+  });
 });

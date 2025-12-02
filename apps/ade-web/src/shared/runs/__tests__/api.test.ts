@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { streamRun, streamRunEvents } from "@shared/runs/api";
+import { runEventsUrl, streamRun, streamRunEvents, streamRunEventsForRun } from "@shared/runs/api";
 import type { RunResource } from "@shared/runs/api";
 import type { AdeEvent } from "@shared/runs/types";
 import { client } from "@shared/api/client";
@@ -51,6 +51,23 @@ class MockEventSource {
 }
 
 const OriginalEventSource = globalThis.EventSource;
+
+const sampleRunResource = {
+  id: "run-123",
+  object: "ade.run",
+  workspace_id: "ws-1",
+  configuration_id: "config-123",
+  status: "queued",
+  created_at: "2025-01-01T00:00:00Z",
+  links: {
+    self: "/api/v1/runs/run-123",
+    summary: "/api/v1/runs/run-123/summary",
+    events: "/api/v1/runs/run-123/events",
+    events_stream: "/api/v1/runs/run-123/events/stream",
+    logs: "/api/v1/runs/run-123/logs",
+    outputs: "/api/v1/runs/run-123/outputs",
+  },
+} satisfies RunResource;
 
 describe("streamRunEvents", () => {
   beforeEach(() => {
@@ -121,23 +138,6 @@ describe("streamRun", () => {
   });
 
   it("creates a run via the typed client and streams events", async () => {
-    const runResource = {
-      id: "run-123",
-      object: "ade.run",
-      workspace_id: "ws-1",
-      configuration_id: "config-123",
-      status: "queued",
-      created_at: "2025-01-01T00:00:00Z",
-      links: {
-        self: "/api/v1/runs/run-123",
-        summary: "/api/v1/runs/run-123/summary",
-        events: "/api/v1/runs/run-123/events",
-        events_stream: "/api/v1/runs/run-123/events/stream",
-        logs: "/api/v1/runs/run-123/logs",
-        outputs: "/api/v1/runs/run-123/outputs",
-      },
-    } satisfies RunResource;
-
     const runEvent: AdeEvent = {
       type: "run.completed",
       created_at: "2025-01-01T00:05:00Z",
@@ -145,9 +145,9 @@ describe("streamRun", () => {
     };
     const events: AdeEvent[] = [];
     const postResponse = {
-      data: runResource,
+      data: sampleRunResource,
       error: undefined,
-      response: new Response(JSON.stringify(runResource), { status: 200 }),
+      response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
     } as any;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse as any);
 
@@ -158,6 +158,7 @@ describe("streamRun", () => {
       }
     })();
 
+    await Promise.resolve();
     await Promise.resolve();
     const source = MockEventSource.instances.at(-1);
     expect(source).toBeDefined();
@@ -172,6 +173,7 @@ describe("streamRun", () => {
       signal: undefined,
     });
     expect(source?.url).toContain("/api/v1/runs/run-123/events/stream");
+    expect(source?.url).toContain("after_sequence=0");
     expect(events).toEqual([runEvent]);
   });
 
@@ -184,5 +186,45 @@ describe("streamRun", () => {
     vi.spyOn(client, "POST").mockResolvedValue(postResponse as any);
 
     await expect(streamRun("config-123").next()).rejects.toThrow("Expected run creation response.");
+  });
+});
+
+describe("runEventsUrl helpers", () => {
+  beforeEach(() => {
+    MockEventSource.instances = [];
+    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource =
+      MockEventSource as unknown as typeof EventSource;
+  });
+
+  afterEach(() => {
+    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource = OriginalEventSource;
+    MockEventSource.instances = [];
+    vi.restoreAllMocks();
+  });
+
+  it("builds streaming event URLs with sequence parameters", () => {
+    const legacyRun = {
+      ...sampleRunResource,
+      links: { ...sampleRunResource.links, events_stream: undefined },
+    } as unknown as RunResource;
+
+    const url = runEventsUrl(legacyRun, { afterSequence: 42, stream: true });
+    expect(url).toContain("/api/v1/runs/run-123/events");
+    expect(url).toContain("stream=true");
+    expect(url).toContain("after_sequence=42");
+  });
+
+  it("streams events for an existing run resource", async () => {
+    const iterator = streamRunEventsForRun(sampleRunResource, { afterSequence: 3 });
+    const pending = iterator.next();
+    const source = MockEventSource.instances.at(-1);
+    expect(source?.url).toContain("/api/v1/runs/run-123/events/stream");
+    expect(source?.url).toContain("after_sequence=3");
+
+    const runEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
+    source?.emit("run.started", JSON.stringify(runEvent));
+    const result = await pending;
+    expect(result.value).toEqual(runEvent);
+    await iterator.return?.(undefined);
   });
 });

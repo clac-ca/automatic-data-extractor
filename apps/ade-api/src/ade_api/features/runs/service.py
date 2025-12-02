@@ -55,6 +55,7 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.infra.storage import (
+    build_venv_root,
     workspace_config_root,
     workspace_documents_root,
     workspace_run_root,
@@ -285,23 +286,35 @@ class RunsService:
             )
             document_descriptor = self._document_descriptor(document)
 
-        build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-        build, build_ctx = await self._builds_service.prepare_build(
+        run_id = self._generate_run_id()
+
+        build, build_ctx = await self._builds_service.ensure_build_for_run(
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            options=build_options,
+            force_rebuild=options.force_rebuild,
+            run_id=run_id,
+            reason="on_demand",
         )
         build_id = build.id
-        venv_path = Path(build_ctx.venv_root) / ".venv"
+        venv_root = (
+            Path(build_ctx.venv_root)
+            if build_ctx
+            else build_venv_root(self._settings, configuration.workspace_id, configuration.id, build_id)
+        )
+        venv_path = venv_root / ".venv"
+        run_status = (
+            RunStatus.WAITING_FOR_BUILD
+            if build.status is not BuildStatus.READY
+            else RunStatus.QUEUED
+        )
 
         selected_sheet_name = self._select_input_sheet_name(options)
 
-        run_id = self._generate_run_id()
         run = Run(
             id=run_id,
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            status=RunStatus.QUEUED,
+            status=run_status,
             attempt=1,
             retry_of_run_id=None,
             trace_id=str(run_id),
@@ -331,7 +344,7 @@ class RunsService:
             venv_path=str(venv_path),
             build_id=build_id,
             runs_dir=str(runs_root),
-            build_context=build_ctx,
+            build_context=build_ctx if (build.status is not BuildStatus.READY) else None,
         )
 
         mode_literal = "validate" if options.validate_only else "execute"
@@ -344,6 +357,16 @@ class RunsService:
                 options=options.model_dump(),
             ),
         )
+        if run.status is RunStatus.WAITING_FOR_BUILD:
+            await self._emit_api_event(
+                run=run,
+                type_="run.waiting_for_build",
+                payload={
+                    "status": "waiting_for_build",
+                    "reason": "build_not_ready",
+                    "build_id": str(build_id),
+                },
+            )
 
         logger.info(
             "run.prepare.success",
@@ -442,25 +465,69 @@ class RunsService:
         if context.build_context:
             build_context = context.build_context
             build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            async for event in self._builds_service.stream_build(
-                context=build_context,
-                options=build_options,
-            ):
-                forwarded = await self._event_dispatcher.emit(
-                    type=event.type,
-                    source=event.source or "api",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=event.build_id or build_context.build_id,
-                    payload=event.payload,
+            if build_context.should_run:
+                async for event in self._builds_service.stream_build(
+                    context=build_context,
+                    options=build_options,
+                ):
+                    forwarded = await self._event_dispatcher.emit(
+                        type=event.type,
+                        source=event.source or "api",
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=event.build_id or build_context.build_id,
+                        payload=event.payload,
+                    )
+                    yield forwarded
+            else:
+                build = await self._builds_service.get_build_or_raise(
+                    build_context.build_id,
+                    workspace_id=build_context.workspace_id,
                 )
-                yield forwarded
+                reader = self._builds_service.event_log_reader(
+                    workspace_id=build.workspace_id,
+                    configuration_id=build.configuration_id,
+                    build_id=build.id,
+                )
+                last_sequence = 0
+                for event in reader.iter(after_sequence=0):
+                    forwarded = await self._event_dispatcher.emit(
+                        type=event.type,
+                        source=event.source or "api",
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=event.build_id or build_context.build_id,
+                        payload=event.payload,
+                    )
+                    yield forwarded
+                    if event.sequence:
+                        last_sequence = max(last_sequence, event.sequence)
+                async with self._builds_service.subscribe_to_events(build.id) as subscription:
+                    async for live_event in subscription:
+                        if live_event.sequence and live_event.sequence <= last_sequence:
+                            continue
+                        forwarded = await self._event_dispatcher.emit(
+                            type=live_event.type,
+                            source=live_event.source or "api",
+                            workspace_id=run.workspace_id,
+                            configuration_id=run.configuration_id,
+                            run_id=run.id,
+                            build_id=live_event.build_id or build_context.build_id,
+                            payload=live_event.payload,
+                        )
+                        yield forwarded
+                        if live_event.sequence:
+                            last_sequence = live_event.sequence
+                        if live_event.type in {"build.completed", "build.failed"}:
+                            break
+
             build = await self._builds_service.get_build_or_raise(
                 build_context.build_id,
                 workspace_id=build_context.workspace_id,
             )
-            if build.status is not BuildStatus.ACTIVE:
+            if build.status is not BuildStatus.READY:
                 error_message = build.error_message or (
                     f"Configuration {build.configuration_id} build failed"
                 )

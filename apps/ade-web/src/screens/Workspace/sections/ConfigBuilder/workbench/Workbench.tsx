@@ -52,7 +52,10 @@ import {
   fetchRun,
   runLogsUrl,
   runOutputsUrl,
-  streamRun,
+  createRun,
+  runEventsUrl,
+  runQueryKeys,
+  streamRunEvents,
   type RunStreamOptions,
   type RunResource,
 } from "@shared/runs/api";
@@ -65,7 +68,7 @@ import { useNotifications, type NotificationIntent } from "@shared/notifications
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
-import { createRunStreamState, runStreamReducer } from "./state/runStream";
+import { createRunStreamState, runStreamReducer, type RunStreamStatus } from "./state/runStream";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
@@ -98,6 +101,13 @@ const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
   extensions: "Extensions coming soon",
 };
 
+const RUN_IN_PROGRESS_STATUSES: ReadonlySet<RunStreamStatus> = new Set([
+  "queued",
+  "waiting_for_build",
+  "building",
+  "running",
+]);
+
 interface ConsolePanelPreferences {
   readonly version: 2;
   readonly fraction: number;
@@ -120,6 +130,53 @@ interface RunStreamMetadata {
   readonly documentId?: string;
   readonly documentName?: string;
   readonly sheetNames?: readonly string[];
+}
+
+function normalizeRunStatusValue(value?: RunStatus | RunStreamStatus | null): RunStreamStatus {
+  if (value === "queued") return "queued";
+  if (value === "waiting_for_build") return "waiting_for_build";
+  if (value === "building") return "building";
+  if (value === "running") return "running";
+  if (value === "succeeded") return "succeeded";
+  if (value === "failed") return "failed";
+  if (value === "canceled") return "canceled";
+  return "idle";
+}
+
+function isRunStatusInProgress(status?: RunStatus | RunStreamStatus | null) {
+  return RUN_IN_PROGRESS_STATUSES.has(normalizeRunStatusValue(status));
+}
+
+function isRunStatusTerminal(status?: RunStatus | RunStreamStatus | null) {
+  const normalized = normalizeRunStatusValue(status);
+  return normalized === "succeeded" || normalized === "failed" || normalized === "canceled";
+}
+
+function combineRunStatuses(
+  resourceStatus?: RunStatus,
+  streamStatus?: RunStreamStatus,
+): RunStreamStatus {
+  const normalizedResource = normalizeRunStatusValue(resourceStatus);
+  const normalizedStream = normalizeRunStatusValue(streamStatus);
+  if (isRunStatusTerminal(normalizedStream)) return normalizedStream;
+  if (isRunStatusTerminal(normalizedResource)) return normalizedResource;
+  if (isRunStatusInProgress(normalizedStream)) return normalizedStream;
+  if (isRunStatusInProgress(normalizedResource)) return normalizedResource;
+  if (normalizedResource !== "idle") return normalizedResource;
+  return normalizedStream;
+}
+
+function extractEventPayload(event: RunStreamEvent): Record<string, unknown> {
+  const payload = event?.payload;
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+}
+
+function resolveRunModeFromPayload(payload: Record<string, unknown>): RunStreamMetadata["mode"] | undefined {
+  const mode = payload.mode;
+  if (mode === "validation" || mode === "extraction") {
+    return mode;
+  }
+  return undefined;
 }
 
 interface WorkbenchProps {
@@ -153,9 +210,11 @@ export function Workbench({
     pane,
     console: consoleState,
     consoleExplicit,
+    runId,
     setFileId,
     setPane,
     setConsole,
+    setRunId,
   } = useWorkbenchUrlState();
 
   const usingSeed = Boolean(seed);
@@ -203,24 +262,23 @@ export function Workbench({
 
   const consoleStreamRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  type ActiveStream = {
-    readonly kind: "run";
-    readonly startedAt: string;
-    readonly metadata?: RunStreamMetadata;
-  };
-  const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
+  const runMetadataRef = useRef<Record<string, (RunStreamMetadata & { startedAt?: string }) | undefined>>({});
+  const lastCompletedRunRef = useRef<string | null>(null);
+  const [runConnectionState, setRunConnectionState] = useState<"idle" | "connecting" | "streaming" | "error">("idle");
+  const [runStreamRestartKey, setRunStreamRestartKey] = useState(0);
 
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
 
   const resetConsole = useCallback(
-    (message: string) => {
+    (message: string, nextRunId?: string | null) => {
       if (!isMountedRef.current) {
         return;
       }
       const timestamp = formatConsoleTimestamp(new Date());
       dispatchRunStream({
         type: "RESET",
+        runId: nextRunId ?? runStreamRef.current.runId,
         initialLines: [{ level: "info", message, timestamp, origin: "run" }],
       });
     },
@@ -256,6 +314,25 @@ export function Workbench({
       consoleStreamRef.current?.abort();
     };
   }, []);
+
+  const runQuery = useQuery({
+    queryKey: runId ? runQueryKeys.detail(runId) : ["run", "none"],
+    queryFn: ({ signal }) => (runId ? fetchRun(runId, signal) : Promise.reject(new Error("No run id"))),
+    enabled: Boolean(runId),
+    staleTime: 15_000,
+    retry: false,
+  });
+
+  const currentRunMetadata = runId ? runMetadataRef.current[runId] : undefined;
+  const derivedRunStatus = combineRunStatuses(runQuery.data?.status, runStreamState.status);
+  const derivedRunMode = currentRunMetadata?.mode ?? runStreamState.runMode;
+  const runInProgress = isRunStatusInProgress(derivedRunStatus);
+
+  useEffect(() => {
+    if (lastCompletedRunRef.current && lastCompletedRunRef.current !== runId) {
+      lastCompletedRunRef.current = null;
+    }
+  }, [runId]);
 
   const validateConfiguration = useValidateConfigurationMutation(workspaceId, configId);
 
@@ -754,15 +831,119 @@ export function Workbench({
     setPendingOpenFileId(null);
   }, [pendingOpenFileId, tree, files, setFileId]);
 
-  const startRunStream = useCallback(
-    (options: RunStreamOptions, metadata: RunStreamMetadata, forceRebuild = false) => {
+  useEffect(() => {
+    if (!runId) {
+      consoleStreamRef.current?.abort();
+      consoleStreamRef.current = null;
+      setRunConnectionState("idle");
+      return;
+    }
+
+    const controller = new AbortController();
+    consoleStreamRef.current?.abort();
+    consoleStreamRef.current = controller;
+
+    const lastSequence =
+      runStreamRef.current.runId === runId ? runStreamRef.current.lastSequence : 0;
+
+    if (runStreamRef.current.runId !== runId) {
+      dispatchRunStream({ type: "ATTACH_RUN", runId });
+      if (runStreamRef.current.consoleLines.length === 0) {
+        resetConsole("Replaying run log…", runId);
+      }
+    } else {
+      dispatchRunStream({ type: "ATTACH_RUN", runId });
+    }
+
+    setRunConnectionState("connecting");
+
+    void (async () => {
+      try {
+        const cachedRun = queryClient.getQueryData(runQueryKeys.detail(runId)) as RunResource | undefined;
+        const runResource =
+          cachedRun ??
+          (await fetchRun(runId, controller.signal).catch((error) => {
+            if (controller.signal.aborted) return null;
+            throw error;
+          }));
+        if (!runResource) {
+          throw new Error("Run not found.");
+        }
+        if (runResource.configuration_id !== configId) {
+          setRunId(null);
+          return;
+        }
+        queryClient.setQueryData(runQueryKeys.detail(runId), runResource);
+        runMetadataRef.current[runId] = {
+          ...runMetadataRef.current[runId],
+          startedAt: runResource.started_at ?? runMetadataRef.current[runId]?.startedAt,
+        };
+        const eventsUrl = runEventsUrl(runResource, { afterSequence: lastSequence });
+        if (!eventsUrl) {
+          throw new Error("Run events link unavailable.");
+        }
+        setRunConnectionState("streaming");
+        for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
+          if (controller.signal.aborted) {
+            return;
+          }
+          const payload = extractEventPayload(event);
+          const mode = resolveRunModeFromPayload(payload);
+          if (mode) {
+            runMetadataRef.current[runId] = {
+              ...runMetadataRef.current[runId],
+              mode,
+            };
+            dispatchRunStream({ type: "ATTACH_RUN", runId, runMode: mode });
+          }
+          dispatchRunStream({ type: "EVENT", event });
+        }
+        setRunConnectionState("idle");
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.warn("Run stream interrupted", error);
+        setRunConnectionState("error");
+        if (runInProgress) {
+          setTimeout(() => setRunStreamRestartKey((key) => key + 1), 1500);
+        } else {
+          pushConsoleError(error);
+        }
+      } finally {
+        if (consoleStreamRef.current === controller) {
+          consoleStreamRef.current = null;
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [
+    runId,
+    configId,
+    queryClient,
+    resetConsole,
+    dispatchRunStream,
+    runInProgress,
+    setRunId,
+    pushConsoleError,
+    runStreamRestartKey,
+  ]);
+
+  const startRun = useCallback(
+    async (
+      options: RunStreamOptions,
+      metadata: RunStreamMetadata,
+      forceRebuild = false,
+    ): Promise<{ runId: string; startedAt: string } | null> => {
       const effectiveOptions = forceRebuild ? { ...options, force_rebuild: true } : options;
       if (
         usingSeed ||
         !tree ||
         filesQuery.isLoading ||
         filesQuery.isError ||
-        activeStream !== null
+        runInProgress ||
+        (runId && runConnectionState === "connecting")
       ) {
         return null;
       }
@@ -780,6 +961,7 @@ export function Workbench({
         metadata.mode === "validation"
           ? "Starting ADE run (validate-only)…"
           : "Starting ADE extraction…",
+        null,
       );
       if (metadata.mode === "validation") {
         setValidationState((prev) => ({
@@ -792,233 +974,219 @@ export function Workbench({
         setLatestRun(null);
       }
 
-      const controller = new AbortController();
-      consoleStreamRef.current?.abort();
-      consoleStreamRef.current = controller;
-      setActiveStream({ kind: "run", startedAt: startedIso, metadata });
-
-      void (async () => {
-        let currentRunId: string | null = null;
-        try {
-          for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
-            dispatchRunStream({ type: "EVENT", event });
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            const payload =
-              event && typeof event === "object" && event.payload && typeof event.payload === "object"
-                ? (event.payload as Record<string, unknown>)
-                : {};
-            const type = event.type;
-            const scope = (payload.scope as string | undefined) ?? null;
-            const isBuildEvent =
-              (typeof type === "string" && type.startsWith("build.")) ||
-              (type === "console.line" && scope === "build");
-            if (isBuildEvent) {
-              continue;
-            }
-            const isRunEvent = typeof type === "string" && type.startsWith("run.");
-            if (isRunEvent && !currentRunId) {
-              currentRunId = event.run_id ?? null;
-            }
-            if (!isRunEvent) continue;
-            if (type === "run.queued") {
-              const fallbackId = (event as { id?: string }).id ?? null;
-              currentRunId = event.run_id ?? fallbackId ?? currentRunId;
-            }
-            if (type === "run.completed") {
-              const runPayload = payload;
-              const runStatus = (runPayload.status as RunStatus | undefined) ?? "succeeded";
-              const failure = runPayload.failure as Record<string, unknown> | undefined;
-              const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-              const summaryMessage =
-                typeof runPayload.summary === "string" ? runPayload.summary.trim() : null;
-              const errorMessage =
-                failureMessage ||
-                summaryMessage ||
-                "ADE run failed.";
-              const notice =
-                runStatus === "succeeded"
-                  ? "ADE run completed successfully."
-                  : runStatus === "canceled"
-                    ? "ADE run canceled."
-                    : errorMessage;
-              const intent: NotificationIntent =
-                runStatus === "succeeded"
-                  ? "success"
-                  : runStatus === "canceled"
-                    ? "info"
-                    : "danger";
-              showConsoleBanner(notice, { intent });
-
-              const resolvedRunId =
-                currentRunId ?? event.run_id ?? (event as { id?: string }).id ?? null;
-              if (resolvedRunId) {
-                try {
-                  const telemetry = await fetchRunTelemetry(resolvedRunId);
-                  const lastSeen = runStreamRef.current.lastSequence;
-                  const missing = telemetry.filter(
-                    (item) =>
-                      item &&
-                      typeof item === "object" &&
-                      typeof item.sequence === "number" &&
-                      item.sequence > lastSeen,
-                  );
-                  for (const extraEvent of missing) {
-                    dispatchRunStream({ type: "EVENT", event: extraEvent as RunStreamEvent });
-                  }
-                } catch (error) {
-                  // Best effort hydration; keep streaming path fast.
-                  console.warn("Unable to hydrate run telemetry", error);
-                }
-              }
-              if (metadata.mode === "extraction" && resolvedRunId) {
-                const completedAt = new Date();
-                const completedIso = completedAt.toISOString();
-                const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
-                let runResource: RunResource | null = null;
-                try {
-                  runResource = await fetchRun(resolvedRunId);
-                } catch (error) {
-                  console.warn("Unable to fetch run resource for download links", error);
-                }
-                const outputsBase = runResource ? runOutputsUrl(runResource) ?? undefined : undefined;
-                const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : undefined;
-                setLatestRun({
-                  runId: resolvedRunId,
-                  status: runStatus,
-                  outputsBase,
-                  logsUrl,
-                  documentName: metadata.documentName,
-                  sheetNames: metadata.sheetNames ?? [],
-                  outputs: [],
-                  outputsLoaded: false,
-                  summary: null,
-                  summaryLoaded: false,
-                  summaryError: null,
-                  telemetry: null,
-                  telemetryLoaded: false,
-                  telemetryError: null,
-                  error: null,
-                  startedAt: startedIso,
-                  completedAt: completedIso,
-                  durationMs,
-                });
-                appendConsoleLine({
-                  level: runStatus === "succeeded" ? "success" : runStatus === "canceled" ? "warning" : "error",
-                  message:
-                    durationMs > 0
-                      ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
-                      : `Run ${runStatus}. Open Run summary for details.`,
-                  timestamp: formatConsoleTimestamp(completedAt),
-                  origin: "run",
-                });
-                try {
-                  const listing = await fetchRunOutputs(runResource ?? resolvedRunId);
-                  const outputFiles = Array.isArray(listing.files) ? listing.files : [];
-                  const files = outputFiles.map((file) => {
-                    const path = (file as { path?: string }).path;
-                    return {
-                      name: file.name ?? path ?? "output",
-                      path,
-                      byte_size: file.byte_size ?? 0,
-                      download_url: file.download_url ?? undefined,
-                    };
-                  });
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, outputs: files, outputsLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run outputs.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, outputsLoaded: true, error: message }
-                      : prev,
-                  );
-                }
-
-                try {
-                  const summary = await fetchRunSummary(resolvedRunId);
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, summary, summaryLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message = error instanceof Error ? error.message : "Unable to load run summary.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, summaryLoaded: true, summaryError: message }
-                      : prev,
-                  );
-                }
-
-                try {
-                  const telemetry = await fetchRunTelemetry(resolvedRunId);
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, telemetry, telemetryLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run telemetry.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, telemetryLoaded: true, telemetryError: message }
-                      : prev,
-                  );
-                }
-              }
-            }
-          }
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
-          pushConsoleError(error);
-        } finally {
-          if (consoleStreamRef.current === controller) {
-            consoleStreamRef.current = null;
-          }
-          if (isMountedRef.current) {
-            setActiveStream(null);
-          }
-        }
-      })();
-
-      return startedIso;
+      try {
+        const runResource = await createRun(configId, effectiveOptions);
+        runMetadataRef.current[runResource.id] = { ...metadata, startedAt: startedIso };
+        setRunId(runResource.id);
+        dispatchRunStream({ type: "ATTACH_RUN", runId: runResource.id, runMode: metadata.mode });
+        queryClient.setQueryData(runQueryKeys.detail(runResource.id), runResource);
+        setRunConnectionState("connecting");
+        return { runId: runResource.id, startedAt: startedIso };
+      } catch (error) {
+        pushConsoleError(error);
+        return null;
+      }
     },
-    [
+  [
       usingSeed,
       tree,
       filesQuery.isLoading,
       filesQuery.isError,
-      activeStream,
+      runInProgress,
+      runId,
+      runConnectionState,
       validateConfiguration.isPending,
       openConsole,
       setPane,
       resetConsole,
       setValidationState,
       setLatestRun,
-      consoleStreamRef,
-      setActiveStream,
       configId,
-      appendConsoleLine,
-      showConsoleBanner,
-      pushConsoleError,
-    ],
+      queryClient,
+      setRunId,
+      dispatchRunStream,
+    pushConsoleError,
+  ],
   );
 
-  const handleRunValidation = useCallback(() => {
-    const startedIso = startRunStream({ validate_only: true }, { mode: "validation" }, false);
-    if (!startedIso) {
+  useEffect(() => {
+    const currentRunId = runId;
+    if (!currentRunId || !isRunStatusTerminal(derivedRunStatus)) {
       return;
     }
+    if (lastCompletedRunRef.current === currentRunId) {
+      return;
+    }
+    lastCompletedRunRef.current = currentRunId;
+
+    const completedPayload = runStreamState.completedPayload ?? {};
+    const runStatus = (completedPayload.status as RunStatus | undefined) ?? (derivedRunStatus as RunStatus);
+    const failure = completedPayload.failure as Record<string, unknown> | undefined;
+    const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+    const summaryMessage = typeof completedPayload.summary === "string" ? completedPayload.summary.trim() : null;
+    const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
+    const notice =
+      runStatus === "succeeded"
+        ? "ADE run completed successfully."
+        : runStatus === "canceled"
+          ? "ADE run canceled."
+          : errorMessage;
+    const intent: NotificationIntent =
+      runStatus === "succeeded"
+        ? "success"
+        : runStatus === "canceled"
+          ? "info"
+          : "danger";
+    showConsoleBanner(notice, { intent });
+
+    const runMode = derivedRunMode ?? "extraction";
+    const startedAtIso = currentRunMetadata?.startedAt ?? runQuery.data?.started_at ?? undefined;
+    const completedIso =
+      (completedPayload.completed_at as string | undefined) ??
+      runQuery.data?.completed_at ??
+      new Date().toISOString();
+    const startedAt = startedAtIso ? new Date(startedAtIso) : null;
+    const completedAt = completedIso ? new Date(completedIso) : new Date();
+    const durationMs =
+      startedAt && completedAt ? Math.max(0, completedAt.getTime() - startedAt.getTime()) : undefined;
+
+    if (runMode === "validation") {
+      setValidationState((prev) => ({
+        ...prev,
+        status: runStatus === "succeeded" ? "success" : "error",
+        lastRunAt: prev.lastRunAt ?? completedAt.toISOString(),
+        error: runStatus === "succeeded" ? null : errorMessage,
+      }));
+      return;
+    }
+
+    appendConsoleLine({
+      level: runStatus === "succeeded" ? "success" : runStatus === "canceled" ? "warning" : "error",
+      message:
+        typeof durationMs === "number" && durationMs > 0
+          ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
+          : `Run ${runStatus}. Open Run summary for details.`,
+      timestamp: formatConsoleTimestamp(completedAt),
+      origin: "run",
+    });
+
+    void (async () => {
+      let runResource = runQuery.data;
+      try {
+        const telemetry = await fetchRunTelemetry(currentRunId);
+        const lastSeen = runStreamRef.current.lastSequence;
+        const missing = telemetry.filter(
+          (event) =>
+            event &&
+            typeof event === "object" &&
+            typeof event.sequence === "number" &&
+            event.sequence > lastSeen,
+        );
+        for (const event of missing) {
+          dispatchRunStream({ type: "EVENT", event: event as RunStreamEvent });
+        }
+      } catch (error) {
+        console.warn("Unable to hydrate run telemetry", error);
+      }
+      if (!runResource) {
+        try {
+          runResource = await fetchRun(currentRunId);
+        } catch (error) {
+          console.warn("Unable to fetch run resource for download links", error);
+        }
+      }
+      const outputsBase = runResource ? runOutputsUrl(runResource) ?? undefined : undefined;
+      const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : undefined;
+      const sheetNames = currentRunMetadata?.sheetNames ?? [];
+      setLatestRun({
+        runId: currentRunId,
+        status: runStatus,
+        outputsBase,
+        logsUrl,
+        documentName: currentRunMetadata?.documentName,
+        sheetNames,
+        outputs: [],
+        outputsLoaded: false,
+        summary: null,
+        summaryLoaded: false,
+        summaryError: null,
+        telemetry: null,
+        telemetryLoaded: false,
+        telemetryError: null,
+        error: null,
+        startedAt: startedAtIso ?? null,
+        completedAt: completedAt.toISOString(),
+        durationMs,
+      });
+      try {
+        const listing = await fetchRunOutputs(runResource ?? currentRunId);
+        const outputFiles = Array.isArray(listing.files) ? listing.files : [];
+        const files = outputFiles.map((file) => {
+          const path = (file as { path?: string }).path;
+          return {
+            name: file.name ?? path ?? "output",
+            path,
+            byte_size: file.byte_size ?? 0,
+            download_url: file.download_url ?? undefined,
+          };
+        });
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId ? { ...prev, outputs: files, outputsLoaded: true } : prev,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load run outputs.";
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId ? { ...prev, outputsLoaded: true, error: message } : prev,
+        );
+      }
+
+      try {
+        const summary = await fetchRunSummary(currentRunId);
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId ? { ...prev, summary, summaryLoaded: true } : prev,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load run summary.";
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId
+            ? { ...prev, summaryLoaded: true, summaryError: message }
+            : prev,
+        );
+      }
+
+      try {
+        const telemetry = await fetchRunTelemetry(currentRunId);
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId ? { ...prev, telemetry, telemetryLoaded: true } : prev,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load run telemetry.";
+        setLatestRun((prev) =>
+          prev && prev.runId === currentRunId
+            ? { ...prev, telemetryLoaded: true, telemetryError: message }
+            : prev,
+        );
+      }
+    })();
+  }, [
+    runId,
+    derivedRunStatus,
+    derivedRunMode,
+    currentRunMetadata,
+    runQuery.data,
+    runStreamState.completedPayload,
+    showConsoleBanner,
+    appendConsoleLine,
+    dispatchRunStream,
+    setValidationState,
+  ]);
+
+  const handleRunValidation = useCallback(async () => {
+    const startedRun = await startRun({ validate_only: true }, { mode: "validation" }, false);
+    if (!startedRun) {
+      return;
+    }
+    const startedIso = startedRun.startedAt;
     validateConfiguration.mutate(undefined, {
       onSuccess(result) {
         const issues = result.issues ?? [];
@@ -1046,12 +1214,12 @@ export function Workbench({
         });
       },
     });
-  }, [startRunStream, validateConfiguration, setValidationState]);
+  }, [startRun, validateConfiguration, setValidationState]);
 
   const handleRunExtraction = useCallback(
-    (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
       const worksheetList = Array.from(new Set((selection.sheetNames ?? []).filter(Boolean)));
-      const started = startRunStream(
+      const started = await startRun(
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
@@ -1070,7 +1238,7 @@ export function Workbench({
         setForceRun(false);
       }
     },
-    [startRunStream, setRunDialogOpen, setForceRun, forceRun],
+    [startRun, setRunDialogOpen, setForceRun, forceRun],
   );
 
   useEffect(() => {
@@ -1102,27 +1270,25 @@ export function Workbench({
     return () => window.removeEventListener("keydown", handler);
   }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
-  const runStreamMetadata = activeStream?.metadata;
-  const isStreamingRun = activeStream !== null;
-  const isStreamingAny = activeStream !== null;
-
-  const isStreamingExtraction = isStreamingRun && runStreamMetadata?.mode === "extraction";
-  const isStreamingValidationRun = isStreamingRun && runStreamMetadata?.mode !== "extraction";
+  const activeRunMode = derivedRunMode ?? (runInProgress ? "extraction" : undefined);
+  const runBusy = runInProgress || (Boolean(runId) && runConnectionState === "connecting");
 
   const isRunningValidation =
-    validationState.status === "running" || validateConfiguration.isPending || isStreamingValidationRun;
+    validationState.status === "running" ||
+    validateConfiguration.isPending ||
+    (runBusy && activeRunMode === "validation");
   const canRunValidation =
     !usingSeed &&
     Boolean(tree) &&
     !filesQuery.isLoading &&
     !filesQuery.isError &&
-    !isStreamingAny &&
+    !runBusy &&
     !validateConfiguration.isPending &&
     validationState.status !== "running";
 
-  const isRunningExtraction = isStreamingExtraction;
+  const isRunningExtraction = runBusy && activeRunMode !== "validation";
   const canRunExtraction =
-    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
+    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
   const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
   const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
   const canCreateFolders = canCreateFiles && !createConfigDirectory.isPending;
@@ -1654,7 +1820,7 @@ export function Workbench({
                 latestRun={latestRun}
                 onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
-                runStatus={runStreamState.status}
+                runStatus={derivedRunStatus}
               />
             </div>
           )}

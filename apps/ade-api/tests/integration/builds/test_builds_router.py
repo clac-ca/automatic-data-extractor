@@ -185,7 +185,7 @@ async def test_stream_build_emits_events_and_logs(
     detail = await async_client.get(f"/api/v1/builds/{build_id}", headers=headers)
     assert detail.status_code == 200
     payload = detail.json()
-    assert payload["status"] == "active"
+    assert payload["status"] == "ready"
     assert payload["exit_code"] == 0
     assert payload["summary"] == "Build succeeded"
 
@@ -251,7 +251,7 @@ async def test_background_build_executes_to_completion(
         build_id,
         headers=headers,
     )
-    assert completed["status"] == "active"
+    assert completed["status"] == "ready"
     assert completed["exit_code"] == 0
 
 
@@ -295,7 +295,7 @@ async def test_list_builds_with_filters_and_limits(
         active_build_id,
         headers=headers,
     )
-    assert active_build["status"] == "active"
+    assert active_build["status"] == "ready"
 
     StubBuilder.events = [
         BuilderLogEvent(message="expected failure"),

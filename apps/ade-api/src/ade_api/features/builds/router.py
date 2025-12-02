@@ -193,6 +193,7 @@ async def create_build_endpoint(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             options=payload.options,
+            reason="manual",
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

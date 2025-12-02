@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 from datetime import datetime
+from uuid import UUID
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -18,14 +19,18 @@ from fastapi import (
     Response,
     Security,
     status,
+    BackgroundTasks,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from ade_api.app.dependencies import get_configurations_service
+from ade_api.app.dependencies import get_builds_service, get_configurations_service
 from ade_api.common.pagination import PageParams, paginate_sequence
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.core.models import User
+from ade_api.features.builds.router import _execute_build_background
+from ade_api.features.builds.schemas import BuildCreateOptions
+from ade_api.features.builds.service import BuildsService
 
 from .etag import canonicalize_etag, format_etag, format_weak_etag
 from .exceptions import (
@@ -359,6 +364,8 @@ async def validate_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    builds_service: Annotated[BuildsService, Depends(get_builds_service)],
+    background_tasks: BackgroundTasks,
     _actor: Annotated[
         User,
         Security(
@@ -368,6 +375,24 @@ async def validate_configuration(
     ],
 ) -> ConfigurationValidateResponse:
     try:
+        workspace_uuid = UUID(str(workspace_id))
+        configuration_uuid = UUID(str(configuration_id))
+        # Ensure configuration build exists/reused; non-blocking if build already ready/inflight.
+        build, context = await builds_service.ensure_build_for_run(
+            workspace_id=workspace_uuid,
+            configuration_id=configuration_uuid,
+            force_rebuild=False,
+            run_id=None,
+            reason="validation",
+        )
+        if context.should_run:
+            background_tasks.add_task(
+                _execute_build_background,
+                context.as_dict(),
+                BuildCreateOptions(force=False, wait=False).model_dump(),
+                builds_service.settings.model_dump(mode="python"),
+            )
+
         result = await service.validate_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
