@@ -8,6 +8,7 @@ export type PhaseStatus = "pending" | "running" | "succeeded" | "failed" | "skip
 export type RunStreamStatus =
   | "idle"
   | "queued"
+  | "waiting_for_build"
   | "building"
   | "running"
   | "succeeded"
@@ -22,6 +23,7 @@ export type PhaseState = {
 
 export interface RunStreamState {
   readonly runId: string | null;
+  readonly runMode?: "validation" | "extraction";
   readonly status: RunStreamStatus;
   readonly buildPhases: Record<string, PhaseState>;
   readonly runPhases: Record<string, PhaseState>;
@@ -35,6 +37,7 @@ export interface RunStreamState {
 
 export type RunStreamAction =
   | { type: "RESET"; runId?: string | null; initialLines?: WorkbenchConsoleLine[] }
+  | { type: "ATTACH_RUN"; runId: string | null; runMode?: "validation" | "extraction" }
   | { type: "CLEAR_CONSOLE" }
   | { type: "APPEND_LINE"; line: WorkbenchConsoleLine }
   | { type: "EVENT"; event: RunStreamEvent };
@@ -45,6 +48,7 @@ export function createRunStreamState(
 ): RunStreamState {
   return {
     runId: null,
+    runMode: undefined,
     status: "idle",
     buildPhases: {},
     runPhases: {},
@@ -65,6 +69,12 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
         runId: action.runId ?? null,
       };
     }
+    case "ATTACH_RUN":
+      return {
+        ...state,
+        runId: action.runId,
+        runMode: action.runMode ?? state.runMode,
+      };
     case "CLEAR_CONSOLE":
       return { ...state, consoleLines: [] };
     case "APPEND_LINE": {
@@ -139,11 +149,18 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
 
   const status = resolveStatus(state.status, type, payload);
   const runId = state.runId ?? (typeof event.run_id === "string" ? event.run_id : null);
+  const runMode =
+    typeof payload.mode === "string"
+      ? payload.mode === "validation"
+        ? "validation"
+        : "extraction"
+      : state.runMode;
 
   return {
     ...state,
     status,
     runId,
+    runMode,
     buildPhases,
     runPhases,
     consoleLines,
@@ -158,6 +175,8 @@ function resolveStatus(current: RunStreamStatus, type: string, payload: Record<s
   switch (type) {
     case "run.queued":
       return "queued";
+    case "run.waiting_for_build":
+      return "waiting_for_build";
     case "build.started":
       return "building";
     case "run.started":
@@ -175,6 +194,7 @@ function normalizeRunStatus(value: unknown): RunStreamStatus {
   if (value === "succeeded") return "succeeded";
   if (value === "failed") return "failed";
   if (value === "canceled" || value === "cancelled") return "canceled";
+  if (value === "waiting_for_build") return "waiting_for_build";
   return "running";
 }
 

@@ -172,7 +172,7 @@ async def test_prepare_build_reuses_active(
         id=generate_uuid7(),
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        status=BuildStatus.ACTIVE,
+        status=BuildStatus.READY,
         created_at=utc_now(),
         started_at=utc_now(),
         finished_at=utc_now(),
@@ -198,7 +198,7 @@ async def test_prepare_build_reuses_active(
     )
 
     assert context.should_run is False
-    assert build.status is BuildStatus.ACTIVE
+    assert build.status is BuildStatus.READY
     assert build.id == configuration.active_build_id
     assert context.fingerprint == fingerprint
 
@@ -240,7 +240,7 @@ async def test_stream_build_success(
 
     refreshed = await service.get_build(build.id)
     assert refreshed is not None
-    assert refreshed.status is BuildStatus.ACTIVE
+    assert refreshed.status is BuildStatus.READY
     assert refreshed.summary == "Build succeeded"
     console_messages = [
         evt.payload_dict().get("message")

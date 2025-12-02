@@ -58,7 +58,7 @@ class BuildsRepository:
             order_by=[desc(Build.created_at)],
         )
 
-    async def get_active_by_fingerprint(
+    async def get_ready_by_fingerprint(
         self,
         *,
         configuration_id: UUID,
@@ -68,7 +68,7 @@ class BuildsRepository:
             select(Build)
             .where(
                 Build.configuration_id == configuration_id,
-                Build.status == BuildStatus.ACTIVE,
+                Build.status == BuildStatus.READY,
                 Build.fingerprint == fingerprint,
             )
             .order_by(Build.created_at.desc())

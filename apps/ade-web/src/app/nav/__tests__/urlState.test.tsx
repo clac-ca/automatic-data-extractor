@@ -110,6 +110,7 @@ describe("Config Builder search helpers", () => {
       console: true,
       view: true,
       file: true,
+      runId: false,
     });
   });
 
@@ -129,6 +130,17 @@ describe("Config Builder search helpers", () => {
 
     expect(snapshot.file).toBe("/legacy/file.py");
     expect(snapshot.present.file).toBe(true);
+    expect(snapshot.present.runId).toBe(false);
+  });
+
+  it("captures run identifiers from multiple param shapes", () => {
+    const primary = readConfigBuilderSearch("runId=run-123");
+    const legacy = readConfigBuilderSearch("run_id=run-456");
+
+    expect(primary.runId).toBe("run-123");
+    expect(primary.present.runId).toBe(true);
+    expect(legacy.runId).toBe("run-456");
+    expect(legacy.present.runId).toBe(true);
   });
 
   it("merges patches and removes defaults", () => {
@@ -143,6 +155,7 @@ describe("Config Builder search helpers", () => {
     expect(next.get("pane")).toBe("problems");
     expect(next.get("view")).toBe("zen");
     expect(next.has("file")).toBe(false);
+    expect(next.has("runId")).toBe(false);
 
     const reset = mergeConfigBuilderSearch(next, { view: "editor" });
     expect(reset.has("view")).toBe(false);

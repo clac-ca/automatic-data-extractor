@@ -123,7 +123,7 @@ async def _prepare_service(
         id=build_id,
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        status=BuildStatus.ACTIVE,
+        status=BuildStatus.READY,
         created_at=utc_now(),
         started_at=utc_now(),
         finished_at=utc_now(),
@@ -475,7 +475,7 @@ async def test_stream_run_emits_build_events_when_requested(
             id=build_id,
             workspace_id=workspace_id or outer_workspace_id,
             configuration_id=configuration_id,
-            status=BuildStatus.ACTIVE,
+            status=BuildStatus.READY,
             created_at=utc_now(),
         )
 

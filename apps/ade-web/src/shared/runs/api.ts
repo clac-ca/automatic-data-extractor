@@ -18,11 +18,11 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   force_rebuild: false,
 };
 
-export async function* streamRun(
+export async function createRun(
   configId: string,
   options: RunStreamOptions = {},
   signal?: AbortSignal,
-): AsyncGenerator<RunStreamEvent> {
+): Promise<RunResource> {
   const pathParams: RunCreatePathParams = { configuration_id: configId };
   const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...options };
   const body: RunCreateRequest = { options: mergedOptions };
@@ -37,15 +37,19 @@ export async function* streamRun(
     throw new Error("Expected run creation response.");
   }
 
-  const runId = data.id;
-  const baseEventsLink =
-    data.links?.events_stream ??
-    (data.links?.events ? `${data.links.events}${data.links.events.includes("?") ? "&" : "?"}stream=true` : null);
-  if (!runId || !baseEventsLink) {
+  return data as RunResource;
+}
+
+export async function* streamRun(
+  configId: string,
+  options: RunStreamOptions = {},
+  signal?: AbortSignal,
+): AsyncGenerator<RunStreamEvent> {
+  const runResource = await createRun(configId, options, signal);
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: 0 });
+  if (!eventsUrl) {
     throw new Error("Run creation response is missing required links.");
   }
-
-  const eventsUrl = resolveRunLink(baseEventsLink, { appendQuery: "after_sequence=0" });
 
   for await (const event of streamRunEvents(eventsUrl, signal)) {
     yield event;
@@ -165,6 +169,42 @@ export async function* streamRunEvents(
     }
   } finally {
     close();
+  }
+}
+
+export function runEventsUrl(
+  run: RunResource,
+  options?: { afterSequence?: number; stream?: boolean },
+): string | null {
+  const baseLink = run.links?.events_stream ?? run.links?.events;
+  if (!baseLink) {
+    return null;
+  }
+  const queryParts: string[] = [];
+  const wantsStream = options?.stream ?? true;
+  const alreadyStreaming = baseLink.endsWith("/stream") || baseLink.includes("stream=true");
+  if (wantsStream && !alreadyStreaming) {
+    queryParts.push("stream=true");
+  }
+  if (typeof options?.afterSequence === "number" && Number.isFinite(options.afterSequence)) {
+    const normalized = Math.max(0, Math.floor(options.afterSequence));
+    queryParts.push(`after_sequence=${normalized}`);
+  }
+  const appendQuery = queryParts.length ? queryParts.join("&") : undefined;
+  return resolveRunLink(baseLink, { appendQuery });
+}
+
+export async function* streamRunEventsForRun(
+  run: RunResource | string,
+  options?: { afterSequence?: number; signal?: AbortSignal },
+): AsyncGenerator<RunStreamEvent> {
+  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence });
+  if (!eventsUrl) {
+    throw new Error("Run events link unavailable.");
+  }
+  for await (const event of streamRunEvents(eventsUrl, options?.signal)) {
+    yield event;
   }
 }
 
