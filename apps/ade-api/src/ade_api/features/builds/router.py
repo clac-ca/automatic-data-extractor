@@ -130,11 +130,11 @@ async def _execute_build_background(
 async def list_builds_endpoint(
     workspace_id: Annotated[
         UUID,
-        PathParam(min_length=1, description="Workspace identifier"),
+        PathParam(description="Workspace identifier"),
     ],
     configuration_id: Annotated[
         UUID,
-        PathParam(min_length=1, description="Configuration identifier"),
+        PathParam(description="Configuration identifier"),
     ],
     page: Annotated[BuildListParams, Depends(resolve_build_list_params)],
     filters: Annotated[BuildFilters, Depends(resolve_build_filters)],
@@ -171,11 +171,11 @@ async def create_build_endpoint(
     *,
     workspace_id: Annotated[
         UUID,
-        PathParam(min_length=1, description="Workspace identifier"),
+        PathParam(description="Workspace identifier"),
     ],
     configuration_id: Annotated[
         UUID,
-        PathParam(min_length=1, description="Configuration identifier"),
+        PathParam(description="Configuration identifier"),
     ],
     payload: BuildCreateRequest,
     background_tasks: BackgroundTasks,
@@ -211,7 +211,7 @@ async def create_build_endpoint(
 
 @router.get("/builds/{build_id}", response_model=BuildResource)
 async def get_build_endpoint(
-    build_id: Annotated[UUID, PathParam(min_length=1, description="Build identifier")],
+    build_id: Annotated[UUID, PathParam(description="Build identifier")],
     service: BuildsService = builds_service_dependency,
 ) -> BuildResource:
     build = await service.get_build(build_id)
@@ -226,7 +226,7 @@ async def get_build_endpoint(
     response_model_exclude_none=True,
 )
 async def list_build_events_endpoint(
-    build_id: Annotated[UUID, PathParam(min_length=1, description="Build identifier")],
+    build_id: Annotated[UUID, PathParam(description="Build identifier")],
     format: Literal["json", "ndjson"] = Query(default="json"),
     after_sequence: int | None = Query(default=None, ge=0),
     limit: int = Query(default=DEFAULT_EVENTS_PAGE_LIMIT, ge=1, le=DEFAULT_EVENTS_PAGE_LIMIT),
@@ -253,7 +253,7 @@ async def list_build_events_endpoint(
 
 @router.get("/builds/{build_id}/events/stream")
 async def stream_build_events_endpoint(
-    build_id: Annotated[UUID, PathParam(min_length=1, description="Build identifier")],
+    build_id: Annotated[UUID, PathParam(description="Build identifier")],
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: BuildsService = builds_service_dependency,
