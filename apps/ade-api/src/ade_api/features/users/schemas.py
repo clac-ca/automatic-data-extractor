@@ -6,9 +6,9 @@ from datetime import datetime
 
 from pydantic import Field
 
-from ade_api.shared.core.ids import UUIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
 
 
 class UserProfile(BaseSchema):

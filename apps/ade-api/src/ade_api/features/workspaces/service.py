@@ -9,10 +9,22 @@ from typing import TYPE_CHECKING, cast
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.features.roles import (
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import Page, paginate_sequence
+from ade_api.core.models import (
+    Role,
+    RolePermission,
+    ScopeType,
+    User,
+    UserRoleAssignment,
+    Workspace,
+    WorkspaceMembership,
+)
+from ade_api.features.rbac import (
     RbacService,
     RoleConflictError,
     RoleImmutableError,
@@ -20,25 +32,13 @@ from ade_api.features.roles import (
     RoleValidationError,
     ScopeMismatchError,
 )
-from ade_api.features.roles.models import Role, RolePermission, ScopeType, UserRoleAssignment
-from ade_api.features.roles.registry import SYSTEM_ROLE_BY_SLUG
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.pagination import Page, paginate_sequence
 
-from ..users.models import User
 from ..users.repository import UsersRepository
-from ..users.schemas import UserOut
-from .models import Workspace, WorkspaceMembership
 from .repository import WorkspacesRepository
-from .schemas import (
-    WorkspaceDefaultSelectionOut,
-    WorkspaceMemberOut,
-    WorkspaceMemberRolesUpdate,
-    WorkspaceOut,
-)
+from .schemas import WorkspaceDefaultSelectionOut, WorkspaceOut
 
 if TYPE_CHECKING:
-    from ade_api.features.roles.schemas import RoleCreate, RoleUpdate
+    from ade_api.features.rbac.schemas import RoleCreate, RoleUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -444,166 +444,6 @@ class WorkspacesService:
             extra=log_context(workspace_id=workspace_id),
         )
 
-    # ------------------------------------------------------------------
-    # Membership management
-    # ------------------------------------------------------------------
-    async def list_members(self, *, workspace_id: str) -> list[WorkspaceMemberOut]:
-        workspace = await self._ensure_workspace(workspace_id)
-        memberships = await self._repo.list_members(workspace_id=cast(str, workspace.id))
-
-        members: list[WorkspaceMemberOut] = []
-        for membership in memberships:
-            member_user = membership.user
-            if member_user is None:
-                continue
-            roles = await self._workspace_roles_for_user(
-                user_id=cast(str, member_user.id),
-                workspace_id=cast(str, workspace.id),
-            )
-            permissions = await self._rbac.get_workspace_permissions_for_user(
-                user=member_user,
-                workspace_id=cast(str, workspace.id),
-            )
-            members.append(
-                WorkspaceMemberOut(
-                    id=cast(str, membership.id),
-                    workspace_id=cast(str, workspace.id),
-                    roles=sorted(role.slug for role in roles),
-                    permissions=sorted(permissions),
-                    is_default=membership.is_default,
-                    user=UserOut.model_validate(member_user),
-                )
-            )
-
-        members.sort(key=lambda member: member.user.email.lower())
-        return members
-
-    async def add_member(
-        self,
-        *,
-        workspace_id: str,
-        user_id: str,
-        role_ids: Sequence[str],
-    ) -> WorkspaceMemberOut:
-        workspace = await self._ensure_workspace(workspace_id)
-        user = await self._users_repo.get_by_id(user_id)
-        if user is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
-        existing = await self._repo.get_membership_for_workspace(
-            user_id=cast(str, user.id),
-            workspace_id=cast(str, workspace.id),
-        )
-        if existing is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                detail="User is already a member of the workspace",
-            )
-
-        membership = await self._repo.create_membership(
-            workspace_id=cast(str, workspace.id),
-            user_id=cast(str, user.id),
-            is_default=False,
-        )
-        await self._assign_roles_to_member(
-            user_id=cast(str, user.id),
-            workspace_id=cast(str, workspace.id),
-            role_ids=role_ids or await self._default_workspace_role_ids(),
-        )
-        roles = await self._workspace_roles_for_user(
-            user_id=cast(str, user.id),
-            workspace_id=cast(str, workspace.id),
-        )
-        permissions = await self._rbac.get_workspace_permissions_for_user(
-            user=user,
-            workspace_id=cast(str, workspace.id),
-        )
-        return WorkspaceMemberOut(
-            id=cast(str, membership.id),
-            workspace_id=cast(str, workspace.id),
-            roles=sorted(role.slug for role in roles),
-            permissions=sorted(permissions),
-            is_default=membership.is_default,
-            user=UserOut.model_validate(user),
-        )
-
-    async def assign_member_roles(
-        self,
-        *,
-        workspace_id: str,
-        membership_id: str,
-        payload: WorkspaceMemberRolesUpdate,
-    ) -> WorkspaceMemberOut:
-        result = await self._session.execute(
-            select(WorkspaceMembership)
-            .options(
-                selectinload(WorkspaceMembership.user),
-                selectinload(WorkspaceMembership.workspace),
-            )
-            .where(WorkspaceMembership.id == membership_id)
-        )
-        membership = result.scalar_one_or_none()
-        if membership is None or str(membership.workspace_id) != workspace_id:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Membership not found within the workspace",
-            )
-        user = membership.user
-        if user is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
-
-        await self._replace_member_roles(
-            user_id=cast(str, user.id),
-            workspace_id=workspace_id,
-            role_ids=payload.role_ids,
-        )
-
-        roles = await self._workspace_roles_for_user(
-            user_id=cast(str, user.id),
-            workspace_id=workspace_id,
-        )
-        permissions = await self._rbac.get_workspace_permissions_for_user(
-            user=user,
-            workspace_id=workspace_id,
-        )
-        return WorkspaceMemberOut(
-            id=cast(str, membership.id),
-            workspace_id=workspace_id,
-            roles=sorted(role.slug for role in roles),
-            permissions=sorted(permissions),
-            is_default=membership.is_default,
-            user=UserOut.model_validate(user),
-        )
-
-    async def remove_member(
-        self,
-        *,
-        workspace_id: str,
-        membership_id: str,
-    ) -> None:
-        membership = await self._session.get(WorkspaceMembership, membership_id)
-        if membership is None or str(membership.workspace_id) != workspace_id:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Membership not found within the workspace",
-            )
-
-        user_id = cast(str, membership.user_id)
-        await self._session.execute(
-            delete(UserRoleAssignment).where(
-                UserRoleAssignment.user_id == user_id,
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id == workspace_id,
-            )
-        )
-        await self._repo.delete_membership(membership)
-        await self._ensure_owner_retained(workspace_id)
-
     async def set_default_workspace(
         self,
         *,
@@ -639,7 +479,7 @@ class WorkspacesService:
         self,
         *,
         workspace_id: str,
-        payload: "RoleCreate",
+        payload: RoleCreate,
         actor: User,
     ) -> Role:
         await self._ensure_workspace(workspace_id)
@@ -667,7 +507,7 @@ class WorkspacesService:
         *,
         workspace_id: str,
         role_id: str,
-        payload: "RoleUpdate",
+        payload: RoleUpdate,
         actor: User,
     ) -> Role:
         await self._ensure_workspace(workspace_id)

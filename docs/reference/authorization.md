@@ -50,18 +50,15 @@ body to simplify debugging and audits.【F:apps/ade-api/src/ade_api/shared/depen
 
 All RBAC administration lives under `/api/v1`:
 
-- Global role catalog and CRUD: `GET/POST /roles?scope=global`, `GET/PATCH/DELETE
-  /roles/{role_id}`.【F:apps/ade-api/src/ade_api/features/roles/router.py†L76-L335】
-- Workspace role catalog and mutations: `GET/POST /workspaces/{workspace_id}/roles`
-  and the workspace-aware patch/delete fallbacks in the roles router.【F:apps/ade-api/src/ade_api/features/roles/router.py†L336-L398】
-- Global role assignments: list/create/delete via
-  `/role-assignments` endpoints.【F:apps/ade-api/src/ade_api/features/roles/router.py†L492-L649】
-- Workspace role assignments: list/create/delete via
-  `/workspaces/{workspace_id}/role-assignments` endpoints guarded by workspace
-  permissions.【F:apps/ade-api/src/ade_api/features/roles/router.py†L651-L760】
+- Role catalog and CRUD (global or workspace-scoped via query params):
+  `GET/POST /rbac/roles`, `GET/PATCH/DELETE /rbac/roles/{role_id}`.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L177-L309】
+- Global role assignments (admin listing/upserts): `/rbac/role-assignments`.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L402-L454】
+- Global roles for a specific user: `/users/{user_id}/roles` (list/assign/remove).【F:apps/ade-api/src/ade_api/features/rbac/router.py†L462-L559】
+- Workspace membership + role bindings:
+  `/workspaces/{workspace_id}/members` (list/create/update/delete).【F:apps/ade-api/src/ade_api/features/rbac/router.py†L659-L900】
 - Permission catalog and effective permission introspection via
-  `/permissions`, `/me/permissions`, and `/me/permissions/check` (not shown
-  above) reuse the same dependencies for parity.【F:apps/ade-api/src/ade_api/features/roles/router.py†L200-L291】
+  `/rbac/permissions`, `/me/permissions`, and `/me/permissions/check` reuse the
+  same dependencies for parity.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L107-L158】
 
 ## Operational notes
 
@@ -69,7 +66,7 @@ All RBAC administration lives under `/api/v1`:
   coverage exercise the same Graph-style keys the registry declares.【F:conftest.py†L110-L247】
 - The baseline migration (`0001_initial_schema`) mirrors this structure and adds
   indexes/constraints for scope lookups and system role uniqueness in SQLite and
-  Postgres.【F:apps/ade-api/src/ade_api/shared/db/migrations/versions/0001_initial_schema.py†L1-L310】
+  Postgres.【F:apps/ade-api/src/ade_api/migrations/versions/0001_initial_schema.py†L1-L310】
 
 Keep this reference updated whenever the registry, service layer, or router
 contracts evolve so onboarding engineers can rely on the docs instead of reading

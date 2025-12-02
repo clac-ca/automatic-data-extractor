@@ -413,14 +413,15 @@ export function useWorkbenchFiles({
         if (!moving) {
           return current;
         }
+        const safeMoving: WorkbenchFileTab = moving;
         const zone: WorkbenchTabZone =
           options?.zone ?? (insertIndex <= pinned.length ? "pinned" : "regular");
         if (zone === "pinned") {
           const clampedIndex = Math.max(0, Math.min(insertIndex, pinned.length));
-          pinned.splice(clampedIndex, 0, { ...moving, pinned: true });
+          pinned.splice(clampedIndex, 0, { ...safeMoving, pinned: true });
         } else {
           const relativeIndex = Math.max(0, Math.min(insertIndex - pinned.length, regular.length));
-          regular.splice(relativeIndex, 0, { ...moving, pinned: false });
+          regular.splice(relativeIndex, 0, { ...safeMoving, pinned: false });
         }
         return [...pinned, ...regular];
       });

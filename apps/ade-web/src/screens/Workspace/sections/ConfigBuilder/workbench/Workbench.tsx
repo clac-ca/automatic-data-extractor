@@ -35,6 +35,8 @@ import {
   useConfigurationFilesQuery,
   useSaveConfigurationFileMutation,
   useDeleteConfigurationFileMutation,
+  useCreateConfigurationDirectoryMutation,
+  useDeleteConfigurationDirectoryMutation,
 } from "@shared/configurations/hooks/useConfigurationFiles";
 import { configurationKeys } from "@shared/configurations/keys";
 import { readConfigurationFileJson } from "@shared/configurations/api";
@@ -43,7 +45,17 @@ import { useValidateConfigurationMutation } from "@shared/configurations/hooks/u
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
-import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
+import {
+  fetchRunOutputs,
+  fetchRunSummary,
+  fetchRunTelemetry,
+  fetchRun,
+  runLogsUrl,
+  runOutputsUrl,
+  streamRun,
+  type RunStreamOptions,
+  type RunResource,
+} from "@shared/runs/api";
 import type { RunStatus, RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -276,14 +288,18 @@ export function Workbench({
   const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
   const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
+  const [deletingFolderPath, setDeletingFolderPath] = useState<string | null>(null);
   const { notifyBanner, dismissScope } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
   const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
+  const createConfigDirectory = useCreateConfigurationDirectoryMutation(workspaceId, configId);
+  const deleteConfigDirectory = useDeleteConfigurationDirectoryMutation(workspaceId, configId);
   const showConsoleBanner = useCallback(
     (message: string, options?: { intent?: NotificationIntent; duration?: number | null }) => {
       notifyBanner({
@@ -861,11 +877,19 @@ export function Workbench({
                 const completedAt = new Date();
                 const completedIso = completedAt.toISOString();
                 const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
-                const downloadBase = `/api/v1/runs/${encodeURIComponent(resolvedRunId)}`;
+                let runResource: RunResource | null = null;
+                try {
+                  runResource = await fetchRun(resolvedRunId);
+                } catch (error) {
+                  console.warn("Unable to fetch run resource for download links", error);
+                }
+                const outputsBase = runResource ? runOutputsUrl(runResource) ?? undefined : undefined;
+                const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : undefined;
                 setLatestRun({
                   runId: resolvedRunId,
                   status: runStatus,
-                  downloadBase,
+                  outputsBase,
+                  logsUrl,
                   documentName: metadata.documentName,
                   sheetNames: metadata.sheetNames ?? [],
                   outputs: [],
@@ -891,7 +915,7 @@ export function Workbench({
                   origin: "run",
                 });
                 try {
-                  const listing = await fetchRunOutputs(resolvedRunId);
+                  const listing = await fetchRunOutputs(runResource ?? resolvedRunId);
                   const outputFiles = Array.isArray(listing.files) ? listing.files : [];
                   const files = outputFiles.map((file) => {
                     const path = (file as { path?: string }).path;
@@ -1101,6 +1125,8 @@ export function Workbench({
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
   const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
   const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
+  const canCreateFolders = canCreateFiles && !createConfigDirectory.isPending;
+  const canDeleteFolders = canCreateFiles && !deleteConfigDirectory.isPending;
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -1192,6 +1218,43 @@ export function Workbench({
     [canCreateFiles, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
   );
 
+  const handleCreateFolder = useCallback(
+    async (folderPath: string, folderName: string) => {
+      const trimmed = folderName.trim();
+      if (!trimmed) {
+        throw new Error("Enter a folder name.");
+      }
+      if (trimmed.includes("..")) {
+        throw new Error("Folder name cannot include '..'.");
+      }
+      if (!canCreateFolders) {
+        throw new Error("Files are still loading.");
+      }
+      const normalizedParent = folderPath.replace(/\/+$/, "");
+      const sanitizedName = trimmed.replace(/^\/+/, "").replace(/\/+/g, "/");
+      const candidatePath = normalizedParent ? `${normalizedParent}/${sanitizedName}` : sanitizedName;
+      const normalizedPath = candidatePath.replace(/\/+/g, "/").replace(/\/$/, "");
+      if (!normalizedPath) {
+        throw new Error("Enter a valid folder name.");
+      }
+      if (tree && findFileNode(tree, normalizedPath)) {
+        throw new Error("A file or folder with that name already exists.");
+      }
+      setIsCreatingFolder(true);
+      try {
+        await createConfigDirectory.mutateAsync({ path: normalizedPath });
+        await filesQuery.refetch();
+        showConsoleBanner(`Folder ready: ${normalizedPath}`, { intent: "success", duration: 4000 });
+      } catch (error) {
+        pushConsoleError(error);
+        throw error instanceof Error ? error : new Error("Unable to create folder.");
+      } finally {
+        setIsCreatingFolder(false);
+      }
+    },
+    [canCreateFolders, tree, createConfigDirectory, filesQuery, showConsoleBanner, pushConsoleError],
+  );
+
   const handleDeleteFile = useCallback(
     async (filePath: string) => {
       if (!canDeleteFiles) {
@@ -1231,6 +1294,50 @@ export function Workbench({
       }
     },
     [canDeleteFiles, tree, deleteConfigFile, files, filesQuery, showConsoleBanner, pushConsoleError, setDeletingFilePath],
+  );
+
+  const handleDeleteFolder = useCallback(
+    async (folderPath: string) => {
+      if (!canDeleteFolders) {
+        throw new Error("Files are still loading.");
+      }
+      const target = tree ? findFileNode(tree, folderPath) : null;
+      if (!tree || !target || target.kind !== "folder") {
+        throw new Error("Folder not found in workspace.");
+      }
+      const confirmDelete =
+        typeof window !== "undefined"
+          ? window.confirm(`Delete folder ${folderPath} and all contents? This cannot be undone.`)
+          : true;
+      if (!confirmDelete) {
+        return;
+      }
+      setDeletingFolderPath(folderPath);
+      try {
+        await deleteConfigDirectory.mutateAsync({ path: folderPath, recursive: true });
+        setPendingOpenFileId((prev) => (prev === folderPath ? null : prev));
+        files.closeTab(folderPath);
+        await filesQuery.refetch();
+        showConsoleBanner(`Deleted folder ${folderPath}`, { intent: "info", duration: 4000 });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to delete folder.";
+        pushConsoleError(message);
+        throw new Error(message);
+      } finally {
+        setDeletingFolderPath((prev) => (prev === folderPath ? null : prev));
+      }
+    },
+    [
+      canDeleteFolders,
+      tree,
+      deleteConfigDirectory,
+      files,
+      filesQuery,
+      showConsoleBanner,
+      pushConsoleError,
+      setDeletingFolderPath,
+    ],
   );
 
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
@@ -1415,11 +1522,16 @@ export function Workbench({
                     }}
                     theme={menuAppearance}
                     canCreateFile={canCreateFiles}
-                    isCreatingFile={isCreatingFile}
+                    canCreateFolder={canCreateFolders}
+                    isCreatingEntry={isCreatingFile || isCreatingFolder}
                     onCreateFile={handleCreateFile}
+                    onCreateFolder={handleCreateFolder}
                     canDeleteFile={canDeleteFiles}
+                    canDeleteFolder={canDeleteFolders}
                     deletingFilePath={deletingFilePath}
+                    deletingFolderPath={deletingFolderPath}
                     onDeleteFile={handleDeleteFile}
+                    onDeleteFolder={handleDeleteFolder}
                     onCloseFile={files.closeTab}
                     onCloseOtherFiles={files.closeOtherTabs}
                     onCloseTabsToRight={files.closeTabsToRight}

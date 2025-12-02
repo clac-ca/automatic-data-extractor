@@ -2,8 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useNavigate } from "@app/nav/history";
-import { sessionKeys } from "@shared/auth/api";
-import { performLogout } from "@shared/auth/api/logout";
+import { performLogout, sessionKeys } from "@shared/auth/api";
 
 export default function LogoutRoute() {
   const navigate = useNavigate();

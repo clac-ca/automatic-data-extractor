@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 from ade_api.settings import Settings
-from ade_api.shared.db import engine as db_engine
-from ade_api.shared.db.engine import (
+from ade_api.infra.db import engine as db_engine
+from ade_api.infra.db.engine import (
     _AZURE_SQL_SCOPE,
     _SQL_COPT_SS_ACCESS_TOKEN,
     _managed_identity_injector,

@@ -13,8 +13,8 @@ from pathlib import Path
 
 from fastapi.concurrency import run_in_threadpool
 
+from ade_api.infra.storage import workspace_config_root
 from ade_api.settings import Settings
-from ade_api.storage_layout import workspace_config_root
 
 from .exceptions import (
     ConfigPublishConflictError,
@@ -92,12 +92,16 @@ class ConfigStorage:
     def __init__(
         self,
         *,
-        templates_root: Path,
+        templates_root: Path | None = None,
         configs_root: Path | None = None,
         settings: Settings | None = None,
     ) -> None:
         if configs_root is None and settings is None:
             raise ValueError("ConfigStorage requires settings or configs_root")
+        if templates_root is None:
+            if settings is None:
+                raise ValueError("ConfigStorage requires settings or templates_root")
+            templates_root = settings.config_templates_dir
         self._templates_root = templates_root.expanduser().resolve()
         if configs_root is None:
             assert settings is not None

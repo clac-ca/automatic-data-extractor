@@ -21,19 +21,15 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 
+from ade_api.app.dependencies import get_run_event_dispatcher, get_runs_service
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import PageParams
+from ade_api.core.http import require_authenticated, require_csrf
+from ade_api.core.models import RunStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.infra.db.session import get_sessionmaker
 from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.shared.dependency import (
-    _get_run_event_dispatcher,
-    get_runs_service,
-    require_authenticated,
-    require_csrf,
-)
-from ade_api.shared.pagination import PageParams
 
-from .models import RunStatus
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -91,7 +87,7 @@ async def _execute_run_background(
     session_factory = get_sessionmaker(settings=settings)
     context = RunExecutionContext.from_dict(context_data)
     options = RunCreateOptions(**options_data)
-    dispatcher = _get_run_event_dispatcher(settings=settings)
+    dispatcher = get_run_event_dispatcher(settings=settings)
     async with session_factory() as session:
         service = RunsService(
             session=session,
@@ -287,7 +283,7 @@ async def get_run_events_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/logfile",
+    "/runs/{run_id}/logs",
     response_class=FileResponse,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Logs unavailable"}},
 )

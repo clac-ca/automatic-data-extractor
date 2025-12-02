@@ -93,11 +93,16 @@ interface ExplorerProps {
   readonly onSelectFile: (fileId: string) => void;
   readonly theme: ExplorerTheme;
   readonly canCreateFile?: boolean;
-  readonly isCreatingFile?: boolean;
-  readonly onCreateFile?: (folderPath: string, fileName: string) => Promise<void> | void;
+  readonly canCreateFolder?: boolean;
+  readonly isCreatingEntry?: boolean;
+  readonly onCreateFile?: (folderPath: string, fileName: string) => Promise<void>;
+  readonly onCreateFolder?: (folderPath: string, folderName: string) => Promise<void>;
   readonly canDeleteFile?: boolean;
   readonly deletingFilePath?: string | null;
-  readonly onDeleteFile?: (filePath: string) => Promise<void> | void;
+  readonly canDeleteFolder?: boolean;
+  readonly deletingFolderPath?: string | null;
+  readonly onDeleteFile?: (filePath: string) => Promise<void>;
+  readonly onDeleteFolder?: (folderPath: string) => Promise<void>;
   readonly onCloseFile: (fileId: string) => void;
   readonly onCloseOtherFiles: (fileId: string) => void;
   readonly onCloseTabsToRight: (fileId: string) => void;
@@ -113,11 +118,16 @@ export function Explorer({
   onSelectFile,
   theme,
   canCreateFile = false,
-  isCreatingFile = false,
+  canCreateFolder = false,
+  isCreatingEntry = false,
   onCreateFile,
+  onCreateFolder,
   canDeleteFile = false,
   deletingFilePath = null,
+  canDeleteFolder = false,
+  deletingFolderPath = null,
   onDeleteFile,
+  onDeleteFolder,
   onCloseFile,
   onCloseOtherFiles,
   onCloseTabsToRight,
@@ -129,9 +139,12 @@ export function Explorer({
     readonly node: WorkbenchFileNode;
     readonly position: { readonly x: number; readonly y: number };
   } | null>(null);
-  const [createTarget, setCreateTarget] = useState<{ readonly folderId: string } | null>(null);
+  const [createTarget, setCreateTarget] = useState<{ readonly folderId: string; readonly kind: "file" | "folder" } | null>(
+    null,
+  );
   const [createError, setCreateError] = useState<string | null>(null);
   const pendingCreate = createTarget?.folderId ?? null;
+  const pendingCreateKind = createTarget?.kind ?? null;
 
   useEffect(() => {
     setExpanded(collectExpandedFolderIds(tree));
@@ -296,7 +309,22 @@ export function Explorer({
           }
           setCreateError(null);
           setFolderExpanded(node.id, true);
-          setCreateTarget({ folderId: node.id });
+          setCreateTarget({ folderId: node.id, kind: "file" });
+          setContextMenu(null);
+        },
+      },
+      {
+        id: "new-folder",
+        label: "New Folder…",
+        icon: <MenuIconNewFolder />,
+        disabled: !canCreateFolder || !onCreateFolder,
+        onSelect: () => {
+          if (!canCreateFolder || !onCreateFolder) {
+            return;
+          }
+          setCreateError(null);
+          setFolderExpanded(node.id, true);
+          setCreateTarget({ folderId: node.id, kind: "folder" });
           setContextMenu(null);
         },
       },
@@ -324,6 +352,20 @@ export function Explorer({
           void handleCopyPath(node.id);
         },
       },
+      {
+        id: "delete-folder",
+        label: "Delete Folder",
+        icon: <MenuIconDelete />,
+        shortcut: shortcuts.delete,
+        disabled: !canDeleteFolder || !onDeleteFolder,
+        onSelect: () => {
+          if (!onDeleteFolder) {
+            return;
+          }
+          void onDeleteFolder(node.id);
+          setContextMenu(null);
+        },
+      },
     ];
   }, [
     contextMenu,
@@ -338,9 +380,13 @@ export function Explorer({
     setFolderExpanded,
     collapseAll,
     canCreateFile,
+    canCreateFolder,
     onCreateFile,
+    onCreateFolder,
     canDeleteFile,
+    canDeleteFolder,
     onDeleteFile,
+    onDeleteFolder,
     setCreateError,
     setCreateTarget,
     setContextMenu,
@@ -392,55 +438,65 @@ export function Explorer({
                 activeFileId={activeFileId}
                 openFileIds={openFileIds}
                 onToggleFolder={toggleFolder}
-        onSelectFile={onSelectFile}
-        tokens={tokens}
-        focusRingClass={focusRingClass}
-        onContextMenu={handleNodeContextMenu}
-        canCreateFile={canCreateFile}
-        isCreatingFile={isCreatingFile}
-        pendingCreateFolderId={pendingCreate}
-        createError={createError}
-        onSubmitCreateFile={async (folderId, fileName) => {
-          if (!onCreateFile) {
-            return;
-          }
-          setCreateError(null);
-          try {
-            await onCreateFile(folderId, fileName);
-            setCreateTarget(null);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "Unable to create file.";
-            setCreateError(message);
-          }
-        }}
-        onCancelCreateFile={() => {
-          setCreateTarget(null);
-          setCreateError(null);
-        }}
-        canDeleteFile={canDeleteFile}
-        deletingFilePath={deletingFilePath}
-        onDeleteFile={onDeleteFile}
-      />
-    ))}
+                onSelectFile={onSelectFile}
+                tokens={tokens}
+                focusRingClass={focusRingClass}
+                onContextMenu={handleNodeContextMenu}
+                canCreateFile={canCreateFile}
+                canCreateFolder={canCreateFolder}
+                isCreatingEntry={isCreatingEntry}
+                pendingCreateFolderId={pendingCreate}
+                pendingCreateKind={pendingCreateKind}
+                createError={createError}
+                onSubmitCreateEntry={async (folderId, name, kind) => {
+                  const handler = kind === "folder" ? onCreateFolder : onCreateFile;
+                  if (!handler) {
+                    return;
+                  }
+                  setCreateError(null);
+                  try {
+                    await handler(folderId, name);
+                    setCreateTarget(null);
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : "Unable to create file.";
+                    setCreateError(message);
+                  }
+                }}
+                onCancelCreateEntry={() => {
+                  setCreateTarget(null);
+                  setCreateError(null);
+                }}
+                canDeleteFile={canDeleteFile}
+                canDeleteFolder={canDeleteFolder}
+                deletingFilePath={deletingFilePath}
+                deletingFolderPath={deletingFolderPath}
+                onDeleteFile={onDeleteFile}
+                onDeleteFolder={onDeleteFolder}
+              />
+            ))}
             {pendingCreate && !rootChildren.some((node) => node.id === pendingCreate) ? (
               <li className="pl-2">
-                <CreateFileRow
+                <CreateEntryRow
                   appearance={theme}
+                  icon={pendingCreateKind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  placeholder={pendingCreateKind === "folder" ? "new_folder" : "new_file.py"}
                   onSubmit={(name) => {
-                    if (!onCreateFile) {
+                    const handler = pendingCreateKind === "folder" ? onCreateFolder : onCreateFile;
+                    if (!handler || !pendingCreateKind) {
                       return;
                     }
                     setCreateError(null);
-                    void onCreateFile("", name).then(
+                    void handler("", name).then(
                       () => setCreateTarget(null),
-                      (error) => setCreateError(error instanceof Error ? error.message : "Unable to create file."),
+                      (error: unknown) =>
+                        setCreateError(error instanceof Error ? error.message : "Unable to create file."),
                     );
                   }}
                   onCancel={() => {
                     setCreateTarget(null);
                     setCreateError(null);
                   }}
-                  isSubmitting={isCreatingFile}
+                  isSubmitting={isCreatingEntry}
                   error={createError}
                 />
               </li>
@@ -471,14 +527,19 @@ interface ExplorerNodeProps {
   readonly focusRingClass: string;
   readonly onContextMenu: (event: React.MouseEvent, node: WorkbenchFileNode) => void;
   readonly canCreateFile: boolean;
-  readonly isCreatingFile: boolean;
+  readonly canCreateFolder: boolean;
+  readonly isCreatingEntry: boolean;
   readonly pendingCreateFolderId: string | null;
+  readonly pendingCreateKind: "file" | "folder" | null;
   readonly createError: string | null;
-  readonly onSubmitCreateFile: (folderId: string, fileName: string) => Promise<void> | void;
-  readonly onCancelCreateFile: () => void;
+  readonly onSubmitCreateEntry: (folderId: string, name: string, kind: "file" | "folder") => Promise<void> | void;
+  readonly onCancelCreateEntry: () => void;
   readonly canDeleteFile: boolean;
+  readonly canDeleteFolder: boolean;
   readonly deletingFilePath: string | null;
+  readonly deletingFolderPath: string | null;
   readonly onDeleteFile?: (filePath: string) => Promise<void> | void;
+  readonly onDeleteFolder?: (folderPath: string) => Promise<void> | void;
 }
 
 function ExplorerNode({
@@ -493,14 +554,19 @@ function ExplorerNode({
   focusRingClass,
   onContextMenu,
   canCreateFile,
-  isCreatingFile,
+  canCreateFolder,
+  isCreatingEntry,
   pendingCreateFolderId,
+  pendingCreateKind,
   createError,
-  onSubmitCreateFile,
-  onCancelCreateFile,
+  onSubmitCreateEntry,
+  onCancelCreateEntry,
   canDeleteFile,
+  canDeleteFolder,
   deletingFilePath,
+  deletingFolderPath,
   onDeleteFile,
+  onDeleteFolder,
 }: ExplorerNodeProps) {
   const paddingLeft = 8 + depth * 16;
   const baseStyle: CSSProperties & { ["--tree-hover-bg"]?: string } = {
@@ -510,6 +576,7 @@ function ExplorerNode({
 
   if (node.kind === "folder") {
     const isOpen = expanded.has(node.id);
+    const isDeleting = deletingFolderPath === node.id;
     const folderStyle: CSSProperties = {
       ...baseStyle,
       color: isOpen ? tokens.textPrimary : tokens.textMuted,
@@ -527,9 +594,11 @@ function ExplorerNode({
           className={clsx(
             "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-left font-medium transition hover:bg-[var(--tree-hover-bg)]",
             focusRingClass,
+            isDeleting && "opacity-60",
           )}
           style={folderStyle}
           aria-expanded={isOpen}
+          disabled={isDeleting}
         >
           <ChevronIcon open={isOpen} tokens={tokens} />
           <FolderIcon open={isOpen} tokens={tokens} />
@@ -551,23 +620,33 @@ function ExplorerNode({
                 focusRingClass={focusRingClass}
                 onContextMenu={onContextMenu}
                 canCreateFile={canCreateFile}
-                isCreatingFile={isCreatingFile}
+                canCreateFolder={canCreateFolder}
+                isCreatingEntry={isCreatingEntry}
                 pendingCreateFolderId={pendingCreateFolderId}
+                pendingCreateKind={pendingCreateKind}
                 createError={createError}
-                onSubmitCreateFile={onSubmitCreateFile}
-                onCancelCreateFile={onCancelCreateFile}
+                onSubmitCreateEntry={onSubmitCreateEntry}
+                onCancelCreateEntry={onCancelCreateEntry}
                 canDeleteFile={canDeleteFile}
+                canDeleteFolder={canDeleteFolder}
                 deletingFilePath={deletingFilePath}
+                deletingFolderPath={deletingFolderPath}
                 onDeleteFile={onDeleteFile}
+                onDeleteFolder={onDeleteFolder}
               />
             ))}
             {pendingCreateFolderId === node.id ? (
               <li className="pl-2">
-                <CreateFileRow
+                <CreateEntryRow
                   appearance={tokens === EXPLORER_THEME_TOKENS.dark ? "dark" : "light"}
-                  onSubmit={(name) => onSubmitCreateFile(node.id, name)}
-                  onCancel={onCancelCreateFile}
-                  isSubmitting={isCreatingFile}
+                  icon={pendingCreateKind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  placeholder={pendingCreateKind === "folder" ? "new_folder" : "new_file.py"}
+                  onSubmit={(name) => {
+                    const kind = pendingCreateKind ?? "file";
+                    onSubmitCreateEntry(node.id, name, kind);
+                  }}
+                  onCancel={onCancelCreateEntry}
+                  isSubmitting={isCreatingEntry}
                   error={createError}
                 />
               </li>
@@ -759,6 +838,22 @@ function MenuIconNewFile() {
   );
 }
 
+function MenuIconNewFolder() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3.5 5h3.5l1.2 1.4H12.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+        strokeLinejoin="round"
+      />
+      <path d="M8 8v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M6.5 9.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function MenuIconExpand() {
   return (
     <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
@@ -830,18 +925,22 @@ function MenuIconDelete() {
   );
 }
 
-function CreateFileRow({
+function CreateEntryRow({
   appearance,
   onSubmit,
   onCancel,
   isSubmitting,
   error,
+  placeholder = "new_file.py",
+  icon,
 }: {
   readonly appearance: "light" | "dark";
   readonly onSubmit: (fileName: string) => void;
   readonly onCancel: () => void;
   readonly isSubmitting: boolean;
   readonly error: string | null;
+  readonly placeholder?: string;
+  readonly icon?: React.ReactNode;
 }) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -854,18 +953,18 @@ function CreateFileRow({
   const border = appearance === "dark" ? "#2f2f2f" : "#d4d4d4";
   return (
     <div
-      className="rounded-md border px-2 py-1"
-      style={{ backgroundColor: bg, borderColor: border }}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="flex items-center gap-2">
-        <span className="inline-flex w-4 justify-center text-[#4fc1ff]">
-          <MenuIconNewFile />
-        </span>
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
+        className="rounded-md border px-2 py-1"
+        style={{ backgroundColor: bg, borderColor: border }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <span className="inline-flex w-4 justify-center text-[#4fc1ff]">
+            {icon ?? <MenuIconNewFile />}
+          </span>
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
@@ -877,7 +976,7 @@ function CreateFileRow({
             }
           }}
           className="flex-1 rounded-sm border border-transparent bg-white/80 px-2 py-1 text-[13px] text-slate-900 outline-none focus:border-[#007acc]"
-          placeholder="new_file.py"
+          placeholder={placeholder}
           disabled={isSubmitting}
         />
         <button

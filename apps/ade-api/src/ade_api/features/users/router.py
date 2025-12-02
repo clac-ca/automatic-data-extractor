@@ -6,18 +6,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Security, status
 
-from ade_api.shared.dependency import (
-    get_users_service,
-    require_authenticated,
-    require_global,
-)
-from ade_api.shared.pagination import PageParams
-from ade_api.shared.sorting import make_sort_dependency
-from ade_api.shared.types import OrderBy
+from ade_api.app.dependencies import get_users_service
+from ade_api.common.pagination import PageParams
+from ade_api.common.sorting import make_sort_dependency
+from ade_api.common.types import OrderBy
+from ade_api.core.http import require_authenticated, require_global
+from ade_api.core.models import User
 
 from .filters import UserFilters
-from .models import User
-from .schemas import UserPage, UserProfile
+from .schemas import UserPage
 from .service import UsersService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -29,21 +26,6 @@ get_sort_order = make_sort_dependency(
     default=DEFAULT_SORT,
     id_field=ID_FIELD,
 )
-
-
-@router.get(
-    "/users/me",
-    response_model=UserProfile,
-    status_code=status.HTTP_200_OK,
-    response_model_exclude_none=True,
-    summary="Return the authenticated user profile",
-)
-async def read_me(
-    user: Annotated[User, Security(require_authenticated)],
-    service: Annotated[UsersService, Depends(get_users_service)],
-) -> UserProfile:
-    profile = await service.get_profile(user=user)
-    return profile
 
 
 @router.get(

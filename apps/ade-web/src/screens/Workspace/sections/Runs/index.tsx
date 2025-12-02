@@ -5,7 +5,7 @@ export default function WorkspaceRunsRoute() {
     <PageState
       title="Runs"
       description="Run history will appear here once runs APIs expose listing endpoints."
-      variant="info"
+      variant="empty"
     />
   );
 }

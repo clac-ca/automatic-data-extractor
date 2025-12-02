@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import User, UserCredential, UserIdentity
+from ade_api.core.models import User, UserCredential, UserIdentity
 
 
 def _canonical_email(value: str) -> str:

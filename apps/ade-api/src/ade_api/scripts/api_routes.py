@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from io import StringIO
 from typing import Any
 
 from fastapi.routing import APIRoute
 
+from ade_api.common.encoding import json_dumps
 from ..main import API_PREFIX, create_app
 
 EXCLUDED_METHODS = {"head", "options"}
@@ -171,7 +171,7 @@ def main() -> None:
     if fmt == "json":
         indent = 2 if args.pretty else None
         separators = (",", ": ") if args.pretty else (",", ":")
-        print(json.dumps(data, indent=indent, separators=separators))
+        print(json_dumps(data, indent=indent, separators=separators))
         return
 
     if fmt == "csv":

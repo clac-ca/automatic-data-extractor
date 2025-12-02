@@ -12,8 +12,9 @@ from pathlib import Path
 from sqlalchemy import MetaData
 from sqlalchemy.engine import URL
 
+from ade_api.infra.db import build_database_url, get_engine, reset_database_state
+
 from ..settings import Settings
-from ..shared.db import build_database_url, get_engine, reset_database_state
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 DEFAULT_STORAGE_ROOT = (REPO_ROOT / "data").resolve()

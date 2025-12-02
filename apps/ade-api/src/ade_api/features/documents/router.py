@@ -19,17 +19,13 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.shared.dependency import (
-    get_documents_service,
-    require_authenticated,
-    require_csrf,
-    require_workspace,
-)
-from ade_api.shared.pagination import PageParams
-from ade_api.shared.sorting import make_sort_dependency
-from ade_api.shared.types import OrderBy
+from ade_api.app.dependencies import get_documents_service
+from ade_api.common.pagination import PageParams
+from ade_api.common.sorting import make_sort_dependency
+from ade_api.common.types import OrderBy
+from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.core.models import User
 
-from ..users.models import User
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,

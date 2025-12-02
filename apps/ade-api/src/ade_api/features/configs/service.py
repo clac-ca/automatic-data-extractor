@@ -21,9 +21,10 @@ from pathlib import Path, PurePosixPath
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.shared.core.ids import generate_uuid7
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.logging import log_context
+from ade_api.common.time import utc_now
+from ade_api.core.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
 from .exceptions import (
@@ -33,7 +34,6 @@ from .exceptions import (
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
 )
-from .models import Configuration, ConfigurationStatus
 from .repository import ConfigurationsRepository
 from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue
 from .storage import ConfigStorage
@@ -656,7 +656,7 @@ class ConfigurationsService:
         workspace_id: str,
         configuration_id: str,
         relative_path: str,
-    ) -> Path:
+    ) -> tuple[Path, bool]:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
@@ -665,6 +665,7 @@ class ConfigurationsService:
         config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
+        created = not dir_path.exists()
 
         logger.debug(
             "config.directories.create.start",
@@ -675,10 +676,11 @@ class ConfigurationsService:
             ),
         )
 
-        await run_in_threadpool(dir_path.mkdir, 0o755, True)
-        configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        await run_in_threadpool(dir_path.mkdir, mode=0o755, parents=True, exist_ok=True)
+        if created:
+            configuration.updated_at = utc_now()
+            await self._session.flush()
+            await self._session.refresh(configuration)
 
         logger.info(
             "config.directories.create.success",
@@ -686,9 +688,10 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 path=relative_path,
+                created=created,
             ),
         )
-        return dir_path
+        return dir_path, created
 
     async def delete_directory(
         self,

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Workspace, WorkspaceMembership
+from ade_api.core.models import Workspace, WorkspaceMembership
 
 
 class WorkspacesRepository:

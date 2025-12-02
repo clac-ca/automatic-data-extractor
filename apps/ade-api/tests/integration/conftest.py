@@ -5,7 +5,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 
 from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db.session import get_sessionmaker
 
 
 @pytest_asyncio.fixture()

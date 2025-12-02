@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from ade_api.shared.core.logging import log_context
+from ade_api.common.logging import log_context
 
 if TYPE_CHECKING:
     from .service import RunStreamFrame

@@ -6,9 +6,9 @@ from uuid import uuid4
 
 import pytest
 
-from ade_api.features.users.models import UserCredential
+from ade_api.core.models import UserCredential
 from ade_api.features.users.repository import UsersRepository
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db.session import get_sessionmaker
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,7 +21,7 @@ async def test_create_user_persists_password_hash() -> None:
         repo = UsersRepository(session)
 
         user = await repo.create(
-            email=f"{uuid4().hex}@example.test",
+            email=f"{uuid4().hex}@example.com",
             password_hash="argon2id$example",
             display_name="  Example User  ",
         )
@@ -42,11 +42,11 @@ async def test_list_users_returns_all_records() -> None:
         repo = UsersRepository(session)
 
         first = await repo.create(
-            email=f"{uuid4().hex}@example.test",
+            email=f"{uuid4().hex}@example.com",
             password_hash=None,
         )
         second = await repo.create(
-            email=f"{uuid4().hex}@example.test",
+            email=f"{uuid4().hex}@example.com",
             password_hash="argon2id$example",
         )
 
@@ -63,7 +63,7 @@ async def test_create_service_account_sets_flag() -> None:
         repo = UsersRepository(session)
 
         user = await repo.create(
-            email=f"{uuid4().hex}@example.test",
+            email=f"{uuid4().hex}@example.com",
             password_hash=None,
             is_service_account=True,
         )
@@ -79,7 +79,7 @@ async def test_set_password_creates_or_updates_credential() -> None:
         repo = UsersRepository(session)
 
         user = await repo.create(
-            email=f"{uuid4().hex}@example.test",
+            email=f"{uuid4().hex}@example.com",
             password_hash=None,
         )
 

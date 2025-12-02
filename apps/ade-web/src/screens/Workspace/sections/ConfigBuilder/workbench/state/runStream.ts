@@ -92,7 +92,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
   const line = isBuildEvent ? describeBuildEvent(event) : describeRunEvent(event);
   const consoleLines = clampConsoleLines([...state.consoleLines, line], state.maxConsoleLines);
 
-  const buildPhases =
+  const buildPhases: Record<string, PhaseState> =
     type === "build.phase.started"
       ? {
           ...state.buildPhases,
@@ -109,7 +109,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
           }
         : state.buildPhases;
 
-  const runPhases =
+  const runPhases: Record<string, PhaseState> =
     type === "run.phase.started"
       ? {
           ...state.runPhases,

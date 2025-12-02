@@ -13,7 +13,8 @@ import type { RunStreamStatus } from "../state/runStream";
 export interface WorkbenchRunSummary {
   readonly runId: string;
   readonly status: RunStatus;
-  readonly downloadBase: string;
+  readonly outputsBase?: string;
+  readonly logsUrl?: string;
   readonly outputs: ReadonlyArray<{
     name: string;
     path?: string;
@@ -391,12 +392,14 @@ function RunSummaryHeader({ summary }: { readonly summary: WorkbenchRunSummary }
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <a
-          href={`${summary.downloadBase}/logfile`}
-          className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-white"
-        >
-          Download telemetry
-        </a>
+        {summary.logsUrl ? (
+          <a
+            href={summary.logsUrl}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-white"
+          >
+            Download logs
+          </a>
+        ) : null}
       </div>
     </div>
   );
@@ -423,15 +426,26 @@ function RunOutputsCard({ summary }: { readonly summary: WorkbenchRunSummary }) 
               file.name.split("/").map(encodeURIComponent).join("/");
             const href = file.download_url
               ? file.download_url
-              : `${summary.downloadBase}/outputs/${encodedPath}`;
+              : summary.outputsBase
+                ? `${summary.outputsBase}/${encodedPath}`
+                : undefined;
+            const content = (
+              <span className="text-brand-600">
+                {file.name || file.path}
+              </span>
+            );
             return (
               <li
                 key={file.path ?? file.name}
                 className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
               >
-                <a href={href} className="text-brand-600 hover:underline">
-                  {file.name || file.path}
-                </a>
+                {href ? (
+                  <a href={href} className="text-brand-600 hover:underline">
+                    {file.name || file.path}
+                  </a>
+                ) : (
+                  content
+                )}
                 <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
               </li>
             );
@@ -486,7 +500,7 @@ function StatusDot({ status }: { readonly status: RunStatus }) {
   const tone =
     status === "succeeded"
       ? "bg-emerald-500"
-      : status === "running" || status === "queued" || status === "active"
+      : status === "running" || status === "queued"
         ? "bg-amber-400"
       : status === "canceled"
         ? "bg-slate-400"
@@ -627,7 +641,6 @@ function statusLabel(status: RunStatus): string {
       return "Canceled";
     case "queued":
       return "Queued";
-    case "active":
     case "running":
       return "Running";
     default:

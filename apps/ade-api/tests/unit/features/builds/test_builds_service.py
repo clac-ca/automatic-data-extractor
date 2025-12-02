@@ -16,17 +16,15 @@ from ade_api.features.builds.builder import (
     BuildStep,
 )
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
-from ade_api.features.builds.models import Build, BuildStatus
+from ade_api.core.models import Build, BuildStatus, Configuration, ConfigurationStatus, Workspace
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildsService
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
-from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.db import Base
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.storage_layout import build_venv_root
+from ade_api.common.time import utc_now
+from ade_api.infra.db import Base
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.storage import build_venv_root
 
 
 @dataclass(slots=True)
@@ -129,10 +127,10 @@ version = "0.2.0"
 async def _create_configuration(
     session: AsyncSession,
 ) -> tuple[Workspace, Configuration]:
-    workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
+    workspace = Workspace(name="Acme", slug=f"acme-{generate_uuid7().hex[:8]}")
     session.add(workspace)
     await session.flush()
-    configuration_id = generate_ulid()
+    configuration_id = generate_uuid7()
     configuration = Configuration(
         id=configuration_id,
         workspace_id=workspace.id,
@@ -171,7 +169,7 @@ async def test_prepare_build_reuses_active(
     )
 
     build = Build(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=workspace.id,
         configuration_id=configuration.id,
         status=BuildStatus.ACTIVE,

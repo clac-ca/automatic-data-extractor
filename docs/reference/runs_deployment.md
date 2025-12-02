@@ -50,5 +50,5 @@ flags, and rollback considerations.
 - If migrations succeeded but the service misbehaves, roll back the image
   and leave the schema in place; the new tables are additive and unused by
   the prior build.
-- Capture the run `events.ndjson` files (or download via `/runs/{run_id}/logfile`)
+- Capture the run `events.ndjson` files (or download via `/runs/{run_id}/logs`)
   for debugging before redeploying to avoid losing incident context.

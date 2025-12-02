@@ -5,18 +5,16 @@ from datetime import datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
-from ade_api.features.runs.models import Run, RunStatus
-from ade_api.features.workspaces.models import Workspace
-from ade_api.shared.db.mixins import generate_ulid
+from ade_api.core.models import Configuration, ConfigurationStatus, Run, RunStatus, Workspace
+from ade_api.infra.db.mixins import generate_uuid7
 
 
 async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Configuration]:
-    workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
+    workspace = Workspace(name="Acme", slug=f"acme-{generate_uuid7().hex[:8]}")
     session.add(workspace)
     await session.flush()
 
-    configuration_id = generate_ulid()
+    configuration_id = generate_uuid7()
     configuration = Configuration(
         id=configuration_id,
         workspace_id=workspace.id,
@@ -33,11 +31,7 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
 async def test_run_defaults(session: AsyncSession) -> None:
     workspace, configuration = await _create_configuration(session)
 
-    run = Run(
-        id="run_test",
-        workspace_id=workspace.id,
-        configuration_id=configuration.id,
-    )
+    run = Run(workspace_id=workspace.id, configuration_id=configuration.id)
     session.add(run)
     await session.commit()
     await session.refresh(run)

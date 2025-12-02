@@ -1,4 +1,3 @@
-import { post } from "@shared/api";
 import { client } from "@shared/api/client";
 import type { components, paths } from "@schema";
 
@@ -40,18 +39,9 @@ export async function fetchUsers(options: FetchUsersOptions = {}): Promise<UserL
   return data;
 }
 
-export interface InviteUserPayload {
-  readonly email: string;
-  readonly display_name?: string | null;
-}
-
-export function inviteUser(payload: InviteUserPayload) {
-  return post<UserProfile>("/users/invitations", payload);
-}
-
 type ListUsersQuery = paths["/api/v1/users"]["get"]["parameters"]["query"];
 type UserListPage = components["schemas"]["UserPage"];
 type UserSummary = UserListPage["items"][number];
-type UserProfile = components["schemas"]["UserProfile"];
+type User = components["schemas"]["UserOut"];
 
-export type { UserListPage, UserSummary };
+export type { UserListPage, UserSummary, User };

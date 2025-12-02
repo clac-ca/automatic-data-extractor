@@ -1,11 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 
-import { Link } from "@app/nav/Link";
 import { useNavigate } from "@app/nav/history";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import {
+  useSetDefaultWorkspaceMutation,
+  useWorkspacesQuery,
+  type WorkspaceProfile,
+} from "@features/Workspace/api/workspaces-api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 import { defaultWorkspaceSection } from "@features/Workspace/components/workspace-navigation";
@@ -13,6 +16,8 @@ import { WorkspaceDirectoryLayout } from "@features/Workspaces/components/Worksp
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { GlobalSearchField } from "@app/shell/GlobalSearchField";
+import { writePreferredWorkspace } from "@features/Workspace/state/workspace-preferences";
+import { Alert } from "@ui/Alert";
 
 export default function WorkspacesIndexRoute() {
   return (
@@ -26,6 +31,9 @@ function WorkspacesIndexContent() {
   const navigate = useNavigate();
   const session = useSession();
   const workspacesQuery = useWorkspacesQuery();
+  const setDefaultWorkspaceMutation = useSetDefaultWorkspaceMutation();
+  const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
+  const [setDefaultError, setSetDefaultError] = useState<string | null>(null);
   const normalizedPermissions = useMemo(
     () => (session.user.permissions ?? []).map((key) => key.toLowerCase()),
     [session.user.permissions],
@@ -51,6 +59,10 @@ function WorkspacesIndexContent() {
       return name.includes(normalizedSearch) || slug.includes(normalizedSearch);
     });
   }, [workspaces, normalizedSearch]);
+  const goToWorkspace = useCallback(
+    (workspaceId: string) => navigate(`/workspaces/${workspaceId}/${defaultWorkspaceSection.path}`),
+    [navigate],
+  );
 
   const actions = canCreateWorkspace ? (
     <Button variant="primary" onClick={() => navigate("/workspaces/new")}>
@@ -64,9 +76,9 @@ function WorkspacesIndexContent() {
     }
     const firstMatch = visibleWorkspaces[0];
     if (firstMatch) {
-      navigate(`/workspaces/${firstMatch.id}/${defaultWorkspaceSection.path}`);
+      goToWorkspace(firstMatch.id);
     }
-  }, [visibleWorkspaces, normalizedSearch, navigate]);
+  }, [visibleWorkspaces, normalizedSearch, goToWorkspace]);
 
   const handleResetSearch = useCallback(() => setSearchQuery(""), []);
 
@@ -80,9 +92,36 @@ function WorkspacesIndexContent() {
   const handleWorkspaceSuggestionSelect = useCallback(
     (suggestion: GlobalSearchSuggestion) => {
       setSearchQuery("");
-      navigate(`/workspaces/${suggestion.id}/${defaultWorkspaceSection.path}`);
+      goToWorkspace(suggestion.id);
     },
-    [navigate],
+    [goToWorkspace],
+  );
+
+  const handleSetDefaultWorkspace = useCallback(
+    async (workspace: WorkspaceProfile) => {
+      setSetDefaultError(null);
+      setPendingWorkspaceId(workspace.id);
+      try {
+        await setDefaultWorkspaceMutation.mutateAsync(workspace.id);
+        writePreferredWorkspace(workspace);
+      } catch (error) {
+        console.warn("workspaces.set_default.failed", error);
+        setSetDefaultError("Unable to set the default workspace. Please try again.");
+      } finally {
+        setPendingWorkspaceId(null);
+      }
+    },
+    [setDefaultWorkspaceMutation],
+  );
+
+  const handleWorkspaceKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>, workspaceId: string) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        goToWorkspace(workspaceId);
+      }
+    },
+    [goToWorkspace],
   );
 
   const directorySearch = {
@@ -165,27 +204,56 @@ function WorkspacesIndexContent() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Select a workspace to jump straight into documents.</p>
         </header>
+        {setDefaultError ? (
+          <Alert tone="danger" heading="We couldn't update your default workspace">
+            {setDefaultError}
+          </Alert>
+        ) : null}
         <GlobalSearchField {...inlineDirectorySearch} className="w-full" />
         <section className="grid gap-5 lg:grid-cols-2">
-          {visibleWorkspaces.map((workspace) => (
-            <Link
-              key={workspace.id}
-              to={`/workspaces/${workspace.id}/${defaultWorkspaceSection.path}`}
-              className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-            >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
-                {workspace.is_default ? (
-                  <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">Default</span>
-                ) : null}
-              </div>
-              <p className="mt-2 text-sm text-slate-500">Slug: {workspace.slug}</p>
-              <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Permissions</p>
-              <p className="text-sm text-slate-600">
-                {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
-              </p>
-            </Link>
-          ))}
+          {visibleWorkspaces.map((workspace) => {
+            const isUpdatingDefault =
+              setDefaultWorkspaceMutation.isPending && pendingWorkspaceId === workspace.id;
+            return (
+              <article
+                key={workspace.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => goToWorkspace(workspace.id)}
+                onKeyDown={(event: KeyboardEvent<HTMLDivElement>) =>
+                  handleWorkspaceKeyDown(event, workspace.id)
+                }
+                className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
+                    <p className="text-sm text-slate-500">Slug: {workspace.slug}</p>
+                  </div>
+                  {workspace.is_default ? (
+                    <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">Default</span>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      isLoading={isUpdatingDefault}
+                      disabled={isUpdatingDefault}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSetDefaultWorkspace(workspace);
+                      }}
+                    >
+                      Set as default
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Permissions</p>
+                <p className="text-sm text-slate-600">
+                  {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
+                </p>
+              </article>
+            );
+          })}
         </section>
       </div>
     );

@@ -9,14 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.roles import RbacService
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.pagination import paginate_sql
-from ade_api.shared.types import OrderBy
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import paginate_sql
+from ade_api.common.types import OrderBy
+from ade_api.core.models import User
+from ade_api.core.security.hashing import hash_password
+from ade_api.features.rbac import RbacService
 
-from ..auth.security import hash_password
 from .filters import UserFilters, apply_user_filters
-from .models import User
 from .repository import UsersRepository
 from .schemas import UserOut, UserPage, UserProfile
 

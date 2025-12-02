@@ -1,6 +1,7 @@
 """ADE run orchestration feature package."""
 
-from .models import Run, RunStatus
+from ade_api.core.models import Run, RunStatus
+
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,

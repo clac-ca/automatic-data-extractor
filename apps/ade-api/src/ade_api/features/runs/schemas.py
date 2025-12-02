@@ -8,11 +8,10 @@ from typing import Literal
 from ade_engine.schemas import AdeEvent
 from pydantic import Field, model_validator
 
-from ade_api.shared.core.ids import UUIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from .models import RunStatus
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
+from ade_api.core.models import RunStatus
 
 RunObjectType = Literal["ade.run"]
 
@@ -84,7 +83,7 @@ class RunLinks(BaseSchema):
     self: str
     summary: str
     events: str
-    logfile: str
+    logs: str
     outputs: str
 
 

@@ -18,6 +18,8 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 
 ### Users (`apps/ade-api/src/ade_api/features/users/schemas.py`)
 
+> Update: user DTOs have been collapsed into `UserOut`/`UserPage` in the current schema; the rows below are kept for historical context.
+
 | DTO | Base | ID type | Aliases / wire names | Enum fields | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- | --- |
 | `UserProfile` | `BaseSchema` | `user_id: str` + alias ↔ `id`; `preferred_workspace_id: str` alias ↔ itself | alias on `user_id`; optional alias on preferred workspace | N/A | IDs are raw `str`; alias keeps `id` on wire; rename to `UserOut`. | `UserOut` |

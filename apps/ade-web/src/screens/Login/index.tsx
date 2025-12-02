@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { ApiError } from "@shared/api";
-import { createSession, sessionKeys } from "@shared/auth/api";
+import { createSession, sessionKeys, type AuthProvider } from "@shared/auth/api";
 import { useAuthProvidersQuery } from "@shared/auth/hooks/useAuthProvidersQuery";
 import { useSessionQuery } from "@shared/auth/hooks/useSessionQuery";
 import { useSetupStatusQuery } from "@shared/auth/hooks/useSetupStatusQuery";
@@ -35,7 +35,7 @@ export default function LoginRoute() {
   const setupQuery = useSetupStatusQuery(shouldCheckSetup);
 
   const providersQuery = useAuthProvidersQuery();
-  const providers = providersQuery.data?.providers ?? [];
+  const providers: AuthProvider[] = providersQuery.data?.providers ?? [];
   const forceSso = providersQuery.data?.force_sso ?? false;
   const providersError =
     providersQuery.isError && !providersQuery.isFetching
@@ -170,7 +170,7 @@ export default function LoginRoute() {
             {providers.map((provider) => (
               <a
                 key={provider.id}
-                href={provider.start_url}
+                href={provider.start_url ?? "#"}
                 className="flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
                 Continue with {provider.label}

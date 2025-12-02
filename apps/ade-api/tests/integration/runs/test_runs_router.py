@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import timedelta
+from collections.abc import AsyncIterator
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -20,22 +21,37 @@ import openpyxl
 import pytest
 from httpx import AsyncClient
 
+from ade_api.common.encoding import json_dumps
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
-from ade_api.features.builds.models import Build, BuildStatus
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.features.builds import service as builds_service_module
+from ade_api.features.builds.builder import (
+    BuildArtifacts,
+    BuilderArtifactsEvent,
+    BuilderEvent,
+    BuilderLogEvent,
+    BuilderStepEvent,
+    BuildStep,
+)
+from ade_api.core.models import (
+    Build,
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    Run,
+    RunStatus,
+    Workspace,
+)
 from ade_api.features.configs.storage import compute_config_digest
-from ade_api.features.documents.models import Document
 from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.runs.models import Run, RunStatus
 from ade_api.features.runs.schemas import RunCreateOptions
 from ade_api.features.runs.service import RunExecutionContext, RunsService
 from ade_api.features.system_settings.service import SafeModeService
-from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings, get_settings
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.storage_layout import (
+from ade_api.common.time import utc_now
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
+from ade_api.infra.storage import (
     build_venv_marker_path,
     build_venv_path,
     workspace_config_root,
@@ -47,7 +63,6 @@ from ade_engine.schemas import AdeEvent
 pytestmark = pytest.mark.asyncio
 
 _SETTINGS = get_settings()
-CSRF_COOKIE = _SETTINGS.session_csrf_cookie_name
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 _ENGINE_PACKAGE = _REPO_ROOT / "apps" / "ade-engine"
 _CONFIG_TEMPLATE = (
@@ -66,6 +81,52 @@ _CONFIG_WHEEL: Path | None = None
 _RUNTIME_CACHE_DIR: Path | None = None
 _CACHED_VENV: Path | None = None
 _REAL_CONFIG_CACHE: dict[str, str] = {}
+
+
+class StubBuilder:
+    """Test double that avoids real venv work during run router tests."""
+
+    events: list[BuilderEvent] = []
+
+    def __init__(self) -> None:
+        self._events = [*type(self).events]
+
+    async def build_stream(
+        self,
+        *,
+        build_id: str,
+        workspace_id: str,
+        configuration_id: str,
+        venv_root: Path,
+        config_path: Path,
+        engine_spec: str,
+        pip_cache_dir: Path | None,
+        python_bin: str | None,
+        timeout: float,
+        fingerprint: str | None = None,
+    ) -> AsyncIterator[BuilderEvent]:
+        json_dumps(
+            {
+                "build_id": build_id,
+                "workspace_id": workspace_id,
+                "configuration_id": configuration_id,
+            }
+        )
+        venv_root.mkdir(parents=True, exist_ok=True)
+        for event in self._events:
+            yield event
+
+
+@pytest.fixture(autouse=True)
+def _stub_builder(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(builds_service_module, "VirtualEnvironmentBuilder", StubBuilder)
+    StubBuilder.events = [
+        BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
+        BuilderArtifactsEvent(
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+        ),
+        BuilderLogEvent(message="stub build complete"),
+    ]
 
 
 def _engine_version_hint(spec: str) -> str | None:
@@ -147,11 +208,11 @@ async def _prepare_service(
     """Create a runnable configuration and document for workspace runs tests."""
 
     settings = get_settings()
-    workspace = Workspace(name="Workspace", slug=f"ws-{generate_ulid().lower()}")
+    workspace = Workspace(name="Workspace", slug=f"ws-{generate_uuid7().hex[:8]}")
     session.add(workspace)
     await session.flush()
 
-    configuration_id = generate_ulid()
+    configuration_id = generate_uuid7()
     configuration = Configuration(
         id=configuration_id,
         workspace_id=workspace.id,
@@ -162,10 +223,14 @@ async def _prepare_service(
     session.add(configuration)
     await session.flush()
 
-    build_id = generate_ulid()
-    venv_path = build_venv_path(settings, workspace.id, configuration.id, build_id)
+    build_id = generate_uuid7()
+    venv_path = build_venv_path(
+        settings, str(workspace.id), str(configuration.id), str(build_id)
+    )
     venv_path.mkdir(parents=True, exist_ok=True)
-    config_root = workspace_config_root(settings, workspace.id, configuration.id)
+    config_root = workspace_config_root(
+        settings, str(workspace.id), str(configuration.id)
+    )
     config_root.mkdir(parents=True, exist_ok=True)
     (config_root / "pyproject.toml").write_text(
         "[project]\nname='demo'\nversion='0.0.1'\n",
@@ -182,10 +247,12 @@ async def _prepare_service(
         extra={},
     )
 
-    marker = build_venv_marker_path(settings, workspace.id, configuration.id, build_id)
+    marker = build_venv_marker_path(
+        settings, str(workspace.id), str(configuration.id), str(build_id)
+    )
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(
-        json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+        json_dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
         encoding="utf-8",
     )
     bin_dir = venv_path / ("Scripts" if os.name == "nt" else "bin")
@@ -217,8 +284,8 @@ async def _prepare_service(
     await session.flush()
 
     storage = DocumentStorage(workspace_documents_root(settings, workspace.id))
-    document_id = generate_ulid()
-    stored_uri = storage.make_stored_uri(document_id)
+    document_id = generate_uuid7()
+    stored_uri = storage.make_stored_uri(str(document_id))
     source_path = storage.path_for(stored_uri)
     source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text("name\nAlice", encoding="utf-8")
@@ -241,8 +308,8 @@ async def _prepare_service(
 
     service = RunsService(session=session, settings=settings)
     run, context = await service.prepare_run(
-        configuration_id=configuration.id,
-        options=RunCreateOptions(input_document_id=document.id),
+        configuration_id=str(configuration.id),
+        options=RunCreateOptions(input_document_id=str(document.id)),
     )
     return service, context, document
 
@@ -257,20 +324,22 @@ async def _seed_configuration(
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
-        config_id = generate_ulid()
+        workspace_id_str = str(workspace_id)
+        config_id = generate_uuid7()
         config = Configuration(
             id=config_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id_str,
             display_name="Test Configuration",
             status=ConfigurationStatus.ACTIVE,
         )
         session.add(config)
         await session.flush()
 
-        build_id = generate_ulid()
-        venv_path = build_venv_path(settings, workspace_id, config.id, build_id)
+        config_id_str = str(config.id)
+        build_id = generate_uuid7()
+        venv_path = build_venv_path(settings, workspace_id_str, config_id_str, str(build_id))
         venv_path.mkdir(parents=True, exist_ok=True)
-        config_root = workspace_config_root(settings, workspace_id, config.id)
+        config_root = workspace_config_root(settings, workspace_id_str, config_id_str)
         config_root.mkdir(parents=True, exist_ok=True)
         (config_root / "pyproject.toml").write_text(
             "[project]\nname='demo'\nversion='0.0.1'\n",
@@ -287,12 +356,12 @@ async def _seed_configuration(
             extra={},
         )
 
-        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+        marker = build_venv_marker_path(settings, workspace_id_str, config_id_str, str(build_id))
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(
-            json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
-            encoding="utf-8",
-        )
+        json_dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
+        encoding="utf-8",
+    )
         bin_dir = venv_path / ("Scripts" if os.name == "nt" else "bin")
         bin_dir.mkdir(parents=True, exist_ok=True)
         python_name = "python.exe" if os.name == "nt" else "python"
@@ -300,7 +369,7 @@ async def _seed_configuration(
 
         build = Build(
             id=build_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id_str,
             configuration_id=config.id,
             status=BuildStatus.ACTIVE,
             created_at=utc_now(),
@@ -320,7 +389,7 @@ async def _seed_configuration(
         config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
         config.content_digest = digest
         await session.commit()
-        return config.id
+        return config_id_str
 
 
 def _venv_executable(venv_path: Path, name: str) -> Path:
@@ -348,9 +417,11 @@ async def _seed_real_configuration(
 ) -> str:
     """Create a configuration with a fully provisioned runtime environment."""
 
-    if workspace_id in _REAL_CONFIG_CACHE:
+    workspace_id_str = str(workspace_id)
+
+    if workspace_id_str in _REAL_CONFIG_CACHE:
         # Reuse the existing configuration for this workspace to avoid repeated builds.
-        cached_config_id = _REAL_CONFIG_CACHE[workspace_id]
+        cached_config_id = _REAL_CONFIG_CACHE[workspace_id_str]
         session_factory = get_sessionmaker(settings=settings)
         async with session_factory() as session:
             existing = await session.get(Configuration, cached_config_id)
@@ -359,10 +430,10 @@ async def _seed_real_configuration(
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
-        config_id = generate_ulid()
+        config_id = generate_uuid7()
         config = Configuration(
             id=config_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id_str,
             display_name="Real Config",
             status=ConfigurationStatus.ACTIVE,
             content_digest="integration-test",
@@ -370,12 +441,14 @@ async def _seed_real_configuration(
         session.add(config)
         await session.flush()
 
-        build_id = generate_ulid()
-        venv_path = build_venv_path(settings, workspace_id, config.id, build_id)
+        config_id_str = str(config.id)
+        build_id = generate_uuid7()
+        build_id_str = str(build_id)
+        venv_path = build_venv_path(settings, workspace_id_str, config_id_str, build_id_str)
         python_bin = settings.python_bin
         resolved_python_bin = str(Path(python_bin).resolve()) if python_bin else None
         venv_interpreter = resolved_python_bin or sys.executable
-        config_src = workspace_config_root(settings, workspace_id, config.id)
+        config_src = workspace_config_root(settings, workspace_id_str, config_id_str)
         if not config_src.exists():
             shutil.copytree(_CONFIG_TEMPLATE, config_src, dirs_exist_ok=True)
         engine_version = _engine_version_hint(settings.engine_spec)
@@ -397,7 +470,7 @@ async def _seed_real_configuration(
             python_bin=resolved_python_bin,
             extra={},
         )
-        marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+        marker = build_venv_marker_path(settings, workspace_id_str, config_id_str, build_id_str)
         existing_marker = marker if marker.exists() else None
         reuse_fingerprint = None
         reuse_build_id = None
@@ -411,7 +484,7 @@ async def _seed_real_configuration(
                 reuse_build_id = None
 
         if reuse_fingerprint and reuse_fingerprint == fingerprint and venv_path.exists():
-            build_id = str(reuse_build_id or build_id)
+            build_id_str = str(reuse_build_id or build_id_str)
         else:
             if venv_path.exists():
                 shutil.rmtree(venv_path)
@@ -419,18 +492,20 @@ async def _seed_real_configuration(
             cached_venv = _ensure_cached_runtime(venv_interpreter)
             shutil.copytree(cached_venv, venv_path, dirs_exist_ok=True)
 
-            marker = build_venv_marker_path(settings, workspace_id, config.id, build_id)
+            marker = build_venv_marker_path(
+                settings, workspace_id_str, config_id_str, build_id_str
+            )
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text(
-                json.dumps({"build_id": build_id, "fingerprint": fingerprint}, indent=2),
-                encoding="utf-8",
-            )
+                json_dumps({"build_id": build_id_str, "fingerprint": fingerprint}, indent=2),
+                    encoding="utf-8",
+                )
 
         python_exe = _venv_executable(venv_path, "python")
         config.content_digest = digest  # type: ignore[attr-defined]
         build = Build(
-            id=build_id,
-            workspace_id=workspace_id,
+            id=build_id_str,
+            workspace_id=workspace_id_str,
             configuration_id=config.id,
             status=BuildStatus.ACTIVE,
             created_at=now,
@@ -445,11 +520,11 @@ async def _seed_real_configuration(
             config_digest=digest,
         )
         session.add(build)
-        config.active_build_id = build_id  # type: ignore[attr-defined]
+        config.active_build_id = build_id_str  # type: ignore[attr-defined]
         config.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
         await session.commit()
-        _REAL_CONFIG_CACHE[workspace_id] = config.id
-        return config.id
+        _REAL_CONFIG_CACHE[workspace_id_str] = str(config.id)
+        return str(config.id)
 
 
 async def _seed_document(
@@ -464,9 +539,10 @@ async def _seed_document(
         b"1,alice@example.com,Alice,Anderson\n"
         b"2,bob@example.com,Bob,Brown\n"
     )
-    document_id = generate_ulid()
-    storage = DocumentStorage(workspace_documents_root(settings, workspace_id))
-    stored_uri = storage.make_stored_uri(document_id)
+    workspace_id_str = str(workspace_id)
+    document_id = generate_uuid7()
+    storage = DocumentStorage(workspace_documents_root(settings, workspace_id_str))
+    stored_uri = storage.make_stored_uri(str(document_id))
     target_path = storage.path_for(stored_uri)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(csv_bytes)
@@ -475,7 +551,7 @@ async def _seed_document(
     async with session_factory() as session:
         document = Document(
             id=document_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id_str,
             original_filename="members.csv",
             content_type="text/csv",
             byte_size=len(csv_bytes),
@@ -513,9 +589,10 @@ async def _seed_workbook_document(
     workbook.close()
     xlsx_bytes = buffer.getvalue()
 
-    document_id = generate_ulid()
-    storage = DocumentStorage(workspace_documents_root(settings, workspace_id))
-    stored_uri = storage.make_stored_uri(document_id)
+    workspace_id_str = str(workspace_id)
+    document_id = generate_uuid7()
+    storage = DocumentStorage(workspace_documents_root(settings, workspace_id_str))
+    stored_uri = storage.make_stored_uri(str(document_id))
     target_path = storage.path_for(stored_uri)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(xlsx_bytes)
@@ -524,7 +601,7 @@ async def _seed_workbook_document(
     async with session_factory() as session:
         document = Document(
             id=document_id,
-            workspace_id=workspace_id,
+            workspace_id=workspace_id_str,
             original_filename="members.xlsx",
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             byte_size=len(xlsx_bytes),
@@ -540,10 +617,8 @@ async def _seed_workbook_document(
 
 
 async def _auth_headers(client: AsyncClient, *, email: str, password: str) -> dict[str, str]:
-    await login(client, email=email, password=password)
-    token = client.cookies.get(CSRF_COOKIE)
-    assert token, "Missing CSRF cookie"
-    return {"X-CSRF-Token": token}
+    token, _ = await login(client, email=email, password=password)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _wait_for_completion(
@@ -552,12 +627,13 @@ async def _wait_for_completion(
     *,
     attempts: int = 10,
     delay: float = 0.05,
+    headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Poll the run endpoint until it leaves the queued state."""
 
     payload: dict[str, Any] = {}
     for _ in range(attempts):
-        response = await client.get(f"/api/v1/runs/{run_id}")
+        response = await client.get(f"/api/v1/runs/{run_id}", headers=headers)
         payload = response.json()
         if payload.get("status") != "queued":
             return payload
@@ -603,7 +679,7 @@ async def test_stream_run_safe_mode(
     assert events[-1]["type"] == "run.completed"
 
     run_id = events[0]["run_id"]
-    run_response = await async_client.get(f"/api/v1/runs/{run_id}")
+    run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
@@ -660,13 +736,18 @@ async def test_stream_run_respects_persisted_safe_mode_override(
             exit_code=0,
             summary="Safe mode override respected",
         )
-        yield AdeEvent(
+        yield await self._event_dispatcher.emit(
             type="run.completed",
-            created_at=completion.finished_at or utc_now(),
-            run_id=completion.id,
-            status=self._status_literal(completion.status),
-            execution={"exit_code": completion.exit_code},
-            error={"message": completion.error_message} if completion.error_message else None,
+            source="api",
+            workspace_id=str(completion.workspace_id),
+            configuration_id=str(completion.configuration_id),
+            run_id=str(completion.id),
+            build_id=str(completion.build_id),
+            payload={
+                "status": "succeeded",
+                "execution": {"exit_code": completion.exit_code},
+                "summary": {"run": {"status": "succeeded"}},
+            },
         )
 
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
@@ -689,7 +770,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     assert events[-1]["type"] == "run.completed"
 
     run_id = events[0]["run_id"]
-    run_response = await async_client.get(f"/api/v1/runs/{run_id}")
+    run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
@@ -726,7 +807,7 @@ async def test_non_stream_run_executes_in_background(
     payload = response.json()
     run_id = payload["id"]
 
-    completed = await _wait_for_completion(async_client, run_id)
+    completed = await _wait_for_completion(async_client, run_id, headers=headers)
     assert completed["status"] == "succeeded"
     assert completed["exit_code"] == 0
 
@@ -757,7 +838,7 @@ async def test_stream_run_processes_real_documents(
         "POST",
         f"/api/v1/configurations/{configuration_id}/runs",
         headers=headers,
-        json={"stream": True, "options": {"input_document_id": document.id}},
+        json={"stream": True, "options": {"input_document_id": str(document.id)}},
     ) as response:
         assert response.status_code == 200, response.text
         async for line in response.aiter_lines():
@@ -771,16 +852,18 @@ async def test_stream_run_processes_real_documents(
     assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
-    run_response = await async_client.get(f"/api/v1/runs/{run_id}")
+    run_response = await async_client.get(f"/api/v1/runs/{run_id}", headers=headers)
     assert run_response.status_code == 200
     run_payload = run_response.json()
     assert run_payload["status"] == "succeeded"
     assert run_payload["exit_code"] == 0
     assert run_payload["build_id"]
-    assert run_payload["input"]["document_ids"] == [document.id]
+    assert str(document.id) in run_payload["input"]["document_ids"]
     assert run_payload["input"]["input_sheet_names"] == []
 
-    outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
+    outputs_response = await async_client.get(
+        f"/api/v1/runs/{run_id}/outputs", headers=headers
+    )
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     assert outputs_payload["files"], "expected normalized outputs"
@@ -810,7 +893,7 @@ async def test_list_workspace_runs_filters_by_status_and_document(
     assert configuration is not None
 
     run_success = Run(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=configuration.workspace_id,
         configuration_id=configuration.id,
         input_document_id=document.id,
@@ -818,7 +901,7 @@ async def test_list_workspace_runs_filters_by_status_and_document(
         created_at=utc_now(),
     )
     run_failed = Run(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=configuration.workspace_id,
         configuration_id=configuration.id,
         status=RunStatus.FAILED,
@@ -838,23 +921,23 @@ async def test_list_workspace_runs_filters_by_status_and_document(
     )
 
     assert page.total == 3
-    assert {run.id for run in page.items} == {
-        context.run_id,
-        run_success.id,
-        run_failed.id,
+    assert {str(run.id) for run in page.items} == {
+        str(context.run_id),
+        str(run_success.id),
+        str(run_failed.id),
     }
 
     filtered = await service.list_runs(
         workspace_id=configuration.workspace_id,
         statuses=[RunStatus.SUCCEEDED],
-        input_document_id=document.id,
+        input_document_id=str(document.id),
         page=1,
         page_size=5,
         include_total=True,
     )
 
     assert filtered.total == 1
-    assert [run.id for run in filtered.items] == [run_success.id]
+    assert [str(run.id) for run in filtered.items] == [str(run_success.id)]
 
 
 async def test_stream_run_processes_all_worksheets_when_unspecified(
@@ -888,7 +971,7 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
         json={
             "stream": True,
             "options": {
-                "input_document_id": document.id,
+                "input_document_id": str(document.id),
             },
         },
     ) as response:
@@ -904,7 +987,9 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
     assert events[-1].get("payload", {}).get("status") == "succeeded"
     run_id = events[0]["run_id"]
 
-    outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
+    outputs_response = await async_client.get(
+        f"/api/v1/runs/{run_id}/outputs", headers=headers
+    )
     assert outputs_response.status_code == 200
     outputs_payload = outputs_response.json()
     normalized = next(
@@ -913,7 +998,7 @@ async def test_stream_run_processes_all_worksheets_when_unspecified(
     )
     assert normalized is not None, "expected normalized workbook output"
 
-    download_response = await async_client.get(normalized["download_url"])
+    download_response = await async_client.get(normalized["download_url"], headers=headers)
     assert download_response.status_code == 200
     workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
     rows = [list(sheet.iter_rows(values_only=True)) for sheet in workbook]
@@ -948,19 +1033,22 @@ async def test_stream_run_sheet_selection_variants(
     scenarios = [
         {
             "label": "all_sheets",
-            "options": {"input_document_id": document.id},
+            "options": {"input_document_id": str(document.id)},
             "expect_selected": True,
             "expect_first_sheet": True,
         },
         {
             "label": "single_name",
-            "options": {"input_document_id": document.id, "input_sheet_name": "Selected"},
+            "options": {"input_document_id": str(document.id), "input_sheet_name": "Selected"},
             "expect_selected": True,
             "expect_first_sheet": False,
         },
         {
             "label": "list_names",
-            "options": {"input_document_id": document.id, "input_sheet_names": ["Selected"]},
+            "options": {
+                "input_document_id": str(document.id),
+                "input_sheet_names": ["Selected"],
+            },
             "expect_selected": True,
             "expect_first_sheet": False,
         },
@@ -986,7 +1074,9 @@ async def test_stream_run_sheet_selection_variants(
             assert events[-1].get("payload", {}).get("status") == "succeeded"
         run_id = events[0]["run_id"]
 
-        outputs_response = await async_client.get(f"/api/v1/runs/{run_id}/outputs")
+        outputs_response = await async_client.get(
+            f"/api/v1/runs/{run_id}/outputs", headers=headers
+        )
         assert outputs_response.status_code == 200
         outputs_payload = outputs_response.json()
         normalized = next(
@@ -995,7 +1085,7 @@ async def test_stream_run_sheet_selection_variants(
         )
         assert normalized is not None, f"expected normalized workbook output for {scenario['label']}"
 
-        download_response = await async_client.get(normalized["download_url"])
+        download_response = await async_client.get(normalized["download_url"], headers=headers)
         assert download_response.status_code == 200
         workbook = openpyxl.load_workbook(BytesIO(download_response.content), read_only=True)
         rows = list(workbook[workbook.sheetnames[0]].iter_rows(values_only=True))

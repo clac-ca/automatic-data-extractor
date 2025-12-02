@@ -39,7 +39,7 @@ Flow:
 [ API modules ]         e.g. workspacesApi, documentsApi, runsApi
         │
         ▼
-[ HTTP client ]         shared/api/httpClient.ts
+[ HTTP client ]         shared/api/client.ts
         │
         ▼
 [ ADE API ]             /api/v1/...
@@ -62,7 +62,7 @@ Design goals:
 
 ## 2. HTTP client
 
-All HTTP calls go through `src/shared/api/httpClient.ts` (or equivalent).
+All HTTP calls go through `src/shared/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
 
 ### 2.1 Responsibilities
 
@@ -70,8 +70,8 @@ The HTTP client handles:
 
 * Building URLs under the `/api` proxy (e.g. `/api/v1/...`).
 * Serialising request bodies (JSON by default).
-* Attaching credentials (cookies, headers) as needed.
-* Parsing JSON responses.
+* Attaching credentials (bearer tokens, CSRF headers) as needed.
+* Parsing JSON responses with generated types.
 * Exposing streaming bodies (for NDJSON).
 * Mapping non‑2xx responses into a unified `ApiError`.
 
@@ -79,39 +79,9 @@ It deliberately does **not** know about workspaces, runs, configs, etc. Domain l
 
 ### 2.2 Shape & behaviour
 
-Minimal shape:
-
-```ts
-export interface ApiErrorPayload {
-  status: number;
-  message: string;
-  code?: string;
-  details?: unknown;
-}
-
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  details?: unknown;
-}
-
-export async function apiRequest<T>(
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
-  path: string,
-  options?: {
-    query?: Record<string, unknown>;
-    body?: unknown;
-    signal?: AbortSignal;
-    headers?: Record<string, string>;
-  },
-): Promise<T> {
-  // ...
-}
-```
-
 Rules:
 
-* API modules **only** use `apiRequest`. No module calls `fetch` directly.
+* API modules use the shared `client` instance; no module calls `fetch` directly.
 * Any non‑2xx status results in an `ApiError` being thrown, with a best-effort `message`.
 
 ### 2.3 Auth, 401, and 403
@@ -261,19 +231,15 @@ Setup:
 Session:
 
 * `POST   /api/v1/auth/session`         – create session.
-* `GET    /api/v1/auth/session`         – read session (canonical “who am I?”).
 * `POST   /api/v1/auth/session/refresh` – refresh session.
 * `DELETE /api/v1/auth/session`         – logout.
+* `GET    /api/v1/me/bootstrap`         – session bootstrap (profile, global roles/permissions, workspaces).
 
 Auth providers:
 
-* `GET /api/v1/auth/providers`       – configured auth providers.
-* `GET /api/v1/auth/sso/login`       – start SSO login (302 redirect).
-* `GET /api/v1/auth/sso/callback`    – finish SSO login.
-
-Current user:
-
-* `GET /api/v1/users/me` or `GET /api/v1/auth/me` – authenticated user (id, email, name).
+* `GET /api/v1/auth/providers`             – configured auth providers.
+* `GET /api/v1/auth/sso/{provider}/authorize` – start SSO login (302 redirect).
+* `GET /api/v1/auth/sso/{provider}/callback`  – finish SSO login.
 
 **Example functions**
 
@@ -283,14 +249,12 @@ Current user:
 * `createSession(credentials)`
 * `refreshSession()`
 * `deleteSession()`
-* `readSession()`
-* `readCurrentUser()`
+* `fetchSession()` (wraps `/me/bootstrap`)
 
 Hooks:
 
 * `useSetupStatusQuery()`
 * `useSessionQuery()`
-* `useCurrentUserQuery()`
 * `useLoginMutation()`
 * `useLogoutMutation()`
 
@@ -336,17 +300,20 @@ Global roles are separate from permissions, and parallel the workspace-scoped ro
 
 Roles:
 
-* `GET    /api/v1/roles`
-* `POST   /api/v1/roles`
-* `GET    /api/v1/roles/{role_id}`
-* `PATCH  /api/v1/roles/{role_id}`
-* `DELETE /api/v1/roles/{role_id}`
+* `GET    /api/v1/rbac/roles`
+* `POST   /api/v1/rbac/roles`
+* `GET    /api/v1/rbac/roles/{role_id}`
+* `PATCH  /api/v1/rbac/roles/{role_id}`
+* `DELETE /api/v1/rbac/roles/{role_id}`
 
 Assignments:
 
-* `GET    /api/v1/role-assignments`
-* `POST   /api/v1/role-assignments`
-* `DELETE /api/v1/role-assignments/{assignment_id}`
+* `GET    /api/v1/rbac/role-assignments`
+* `POST   /api/v1/rbac/role-assignments`
+* `DELETE /api/v1/rbac/role-assignments/{assignment_id}`
+* `GET    /api/v1/users/{user_id}/roles`
+* `PUT    /api/v1/users/{user_id}/roles/{role_id}`
+* `DELETE /api/v1/users/{user_id}/roles/{role_id}`
 
 **Example functions**
 
@@ -384,21 +351,19 @@ Workspaces:
 * `GET    /api/v1/workspaces/{workspace_id}`
 * `PATCH  /api/v1/workspaces/{workspace_id}`
 * `DELETE /api/v1/workspaces/{workspace_id}`
-* `POST   /api/v1/workspaces/{workspace_id}/default`
+* `PUT    /api/v1/workspaces/{workspace_id}/default`
 
 Members:
 
 * `GET    /api/v1/workspaces/{workspace_id}/members`
 * `POST   /api/v1/workspaces/{workspace_id}/members`
-* `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
-* `PUT    /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
+* `PUT    /api/v1/workspaces/{workspace_id}/members/{user_id}`
+* `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}`
 
 Workspace roles & assignments:
 
-* `GET    /api/v1/workspaces/{workspace_id}/roles`
-* `GET    /api/v1/workspaces/{workspace_id}/role-assignments`
-* `POST   /api/v1/workspaces/{workspace_id}/role-assignments`
-* `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}`
+* Workspace role definitions reuse `/api/v1/rbac/roles` with `scope=workspace`.
+* Role bindings are managed via workspace members (`/api/v1/workspaces/{workspace_id}/members`).
 
 **Example functions**
 
@@ -410,20 +375,18 @@ Workspaces:
 * `updateWorkspace(workspaceId, patch)`
 * `deleteWorkspace(workspaceId)`
 * `setDefaultWorkspace(workspaceId)`
+* `useSetDefaultWorkspaceMutation()`
 
 Members:
 
 * `listWorkspaceMembers(workspaceId)`
 * `addWorkspaceMember(workspaceId, payload)`
-* `removeWorkspaceMember(workspaceId, membershipId)`
-* `updateWorkspaceMemberRoles(workspaceId, membershipId, roles)`
+* `removeWorkspaceMember(workspaceId, userId)`
+* `updateWorkspaceMemberRoles(workspaceId, userId, roles)`
 
 Workspace roles:
 
 * `listWorkspaceRoles(workspaceId)`
-* `listWorkspaceRoleAssignments(workspaceId)`
-* `createWorkspaceRoleAssignment(workspaceId, payload)`
-* `deleteWorkspaceRoleAssignment(workspaceId, assignmentId)`
 
 Hooks:
 
@@ -499,7 +462,7 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 - `GET  /api/v1/runs/{run_id}` – canonical run detail.
-- `GET  /api/v1/runs/{run_id}/logfile` – download telemetry log.
+- `GET  /api/v1/runs/{run_id}/logs` – download telemetry log.
 - `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
 - `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download specific output.
 
@@ -570,8 +533,10 @@ Streaming:
 * `PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
 * `PATCH  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
 * `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}`
-* `POST   /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
+* `PUT    /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
 * `DELETE /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}`
+
+Directory creation is idempotent: `PUT` returns `201` when the folder is first created and `200` if it already exists.
 
 #### Builds
 
@@ -657,7 +622,7 @@ Hooks:
 **Responsibilities**
 
 * User directory (admin).
-* API key management for users.
+* API key management for self-service and admins.
 
 **Key routes**
 
@@ -667,23 +632,21 @@ Users:
 
 API keys:
 
-* `GET    /api/v1/auth/api-keys`
-* `POST   /api/v1/auth/api-keys`
-* `DELETE /api/v1/auth/api-keys/{api_key_id}`
+* Self-service: `GET /api/v1/me/api-keys`, `POST /api/v1/me/api-keys`, `DELETE /api/v1/me/api-keys/{api_key_id}`
+* Admin (global): `GET /api/v1/api-keys`, `POST /api/v1/api-keys`, `GET /api/v1/api-keys/{api_key_id}`, `DELETE /api/v1/api-keys/{api_key_id}`
+* Admin (per user): `GET /api/v1/users/{user_id}/api-keys`, `POST /api/v1/users/{user_id}/api-keys`, `DELETE /api/v1/users/{user_id}/api-keys/{api_key_id}`
 
 **Example functions**
 
-* `listUsers(params?)`
-* `listApiKeys()`
-* `createApiKey(payload)`
-* `revokeApiKey(apiKeyId)`
+* Users: `listUsers(params?)`
+* API keys (self): `listMyApiKeys(params?)`, `createMyApiKey(payload)`, `revokeMyApiKey(apiKeyId)`
+* API keys (admin): `listApiKeys(params?)`, `getApiKey(apiKeyId)`, `createApiKey(payload)`, `revokeApiKey(apiKeyId)`
+* API keys (per user): `listUserApiKeys(userId, params?)`, `createUserApiKey(userId, payload)`, `revokeUserApiKey(userId, apiKeyId)`
 
 Hooks:
 
 * `useUsersQuery()`
-* `useApiKeysQuery()`
-* `useCreateApiKeyMutation()`
-* `useRevokeApiKeyMutation()`
+* (API keys hooks not yet defined; call `@shared/api-keys/api` directly from screens as needed.)
 
 ---
 
@@ -804,7 +767,7 @@ Key families:
 UI rules:
 
 * Use `sequence` for ordering when transport may deliver events slightly out of order.
-* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/logfile`) for offline replay.
+* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/logs`) for offline replay.
 * Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.completed`.
 
 ### 6.3 Streaming helper
@@ -824,7 +787,7 @@ Characteristics:
 
 * Close the stream on unmount or when the user hides the console.
 * Treat `run.completed` as terminal; callers can close the stream after it arrives.
-* For post-run analysis, `events.ndjson` is still available via `/runs/{run_id}/logfile`.
+* For post-run analysis, `events.ndjson` is still available via `/runs/{run_id}/logs`.
 
 ### 6.4 Run & build streams in practice
 

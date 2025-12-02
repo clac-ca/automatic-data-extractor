@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from ade_api.common.encoding import json_dumps
 from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
@@ -20,10 +21,11 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.core.models import Configuration, ConfigurationStatus
 from ade_api.settings import Settings
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
+from ade_api.infra.storage import workspace_config_root
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -51,6 +53,13 @@ class StubBuilder:
         timeout: float,
         fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
+        json_dumps(
+            {
+                "build_id": build_id,
+                "workspace_id": workspace_id,
+                "configuration_id": configuration_id,
+            }
+        )
         venv_root.mkdir(parents=True, exist_ok=True)
         for event in self._events:
             yield event
@@ -69,7 +78,7 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
-        configuration_id = generate_ulid()
+        configuration_id = generate_uuid7()
         configuration = Configuration(
             id=configuration_id,
             workspace_id=workspace_id,
@@ -80,7 +89,7 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
         session.add(configuration)
         await session.commit()
 
-    config_root = settings.configs_dir / workspace_id / "config_packages" / configuration_id
+    config_root = workspace_config_root(settings, workspace_id, configuration_id)
     (config_root / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
     (config_root / "pyproject.toml").write_text(
         """
@@ -101,10 +110,8 @@ async def _auth_headers(
     password: str,
     settings: Settings,
 ) -> dict[str, str]:
-    await login(client, email=email, password=password)
-    csrf_cookie = client.cookies.get(settings.session_csrf_cookie_name)
-    assert csrf_cookie, "CSRF cookie missing after login"
-    return {"X-CSRF-Token": csrf_cookie}
+    token, _ = await login(client, email=email, password=password)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def test_stream_build_emits_events_and_logs(

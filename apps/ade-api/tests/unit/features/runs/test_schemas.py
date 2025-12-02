@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from ade_api.features.runs.schemas import (
     RunCreateOptions,
@@ -18,18 +19,21 @@ def _ts(seconds: int) -> datetime:
 
 
 def test_run_resource_serialization_uses_aliases() -> None:
+    run_id = str(uuid4())
+    workspace_id = str(uuid4())
+    configuration_id = str(uuid4())
     resource = RunResource(
-        id="run_123",
-        workspace_id="ws_1",
-        configuration_id="cfg_456",
+        id=run_id,
+        workspace_id=workspace_id,
+        configuration_id=configuration_id,
         status="queued",
         created_at=_ts(1_700_000_000),
         links=RunLinks(
-            self="/api/v1/runs/run_123",
-            summary="/api/v1/runs/run_123/summary",
-            events="/api/v1/runs/run_123/events",
-            logfile="/api/v1/runs/run_123/logfile",
-            outputs="/api/v1/runs/run_123/outputs",
+            self=f"/api/v1/runs/{run_id}",
+            summary=f"/api/v1/runs/{run_id}/summary",
+            events=f"/api/v1/runs/{run_id}/events",
+            logs=f"/api/v1/runs/{run_id}/logs",
+            outputs=f"/api/v1/runs/{run_id}/outputs",
         ),
     )
 

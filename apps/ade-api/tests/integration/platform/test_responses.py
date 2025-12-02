@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from ade_api.shared.core.responses import DefaultResponse, JSONResponse
-from ade_api.shared.core.schema import BaseSchema
+from ade_api.common.responses import DefaultResponse, JSONResponse
+from ade_api.common.schema import BaseSchema
 
 
 class ExampleSchema(BaseSchema):

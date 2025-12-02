@@ -6,11 +6,9 @@ from typing import Any
 
 from pydantic import Field
 
-from ade_api.shared.core.ids import UUIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from ..users.schemas import UserOut
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
 
 
 class WorkspaceOut(BaseSchema):
@@ -41,30 +39,6 @@ class WorkspaceUpdate(BaseSchema):
     settings: dict[str, Any] | None = None
 
 
-class WorkspaceMemberCreate(BaseSchema):
-    """Payload for adding a member to a workspace."""
-
-    user_id: UUIDStr
-    role_ids: list[UUIDStr] | None = Field(default=None, min_length=0)
-
-
-class WorkspaceMemberRolesUpdate(BaseSchema):
-    """Payload used to replace the set of roles for a membership."""
-
-    role_ids: list[UUIDStr] = Field(default_factory=list)
-
-
-class WorkspaceMemberOut(BaseSchema):
-    """Representation of a workspace membership."""
-
-    id: UUIDStr
-    workspace_id: UUIDStr
-    roles: list[str]
-    permissions: list[str]
-    is_default: bool
-    user: UserOut
-
-
 class WorkspaceDefaultSelectionOut(BaseSchema):
     """Response indicating the caller's default workspace selection."""
 
@@ -76,18 +50,10 @@ class WorkspacePage(Page[WorkspaceOut]):
     """Paginated workspace listing."""
 
 
-class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
-    """Paginated workspace member listing."""
-
-
 __all__ = [
     "WorkspaceCreate",
     "WorkspaceDefaultSelectionOut",
-    "WorkspaceMemberOut",
-    "WorkspaceMemberCreate",
-    "WorkspaceMemberRolesUpdate",
     "WorkspaceOut",
     "WorkspaceUpdate",
     "WorkspacePage",
-    "WorkspaceMemberPage",
 ]

@@ -38,6 +38,7 @@ apps/web/build/
 apps/web/coverage/
 apps/web/.eslintcache
 apps/ade-web/.generated/
+apps/ade-api/.generated/
 apps/ade-engine/.generated/
 .generated/
 

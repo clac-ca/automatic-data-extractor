@@ -748,7 +748,7 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}`
   Workspace‑scoped run detail.
 
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logfile`
+* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs`
   Download telemetry log.
 
 * `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs`
@@ -770,7 +770,7 @@ Used primarily by Configuration Builder:
 * `GET /api/v1/runs/{run_id}`
   Global run detail.
 
-* `GET /api/v1/runs/{run_id}/logfile`
+* `GET /api/v1/runs/{run_id}/logs`
   Download telemetry log.
 
 * `GET /api/v1/runs/{run_id}/outputs`

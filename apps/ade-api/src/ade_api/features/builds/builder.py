@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 import sys
@@ -11,9 +10,11 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
 
+from ade_api.common.encoding import json_dumps
 from .exceptions import BuildExecutionError
 
 __all__ = [
@@ -75,9 +76,9 @@ class VirtualEnvironmentBuilder:
     async def build_stream(
         self,
         *,
-        build_id: str,
-        workspace_id: str,
-        configuration_id: str,
+        build_id: str | UUID,
+        workspace_id: str | UUID,
+        configuration_id: str | UUID,
         venv_root: Path,
         config_path: Path,
         engine_spec: str,
@@ -330,9 +331,9 @@ class VirtualEnvironmentBuilder:
 
         def _write() -> None:
             runtime_dir.mkdir(parents=True, exist_ok=True)
-            metadata_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            metadata_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
             packages_path.write_text("ade-engine\nade-config", encoding="utf-8")
-            marker_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            marker_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
 
         await run_in_threadpool(_write)
 
