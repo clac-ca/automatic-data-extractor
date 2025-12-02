@@ -73,7 +73,9 @@ troubleshooting workflow you use for runs:
    or the run creation endpoint. Watch for `build.created`,
    `build.started`, `build.phase.*`, `build.completed`, and `console.line`
    events (`payload.scope: "build"`).
-2. For status snapshots, hit `/api/v1/builds/{build_id}`. For live logs/events,
+2. For status snapshots, hit `/api/v1/builds/{build_id}`. For history,
+   use `GET /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
+   with optional `status` filters. For live logs/events,
    attach to `/api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>`
    (build + run + console output in one ordered stream).
 3. Database fallbacks mirror runs: inspect the `builds` table if the API is

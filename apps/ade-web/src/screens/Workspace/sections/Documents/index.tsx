@@ -672,7 +672,7 @@ function useSubmitRun(workspaceId: string) {
     mutationFn: async ({ configId, options }) => {
       const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
         params: { path: { configuration_id: configId } },
-        body: { stream: false, options },
+        body: { options },
       });
       if (!data) throw new Error("Expected run payload.");
       return data as RunResource;

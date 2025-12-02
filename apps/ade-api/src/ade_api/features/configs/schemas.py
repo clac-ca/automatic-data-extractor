@@ -187,6 +187,11 @@ class FileRenameResponse(BaseSchema):
     etag: str
 
 
+class DirectoryWriteResponse(BaseSchema):
+    path: str
+    created: bool
+
+
 __all__ = [
     "ConfigSource",
     "ConfigSourceClone",
@@ -206,4 +211,5 @@ __all__ = [
     "FileWriteResponse",
     "FileRenameRequest",
     "FileRenameResponse",
+    "DirectoryWriteResponse",
 ]

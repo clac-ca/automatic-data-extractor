@@ -30,8 +30,8 @@ async def test_safe_mode_toggle_persists_state(
         json={"enabled": True, "detail": "Maintenance window"},
         headers=headers,
     )
-    assert updated.status_code == 200
-    assert updated.json()["enabled"] is True
+    assert updated.status_code == 204
+    assert updated.text == ""
 
     reread = await async_client.get("/api/v1/system/safe-mode", headers=headers)
     assert reread.status_code == 200

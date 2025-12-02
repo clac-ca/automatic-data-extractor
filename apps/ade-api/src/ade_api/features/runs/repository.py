@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from uuid import UUID
 
 from sqlalchemy import Select, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ class RunsRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self, run_id: str) -> Run | None:
+    async def get(self, run_id: UUID) -> Run | None:
         """Return the ``Run`` identified by ``run_id`` if it exists."""
 
         return await self._session.get(Run, run_id)
@@ -27,16 +28,19 @@ class RunsRepository:
     async def list_by_workspace(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID | None,
         statuses: Sequence[RunStatus] | None,
-        input_document_id: str | None,
+        input_document_id: UUID | None,
         page: int,
         page_size: int,
         include_total: bool,
     ) -> Page[Run]:
-        """Return paginated runs for ``workspace_id`` filtered by status or document."""
+        """Return paginated runs for ``workspace_id`` filtered by config, status, or document."""
 
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)
+        if configuration_id:
+            stmt = stmt.where(Run.configuration_id == configuration_id)
         if statuses:
             stmt = stmt.where(Run.status.in_(statuses))
         if input_document_id:

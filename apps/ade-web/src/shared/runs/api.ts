@@ -25,10 +25,7 @@ export async function* streamRun(
 ): AsyncGenerator<RunStreamEvent> {
   const pathParams: RunCreatePathParams = { configuration_id: configId };
   const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...options };
-  const body: RunCreateRequest = {
-    stream: false,
-    options: mergedOptions,
-  };
+  const body: RunCreateRequest = { options: mergedOptions };
 
   const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
     params: { path: pathParams },
@@ -41,12 +38,14 @@ export async function* streamRun(
   }
 
   const runId = data.id;
-  const eventsLink = data.links?.events;
-  if (!runId || !eventsLink) {
+  const baseEventsLink =
+    data.links?.events_stream ??
+    (data.links?.events ? `${data.links.events}${data.links.events.includes("?") ? "&" : "?"}stream=true` : null);
+  if (!runId || !baseEventsLink) {
     throw new Error("Run creation response is missing required links.");
   }
 
-  const eventsUrl = resolveRunLink(eventsLink, { appendQuery: "stream=true&after_sequence=0" });
+  const eventsUrl = resolveRunLink(baseEventsLink, { appendQuery: "after_sequence=0" });
 
   for await (const event of streamRunEvents(eventsUrl, signal)) {
     yield event;
@@ -64,6 +63,22 @@ export async function* streamRunEvents(
   let source: EventSource | null = null;
   let done = false;
   let error: unknown;
+  const eventTypes = [
+    "ade.event",
+    "run.queued",
+    "run.started",
+    "run.completed",
+    "run.failed",
+    "run.canceled",
+    "run.waiting_for_build",
+    "build.queued",
+    "build.started",
+    "build.progress",
+    "build.phase.started",
+    "build.completed",
+    "build.failed",
+    "console.line",
+  ];
 
   const flush = () => {
     while (awaiters.length) {
@@ -79,7 +94,9 @@ export async function* streamRunEvents(
       error = reason;
     }
     if (source) {
-      source.removeEventListener?.("ade.event", handleRunEvent as EventListener);
+      eventTypes.forEach((type) => {
+        source?.removeEventListener?.(type, handleRunEvent as EventListener);
+      });
       source.onmessage = null;
       source.onerror = null;
       source.close();
@@ -102,7 +119,9 @@ export async function* streamRunEvents(
   };
 
   source = new EventSource(url, { withCredentials: true });
-  source.addEventListener("ade.event", handleRunEvent as EventListener);
+  eventTypes.forEach((type) => {
+    source?.addEventListener(type, handleRunEvent as EventListener);
+  });
   source.onmessage = handleRunEvent;
 
   source.onerror = () => {

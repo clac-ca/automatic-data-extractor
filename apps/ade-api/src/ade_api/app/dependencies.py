@@ -24,6 +24,7 @@ get_current_principal = _get_current_principal
 
 if TYPE_CHECKING:
     from ade_api.features.runs.event_dispatcher import RunEventDispatcher
+    from ade_api.features.builds.event_dispatcher import BuildEventDispatcher
 
 
 def _build_config_storage(settings: Settings):
@@ -87,9 +88,17 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
 
 def get_builds_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.builds.service import BuildsService
+    from ade_api.features.builds.event_dispatcher import BuildEventStorage, BuildEventDispatcher
 
+    dispatcher = get_build_event_dispatcher(settings=settings)
     storage = _build_config_storage(settings)
-    return BuildsService(session=session, settings=settings, storage=storage)
+    return BuildsService(
+        session=session,
+        settings=settings,
+        storage=storage,
+        event_dispatcher=dispatcher,
+        event_storage=dispatcher.storage,
+    )
 
 
 def get_runs_service(session: SessionDep, settings: SettingsDep):
@@ -99,6 +108,7 @@ def get_runs_service(session: SessionDep, settings: SettingsDep):
 
     storage = _build_config_storage(settings)
     dispatcher = get_run_event_dispatcher(settings=settings)
+    build_dispatcher = get_build_event_dispatcher(settings=settings)
     supervisor = RunExecutionSupervisor()
 
     return RunsService(
@@ -108,10 +118,18 @@ def get_runs_service(session: SessionDep, settings: SettingsDep):
         safe_mode_service=SafeModeService(session=session, settings=settings),
         storage=storage,
         event_dispatcher=dispatcher,
+        build_event_dispatcher=build_dispatcher,
     )
 
 
+def get_workspaces_service(session: SessionDep):
+    from ade_api.features.workspaces.service import WorkspacesService
+
+    return WorkspacesService(session=session)
+
+
 _RUN_EVENT_DISPATCHER: RunEventDispatcher | None = None
+_BUILD_EVENT_DISPATCHER: BuildEventDispatcher | None = None
 
 
 def get_run_event_dispatcher(*, settings: Settings):
@@ -125,6 +143,19 @@ def get_run_event_dispatcher(*, settings: Settings):
             storage=RunEventStorage(settings=settings)
         )
     return _RUN_EVENT_DISPATCHER
+
+
+def get_build_event_dispatcher(*, settings: Settings):
+    """Provide a process-wide BuildEventDispatcher."""
+
+    from ade_api.features.builds.event_dispatcher import BuildEventDispatcher, BuildEventStorage
+
+    global _BUILD_EVENT_DISPATCHER
+    if _BUILD_EVENT_DISPATCHER is None:
+        _BUILD_EVENT_DISPATCHER = BuildEventDispatcher(
+            storage=BuildEventStorage(settings=settings)
+        )
+    return _BUILD_EVENT_DISPATCHER
 
 
 async def get_workspace_profile(
@@ -157,6 +188,8 @@ __all__ = [
     "get_configurations_service",
     "get_builds_service",
     "get_runs_service",
+    "get_workspaces_service",
     "get_run_event_dispatcher",
+    "get_build_event_dispatcher",
     "get_workspace_profile",
 ]

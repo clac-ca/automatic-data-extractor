@@ -7,12 +7,12 @@ import inspect
 import json
 import logging
 import os
-import uuid
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -27,6 +27,7 @@ from ade_engine.schemas import (
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.encoding import json_dumps
@@ -129,11 +130,11 @@ class RunPathsSnapshot:
 class RunExecutionContext:
     """Minimal data required to execute a run outside the request scope."""
 
-    run_id: str
-    configuration_id: str
-    workspace_id: str
+    run_id: UUID
+    configuration_id: UUID
+    workspace_id: UUID
     venv_path: str
-    build_id: str
+    build_id: UUID
     runs_dir: str | None = None
     build_context: BuildExecutionContext | None = None
 
@@ -151,11 +152,11 @@ class RunExecutionContext:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> RunExecutionContext:
         return cls(
-            run_id=payload["run_id"],
-            configuration_id=payload["configuration_id"],
-            workspace_id=payload["workspace_id"],
+            run_id=UUID(str(payload["run_id"])),
+            configuration_id=UUID(str(payload["configuration_id"])),
+            workspace_id=UUID(str(payload["workspace_id"])),
             venv_path=payload["venv_path"],
-            build_id=payload["build_id"],
+            build_id=UUID(str(payload["build_id"])),
             runs_dir=payload.get("runs_dir") or None,
             build_context=(
                 BuildExecutionContext.from_dict(payload["build_context"])
@@ -256,7 +257,7 @@ class RunsService:
     async def prepare_run(
         self,
         *,
-        configuration_id: str,
+        configuration_id: UUID,
         options: RunCreateOptions,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
@@ -303,7 +304,7 @@ class RunsService:
             status=RunStatus.QUEUED,
             attempt=1,
             retry_of_run_id=None,
-            trace_id=run_id,
+            trace_id=str(run_id),
             input_document_id=input_document_id,
             input_documents=[document_descriptor] if document_descriptor else [],
             input_sheet_name=selected_sheet_name,
@@ -324,11 +325,11 @@ class RunsService:
 
         runs_root = workspace_run_root(self._settings, configuration.workspace_id)
         context = RunExecutionContext(
-            run_id=str(run.id),
-            workspace_id=str(configuration.workspace_id),
-            configuration_id=str(configuration.id),
+            run_id=run.id,
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
             venv_path=str(venv_path),
-            build_id=str(build_id),
+            build_id=build_id,
             runs_dir=str(runs_root),
             build_context=build_ctx,
         )
@@ -448,10 +449,10 @@ class RunsService:
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
                     source=event.source or "api",
-                    workspace_id=str(run.workspace_id),
-                    configuration_id=str(run.configuration_id),
-                    run_id=str(run.id),
-                    build_id=str(event.build_id or build_context.build_id),
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    build_id=event.build_id or build_context.build_id,
                     payload=event.payload,
                 )
                 yield forwarded
@@ -684,7 +685,7 @@ class RunsService:
     # Public read APIs (runs, summaries, events, outputs)
     # --------------------------------------------------------------------- #
 
-    async def get_run(self, run_id: str) -> Run | None:
+    async def get_run(self, run_id: UUID) -> Run | None:
         """Return the run instance for ``run_id`` if it exists."""
 
         logger.debug(
@@ -709,7 +710,7 @@ class RunsService:
             )
         return run
 
-    async def get_run_summary(self, run_id: str) -> RunSummaryV1 | None:
+    async def get_run_summary(self, run_id: UUID) -> RunSummaryV1 | None:
         """Return a RunSummaryV1 for ``run_id`` if available or derivable."""
 
         logger.debug(
@@ -764,7 +765,7 @@ class RunsService:
     async def get_run_events(
         self,
         *,
-        run_id: str,
+        run_id: UUID,
         after_sequence: int | None = None,
         limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
     ) -> tuple[list[AdeEvent], int | None]:
@@ -803,10 +804,10 @@ class RunsService:
     async def list_runs(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str | None = None,
+        workspace_id: UUID,
+        configuration_id: UUID | None = None,
         statuses: Sequence[RunStatus] | None,
-        input_document_id: str | None,
+        input_document_id: UUID | None,
         page: int,
         page_size: int,
         include_total: bool,
@@ -861,9 +862,9 @@ class RunsService:
     async def list_runs_for_configuration(
         self,
         *,
-        configuration_id: str,
+        configuration_id: UUID,
         statuses: Sequence[RunStatus] | None,
-        input_document_id: str | None,
+        input_document_id: UUID | None,
         page: int,
         page_size: int,
         include_total: bool,
@@ -873,7 +874,7 @@ class RunsService:
         configuration = await self._resolve_configuration(configuration_id)
         return await self.list_runs(
             workspace_id=configuration.workspace_id,
-            configuration_id=str(configuration.id),
+            configuration_id=configuration.id,
             statuses=statuses,
             input_document_id=input_document_id,
             page=page,
@@ -968,7 +969,7 @@ class RunsService:
         )
 
     @staticmethod
-    def _links(run_id: str) -> RunLinks:
+    def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
         return RunLinks(
             self=base,
@@ -979,7 +980,7 @@ class RunsService:
             outputs=f"{base}/outputs",
         )
 
-    async def get_logs_file_path(self, *, run_id: str) -> Path:
+    async def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
 
         logger.debug(
@@ -1011,7 +1012,7 @@ class RunsService:
         )
         return logs_path
 
-    async def list_output_files(self, *, run_id: str) -> list[tuple[str, int]]:
+    async def list_output_files(self, *, run_id: UUID) -> list[tuple[str, int]]:
         """Return output file tuples for ``run_id``."""
 
         logger.debug(
@@ -1056,7 +1057,7 @@ class RunsService:
     async def resolve_output_file(
         self,
         *,
-        run_id: str,
+        run_id: UUID,
         relative_path: str,
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
@@ -1123,7 +1124,7 @@ class RunsService:
         )
         return candidate
 
-    def run_directory(self, *, workspace_id: str, run_id: str) -> Path:
+    def run_directory(self, *, workspace_id: UUID, run_id: UUID) -> Path:
         """Return the canonical run directory for a given ``run_id``."""
 
         path = self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
@@ -1323,7 +1324,7 @@ class RunsService:
 
         return status, error_message
 
-    def _manifest_path(self, workspace_id: str, configuration_id: str) -> Path:
+    def _manifest_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         return (
             workspace_config_root(
                 self._settings,
@@ -1335,7 +1336,7 @@ class RunsService:
             / "manifest.json"
         )
 
-    def _load_manifest(self, workspace_id: str, configuration_id: str) -> ManifestV1 | None:
+    def _load_manifest(self, workspace_id: UUID, configuration_id: UUID) -> ManifestV1 | None:
         path = self._manifest_path(workspace_id, configuration_id)
         if not path.exists():
             return None
@@ -1831,14 +1832,10 @@ class RunsService:
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
                     source=event.source or "engine",
-                    workspace_id=str(run.workspace_id),
-                    configuration_id=str(run.configuration_id),
-                    run_id=str(run.id),
-                    build_id=(
-                        str(event.build_id or getattr(run, "build_id", None))
-                        if (event.build_id or getattr(run, "build_id", None))
-                        else None
-                    ),
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    build_id=event.build_id or getattr(run, "build_id", None),
                     payload=event.payload,
                 )
                 yield forwarded
@@ -1941,7 +1938,7 @@ class RunsService:
     # Internal helpers: DB, storage, builds
     # --------------------------------------------------------------------- #
 
-    async def _require_run(self, run_id: str) -> Run:
+    async def _require_run(self, run_id: UUID) -> Run:
         run = await self._runs.get(run_id)
         if run is None:
             logger.warning(
@@ -1951,7 +1948,7 @@ class RunsService:
             raise RunNotFoundError(run_id)
         return run
 
-    async def _require_document(self, *, workspace_id: str, document_id: str) -> Document:
+    async def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> Document:
         document = await self._documents.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1967,15 +1964,15 @@ class RunsService:
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
 
-    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
 
     async def _stage_input_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
         run_dir: Path,
     ) -> Path:
         document = await self._require_document(
@@ -1991,7 +1988,7 @@ class RunsService:
             run_dir=run_dir,
         )
 
-    async def _resolve_configuration(self, configuration_id: str) -> Configuration:
+    async def _resolve_configuration(self, configuration_id: UUID) -> Configuration:
         configuration = await self._configs.get_by_id(configuration_id)
         if configuration is None:
             logger.warning(
@@ -2090,11 +2087,11 @@ class RunsService:
             if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
                 env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
         if context.run_id:
-            env["ADE_TELEMETRY_CORRELATION_ID"] = context.run_id
-            env["ADE_RUN_ID"] = context.run_id
+            env["ADE_TELEMETRY_CORRELATION_ID"] = str(context.run_id)
+            env["ADE_RUN_ID"] = str(context.run_id)
         return env
 
-    def _run_dir_for_run(self, *, workspace_id: str, run_id: str) -> Path:
+    def _run_dir_for_run(self, *, workspace_id: UUID, run_id: UUID) -> Path:
         root = workspace_run_root(self._settings, workspace_id).resolve()
         candidate = (root / str(run_id)).resolve()
         try:
@@ -2108,8 +2105,8 @@ class RunsService:
         return candidate
 
     @staticmethod
-    def _generate_run_id() -> str:
-        return str(uuid.uuid7())
+    def _generate_run_id() -> UUID:
+        return generate_uuid7()
 
     @staticmethod
     def _epoch_seconds(dt: datetime | None) -> int | None:
@@ -2178,7 +2175,7 @@ class RunsService:
         run: Run,
         type_: str,
         payload: AdeEventPayload | dict[str, Any] | None = None,
-        build_id: str | None = None,
+        build_id: UUID | None = None,
     ) -> AdeEvent:
         """Emit an AdeEvent originating from the API orchestrator."""
 
@@ -2186,10 +2183,10 @@ class RunsService:
         event = await self._event_dispatcher.emit(
             type=type_,
             source="api",
-            workspace_id=str(run.workspace_id),
-            configuration_id=str(run.configuration_id),
-            run_id=str(run.id),
-            build_id=str(build_identifier) if build_identifier else None,
+            workspace_id=run.workspace_id,
+            configuration_id=run.configuration_id,
+            run_id=run.id,
+            build_id=build_identifier,
             payload=payload,
         )
         self._log_event_debug(event, origin="api")
@@ -2205,13 +2202,13 @@ class RunsService:
         """Guarantee a single run.queued event exists for the run."""
 
         last_sequence = self._event_storage.last_sequence(
-            workspace_id=str(run.workspace_id),
-            run_id=str(run.id),
+            workspace_id=run.workspace_id,
+            run_id=run.id,
         )
         if last_sequence > 0:
             reader = self.event_log_reader(
-                workspace_id=str(run.workspace_id),
-                run_id=str(run.id),
+                workspace_id=run.workspace_id,
+                run_id=run.id,
             )
             return next(iter(reader.iter(after_sequence=0)), None)
         return await self._emit_api_event(
@@ -2224,7 +2221,7 @@ class RunsService:
             ),
         )
 
-    def event_log_reader(self, *, workspace_id: str, run_id: str) -> RunEventLogReader:
+    def event_log_reader(self, *, workspace_id: UUID, run_id: UUID) -> RunEventLogReader:
         """Return a reader for persisted run events."""
 
         return RunEventLogReader(
@@ -2233,7 +2230,7 @@ class RunsService:
             run_id=run_id,
         )
 
-    def subscribe_to_events(self, run_id: str):
+    def subscribe_to_events(self, run_id: UUID):
         """Expose dispatcher subscription for live event streaming."""
 
         return self._event_dispatcher.subscribe(run_id)

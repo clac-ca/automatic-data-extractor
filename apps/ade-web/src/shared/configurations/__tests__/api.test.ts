@@ -12,12 +12,14 @@ describe("configuration directory api helpers", () => {
     const spy = vi
       .spyOn(client, "PUT")
       .mockResolvedValue(
-        { data: { path: "assets/new" } } as unknown as Awaited<ReturnType<(typeof client)["PUT"]>>,
+        { data: { path: "assets/new", created: true } } as unknown as Awaited<
+          ReturnType<(typeof client)["PUT"]>
+        >,
       );
 
     const result = await createConfigurationDirectory("ws1", "cfg1", "assets/new");
 
-    expect(result).toEqual({ path: "assets/new" });
+    expect(result).toEqual({ path: "assets/new", created: true });
     expect(spy).toHaveBeenCalledWith(
       "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
       {

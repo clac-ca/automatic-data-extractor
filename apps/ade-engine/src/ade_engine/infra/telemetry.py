@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Protocol
+from uuid import UUID
 
 from ade_engine.core.types import NormalizedTable, RunContext
 from ade_engine.schemas.telemetry import AdeEvent
@@ -40,9 +41,20 @@ def _event_level(event: AdeEvent) -> str:
     return "info"
 
 
-def _context_ids(run: RunContext) -> tuple[str | None, str | None]:
+def _coerce_uuid(value: Any) -> UUID | None:
+    if value is None:
+        return None
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except Exception:
+        return None
+
+
+def _context_ids(run: RunContext) -> tuple[UUID | None, UUID | None]:
     meta = run.metadata or {}
-    return meta.get("workspace_id"), meta.get("configuration_id")
+    return _coerce_uuid(meta.get("workspace_id")), _coerce_uuid(meta.get("configuration_id"))
 
 
 def _make_event(

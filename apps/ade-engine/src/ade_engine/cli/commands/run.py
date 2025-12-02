@@ -47,7 +47,7 @@ def run_command(
     result = Engine().run(request)
     payload = {
         "status": result.status.value,
-        "run_id": result.run_id,
+        "run_id": str(result.run_id),
         "output_paths": [str(path) for path in result.output_paths],
         "logs_dir": str(result.logs_dir),
         "events_path": str(Path(result.logs_dir) / "events.ndjson"),

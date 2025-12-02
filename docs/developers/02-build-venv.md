@@ -20,12 +20,12 @@ Once built, every run for that configuration runs inside this frozen environment
 
 ## Where Builds Are Stored
 
-Virtual environments live on local storage at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv/`. They are not co-located with the configuration or shared storage.
+Virtual environments live on local storage at `ADE_VENVS_DIR/<workspace>/<configuration>/<build_id>/.venv/`. They are not co-located with the configuration or shared storage.
 
 ```text
 ADE_VENVS_DIR/                     # default: /tmp/ade-venvs (local, non-shared)
 └─ <workspace_id>/
-   └─ <config_id>/
+   └─ <configuration_id>/
       └─ <build_id>/
          └─ .venv/                 # build-scoped environment
             ├─ bin/python
@@ -42,7 +42,7 @@ ADE maintains **one active build pointer per configuration**. The configuration 
 
 ```mermaid
 flowchart TD
-  A["Start build (configuration + version)"] --> B["Create temp venv at ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv.tmp"]
+  A["Start build (configuration + version)"] --> B["Create temp venv at ADE_VENVS_DIR/<workspace>/<configuration>/<build_id>/.venv.tmp"]
   B --> C["Install ADE Engine"]
   C --> D["Install config package (+ dependencies)"]
   D --> E["Verify imports (ade_engine, ade_config)"]
@@ -69,7 +69,7 @@ Build metadata lives primarily in the `builds` history table; the configuration 
 | `active_build_fingerprint`  | Hash of config digest + engine spec/version + python   |
 | `builds` table              | Source of truth for status, timestamps, errors, python/engine/config metadata |
 
-The active environment lives at `ADE_VENVS_DIR/<workspace>/<config>/<build_id>/.venv`; switching builds is a DB pointer update, not an in-place rebuild.
+The active environment lives at `ADE_VENVS_DIR/<workspace>/<configuration>/<build_id>/.venv`; switching builds is a DB pointer update, not an in-place rebuild.
 
 ---
 
@@ -144,10 +144,10 @@ This self‑healing logic guarantees that a crash during build does not permanen
 
 ## Runs and Build Reuse
 
-Before each run, the backend calls `ensure_active_build(workspace_id, config_id)`, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
+Before each run, the backend calls `ensure_active_build(workspace_id, configuration_id)`, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
 
 ```bash
-${ADE_VENVS_DIR}/<workspace_id>/<config_id>/<build_id>/.venv/bin/python -I -B -m ade_engine.run <run_id>
+${ADE_VENVS_DIR}/<workspace_id>/<configuration_id>/<build_id>/.venv/bin/python -I -B -m ade_engine.run <run_id>
 ```
 
 Runs never install packages; they always run inside the verified build venv. The run record stores the `build_id` used for audit and reproducibility.
@@ -161,7 +161,7 @@ Build orchestration now mirrors the runs contract with dedicated build resources
 ### Create or rebuild (supports streaming)
 
 ```
-POST /api/v1/workspaces/{workspace_id}/configs/{config_id}/builds
+POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds
 ```
 
 Body:
@@ -178,6 +178,14 @@ Body:
 
 * `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Progress is emitted as run events (see below).
 * `stream: true` — execute inline and stream `AdeEvent` envelopes (`build.*` + `console.line` with `scope:"build"`) over SSE.
+
+### List build history
+
+```
+GET /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds?status=failed&limit=20
+```
+
+Returns a paged collection of builds (newest first). Filters support repeated `status` values. Pagination uses `page`, `page_size` (or `limit` alias), and `include_total`.
 
 ### Get build status
 
@@ -197,7 +205,7 @@ GET /api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>
 
 This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build lifecycle + `console.line` + subsequent run events). Use `after_sequence` to resume.
 
-> **Runs API (submit):** clients provide `workspace_id` and `config_id`. The server resolves and records `build_id` at submit time.
+> **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configuration_id}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
 
 ---
 
@@ -208,7 +216,7 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 | `ADE_WORKSPACES_DIR`            | `./data/workspaces`    | Workspace root for ADE storage                  |
 | `ADE_DOCUMENTS_DIR`             | `./data/workspaces`    | Base for documents (`<ws>/documents/...`)       |
 | `ADE_CONFIGS_DIR`               | `./data/workspaces`    | Base for configs (`<ws>/config_packages/...`)   |
-| `ADE_VENVS_DIR`                 | `/tmp/ade-venvs`       | Local base for venvs (`<ws>/<cfg>/<build>/...`) |
+| `ADE_VENVS_DIR`                 | `/tmp/ade-venvs`       | Local base for venvs (`<ws>/<configuration>/<build>/...`) |
 | `ADE_RUNS_DIR`                  | `./data/workspaces`    | Base for runs (`<ws>/runs/<run_id>/...`)        |
 | `ADE_PIP_CACHE_DIR`             | `./data/cache/pip`     | Cache for pip downloads (safe to delete)        |
 | `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
@@ -226,9 +234,9 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 
 ## Backend Architecture (Essentials)
 
-* **Router** — `POST /workspaces/{workspace_id}/configs/{config_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
+* **Router** — `POST /workspaces/{workspace_id}/configurations/{configuration_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
 * **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses the `builds` table (one queued/building row per config) to deduplicate concurrent requests**, and triggers the builder if needed.
-* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<cfg>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
+* **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<configuration>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
 * **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
 * **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream.
 

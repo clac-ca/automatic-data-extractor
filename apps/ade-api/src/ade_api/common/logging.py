@@ -18,6 +18,7 @@ import logging
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from ade_api.settings import Settings
 
@@ -180,12 +181,12 @@ def clear_request_context() -> None:
 
 def log_context(
     *,
-    workspace_id: str | None = None,
-    configuration_id: str | None = None,
-    run_id: str | None = None,
-    build_id: str | None = None,
-    document_id: str | None = None,
-    user_id: str | None = None,
+    workspace_id: UUID | None = None,
+    configuration_id: UUID | None = None,
+    run_id: UUID | None = None,
+    build_id: UUID | None = None,
+    document_id: UUID | None = None,
+    user_id: UUID | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
     """Build a consistent `extra` payload for structured logs.
@@ -204,17 +205,17 @@ def log_context(
     ctx: dict[str, Any] = {}
 
     if workspace_id is not None:
-        ctx["workspace_id"] = workspace_id
+        ctx["workspace_id"] = str(workspace_id)
     if configuration_id is not None:
-        ctx["configuration_id"] = configuration_id
+        ctx["configuration_id"] = str(configuration_id)
     if run_id is not None:
-        ctx["run_id"] = run_id
+        ctx["run_id"] = str(run_id)
     if build_id is not None:
-        ctx["build_id"] = build_id
+        ctx["build_id"] = str(build_id)
     if document_id is not None:
-        ctx["document_id"] = document_id
+        ctx["document_id"] = str(document_id)
     if user_id is not None:
-        ctx["user_id"] = user_id
+        ctx["user_id"] = str(user_id)
 
     # Allow arbitrary additional structured fields.
     for key, value in extra.items():

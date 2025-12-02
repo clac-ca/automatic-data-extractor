@@ -72,7 +72,7 @@ describe("streamRunEvents", () => {
     expect(source).toBeDefined();
 
     const runEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
-    source?.emit("ade.event", JSON.stringify(runEvent));
+    source?.emit("run.started", JSON.stringify(runEvent));
 
     const result = await pending;
     expect(result.done).toBe(false);
@@ -94,11 +94,11 @@ describe("streamRunEvents", () => {
       payload: { status: "succeeded" },
     };
 
-    source?.emit("ade.event", JSON.stringify(startEvent));
+    source?.emit("run.started", JSON.stringify(startEvent));
     expect((await first).value).toEqual(startEvent);
 
     const second = iterator.next();
-    source?.emit("ade.event", JSON.stringify(completedEvent));
+    source?.emit("run.completed", JSON.stringify(completedEvent));
     expect((await second).value).toEqual(completedEvent);
 
     const done = await iterator.next();
@@ -132,6 +132,7 @@ describe("streamRun", () => {
         self: "/api/v1/runs/run-123",
         summary: "/api/v1/runs/run-123/summary",
         events: "/api/v1/runs/run-123/events",
+        events_stream: "/api/v1/runs/run-123/events/stream",
         logs: "/api/v1/runs/run-123/logs",
         outputs: "/api/v1/runs/run-123/outputs",
       },
@@ -167,10 +168,10 @@ describe("streamRun", () => {
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/configurations/{configuration_id}/runs", {
       params: { path: { configuration_id: "config-123" } },
-      body: { stream: false, options: { dry_run: true, validate_only: false, force_rebuild: false } },
+      body: { options: { dry_run: true, validate_only: false, force_rebuild: false } },
       signal: undefined,
     });
-    expect(source?.url).toContain("/api/v1/runs/run-123/events");
+    expect(source?.url).toContain("/api/v1/runs/run-123/events/stream");
     expect(events).toEqual([runEvent]);
   });
 

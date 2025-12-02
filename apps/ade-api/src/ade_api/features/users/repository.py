@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,13 +17,16 @@ def _canonical_email(value: str) -> str:
     return value.strip().lower()
 
 
+_UNSET = object()
+
+
 class UsersRepository:
     """High-level persistence helpers for the unified user model."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(self, user_id: str) -> User | None:
+    async def get_by_id(self, user_id: str | UUID) -> User | None:
         stmt = (
             select(User)
             .options(
@@ -33,7 +38,7 @@ class UsersRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_id_basic(self, user_id: str) -> User | None:
+    async def get_by_id_basic(self, user_id: str | UUID) -> User | None:
         """Lightweight lookup without eager-loading relationships."""
 
         return await self._session.get(User, user_id)
@@ -141,5 +146,20 @@ class UsersRepository:
         await self._session.flush()
         await self._session.refresh(identity)
         return identity
+
+    async def update_user(
+        self,
+        user: User,
+        *,
+        display_name: str | None | object = _UNSET,
+        is_active: bool | None | object = _UNSET,
+    ) -> User:
+        if display_name is not _UNSET:
+            user.display_name = cast(str | None, display_name)
+        if is_active is not _UNSET:
+            user.is_active = cast(bool, is_active)
+        await self._session.flush()
+        await self._session.refresh(user)
+        return user
 
 __all__ = ["UsersRepository"]

@@ -1,6 +1,6 @@
 # Authorization Architecture
 
-The Automatic Data Extractor (ADE) now relies on a unified RBAC model where
+The Automatic Data Extractor (ADE) relies on a unified RBAC model where
 principal → role assignments drive every permission decision. This document
 summarises the building blocks, runtime flow, and public API so engineers and
 operators can reason about access control without diving through the codebase.
@@ -8,65 +8,68 @@ operators can reason about access control without diving through the codebase.
 ## Core entities
 
 - **Principals** represent subjects that can receive roles. Today every
-  principal wraps a user record and enforces the link through a check constraint
-  so future principal types (service accounts, groups) can be added without
-  schema changes.【F:apps/ade-api/src/ade_api/features/roles/models.py†L16-L61】
+  principal wraps a user record; the schema leaves room for future principal
+  types without structural changes (`ade_api/core/models/user.py`).
 - **Permissions** are Graph-style keys that include resource and action columns,
-  allowing the API and UI to group capabilities predictably.【F:apps/ade-api/src/ade_api/features/roles/models.py†L63-L85】
+  allowing the API and UI to group capabilities predictably
+  (`ade_api/core/models/rbac.py`).
 - **Roles** bundle permissions at either global or workspace scope and enforce
-  slug uniqueness within that scope while cascading assignments and permissions
-  on delete.【F:apps/ade-api/src/ade_api/features/roles/models.py†L88-L142】
+  slug uniqueness within that scope while cascading permissions on delete
+  (`ade_api/core/models/rbac.py`).
 - **Role assignments** attach roles to principals at a scope. The database
   ensures scope consistency and cascades with principals, roles, and workspaces
-  so authorisation data stays clean.【F:apps/ade-api/src/ade_api/features/roles/models.py†L145-L189】
+  so authorisation data stays clean (`ade_api/core/models/rbac.py`).
 
 ## Permission registry and seeds
 
-Permissions and default roles live in a declarative registry. Each entry defines
-its key, scope, label, description, and implied defaults, while the system role
-catalog seeds administrator and workspace owner/member experiences aligned with
-Microsoft Graph conventions.【F:apps/ade-api/src/ade_api/features/roles/registry.py†L1-L132】【F:apps/ade-api/src/ade_api/features/roles/registry.py†L134-L211】
+Permissions and default roles live in `ade_api/core/rbac/registry.py`. Each
+entry defines its key, scope, label, description, and implied defaults. The
+system role catalog seeds administrator and workspace owner/member experiences
+aligned with the registry, so permissions are consistent across API, UI, and
+migrations.
 
 ## Service layer and decision flow
 
-The role service normalises permission keys, expands implication rules (for
-example, `.ReadWrite` implies `.Read`), and exposes helpers for CRUD operations
-and assignment upserts.【F:apps/ade-api/src/ade_api/features/roles/service.py†L1-L213】【F:apps/ade-api/src/ade_api/features/roles/service.py†L215-L366】
-
-Route-level guards ultimately call the principal-oriented `authorize` facade,
-which delegates to the service functions to compute granted permissions for the
-requested scope.【F:apps/ade-api/src/ade_api/features/roles/authorization.py†L1-L52】 Workspace
-profiles reuse the same assignment data so global administrators inherit owner
-capabilities when reviewing a workspace.【F:apps/ade-api/src/ade_api/features/workspaces/service.py†L33-L142】
+The RBAC service (`ade_api/features/rbac/service.py`) normalises permission
+keys, expands implication rules, and exposes helpers for role CRUD and
+assignment upserts. Permission checks flow through `ade_api/core/http`
+dependencies, which compute effective permissions for the current principal and
+scope before allowing a request to proceed. Workspace profiles reuse the same
+assignment data so global administrators inherit owner capabilities when
+reviewing a workspace.
 
 ## FastAPI security dependencies
 
-Shared dependencies wrap authentication, CSRF enforcement, and permission checks
-so routers declare their requirements with `Security(...)`. Denials surface the
-missing permission, scope type, and scope identifier in a structured JSON error
-body to simplify debugging and audits.【F:apps/ade-api/src/ade_api/shared/dependency.py†L34-L306】
+Shared dependencies wrap authentication and permission checks so routers declare
+their requirements with `Security(...)`. Denials surface the missing permission,
+scope type, and scope identifier in a structured JSON error body to simplify
+debugging and audits (`ade_api/core/http/dependencies.py`). A `require_csrf`
+placeholder is present on mutating routes but currently no-ops; it remains to
+ease future CSRF enforcement.
 
 ## Public API
 
 All RBAC administration lives under `/api/v1`:
 
+- Permission catalog: `GET /rbac/permissions`.
 - Role catalog and CRUD (global or workspace-scoped via query params):
-  `GET/POST /rbac/roles`, `GET/PATCH/DELETE /rbac/roles/{role_id}`.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L177-L309】
-- Global role assignments (admin listing/upserts): `/rbac/role-assignments`.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L402-L454】
-- Global roles for a specific user: `/users/{user_id}/roles` (list/assign/remove).【F:apps/ade-api/src/ade_api/features/rbac/router.py†L462-L559】
+  `GET/POST /rbac/roles`, `GET/PATCH/DELETE /rbac/roles/{role_id}`.
+- Global role assignments (admin listing/upserts): `GET /rbac/role-assignments`.
+- Global roles for a specific user: `GET /users/{user_id}/roles`,
+  `PUT/DELETE /users/{user_id}/roles/{role_id}`.
 - Workspace membership + role bindings:
-  `/workspaces/{workspace_id}/members` (list/create/update/delete).【F:apps/ade-api/src/ade_api/features/rbac/router.py†L659-L900】
-- Permission catalog and effective permission introspection via
-  `/rbac/permissions`, `/me/permissions`, and `/me/permissions/check` reuse the
-  same dependencies for parity.【F:apps/ade-api/src/ade_api/features/rbac/router.py†L107-L158】
+  `/workspaces/{workspace_id}/members` (list/create/update/delete).
+- Effective permission introspection via `/me/permissions` and
+  `/me/permissions/check`.
 
 ## Operational notes
 
 - Tests seed principals, workspace roles, and assignments so API and service
-  coverage exercise the same Graph-style keys the registry declares.【F:conftest.py†L110-L247】
+  coverage exercise the same Graph-style keys the registry declares
+  (`apps/ade-api/conftest.py`).
 - The baseline migration (`0001_initial_schema`) mirrors this structure and adds
   indexes/constraints for scope lookups and system role uniqueness in SQLite and
-  Postgres.【F:apps/ade-api/src/ade_api/migrations/versions/0001_initial_schema.py†L1-L310】
+  Postgres (`apps/ade-api/src/ade_api/migrations/versions/0001_initial_schema.py`).
 
 Keep this reference updated whenever the registry, service layer, or router
 contracts evolve so onboarding engineers can rely on the docs instead of reading

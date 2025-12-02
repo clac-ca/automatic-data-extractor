@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -12,9 +13,9 @@ RunStatusLiteral = Literal["succeeded", "failed", "canceled"]
 class RunSummaryRun(BaseModel):
     """Identity and lifecycle info for a run summary."""
 
-    id: str
-    workspace_id: str | None = None
-    configuration_id: str | None = None
+    id: UUID
+    workspace_id: UUID | None = None
+    configuration_id: UUID | None = None
 
     status: RunStatusLiteral
     failure_code: str | None = None

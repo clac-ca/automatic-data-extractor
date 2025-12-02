@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from uuid import UUID
 
 
 class RunStatus(str, Enum):
@@ -83,7 +84,7 @@ class RunPaths:
 class RunContext:
     """Per-run state shared across the pipeline and hooks."""
 
-    run_id: str
+    run_id: UUID
     metadata: dict[str, Any]
     manifest: Any
     paths: RunPaths
@@ -107,7 +108,7 @@ class RunResult:
 
     status: RunStatus
     error: RunError | None
-    run_id: str
+    run_id: UUID
     output_paths: tuple[Path, ...]
     logs_dir: Path
     processed_files: tuple[str, ...]

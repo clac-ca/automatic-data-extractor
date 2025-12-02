@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import Field
@@ -50,9 +51,39 @@ class WorkspacePage(Page[WorkspaceOut]):
     """Paginated workspace listing."""
 
 
+class WorkspaceMemberOut(BaseSchema):
+    """Workspace member with their role IDs and slugs."""
+
+    user_id: UUIDStr
+    role_ids: list[UUIDStr]
+    role_slugs: list[str]
+    created_at: datetime
+
+
+class WorkspaceMemberCreate(BaseSchema):
+    """Payload for adding a new workspace member with roles."""
+
+    user_id: UUIDStr
+    role_ids: list[UUIDStr]
+
+
+class WorkspaceMemberUpdate(BaseSchema):
+    """Payload for updating workspace member roles."""
+
+    role_ids: list[UUIDStr]
+
+
+class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
+    """Paginated collection of workspace members."""
+
+
 __all__ = [
     "WorkspaceCreate",
     "WorkspaceDefaultSelectionOut",
+    "WorkspaceMemberCreate",
+    "WorkspaceMemberOut",
+    "WorkspaceMemberPage",
+    "WorkspaceMemberUpdate",
     "WorkspaceOut",
     "WorkspaceUpdate",
     "WorkspacePage",

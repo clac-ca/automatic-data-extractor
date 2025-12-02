@@ -10,6 +10,7 @@ import tomllib
 from collections.abc import Callable, Iterable
 from hashlib import sha256
 from pathlib import Path
+from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
 
@@ -119,19 +120,19 @@ class ConfigStorage:
     def configs_root(self) -> Path:
         return self._configs_root
 
-    def workspace_root(self, workspace_id: str) -> Path:
+    def workspace_root(self, workspace_id: UUID) -> Path:
         if self._settings is not None:
             return workspace_config_root(self._settings, workspace_id)
         return self._configs_root / str(workspace_id) / "config_packages"
 
-    def config_path(self, workspace_id: str, configuration_id: str) -> Path:
+    def config_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         return self.workspace_root(workspace_id) / str(configuration_id)
 
     async def materialize_from_template(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         template_id: str,
     ) -> None:
         template_path = (self._templates_root / template_id).resolve()
@@ -150,9 +151,9 @@ class ConfigStorage:
     async def materialize_from_clone(
         self,
         *,
-        workspace_id: str,
-        source_configuration_id: str,
-        new_configuration_id: str,
+        workspace_id: UUID,
+        source_configuration_id: UUID,
+        new_configuration_id: UUID,
     ) -> None:
         source_path = self.config_path(workspace_id, source_configuration_id)
         exists = await run_in_threadpool(source_path.is_dir)
@@ -166,7 +167,7 @@ class ConfigStorage:
             configuration_id=new_configuration_id,
         )
 
-    async def ensure_config_path(self, workspace_id: str, configuration_id: str) -> Path:
+    async def ensure_config_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         path = self.config_path(workspace_id, configuration_id)
         exists = await run_in_threadpool(path.is_dir)
         if not exists:
@@ -178,8 +179,8 @@ class ConfigStorage:
     async def delete_config(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         missing_ok: bool = True,
     ) -> None:
         path = self.config_path(workspace_id, configuration_id)

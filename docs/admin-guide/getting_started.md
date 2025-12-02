@@ -93,7 +93,7 @@ export environment variables in your shell.
    curl http://localhost:8000/health
    ```
 
-All runtime state stays under `data/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `data/documents/` intact unless you intend to delete uploaded sources.
+All runtime state stays under `data/`. Stop the FastAPI process before deleting files and remove only the pieces you need to refresh. Deleting `data/db/` after the app stops resets the SQLite database; the next bootstrap recreates the directory and reapplies migrations automatically. Leave `data/workspaces/<workspace_id>/documents/` intact unless you intend to delete uploaded sources.
 
 ### Run backend and frontend manually (optional)
 The uvicorn command above serves the prebuilt SPA. For frontend development with hot module reload, run the backend and the Vite dev server in separate terminals. Install dependencies in `apps/ade-web/` first (repeat only after dependency updates).
@@ -157,7 +157,7 @@ docker rm ade-backend
 
 ## 6. Where ADE Stores Data
 - `data/db/api.sqlite` – primary metadata database (SQLite).
-- `data/documents/` – uploaded source files.
+- `data/workspaces/<workspace_id>/documents/` – uploaded source files.
 - `data/logs/` *(if enabled)* – structured JSON logs.
 
 Back up the `data/` directory to retain everything you need for a full

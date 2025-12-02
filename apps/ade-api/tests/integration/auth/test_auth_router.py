@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
+from ade_api.infra.db.engine import ensure_database_ready, reset_database_state
+from ade_api.infra.db.session import reset_session_state
 from ade_api.settings import get_settings
 from tests.utils import login
 
@@ -18,27 +21,37 @@ async def test_login_and_refresh(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
-    """Password login should return tokens and allow refresh."""
+    """Password login should return tokens, cookies, and allow refresh."""
 
     admin = seed_identity["admin"]
-    access_token, payload = await login(
-        async_client,
-        email=admin["email"],
-        password=admin["password"],
+    response = await async_client.post(
+        "/api/v1/auth/session",
+        json={"email": admin["email"], "password": admin["password"]},
     )
-    assert payload["token_type"] == "bearer"
-    assert payload["refresh_token"]
-    assert payload["expires_in"] > 0
-    assert payload["refresh_expires_in"] > 0
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    tokens = payload["tokens"]
+    context = payload["context"]
+    cookie_name = get_settings().session_cookie_name
+
+    assert tokens["token_type"] == "bearer"
+    assert tokens["refresh_token"]
+    assert tokens["expires_in"] > 0
+    assert tokens["refresh_expires_in"] > 0
+    assert tokens["expires_at"]
+    assert tokens["refresh_expires_at"]
+    assert context["user"]["email"] == admin["email"]
+    assert async_client.cookies.get(cookie_name) == tokens["access_token"]
 
     refresh = await async_client.post(
         "/api/v1/auth/session/refresh",
-        json={"refresh_token": payload["refresh_token"]},
+        json={"refresh_token": tokens["refresh_token"]},
     )
     assert refresh.status_code == 200, refresh.text
-    refreshed = refresh.json()
+    refreshed = refresh.json()["tokens"]
     assert refreshed["access_token"]
     assert refreshed["token_type"] == "bearer"
+    assert async_client.cookies.get(cookie_name) == refreshed["access_token"]
 
 
 async def test_refresh_prefers_body_over_cookie(
@@ -53,16 +66,17 @@ async def test_refresh_prefers_body_over_cookie(
         email=admin["email"],
         password=admin["password"],
     )
+    tokens = payload["tokens"]
 
     refresh_cookie = get_settings().session_refresh_cookie_name
     async_client.cookies.set(refresh_cookie, "stale-cookie-token")
 
     response = await async_client.post(
         "/api/v1/auth/session/refresh",
-        json={"refresh_token": payload["refresh_token"]},
+        json={"refresh_token": tokens["refresh_token"]},
     )
     assert response.status_code == 200, response.text
-    data = response.json()
+    data = response.json()["tokens"]
     assert data["access_token"]
     assert data["refresh_token"]
 
@@ -79,13 +93,14 @@ async def test_refresh_falls_back_to_cookie(
         email=admin["email"],
         password=admin["password"],
     )
+    tokens = payload["tokens"]
 
     refresh_cookie = get_settings().session_refresh_cookie_name
-    async_client.cookies.set(refresh_cookie, payload["refresh_token"])
+    async_client.cookies.set(refresh_cookie, tokens["refresh_token"])
 
     response = await async_client.post("/api/v1/auth/session/refresh")
     assert response.status_code == 200, response.text
-    data = response.json()
+    data = response.json()["tokens"]
     assert data["access_token"]
     assert data["refresh_token"]
 
@@ -108,6 +123,60 @@ async def test_setup_status_when_users_exist(async_client: AsyncClient) -> None:
     payload = response.json()
     assert payload["requires_setup"] is False
     assert payload["has_users"] is True
+
+
+async def test_setup_returns_created_on_first_admin(
+    async_client: AsyncClient,
+    override_app_settings,
+    tmp_path: Path,
+) -> None:
+    """First-run setup should create the admin and return 201 with tokens."""
+
+    db_root = tmp_path / "auth-setup-created"
+    db_path = db_root / "api.sqlite"
+    workspace_root = db_root / "workspaces"
+
+    reset_database_state()
+    reset_session_state()
+
+    settings = override_app_settings(
+        database_dsn=f"sqlite+aiosqlite:///{db_path}",
+        workspaces_dir=workspace_root,
+        documents_dir=workspace_root,
+        configs_dir=workspace_root,
+        runs_dir=workspace_root,
+        venvs_dir=db_root / "venvs",
+        pip_cache_dir=db_root / "cache" / "pip",
+    )
+    await ensure_database_ready(settings)
+
+    status_response = await async_client.get("/api/v1/auth/setup")
+    assert status_response.status_code == 200, status_response.text
+    status_payload = status_response.json()
+    assert status_payload["requires_setup"] is True
+    assert status_payload["has_users"] is False
+
+    response = await async_client.post(
+        "/api/v1/auth/setup",
+        json={
+            "email": "first@example.com",
+            "password": "Password123!",
+            "display_name": "First Admin",
+        },
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    tokens = payload["tokens"]
+    context = payload["context"]
+    assert tokens["access_token"]
+    assert tokens["token_type"] == "bearer"
+    assert context["user"]["email"] == "first@example.com"
+
+    verify_response = await async_client.get("/api/v1/auth/setup")
+    assert verify_response.status_code == 200, verify_response.text
+    verify_payload = verify_response.json()
+    assert verify_payload["requires_setup"] is False
+    assert verify_payload["has_users"] is True
 
 
 async def test_setup_conflict_when_users_exist(async_client: AsyncClient) -> None:

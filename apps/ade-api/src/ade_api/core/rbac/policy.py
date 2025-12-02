@@ -8,6 +8,7 @@ GLOBAL_IMPLICATIONS: dict[str, tuple[str, ...]] = {
     "system.settings.manage": ("system.settings.read",),
     "workspaces.manage_all": ("workspaces.read_all",),
     "api_keys.manage_all": ("api_keys.read_all",),
+    "users.manage_all": ("users.read_all",),
 }
 
 # Workspace-scope permission implications

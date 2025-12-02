@@ -7,6 +7,7 @@ avoid root-level one-off modules.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import UUID
 
 from ade_api.settings import Settings
 
@@ -23,11 +24,11 @@ __all__ = [
 ]
 
 
-def _workspace_base(root: Path, workspace_id: str | object) -> Path:
+def _workspace_base(root: Path, workspace_id: UUID | object) -> Path:
     return Path(root) / str(workspace_id)
 
 
-def workspace_root(settings: Settings, workspace_id: str) -> Path:
+def workspace_root(settings: Settings, workspace_id: UUID) -> Path:
     """Base directory for a workspace under the configured workspaces root."""
 
     return _workspace_base(settings.workspaces_dir, workspace_id)
@@ -35,8 +36,8 @@ def workspace_root(settings: Settings, workspace_id: str) -> Path:
 
 def workspace_config_root(
     settings: Settings,
-    workspace_id: str,
-    configuration_id: str | None = None,
+    workspace_id: UUID,
+    configuration_id: UUID | None = None,
 ) -> Path:
     """Path to a workspace's config packages root or a specific config."""
 
@@ -46,8 +47,8 @@ def workspace_config_root(
 
 def workspace_run_root(
     settings: Settings,
-    workspace_id: str,
-    run_id: str | None = None,
+    workspace_id: UUID,
+    run_id: UUID | None = None,
 ) -> Path:
     """Path to a workspace's runs root or a specific run directory."""
 
@@ -55,13 +56,13 @@ def workspace_run_root(
     return root if run_id is None else root / str(run_id)
 
 
-def workspace_documents_root(settings: Settings, workspace_id: str) -> Path:
+def workspace_documents_root(settings: Settings, workspace_id: UUID) -> Path:
     """Path to a workspace's documents directory."""
 
     return _workspace_base(settings.documents_dir, workspace_id) / "documents"
 
 
-def workspace_venvs_root(settings: Settings, workspace_id: str) -> Path:
+def workspace_venvs_root(settings: Settings, workspace_id: UUID) -> Path:
     """Root of all venvs for a workspace under ADE_VENVS_DIR."""
 
     return _workspace_base(settings.venvs_dir, workspace_id)
@@ -69,9 +70,9 @@ def workspace_venvs_root(settings: Settings, workspace_id: str) -> Path:
 
 def build_venv_root(
     settings: Settings,
-    workspace_id: str,
-    configuration_id: str,
-    build_id: str,
+    workspace_id: UUID,
+    configuration_id: UUID,
+    build_id: UUID,
 ) -> Path:
     """Root folder reserved for a specific build."""
 
@@ -80,9 +81,9 @@ def build_venv_root(
 
 def build_venv_path(
     settings: Settings,
-    workspace_id: str,
-    configuration_id: str,
-    build_id: str,
+    workspace_id: UUID,
+    configuration_id: UUID,
+    build_id: UUID,
 ) -> Path:
     """Path to the finalized virtual environment directory for a build."""
 
@@ -91,9 +92,9 @@ def build_venv_path(
 
 def build_venv_temp_path(
     settings: Settings,
-    workspace_id: str,
-    configuration_id: str,
-    build_id: str,
+    workspace_id: UUID,
+    configuration_id: UUID,
+    build_id: UUID,
 ) -> Path:
     """Temporary venv path used during build before atomic rename."""
 
@@ -102,9 +103,9 @@ def build_venv_temp_path(
 
 def build_venv_marker_path(
     settings: Settings,
-    workspace_id: str,
-    configuration_id: str,
-    build_id: str,
+    workspace_id: UUID,
+    configuration_id: UUID,
+    build_id: UUID,
 ) -> Path:
     """Marker file capturing build metadata inside the venv."""
 

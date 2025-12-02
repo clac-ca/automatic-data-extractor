@@ -3,13 +3,11 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Response, Security, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.app.dependencies import get_workspace_profile
-from ade_api.common.pagination import PageParams, paginate_sequence
+from ade_api.app.dependencies import get_workspace_profile, get_workspaces_service
+from ade_api.common.pagination import PageParams
 from ade_api.core.http import require_authenticated, require_csrf, require_global, require_workspace
 from ade_api.core.models import User
-from ade_api.infra.db.session import get_session
 
 from .schemas import (
     WorkspaceCreate,
@@ -20,6 +18,7 @@ from .schemas import (
 from .service import WorkspacesService
 
 router = APIRouter(tags=["workspaces"], dependencies=[Security(require_authenticated)])
+workspaces_service_dependency = Depends(get_workspaces_service)
 
 WORKSPACE_CREATE_BODY = Body(...)
 WORKSPACE_UPDATE_BODY = Body(...)
@@ -55,11 +54,10 @@ async def create_workspace(
         User,
         Security(require_global("workspaces.create")),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: WorkspacesService = workspaces_service_dependency,
     *,
     payload: WorkspaceCreate = WORKSPACE_CREATE_BODY,
 ) -> WorkspaceOut:
-    service = WorkspacesService(session=session)
     workspace = await service.create_workspace(
         user=admin_user,
         name=payload.name,
@@ -87,12 +85,10 @@ async def create_workspace(
 async def list_workspaces(
     current_user: Annotated[User, Security(require_authenticated)],
     page: Annotated[PageParams, Depends()],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspacePage:
-    service = WorkspacesService(session=session)
-    memberships = await service.list_memberships(user=current_user)
-    page_result = paginate_sequence(
-        memberships,
+    page_result = await service.list_workspaces(
+        user=current_user,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
@@ -165,11 +161,10 @@ async def update_workspace(
             scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: WorkspacesService = workspaces_service_dependency,
     *,
     payload: WorkspaceUpdate = WORKSPACE_UPDATE_BODY,
 ) -> WorkspaceOut:
-    service = WorkspacesService(session=session)
     workspace = await service.update_workspace(
         user=actor,
         workspace_id=workspace.id,
@@ -206,9 +201,8 @@ async def delete_workspace(
             scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    service = WorkspacesService(session=session)
     await service.delete_workspace(workspace_id=workspace.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -236,9 +230,8 @@ async def set_default_workspace(
             scopes=["{workspace_id}"],
         ),
     ],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: WorkspacesService = workspaces_service_dependency,
 ) -> Response:
-    service = WorkspacesService(session=session)
     await service.set_default_workspace(
         workspace_id=workspace.id,
         user=actor,

@@ -76,9 +76,9 @@ class VirtualEnvironmentBuilder:
     async def build_stream(
         self,
         *,
-        build_id: str | UUID,
-        workspace_id: str | UUID,
-        configuration_id: str | UUID,
+        build_id: UUID,
+        workspace_id: UUID,
+        configuration_id: UUID,
         venv_root: Path,
         config_path: Path,
         engine_spec: str,
@@ -200,9 +200,9 @@ class VirtualEnvironmentBuilder:
             await self._write_metadata(
                 temp_path,
                 {
-                    "build_id": build_id,
-                    "workspace_id": workspace_id,
-                    "configuration_id": configuration_id,
+                    "build_id": str(build_id),
+                    "workspace_id": str(workspace_id),
+                    "configuration_id": str(configuration_id),
                     "python_version": python_version,
                     "engine_version": engine_version,
                     "fingerprint": fingerprint,
@@ -252,7 +252,7 @@ class VirtualEnvironmentBuilder:
         *,
         timeout: float,
         env: Mapping[str, str] | None = None,
-        build_id: str,
+        build_id: UUID,
     ) -> AsyncIterator[BuilderLogEvent]:
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -296,7 +296,7 @@ class VirtualEnvironmentBuilder:
         *,
         timeout: float,
         env: Mapping[str, str] | None = None,
-        build_id: str,
+        build_id: UUID,
     ) -> str:
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -352,7 +352,7 @@ class VirtualEnvironmentBuilder:
         merged.update(env)
         return merged
 
-    async def _run_smoke_tests(self, venv_python: Path, *, timeout: float, build_id: str) -> None:
+    async def _run_smoke_tests(self, venv_python: Path, *, timeout: float, build_id: UUID) -> None:
         """Lightweight validation to ensure key packages import and report versions."""
 
         checks = [

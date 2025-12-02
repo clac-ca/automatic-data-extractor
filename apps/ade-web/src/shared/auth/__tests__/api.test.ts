@@ -45,8 +45,8 @@ const meBootstrap = {
     has_next: false,
     has_previous: false,
   },
-  global_roles: [],
-  global_permissions: [],
+  roles: [],
+  permissions: [],
 };
 
 async function loadApi(initialStorage?: Record<string, unknown>) {
@@ -90,20 +90,33 @@ describe("auth api", () => {
   it("refreshes using the cookie flow without persisting a refresh token", async () => {
     const { api, storage } = await loadApi();
 
+    const expiresAt = new Date(Date.now() + 120_000).toISOString();
+    const refreshExpiresAt = new Date(Date.now() + 300_000).toISOString();
     const issued = {
-      access_token: "new-access",
-      refresh_token: "new-refresh",
-      token_type: "bearer",
-      expires_in: 120,
-      refresh_expires_in: 300,
+      session: {
+        access_token: "new-access",
+        refresh_token: "new-refresh",
+        token_type: "bearer",
+        expires_in: 120,
+        refresh_expires_in: 300,
+        expires_at: expiresAt,
+        refresh_expires_at: refreshExpiresAt,
+      },
+      csrf_token: "csrf",
     };
 
     mockClient.POST.mockResolvedValueOnce({ data: issued });
+    mockClient.GET.mockResolvedValueOnce({ data: meBootstrap });
 
     await api.refreshSession();
 
     expect(mockClient.POST).toHaveBeenCalledWith("/api/v1/auth/session/refresh", {
       body: undefined,
+      signal: undefined,
+    });
+    expect(mockClient.GET).toHaveBeenCalledWith("/api/v1/me/bootstrap", {
+      headers: { Authorization: "bearer new-access" },
+      params: { query: { include_total: false, page: 1, page_size: 200 } },
       signal: undefined,
     });
 

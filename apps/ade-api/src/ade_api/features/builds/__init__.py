@@ -8,7 +8,17 @@ from .exceptions import (
     BuildNotFoundError,
     BuildWorkspaceMismatchError,
 )
-from .schemas import BuildCreateOptions, BuildCreateRequest, BuildEvent, BuildResource
+from .schemas import (
+    BuildCreateOptions,
+    BuildCreateRequest,
+    BuildLinks,
+    BuildEventsPage,
+    BuildEvent,
+    BuildFilters,
+    BuildListParams,
+    BuildPage,
+    BuildResource,
+)
 from .service import BuildExecutionContext, BuildsService
 
 __all__ = [
@@ -19,6 +29,11 @@ __all__ = [
     "BuildWorkspaceMismatchError",
     "BuildCreateOptions",
     "BuildCreateRequest",
+    "BuildLinks",
+    "BuildEventsPage",
+    "BuildFilters",
+    "BuildListParams",
+    "BuildPage",
     "BuildResource",
     "BuildEvent",
     "BuildStatus",
