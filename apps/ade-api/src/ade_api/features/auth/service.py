@@ -13,12 +13,14 @@ from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 from ade_api.core.models.user import User, UserCredential
+from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.hashing import hash_password, verify_password
 from ade_api.core.security.tokens import (
     create_access_token,
     create_refresh_token,
     decode_token,
 )
+from ade_api.features.rbac import RbacService
 from ade_api.settings import Settings
 
 from .schemas import (
@@ -37,6 +39,7 @@ class SessionTokens:
     refresh_token: str
     access_expires_at: datetime
     refresh_expires_at: datetime
+
 
 
 def _normalize_email(value: str) -> str:
@@ -122,6 +125,20 @@ class AuthService:
         )
         self._session.add(credential)
         await self._session.flush()
+
+        rbac = RbacService(session=self._session)
+        await rbac.sync_registry()
+
+        admin_role = await rbac.get_role_by_slug(slug="global-admin")
+        if admin_role is None:
+            raise RuntimeError("Global admin role is not registered.")
+
+        await rbac.assign_role_if_missing(
+            user_id=user.id,
+            role_id=admin_role.id,
+            scope_type=ScopeType.GLOBAL,
+            scope_id=None,
+        )
 
         return self._issue_session_tokens(user=user, issued_at=now)
 

@@ -177,6 +177,8 @@ async def test_setup_returns_created_on_first_admin(
     assert bootstrap.status_code == 200, bootstrap.text
     context = bootstrap.json()
     assert context["user"]["email"] == "first@example.com"
+    assert context["roles"] == ["global-admin"]
+    assert "workspaces.create" in context["permissions"]
 
     verify_response = await async_client.get("/api/v1/auth/setup")
     assert verify_response.status_code == 200, verify_response.text
