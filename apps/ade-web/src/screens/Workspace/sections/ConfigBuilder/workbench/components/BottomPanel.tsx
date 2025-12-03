@@ -55,7 +55,11 @@ export function BottomPanel({
         value={activePane}
         onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}
       >
-        <div className="flex flex-none items-center justify-between border-b border-slate-200 px-3 py-1.5">
+        <div
+          className="flex flex-none items-center justify-between border-b border-slate-200 px-3 py-1.5"
+          onDoubleClick={onToggleCollapse}
+          title={onToggleCollapse ? "Double-click to hide console" : undefined}
+        >
           <TabsList className="flex items-center gap-3 text-[11px] font-medium">
             <TabsTrigger
               value="terminal"

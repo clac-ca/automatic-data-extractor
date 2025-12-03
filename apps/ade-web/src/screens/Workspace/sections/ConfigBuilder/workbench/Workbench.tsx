@@ -6,6 +6,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type ChangeEvent,
 } from "react";
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,7 +26,7 @@ import type {
   WorkbenchDataSeed,
 } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
-import { createWorkbenchTreeFromListing, findFileNode } from "./utils/tree";
+import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { SplitButton } from "@ui/SplitButton";
@@ -38,8 +39,9 @@ import {
   useCreateConfigurationDirectoryMutation,
   useDeleteConfigurationDirectoryMutation,
 } from "@shared/configurations/hooks/useConfigurationFiles";
+import { useReplaceConfigurationMutation } from "@shared/configurations/hooks/useConfigurationImport";
 import { configurationKeys } from "@shared/configurations/keys";
-import { readConfigurationFileJson } from "@shared/configurations/api";
+import { exportConfiguration, readConfigurationFileJson } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
@@ -152,6 +154,8 @@ export function Workbench({
     order: "asc",
     enabled: !usingSeed,
   });
+  const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
+  const isDraftConfig = filesQuery.data?.status === "draft";
 
   const tree = useMemo(() => {
     if (seed) {
@@ -167,6 +171,11 @@ export function Workbench({
   const handleRunComplete = useCallback((info: RunCompletionInfo) => {
     setPendingCompletion(info);
   }, []);
+  const replaceConfig = useReplaceConfigurationMutation(workspaceId, configId);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const [actionsMenu, setActionsMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
   const {
     stream: runStreamState,
@@ -264,6 +273,26 @@ export function Workbench({
     },
     [appendConsoleLine, showConsoleBanner],
   );
+
+  const handleExportConfig = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportConfiguration(workspaceId, configId);
+      const filename = result.filename ?? `${configId}.zip`;
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      showConsoleBanner(`Exported ${filename}`, { intent: "success", duration: 4000 });
+    } catch (error) {
+      pushConsoleError(error);
+      showConsoleBanner("Export failed. Try again in a moment.", { intent: "danger", duration: 6000 });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [workspaceId, configId, showConsoleBanner, pushConsoleError]);
 
   useEffect(() => {
     if (!pendingCompletion) {
@@ -679,7 +708,7 @@ export function Workbench({
       ? clampConsoleHeight(desiredHeight)
       : 0;
   const consoleHeight = liveConsoleHeight;
-  const effectiveHandle = outputCollapsed ? 0 : OUTPUT_HANDLE_THICKNESS;
+  const effectiveHandle = OUTPUT_HANDLE_THICKNESS;
   const effectiveConsoleHeight = outputCollapsed ? COLLAPSED_CONSOLE_BAR_HEIGHT : liveConsoleHeight;
   const editorHeight =
     paneHeight > 0
@@ -826,6 +855,8 @@ export function Workbench({
   const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
   const canCreateFolders = canCreateFiles && !createConfigDirectory.isPending;
   const canDeleteFolders = canCreateFiles && !deleteConfigDirectory.isPending;
+  const canReplaceFromArchive =
+    isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -838,6 +869,9 @@ export function Workbench({
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     setSettingsMenu({ x: rect.right + 8, y: rect.top });
+  }, []);
+  const handleOpenActionsMenu = useCallback((position: { x: number; y: number }) => {
+    setActionsMenu(position);
   }, []);
 
   const closeSettingsMenu = useCallback(() => setSettingsMenu(null), []);
@@ -1035,6 +1069,60 @@ export function Workbench({
     ],
   );
 
+  const handleReplaceArchiveRequest = useCallback(() => {
+    if (!canReplaceFromArchive) {
+      showConsoleBanner("Replace is only available for draft configurations.", { intent: "warning", duration: 6000 });
+      setActionsMenu(null);
+      return;
+    }
+    setActionsMenu(null);
+    setReplaceConfirmOpen(true);
+  }, [canReplaceFromArchive, showConsoleBanner]);
+
+  const handleReplaceFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+      if (!file) {
+        return;
+      }
+      try {
+        await replaceConfig.mutateAsync({ file, ifMatch: currentFilesetEtag });
+        tabPersistence?.clear?.();
+        files.closeAllTabs();
+        setFileId(undefined);
+        const refreshed = await filesQuery.refetch();
+        const listing = refreshed.data ?? filesQuery.data ?? null;
+        const nextTree = listing ? createWorkbenchTreeFromListing(listing) : null;
+        const firstFile = nextTree ? findFirstFile(nextTree) : null;
+        setPendingOpenFileId(firstFile?.id ?? null);
+        showConsoleBanner("Configuration replaced from archive.", { intent: "success", duration: 6000 });
+      } catch (error) {
+        const message =
+          error instanceof ApiError && error.status === 412
+            ? "Replace blocked: the configuration changed on the server. Reload and try again."
+            : error instanceof ApiError && error.status === 428
+              ? "Replace blocked: refresh the file list and try again."
+            : error instanceof Error
+              ? error.message
+              : "Unable to replace configuration.";
+        pushConsoleError(message);
+        showConsoleBanner(message, { intent: "danger", duration: 6000 });
+      }
+    },
+    [
+      replaceConfig,
+      currentFilesetEtag,
+      tabPersistence,
+      files,
+      filesQuery,
+      setFileId,
+      setPendingOpenFileId,
+      showConsoleBanner,
+      pushConsoleError,
+    ],
+  );
+
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
     const items: ContextMenuItem[] = THEME_MENU_OPTIONS.map((option) => ({
@@ -1065,6 +1153,25 @@ export function Workbench({
     outputCollapsed,
     handleToggleOutput,
   ]);
+  const actionsMenuItems = useMemo<ContextMenuItem[]>(() => {
+    return [
+      {
+        id: "export",
+        label: isExporting ? "Exporting…" : "Export (.zip)",
+        disabled: isExporting,
+        onSelect: () => {
+          setActionsMenu(null);
+          void handleExportConfig();
+        },
+      },
+      {
+        id: "replace",
+        label: "Import from zip",
+        disabled: !canReplaceFromArchive,
+        onSelect: handleReplaceArchiveRequest,
+      },
+    ];
+  }, [canReplaceFromArchive, handleExportConfig, handleReplaceArchiveRequest, isExporting]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !isMaximized) {
@@ -1166,6 +1273,7 @@ export function Workbench({
           onSaveFile={handleSaveActiveTab}
           saveShortcutLabel={saveShortcutLabel}
           onOpenTestMenu={(position) => setTestMenu(position)}
+          onOpenActionsMenu={handleOpenActionsMenu}
           canRunValidation={canRunValidation}
           isRunningValidation={isRunningValidation}
           onRunValidation={handleRunValidation}
@@ -1185,6 +1293,7 @@ export function Workbench({
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximize={handleToggleMaximize}
           onCloseWindow={handleCloseWorkbench}
+          actionsBusy={isExporting || replaceConfig.isPending}
         />
         <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
@@ -1248,35 +1357,82 @@ export function Workbench({
           ) : null}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ backgroundColor: editorSurface, color: editorText }}>
-          {outputCollapsed ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1">
-                <EditorArea
-                  tabs={files.tabs}
-                  activeTabId={files.activeTab?.id ?? ""}
-                  onSelectTab={(tabId) => {
-                    files.selectTab(tabId);
-                    setFileId(tabId);
-                  }}
-                  onCloseTab={files.closeTab}
-                  onCloseOtherTabs={files.closeOtherTabs}
-                  onCloseTabsToRight={files.closeTabsToRight}
-                  onCloseAllTabs={files.closeAllTabs}
-                  onContentChange={files.updateContent}
-                  onSaveTab={handleSaveTabShortcut}
-                  onSaveAllTabs={handleSaveAllTabs}
-                  onMoveTab={files.moveTab}
-                  onRetryTabLoad={files.reloadTab}
-                  onPinTab={files.pinTab}
-                  onUnpinTab={files.unpinTab}
-                  onSelectRecentTab={files.selectRecentTab}
-                  editorTheme={editorTheme.resolvedTheme}
-                  menuAppearance={menuAppearance}
-                  canSaveFiles={canSaveFiles}
-                  minHeight={editorMinHeight}
-                />
-              </div>
-              <div className="flex shrink-0 items-center justify-between border-t border-slate-300 bg-white px-4 py-2 text-[12px] text-slate-700 shadow-inner">
+          <div
+            className="grid min-h-0 min-w-0 flex-1"
+            style={{
+              height: paneHeight > 0 ? `${paneHeight}px` : undefined,
+              gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${effectiveHandle}px ${Math.max(
+                0,
+                effectiveConsoleHeight,
+              )}px`,
+            }}
+          >
+            <EditorArea
+              tabs={files.tabs}
+              activeTabId={files.activeTab?.id ?? ""}
+              onSelectTab={(tabId) => {
+                files.selectTab(tabId);
+                setFileId(tabId);
+              }}
+              onCloseTab={files.closeTab}
+              onCloseOtherTabs={files.closeOtherTabs}
+              onCloseTabsToRight={files.closeTabsToRight}
+              onCloseAllTabs={files.closeAllTabs}
+              onContentChange={files.updateContent}
+              onSaveTab={handleSaveTabShortcut}
+              onSaveAllTabs={handleSaveAllTabs}
+              onMoveTab={files.moveTab}
+              onRetryTabLoad={files.reloadTab}
+              onPinTab={files.pinTab}
+              onUnpinTab={files.unpinTab}
+              onSelectRecentTab={files.selectRecentTab}
+              editorTheme={editorTheme.resolvedTheme}
+              menuAppearance={menuAppearance}
+              canSaveFiles={canSaveFiles}
+              minHeight={editorMinHeight}
+            />
+            <PanelResizeHandle
+              orientation="horizontal"
+              onPointerDown={(event) => {
+                setIsResizingConsole(true);
+                const startY = event.clientY;
+                const startHeight = liveConsoleHeight;
+                let didOpen = false;
+                trackPointerDrag(event, {
+                  cursor: "row-resize",
+                  onMove: (move) => {
+                    if (outputCollapsed && !didOpen) {
+                      void openConsole();
+                      didOpen = true;
+                    }
+                    if (consoleLimits.maxPx <= 0 || paneHeight <= 0) {
+                      return;
+                    }
+                    const delta = startY - move.clientY;
+                    const nextHeight = clamp(startHeight + delta, consoleLimits.minPx, consoleLimits.maxPx);
+                    setConsoleFraction(clamp(nextHeight / paneHeight, 0, 1));
+                  },
+                  onEnd: () => {
+                    setIsResizingConsole(false);
+                  },
+                });
+              }}
+              onDoubleClick={() => {
+                if (outputCollapsed) {
+                  void openConsole();
+                } else {
+                  closeConsole();
+                }
+              }}
+              onToggle={handleToggleOutput}
+              collapsed={outputCollapsed}
+            />
+            {outputCollapsed ? (
+              <div
+                className="flex items-center justify-between border-t border-slate-300 bg-white px-4 py-2 text-[12px] text-slate-700 shadow-inner cursor-pointer"
+                onDoubleClick={handleToggleOutput}
+                title="Double-click to show console"
+              >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">Console hidden</span>
                   <span className="text-[11px] text-slate-500">(double-click gutter or Ctrl+`)</span>
@@ -1290,75 +1446,9 @@ export function Workbench({
                   Show console
                 </button>
               </div>
-            </div>
-          ) : (
-            <div
-                className="grid min-h-0 min-w-0 flex-1"
-                style={{
-                height: paneHeight > 0 ? `${paneHeight}px` : undefined,
-                gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
-                  0,
-                  consoleHeight,
-                )}px`,
-              }}
-            >
-              <EditorArea
-                tabs={files.tabs}
-                activeTabId={files.activeTab?.id ?? ""}
-                onSelectTab={(tabId) => {
-                  files.selectTab(tabId);
-                  setFileId(tabId);
-                }}
-                onCloseTab={files.closeTab}
-                onCloseOtherTabs={files.closeOtherTabs}
-                onCloseTabsToRight={files.closeTabsToRight}
-                onCloseAllTabs={files.closeAllTabs}
-                onContentChange={files.updateContent}
-                onSaveTab={handleSaveTabShortcut}
-                onSaveAllTabs={handleSaveAllTabs}
-                onMoveTab={files.moveTab}
-                onRetryTabLoad={files.reloadTab}
-                onPinTab={files.pinTab}
-                onUnpinTab={files.unpinTab}
-                onSelectRecentTab={files.selectRecentTab}
-                editorTheme={editorTheme.resolvedTheme}
-                menuAppearance={menuAppearance}
-                canSaveFiles={canSaveFiles}
-                minHeight={editorMinHeight}
-              />
-              <PanelResizeHandle
-                orientation="horizontal"
-                onPointerDown={(event) => {
-                  setIsResizingConsole(true);
-                  const startY = event.clientY;
-                  const startHeight = consoleHeight;
-                  trackPointerDrag(event, {
-                    cursor: "row-resize",
-                    onMove: (move) => {
-                      if (consoleLimits.maxPx <= 0 || paneHeight <= 0) {
-                        return;
-                      }
-                      const delta = startY - move.clientY;
-                      const nextHeight = clamp(startHeight + delta, consoleLimits.minPx, consoleLimits.maxPx);
-                      setConsoleFraction(clamp(nextHeight / paneHeight, 0, 1));
-                    },
-                    onEnd: () => {
-                      setIsResizingConsole(false);
-                    },
-                  });
-                }}
-                onDoubleClick={() => {
-                  if (outputCollapsed) {
-                    void openConsole();
-                  } else {
-                    closeConsole();
-                  }
-                }}
-                onToggle={handleToggleOutput}
-                collapsed={outputCollapsed}
-              />
+            ) : (
               <BottomPanel
-                height={Math.max(0, consoleHeight)}
+                height={Math.max(0, liveConsoleHeight)}
                 consoleLines={consoleLines}
                 validation={validationState}
                 activePane={pane}
@@ -1370,10 +1460,11 @@ export function Workbench({
                 buildPhases={runStreamState.buildPhases}
                 runPhases={runStreamState.runPhases}
                 runMode={derivedRunMode}
+                inspectorFile={files.activeTab ?? null}
                 onToggleCollapse={handleToggleOutput}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
       </div>
@@ -1388,6 +1479,65 @@ export function Workbench({
           onRun={handleRunExtraction}
         />
       ) : null}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept=".zip"
+        onChange={handleReplaceFileChange}
+        className="hidden"
+      />
+      {replaceConfirmOpen ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="replace-config-title"
+          >
+            <div className="space-y-2">
+              <h2 id="replace-config-title" className="text-lg font-semibold text-slate-900">
+                Import from zip
+              </h2>
+              <p className="text-sm text-slate-600">
+                Importing will replace this configuration’s current code with the uploaded archive. Unsaved editor changes
+                will be discarded.
+              </p>
+              {!canReplaceFromArchive ? (
+                <p className="text-sm font-medium text-danger-600">Only draft configurations can be replaced.</p>
+              ) : null}
+              {files.isDirty ? (
+                <p className="text-sm font-medium text-amber-700">You have unsaved changes that will be lost.</p>
+              ) : null}
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setReplaceConfirmOpen(false)}
+                disabled={replaceConfig.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setReplaceConfirmOpen(false);
+                  replaceInputRef.current?.click();
+                }}
+                disabled={!canReplaceFromArchive || replaceConfig.isPending}
+                isLoading={replaceConfig.isPending}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <ContextMenu
+        open={Boolean(actionsMenu)}
+        position={actionsMenu}
+        onClose={() => setActionsMenu(null)}
+        items={actionsMenuItems}
+        appearance={menuAppearance}
+      />
       <ContextMenu
         open={Boolean(testMenu)}
         position={testMenu}
@@ -1441,6 +1591,7 @@ function WorkbenchChrome({
   onSaveFile,
   saveShortcutLabel,
   onOpenTestMenu,
+  onOpenActionsMenu,
   canRunValidation,
   isRunningValidation,
   onRunValidation,
@@ -1456,6 +1607,7 @@ function WorkbenchChrome({
   onMinimizeWindow,
   onToggleMaximize,
   onCloseWindow,
+  actionsBusy = false,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -1465,6 +1617,7 @@ function WorkbenchChrome({
   readonly onSaveFile: () => void;
   readonly saveShortcutLabel: string;
   readonly onOpenTestMenu: (position: { x: number; y: number }) => void;
+  readonly onOpenActionsMenu: (position: { x: number; y: number }) => void;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
@@ -1480,6 +1633,7 @@ function WorkbenchChrome({
   readonly onMinimizeWindow: () => void;
   readonly onToggleMaximize: () => void;
   readonly onCloseWindow: () => void;
+  readonly actionsBusy?: boolean;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -1576,6 +1730,16 @@ function WorkbenchChrome({
             icon={<ConsoleIcon />}
           />
         </div>
+        <ChromeIconButton
+          ariaLabel="Configuration actions"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenActionsMenu({ x: rect.right + 8, y: rect.bottom });
+          }}
+          appearance={appearance}
+          disabled={actionsBusy}
+          icon={<ActionsIcon />}
+        />
         <div
           className={clsx(
             "flex items-center gap-2 border-l pl-3",
@@ -1864,12 +2028,14 @@ function ChromeIconButton({
   icon,
   appearance,
   active = false,
+  disabled = false,
 }: {
   readonly ariaLabel: string;
   readonly onClick: () => void;
   readonly icon: ReactNode;
   readonly appearance: "light" | "dark";
   readonly active?: boolean;
+  readonly disabled?: boolean;
 }) {
   const dark = appearance === "dark";
   const baseClass = dark
@@ -1881,10 +2047,12 @@ function ChromeIconButton({
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      disabled={disabled}
       className={clsx(
         "flex h-7 w-7 items-center justify-center rounded-[4px] border border-transparent text-sm transition focus-visible:outline-none focus-visible:ring-2",
         baseClass,
         active && activeClass,
+        disabled && "cursor-not-allowed opacity-50",
       )}
       title={ariaLabel}
     >
@@ -1994,6 +2162,16 @@ function RunIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ActionsIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="3" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="13" cy="8" r="1.3" fill="currentColor" />
     </svg>
   );
 }

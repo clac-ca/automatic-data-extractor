@@ -185,6 +185,31 @@ export async function readConfigurationFileJson(
   return data as FileReadJson;
 }
 
+export interface ExportConfigurationResult {
+  readonly blob: Blob;
+  readonly filename?: string;
+}
+
+export async function exportConfiguration(
+  workspaceId: string,
+  configId: string,
+): Promise<ExportConfigurationResult> {
+  const { data, response } = await client.GET(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export",
+    {
+      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      parseAs: "blob",
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration archive payload.");
+  }
+  const disposition = response?.headers?.get("content-disposition") ?? "";
+  const filenameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+  const filename = filenameMatch?.[1];
+  return { blob: data as Blob, filename: filename ?? undefined };
+}
+
 export interface UpsertConfigurationFilePayload {
   readonly path: string;
   readonly content: string;
@@ -317,6 +342,58 @@ export async function deleteConfigurationDirectory(
       },
     },
   );
+}
+
+export interface ImportConfigurationPayload {
+  readonly displayName: string;
+  readonly file: File | Blob;
+}
+
+export async function importConfiguration(
+  workspaceId: string,
+  payload: ImportConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("display_name", payload.displayName);
+  formData.append("file", payload.file);
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/configurations/import", {
+    params: { path: { workspace_id: workspaceId } },
+    body: formData,
+    bodySerializer: () => formData,
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export interface ReplaceConfigurationPayload {
+  readonly file: File | Blob;
+  readonly ifMatch?: string | null;
+}
+
+export async function replaceConfigurationFromArchive(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import",
+    {
+      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
+      body: formData,
+      bodySerializer: () => formData,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
 }
 
 export type ConfigurationSourceInput =

@@ -668,6 +668,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/configurations/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a configuration from an uploaded archive */
+        post: operations["import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
         parameters: {
             query?: never;
@@ -767,6 +784,23 @@ export type paths = {
         /** Export Config */
         get: operations["export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a draft configuration from an uploaded archive */
+        put: operations["replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1364,6 +1398,24 @@ export type components = {
              */
             has_users: boolean;
         };
+        /** Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post */
+        Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
+        /** Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put */
+        Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_upload_document_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_document_api_v1_workspaces__workspace_id__documents_post: {
             /**
@@ -1446,7 +1498,11 @@ export type components = {
          * @description API representation of a build row.
          */
         BuildResource: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             id: string;
             /**
              * Object
@@ -1454,9 +1510,17 @@ export type components = {
              * @constant
              */
             object: "ade.build";
-            /** Workspace Id */
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             workspace_id: string;
-            /** Configuration Id */
+            /**
+             * Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             configuration_id: string;
             status: components["schemas"]["BuildStatus"];
             /**
@@ -2547,7 +2611,7 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "canceled";
+        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
         /**
          * RunSummaryBreakdowns
          * @description Nested breakdowns for files and fields.
@@ -2676,7 +2740,10 @@ export type components = {
          * @description Identity and lifecycle info for a run summary.
          */
         RunSummaryRun: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
             /** Workspace Id */
             workspace_id?: string | null;
@@ -2686,7 +2753,7 @@ export type components = {
              * Status
              * @enum {string}
              */
-            status: "succeeded" | "failed" | "canceled";
+            status: "succeeded" | "failed" | "cancelled";
             /** Failure Code */
             failure_code?: string | null;
             /** Failure Stage */
@@ -5506,6 +5573,42 @@ export interface operations {
             };
         };
     };
+    import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post: {
         parameters: {
             query?: never;
@@ -5881,6 +5984,44 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                     "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
                 };
             };
             /** @description Validation Error */

@@ -25,7 +25,7 @@ export function PanelResizeHandle({
       aria-orientation={orientation}
       className={clsx(
         "relative select-none bg-transparent group",
-        isVertical ? "w-4 cursor-col-resize" : "h-full cursor-row-resize",
+        isVertical ? "w-4 cursor-col-resize" : "h-3 cursor-row-resize",
       )}
       style={{ touchAction: "none" }}
       onPointerDown={onPointerDown}
@@ -36,7 +36,7 @@ export function PanelResizeHandle({
       <div
         className={clsx(
           "absolute inset-0 flex items-center justify-center",
-          isVertical ? "px-[6px]" : "py-[8px]",
+          isVertical ? "px-[6px]" : "py-[6px]",
         )}
         aria-hidden
       >

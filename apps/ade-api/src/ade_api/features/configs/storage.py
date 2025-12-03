@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import fnmatch
+import io
 import json
 import os
 import secrets
 import shutil
+import zipfile
 import tomllib
 from collections.abc import Callable, Iterable
 from hashlib import sha256
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
@@ -18,6 +21,7 @@ from ade_api.infra.storage import workspace_config_root
 from ade_api.settings import Settings
 
 from .exceptions import (
+    ConfigImportError,
     ConfigPublishConflictError,
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
@@ -50,6 +54,11 @@ _COPY_IGNORE_PATTERNS = (
     "dist",
     "build",
 )
+_IMPORT_MAX_ARCHIVE_BYTES = 50 * 1024 * 1024  # 50 MiB compressed cap
+_IMPORT_MAX_EXPANDED_BYTES = 200 * 1024 * 1024  # 200 MiB safety cap
+_IMPORT_MAX_ENTRIES = 5000
+_IMPORT_CODE_MAX_BYTES = 512 * 1024  # mirror per-file limits used by write_file
+_IMPORT_ASSET_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _copytree_no_stat(
@@ -176,6 +185,38 @@ class ConfigStorage:
             )
         return path
 
+    async def import_archive(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        archive: bytes,
+    ) -> str | None:
+        """Materialize a configuration from a zip archive."""
+
+        return await self._materialize_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+            replace=False,
+        )
+
+    async def replace_from_archive(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        archive: bytes,
+    ) -> str | None:
+        """Replace an existing configuration (draft-only) from a zip archive."""
+
+        return await self._materialize_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+            replace=True,
+        )
+
     async def delete_config(
         self,
         *,
@@ -246,6 +287,49 @@ class ConfigStorage:
             return issues, digest
 
         return await run_in_threadpool(_validate)
+
+    async def _materialize_from_archive(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        archive: bytes,
+        replace: bool,
+    ) -> str | None:
+        workspace_root = self.workspace_root(workspace_id)
+        destination = workspace_root / str(configuration_id)
+        staging = workspace_root / f".import-{configuration_id}-{secrets.token_hex(4)}"
+
+        await run_in_threadpool(workspace_root.mkdir, parents=True, exist_ok=True)
+
+        def _prepare_stage() -> None:
+            if len(archive) > _IMPORT_MAX_ARCHIVE_BYTES:
+                raise ConfigImportError("archive_too_large", limit=_IMPORT_MAX_ARCHIVE_BYTES)
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+            staging.mkdir(parents=True, exist_ok=True)
+            _extract_archive(archive, staging)
+
+        try:
+            await run_in_threadpool(_prepare_stage)
+            issues, digest = await self.validate_path(staging)
+            if issues:
+                raise ConfigSourceInvalidError(issues)
+
+            def _publish() -> None:
+                if destination.exists():
+                    if not replace:
+                        raise ConfigPublishConflictError(
+                            f"Destination '{destination}' already exists"
+                        )
+                    shutil.rmtree(destination, ignore_errors=True)
+                staging.replace(destination)
+
+            await run_in_threadpool(_publish)
+            return digest
+        except Exception:
+            await self._remove_path(staging)
+            raise
 
     async def _materialize_from_source(
         self,
@@ -327,6 +411,79 @@ def _collect_digest_files(root: Path) -> list[Path]:
     files = list(_iter())
     files.sort(key=lambda item: item.relative_to(root).as_posix())
     return files
+
+
+def _extract_archive(archive: bytes, destination: Path) -> None:
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(archive))
+    except zipfile.BadZipFile as exc:
+        raise ConfigImportError("invalid_archive", detail="Archive is not a valid zip file") from exc
+
+    entries = [info for info in zf.infolist() if not info.is_dir()]
+    if not entries:
+        raise ConfigImportError("archive_empty", detail="Archive contained no files")
+
+    total_uncompressed = 0
+    entry_count = 0
+    destination_root = destination.resolve()
+    for info in entries:
+        entry_count += 1
+        if entry_count > _IMPORT_MAX_ENTRIES:
+            raise ConfigImportError("too_many_entries", limit=_IMPORT_MAX_ENTRIES)
+
+        rel_path = _normalize_archive_member(info.filename)
+        if rel_path is None:
+            continue
+
+        limit = (
+            _IMPORT_ASSET_MAX_BYTES
+            if rel_path.parts and rel_path.parts[0] == "assets"
+            else _IMPORT_CODE_MAX_BYTES
+        )
+        if info.file_size > limit:
+            raise ConfigImportError("file_too_large", detail=rel_path.as_posix(), limit=limit)
+
+        total_uncompressed += info.file_size
+        if total_uncompressed > _IMPORT_MAX_EXPANDED_BYTES:
+            raise ConfigImportError("archive_too_large", limit=_IMPORT_MAX_EXPANDED_BYTES)
+
+        target = destination / rel_path.as_posix()
+        resolved = target.resolve()
+        if destination_root not in resolved.parents and resolved != destination_root:
+            raise ConfigImportError("path_not_allowed", detail=rel_path.as_posix())
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(info, "r") as src, target.open("wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+    if total_uncompressed == 0:
+        raise ConfigImportError("archive_empty", detail="Archive contained no files")
+
+
+def _normalize_archive_member(name: str) -> PurePosixPath | None:
+    candidate = PurePosixPath(name.strip())
+    parts = [part for part in candidate.parts if part not in (".", "")]
+    if not parts:
+        return None
+    rel = PurePosixPath(*parts)
+    if rel.is_absolute() or any(part == ".." for part in rel.parts):
+        raise ConfigImportError("path_not_allowed", detail=name)
+    if rel.parts[0] in {
+        ".git",
+        ".idea",
+        ".vscode",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "env",
+        "node_modules",
+        "dist",
+        "build",
+        "__MACOSX",
+    }:
+        return None
+    if any(fnmatch.fnmatch(rel.name, pattern) for pattern in {".DS_Store", "*.pyc"}):
+        return None
+    return rel
 
 
 __all__ = ["ConfigStorage", "compute_config_digest"]
