@@ -8,8 +8,8 @@ import json
 import os
 import secrets
 import shutil
-import zipfile
 import tomllib
+import zipfile
 from collections.abc import Callable, Iterable
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -417,7 +417,10 @@ def _extract_archive(archive: bytes, destination: Path) -> None:
     try:
         zf = zipfile.ZipFile(io.BytesIO(archive))
     except zipfile.BadZipFile as exc:
-        raise ConfigImportError("invalid_archive", detail="Archive is not a valid zip file") from exc
+        raise ConfigImportError(
+            "invalid_archive",
+            detail="Archive is not a valid zip file",
+        ) from exc
 
     entries = [info for info in zf.infolist() if not info.is_dir()]
     if not entries:

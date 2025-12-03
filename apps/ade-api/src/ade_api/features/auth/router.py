@@ -26,6 +26,8 @@ from .schemas import (
     SessionEnvelope,
     SessionSnapshot,
     SessionStatusResponse,
+)
+from .schemas import (
     SessionTokens as SessionTokensSchema,
 )
 from .service import (
@@ -209,8 +211,11 @@ def _decode_access_snapshot(token: str, settings: Settings) -> SessionSnapshot:
         ) from exc
 
     principal_type_raw = str(payload.get("pt") or PrincipalType.USER.value).lower()
+    principal_types = {pt.value for pt in PrincipalType}
     principal_type = (
-        principal_type_raw if principal_type_raw in {pt.value for pt in PrincipalType} else PrincipalType.USER.value
+        principal_type_raw
+        if principal_type_raw in principal_types
+        else PrincipalType.USER.value
     )
 
     exp = payload.get("exp")

@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
+from ade_engine.schemas import AdeEvent
 from pydantic import AliasChoices, ConfigDict, Field, conint
 
-from ade_engine.schemas import AdeEvent
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page, PageParams
 from ade_api.common.schema import BaseSchema
@@ -51,7 +51,7 @@ class BuildResource(BaseSchema):
     exit_code: int | None = None
     summary: str | None = None
     error_message: str | None = None
-    links: "BuildLinks"
+    links: BuildLinks
 
     model_config = ConfigDict(json_encoders={datetime: _timestamp})
 

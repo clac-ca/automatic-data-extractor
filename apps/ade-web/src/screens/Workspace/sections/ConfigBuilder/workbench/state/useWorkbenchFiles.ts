@@ -50,7 +50,7 @@ interface WorkbenchFilesApi {
   readonly beginSavingTab: (fileId: string) => void;
   readonly completeSavingTab: (
     fileId: string,
-    options?: { metadata?: WorkbenchFileMetadata; etag?: string | null },
+    options?: { metadata?: WorkbenchFileMetadata; etag?: string | null; savedContent?: string },
   ) => void;
   readonly failSavingTab: (fileId: string, message: string) => void;
   readonly replaceTabContent: (
@@ -551,7 +551,10 @@ export function useWorkbenchFiles({
   }, []);
 
   const completeSavingTab = useCallback(
-    (fileId: string, options?: { metadata?: WorkbenchFileMetadata; etag?: string | null }) => {
+    (
+      fileId: string,
+      options?: { metadata?: WorkbenchFileMetadata; etag?: string | null; savedContent?: string },
+    ) => {
       setTabs((current) =>
         current.map((tab) => {
           if (tab.id !== fileId) {
@@ -559,11 +562,12 @@ export function useWorkbenchFiles({
           }
           const resolvedMetadata = options?.metadata ?? tab.metadata ?? null;
           const resolvedEtag = options?.etag ?? tab.etag ?? null;
+          const savedContent = options?.savedContent ?? tab.content;
           return {
             ...tab,
             saving: false,
             saveError: null,
-            initialContent: tab.content,
+            initialContent: savedContent,
             etag: resolvedEtag,
             metadata: resolvedMetadata
               ? {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID, uuid4
 
 from ade_api.features.runs.summary_builder import build_run_summary, build_run_summary_from_paths
 from ade_engine.schemas import AdeEvent, ManifestV1
@@ -17,8 +18,15 @@ def _dt(seconds: int) -> datetime:
 def _manifest() -> ManifestV1:
     return ManifestV1.model_validate_json((FIXTURES / "manifest.json").read_text(encoding="utf-8"))
 
+RUN_ID_1 = uuid4()
+RUN_ID_2 = uuid4()
+RUN_ID_3 = uuid4()
+EXTERNAL_RUN_ID = uuid4()
+WORKSPACE_ID = uuid4()
+CONFIGURATION_ID = uuid4()
 
-def _success_events(run_id: str = "run_1") -> list[AdeEvent]:
+
+def _success_events(run_id: UUID = RUN_ID_1) -> list[AdeEvent]:
     return [
         AdeEvent(
             type="run.started",
@@ -84,7 +92,7 @@ def _success_events(run_id: str = "run_1") -> list[AdeEvent]:
     ]
 
 
-def _failure_events(run_id: str = "run_2") -> list[AdeEvent]:
+def _failure_events(run_id: UUID = RUN_ID_2) -> list[AdeEvent]:
     return [
         AdeEvent(
             type="run.started",
@@ -108,9 +116,9 @@ def test_build_run_summary_happy_path():
     summary = build_run_summary(
         events=_success_events(),
         manifest=_manifest(),
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="run_1",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=RUN_ID_1,
     )
 
     assert summary.run.status == "succeeded"
@@ -137,9 +145,9 @@ def test_build_run_summary_missing_row_counts_sets_none():
     summary = build_run_summary(
         events=events,
         manifest=_manifest(),
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="run_1",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=RUN_ID_1,
     )
 
     assert summary.core.row_count is None
@@ -150,9 +158,9 @@ def test_build_run_summary_handles_failures():
     summary = build_run_summary(
         events=_failure_events(),
         manifest=_manifest(),
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="run_2",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=RUN_ID_2,
     )
 
     assert summary.run.status == "failed"
@@ -167,7 +175,7 @@ def test_build_run_summary_prefers_run_error_details():
         AdeEvent(
             type="run.error",
             created_at=_dt(2),
-            run_id="run_2",
+            run_id=RUN_ID_2,
             payload={"code": "engine_failure", "stage": "run", "message": "boom"},
         )
     )
@@ -175,9 +183,9 @@ def test_build_run_summary_prefers_run_error_details():
     summary = build_run_summary(
         events=events,
         manifest=_manifest(),
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="run_2",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=RUN_ID_2,
     )
 
     assert summary.run.failure_code == "engine_failure"
@@ -188,7 +196,7 @@ def test_build_run_summary_uses_validation_summary():
     validation_summary = AdeEvent(
         type="run.validation.summary",
         created_at=_dt(1),
-        run_id="run_3",
+        run_id=RUN_ID_3,
         payload={
             "issues_total": 4,
             "issues_by_severity": {"error": 3, "warning": 1},
@@ -205,21 +213,21 @@ def test_build_run_summary_uses_validation_summary():
             AdeEvent(
                 type="run.started",
                 created_at=_dt(0),
-                run_id="run_3",
+                run_id=RUN_ID_3,
                 payload={"status": "running", "engine_version": "0.2.1"},
             ),
             validation_summary,
             AdeEvent(
                 type="run.completed",
                 created_at=_dt(2),
-                run_id="run_3",
+                run_id=RUN_ID_3,
                 payload={"status": "succeeded"},
             ),
         ],
         manifest=_manifest(),
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="run_3",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=RUN_ID_3,
     )
 
     assert summary.core.validation_issue_count_total == 4
@@ -232,7 +240,7 @@ def test_build_run_summary_from_paths_reads_files(tmp_path: Path):
     events_path = tmp_path / "events.ndjson"
     manifest_path = tmp_path / "manifest.json"
 
-    events_payload = "\n".join(event.model_dump_json() for event in _success_events("external_run_id"))
+    events_payload = "\n".join(event.model_dump_json() for event in _success_events(EXTERNAL_RUN_ID))
     events_path.write_text(events_payload, encoding="utf-8")
     manifest_path.write_text(
         (FIXTURES / "manifest.json").read_text(encoding="utf-8"),
@@ -242,11 +250,11 @@ def test_build_run_summary_from_paths_reads_files(tmp_path: Path):
     summary = build_run_summary_from_paths(
         events_path=events_path,
         manifest_path=manifest_path,
-        workspace_id="ws_1",
-        configuration_id="cfg_1",
-        run_id="external_run_id",
+        workspace_id=WORKSPACE_ID,
+        configuration_id=CONFIGURATION_ID,
+        run_id=EXTERNAL_RUN_ID,
     )
 
-    assert summary.run.id == "external_run_id"
+    assert summary.run.id == EXTERNAL_RUN_ID
     assert summary.core.table_count == 2
     assert summary.core.row_count == 15

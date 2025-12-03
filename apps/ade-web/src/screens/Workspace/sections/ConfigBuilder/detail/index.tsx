@@ -45,6 +45,16 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
     );
   }
 
+  if (configurationsQuery.isError) {
+    return (
+      <PageState
+        variant="error"
+        title="Unable to load configuration"
+        description="Try refreshing the page."
+      />
+    );
+  }
+
   if (!config) {
     return (
       <PageState

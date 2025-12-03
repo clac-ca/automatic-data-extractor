@@ -12,8 +12,8 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     HTTPException,
-    Request,
     Query,
+    Request,
     Security,
     status,
 )
@@ -21,11 +21,10 @@ from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
 from ade_api.app.dependencies import get_builds_service
+from ade_api.common.encoding import json_bytes
 from ade_api.common.logging import log_context
-from ade_api.common.time import utc_now
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.core.models import BuildStatus
-from ade_api.common.encoding import json_bytes
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.infra.db.session import get_sessionmaker
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
@@ -88,9 +87,9 @@ async def _execute_build_background(
     options_data: dict[str, Any],
     settings_payload: dict[str, Any],
 ) -> None:
+    from ade_api.app.dependencies import get_build_event_dispatcher
     from ade_api.features.configs.storage import ConfigStorage
     from ade_api.settings import Settings
-    from ade_api.app.dependencies import get_build_event_dispatcher
 
     settings = Settings(**settings_payload)
     session_factory = get_sessionmaker(settings=settings)
@@ -263,7 +262,10 @@ async def stream_build_events_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
 
-    last_event_id_header = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    last_event_id_header = (
+        request.headers.get("last-event-id")
+        or request.headers.get("Last-Event-ID")
+    )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:
         try:

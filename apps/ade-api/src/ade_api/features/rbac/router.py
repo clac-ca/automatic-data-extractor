@@ -5,9 +5,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, Security, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from ade_api.app.dependencies import get_current_principal, get_db_session
 from ade_api.common.pagination import PageParams, paginate_sequence
@@ -26,6 +24,7 @@ from ade_api.features.rbac.schemas import (
     RoleUpdate,
     UserRolesEnvelope,
     UserRoleSummary,
+    WorkspaceMemberOut,
 )
 from ade_api.features.rbac.service import (
     AssignmentError,

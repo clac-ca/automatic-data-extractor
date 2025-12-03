@@ -53,7 +53,7 @@ function safeParseJson(value: string) {
 
 function highlightJson(text: string) {
   const regex =
-    /("(?:\\.|[^"])*"(?=:)|"(?:\\.|[^"])*")|(-?\b\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?\b)|\b(true|false|null)\b/g;
+    /("(?:\\.|[^"])*"(?=:)|"(?:\\.|[^"])*")|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|\b(true|false|null)\b/g;
   const parts: Array<string | JSX.Element> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;

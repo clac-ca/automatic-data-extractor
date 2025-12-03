@@ -11,10 +11,10 @@ from .exceptions import (
 from .schemas import (
     BuildCreateOptions,
     BuildCreateRequest,
-    BuildLinks,
-    BuildEventsPage,
     BuildEvent,
+    BuildEventsPage,
     BuildFilters,
+    BuildLinks,
     BuildListParams,
     BuildPage,
     BuildResource,

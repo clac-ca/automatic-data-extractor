@@ -101,6 +101,24 @@ export function useRunStreamController({
     streamRef.current = stream;
   }, [stream]);
 
+  const stopStreaming = useCallback(() => {
+    const controller = streamControllerRef.current;
+    if (controller) {
+      controller.abort();
+      streamControllerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (runId !== null) {
+      return;
+    }
+    stopStreaming();
+    runResourceRef.current = null;
+    runMetadataRef.current = null;
+    runStartedAtRef.current = null;
+  }, [runId, stopStreaming]);
+
   const appendConsoleLine = useCallback(
     (line: WorkbenchConsoleLine) => dispatch({ type: "APPEND_LINE", line }),
     [dispatch],
@@ -125,14 +143,6 @@ export function useRunStreamController({
     },
     [appendConsoleLine, onError],
   );
-
-  const stopStreaming = useCallback(() => {
-    const controller = streamControllerRef.current;
-    if (controller) {
-      controller.abort();
-      streamControllerRef.current = null;
-    }
-  }, []);
 
   const connectToRun = useCallback(
     async (runResource: RunResource, metadata?: RunStreamMetadata | null) => {

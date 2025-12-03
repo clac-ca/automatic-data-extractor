@@ -10,6 +10,7 @@ from typing import Any
 from fastapi.routing import APIRoute
 
 from ade_api.common.encoding import json_dumps
+
 from ..main import API_PREFIX, create_app
 
 EXCLUDED_METHODS = {"head", "options"}

@@ -30,25 +30,27 @@ async def test_login_and_refresh(
     )
     assert response.status_code == 200, response.text
     payload = response.json()
-    tokens = payload["tokens"]
-    context = payload["context"]
+    session = payload["session"]
     cookie_name = get_settings().session_cookie_name
 
-    assert tokens["token_type"] == "bearer"
-    assert tokens["refresh_token"]
-    assert tokens["expires_in"] > 0
-    assert tokens["refresh_expires_in"] > 0
-    assert tokens["expires_at"]
-    assert tokens["refresh_expires_at"]
+    assert session["token_type"] == "bearer"
+    assert session["refresh_token"]
+    assert session["expires_in"] > 0
+    assert session["refresh_expires_in"] > 0
+    assert session["expires_at"]
+    assert session["refresh_expires_at"]
+    bootstrap = await async_client.get("/api/v1/me/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    context = bootstrap.json()
     assert context["user"]["email"] == admin["email"]
-    assert async_client.cookies.get(cookie_name) == tokens["access_token"]
+    assert async_client.cookies.get(cookie_name) == session["access_token"]
 
     refresh = await async_client.post(
         "/api/v1/auth/session/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+        json={"refresh_token": session["refresh_token"]},
     )
     assert refresh.status_code == 200, refresh.text
-    refreshed = refresh.json()["tokens"]
+    refreshed = refresh.json()["session"]
     assert refreshed["access_token"]
     assert refreshed["token_type"] == "bearer"
     assert async_client.cookies.get(cookie_name) == refreshed["access_token"]
@@ -66,17 +68,17 @@ async def test_refresh_prefers_body_over_cookie(
         email=admin["email"],
         password=admin["password"],
     )
-    tokens = payload["tokens"]
+    session = payload["session"]
 
     refresh_cookie = get_settings().session_refresh_cookie_name
     async_client.cookies.set(refresh_cookie, "stale-cookie-token")
 
     response = await async_client.post(
         "/api/v1/auth/session/refresh",
-        json={"refresh_token": tokens["refresh_token"]},
+        json={"refresh_token": session["refresh_token"]},
     )
     assert response.status_code == 200, response.text
-    data = response.json()["tokens"]
+    data = response.json()["session"]
     assert data["access_token"]
     assert data["refresh_token"]
 
@@ -93,14 +95,14 @@ async def test_refresh_falls_back_to_cookie(
         email=admin["email"],
         password=admin["password"],
     )
-    tokens = payload["tokens"]
+    session = payload["session"]
 
     refresh_cookie = get_settings().session_refresh_cookie_name
-    async_client.cookies.set(refresh_cookie, tokens["refresh_token"])
+    async_client.cookies.set(refresh_cookie, session["refresh_token"])
 
     response = await async_client.post("/api/v1/auth/session/refresh")
     assert response.status_code == 200, response.text
-    data = response.json()["tokens"]
+    data = response.json()["session"]
     assert data["access_token"]
     assert data["refresh_token"]
 
@@ -166,10 +168,13 @@ async def test_setup_returns_created_on_first_admin(
     )
     assert response.status_code == 201, response.text
     payload = response.json()
-    tokens = payload["tokens"]
-    context = payload["context"]
-    assert tokens["access_token"]
-    assert tokens["token_type"] == "bearer"
+    session = payload["session"]
+    assert session["access_token"]
+    assert session["token_type"] == "bearer"
+
+    bootstrap = await async_client.get("/api/v1/me/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    context = bootstrap.json()
     assert context["user"]["email"] == "first@example.com"
 
     verify_response = await async_client.get("/api/v1/auth/setup")

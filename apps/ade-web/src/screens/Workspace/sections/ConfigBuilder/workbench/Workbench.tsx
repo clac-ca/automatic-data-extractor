@@ -434,13 +434,15 @@ export function Workbench({
       if (tab.content === tab.initialContent || tab.saving) {
         return false;
       }
+      const contentToSave = tab.content;
+      const etagToUse = tab.etag ?? undefined;
       files.beginSavingTab(tabId);
       try {
         const response = await saveConfigFile.mutateAsync({
           path: tab.id,
-          content: tab.content,
-          etag: tab.etag ?? undefined,
-          create: !tab.etag,
+          content: contentToSave,
+          etag: etagToUse,
+          create: !etagToUse,
           parents: true,
         });
         const metadata = {
@@ -452,6 +454,7 @@ export function Workbench({
         files.completeSavingTab(tabId, {
           etag: response.etag ?? tab.etag ?? null,
           metadata,
+          savedContent: contentToSave,
         });
         showConsoleBanner(`Saved ${tab.name}`, { intent: "success", duration: 4000 });
         return true;
@@ -707,7 +710,6 @@ export function Workbench({
     paneHeight > 0
       ? clampConsoleHeight(desiredHeight)
       : 0;
-  const consoleHeight = liveConsoleHeight;
   const effectiveHandle = OUTPUT_HANDLE_THICKNESS;
   const effectiveConsoleHeight = outputCollapsed ? COLLAPSED_CONSOLE_BAR_HEIGHT : liveConsoleHeight;
   const editorHeight =
@@ -736,17 +738,14 @@ export function Workbench({
     setPendingOpenFileId(null);
   }, [pendingOpenFileId, tree, files, setFileId]);
 
-  const prepareRun = useCallback(
-    (mode: "validation" | "extraction") => {
-      const opened = openConsole();
-      if (!opened) {
-        return false;
-      }
-      setPane("terminal");
-      return true;
-    },
-    [openConsole, setPane],
-  );
+  const prepareRun = useCallback(() => {
+    const opened = openConsole();
+    if (!opened) {
+      return false;
+    }
+    setPane("terminal");
+    return true;
+  }, [openConsole, setPane]);
 
   const handleRunValidation = useCallback(async () => {
     if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
@@ -758,7 +757,7 @@ export function Workbench({
     await startRun(
       { validate_only: true },
       { mode: "validation" },
-      { prepare: () => prepareRun("validation") },
+      { prepare: prepareRun },
     );
   }, [
     usingSeed,
@@ -792,7 +791,7 @@ export function Workbench({
           documentName: selection.documentName,
           sheetNames: worksheetList,
         },
-        { forceRebuild: forceRun, prepare: () => prepareRun("extraction") },
+        { forceRebuild: forceRun, prepare: prepareRun },
       );
     },
     [
@@ -1331,7 +1330,11 @@ export function Workbench({
                     onHide={handleHideExplorer}
                   />
                 ) : (
-                  <SidePanelPlaceholder width={explorerWidth} view={activityView} />
+                  <SidePanelPlaceholder
+                    width={explorerWidth}
+                    view={activityView}
+                    appearance={menuAppearance}
+                  />
                 )}
               </div>
               <PanelResizeHandle
@@ -1559,13 +1562,21 @@ export function Workbench({
 interface SidePanelPlaceholderProps {
   readonly width: number;
   readonly view: ActivityBarView;
+  readonly appearance: "light" | "dark";
 }
 
-function SidePanelPlaceholder({ width, view }: SidePanelPlaceholderProps) {
+function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderProps) {
   const label = ACTIVITY_LABELS[view] || "Coming soon";
+  const surfaceClass =
+    appearance === "dark"
+      ? "border-[#111111] bg-[#1e1e1e] text-slate-300"
+      : "border-slate-200 bg-slate-50 text-slate-600";
   return (
     <div
-      className="flex h-full min-h-0 flex-col items-center justify-center border-r border-[#111111] bg-[#1e1e1e] px-4 text-center text-[11px] uppercase tracking-wide text-slate-400"
+      className={clsx(
+        "flex h-full min-h-0 flex-col items-center justify-center border-r px-4 text-center text-[11px] uppercase tracking-wide",
+        surfaceClass,
+      )}
       style={{ width }}
       aria-live="polite"
     >
@@ -1788,6 +1799,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     queryKey: ["builder-documents", workspaceId],
     queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
     staleTime: 60_000,
+    enabled: open,
   });
   const documents = useMemo(
     () => documentsQuery.data ?? [],
@@ -1795,6 +1807,9 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
   );
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   useEffect(() => {
+    if (!open) {
+      return;
+    }
     if (!documents.length) {
       setSelectedDocumentId("");
       return;
@@ -1805,13 +1820,13 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
       }
       return documents[0]?.id ?? "";
     });
-  }, [documents]);
+  }, [documents, open]);
 
   const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId) ?? null;
   const sheetQuery = useQuery<DocumentSheet[]>({
     queryKey: ["builder-document-sheets", workspaceId, selectedDocumentId],
     queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, selectedDocumentId, signal),
-    enabled: Boolean(selectedDocumentId),
+    enabled: open && Boolean(selectedDocumentId),
     staleTime: 60_000,
   });
   const sheetOptions = useMemo(
@@ -1820,6 +1835,9 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
   );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   useEffect(() => {
+    if (!open) {
+      return;
+    }
     if (!sheetOptions.length) {
       setSelectedSheets([]);
       return;
@@ -1827,7 +1845,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     setSelectedSheets((current) =>
       current.filter((name) => sheetOptions.some((sheet) => sheet.name === name)),
     );
-  }, [sheetOptions]);
+  }, [open, sheetOptions]);
 
   const normalizedSheetSelection = useMemo(
     () =>
@@ -2225,12 +2243,29 @@ function formatWorkspaceLabel(workspaceId: string): string {
 
 function decodeFileContent(payload: FileReadJson): string {
   if (payload.encoding === "base64") {
-    if (typeof atob === "function") {
-      return atob(payload.content);
-    }
+    // Preserve UTF-8 characters when decoding base64 payloads from the API.
     const buffer = (globalThis as { Buffer?: { from: (data: string, encoding: string) => { toString: (encoding: string) => string } } }).Buffer;
     if (buffer) {
       return buffer.from(payload.content, "base64").toString("utf-8");
+    }
+    if (typeof atob === "function") {
+      try {
+        const binary = atob(payload.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        if (typeof TextDecoder !== "undefined") {
+          return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+        }
+        let fallback = "";
+        for (let index = 0; index < bytes.length; index += 1) {
+          fallback += String.fromCharCode(bytes[index]);
+        }
+        return fallback;
+      } catch {
+        // Swallow decode errors and fall through to the raw content.
+      }
     }
   }
   return payload.content;

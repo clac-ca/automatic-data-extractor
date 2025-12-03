@@ -23,9 +23,9 @@ from ade_engine.schemas import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
-from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.core.models import Build, BuildStatus, Configuration
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
@@ -34,7 +34,6 @@ from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.infra.storage import build_venv_root
 from ade_api.settings import Settings
-from .event_dispatcher import BuildEventDispatcher, BuildEventLogReader, BuildEventStorage
 
 from .builder import (
     BuildArtifacts,
@@ -43,6 +42,7 @@ from .builder import (
     BuilderStepEvent,
     VirtualEnvironmentBuilder,
 )
+from .event_dispatcher import BuildEventDispatcher, BuildEventLogReader, BuildEventStorage
 from .exceptions import (
     BuildAlreadyInProgressError,
     BuildExecutionError,
@@ -288,7 +288,8 @@ class BuildsService:
                     ),
                 )
                 raise BuildAlreadyInProgressError(
-                    f"Build in progress for workspace={workspace_id} configuration={configuration_id}"
+                    "Build in progress for "
+                    f"workspace={workspace_id} configuration={configuration_id}"
                 )
             context = self._reuse_context(
                 build=inflight,
