@@ -44,7 +44,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "documents"
     workspace_id: Mapped[UUID] = mapped_column(
         UUIDType(),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
     workspace: Mapped[Workspace] = relationship("Workspace", lazy="selectin")
@@ -61,7 +61,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=dict,
     )
     uploaded_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     uploaded_by_user: Mapped[User | None] = relationship(
         "User",
@@ -98,7 +98,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     tags: Mapped[list[DocumentTag]] = relationship(
         "DocumentTag",
@@ -153,7 +153,7 @@ class DocumentTag(Base):
 
     document_id: Mapped[UUID] = mapped_column(
         UUIDType(),
-        ForeignKey("documents.id", ondelete="CASCADE"),
+        ForeignKey("documents.id", ondelete="NO ACTION"),
         primary_key=True,
     )
     tag: Mapped[str] = mapped_column(String(100), primary_key=True, nullable=False)

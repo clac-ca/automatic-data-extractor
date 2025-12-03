@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Select, delete, func, select
+from sqlalchemy import Select, delete, func, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -539,7 +539,9 @@ class RbacService:
         if role_id:
             stmt = stmt.where(UserRoleAssignment.role_id == role_id)
         if not include_inactive:
-            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active.is_(True))
+            stmt = stmt.join(User, UserRoleAssignment.user).where(
+                User.is_active == true()
+            )
 
         return await paginate_sql(
             self._session,

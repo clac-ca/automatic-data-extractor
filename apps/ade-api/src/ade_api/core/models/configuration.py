@@ -31,7 +31,7 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     workspace_id: Mapped[UUID] = mapped_column(
         UUIDType(),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=False,
     )
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -55,7 +55,7 @@ class Configuration(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     active_build_id: Mapped[UUID | None] = mapped_column(
         UUIDType(),
-        ForeignKey("builds.id", ondelete="SET NULL"),
+        ForeignKey("builds.id", ondelete="NO ACTION"),
         nullable=True,
     )
     active_build_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)

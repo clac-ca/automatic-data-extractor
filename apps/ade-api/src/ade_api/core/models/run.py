@@ -35,16 +35,16 @@ class Run(Base):
 
     id: Mapped[UUID] = mapped_column(UUIDType(), primary_key=True, default=generate_uuid7)
     configuration_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("configurations.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False
     )
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
     build_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("builds.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
     )
     input_document_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=True
     )
     input_documents: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSON, nullable=True
@@ -70,12 +70,12 @@ class Run(Base):
     )
     retry_of_run_id: Mapped[UUID | None] = mapped_column(
         UUIDType(),
-        ForeignKey("runs.id", ondelete="SET NULL"),
+        ForeignKey("runs.id", ondelete="NO ACTION"),
         nullable=True,
     )
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     submitted_by_user_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     artifact_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     output_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)

@@ -43,10 +43,10 @@ class Build(Base):
 
     id: Mapped[UUID] = mapped_column(UUIDType(), primary_key=True, default=generate_uuid7)
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
     configuration_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("configurations.id", ondelete="CASCADE"), nullable=False, index=True
+        UUIDType(), ForeignKey("configurations.id", ondelete="NO ACTION"), nullable=False, index=True
     )
     fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     engine_spec: Mapped[str | None] = mapped_column(String(255), nullable=True)
