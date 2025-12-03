@@ -17,6 +17,7 @@ from . import setup
 from . import start
 from . import tests
 from . import types_cmd
+from . import users
 
 COMMAND_MODULES = (
     setup,
@@ -29,6 +30,7 @@ COMMAND_MODULES = (
     types_cmd,
     migrate,
     routes,
+    users,
     docker,
     clean_reset,
     ci,
