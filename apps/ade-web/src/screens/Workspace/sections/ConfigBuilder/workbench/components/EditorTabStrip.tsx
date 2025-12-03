@@ -82,6 +82,14 @@ export function EditorTabStrip({
       activationConstraint: { distance: 5 },
     }),
   );
+  const barTone =
+    menuAppearance === "dark"
+      ? "border-[#1f2937] bg-[#0f172a]"
+      : "border-slate-200 bg-slate-900/5";
+  const overflowButtonTone =
+    menuAppearance === "dark"
+      ? "text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-white/30 focus-visible:ring-offset-0"
+      : "text-slate-500 hover:bg-white hover:text-slate-900 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900/5";
 
   const setTabNode = useCallback((tabId: string, node: HTMLDivElement | null) => {
     const map = tabRefs.current;
@@ -284,11 +292,16 @@ export function EditorTabStrip({
         onDragCancel={handleDragCancel}
       >
         <SortableContext items={tabs.map((tab) => tab.id)} strategy={horizontalListSortingStrategy}>
-          <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-900/5 px-1">
-            <ScrollButton direction="left" disabled={!scrollShadow.left} onClick={() => scrollTabs(-SCROLL_STEP)} />
+          <div className={clsx("flex items-center gap-1 px-1", barTone, "border-b")}>
+            <ScrollButton
+              appearance={menuAppearance}
+              direction="left"
+              disabled={!scrollShadow.left}
+              onClick={() => scrollTabs(-SCROLL_STEP)}
+            />
             <div className="relative flex min-w-0 flex-1 items-stretch">
-              {scrollShadow.left ? <ScrollGradient position="left" /> : null}
-              {scrollShadow.right ? <ScrollGradient position="right" /> : null}
+              {scrollShadow.left ? <ScrollGradient position="left" appearance={menuAppearance} /> : null}
+              {scrollShadow.right ? <ScrollGradient position="right" appearance={menuAppearance} /> : null}
               <div
                 ref={scrollContainerRef}
                 className="flex min-w-0 flex-1 overflow-x-auto pb-1"
@@ -322,11 +335,19 @@ export function EditorTabStrip({
                 </TabsList>
               </div>
             </div>
-            <ScrollButton direction="right" disabled={!scrollShadow.right} onClick={() => scrollTabs(SCROLL_STEP)} />
+            <ScrollButton
+              appearance={menuAppearance}
+              direction="right"
+              disabled={!scrollShadow.right}
+              onClick={() => scrollTabs(SCROLL_STEP)}
+            />
             <button
               ref={overflowButtonRef}
               type="button"
-              className="mx-1 flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className={clsx(
+                "mx-1 flex h-8 w-8 items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2",
+                overflowButtonTone,
+              )}
               aria-label="Open editors list"
               onClick={openTabListMenu}
             >
@@ -354,20 +375,24 @@ export function EditorTabStrip({
 }
 
 interface ScrollButtonProps {
+  readonly appearance: "light" | "dark";
   readonly direction: "left" | "right";
   readonly disabled: boolean;
   readonly onClick: () => void;
 }
 
-function ScrollButton({ direction, disabled, onClick }: ScrollButtonProps) {
+function ScrollButton({ appearance, direction, disabled, onClick }: ScrollButtonProps) {
+  const activeTone =
+    appearance === "dark"
+      ? "hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/30"
+      : "hover:bg-white hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900/5";
   return (
     <button
       type="button"
       className={clsx(
-        "flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
-        disabled
-          ? "cursor-default opacity-30"
-          : "hover:bg-white hover:text-slate-900 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900/5",
+        "flex h-8 w-8 items-center justify-center rounded-md transition focus-visible:outline-none",
+        appearance === "dark" ? "text-slate-300" : "text-slate-500",
+        disabled ? "cursor-default opacity-30" : activeTone,
       )}
       onClick={onClick}
       disabled={disabled}
@@ -380,17 +405,19 @@ function ScrollButton({ direction, disabled, onClick }: ScrollButtonProps) {
 
 interface ScrollGradientProps {
   readonly position: "left" | "right";
+  readonly appearance: "light" | "dark";
 }
 
-function ScrollGradient({ position }: ScrollGradientProps) {
+function ScrollGradient({ position, appearance }: ScrollGradientProps) {
+  const gradientClass =
+    appearance === "dark"
+      ? position === "left"
+        ? "left-0 bg-gradient-to-r from-[#0f172a] via-[#0f172a]/80 to-transparent"
+        : "right-0 bg-gradient-to-l from-[#0f172a] via-[#0f172a]/80 to-transparent"
+      : position === "left"
+        ? "left-0 bg-gradient-to-r from-slate-100 via-slate-100/70 to-transparent"
+        : "right-0 bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent";
   return (
-    <div
-      className={clsx(
-        "pointer-events-none absolute top-0 bottom-0 w-8",
-        position === "left"
-          ? "left-0 bg-gradient-to-r from-slate-100 via-slate-100/70 to-transparent"
-          : "right-0 bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent",
-      )}
-    />
+    <div className={clsx("pointer-events-none absolute top-0 bottom-0 w-8", gradientClass)} />
   );
 }

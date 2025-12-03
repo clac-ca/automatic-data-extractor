@@ -35,6 +35,8 @@ export interface ValidationIssue {
 
 export interface ValidationSummary {
   readonly issues?: ValidationIssue[];
+  readonly issues_total?: number;
+  readonly max_severity?: ValidationIssue["level"];
   readonly content_digest?: string | null;
   readonly error?: string | null;
 }
@@ -216,6 +218,7 @@ function resolveStatus(current: RunStreamStatus, type: string, payload: Record<s
 export function normalizeRunStatusValue(value?: RunStatus | RunStreamStatus | null): RunStreamStatus {
   if (value === "queued") return "queued";
   if (value === "waiting_for_build") return "waiting_for_build";
+  if (value === "cancelled") return "canceled";
   if (value === "building") return "building";
   if (value === "running") return "running";
   if (value === "succeeded") return "succeeded";
@@ -280,32 +283,50 @@ function normalizeValidationSummary(
   payload: Record<string, unknown>,
   current?: ValidationSummary | null,
 ): ValidationSummary {
+  const next: ValidationSummary = { ...(current ?? {}) };
   const rawIssues = payload.issues;
-  const issues = Array.isArray(rawIssues)
-    ? rawIssues
-        .map((issue) => (issue && typeof issue === "object" ? toValidationIssue(issue as Record<string, unknown>) : null))
-        .filter(Boolean) as ValidationIssue[]
-    : current?.issues ?? [];
-  const summary: ValidationSummary = {
-    ...current,
-    issues,
-  };
-  if (typeof payload.content_digest === "string") {
-    summary.content_digest = payload.content_digest;
-  } else if (current?.content_digest) {
-    summary.content_digest = current.content_digest;
+  if (Array.isArray(rawIssues)) {
+    const issues = rawIssues
+      .map((issue) => (issue && typeof issue === "object" ? toValidationIssue(issue as Record<string, unknown>) : null))
+      .filter(Boolean) as ValidationIssue[];
+    next.issues = issues;
   }
-  if (typeof payload.error === "string") {
-    summary.error = payload.error;
+
+  if ("issues_total" in payload) {
+    const total = asNumber(payload.issues_total);
+    if (typeof total === "number") {
+      next.issues_total = total;
+    }
   }
-  return summary;
+
+  if ("max_severity" in payload) {
+    const severity = normalizeValidationSeverity(payload.max_severity);
+    if (severity) {
+      next.max_severity = severity;
+    }
+  }
+
+  if ("content_digest" in payload) {
+    const contentDigest = typeof payload.content_digest === "string" ? payload.content_digest : null;
+    if (contentDigest !== undefined) {
+      next.content_digest = contentDigest;
+    }
+  }
+
+  if ("error" in payload) {
+    const error = typeof payload.error === "string" ? payload.error : null;
+    next.error = error;
+  }
+
+  return next;
 }
 
 export function deriveValidationStateFromStream(
   runStream: RunStreamState,
   seedValidation?: readonly WorkbenchValidationMessage[],
 ): WorkbenchValidationState {
-  const summary = runStream.validationSummary ?? (seedValidation ? { issues: seedValidation } : null);
+  const summary: ValidationSummary | null =
+    runStream.validationSummary ?? (seedValidation ? { issues: seedValidation } : null);
   const mode = runStream.runMode ?? (summary ? "validation" : undefined);
   if (!mode && !summary) {
     return { status: "idle", messages: [], lastRunAt: undefined, error: null, digest: null };
@@ -383,4 +404,11 @@ function asNumber(value: unknown): number | undefined {
     return undefined;
   }
   return value;
+}
+
+function normalizeValidationSeverity(value: unknown): ValidationIssue["level"] | undefined {
+  if (value === "error") return "error";
+  if (value === "warning") return "warning";
+  if (value === "info") return "info";
+  return undefined;
 }

@@ -22,6 +22,7 @@ import {
   type RunResource,
   type RunStreamOptions,
 } from "@shared/runs/api";
+import { eventTimestamp } from "@shared/runs/types";
 
 export interface RunStreamMetadata {
   readonly mode: "validation" | "extraction";
@@ -72,13 +73,9 @@ export function useRunStreamController({
   ) => Promise<{ runId: string; startedAt: string } | null>;
 } {
   const initialState = useMemo(() => {
-    const seeded =
-      Boolean(seed?.console && seed.console.length > 0) ||
-      Boolean(seed?.validation && seed.validation.length > 0);
     const base = createRunStreamState(
       maxConsoleLines,
       seed?.console ? [...seed.console].slice(-maxConsoleLines) : undefined,
-      seeded,
     );
     if (seed?.validation?.length) {
       return {
@@ -159,6 +156,11 @@ export function useRunStreamController({
       streamControllerRef.current = controller;
       try {
         for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
+          if (event?.type === "run.started") {
+            const payload = (event?.payload ?? {}) as Record<string, unknown>;
+            const startedAt = typeof payload.started_at === "string" ? payload.started_at : eventTimestamp(event);
+            runStartedAtRef.current = startedAt;
+          }
           dispatch({ type: "EVENT", event });
         }
       } catch (error) {

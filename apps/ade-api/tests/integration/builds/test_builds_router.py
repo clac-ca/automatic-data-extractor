@@ -119,7 +119,10 @@ async def _collect_build_events(
     build_id: str,
     *,
     headers: dict[str, str] | None = None,
+    timeout: float = 10.0,
 ) -> list[dict[str, Any]]:
+    """Stream build events with an upper bound to avoid hanging."""
+
     events: list[dict[str, Any]] = []
     async with client.stream(
         "GET",
@@ -128,13 +131,20 @@ async def _collect_build_events(
         params={"after_sequence": 0},
     ) as response:
         assert response.status_code == 200
-        async for line in response.aiter_lines():
-            if not line or not line.startswith("data: "):
-                continue
-            event = json.loads(line.removeprefix("data: "))
-            events.append(event)
-            if event.get("type") in {"build.completed", "build.failed"}:
-                break
+
+        async def _consume() -> None:
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                event = json.loads(line.removeprefix("data: "))
+                events.append(event)
+                if event.get("type") in {"build.completed", "build.failed"}:
+                    return
+
+        try:
+            await asyncio.wait_for(_consume(), timeout=timeout)
+        except asyncio.TimeoutError as exc:  # pragma: no cover - defensive guard
+            pytest.fail(f"Timed out waiting for build stream to complete: {exc}")
     return events
 
 

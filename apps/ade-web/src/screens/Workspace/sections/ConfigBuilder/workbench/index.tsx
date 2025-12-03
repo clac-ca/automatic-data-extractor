@@ -38,13 +38,25 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
     if (!configId) {
       return;
     }
+    if (configQuery.isError) {
+      return;
+    }
     const resolvedName = configQuery.data?.display_name ?? configId;
     openSession({
       workspaceId: workspace.id,
       configId,
       configName: `${workspace.name} · ${resolvedName}`,
     });
-  }, [configId, configQuery.data?.display_name, workspace.id, workspace.name, openSession]);
+  }, [configId, configQuery.data?.display_name, configQuery.isError, workspace.id, workspace.name, openSession]);
+
+  useEffect(() => {
+    if (!configId) {
+      return;
+    }
+    if (configQuery.isError || (configQuery.isSuccess && !configQuery.data)) {
+      closeSession();
+    }
+  }, [closeSession, configId, configQuery.data, configQuery.isError, configQuery.isSuccess]);
 
   if (!configId) {
     return (
@@ -52,6 +64,36 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
         variant="error"
         title="Select a configuration"
         description="Choose a configuration from the list to open the workbench."
+      />
+    );
+  }
+
+  if (configQuery.isLoading) {
+    return (
+      <PageState
+        variant="loading"
+        title="Loading configuration"
+        description="Fetching configuration details before opening the workbench."
+      />
+    );
+  }
+
+  if (configQuery.isError) {
+    return (
+      <PageState
+        variant="error"
+        title="Unable to load configuration"
+        description="Try refreshing the page or pick a different configuration."
+      />
+    );
+  }
+
+  if (!configQuery.data) {
+    return (
+      <PageState
+        variant="error"
+        title="Configuration unavailable"
+        description="The selected configuration could not be found. It may have been deleted."
       />
     );
   }

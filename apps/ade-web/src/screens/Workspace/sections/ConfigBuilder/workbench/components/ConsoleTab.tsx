@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, UIEvent } from "react";
 import clsx from "clsx";
 
@@ -61,6 +61,8 @@ export function ConsoleTab({
     () => filteredLines.map((line) => formatLineForCopy(line, viewMode)).join("\n"),
     [filteredLines, viewMode],
   );
+  const clipboardAvailable = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
+  const canCopy = Boolean(copyContent);
 
   const hasConsoleLines = renderableLines.length > 0;
   const hasAnyConsoleLines = consoleLines.length > 0;
@@ -92,14 +94,40 @@ export function ConsoleTab({
     }
   };
 
-  const handleCopy = async () => {
-    if (!copyContent) return;
+  const copyToClipboard = useCallback(async (text: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // fall through to the fallback
+      }
+    }
+    if (typeof document === "undefined") {
+      return false;
+    }
     try {
-      await navigator.clipboard?.writeText(copyContent);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "true");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return successful;
     } catch {
-      setCopied(false);
+      return false;
+    }
+  }, []);
+
+  const handleCopy = async () => {
+    if (!canCopy) return;
+    const copiedSuccessfully = await copyToClipboard(copyContent);
+    setCopied(copiedSuccessfully);
+    if (copiedSuccessfully) {
+      window.setTimeout(() => setCopied(false), 1500);
     }
   };
 
@@ -186,17 +214,17 @@ export function ConsoleTab({
             <button
               type="button"
               onClick={handleCopy}
-              className={clsx(
-                "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
-                copied
-                  ? "border-emerald-600/60 bg-transparent text-emerald-200"
-                  : "border border-slate-600 bg-transparent text-slate-200 hover:border-slate-400",
-              )}
-              disabled={!copyContent}
-              title="Copy visible console output"
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
+          className={clsx(
+            "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
+            copied
+              ? "border-emerald-600/60 bg-transparent text-emerald-200"
+              : "border border-slate-600 bg-transparent text-slate-200 hover:border-slate-400",
+          )}
+          disabled={!canCopy}
+          title={clipboardAvailable ? "Copy visible console output" : "Copy may be blocked by browser permissions"}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
             <button
               type="button"
               onClick={() => onClearConsole?.()}
@@ -291,12 +319,13 @@ function EmptyState({ title, description }: { readonly title: string; readonly d
 }
 
 function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] }) {
+  const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
       ? "bg-emerald-500"
       : status === "running" || status === "queued"
         ? "bg-amber-400"
-        : status === "canceled"
+        : cancelled
           ? "bg-slate-400"
           : "bg-rose-500";
 
@@ -327,6 +356,10 @@ function consoleLevelLabel(level: WorkbenchConsoleLine["level"]) {
     default:
       return "INFO";
   }
+}
+
+function isCancelledStatus(status?: WorkbenchRunSummary["status"]) {
+  return status === "cancelled" || status === "canceled";
 }
 
 function originLabel(origin?: WorkbenchConsoleLine["origin"]) {

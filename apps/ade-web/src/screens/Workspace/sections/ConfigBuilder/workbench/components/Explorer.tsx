@@ -535,7 +535,7 @@ export function Explorer({
       </aside>
       <ContextMenu
         open={Boolean(contextMenu)}
-        position={contextMenu?.position}
+        position={contextMenu ? contextMenu.position : null}
         onClose={() => setContextMenu(null)}
         items={explorerMenuItems}
         appearance={menuAppearance}

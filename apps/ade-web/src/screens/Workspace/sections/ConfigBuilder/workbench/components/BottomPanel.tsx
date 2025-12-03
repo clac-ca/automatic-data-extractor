@@ -1,10 +1,8 @@
+import clsx from "clsx";
+
 import type { ConfigBuilderPane } from "@app/nav/urlState";
 import type { PhaseState, RunStreamStatus } from "../state/runStream";
-import type {
-  WorkbenchConsoleLine,
-  WorkbenchRunSummary,
-  WorkbenchValidationState,
-} from "../types";
+import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
@@ -26,6 +24,7 @@ interface BottomPanelProps {
   readonly runPhases: Record<string, PhaseState>;
   readonly runMode?: "validation" | "extraction";
   readonly onToggleCollapse?: () => void;
+  readonly appearance?: "light" | "dark";
 }
 
 export function BottomPanel({
@@ -42,13 +41,28 @@ export function BottomPanel({
   runPhases,
   runMode,
   onToggleCollapse,
+  appearance = "light",
 }: BottomPanelProps) {
   const hasProblems = validation.messages.length > 0;
   const hasRun = Boolean(latestRun);
+  const theme =
+    appearance === "dark"
+      ? {
+          surface: "border-[#1f2431] bg-[#0f111a] text-slate-100",
+          header: "border-[#1f2431] bg-[#0f111a]",
+          hideButton:
+            "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
+        }
+      : {
+          surface: "border-slate-200 bg-slate-50 text-slate-800",
+          header: "border-slate-200 bg-slate-50",
+          hideButton: "border-slate-300 bg-white text-slate-700 hover:border-slate-400",
+        };
+  const runStatusTone = appearance === "dark" ? "text-slate-300" : "text-slate-500";
 
   return (
     <section
-      className="flex min-h-0 flex-col overflow-hidden border-t border-slate-200 bg-slate-50"
+      className={clsx("flex min-h-0 flex-col overflow-hidden border-t", theme.surface)}
       style={{ height }}
     >
       <TabsRoot
@@ -56,7 +70,7 @@ export function BottomPanel({
         onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}
       >
         <div
-          className="flex flex-none items-center justify-between border-b border-slate-200 px-3 py-1.5"
+          className={clsx("flex flex-none items-center justify-between border-b px-3 py-1.5", theme.header)}
           onDoubleClick={onToggleCollapse}
           title={onToggleCollapse ? "Double-click to hide console" : undefined}
         >
@@ -73,7 +87,7 @@ export function BottomPanel({
             >
               Run
               {hasRun ? (
-                <span className="ml-1 text-[10px] lowercase text-slate-500">
+                <span className={clsx("ml-1 text-[10px] lowercase", runStatusTone)}>
                   {latestRun?.status}
                 </span>
               ) : null}
@@ -94,7 +108,10 @@ export function BottomPanel({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-400"
+              className={clsx(
+                "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide shadow-sm transition",
+                theme.hideButton,
+              )}
               title="Hide console"
             >
               Hide

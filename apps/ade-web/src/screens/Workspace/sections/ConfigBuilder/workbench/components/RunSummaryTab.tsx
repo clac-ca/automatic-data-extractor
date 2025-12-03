@@ -242,12 +242,13 @@ function TelemetrySummaryCard({ summary }: { readonly summary: WorkbenchRunSumma
 }
 
 function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] }) {
+  const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
       ? "bg-emerald-500"
       : status === "running" || status === "queued"
         ? "bg-amber-400"
-        : status === "canceled"
+        : cancelled
           ? "bg-slate-400"
           : "bg-rose-500";
 
@@ -270,13 +271,14 @@ function formatRunDuration(valueMs: number): string {
 }
 
 function statusLabel(status: WorkbenchRunSummary["status"]): string {
+  if (isCancelledStatus(status)) {
+    return "Canceled";
+  }
   switch (status) {
     case "succeeded":
       return "Succeeded";
     case "failed":
       return "Failed";
-    case "canceled":
-      return "Canceled";
     case "queued":
       return "Queued";
     case "running":
@@ -322,6 +324,10 @@ function phaseStatusLabel(status: PhaseState["status"]) {
     default:
       return "Pending";
   }
+}
+
+function isCancelledStatus(status: WorkbenchRunSummary["status"]) {
+  return status === "cancelled" || status === "canceled";
 }
 
 function prettyPhaseLabel(id: string) {

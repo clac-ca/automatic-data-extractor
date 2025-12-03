@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "@app/nav/history";
 
 import { Button } from "@ui/Button";
@@ -7,7 +6,8 @@ import { PageState } from "@ui/PageState";
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 
-import { useConfigurationsQuery } from "@shared/configurations";
+import { useConfigurationQuery } from "@shared/configurations";
+import { createLastSelectionStorage, persistLastSelection } from "../storage";
 
 interface WorkspaceConfigRouteProps {
   readonly params?: { readonly configId?: string };
@@ -17,13 +17,17 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const configId = params?.configId;
+  const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
 
-  const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configurationId: configId });
+  const config = configQuery.data;
 
-  const config = useMemo(
-    () => configurationsQuery.data?.items.find((item) => item.id === configId),
-    [configurationsQuery.data, configId],
-  );
+  useEffect(() => {
+    if (!configId || !config) {
+      return;
+    }
+    persistLastSelection(lastSelectionStorage, configId);
+  }, [configId, config, lastSelectionStorage]);
 
   if (!configId) {
     return (
@@ -35,7 +39,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
     );
   }
 
-  if (configurationsQuery.isLoading) {
+  if (configQuery.isLoading) {
     return (
       <PageState
         variant="loading"
@@ -45,7 +49,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
     );
   }
 
-  if (configurationsQuery.isError) {
+  if (configQuery.isError) {
     return (
       <PageState
         variant="error"
@@ -93,7 +97,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Updated</dt>
-            <dd className="text-sm text-slate-700">{new Date(config.updated_at).toLocaleString()}</dd>
+            <dd className="text-sm text-slate-700">{formatTimestamp(config.updated_at)}</dd>
           </div>
         </dl>
       </section>
@@ -106,4 +110,15 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
       </section>
     </div>
   );
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) {
+    return "unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
 }
