@@ -322,12 +322,12 @@ export function Workbench({
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
     const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
-    const isCancelled = status === "cancelled" || status === "canceled";
+    const isCancelled = status === "cancelled";
     const notice =
       status === "succeeded"
         ? "ADE run completed successfully."
         : isCancelled
-          ? "ADE run canceled."
+          ? "ADE run cancelled."
           : errorMessage;
     const intent: NotificationIntent =
       status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
@@ -2302,7 +2302,7 @@ function describeError(error: unknown): string {
     return error.message;
   }
   if (error instanceof DOMException && error.name === "AbortError") {
-    return "Operation canceled.";
+    return "Operation cancelled.";
   }
   if (error instanceof Error) {
     return error.message;

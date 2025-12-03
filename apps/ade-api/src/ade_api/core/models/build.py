@@ -23,7 +23,7 @@ class BuildStatus(str, Enum):
     BUILDING = "building"
     READY = "ready"
     FAILED = "failed"
-    CANCELED = "canceled"
+    CANCELLED = "cancelled"
 
 
 class Build(Base):

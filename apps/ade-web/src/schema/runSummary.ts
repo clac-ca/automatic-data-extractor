@@ -2,7 +2,7 @@ export interface RunSummaryRun {
   readonly id: string;
   readonly workspace_id?: string | null;
   readonly configuration_id?: string | null;
-  readonly status: "succeeded" | "failed" | "canceled";
+  readonly status: "succeeded" | "failed" | "cancelled";
   readonly failure_code?: string | null;
   readonly failure_stage?: string | null;
   readonly failure_message?: string | null;

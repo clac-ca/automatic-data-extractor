@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -12,24 +13,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
+from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
 from ade_api.core.models import User
 from ade_api.core.security.hashing import hash_password
+from ade_api.features.api_keys.service import ApiKeyService
 from ade_api.features.rbac import RbacService
+from ade_api.settings import Settings
 
 from .filters import UserFilters, apply_user_filters
 from .repository import UsersRepository
 from .schemas import UserOut, UserPage, UserProfile, UserUpdate
 
 logger = logging.getLogger(__name__)
+LOCKOUT_HORIZON = timedelta(days=365 * 10)
 
 
 class UsersService:
     """Expose read-oriented helpers for user accounts."""
 
-    def __init__(self, *, session: AsyncSession) -> None:
+    def __init__(self, *, session: AsyncSession, settings: Settings) -> None:
         self._session = session
         self._repo = UsersRepository(session)
+        self._api_keys = ApiKeyService(session=session, settings=settings)
 
     async def get_profile(self, *, user: User) -> UserProfile:
         """Return the profile for the authenticated user."""
@@ -129,6 +135,7 @@ class UsersService:
         *,
         user_id: str | UUID,
         payload: UserUpdate,
+        actor: User | None = None,
     ) -> UserOut:
         """Update mutable user fields."""
 
@@ -154,18 +161,30 @@ class UsersService:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="is_active must be true or false when provided.",
-            )
+        )
 
         repo_kwargs = {}
         if "display_name" in updates:
             repo_kwargs["display_name"] = updates["display_name"]
-        if "is_active" in updates:
+        is_active_update = updates.get("is_active")
+
+        if is_active_update is False and (user.is_active or user.locked_until is None):
+            if actor is not None and actor.id == user.id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail="Users cannot deactivate their own account.",
+                )
+            await self._apply_deactivation(user=user, actor=actor)
+        elif is_active_update is True and not user.is_active:
+            await self._apply_reactivation(user=user)
+        elif "is_active" in updates:
             repo_kwargs["is_active"] = updates["is_active"]
 
-        await self._repo.update_user(
-            user,
-            **repo_kwargs,
-        )
+        if repo_kwargs:
+            await self._repo.update_user(
+                user,
+                **repo_kwargs,
+            )
 
         result = await self._serialize_user(user)
         logger.info(
@@ -177,6 +196,30 @@ class UsersService:
             ),
         )
         return result
+
+    async def deactivate_user(
+        self,
+        *,
+        user_id: str | UUID,
+        actor: User,
+    ) -> UserOut:
+        """Deactivate a user account and revoke API keys."""
+
+        user = await self._repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        if actor.id == user.id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="Users cannot deactivate their own account.",
+            )
+
+        await self._apply_deactivation(user=user, actor=actor)
+        return await self._serialize_user(user)
 
     async def _build_profile(self, user: User) -> UserProfile:
         logger.debug(
@@ -204,6 +247,28 @@ class UsersService:
             created_at=user.created_at,
             updated_at=user.updated_at,
         )
+
+    async def _apply_deactivation(self, *, user: User, actor: User | None) -> None:
+        now = utc_now()
+        user.is_active = False
+        user.locked_until = now + LOCKOUT_HORIZON
+        user.failed_login_count = 0
+        await self._session.flush()
+        await self._api_keys.revoke_all_for_owner(owner_user_id=user.id)
+        logger.info(
+            "users.deactivate",
+            extra=log_context(
+                user_id=str(user.id),
+                actor_id=str(actor.id) if actor else None,
+                locked_until=str(user.locked_until) if user.locked_until else None,
+            ),
+        )
+
+    async def _apply_reactivation(self, *, user: User) -> None:
+        user.is_active = True
+        user.locked_until = None
+        user.failed_login_count = 0
+        await self._session.flush()
 
     async def create_admin(
         self,

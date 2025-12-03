@@ -247,7 +247,7 @@ async def test_list_documents_includes_last_run_summary() -> None:
             created_at=now - timedelta(minutes=10),
             started_at=now - timedelta(minutes=5),
             finished_at=now - timedelta(minutes=1),
-            canceled_at=None,
+            cancelled_at=None,
             error_message="Request failed with status 404",
         )
         session.add(run)

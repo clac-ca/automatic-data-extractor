@@ -35,10 +35,10 @@ def _build_config_storage(settings: Settings):
     return ConfigStorage(settings=settings)
 
 
-def get_users_service(session: SessionDep):
+def get_users_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.users.service import UsersService
 
-    return UsersService(session=session)
+    return UsersService(session=session, settings=settings)
 
 
 def get_api_keys_service(session: SessionDep, settings: SettingsDep):

@@ -359,7 +359,7 @@ function consoleLevelLabel(level: WorkbenchConsoleLine["level"]) {
 }
 
 function isCancelledStatus(status?: WorkbenchRunSummary["status"]) {
-  return status === "cancelled" || status === "canceled";
+  return status === "cancelled";
 }
 
 function originLabel(origin?: WorkbenchConsoleLine["origin"]) {

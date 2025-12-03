@@ -49,6 +49,8 @@ class _RbacAdapter(RbacServiceInterface):
         user = await self.session.get(User, principal.user_id)
         if user is None:
             raise AuthenticationError("Unknown principal")
+        if not getattr(user, "is_active", True):
+            raise AuthenticationError("User account is inactive.")
         return user
 
     async def sync_registry(self) -> None:
@@ -163,6 +165,8 @@ def get_session_authenticator(
             service = AuthService(session=db, settings=settings)
             try:
                 return await service.resolve_principal_from_access_token(candidate)
+            except AuthenticationError:
+                raise
             except Exception:
                 return None
 
@@ -210,6 +214,8 @@ async def require_authenticated(
     user = await db.get(User, principal.user_id)
     if user is None:
         raise AuthenticationError("Unknown principal")
+    if not getattr(user, "is_active", True):
+        raise AuthenticationError("User account is inactive.")
     return user
 
 
