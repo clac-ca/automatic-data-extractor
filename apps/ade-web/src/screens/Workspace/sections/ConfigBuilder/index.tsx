@@ -10,7 +10,11 @@ import { PageState } from "@ui/PageState";
 import { Select } from "@ui/Select";
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
-import { useConfigurationsQuery, useCreateConfigurationMutation } from "@shared/configurations";
+import {
+  useConfigurationsQuery,
+  useCreateConfigurationMutation,
+  useImportConfigurationMutation,
+} from "@shared/configurations";
 import { createScopedStorage } from "@shared/storage";
 
 const TEMPLATE_OPTIONS = [{ value: "default", label: "Default template" }] as const;
@@ -29,10 +33,14 @@ export default function WorkspaceConfigsIndexRoute() {
   const storage = useMemo(() => createScopedStorage(buildStorageKey(workspace.id)), [workspace.id]);
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
   const createConfig = useCreateConfigurationMutation(workspace.id);
+  const importConfig = useImportConfigurationMutation(workspace.id);
 
   const [displayName, setDisplayName] = useState(() => `${workspace.name} Config`);
   const [templateId, setTemplateId] = useState<string>(TEMPLATE_OPTIONS[0]?.value ?? "default");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [importDisplayName, setImportDisplayName] = useState(() => `${workspace.name} Import`);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const configurations = useMemo(
     () =>
@@ -75,8 +83,37 @@ export default function WorkspaceConfigsIndexRoute() {
     );
   };
 
+  const handleImport = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = importDisplayName.trim();
+    if (!trimmedName) {
+      setImportError("Enter a display name for the imported configuration.");
+      return;
+    }
+    if (!importFile) {
+      setImportError("Select a .zip file to import.");
+      return;
+    }
+    setImportError(null);
+    importConfig.mutate(
+      { displayName: trimmedName, file: importFile },
+      {
+        onSuccess(record) {
+          storage.set<LastSelection>({ configId: record.id });
+          setImportFile(null);
+          void configurationsQuery.refetch();
+          navigate(buildConfigDetailPath(workspace.id, record.id));
+        },
+        onError(error) {
+          setImportError(error instanceof Error ? error.message : "Unable to import configuration.");
+        },
+      },
+    );
+  };
+
   const creationError = validationError ?? (createConfig.error instanceof Error ? createConfig.error.message : null);
   const canSubmit = displayName.trim().length > 0 && !createConfig.isPending;
+  const canImport = importDisplayName.trim().length > 0 && Boolean(importFile) && !importConfig.isPending;
 
   if (configurationsQuery.isLoading) {
     return <PageState variant="loading" title="Loading configurations" description="Fetching workspace configurations…" />;
@@ -200,6 +237,42 @@ export default function WorkspaceConfigsIndexRoute() {
             Create from template
           </Button>
         </form>
+        <div className="border-t border-slate-200 pt-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-slate-900">Import configuration</h2>
+            <p className="text-sm text-slate-500">Upload an ADE export (.zip) to create a new draft configuration.</p>
+          </div>
+          <form onSubmit={handleImport} className="mt-3 space-y-4">
+            <FormField label="Configuration name" required>
+              <Input
+                value={importDisplayName}
+                onChange={(event) => setImportDisplayName(event.target.value)}
+                placeholder="Imported configuration"
+                disabled={importConfig.isPending}
+              />
+            </FormField>
+            <FormField label="Archive (.zip)" required>
+              <Input
+                type="file"
+                accept=".zip"
+                onChange={(event) => {
+                  setImportError(null);
+                  setImportFile(event.target.files?.[0] ?? null);
+                }}
+                disabled={importConfig.isPending}
+              />
+              {importFile ? (
+                <p className="mt-1 text-xs text-slate-500" aria-live="polite">
+                  {importFile.name}
+                </p>
+              ) : null}
+            </FormField>
+            {importError ? <p className="text-sm font-medium text-danger-600">{importError}</p> : null}
+            <Button type="submit" className="w-full" disabled={!canImport} isLoading={importConfig.isPending}>
+              Import archive
+            </Button>
+          </form>
+        </div>
       </aside>
     </div>
   );

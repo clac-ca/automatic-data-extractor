@@ -3984,6 +3984,72 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/configurations/import": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Create a configuration from an uploaded archive",
+        "operationId": "import_configuration_api_v1_workspaces__workspace_id__configurations_import_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
       "post": {
         "tags": [
@@ -4779,6 +4845,84 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import": {
+      "put": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Replace a draft configuration from an uploaded archive",
+        "operationId": "replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
       "put": {
         "tags": [
@@ -4958,7 +5102,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4970,7 +5114,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5104,7 +5248,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -5116,7 +5260,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5182,7 +5326,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Build identifier",
               "title": "Build Id"
             },
@@ -5238,7 +5382,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Build identifier",
               "title": "Build Id"
             },
@@ -5337,7 +5481,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Build identifier",
               "title": "Build Id"
             },
@@ -5409,7 +5553,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5473,7 +5617,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5599,7 +5743,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -5725,7 +5869,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -5781,7 +5925,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -5840,7 +5984,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -5939,7 +6083,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -6010,7 +6154,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -6062,7 +6206,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -6121,7 +6265,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Run identifier",
               "title": "Run Id"
             },
@@ -6295,7 +6439,8 @@
           "workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -6306,7 +6451,8 @@
           "configuration_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -6317,7 +6463,8 @@
           "run_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -6328,7 +6475,8 @@
           "build_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -6944,6 +7092,40 @@
         "title": "AuthSetupStatusResponse",
         "description": "Describes whether initial administrator setup is required."
       },
+      "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Display Name"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "file"
+        ],
+        "title": "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
+      },
+      "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"
+      },
       "Body_upload_document_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "file": {
@@ -7118,7 +7300,9 @@
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "format": "uuid",
+            "title": "Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "object": {
             "type": "string",
@@ -7128,11 +7312,15 @@
           },
           "workspace_id": {
             "type": "string",
-            "title": "Workspace Id"
+            "format": "uuid",
+            "title": "Workspace Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "configuration_id": {
             "type": "string",
-            "title": "Configuration Id"
+            "format": "uuid",
+            "title": "Configuration Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "status": {
             "$ref": "#/components/schemas/BuildStatus"
@@ -7221,7 +7409,7 @@
         "enum": [
           "queued",
           "building",
-          "active",
+          "ready",
           "failed",
           "canceled"
         ],
@@ -9784,12 +9972,14 @@
         "properties": {
           "id": {
             "type": "string",
+            "format": "uuid",
             "title": "Id"
           },
           "workspace_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -9800,7 +9990,8 @@
           "configuration_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"

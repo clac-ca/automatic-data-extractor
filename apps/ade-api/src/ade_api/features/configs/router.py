@@ -20,6 +20,9 @@ from fastapi import (
     Security,
     status,
     BackgroundTasks,
+    File,
+    Form,
+    UploadFile,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -41,6 +44,7 @@ from .exceptions import (
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
+    ConfigImportError,
 )
 from .schemas import (
     ConfigurationActivateRequest,
@@ -349,6 +353,57 @@ async def create_configuration(
             status.HTTP_409_CONFLICT,
             detail="publish_conflict",
         ) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.post(
+    "/configurations/import",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a configuration from an uploaded archive",
+    response_model_exclude_none=True,
+)
+async def import_configuration(
+    workspace_id: WorkspaceIdPath,
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    *,
+    display_name: Annotated[str, Form(min_length=1)],
+    file: UploadFile = File(...),
+) -> ConfigurationRecord:
+    try:
+        archive = await file.read()
+        record = await service.import_configuration_from_archive(
+            workspace_id=workspace_id,
+            display_name=display_name.strip(),
+            archive=archive,
+        )
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigPublishConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
+    except ConfigImportError as exc:
+        status_code = (
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            if exc.code == "archive_too_large" and exc.limit
+            else status.HTTP_400_BAD_REQUEST
+        )
+        detail: str | dict = exc.code
+        if exc.limit:
+            detail = {"error": exc.code, "limit": exc.limit}
+        raise HTTPException(status_code, detail=detail) from exc
 
     return ConfigurationRecord.model_validate(record)
 
@@ -723,6 +778,69 @@ async def export_config(
         "Content-Disposition": f'attachment; filename="{configuration_id}.zip"',
     }
     return StreamingResponse(stream, media_type="application/zip", headers=headers)
+
+
+@router.put(
+    "/configurations/{configuration_id}/import",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    summary="Replace a draft configuration from an uploaded archive",
+    response_model_exclude_none=True,
+)
+async def replace_configuration_from_archive(
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
+    request: Request,
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    file: UploadFile = File(...),
+) -> ConfigurationRecord:
+    archive = await file.read()
+    try:
+        record = await service.replace_configuration_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+            if_match=request.headers.get("if-match"),
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_storage_missing") from exc
+    except ConfigStateError as exc:
+        _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+    except PreconditionRequiredError:
+        _problem("precondition_required", status.HTTP_428_PRECONDITION_REQUIRED)
+    except PreconditionFailedError as exc:
+        _problem(
+            "precondition_failed",
+            status.HTTP_412_PRECONDITION_FAILED,
+            meta={"current_etag": format_etag(exc.current_etag)},
+        )
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigImportError as exc:
+        status_code = (
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            if exc.code == "archive_too_large" and exc.limit
+            else status.HTTP_400_BAD_REQUEST
+        )
+        detail: str | dict = exc.code
+        if exc.limit:
+            detail = {"error": exc.code, "limit": exc.limit}
+        raise HTTPException(status_code, detail=detail) from exc
+
+    return ConfigurationRecord.model_validate(record)
 
 
 @router.put(
