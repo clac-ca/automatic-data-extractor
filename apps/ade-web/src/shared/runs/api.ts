@@ -60,115 +60,105 @@ export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const abortError = new DOMException("Aborted", "AbortError");
-  const queue: Array<RunStreamEvent | null> = [];
-  const awaiters: Array<() => void> = [];
+  const abortError =
+    typeof DOMException !== "undefined"
+      ? new DOMException("Aborted", "AbortError")
+      : Object.assign(new Error("Aborted"), { name: "AbortError" });
+  const controller = new AbortController();
+  const abortHandler = () => controller.abort();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-  let source: EventSource | null = null;
-  let done = false;
-  let error: unknown;
-  const eventTypes = [
-    "ade.event",
-    "run.queued",
-    "run.started",
-    "run.completed",
-    "run.failed",
-    "run.cancelled",
-    "run.waiting_for_build",
-    "build.queued",
-    "build.started",
-    "build.progress",
-    "build.phase.started",
-    "build.completed",
-    "build.failed",
-    "console.line",
-  ];
-
-  const flush = () => {
-    while (awaiters.length) {
-      const resolve = awaiters.shift();
-      resolve?.();
-    }
-  };
-
-  const close = (reason?: unknown) => {
-    if (done) return;
-    done = true;
-    if (reason) {
-      error = reason;
-    }
-    if (source) {
-      eventTypes.forEach((type) => {
-        source?.removeEventListener?.(type, handleRunEvent as EventListener);
-      });
-      source.onmessage = null;
-      source.onerror = null;
-      source.close();
-    }
-    queue.push(null);
-    flush();
-  };
-
-  const handleRunEvent = (msg: MessageEvent<string>) => {
-    try {
-      const event = JSON.parse(msg.data) as RunStreamEvent;
-      queue.push(event);
-      flush();
-      if (event.type === "run.completed") {
-        close();
-      }
-    } catch (err) {
-      console.warn("Skipping malformed run event", err, msg.data);
-    }
-  };
-
-  source = new EventSource(url, { withCredentials: true });
-  eventTypes.forEach((type) => {
-    source?.addEventListener(type, handleRunEvent as EventListener);
-  });
-  source.onmessage = handleRunEvent;
-
-  source.onerror = () => {
-    if (signal?.aborted) {
-      close(abortError);
-      return;
-    }
-    if (!done) {
-      close(new Error("Run event stream interrupted"));
-    }
-  };
-
-  if (signal) {
-    if (signal.aborted) {
-      close(abortError);
-    } else {
-      signal.addEventListener("abort", () => close(abortError));
-    }
+  if (signal?.aborted) {
+    controller.abort();
+  } else if (signal) {
+    signal.addEventListener("abort", abortHandler);
   }
 
   try {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "text/event-stream" },
+      signal: controller.signal,
+    });
+
+    if (!response.body || !response.ok) {
+      throw new Error("Run event stream unavailable.");
+    }
+
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
     while (true) {
-      if (!queue.length) {
-        await new Promise<void>((resolve) => awaiters.push(resolve));
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const event = parseSseEvent(part);
+        if (!event) {
+          continue;
+        }
+        yield event;
+        if (event.type === "run.completed") {
+          controller.abort();
+          return;
+        }
       }
 
-      const next = queue.shift();
-      if (next === null) {
-        if (error) {
-          throw error;
+      if (done) {
+        const finalEvent = parseSseEvent(buffer);
+        if (finalEvent) {
+          yield finalEvent;
         }
-        break;
+        return;
       }
-      if (!next) {
-        continue;
-      }
-      if (error) {
-        throw error;
-      }
-      yield next;
     }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw abortError;
+    }
+    throw error;
   } finally {
-    close();
+    if (signal) {
+      signal.removeEventListener("abort", abortHandler);
+    }
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore cancellation failures
+      }
+    }
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  }
+}
+
+function parseSseEvent(rawEvent: string): RunStreamEvent | null {
+  const dataLines: string[] = [];
+  for (const line of rawEvent.split(/\n/)) {
+    if (line.startsWith("data:")) {
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+    }
+  }
+  if (!dataLines.length) {
+    return null;
+  }
+  const payload = dataLines.join("\n");
+  if (!payload.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(payload) as RunStreamEvent;
+  } catch (error) {
+    console.warn("Skipping malformed run event", error, payload);
+    return null;
   }
 }
 

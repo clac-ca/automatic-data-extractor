@@ -1,56 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { client } from "@shared/api/client";
 import { runEventsUrl, streamRun, streamRunEvents, streamRunEventsForRun } from "@shared/runs/api";
 import type { RunResource } from "@shared/runs/api";
 import type { AdeEvent } from "@shared/runs/types";
-import { client } from "@shared/api/client";
 
-class MockEventSource {
-  static instances: MockEventSource[] = [];
+const encoder = new TextEncoder();
 
-  onmessage: ((event: MessageEvent<string>) => void) | null = null;
-  onerror: ((event: Event) => void) | null = null;
-
-  readonly listeners = new Map<string, Array<(event: MessageEvent<string>) => void>>();
-  closed = false;
-
-  constructor(readonly url: string, readonly options?: EventSourceInit) {
-    MockEventSource.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: (event: MessageEvent<string>) => void) {
-    const existing = this.listeners.get(type) ?? [];
-    this.listeners.set(type, [...existing, listener]);
-  }
-
-  removeEventListener(type: string, listener: (event: MessageEvent<string>) => void) {
-    const existing = this.listeners.get(type);
-    if (!existing) return;
-    this.listeners.set(
-      type,
-      existing.filter((entry) => entry !== listener),
-    );
-  }
-
-  emit(type: string, data: string) {
-    const event = new MessageEvent<string>(type, { data });
-    if (type === "message" && this.onmessage) {
-      this.onmessage(event);
-    }
-    const listeners = this.listeners.get(type) ?? [];
-    listeners.forEach((listener) => listener(event));
-  }
-
-  fail(error?: Event) {
-    this.onerror?.(error ?? new Event("error"));
-  }
-
-  close() {
-    this.closed = true;
-  }
+function createSseStream() {
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    start(ctrl) {
+      controller = ctrl;
+    },
+  });
+  return {
+    stream,
+    emit(event: AdeEvent) {
+      const payload = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+      controller?.enqueue(encoder.encode(payload));
+    },
+    close() {
+      controller?.close();
+    },
+  };
 }
 
-const OriginalEventSource = globalThis.EventSource;
+function mockSseFetch() {
+  const sse = createSseStream();
+  const response = new Response(sse.stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
+  return { sse, fetchMock };
+}
 
 const sampleRunResource = {
   id: "run-123",
@@ -73,40 +57,35 @@ type CreateRunPostResponse = Awaited<
   ReturnType<typeof client.POST<"/api/v1/configurations/{configuration_id}/runs">>
 >;
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("streamRunEvents", () => {
-  beforeEach(() => {
-    MockEventSource.instances = [];
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-
-  afterEach(() => {
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource = OriginalEventSource;
-    MockEventSource.instances = [];
-    vi.restoreAllMocks();
-  });
-
-  it("consumes named ade.event messages", async () => {
+  it("consumes any SSE event type", async () => {
+    const { sse } = mockSseFetch();
     const iterator = streamRunEvents("http://example.com/stream");
-    const pending = iterator.next();
-    const source = MockEventSource.instances.at(-1);
-    expect(source).toBeDefined();
 
-    const runEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
-    source?.emit("run.started", JSON.stringify(runEvent));
+    const pending = iterator.next();
+    await Promise.resolve();
+
+    const runEvent: AdeEvent = { type: "run.phase.started", created_at: "2025-01-01T00:00:00Z" };
+    sse.emit(runEvent);
 
     const result = await pending;
     expect(result.done).toBe(false);
     expect(result.value).toEqual(runEvent);
 
     await iterator.return?.(undefined);
+    sse.close();
   });
 
   it("closes the stream after run completion", async () => {
+    const { sse } = mockSseFetch();
     const iterator = streamRunEvents("http://example.com/stream");
+
     const first = iterator.next();
-    const source = MockEventSource.instances.at(-1);
-    expect(source).toBeDefined();
+    await Promise.resolve();
 
     const startEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
     const completedEvent: AdeEvent = {
@@ -115,33 +94,22 @@ describe("streamRunEvents", () => {
       payload: { status: "succeeded" },
     };
 
-    source?.emit("run.started", JSON.stringify(startEvent));
+    sse.emit(startEvent);
     expect((await first).value).toEqual(startEvent);
 
     const second = iterator.next();
-    source?.emit("run.completed", JSON.stringify(completedEvent));
+    sse.emit(completedEvent);
     expect((await second).value).toEqual(completedEvent);
 
     const done = await iterator.next();
     expect(done.done).toBe(true);
-    expect(source?.closed).toBe(true);
+    sse.close();
   });
 });
 
 describe("streamRun", () => {
-  beforeEach(() => {
-    MockEventSource.instances = [];
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-
-  afterEach(() => {
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource = OriginalEventSource;
-    MockEventSource.instances = [];
-    vi.restoreAllMocks();
-  });
-
   it("creates a run via the typed client and streams events", async () => {
+    const { sse, fetchMock } = mockSseFetch();
     const runEvent: AdeEvent = {
       type: "run.completed",
       created_at: "2025-01-01T00:05:00Z",
@@ -163,11 +131,12 @@ describe("streamRun", () => {
     })();
 
     await Promise.resolve();
-    await Promise.resolve();
-    const source = MockEventSource.instances.at(-1);
-    expect(source).toBeDefined();
+    expect(fetchMock).toHaveBeenCalled();
+    const [url] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
+    expect(String(url)).toContain("after_sequence=0");
 
-    source?.emit("ade.event", JSON.stringify(runEvent));
+    sse.emit(runEvent);
 
     await consume;
 
@@ -176,9 +145,8 @@ describe("streamRun", () => {
       body: { options: { dry_run: true, validate_only: false, force_rebuild: false } },
       signal: undefined,
     });
-    expect(source?.url).toContain("/api/v1/runs/run-123/events/stream");
-    expect(source?.url).toContain("after_sequence=0");
     expect(events).toEqual([runEvent]);
+    sse.close();
   });
 
   it("throws when run creation does not return data", async () => {
@@ -194,18 +162,6 @@ describe("streamRun", () => {
 });
 
 describe("runEventsUrl helpers", () => {
-  beforeEach(() => {
-    MockEventSource.instances = [];
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-
-  afterEach(() => {
-    (globalThis as unknown as { EventSource: typeof EventSource }).EventSource = OriginalEventSource;
-    MockEventSource.instances = [];
-    vi.restoreAllMocks();
-  });
-
   it("builds streaming event URLs with sequence parameters", () => {
     const legacyRun = {
       ...sampleRunResource,
@@ -219,16 +175,20 @@ describe("runEventsUrl helpers", () => {
   });
 
   it("streams events for an existing run resource", async () => {
+    const { sse, fetchMock } = mockSseFetch();
     const iterator = streamRunEventsForRun(sampleRunResource, { afterSequence: 3 });
     const pending = iterator.next();
-    const source = MockEventSource.instances.at(-1);
-    expect(source?.url).toContain("/api/v1/runs/run-123/events/stream");
-    expect(source?.url).toContain("after_sequence=3");
+    await Promise.resolve();
+
+    const [url] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
+    expect(String(url)).toContain("after_sequence=3");
 
     const runEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
-    source?.emit("run.started", JSON.stringify(runEvent));
+    sse.emit(runEvent);
     const result = await pending;
     expect(result.value).toEqual(runEvent);
     await iterator.return?.(undefined);
+    sse.close();
   });
 });

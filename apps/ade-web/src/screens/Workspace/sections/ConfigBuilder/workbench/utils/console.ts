@@ -196,9 +196,49 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         (payload.source_file as string | undefined) ??
         (payload.table_id as string | undefined) ??
         "table";
+      const mappedColumns = asNumber(payload.mapped_column_count);
+      const columnCount = asNumber(payload.column_count);
+      const rowCount = asNumber(payload.row_count);
+      const coveragePct =
+        columnCount && mappedColumns !== undefined && columnCount > 0
+          ? (mappedColumns / columnCount) * 100
+          : null;
+      const mappedSummary =
+        columnCount && mappedColumns !== undefined
+          ? `mapped ${mappedColumns}/${columnCount} (${formatPercent(coveragePct)})`
+          : mappedColumns !== undefined
+            ? `mapped ${mappedColumns} column${mappedColumns === 1 ? "" : "s"}`
+            : null;
+
+      const missingRequired = collectMissingRequired(payload);
+      const unmappedHeaders = collectUnmappedHeaders(payload);
+
+      const line1Parts = [
+        `Table ${name}:`,
+        rowCount !== undefined ? `${rowCount} row${rowCount === 1 ? "" : "s"}` : null,
+        columnCount !== undefined ? `${columnCount} col${columnCount === 1 ? "" : "s"}` : null,
+        mappedSummary,
+      ].filter(Boolean);
+
+      const line2Parts = [
+        missingRequired.length ? `Missing required: ${formatList(missingRequired, 3)}` : null,
+        unmappedHeaders.length ? `Unmapped: ${formatList(unmappedHeaders, 100)}` : null,
+      ].filter(Boolean);
+
+      const detailParts = formatTableDetails(payload.details, payload.source_file as string | undefined);
+      const messageLines = [
+        line1Parts.join(" · "),
+        line2Parts.find((line) => line?.startsWith("Missing required")) ?? null,
+        line2Parts.find((line) => line?.startsWith("Unmapped")) ?? null,
+        detailParts ? `(${detailParts})` : null,
+      ].filter(Boolean);
+
+      const level: WorkbenchConsoleLine["level"] =
+        missingRequired.length > 0 ? "warning" : coveragePct !== null && coveragePct >= 85 ? "success" : "info";
+
       return attachRaw({
-        level: "info",
-        message: `Table completed (${name})`,
+        level,
+        message: messageLines.join("\n"),
         timestamp: ts,
         origin: "run",
       });
@@ -376,4 +416,88 @@ function formatDurationMs(value?: unknown): string | null {
   const minutes = Math.floor(value / 60_000);
   const seconds = Math.round((value % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function formatPercent(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "0.0%";
+  return `${(Math.round(value * 10) / 10).toFixed(1)}%`;
+}
+
+function formatList(values: string[], maxEntries: number): string {
+  if (!values.length) return "";
+  const shown = values.slice(0, maxEntries);
+  const remaining = values.length - shown.length;
+  const suffix = remaining > 0 ? `... (+${remaining} more)` : "";
+  return `${shown.join(", ")}${suffix}`;
+}
+
+function collectMissingRequired(payload: Record<string, unknown>): string[] {
+  const mapping = payload?.mapping;
+  const mapped =
+    mapping &&
+    typeof mapping === "object" &&
+    Array.isArray((mapping as Record<string, unknown>).mapped_columns)
+      ? ((mapping as Record<string, unknown>).mapped_columns as Array<Record<string, unknown>>)
+      : Array.isArray(payload.mapped_fields)
+        ? (payload.mapped_fields as Array<Record<string, unknown>>)
+        : [];
+  return mapped
+    .filter((entry) => entry && typeof entry === "object" && entry.is_required === true && entry.is_satisfied === false)
+    .map((entry) => (typeof entry.field === "string" && entry.field.trim()) || "")
+    .filter(Boolean);
+}
+
+function collectUnmappedHeaders(payload: Record<string, unknown>): string[] {
+  const fromRoot = Array.isArray(payload.unmapped_columns)
+    ? (payload.unmapped_columns as Array<Record<string, unknown>>)
+    : [];
+  const fromMapping =
+    payload.mapping &&
+    typeof payload.mapping === "object" &&
+    Array.isArray((payload.mapping as Record<string, unknown>).unmapped_columns)
+      ? ((payload.mapping as Record<string, unknown>).unmapped_columns as Array<Record<string, unknown>>)
+      : [];
+  const combined = [...fromRoot, ...fromMapping];
+  return combined
+    .map((entry) => (entry && typeof entry === "object" ? (entry.header as string | undefined) : undefined))
+    .map((header) => (header ?? "").trim())
+    .filter(Boolean);
+}
+
+function formatTableDetails(
+  details: unknown,
+  sourceFile: string | undefined,
+): string | null {
+  if (!details || typeof details !== "object") {
+    return sourceFile ? basename(sourceFile) : null;
+  }
+  const detailObj = details as Record<string, unknown>;
+  const headerRow = asNumber(detailObj.header_row);
+  const first = asNumber(detailObj.first_data_row);
+  const last = asNumber(detailObj.last_data_row);
+  const pieces: string[] = [];
+  if (headerRow !== undefined) {
+    pieces.push(`header row ${headerRow}`);
+  }
+  if (first !== undefined && last !== undefined) {
+    pieces.push(`data ${first}-${last}`);
+  }
+  if (sourceFile) {
+    pieces.push(basename(sourceFile));
+  }
+  return pieces.length ? pieces.join(" · ") : null;
+}
+
+function basename(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split("/");
+  return parts[parts.length - 1] || trimmed;
 }

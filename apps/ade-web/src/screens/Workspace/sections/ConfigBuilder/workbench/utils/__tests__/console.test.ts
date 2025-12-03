@@ -122,4 +122,43 @@ describe("describeRunEvent", () => {
     expect(line.message).toContain("build_not_ready");
     expect(line.message).toContain("bld_123");
   });
+
+  it("formats run.table.summary with coverage and missing required", () => {
+    const event: AdeEvent = {
+      type: "run.table.summary",
+      created_at: "2025-12-03T21:45:59.474755Z",
+      payload: {
+        table_id: "tbl_0",
+        source_sheet: "Sheet1",
+        row_count: 35,
+        column_count: 49,
+        mapped_column_count: 4,
+        unmapped_column_count: 45,
+        mapping: {
+          mapped_columns: [
+            { field: "member_id", is_required: true, is_satisfied: false },
+            { field: "email", is_required: true, is_satisfied: false },
+            { field: "first_name", is_required: false, is_satisfied: true },
+          ],
+          unmapped_columns: [
+            { header: "Co." },
+            { header: "Company Name" },
+            { header: "Union Code" },
+            { header: "Union Code Description" },
+            { header: "Address No." },
+          ],
+        },
+        details: { header_row: 4, first_data_row: 5, last_data_row: 39 },
+        source_file: "/path/to/LedcorConstSK_240131.xlsx",
+      },
+    };
+    const line = describeRunEvent(event);
+    expect(line.level).toBe("warning");
+    expect(line.message).toContain("35 rows");
+    expect(line.message).toContain("49 cols");
+    expect(line.message).toContain("mapped 4/49 (8.2%)");
+    expect(line.message).toContain("Missing required: member_id, email");
+    expect(line.message).toContain("Unmapped: Co., Company Name, Union Code");
+    expect(line.message).toContain("header row 4");
+  });
 });
