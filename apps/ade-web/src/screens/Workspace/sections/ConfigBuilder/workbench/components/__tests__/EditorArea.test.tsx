@@ -21,6 +21,11 @@ vi.mock("@ui/CodeEditor", () => ({
 import type { WorkbenchFileTab } from "../../types";
 import { EditorArea } from "../EditorArea";
 
+const focusEditor = (container: HTMLElement) => {
+  const editor = container.querySelector<HTMLTextAreaElement>('[data-testid="code-editor"]');
+  editor?.focus();
+};
+
 const tabs: WorkbenchFileTab[] = [
   {
     id: "manifest.json",
@@ -61,7 +66,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const onUnpinTab = vi.fn();
     const onSelectRecentTab = vi.fn();
 
-    const { unmount } = render(
+    const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
         activeTabId="manifest.json"
@@ -80,6 +85,7 @@ describe("EditorArea keyboard shortcuts", () => {
       />,
     );
 
+    focusEditor(container);
     fireEvent.keyDown(window, { key: "Tab", ctrlKey: true });
     expect(onSelectRecentTab).toHaveBeenCalledWith("forward");
 
@@ -98,7 +104,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const onUnpinTab = vi.fn();
     const onSelectRecentTab = vi.fn();
 
-    const { unmount } = render(
+    const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
         activeTabId="src/data.py"
@@ -117,6 +123,7 @@ describe("EditorArea keyboard shortcuts", () => {
       />,
     );
 
+    focusEditor(container);
     fireEvent.keyDown(window, { key: "Tab", ctrlKey: true, shiftKey: true });
     expect(onSelectRecentTab).toHaveBeenCalledWith("backward");
 
@@ -135,7 +142,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const onUnpinTab = vi.fn();
     const onSelectRecentTab = vi.fn();
 
-    const { unmount } = render(
+    const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
         activeTabId="manifest.json"
@@ -154,6 +161,7 @@ describe("EditorArea keyboard shortcuts", () => {
       />,
     );
 
+    focusEditor(container);
     fireEvent.keyDown(window, { key: "PageDown", ctrlKey: true });
     expect(onSelectTab).toHaveBeenCalledWith("src/data.py");
 
@@ -172,7 +180,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const onUnpinTab = vi.fn();
     const onSelectRecentTab = vi.fn();
 
-    const { unmount } = render(
+    const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
         activeTabId="src/data.py"
@@ -191,6 +199,7 @@ describe("EditorArea keyboard shortcuts", () => {
       />,
     );
 
+    focusEditor(container);
     fireEvent.keyDown(window, { key: "PageUp", ctrlKey: true });
     expect(onSelectTab).toHaveBeenCalledWith("manifest.json");
 
@@ -209,7 +218,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const onUnpinTab = vi.fn();
     const onSelectRecentTab = vi.fn();
 
-    const { unmount } = render(
+    const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
         activeTabId="manifest.json"
@@ -228,6 +237,7 @@ describe("EditorArea keyboard shortcuts", () => {
       />,
     );
 
+    focusEditor(container);
     fireEvent.keyDown(window, { key: "w", ctrlKey: true });
     expect(onCloseTab).toHaveBeenCalledWith("manifest.json");
 
