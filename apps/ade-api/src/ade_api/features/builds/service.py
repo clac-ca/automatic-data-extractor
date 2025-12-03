@@ -1226,7 +1226,11 @@ class BuildsService:
             payload = json.loads(marker_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return False
-        if payload.get("build_id") != build.id:
+        try:
+            marker_build_id = UUID(str(payload.get("build_id")))
+        except (TypeError, ValueError):
+            return False
+        if marker_build_id != build.id:
             return False
         if build.fingerprint and payload.get("fingerprint") != build.fingerprint:
             return False
