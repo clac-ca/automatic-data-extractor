@@ -685,7 +685,7 @@ class RunsService:
         run = await self._runs.get(context.run_id)
         if run is None:
             return
-        if run.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELED):
+        if run.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED):
             return
 
         message = f"ADE run orchestration failed: {error}"
@@ -1388,6 +1388,12 @@ class RunsService:
             elif summary_status == "succeeded":
                 status = RunStatus.SUCCEEDED
                 error_message = None
+            elif summary_status in {"cancelled", "canceled"}:
+                status = RunStatus.CANCELLED
+                error = summary.get("error")
+                error_message = (
+                    error.get("message") if isinstance(error, dict) else None
+                ) or "Run cancelled"
 
         return status, error_message
 
@@ -1539,7 +1545,7 @@ class RunsService:
                 "workspace_id": str(run.workspace_id),
                 "configuration_id": str(run.configuration_id),
                 "status": status_literal,
-                "failure_code": "canceled" if status is RunStatus.CANCELED else None,
+                "failure_code": "cancelled" if status is RunStatus.CANCELLED else None,
                 "failure_stage": None,
                 "failure_message": message,
                 "engine_version": getattr(run, "engine_version", None),
@@ -1917,7 +1923,7 @@ class RunsService:
             )
             placeholder_summary = await self._build_placeholder_summary(
                 run=run,
-                status=RunStatus.CANCELED,
+                status=RunStatus.CANCELLED,
                 message="Run execution cancelled",
             )
             summary_json = self._serialize_summary(placeholder_summary)
@@ -1929,7 +1935,7 @@ class RunsService:
             )
             completion = await self._complete_run(
                 run,
-                status=RunStatus.CANCELED,
+                status=RunStatus.CANCELLED,
                 exit_code=None,
                 summary=summary_json,
                 error_message="Run execution cancelled",
@@ -2107,7 +2113,7 @@ class RunsService:
         if error_message is not None:
             run.error_message = error_message
         run.finished_at = utc_now()
-        run.canceled_at = utc_now() if status is RunStatus.CANCELED else None
+        run.canceled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
         await self._session.refresh(run)
 

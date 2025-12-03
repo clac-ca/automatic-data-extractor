@@ -319,11 +319,11 @@ async def test_stream_run_handles_cancelled_execution(
             events.append(event)
 
     assert events[-1].type == "run.completed"
-    assert events[-1].payload_dict().get("status") == "canceled"
+    assert events[-1].payload_dict().get("status") == "cancelled"
 
     run = await service.get_run(context.run_id)
     assert run is not None
-    assert run.status is RunStatus.CANCELED
+    assert run.status is RunStatus.CANCELLED
 
 
 @pytest.mark.asyncio()

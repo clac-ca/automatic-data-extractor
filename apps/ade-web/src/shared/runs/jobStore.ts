@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import {
   createRun,
   fetchRun,
+  fetchRunEvents,
   runEventsUrl,
   streamRunEvents,
   type RunResource,
@@ -54,6 +55,7 @@ const store: RunJobStoreState = {
 const listeners = new Set<Listener>();
 const streamControllers = new Map<string, AbortController>();
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingStreams = new Set<string>();
 
 function notify() {
   listeners.forEach((listener) => listener());
@@ -206,17 +208,45 @@ function stopRunStream(runId: string) {
 }
 
 async function ensureRunStream(runId: string) {
-  const run = getRun(runId);
-  if (!run || streamControllers.has(runId)) {
+  const existing = getRun(runId);
+  if (!existing || streamControllers.has(runId)) {
     return;
   }
-  const eventsUrl = run.resource ? runEventsUrl(run.resource, { afterSequence: run.lastSequence }) : null;
+  if (pendingStreams.has(runId)) {
+    return;
+  }
+  pendingStreams.add(runId);
+
+  const resource = existing.resource ?? (await fetchRun(runId).catch(() => undefined));
+  if (!resource) {
+    updateRun(runId, (prev) => ({
+      ...(prev ?? { runId, events: [], lastSequence: 0, status: "idle", connectState: "idle" }),
+      connectState: "error",
+      error: "Run resource unavailable.",
+    }));
+    pendingStreams.delete(runId);
+    return;
+  }
+
+  // Hydrate history before streaming live events.
+  try {
+    const history = await fetchRunEvents(resource, { afterSequence: existing.lastSequence });
+    if (history.length) {
+      handleEvents(runId, history);
+    }
+  } catch (error) {
+    console.warn("Run history unavailable", error);
+  }
+
+  const current = getRun(runId) ?? existing;
+  const eventsUrl = runEventsUrl(resource, { afterSequence: current.lastSequence });
   if (!eventsUrl) {
     updateRun(runId, (prev) => ({
       ...(prev ?? { runId, events: [], lastSequence: 0, status: "idle", connectState: "idle" }),
       connectState: "error",
       error: "Run events unavailable.",
     }));
+    pendingStreams.delete(runId);
     return;
   }
 
@@ -226,8 +256,9 @@ async function ensureRunStream(runId: string) {
   updateRun(runId, (prev) => ({
     ...(prev ?? { runId, events: [], lastSequence: 0, status: "idle", connectState: "idle" }),
     connectState: "connecting",
-    error: null,
-  }));
+      error: null,
+      resource,
+    }));
 
   try {
     for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
@@ -244,6 +275,7 @@ async function ensureRunStream(runId: string) {
     }));
   } catch (error) {
     if (controller.signal.aborted) {
+      pendingStreams.delete(runId);
       return;
     }
     console.warn("Run stream interrupted", error);
@@ -262,6 +294,7 @@ async function ensureRunStream(runId: string) {
       retryTimers.set(runId, retry);
     }
   }
+  pendingStreams.delete(runId);
 }
 
 export async function startRunJob(

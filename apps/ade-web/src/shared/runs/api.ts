@@ -208,6 +208,39 @@ export async function* streamRunEventsForRun(
   }
 }
 
+export async function fetchRunEvents(
+  run: RunResource | string,
+  options?: { afterSequence?: number; signal?: AbortSignal },
+): Promise<RunStreamEvent[]> {
+  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence, stream: false });
+  if (!eventsUrl) {
+    throw new Error("Run events link unavailable.");
+  }
+  const response = await fetch(eventsUrl, {
+    method: "GET",
+    credentials: "include",
+    signal: options?.signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Run events unavailable (${response.status}).`);
+  }
+  const text = await response.text();
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const events: RunStreamEvent[] = [];
+  for (const line of lines) {
+    try {
+      events.push(JSON.parse(line) as RunStreamEvent);
+    } catch (error) {
+      console.warn("Skipping malformed run event line", error, line);
+    }
+  }
+  return events;
+}
+
 export async function fetchRunOutputs(
   run: RunResource | string,
   signal?: AbortSignal,

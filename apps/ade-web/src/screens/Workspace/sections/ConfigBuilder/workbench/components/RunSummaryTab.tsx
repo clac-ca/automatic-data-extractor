@@ -1,9 +1,18 @@
 import clsx from "clsx";
 
+import type { PhaseState, RunStreamStatus } from "../state/runStream";
 import type { WorkbenchRunSummary } from "../types";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 
-export function RunSummaryTab({ latestRun }: { readonly latestRun?: WorkbenchRunSummary | null }) {
+interface RunSummaryTabProps {
+  readonly latestRun?: WorkbenchRunSummary | null;
+  readonly buildPhases: Record<string, PhaseState>;
+  readonly runPhases: Record<string, PhaseState>;
+  readonly runStatus?: RunStreamStatus;
+  readonly runMode?: "validation" | "extraction";
+}
+
+export function RunSummaryTab({ latestRun, buildPhases, runPhases, runStatus, runMode }: RunSummaryTabProps) {
   if (!latestRun) {
     return (
       <div className="flex flex-1 items-center justify-center text-xs text-slate-500">
@@ -14,10 +23,82 @@ export function RunSummaryTab({ latestRun }: { readonly latestRun?: WorkbenchRun
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto">
+      <RunTimelineCard buildPhases={buildPhases} runPhases={runPhases} runStatus={runStatus} runMode={runMode} />
       <RunSummaryHeader summary={latestRun} />
       <RunOutputsCard summary={latestRun} />
       <RunCoreSummaryCard summary={latestRun} />
       <TelemetrySummaryCard summary={latestRun} />
+    </div>
+  );
+}
+
+function RunTimelineCard({
+  buildPhases,
+  runPhases,
+  runStatus,
+  runMode,
+}: {
+  readonly buildPhases: Record<string, PhaseState>;
+  readonly runPhases: Record<string, PhaseState>;
+  readonly runStatus?: RunStreamStatus;
+  readonly runMode?: "validation" | "extraction";
+}) {
+  const buildEntries = Object.entries(buildPhases);
+  const runEntries = Object.entries(runPhases);
+  const hasAny = buildEntries.length > 0 || runEntries.length > 0 || runStatus;
+
+  if (!hasAny) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Run timeline</p>
+          <p className="text-[12px] text-slate-500">
+            {runMode ? runMode === "validation" ? "Validation" : "Test run" : "Run"} · {runStatus ?? "idle"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        <PhaseList title="Build" entries={buildEntries} fallback={buildFallback(runStatus)} />
+        <PhaseList title="Run" entries={runEntries} fallback={runFallback(runStatus)} />
+      </div>
+    </section>
+  );
+}
+
+function PhaseList({
+  title,
+  entries,
+  fallback,
+}: {
+  readonly title: string;
+  readonly entries: Array<[string, PhaseState]>;
+  readonly fallback?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      {entries.length === 0 ? (
+        <p className="text-[12px] text-slate-500">{fallback ?? "Waiting for updates…"}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {entries.map(([id, state]) => (
+            <li key={id} className="flex items-start gap-2 rounded border border-slate-100 px-2 py-1">
+              <span className={clsx("mt-[3px] inline-flex h-2 w-2 rounded-full", phaseTone(state.status))} aria-hidden />
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-slate-700">{prettyPhaseLabel(id)}</p>
+                <p className="text-[12px] text-slate-500">
+                  {state.message ?? phaseStatusLabel(state.status)}
+                  {state.durationMs != null ? ` · ${formatRunDuration(state.durationMs)}` : ""}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -211,4 +292,54 @@ function formatRelative(timestamp: string): string {
     return timestamp;
   }
   return date.toLocaleString();
+}
+
+function phaseTone(status: PhaseState["status"]) {
+  switch (status) {
+    case "succeeded":
+      return "bg-emerald-500";
+    case "running":
+      return "bg-amber-400";
+    case "failed":
+      return "bg-rose-500";
+    case "skipped":
+      return "bg-slate-400";
+    default:
+      return "bg-slate-300";
+  }
+}
+
+function phaseStatusLabel(status: PhaseState["status"]) {
+  switch (status) {
+    case "succeeded":
+      return "Completed";
+    case "running":
+      return "In progress";
+    case "failed":
+      return "Failed";
+    case "skipped":
+      return "Skipped";
+    default:
+      return "Pending";
+  }
+}
+
+function prettyPhaseLabel(id: string) {
+  return id
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+function buildFallback(status?: RunStreamStatus) {
+  if (status === "waiting_for_build") return "Waiting for build queue…";
+  if (status === "queued") return "Queued…";
+  if (status === "building") return "Building environment…";
+  return "No build phases reported.";
+}
+
+function runFallback(status?: RunStreamStatus) {
+  if (status === "running") return "Running…";
+  if (status === "queued" || status === "waiting_for_build" || status === "building") return "Run pending.";
+  return "No run phases reported.";
 }

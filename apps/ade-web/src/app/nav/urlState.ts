@@ -118,7 +118,6 @@ export interface ConfigBuilderSearchState {
   readonly console: ConfigBuilderConsole;
   readonly view: ConfigBuilderView;
   readonly file?: string;
-  readonly runId?: string;
 }
 
 export interface ConfigBuilderSearchSnapshot extends ConfigBuilderSearchState {
@@ -128,7 +127,6 @@ export interface ConfigBuilderSearchSnapshot extends ConfigBuilderSearchState {
     readonly console: boolean;
     readonly view: boolean;
     readonly file: boolean;
-    readonly runId: boolean;
   };
 }
 
@@ -139,7 +137,7 @@ export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
   view: "editor",
 };
 
-const CONFIG_BUILDER_KEYS = ["tab", "pane", "console", "view", "file", "path", "runId"] as const;
+const CONFIG_BUILDER_KEYS = ["tab", "pane", "console", "view", "file", "path"] as const;
 
 function normalizeConsole(value: string | null): ConfigBuilderConsole {
   return value === "open" ? "open" : "closed";
@@ -162,11 +160,6 @@ function normalizeView(value: string | null): ConfigBuilderView {
   return value === "split" || value === "zen" ? value : "editor";
 }
 
-function normalizeRunId(value: string | null): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
-}
-
 export function readConfigBuilderSearch(
   source: URLSearchParams | string,
 ): ConfigBuilderSearchSnapshot {
@@ -176,7 +169,6 @@ export function readConfigBuilderSearch(
   const consoleRaw = params.get("console");
   const viewRaw = params.get("view");
   const fileRaw = params.get("file") ?? params.get("path");
-  const runIdRaw = params.get("runId") ?? params.get("run_id") ?? params.get("run");
 
   const state: ConfigBuilderSearchState = {
     tab: tabRaw === "editor" ? "editor" : DEFAULT_CONFIG_BUILDER_SEARCH.tab,
@@ -184,7 +176,6 @@ export function readConfigBuilderSearch(
     console: normalizeConsole(consoleRaw),
     view: normalizeView(viewRaw),
     file: fileRaw ?? undefined,
-    runId: normalizeRunId(runIdRaw),
   };
 
   return {
@@ -195,7 +186,6 @@ export function readConfigBuilderSearch(
       console: params.has("console"),
       view: params.has("view"),
       file: params.has("file") || params.has("path"),
-      runId: params.has("runId") || params.has("run_id") || params.has("run"),
     },
   };
 }
@@ -230,9 +220,6 @@ export function mergeConfigBuilderSearch(
   }
   if (nextState.file && nextState.file.length > 0) {
     next.set("file", nextState.file);
-  }
-  if (nextState.runId && nextState.runId.length > 0) {
-    next.set("runId", nextState.runId);
   }
 
   return next;

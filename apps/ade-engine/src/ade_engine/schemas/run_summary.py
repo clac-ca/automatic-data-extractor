@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-RunStatusLiteral = Literal["succeeded", "failed", "canceled"]
+RunStatusLiteral = Literal["succeeded", "failed", "cancelled"]
 
 
 class RunSummaryRun(BaseModel):
