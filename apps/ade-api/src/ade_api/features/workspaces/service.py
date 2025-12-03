@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -772,7 +772,9 @@ class WorkspacesService:
         if user_id:
             stmt = stmt.where(UserRoleAssignment.user_id == user_id)
         if not include_inactive:
-            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active.is_(True))
+            stmt = stmt.join(User, UserRoleAssignment.user).where(
+                User.is_active == true()
+            )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

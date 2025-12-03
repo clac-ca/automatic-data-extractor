@@ -26,13 +26,13 @@ class ApiKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owner_user_id: Mapped[UUID] = mapped_column(
         "owner_user_id",
         UUIDType(),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=False,
     )
     created_by_user_id: Mapped[UUID | None] = mapped_column(
         "created_by_user_id",
         UUIDType(),
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="NO ACTION"),
         nullable=True,
     )
     scope_type: Mapped[ScopeType] = mapped_column(
@@ -48,7 +48,7 @@ class ApiKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     scope_id: Mapped[UUID | None] = mapped_column(
         UUIDType(),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="NO ACTION"),
         nullable=True,
     )
     token_prefix: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)

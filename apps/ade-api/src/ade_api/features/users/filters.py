@@ -48,9 +48,9 @@ def apply_user_filters(stmt: Select, filters: UserFilters) -> Select:
             )
         )
     if filters.is_active is not None:
-        stmt = stmt.where(User.is_active.is_(filters.is_active))
+        stmt = stmt.where(User.is_active == filters.is_active)
     if filters.is_service_account is not None:
-        stmt = stmt.where(User.is_service_account.is_(filters.is_service_account))
+        stmt = stmt.where(User.is_service_account == filters.is_service_account)
     return stmt
 
 

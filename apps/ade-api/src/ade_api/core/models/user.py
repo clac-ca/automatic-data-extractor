@@ -94,7 +94,7 @@ class UserCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "user_credentials"
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     last_rotated_at: Mapped[datetime | None] = mapped_column(
@@ -111,7 +111,7 @@ class UserIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "user_identities"
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)

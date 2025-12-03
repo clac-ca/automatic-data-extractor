@@ -36,10 +36,10 @@ class WorkspaceMembership(TimestampMixin, Base):
 
     __tablename__ = "workspace_memberships"
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), primary_key=True
     )
     workspace_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), primary_key=True
     )
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     workspace: Mapped[Workspace] = relationship("Workspace", back_populates="memberships")

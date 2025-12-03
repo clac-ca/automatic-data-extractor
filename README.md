@@ -227,6 +227,7 @@ Once installed (locally or inside the container), the `ade` CLI provides useful 
 * `ade build` — build the frontend and bundle it into the backend static assets
 * `ade start` — run the backend using the built SPA
 * `ade ci` — run the full CI suite (lint, tests, build)
+* `ade users ...` — manage users (list/create/update, assign or remove roles)
 
 See `ade --help` for more options.
 
