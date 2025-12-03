@@ -21,7 +21,9 @@ def detect_mixed_text_and_numbers(
     state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
@@ -73,7 +75,9 @@ def detect_value_patterns(
     state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """

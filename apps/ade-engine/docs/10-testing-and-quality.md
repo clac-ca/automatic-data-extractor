@@ -312,7 +312,7 @@ Key tests:
 * Telemetry events:
 
   * `FileEventSink` writes well‑formed NDJSON.
-  * `PipelineLogger.note` and `.event` respect `min_*_level` thresholds.
+  * Run logger and `EventEmitter` respect `min_*_level` thresholds on the configured sinks.
   * `run.started`, `run.table.summary`, `run.completed` payloads validate against schema.
 
 ---
@@ -465,7 +465,7 @@ When tests fail, a few patterns help quickly identify where the problem lives.
 
   * Check `mapped_columns` / `unmapped_columns` for unexpected field/header matches.
   * Check validation aggregates for surprising issue counts.
-* Add temporary assertions or `PipelineLogger.note` calls in the failing area,
+* Add temporary assertions or `logger.debug` / `event_emitter.custom` calls in the failing area,
   then re‑run the specific test.
 
 ### 8.2 Script errors

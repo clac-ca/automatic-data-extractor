@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -14,7 +15,7 @@ from ade_engine.schemas.run_summary import (
 def _build_summary(**overrides):
     return RunSummaryV1(
         run=RunSummaryRun(
-            id="run-1",
+            id=uuid4(),
             status="succeeded",
             started_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
             **overrides,
@@ -41,7 +42,7 @@ def test_run_summary_forbids_extra_fields():
 
     with pytest.raises(ValidationError):
         RunSummaryRun(
-            id="run-1",
+            id=uuid4(),
             status="succeeded",
             started_at=datetime.now(tz=timezone.utc),
             unexpected=True,  # type: ignore[arg-type]

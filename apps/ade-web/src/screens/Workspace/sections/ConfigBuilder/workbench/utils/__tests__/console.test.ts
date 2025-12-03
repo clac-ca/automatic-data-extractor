@@ -161,4 +161,72 @@ describe("describeRunEvent", () => {
     expect(line.message).toContain("Unmapped: Co., Company Name, Union Code");
     expect(line.message).toContain("header row 4");
   });
+
+  it("formats run.column_detector.score", () => {
+    const event: AdeEvent = {
+      type: "run.column_detector.score",
+      created_at: "2025-12-03T23:05:45.909440Z",
+      payload: {
+        field: "last_name",
+        threshold: 0.5,
+        chosen: {
+          column_index: 6,
+          header: "Last Name",
+          score: 0.9,
+          passed_threshold: true,
+          contributions: [{ detector: "ade_config.column_detectors.last_name.detect_last_name", delta: 0.9 }],
+        },
+        candidates: [
+          { header: "Last Name", score: 0.9, passed_threshold: true },
+          { header: "Co.", score: 0.35, passed_threshold: false },
+        ],
+      },
+    };
+    const line = describeRunEvent(event);
+    expect(line.level).toBe("success");
+    expect(line.message).toContain("Matched last_name");
+    expect(line.message).toContain("Last Name");
+    expect(line.message).toContain("0.90");
+    expect(line.message).toContain("Top candidates:");
+  });
+
+  it("formats run.row_detector.score", () => {
+    const event: AdeEvent = {
+      type: "run.row_detector.score",
+      created_at: "2025-12-03T23:05:45.906917Z",
+      payload: {
+        thresholds: { header: 0.6, data: 0.5 },
+        header_row_index: 4,
+        data_row_start_index: 5,
+        data_row_end_index: 39,
+        trigger: {
+          row_index: 4,
+          header_score: 1.1,
+          data_score: 0.1,
+          contributions: [
+            { detector: "ade_config.row_detectors.header.detect_known_header_words", scores: { header: 0.6 } },
+            { detector: "ade_config.row_detectors.data.detect_mixed_text_and_numbers", scores: { data: 0.1 } },
+          ],
+          sample: ["Co.", "Company Name"],
+        },
+      },
+    };
+    const line = describeRunEvent(event);
+    expect(line.level).toBe("warning");
+    expect(line.message).toContain("header row 4");
+    expect(line.message).toContain("data rows 5-39");
+    expect(line.message).toContain("hdr");
+    expect(line.message).toContain("Sample");
+  });
+
+  it("formats run.transform.* events", () => {
+    const event: AdeEvent = {
+      type: "run.transform.member_id.missing",
+      created_at: "2025-12-03T23:12:09.287718Z",
+      payload: { row_index: 5 },
+    };
+    const line = describeRunEvent(event);
+    expect(line.message).toContain("Transform: member_id.missing");
+    expect(line.message).toContain("row 5");
+  });
 });

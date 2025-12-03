@@ -33,7 +33,9 @@ def detect_known_header_words(
     state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
@@ -70,7 +72,9 @@ def detect_mostly_text(
     state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """
@@ -106,7 +110,9 @@ def detect_early_row_bias(
     state: dict[str, Any] | None = None,
     row_index: int,
     row_values: list[Any],
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> dict[str, dict[str, float]]:
     """

@@ -12,6 +12,9 @@ This document explains:
 * How scores are combined and resolved
 * How to add or customize detectors
 
+> Script API v3: detector functions must be keyword-only and declare both `logger`
+> and `event_emitter` parameters (plus `**_` for future args).
+
 ---
 
 ## 1. What is a column detector?

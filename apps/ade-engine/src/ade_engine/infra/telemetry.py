@@ -133,12 +133,8 @@ class TelemetryConfig:
 
 
 @dataclass
-class PipelineLogger:
-    """Unified facade for ADE events.
-
-    This logger owns the per-run sequence counter and wraps low-level sinks so
-    callers can think in terms of semantic event types (console.line, run.table.summary, ...).
-    """
+class EventEmitter:
+    """Run-scoped telemetry emitter for structured ADE events."""
 
     run: RunContext
     event_sink: EventSink | None = None
@@ -152,9 +148,9 @@ class PipelineLogger:
     # Monotonic sequence number for this run's event stream.
     _sequence: int = field(default=0, init=False, repr=False)
 
-    # --------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
     # Internal helpers
-    # --------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
 
     def _next_sequence(self) -> int:
         self._sequence += 1
@@ -175,37 +171,48 @@ class PipelineLogger:
         )
         self.event_sink.emit(event)
 
-    # --------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
     # Public helpers
-    # --------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
 
-    def note(self, message: str, *, level: str = "info", stream: str = "stdout", **details: Any) -> None:
-        """Emit a standardized console.line event."""
+    def console_line(
+        self,
+        message: str,
+        *,
+        level: str = "info",
+        stream: str = "stdout",
+        scope: str = "run",
+        logger: str | None = None,
+        engine_timestamp: int | float | str | None = None,
+        **details: Any,
+    ) -> None:
+        """Emit a standardized console.line event (used internally for log bridging)."""
 
         payload: dict[str, Any] = {
-            "scope": "run",
+            "scope": scope,
             "message": message,
             "level": level,
             "stream": stream,
         }
+        if logger:
+            payload["logger"] = logger
+        if engine_timestamp is not None:
+            payload["engine_timestamp"] = engine_timestamp
         if details:
             payload["details"] = details
         self._emit("console.line", payload=payload)
 
-    def event(self, type_suffix: str, *, level: str | None = "info", **payload: Any) -> None:
+    def custom(self, type_suffix: str, **payload: Any) -> None:
         """Emit a run.* lifecycle/metadata event."""
 
-        event_payload = dict(payload)
-        if level is not None:
-            event_payload["level"] = level
-        self._emit(f"run.{type_suffix}", payload=event_payload or None)
+        self._emit(f"run.{type_suffix}", payload=payload or None)
 
-    def pipeline_phase(self, phase: str, **payload: Any) -> None:
+    def phase_started(self, phase: str, **payload: Any) -> None:
         """Emit a run.phase.started event."""
 
         self._emit("run.phase.started", payload={"phase": phase, **payload})
 
-    def record_table(self, table: NormalizedTable) -> None:
+    def table_summary(self, table: NormalizedTable) -> None:
         """Emit a run.table.summary event for a single normalized table."""
 
         extracted = table.mapped.extracted
@@ -288,19 +295,7 @@ class PipelineLogger:
 
 
 def _aggregate_validation(issues: list[Any]) -> dict[str, Any]:
-    """Aggregate validation issues into a compact summary.
-
-    Returned shape aligns with the examples used for ``run.table.summary`` and
-    ``run.validation.summary`` events:
-
-    {
-        "issues_total": 5,
-        "issues_by_severity": {...},
-        "issues_by_code": {...},
-        "issues_by_field": {...},
-        "max_severity": "warning"
-    }
-    """
+    """Aggregate validation issues into a compact summary."""
 
     total = 0
     by_severity: defaultdict[str, int] = defaultdict(int)
@@ -361,3 +356,12 @@ def _aggregate_validation(issues: list[Any]) -> dict[str, Any]:
         "issues_by_field": summary_by_field,
         "max_severity": max_severity,
     }
+
+
+__all__ = [
+    "DispatchEventSink",
+    "EventEmitter",
+    "EventSink",
+    "FileEventSink",
+    "TelemetryConfig",
+]

@@ -243,6 +243,14 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
+    case "run.column_detector.score":
+      return attachRaw(formatColumnDetectorScore(payload, ts));
+    case "run.row_detector.score":
+      return attachRaw(formatRowDetectorScore(payload, ts));
+    case "run.hook.checkpoint":
+      return attachRaw(formatHookCheckpoint(payload, ts));
+    case "run.hook.mapping_checked":
+      return attachRaw(formatMappingChecked(payload, ts));
     case "run.validation.issue": {
       const sev = (payload.severity as string | undefined) ?? "info";
       return attachRaw({
@@ -280,6 +288,9 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
     case "run.completed":
       return attachRaw(formatRunCompletion(payload, ts));
     default:
+      if (type.startsWith("run.transform.")) {
+        return attachRaw(formatTransformEvent(type, payload, ts));
+      }
       return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
   }
 }
@@ -500,4 +511,167 @@ function basename(path: string): string {
   if (!trimmed) return "";
   const parts = trimmed.split("/");
   return parts[parts.length - 1] || trimmed;
+}
+
+function formatColumnDetectorScore(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const field = (payload.field as string | undefined) ?? "field";
+  const threshold = asNumber(payload.threshold);
+  const chosen = (payload.chosen as Record<string, unknown> | undefined) ?? {};
+  const header = (chosen.header as string | undefined) ?? "unknown";
+  const score = asNumber(chosen.score) ?? 0;
+  const passed = chosen.passed_threshold === true;
+  const columnIndex = asNumber(chosen.column_index) ?? asNumber(chosen.source_column_index);
+  const candidates = Array.isArray(payload.candidates)
+    ? (payload.candidates as Array<Record<string, unknown>>)
+    : [];
+  const candidatePreview = candidates
+    .slice(0, 3)
+    .map((candidate) => {
+      const name = (candidate.header as string | undefined) ?? `col ${asNumber(candidate.column_index) ?? "?"}`;
+      const candidateScore = formatScore(asNumber(candidate.score));
+      const ok = candidate.passed_threshold === true ? "✓" : "";
+      return `"${name}" ${candidateScore}${ok ? ` ${ok}` : ""}`;
+    })
+    .join(" | ");
+  const contributions = Array.isArray(chosen.contributions)
+    ? (chosen.contributions as Array<Record<string, unknown>>)
+    : [];
+  const contribPreview = contributions
+    .slice(0, 3)
+    .map((entry) => `${shortName(entry.detector as string)} ${formatScore(asNumber(entry.delta))}`)
+    .join(", ");
+
+  const passedText =
+    threshold !== undefined
+      ? `${formatScore(score)} ${passed ? "≥" : "<"} ${formatScore(threshold)}`
+      : formatScore(score);
+  const primary = passed
+    ? `Matched ${field} to "${header}"${columnIndex !== undefined ? ` (col ${columnIndex})` : ""} · score ${passedText}`
+    : `No match for ${field}${threshold !== undefined ? ` (score ${passedText})` : ""}`;
+  const secondary = candidatePreview ? `Top candidates: ${candidatePreview}` : "";
+  const tertiary = contribPreview ? `Signals: ${contribPreview}` : "";
+  const level: WorkbenchConsoleLine["level"] = passed ? "success" : "warning";
+
+  return {
+    level,
+    message: [primary, secondary, tertiary].filter(Boolean).join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatRowDetectorScore(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const thresholds = (payload.thresholds as Record<string, unknown> | undefined) ?? {};
+  const headerThreshold = asNumber(thresholds.header);
+  const dataThreshold = asNumber(thresholds.data);
+  const headerRow = asNumber(payload.header_row_index);
+  const dataStart = asNumber(payload.data_row_start_index);
+  const dataEnd = asNumber(payload.data_row_end_index);
+  const trigger = (payload.trigger as Record<string, unknown> | undefined) ?? {};
+  const triggerRow = asNumber(trigger.row_index);
+  const headerScore = (trigger.scores as Record<string, unknown> | undefined)?.header ?? trigger.header_score;
+  const dataScore = (trigger.scores as Record<string, unknown> | undefined)?.data ?? trigger.data_score;
+  const headerScoreNum = asNumber(headerScore) ?? 0;
+  const dataScoreNum = asNumber(dataScore) ?? 0;
+  const contributions = Array.isArray(trigger.contributions)
+    ? (trigger.contributions as Array<Record<string, unknown>>)
+    : [];
+  const contribPreview = contributions
+    .flatMap((entry) => {
+      const detector = shortName(entry.detector as string);
+      const scores = (entry.scores as Record<string, unknown> | undefined) ?? {};
+      return Object.entries(scores).map(
+        ([kind, value]) => `${detector} ${kind}:${formatScore(asNumber(value))}`,
+      );
+    })
+    .sort()
+    .slice(0, 3)
+    .join("; ");
+  const sample =
+    Array.isArray(trigger.sample) && trigger.sample.length
+      ? `Sample: ${trigger.sample.slice(0, 5).join(", ")}${trigger.sample.length > 5 ? "…" : ""}`
+      : "";
+
+  const primary = `Picked header row ${headerRow ?? "?"}, data rows ${dataStart ?? "?"}-${dataEnd ?? "?"}${triggerRow !== undefined ? ` (trigger ${triggerRow})` : ""}`;
+  const secondary = `hdr ${formatScore(headerScoreNum)}${headerThreshold !== undefined ? `/${formatScore(headerThreshold)}` : ""} · data ${formatScore(dataScoreNum)}${dataThreshold !== undefined ? `/${formatScore(dataThreshold)}` : ""}`;
+  const tertiary = contribPreview ? `Signals: ${contribPreview}` : sample;
+  const level: WorkbenchConsoleLine["level"] =
+    (headerThreshold !== undefined && headerScoreNum < headerThreshold) ||
+    (dataThreshold !== undefined && dataScoreNum < dataThreshold)
+      ? "warning"
+      : "info";
+
+  return {
+    level,
+    message: [primary, secondary, tertiary, sample && contribPreview ? sample : ""].filter(Boolean).join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatHookCheckpoint(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const stage = (payload.stage as string | undefined) ?? "checkpoint";
+  return {
+    level: "info",
+    message: `Hook checkpoint: ${stage}`,
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatMappingChecked(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const mapped = asNumber(payload.mapped_columns) ?? 0;
+  const extra = asNumber(payload.extra_columns) ?? 0;
+  const level: WorkbenchConsoleLine["level"] = mapped === 0 ? "warning" : mapped > 0 ? "success" : "info";
+  return {
+    level,
+    message: `Mapping result: ${mapped} mapped, ${extra} extra`,
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatScore(value: number | undefined): string {
+  if (value === undefined || Number.isNaN(value)) return "?";
+  return value.toFixed(2);
+}
+
+function shortName(name?: string): string {
+  if (!name) return "";
+  const parts = name.split("."); // e.g., module.fn
+  return parts[parts.length - 1] || name;
+}
+
+function formatTransformEvent(
+  type: string,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const segments = type.split(".");
+  const name = segments.slice(2).join(".") || "transform";
+  const rowIndex = asNumber(payload.row_index);
+  const message = `Transform: ${name}${rowIndex !== undefined ? ` (row ${rowIndex})` : ""}`;
+  return {
+    level: "info",
+    message,
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
 }

@@ -24,11 +24,13 @@ and stamps those fields before persisting/streaming to clients.
 
 ## 2. Event catalog (engine-origin)
 
-- **`console.line`** — emitted via `PipelineLogger.note`
+- **`console.line`** — emitted via the run logger bridged by `TelemetryLogHandler`.
   - Payload: `scope:"run"`, `stream:"stdout"|"stderr"`, `level` (default `info`), `message`, optional `logger`, `engine_timestamp`.
 - **`run.started`** — emitted once per engine invocation with `status:"in_progress"` and `engine_version`.
-- **`run.phase.started`** — optional progress markers (`extracting`, `mapping`, `normalizing`, `writing_output`, etc.) emitted via `PipelineLogger.pipeline_phase`.
+- **`run.phase.started`** — optional progress markers (`extracting`, `mapping`, `normalizing`, `writing_output`, etc.) emitted via `EventEmitter.phase_started`.
   - The engine **does not emit `run.phase.completed`** today.
+- **`run.row_detector.score`** — emitted per extracted table with header/data thresholds, trigger row scores/contributions, and data row ranges.
+- **`run.column_detector.score`** — emitted per manifest field per table with threshold, chosen column (or unmapped), and top-N candidate scores + contribution breakdown.
 - **`run.table.summary`** — one per normalized table; includes source file/sheet, table_index, row/column counts, mapping (`mapped_columns` + `unmapped_columns`), `mapped_fields` summary, `unmapped_column_count`, validation breakdowns (`total`, `by_severity`, `by_code`, `by_field`), and header/data row indices.
 - **`run.validation.summary`** — aggregated validation counts (emitted when issues exist).
 - **`run.validation.issue`** — optional per-issue events for debugging.

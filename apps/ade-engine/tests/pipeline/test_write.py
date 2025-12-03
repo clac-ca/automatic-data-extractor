@@ -1,7 +1,9 @@
 import json
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from openpyxl import load_workbook
@@ -9,7 +11,7 @@ from openpyxl import load_workbook
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_extracted_tables, normalize_table, write_workbook
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.telemetry import EventEmitter, FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -31,7 +33,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], writer: dict | None = No
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -73,7 +75,7 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
         logs_dir=tmp_path / "logs",
     )
     return RunContext(
-        run_id="run-1",
+        run_id=uuid4(),
         metadata={},
         manifest=manifest,
         paths=paths,
@@ -81,8 +83,9 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
     )
 
 
-def _logger(run: RunContext, manifest) -> PipelineLogger:
-    return PipelineLogger(run=run)
+def _event_emitter(run: RunContext) -> EventEmitter:
+    sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
+    return EventEmitter(run=run, event_sink=sink)
 
 
 def test_writes_combined_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +99,7 @@ def test_writes_combined_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch
         pkg_dir,
         "alpha",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "alpha" else 0.0
 """,
     )
@@ -104,7 +107,7 @@ def detect_header(*, header, **_):
         pkg_dir,
         "beta",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "beta" else 0.0
 """,
     )
@@ -112,6 +115,8 @@ def detect_header(*, header, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
+    event_emitter = _event_emitter(run)
+    logger = logging.getLogger("test_write")
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -124,11 +129,16 @@ def detect_header(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
-    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped)
+    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run, event_emitter=event_emitter)[0]
+    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, event_emitter=event_emitter)
 
-    pipeline_logger = _logger(run, runtime.manifest)
-    output_path = write_workbook(ctx=run, cfg=runtime, tables=[normalized], pipeline_logger=pipeline_logger)
+    output_path = write_workbook(
+        ctx=run,
+        cfg=runtime,
+        tables=[normalized],
+        event_emitter=event_emitter,
+        logger=logger,
+    )
 
     workbook = load_workbook(output_path)
     sheet = workbook["Combined"]
@@ -147,7 +157,7 @@ def test_creates_unique_sheets_and_runs_hooks(tmp_path: Path, monkeypatch: pytes
         pkg_dir,
         "on_before_save",
         """
-def run(*, workbook, tables, **_):
+def run(*, workbook, tables, logger, event_emitter, **_):
     sheet = workbook.create_sheet(title="Hooked")
     sheet["A1"] = tables[0].output_sheet_name
 """,
@@ -168,7 +178,7 @@ def run(*, workbook, tables, **_):
         pkg_dir,
         "alpha",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower().startswith("alpha") else 0.0
 """,
     )
@@ -176,6 +186,8 @@ def detect_header(*, header, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
+    event_emitter = _event_emitter(run)
+    logger = logging.getLogger("test_write")
 
     raw_one = ExtractedTable(
         source_file=tmp_path / "first.csv",
@@ -198,11 +210,20 @@ def detect_header(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped_tables = map_extracted_tables(tables=[raw_one, raw_two], runtime=runtime, run=run)
-    normalized_tables = [normalize_table(ctx=run, cfg=runtime, mapped=mapped) for mapped in mapped_tables]
+    mapped_tables = map_extracted_tables(
+        tables=[raw_one, raw_two], runtime=runtime, run=run, event_emitter=event_emitter
+    )
+    normalized_tables = [
+        normalize_table(ctx=run, cfg=runtime, mapped=mapped, event_emitter=event_emitter) for mapped in mapped_tables
+    ]
 
-    pipeline_logger = _logger(run, runtime.manifest)
-    output_path = write_workbook(ctx=run, cfg=runtime, tables=normalized_tables, pipeline_logger=pipeline_logger)
+    output_path = write_workbook(
+        ctx=run,
+        cfg=runtime,
+        tables=normalized_tables,
+        event_emitter=event_emitter,
+        logger=logger,
+    )
 
     workbook = load_workbook(output_path)
     sheet_names = workbook.sheetnames

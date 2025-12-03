@@ -12,7 +12,8 @@ def run(
     run: Any | None = None,
     state: dict[str, Any] | None = None,
     manifest: Any | None = None,
-    logger: Any | None = None,
+    logger=None,
+    event_emitter=None,
     stage: Any | None = None,
     **_: Any,
 ) -> list[Any] | None:
@@ -30,11 +31,7 @@ def run(
         return None
 
     if logger is not None:
-        logger.note(
-            "Finished extract phase",
-            stage=stage,
-            table_count=len(tables),
-        )
+        logger.info("Finished extract phase: %s tables", len(tables))
 
     # Example: drop empty tables
     filtered = []
@@ -43,11 +40,10 @@ def run(
         if data_rows:
             filtered.append(t)
         elif logger is not None:
-            logger.note(
-                "Dropping empty table",
-                file=str(getattr(t, "source_file", "")),
-                sheet=getattr(t, "source_sheet", None),
-                stage=stage,
+            logger.info(
+                "Dropping empty table file=%s sheet=%s",
+                getattr(t, "source_file", ""),
+                getattr(t, "source_sheet", None),
             )
 
     return filtered

@@ -9,12 +9,12 @@
 
 ## Work Package Checklist
 
-* [ ] Introduce the new **run-scoped** `logger` + `event_emitter` primitives (and remove `PipelineLogger` from config-facing surfaces)
-* [ ] Thread `logger` + `event_emitter` through **every** engine pipeline stage and **every** ade-config callable (detectors/transforms/validators/hooks)
-* [ ] Enforce **script_api_version=3** and update all signature validation to require `logger` + `event_emitter` (no backwards compatibility)
-* [ ] Add **automatic** `run.column_detector.score` and `run.row_detector.score` events emitted by the engine (no changes required in detectors)
-* [ ] Update all tests + fixtures to the new API and event shapes (including schema tests)
-* [ ] Update all docs and rewrite config templates under `apps/ade-api/src/ade_api/templates` (include usage examples for both `logger` and `event_emitter`)
+* [x] Introduce the new **run-scoped** `logger` + `event_emitter` primitives (and remove `PipelineLogger` from config-facing surfaces)
+* [x] Thread `logger` + `event_emitter` through **every** engine pipeline stage and **every** ade-config callable (detectors/transforms/validators/hooks)
+* [x] Enforce **script_api_version=3** and update all signature validation to require `logger` + `event_emitter` (no backwards compatibility)
+* [x] Add **automatic** `run.column_detector.score` and `run.row_detector.score` events emitted by the engine (no changes required in detectors)
+* [x] Update all tests + fixtures to the new API and event shapes (including schema tests)
+* [x] Update all docs and rewrite config templates under `apps/ade-api/src/ade_api/templates` (include usage examples for both `logger` and `event_emitter`)
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:

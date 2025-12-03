@@ -16,6 +16,9 @@ This document explains:
 - what information your hook functions receive,
 - and some practical examples you can copy.
 
+> Script API v3: hooks must be keyword-only and include both `logger` and
+> `event_emitter` keyword arguments (plus `**_` for future args).
+
 You don’t have to be a Python expert.  
 Think of hooks as **small functions that ADE calls at certain points**, passing you useful information.
 
@@ -199,7 +202,7 @@ most common method is:
 
 ```python
 if logger is not None:
-    logger.note(
+    logger.info(
         "short_message",
         key1=value1,
         key2=value2,
@@ -245,7 +248,7 @@ def run(*, run=None, logger=None, state=None, stage=None, **kwargs):
     if state is not None:
         state["run_id"] = run_id
 
-    logger.note(
+    logger.info(
         "run_started",
         stage=stage,
         run_id=run_id,
@@ -281,7 +284,7 @@ def run(*, tables=None, logger=None, stage=None, **kwargs):
             kept.append(t)
         else:
             if logger is not None:
-                logger.note(
+                logger.info(
                     "dropped_empty_table",
                     stage=stage,
                     file=source_file,
@@ -289,7 +292,7 @@ def run(*, tables=None, logger=None, stage=None, **kwargs):
                 )
 
     if logger is not None:
-        logger.note(
+        logger.info(
             "extract_summary",
             stage=stage,
             total=len(tables),
@@ -324,7 +327,7 @@ def run(*, tables=None, logger=None, stage=None, **kwargs):
         mapping = getattr(mapped_table, "mapping", []) or []
         extras = getattr(mapped_table, "extras", []) or []
 
-        logger.note(
+        logger.info(
             "mapped_table",
             stage=stage,
             file=source_file,
@@ -371,7 +374,7 @@ def run(*, workbook=None, tables=None, logger=None, stage=None, **kwargs):
     sheet.add_table(excel_table)
 
     if logger is not None:
-        logger.note(
+        logger.info(
             "styled_workbook",
             stage=stage,
             sheet=sheet.title,
@@ -403,7 +406,7 @@ def run(*, run=None, result=None, logger=None, stage=None, **kwargs):
     status = getattr(result, "status", None)
     output_paths = getattr(result, "output_paths", ()) or ()
 
-    logger.note(
+    logger.info(
         "run_finished",
         stage=stage,
         run_id=run_id,
