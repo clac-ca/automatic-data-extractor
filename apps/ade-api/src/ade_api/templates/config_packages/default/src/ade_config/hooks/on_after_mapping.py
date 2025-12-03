@@ -12,7 +12,8 @@ def run(
     run: Any | None = None,
     state: dict[str, Any] | None = None,
     manifest: Any | None = None,
-    logger: Any | None = None,
+    logger=None,
+    event_emitter=None,
     stage: Any | None = None,
     **_: Any,
 ) -> list[Any] | None:
@@ -36,14 +37,20 @@ def run(
         mapping = getattr(mapped_table, "mapping", []) or []
         extras = getattr(mapped_table, "extras", []) or []
 
-        logger.note(
-            "Mapped table",
-            file=source_file,
-            sheet=source_sheet,
-            mapped_columns=len(mapping),
-            extra_columns=len(extras),
-            stage=stage,
+        logger.info(
+            "Mapped table file=%s sheet=%s mapped=%s extras=%s",
+            source_file,
+            source_sheet,
+            len(mapping),
+            len(extras),
         )
+        if event_emitter is not None:
+            event_emitter.custom(
+                "hook.mapping_checked",
+                table_index=getattr(extracted, "table_index", None),
+                mapped_columns=len(mapping),
+                extra_columns=len(extras),
+            )
 
     # Example: just log, no structural change.
     return tables

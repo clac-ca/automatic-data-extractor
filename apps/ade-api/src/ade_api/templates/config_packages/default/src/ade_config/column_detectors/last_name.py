@@ -11,16 +11,14 @@ def detect_last_name(
     *,
     run: dict[str, Any] | None = None,
     state: dict[str, Any] | None = None,
-    field_name: str = _FIELD,
-    field_meta: dict[str, Any] | None = None,
-    header: str | None = None,
-    column_values_sample: list[Any] | None = None,
-    column_values: tuple[Any, ...] | None = None,
-    table: dict[str, Any] | None = None,
-    column_index: int | None = None,
+    raw_table: Any | None = None,
+    column_index: int,
+    header: str | None,
+    column_values_sample: list[Any],
+    column_values: list[Any],
     manifest: dict[str, Any] | None = None,
-    env: dict[str, Any] | None = None,
-    logger: Any | None = None,
+    logger,
+    event_emitter,
     **_: Any,
 ) -> float:
     """
@@ -28,14 +26,10 @@ def detect_last_name(
 
     Args:
         run/state: run metadata and shared cache available for scoring.
-        field_name: canonical field this detector serves.
-        field_meta: manifest metadata describing synonyms/requirements.
         header: cleaned header text for this column (if present).
         column_values_sample: stratified sample of column values.
-        column_values: full column (only touch if necessary).
-        table/column_index: full table context and column position.
-        manifest/env: manifest/env overrides for extra hints.
-        logger: logger for diagnostics.
+        column_index: full table context and column position.
+        logger/event_emitter: logger for diagnostics; event_emitter for structured run events.
         **_: extra future-proof keywords.
     """
     sample_values = column_values_sample or []
@@ -63,13 +57,14 @@ def transform(
     *,
     run: dict[str, Any] | None = None,
     state: dict[str, Any] | None = None,
-    row_index: int | None = None,
-    field_name: str = _FIELD,
-    value: Any = None,
-    row: dict[str, Any] | None = None,
+    row_index: int,
+    field_name: str,
+    value: Any,
+    row: dict[str, Any],
+    field_config: dict[str, Any] | None = None,
     manifest: dict[str, Any] | None = None,
-    env: dict[str, Any] | None = None,
-    logger: Any | None = None,
+    logger,
+    event_emitter,
     **_: Any,
 ) -> dict[str, Any] | None:
     """

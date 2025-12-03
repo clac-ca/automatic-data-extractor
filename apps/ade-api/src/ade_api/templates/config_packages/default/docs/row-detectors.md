@@ -9,6 +9,9 @@ Their job is to answer very simple questions:
 - “Which rows are **data** (actual records)?”
 - “Which rows should be **ignored** (titles, notes, totals, etc.)?”
 
+> Script API v3 requires row detectors to be keyword-only and accept both
+> `logger` and `event_emitter` keyword arguments (plus `**_`).
+
 You describe those rules in the files under:
 
 ```text
@@ -34,7 +37,7 @@ When ADE reads a sheet:
 
    * the row’s position (`row_index`),
    * the list of cell values in that row (`row_values`),
-   * and some extra context (run info, a shared `state` dictionary, and a `logger`).
+   * and some extra context (run info, a shared `state` dictionary, a `logger`, and an `event_emitter`).
 
 Your function:
 
@@ -152,7 +155,7 @@ You can ignore it, or use it like this:
 
 ```python
 if logger is not None:
-    logger.note(
+    logger.info(
         "row_scored_for_header",
         stage="row-detect",
         row_index=row_index,

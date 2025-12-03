@@ -10,11 +10,12 @@ from uuid import uuid7
 
 from ade_engine.config.loader import ConfigRuntime, load_config_runtime
 from ade_engine.config.hook_registry import HookStage
-from ade_engine.core.errors import InputError, error_to_run_error
+from ade_engine.core.errors import ConfigError, InputError, error_to_run_error
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.pipeline.pipeline_runner import execute_pipeline
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
-from ade_engine.infra.telemetry import PipelineLogger, TelemetryConfig
+from ade_engine.infra.logging import build_run_logger
+from ade_engine.infra.telemetry import EventEmitter, TelemetryConfig
 
 
 def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path, Path]:
@@ -78,9 +79,15 @@ class Engine:
                 package=normalized_request.config_package, manifest_path=normalized_request.manifest_path
             )
             run_ctx.manifest = runtime.manifest
+            if runtime.manifest.model.script_api_version != 3:
+                raise ConfigError(
+                    f"Config manifest declares script_api_version={runtime.manifest.model.script_api_version}; "
+                    "this engine requires script_api_version=3. Update ade_config call signatures to accept "
+                    "logger and event_emitter."
+                )
 
             event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
-            pipeline_logger = PipelineLogger(
+            event_emitter = EventEmitter(
                 run=run_ctx,
                 event_sink=event_sink,
                 source="engine",
@@ -88,13 +95,14 @@ class Engine:
                 emitter_version=self.engine_info.version,
                 correlation_id=self.telemetry.correlation_id if self.telemetry else None,
             )
+            run_logger = build_run_logger(base_name="ade_engine.run", event_emitter=event_emitter, bridge_to_telemetry=True)
 
             # Engine-level run.started event (API may later wrap with additional context).
-            pipeline_logger.event(
+            event_emitter.custom(
                 "started",
-                level=None,
                 status="in_progress",
                 engine_version=self.engine_info.version,
+                config_version=runtime.manifest.model.version,
             )
 
             phase = RunPhase.HOOKS
@@ -106,7 +114,8 @@ class Engine:
                 tables=None,
                 workbook=None,
                 result=None,
-                logger=pipeline_logger,
+                logger=run_logger,
+                event_emitter=event_emitter,
             )
 
             phase = RunPhase.EXTRACTING
@@ -114,8 +123,8 @@ class Engine:
                 request=normalized_request,
                 run=run_ctx,
                 runtime=runtime,
-                pipeline_logger=pipeline_logger,
-                logger=self.logger,
+                logger=run_logger,
+                event_emitter=event_emitter,
             )
 
             phase = RunPhase.COMPLETED
@@ -138,7 +147,15 @@ class Engine:
                 tables=normalized_tables,
                 workbook=None,
                 result=provisional,
-                logger=pipeline_logger,
+                logger=run_logger,
+                event_emitter=event_emitter,
+            )
+
+            event_emitter.custom(
+                "completed",
+                status="succeeded",
+                processed_files=processed_files,
+                output_paths=[str(path) for path in output_paths],
             )
 
             return provisional
@@ -148,8 +165,16 @@ class Engine:
             self.logger.exception("Run failed", exc_info=exc)
 
             try:
-                if "pipeline_logger" in locals():
-                    pass  # Completion events are emitted by the API layer.
+                if "event_emitter" in locals():
+                    event_emitter.custom(
+                        "completed",
+                        status="failed",
+                        failure={
+                            "code": error.code.value if hasattr(error, "code") else None,
+                            "stage": error.stage.value if hasattr(error, "stage") and error.stage else None,
+                            "message": getattr(error, "message", str(exc)),
+                        },
+                    )
             except Exception:
                 # Telemetry failures should never mask the underlying error.
                 pass

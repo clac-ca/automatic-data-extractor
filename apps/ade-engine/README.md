@@ -401,8 +401,9 @@ workbook(s). Events use the `AdeEvent` envelope defined in
 
 Key events the engine emits:
 
-- `console.line` — via `PipelineLogger.note`; payload has `scope:"run"`, `stream`, `level`, `message`.
+- `console.line` — via the run logger bridged by `TelemetryLogHandler`; payload has `scope:"run"`, `stream`, `level`, `message`.
 - `run.started` — emitted at the start of `Engine.run` with `status:"in_progress"` and `engine_version`.
+- `run.row_detector.score` / `run.column_detector.score` — engine-emitted scoring summaries for extraction/mapping.
 - `run.table.summary` — one per normalized table with mapping + validation breakdowns.
 - `run.validation.summary` — aggregated validation counts (optional, emitted when there are issues).
 - `run.validation.issue` — optional per-issue events.
@@ -414,12 +415,12 @@ How it’s written:
 - Default sink: `FileEventSink` created by `TelemetryConfig.build_sink` (writes to `<logs_dir>/events.ndjson`).
 - Sequence/event_id: not set by the engine; the ADE API re-envelops engine events, assigns `event_id`/`sequence`, and persists them to dispatcher-backed logs for streaming.
 
-Engine-side API surface (`PipelineLogger`):
+Engine-side API surface (`EventEmitter` + run `logger`):
 
-- `note(message, level="info", stream="stdout", **details)` → `console.line`.
-- `event(type_suffix, level=None, **payload)` → emits `run.<type_suffix>`.
-- `pipeline_phase(phase, **payload)` → convenience for `run.phase.started` (only “started” is emitted today).
-- `record_table(table)` → emits `run.table.summary`.
+- `logger.debug/info/warning/error(...)` → bridged to `console.line` telemetry.
+- `custom(type_suffix, **payload)` → emits `run.<type_suffix>`.
+- `phase_started(phase, **payload)` → emits `run.phase.started` (only “started” is emitted today).
+- `table_summary(table)` → emits `run.table.summary`.
 - `validation_issue(**payload)` / `validation_summary(issues)` → emit validation events.
 
 For the detailed taxonomy and payloads used by ADE, see

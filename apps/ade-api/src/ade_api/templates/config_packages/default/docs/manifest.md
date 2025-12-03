@@ -21,7 +21,7 @@ Typical location: `manifest.json` (or similar) at the root of your workspace, re
   "version": "0.2.0",
   "name": "Default ADE Workspace Config",
   "description": "Starter config that detects a simple person/member schema.",
-  "script_api_version": 2,
+  "script_api_version": 3,
   "columns": {
     "order": ["member_id", "email", "first_name", "last_name"],
     "fields": {
@@ -116,8 +116,8 @@ Short description of what this manifest is for.
 
 Indicates which **hook/column-detector script API** version this manifest expects.
 
-* Example: `"script_api_version": 2`
-* Your detector modules and hook functions must be compatible with this API version.
+* Example: `"script_api_version": 3`
+* Your detector modules and hook functions must be compatible with this API version (`logger` + `event_emitter` keyword args are required).
 
 ---
 

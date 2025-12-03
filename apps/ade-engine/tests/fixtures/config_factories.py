@@ -41,7 +41,7 @@ def _write_row_detectors(package_dir: Path) -> None:
     (detectors / "basic.py").write_text(
         textwrap.dedent(
             """
-            def detect_header(*, row_index, **_):
+            def detect_header(*, row_index, logger, event_emitter, **_):
                 return {"scores": {"header": 1.0 if row_index == 1 else 0.0, "data": 1.0 if row_index > 1 else 0.0}}
             """
         )
@@ -61,7 +61,7 @@ def _write_column_module(
     (detectors / "__init__.py").write_text("")
 
     body = [
-        "def detect_header(*, header, **_):",
+        "def detect_header(*, header, logger, event_emitter, **_):",
         "    return 1.0 if (header or '').strip().lower() == '%s' else 0.0" % header.lower(),
     ]
 
@@ -69,7 +69,7 @@ def _write_column_module(
         body.extend(
             [
                 "",
-                "def transform(*, value, row, **_):",
+                "def transform(*, value, row, logger, event_emitter, **_):",
                 "    if value is None:",
                 "        return None",
                 "    row['%s'] = str(value).strip().title()" % field,
@@ -81,7 +81,7 @@ def _write_column_module(
         body.extend(
             [
                 "",
-                "def validate(*, value, **_):",
+                "def validate(*, value, logger, event_emitter, **_):",
                 "    if value in (None, ''):",
                 "        return [{'code': 'missing_value', 'severity': 'error', 'message': '%s is required'}]" % field,
                 "    return []",
@@ -100,7 +100,7 @@ def _write_hooks(package_dir: Path, *, failing: bool) -> None:
         (hooks / "failing.py").write_text(
             textwrap.dedent(
                 """
-                def run(*_, **__):
+                def run(*, logger, event_emitter, **__):
                     raise RuntimeError("hook boom")
                 """
             )
@@ -109,8 +109,9 @@ def _write_hooks(package_dir: Path, *, failing: bool) -> None:
         (hooks / "notes.py").write_text(
             textwrap.dedent(
                 """
-                def run(*, logger, **_):
-                    logger.note(message="hook ran")
+                def run(*, logger, event_emitter, **_):
+                    logger.info("hook ran")
+                    event_emitter.custom("hook.note", status="ok")
                 """
             )
         )
@@ -128,7 +129,7 @@ def _write_manifest(
         version="1.0.0",
         name="Fixture Config",
         description="minimal config for engine tests",
-        script_api_version=2,
+        script_api_version=3,
         columns=ColumnsConfig(
             order=[field for field, _ in fields],
             fields={

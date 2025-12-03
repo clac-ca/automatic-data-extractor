@@ -87,6 +87,54 @@ class RunPhaseCompletedPayload(AdeEventPayload):
     metrics: dict[str, Any] | None = None
 
 
+class ColumnDetectorContributionPayload(AdeEventPayload):
+    detector: str
+    delta: float
+
+
+class ColumnDetectorCandidatePayload(AdeEventPayload):
+    column_index: int | None = None
+    source_column_index: int | None = None
+    header: str | None = None
+    score: float | None = None
+    passed_threshold: bool | None = None
+    contributions: list[ColumnDetectorContributionPayload] | None = None
+
+
+class RunColumnDetectorScorePayload(AdeEventPayload):
+    source_file: str
+    source_sheet: str | None = None
+    table_index: int
+    field: str
+    threshold: float | None = None
+    chosen: ColumnDetectorCandidatePayload | None = None
+    candidates: list[ColumnDetectorCandidatePayload] | None = None
+
+
+class RowDetectorContributionPayload(AdeEventPayload):
+    detector: str
+    scores: dict[str, float] | None = None
+
+
+class RowDetectorTriggerPayload(AdeEventPayload):
+    row_index: int
+    header_score: float | None = None
+    data_score: float | None = None
+    contributions: list[RowDetectorContributionPayload] | None = None
+    sample: list[Any] | None = None
+
+
+class RunRowDetectorScorePayload(AdeEventPayload):
+    source_file: str
+    source_sheet: str | None = None
+    table_index: int
+    thresholds: dict[str, float] | None = None
+    header_row_index: int | None = None
+    data_row_start_index: int | None = None
+    data_row_end_index: int | None = None
+    trigger: RowDetectorTriggerPayload | None = None
+
+
 class RunTableSummaryPayload(AdeEventPayload):
     table_id: str
     source_file: str
@@ -180,16 +228,22 @@ __all__ = [
     "BuildPhaseCompletedPayload",
     "BuildPhaseStartedPayload",
     "BuildStartedPayload",
+    "ColumnDetectorCandidatePayload",
+    "ColumnDetectorContributionPayload",
     "ConsoleLinePayload",
     "RunCompletedPayload",
     "RunErrorPayload",
     "RunPhaseCompletedPayload",
     "RunPhaseStartedPayload",
+    "RunColumnDetectorScorePayload",
+    "RunRowDetectorScorePayload",
     "RunQueuedPayload",
     "RunStartedPayload",
     "RunTableSummaryPayload",
     "RunValidationIssuePayload",
     "RunValidationSummaryPayload",
+    "RowDetectorContributionPayload",
+    "RowDetectorTriggerPayload",
     "TelemetryEnvelope",
     "TelemetryEvent",
 ]

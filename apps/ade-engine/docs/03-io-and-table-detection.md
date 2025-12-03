@@ -370,7 +370,7 @@ Details:
 
 ## 7. Integration with telemetry
 
-`PipelineLogger` is available during extraction and may emit events like:
+The run `event_emitter` is available during extraction and may emit events like:
 
 * `run.phase.started` with phase `"extracting"`.
 * `console.line` breadcrumbs for human-readable progress.

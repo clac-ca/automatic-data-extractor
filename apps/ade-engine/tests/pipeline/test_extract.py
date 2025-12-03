@@ -4,6 +4,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import openpyxl
 import pytest
@@ -12,6 +13,7 @@ from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import extract_raw_tables
 from ade_engine.core.types import RunContext, RunPaths, RunRequest
 from ade_engine.core.errors import InputError
+from ade_engine.infra.telemetry import EventEmitter, FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -33,7 +35,7 @@ def _write_manifest(pkg_dir: Path) -> Path:
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {"order": [], "fields": {}},
         "hooks": {
             "on_run_start": [],
@@ -55,7 +57,7 @@ def _write_row_detector(pkg_dir: Path) -> None:
     (detector_dir / "__init__.py").write_text("")
     (detector_dir / "simple.py").write_text(
         """
-def detect_labels(*, row_values, **_):
+def detect_labels(*, row_values, logger, event_emitter, **_):
     cells = [str(c or "").lower() for c in row_values]
     header_score = 1.0 if cells and cells[0].startswith("header") else 0.0
     data_score = 1.0 if any(cells) and not header_score else 0.0
@@ -71,12 +73,17 @@ def _make_run_context(tmp_path: Path, run_request: RunRequest, manifest: object)
         logs_dir=tmp_path / "logs",
     )
     return RunContext(
-        run_id="run-1",
+        run_id=uuid4(),
         metadata={},
         manifest=manifest,
         paths=paths,
         started_at=datetime.utcnow(),
     )
+
+
+def _event_emitter(run: RunContext) -> EventEmitter:
+    sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
+    return EventEmitter(run=run, event_sink=sink)
 
 
 def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,8 +97,9 @@ def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.Monke
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[source_file])
     run = _make_run_context(tmp_path, request, runtime.manifest)
+    event_emitter = _event_emitter(run)
 
-    tables = extract_raw_tables(request=request, run=run, runtime=runtime)
+    tables = extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
 
     assert len(tables) == 1
     table = tables[0]
@@ -102,6 +110,14 @@ def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.Monke
     assert table.first_data_row_index == 2
     assert table.last_data_row_index == 3
     assert table.data_rows == [["value-1", "1"], ["value-2", "2"]]
+    events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().splitlines()]
+    score_events = [event for event in events if event["type"] == "run.row_detector.score"]
+    assert len(score_events) == 1
+    payload = score_events[0]["payload"]
+    assert payload["header_row_index"] == 1
+    assert payload["data_row_start_index"] == 2
+    assert payload["data_row_end_index"] == 3
+    assert payload["trigger"]["header_score"] == 1.0
 
 
 def test_detects_multiple_tables_per_sheet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,8 +140,9 @@ def test_detects_multiple_tables_per_sheet(tmp_path: Path, monkeypatch: pytest.M
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[source_file])
     run = _make_run_context(tmp_path, request, runtime.manifest)
+    event_emitter = _event_emitter(run)
 
-    tables = extract_raw_tables(request=request, run=run, runtime=runtime)
+    tables = extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
 
     assert [(t.table_index, t.source_sheet) for t in tables] == [(0, "Data"), (1, "Data")]
     assert tables[0].header_row_index == 1
@@ -147,8 +164,9 @@ def test_missing_requested_sheet_raises(tmp_path: Path, monkeypatch: pytest.Monk
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[tmp_path / "input.xlsx"], input_sheets=["Missing"])
     run = _make_run_context(tmp_path, request, runtime.manifest)
+    event_emitter = _event_emitter(run)
 
     with pytest.raises(InputError) as excinfo:
-        extract_raw_tables(request=request, run=run, runtime=runtime)
+        extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
 
     assert "Worksheet(s) Missing not found" in str(excinfo.value)

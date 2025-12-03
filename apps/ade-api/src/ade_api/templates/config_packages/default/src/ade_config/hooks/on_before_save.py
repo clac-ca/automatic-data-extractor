@@ -19,7 +19,8 @@ def run(
     run: Any | None = None,
     manifest: Any | None = None,
     state: dict[str, Any] | None = None,
-    logger: Any | None = None,
+    logger=None,
+    event_emitter=None,
     stage: Any | None = None,
     result: Any | None = None,
     **_: Any,
@@ -50,6 +51,8 @@ def run(
     sheet.add_table(excel_table)
 
     if logger is not None:
-        logger.note("Styled workbook with Excel table", stage=stage)
+        logger.info("Styled workbook with Excel table")
+    if event_emitter is not None:
+        event_emitter.custom("hook.workbook_styled", stage=getattr(stage, "value", stage))
 
     return workbook

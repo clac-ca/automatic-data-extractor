@@ -21,13 +21,23 @@ def _validate_keyword_only(func: Callable[..., object], *, label: str) -> None:
     """Ensure a callable uses keyword-only parameters and allows future kwargs."""
 
     signature = inspect.signature(func)
-    invalid_params = [p for p in signature.parameters.values() if p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD]
+    invalid_params = [
+        p
+        for p in signature.parameters.values()
+        if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.POSITIONAL_ONLY)
+    ]
     if invalid_params:
         names = ", ".join(p.name for p in invalid_params)
         raise ConfigError(f"{label} must declare keyword-only parameters (invalid: {names})")
 
     if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
         raise ConfigError(f"{label} must accept **_ for forwards compatibility")
+
+    missing = [name for name in ("logger", "event_emitter") if name not in signature.parameters]
+    if missing:
+        raise ConfigError(
+            f"{label} must accept logger and event_emitter keyword arguments (missing: {', '.join(missing)})"
+        )
 
 
 @dataclass

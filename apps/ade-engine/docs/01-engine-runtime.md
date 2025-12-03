@@ -123,7 +123,7 @@ Note: callers can derive `events.ndjson` as `logs_dir / "events.ndjson"`.
 
 1. **Normalize request**: validate exclusivity of `input_files`/`input_dir`, resolve `output_dir`/`logs_dir`.
 2. **Load config**: import `ade_config`, load `manifest.json`, build `ConfigRuntime`.
-3. **Initialize telemetry**: build an `EventSink` (default `FileEventSink` writing to `logs/events.ndjson`), and construct a `PipelineLogger` that emits `AdeEvent` envelopes.
+3. **Initialize telemetry**: build an `EventSink` (default `FileEventSink` writing to `logs/events.ndjson`), construct a run-scoped `EventEmitter`, and attach a run `logger` bridged to telemetry via `TelemetryLogHandler`.
 4. **Run hooks (ON_RUN_START)**: give hooks access to `run`, `manifest`, `logger`, and mutable `state`.
 5. **Extract**: discover and slice tables into `ExtractedTable` objects.
 6. **Map**: score headers and build `MappedTable` objects.

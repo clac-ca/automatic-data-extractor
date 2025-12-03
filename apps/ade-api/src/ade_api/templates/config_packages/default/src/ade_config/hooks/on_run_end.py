@@ -10,7 +10,8 @@ def run(
     *,
     run: Any | None = None,
     result: Any | None = None,
-    logger: Any | None = None,
+    logger=None,
+    event_emitter=None,
     state: dict[str, Any] | None = None,
     manifest: Any | None = None,
     tables: list[Any] | None = None,
@@ -30,10 +31,12 @@ def run(
     status = getattr(result, "status", None)
     output_paths = getattr(result, "output_paths", ()) or ()
 
-    logger.note(
-        "Run finished",
-        stage=stage,
-        run_id=run_id,
-        status=status,
-        outputs=[str(p) for p in output_paths],
-    )
+    logger.info("Run finished status=%s outputs=%s", status, [str(p) for p in output_paths])
+    if event_emitter is not None:
+        event_emitter.custom(
+            "hook.completed",
+            stage=getattr(stage, "value", stage),
+            run_id=str(run_id),
+            status=str(status),
+            outputs=[str(p) for p in output_paths],
+        )

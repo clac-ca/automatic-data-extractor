@@ -69,7 +69,8 @@ def normalize_table(
     ctx: RunContext,
     cfg: ConfigRuntime,
     mapped: MappedTable,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
 ) -> NormalizedTable:
     ...
 ```
@@ -92,9 +93,9 @@ Where:
 
     * `raw: ExtractedTable`
     * `column_map: ColumnMap` (`mapped_columns` + `unmapped_columns`)
-* `logger: PipelineLogger`
+* `logger: logging.Logger` / `event_emitter: EventEmitter`
 
-  * Unified logging/telemetry helper.
+  * `logger` for human-readable messages, `event_emitter` for structured events.
 
 Returns:
 
@@ -196,7 +197,8 @@ def transform(
     row: dict,                    # full canonical row (field -> value)
     field_config: dict | None,    # from manifest.columns.fields.get(field_name)
     manifest: ManifestContext,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     **_,
 ) -> dict | None:
     ...
@@ -209,7 +211,7 @@ Parameters to remember:
 * `row_index`: traceability back to original file.
 * `field_name`, `value`, `row`: the core of the normalization work.
 * `field_config`: the manifest’s field config for this field (e.g., label, required).
-* `logger`: use for notes/events (not `print`).
+* `logger`: use for notes (not `print`); use `event_emitter` for structured run events when needed.
 * Include `**_` in signatures to allow future parameters without breaking configurations.
 
 ### 4.2 Call order & data flow
@@ -296,7 +298,8 @@ def validate(
     row: dict,
     field_config: dict | None,
     manifest: ManifestContext,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     **_,
 ) -> list[dict]:
     ...
@@ -458,8 +461,9 @@ writer in the current runtime.
 
 Key events:
 
-- `console.line` — progress/errors emitted via `PipelineLogger.note`.
+- `console.line` — progress/errors emitted via the run logger (`TelemetryLogHandler` → EventEmitter).
 - `run.phase.started` — phase transitions (e.g., `"normalizing"`, `"writing_output"`).
+- `run.row_detector.score` / `run.column_detector.score` — engine-emitted scoring summaries for extraction/mapping.
 - `run.table.summary` — per-table summary including mapped/unmapped columns and validation aggregates.
 - `run.validation.summary` — optional aggregate when issues exist.
 - `run.validation.issue` — optional per-issue events for deep debugging.

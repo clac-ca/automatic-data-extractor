@@ -9,6 +9,8 @@ def detect_member_id(
     *,
     header: str | None,
     column_values_sample: list[Any],
+    logger=None,
+    event_emitter=None,
     **_: Any,
 ) -> float:
     """Return a confidence score based on header match and numeric samples."""
@@ -20,7 +22,7 @@ def detect_member_id(
     return round(min(1.0, header_score + sample_score), 2)
 
 
-def transform(*, value: Any, **_: Any) -> dict[str, Any]:
+def transform(*, value: Any, logger=None, event_emitter=None, **_: Any) -> dict[str, Any]:
     """Normalize identifiers to trimmed uppercase strings."""
     if value in (None, ""):
         return {"member_id": None}
