@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -47,6 +48,41 @@ class FakeBuilder:
     ) -> AsyncIterator[BuilderEvent]:
         venv_root.mkdir(parents=True, exist_ok=True)
         for event in self.events:
+            yield event
+
+
+class TrackingBuilder(FakeBuilder):
+    def __init__(self) -> None:
+        super().__init__(events=[])
+        self.invocations = 0
+
+    async def build_stream(
+        self,
+        *,
+        build_id: str,
+        workspace_id: str,
+        configuration_id: str,
+        venv_root: Path,
+        config_path: Path,
+        engine_spec: str,
+        pip_cache_dir: Path | None,
+        python_bin: str | None,
+        timeout: float,
+        fingerprint: str | None = None,
+    ) -> AsyncIterator[BuilderEvent]:
+        self.invocations += 1
+        async for event in super().build_stream(
+            build_id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            venv_root=venv_root,
+            config_path=config_path,
+            engine_spec=engine_spec,
+            pip_cache_dir=pip_cache_dir,
+            python_bin=python_bin,
+            timeout=timeout,
+            fingerprint=fingerprint,
+        ):
             yield event
 
 
@@ -249,3 +285,43 @@ async def test_stream_build_success(
     ]
     assert console_messages == ["log 1", "log 2"]
     assert any(getattr(evt, "type", "") == "build.completed" for evt in events)
+
+
+@pytest.mark.asyncio()
+async def test_ensure_local_env_uses_marker_when_ids_are_strings(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = TrackingBuilder()
+    service = service_factory(session, builder=builder)
+
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        fingerprint="fp-123",
+        engine_spec="demo",
+        engine_version="0.0.1",
+        python_version="3.11.0",
+    )
+    session.add(build)
+    await session.commit()
+
+    venv_root = build_venv_root(
+        service.settings, workspace.id, configuration.id, build.id
+    )
+    marker_path = venv_root / ".venv" / "ade_build.json"
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_payload = {"build_id": str(build.id), "fingerprint": build.fingerprint}
+    marker_path.write_text(json.dumps(marker_payload), encoding="utf-8")
+
+    resolved = await service.ensure_local_env(build=build)
+
+    assert resolved == marker_path.parent
+    assert builder.invocations == 0

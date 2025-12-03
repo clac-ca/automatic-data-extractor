@@ -281,11 +281,18 @@ async def stream_build_events_endpoint(
             build_id=build.id,
         )
         last_sequence = start_sequence
+        stream_complete = False
 
         for event in reader.iter(after_sequence=start_sequence):
             yield _sse_event_bytes(event)
             if event.sequence:
                 last_sequence = event.sequence
+            if event.type in {"build.completed", "build.failed"}:
+                stream_complete = True
+                break
+
+        if stream_complete:
+            return
 
         async with service.subscribe_to_events(build.id) as subscription:
             async for live_event in subscription:
@@ -294,5 +301,7 @@ async def stream_build_events_endpoint(
                 yield _sse_event_bytes(live_event)
                 if live_event.sequence:
                     last_sequence = live_event.sequence
+                if live_event.type in {"build.completed", "build.failed"}:
+                    break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

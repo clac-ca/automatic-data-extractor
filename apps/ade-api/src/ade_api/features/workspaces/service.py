@@ -7,6 +7,7 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
@@ -608,6 +609,7 @@ class WorkspacesService:
         workspace_id: str,
         user_id: str,
     ) -> None:
+        workspace_uuid = UUID(workspace_id)
         await self._ensure_workspace(workspace_id)
 
         assignments = await self._get_workspace_assignments(
@@ -624,7 +626,7 @@ class WorkspacesService:
             await self._rbac.delete_assignment(
                 assignment_id=cast(str, assignment.id),
                 scope_type=ScopeType.WORKSPACE,
-                scope_id=workspace_id,
+                scope_id=workspace_uuid,
             )
         await self._delete_membership_if_exists(
             workspace_id=workspace_id,
@@ -754,7 +756,9 @@ class WorkspacesService:
         stmt = (
             select(UserRoleAssignment)
             .options(
-                selectinload(UserRoleAssignment.role).selectinload(RolePermission.permission),
+                selectinload(UserRoleAssignment.role)
+                .selectinload(Role.permissions)
+                .selectinload(RolePermission.permission),
                 selectinload(UserRoleAssignment.user),
             )
             .where(

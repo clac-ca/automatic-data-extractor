@@ -3,7 +3,7 @@ import { useEffect, type RefObject } from "react";
 import type { WorkbenchFileTab } from "../types";
 
 interface EditorKeybindingsProps {
-  readonly containerRef: RefObject<HTMLElement>;
+  readonly containerRef: RefObject<HTMLElement | null>;
   readonly tabs: readonly WorkbenchFileTab[];
   readonly activeTabId: string;
   readonly onCloseTab: (tabId: string) => void;
@@ -91,4 +91,6 @@ export function EditorKeybindings({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [tabs, activeTabId, onCloseTab, onSelectRecentTab, onSelectTab, containerRef]);
+
+  return null;
 }

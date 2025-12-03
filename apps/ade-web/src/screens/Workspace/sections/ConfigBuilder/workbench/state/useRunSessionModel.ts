@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { isRunStatusTerminal } from "./runStream";
+import { isRunStatusTerminal, normalizeRunStatusValue } from "./runStream";
 import { useRunStreamController, type RunStreamMetadata } from "./useRunStreamController";
 import type { WorkbenchDataSeed, WorkbenchRunSummary } from "../types";
 
@@ -80,10 +80,14 @@ export function useRunSessionModel({
     const failure = completedPayload.failure as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof completedPayload.summary === "string" ? completedPayload.summary.trim() : null;
+    const payloadStartedAt = typeof completedPayload.started_at === "string" ? completedPayload.started_at : undefined;
 
-    const normalizedStatus = (completedPayload.status as RunStatus | undefined) ?? (runStatus as RunStatus);
+    const normalizedStatus = normalizeRunStatusValue(
+      (completedPayload.status as RunStatus | undefined) ?? runStatus,
+    );
+    const completionStatus: RunStatus = normalizedStatus === "canceled" ? "cancelled" : normalizedStatus;
     const resolvedMode: "validation" | "extraction" = runMode ?? runMetadata?.mode ?? "extraction";
-    const startedAtIso = runStartedAt ?? runResource?.started_at ?? undefined;
+    const startedAtIso = payloadStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;
     const completedIso = (completedPayload.completed_at as string | undefined) ?? runResource?.completed_at ?? new Date().toISOString();
     const startedAt = startedAtIso ? new Date(startedAtIso) : null;
     const completedAt = completedIso ? new Date(completedIso) : new Date();
@@ -92,7 +96,7 @@ export function useRunSessionModel({
 
     onRunComplete?.({
       runId,
-      status: normalizedStatus,
+      status: completionStatus,
       mode: resolvedMode,
       startedAt: startedAtIso ?? null,
       completedAt: completedAt.toISOString(),
@@ -109,7 +113,7 @@ export function useRunSessionModel({
       const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : previous?.logsUrl;
       return {
         runId,
-        status: normalizedStatus,
+        status: completionStatus,
         outputsBase,
         logsUrl,
         documentName: runMetadata?.documentName,

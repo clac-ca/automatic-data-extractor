@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type MouseEventHandler,
   type ReactNode,
   type ChangeEvent,
 } from "react";
@@ -55,6 +56,7 @@ import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
+import { createLastSelectionStorage, persistLastSelection } from "../storage";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
@@ -156,6 +158,7 @@ export function Workbench({
   });
   const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
   const isDraftConfig = filesQuery.data?.status === "draft";
+  const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspaceId), [workspaceId]);
 
   const tree = useMemo(() => {
     if (seed) {
@@ -166,6 +169,15 @@ export function Workbench({
     }
     return createWorkbenchTreeFromListing(filesQuery.data);
   }, [seed, filesQuery.data]);
+
+  useEffect(() => {
+    if (!configId) {
+      return;
+    }
+    if (usingSeed || filesQuery.isSuccess) {
+      persistLastSelection(lastSelectionStorage, configId);
+    }
+  }, [configId, usingSeed, filesQuery.isSuccess, lastSelectionStorage]);
 
   const [pendingCompletion, setPendingCompletion] = useState<RunCompletionInfo | null>(null);
   const handleRunComplete = useCallback((info: RunCompletionInfo) => {
@@ -211,10 +223,6 @@ export function Workbench({
     [workspaceId, configId],
   );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
-  if (!initialConsolePrefsRef.current && consolePersistence) {
-    initialConsolePrefsRef.current =
-      (consolePersistence.get<unknown>() as ConsolePanelPreferences | Record<string, unknown> | null) ?? null;
-  }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
   const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
@@ -228,6 +236,17 @@ export function Workbench({
   const [consoleFraction, setConsoleFraction] = useState<number | null>(null);
   const lastConsoleFractionRef = useRef<number | null>(null);
   const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
+  useEffect(() => {
+    if (!consolePersistence) {
+      initialConsolePrefsRef.current = null;
+    } else {
+      initialConsolePrefsRef.current =
+        (consolePersistence.get<unknown>() as ConsolePanelPreferences | Record<string, unknown> | null) ?? null;
+    }
+    lastConsoleFractionRef.current = null;
+    setConsoleFraction(null);
+    setHasHydratedConsoleState(false);
+  }, [consolePersistence]);
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 });
   const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
@@ -303,20 +322,21 @@ export function Workbench({
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
     const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
+    const isCancelled = status === "cancelled" || status === "canceled";
     const notice =
       status === "succeeded"
         ? "ADE run completed successfully."
-        : status === "canceled"
+        : isCancelled
           ? "ADE run canceled."
           : errorMessage;
     const intent: NotificationIntent =
-      status === "succeeded" ? "success" : status === "canceled" ? "info" : "danger";
+      status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
     showConsoleBanner(notice, { intent });
 
     if (mode !== "validation") {
       const completedTimestamp = completedAt ? new Date(completedAt) : new Date();
       appendConsoleLine({
-        level: status === "succeeded" ? "success" : status === "canceled" ? "warning" : "error",
+        level: status === "succeeded" ? "success" : isCancelled ? "warning" : "error",
         message:
           typeof durationMs === "number" && durationMs > 0
             ? `Run ${status} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
@@ -495,6 +515,18 @@ export function Workbench({
     },
     [saveTab],
   );
+
+  const saveDirtyTabsBeforeRun = useCallback(async () => {
+    if (!canSaveFiles || dirtyTabs.length === 0) {
+      return true;
+    }
+    const saved = await saveTabsSequentially(dirtyTabs.map((tab) => tab.id));
+    const allSaved = saved.length === dirtyTabs.length;
+    if (!allSaved) {
+      showConsoleBanner("Save failed. Fix errors before running again.", { intent: "danger", duration: 7000 });
+    }
+    return allSaved;
+  }, [canSaveFiles, dirtyTabs, saveTabsSequentially, showConsoleBanner]);
 
   const handleSaveTabShortcut = useCallback(
     (tabId: string) => {
@@ -751,8 +783,9 @@ export function Workbench({
     if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
       return;
     }
-    if (canSaveFiles && dirtyTabs.length > 0) {
-      await saveTabsSequentially(dirtyTabs.map((tab) => tab.id));
+    const ready = await saveDirtyTabsBeforeRun();
+    if (!ready) {
+      return;
     }
     await startRun(
       { validate_only: true },
@@ -764,9 +797,7 @@ export function Workbench({
     tree,
     filesQuery.isLoading,
     filesQuery.isError,
-    canSaveFiles,
-    dirtyTabs,
-    saveTabsSequentially,
+    saveDirtyTabsBeforeRun,
     startRun,
     prepareRun,
   ]);
@@ -776,6 +807,10 @@ export function Workbench({
       setRunDialogOpen(false);
       setForceRun(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
+        return;
+      }
+      const ready = await saveDirtyTabsBeforeRun();
+      if (!ready) {
         return;
       }
       const worksheetList = Array.from(new Set((selection.sheetNames ?? []).filter(Boolean)));
@@ -802,6 +837,7 @@ export function Workbench({
       startRun,
       forceRun,
       prepareRun,
+      saveDirtyTabsBeforeRun,
     ],
   );
 
@@ -882,6 +918,37 @@ export function Workbench({
       closeConsole();
     }
   }, [outputCollapsed, openConsole, closeConsole]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handler = (event: KeyboardEvent) => {
+      const usesPrimary = isMacPlatform ? event.metaKey : event.ctrlKey;
+      if (!usesPrimary || event.altKey) {
+        return;
+      }
+      const key = event.key?.toLowerCase();
+      if (key !== "`" && event.code !== "Backquote") {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const insideEditor = typeof target.closest === "function" ? target.closest("[data-editor-area]") : null;
+        if (!insideEditor) {
+          const tag = target.tagName;
+          const role = target.getAttribute("role");
+          if (tag === "INPUT" || tag === "TEXTAREA" || role === "textbox" || target.isContentEditable) {
+            return;
+          }
+        }
+      }
+      event.preventDefault();
+      handleToggleOutput();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isMacPlatform, handleToggleOutput]);
 
   const handleClearConsole = useCallback(() => {
     clearConsole();
@@ -1185,6 +1252,7 @@ export function Workbench({
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
+  const toggleConsoleShortcutLabel = isMacPlatform ? "⌘`" : "Ctrl+`";
   const testMenuItems = useMemo<ContextMenuItem[]>(() => {
     const disabled = !canRunExtraction;
     return [
@@ -1258,6 +1326,18 @@ export function Workbench({
         "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
         menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
       );
+  const collapsedConsoleTheme =
+    menuAppearance === "dark"
+      ? {
+          bar: "border-[#1f2431] bg-[#0f111a] text-slate-200",
+          hint: "text-slate-400",
+          button: "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
+        }
+      : {
+          bar: "border-slate-300 bg-white text-slate-700",
+          hint: "text-slate-500",
+          button: "border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-400",
+        };
 
   return (
     <div className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
@@ -1432,18 +1512,26 @@ export function Workbench({
             />
             {outputCollapsed ? (
               <div
-                className="flex items-center justify-between border-t border-slate-300 bg-white px-4 py-2 text-[12px] text-slate-700 shadow-inner cursor-pointer"
+                className={clsx(
+                  "flex cursor-pointer items-center justify-between border-t px-4 py-2 text-[12px] shadow-inner",
+                  collapsedConsoleTheme.bar,
+                )}
                 onDoubleClick={handleToggleOutput}
                 title="Double-click to show console"
               >
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">Console hidden</span>
-                  <span className="text-[11px] text-slate-500">(double-click gutter or Ctrl+`)</span>
+                  <span className={clsx("text-[11px]", collapsedConsoleTheme.hint)}>
+                    (double-click gutter or {toggleConsoleShortcutLabel})
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleToggleOutput}
-                  className="rounded border border-slate-300 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 transition hover:border-slate-400"
+                  className={clsx(
+                    "rounded px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition",
+                    collapsedConsoleTheme.button,
+                  )}
                   title="Show console"
                 >
                   Show console
@@ -1463,7 +1551,6 @@ export function Workbench({
                 buildPhases={runStreamState.buildPhases}
                 runPhases={runStreamState.runPhases}
                 runMode={derivedRunMode}
-                inspectorFile={files.activeTab ?? null}
                 onToggleCollapse={handleToggleOutput}
               />
             )}
@@ -2049,7 +2136,7 @@ function ChromeIconButton({
   disabled = false,
 }: {
   readonly ariaLabel: string;
-  readonly onClick: () => void;
+  readonly onClick: MouseEventHandler<HTMLButtonElement>;
   readonly icon: ReactNode;
   readonly appearance: "light" | "dark";
   readonly active?: boolean;

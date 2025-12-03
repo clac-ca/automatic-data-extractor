@@ -24,7 +24,7 @@ def _handle_permission_error(_request, exc: PermissionDeniedError) -> JSONRespon
         "error": "forbidden",
         "permission": exc.permission_key,
         "scope_type": exc.scope_type,
-        "scope_id": exc.scope_id,
+        "scope_id": str(exc.scope_id) if exc.scope_id is not None else None,
     }
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,

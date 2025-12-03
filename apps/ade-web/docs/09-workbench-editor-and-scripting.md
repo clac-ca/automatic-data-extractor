@@ -534,7 +534,7 @@ URL query parameters encode **shareable view state**—the bits we want to survi
 
 ```ts
 export type ConfigBuilderTab = "editor";
-export type ConfigBuilderPane = "console" | "validation";
+export type ConfigBuilderPane = "terminal" | "problems" | "runSummary";
 export type ConfigBuilderConsole = "open" | "closed";
 export type ConfigBuilderView = "editor" | "split" | "zen";
 
@@ -544,6 +544,7 @@ export interface ConfigBuilderSearchState {
   readonly console: ConfigBuilderConsole;
   readonly view: ConfigBuilderView;
   readonly file?: string;             // file id/path
+  readonly runId?: string;            // currently viewed run
 }
 ```
 
@@ -552,7 +553,7 @@ Defaults:
 ```ts
 export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
   tab: "editor",
-  pane: "console",
+  pane: "terminal",
   console: "closed",
   view: "editor",
 };
@@ -579,7 +580,7 @@ Responsibilities:
 
 * Parse the search string / `URLSearchParams`.
 * Map invalid or unknown values back to defaults.
-* Support legacy `path` → `file` mapping for backwards compatibility.
+* Ignore legacy/unknown parameters; only canonical keys are parsed.
 * Record which keys were explicitly present under `present.*`.
 
 ### 5.3 Writing to the URL
@@ -594,7 +595,7 @@ Responsibilities:
    * Given `patch`.
 3. Produces new `URLSearchParams` by:
 
-   * Removing all builder‑related keys (`tab`, `pane`, `console`, `view`, `file`, `path`).
+   * Removing all builder‑related keys (`tab`, `pane`, `console`, `view`, `file`, `runId`).
    * Writing new keys **only when they differ from defaults**.
    * Omitting `file` when empty.
 
