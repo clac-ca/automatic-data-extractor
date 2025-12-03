@@ -101,9 +101,9 @@ describe("streamRunEvents", () => {
     sse.emit(completedEvent);
     expect((await second).value).toEqual(completedEvent);
 
+    sse.close();
     const done = await iterator.next();
     expect(done.done).toBe(true);
-    sse.close();
   });
 });
 

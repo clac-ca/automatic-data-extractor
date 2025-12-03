@@ -103,10 +103,6 @@ export async function* streamRunEvents(
           continue;
         }
         yield event;
-        if (event.type === "run.completed") {
-          controller.abort();
-          return;
-        }
       }
 
       if (done) {
