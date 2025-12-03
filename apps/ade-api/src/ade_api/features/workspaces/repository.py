@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -71,7 +71,7 @@ class WorkspacesRepository:
             .where(
                 and_(
                     WorkspaceMembership.user_id == user_id,
-                    WorkspaceMembership.is_default.is_(True),
+                    WorkspaceMembership.is_default == true(),
                 )
             )
             .limit(1)
