@@ -9,7 +9,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, inspect
 from sqlalchemy.engine import URL
 
 from ade_api.infra.db import build_database_url, get_engine, reset_database_state
@@ -142,12 +142,19 @@ async def _drop_all_tables(settings: Settings) -> int:
 
     async with engine.begin() as connection:
         def _reflect_and_drop(sync_connection) -> int:
-            metadata = MetaData()
-            metadata.reflect(bind=sync_connection)
-            table_count = len(metadata.tables)
-            if metadata.tables:
-                metadata.drop_all(bind=sync_connection)
-            return table_count
+            inspector = inspect(sync_connection)
+            dropped = 0
+
+            for schema in inspector.get_schema_names():
+                if schema in {"information_schema", "pg_catalog"}:
+                    continue
+                metadata = MetaData(schema=schema)
+                metadata.reflect(bind=sync_connection, schema=schema)
+                if metadata.tables:
+                    dropped += len(metadata.tables)
+                    metadata.drop_all(bind=sync_connection)
+
+            return dropped
 
         return await connection.run_sync(_reflect_and_drop)
 
