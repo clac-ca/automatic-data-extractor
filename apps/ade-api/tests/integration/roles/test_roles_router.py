@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from ade_api.core.models import User
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -132,6 +133,39 @@ async def test_workspace_member_listing_admin(
     assert any(
         str(m["user_id"]) == str(seed_identity["workspace_owner"]["id"]) for m in members
     )
+
+
+async def test_workspace_member_listing_excludes_inactive_by_default(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+    session,
+) -> None:
+    admin = seed_identity["admin"]
+    member = seed_identity["member"]
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    user = await session.get(User, member["id"])
+    assert user is not None
+    user.is_active = False
+    await session.flush()
+
+    base_url = f"/api/v1/workspaces/{seed_identity['workspace_id']}/members"
+
+    default_response = await async_client.get(
+        base_url,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert default_response.status_code == 200
+    default_members = {str(item["user_id"]) for item in _items(default_response.json())}
+    assert str(member["id"]) not in default_members
+
+    inclusive = await async_client.get(
+        base_url,
+        headers={"Authorization": f"Bearer {token}"},
+        params={"include_inactive": True},
+    )
+    assert inclusive.status_code == 200, inclusive.text
+    inclusive_members = {str(item["user_id"]) for item in _items(inclusive.json())}
+    assert str(member["id"]) in inclusive_members
 
 
 async def test_assign_workspace_member_roles(

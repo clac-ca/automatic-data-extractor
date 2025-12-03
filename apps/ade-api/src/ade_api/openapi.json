@@ -7411,7 +7411,7 @@
           "building",
           "ready",
           "failed",
-          "canceled"
+          "cancelled"
         ],
         "title": "BuildStatus",
         "description": "Lifecycle states for API-facing build resources."

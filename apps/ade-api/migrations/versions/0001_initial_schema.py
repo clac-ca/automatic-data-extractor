@@ -110,7 +110,7 @@ RUN_STATUS = sa.Enum(
     "running",
     "succeeded",
     "failed",
-    "canceled",
+    "cancelled",
     name="run_status",
     native_enum=False,
     create_constraint=True,
@@ -122,7 +122,7 @@ BUILD_STATUS = sa.Enum(
     "building",
     "ready",
     "failed",
-    "canceled",
+    "cancelled",
     name="build_status",
     native_enum=False,
     create_constraint=True,
@@ -280,7 +280,7 @@ def _create_user_credentials() -> None:
         sa.Column(
             "user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
@@ -303,7 +303,7 @@ def _create_user_identities() -> None:
         sa.Column(
             "user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("provider", sa.String(length=100), nullable=False),
@@ -346,13 +346,13 @@ def _create_workspace_memberships() -> None:
         sa.Column(
             "user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             primary_key=True,
         ),
         sa.Column(
             "workspace_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             primary_key=True,
         ),
         sa.Column(
@@ -419,13 +419,13 @@ def _create_roles() -> None:
         sa.Column(
             "created_by_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column(
             "updated_by_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
     )
@@ -443,13 +443,13 @@ def _create_role_permissions() -> None:
         sa.Column(
             "role_id",
             UUIDType(),
-            sa.ForeignKey("roles.id", ondelete="CASCADE"),
+            sa.ForeignKey("roles.id", ondelete="NO ACTION"),
             primary_key=True,
         ),
         sa.Column(
             "permission_id",
             UUIDType(),
-            sa.ForeignKey("permissions.id", ondelete="CASCADE"),
+            sa.ForeignKey("permissions.id", ondelete="NO ACTION"),
             primary_key=True,
         ),
     )
@@ -468,20 +468,20 @@ def _create_user_role_assignments() -> None:
         sa.Column(
             "user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column(
             "role_id",
             UUIDType(),
-            sa.ForeignKey("roles.id", ondelete="CASCADE"),
+            sa.ForeignKey("roles.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("scope_type", RBAC_SCOPE, nullable=False),
         sa.Column(
             "scope_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         *_timestamps(),
@@ -519,20 +519,20 @@ def _create_api_keys() -> None:
         sa.Column(
             "owner_user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column(
             "created_by_user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column("scope_type", RBAC_SCOPE, nullable=False, server_default="global"),
         sa.Column(
             "scope_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column("token_prefix", sa.String(length=32), nullable=False, unique=True),
@@ -579,7 +579,7 @@ def _create_configurations() -> None:
         sa.Column(
             "workspace_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("display_name", sa.String(length=255), nullable=False),
@@ -614,13 +614,13 @@ def _create_builds() -> None:
         sa.Column(
             "workspace_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column(
             "configuration_id",
             UUIDType(),
-            sa.ForeignKey("configurations.id", ondelete="CASCADE"),
+            sa.ForeignKey("configurations.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("fingerprint", sa.String(length=128), nullable=True),
@@ -689,15 +689,16 @@ def _create_builds() -> None:
         )
 
     # Foreign key from configurations.active_build_id → builds.id
-    # Skipped on SQLite due to ALTER TABLE limitations.
-    if dialect != "sqlite":
+    # Skipped on SQLite due to ALTER TABLE limitations and on MSSQL to avoid
+    # multiple cascade path errors stemming from workspace-level cascades.
+    if dialect not in {"sqlite", "mssql"}:
         op.create_foreign_key(
             "fk_configurations_active_build_id",
             source_table="configurations",
             referent_table="builds",
             local_cols=["active_build_id"],
             remote_cols=["id"],
-            ondelete="SET NULL",
+            ondelete="NO ACTION",
         )
 
 
@@ -708,25 +709,25 @@ def _create_runs() -> None:
         sa.Column(
             "configuration_id",
             UUIDType(),
-            sa.ForeignKey("configurations.id", ondelete="CASCADE"),
+            sa.ForeignKey("configurations.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column(
             "workspace_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column(
             "build_id",
             UUIDType(),
-            sa.ForeignKey("builds.id", ondelete="SET NULL"),
+            sa.ForeignKey("builds.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column(
             "input_document_id",
             UUIDType(),
-            sa.ForeignKey("documents.id", ondelete="SET NULL"),
+            sa.ForeignKey("documents.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column("input_documents", sa.JSON(), nullable=True),
@@ -743,7 +744,7 @@ def _create_runs() -> None:
         sa.Column(
             "retry_of_run_id",
             UUIDType(),
-            sa.ForeignKey("runs.id", ondelete="SET NULL"),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column("trace_id", sa.String(length=64), nullable=True),
@@ -759,13 +760,13 @@ def _create_runs() -> None:
         ),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("canceled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
             ["submitted_by_user_id"],
             ["users.id"],
-            ondelete="SET NULL",
+            ondelete="NO ACTION",
         ),
     )
     op.create_index("ix_runs_configuration", "runs", ["configuration_id"], unique=False)
@@ -802,7 +803,7 @@ def _create_documents() -> None:
         sa.Column(
             "workspace_id",
             UUIDType(),
-            sa.ForeignKey("workspaces.id", ondelete="CASCADE"),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
             nullable=False,
         ),
         sa.Column("original_filename", sa.String(length=255), nullable=False),
@@ -819,7 +820,7 @@ def _create_documents() -> None:
         sa.Column(
             "uploaded_by_user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         sa.Column("status", DOCUMENT_STATUS, nullable=False, server_default="uploaded"),
@@ -835,7 +836,7 @@ def _create_documents() -> None:
         sa.Column(
             "deleted_by_user_id",
             UUIDType(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
         *_timestamps(),
@@ -913,7 +914,7 @@ def _create_document_tags() -> None:
         sa.Column(
             "document_id",
             UUIDType(),
-            sa.ForeignKey("documents.id", ondelete="CASCADE"),
+            sa.ForeignKey("documents.id", ondelete="NO ACTION"),
             primary_key=True,
         ),
         sa.Column("tag", sa.String(length=100), primary_key=True, nullable=False),

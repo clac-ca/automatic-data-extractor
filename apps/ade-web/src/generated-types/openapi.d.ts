@@ -1551,7 +1551,7 @@ export type components = {
          * @description Lifecycle states for API-facing build resources.
          * @enum {string}
          */
-        BuildStatus: "queued" | "building" | "ready" | "failed" | "canceled";
+        BuildStatus: "queued" | "building" | "ready" | "failed" | "cancelled";
         /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.

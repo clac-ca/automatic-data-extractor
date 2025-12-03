@@ -115,6 +115,22 @@ async def _ensure_dev_user(
         _dev_user_ready.add(principal.user_id)
 
 
+async def _ensure_active_principal(
+    *,
+    principal: AuthenticatedPrincipal,
+    session: AsyncSession,
+) -> None:
+    """Ensure the backing user exists and is active."""
+
+    from ade_api.core.models import User
+
+    user = await session.get(User, principal.user_id)
+    if user is None:
+        raise AuthenticationError("Unknown principal")
+    if not getattr(user, "is_active", True):
+        raise AuthenticationError("User account is inactive.")
+
+
 async def authenticate_request(
     request: Request,
     _db: AsyncSession,  # kept for future interfaces and parity with feature services
@@ -132,16 +148,19 @@ async def authenticate_request(
     if settings.auth_disabled:
         principal = _dev_principal(settings)
         await _ensure_dev_user(principal, settings, _db)
+        await _ensure_active_principal(principal=principal, session=_db)
         return principal
 
     raw_api_key = _extract_api_key(request)
     if raw_api_key:
         principal = await api_key_service.authenticate(raw_api_key)
         if principal is not None:
+            await _ensure_active_principal(principal=principal, session=_db)
             return principal
 
     principal = await session_service.authenticate(request)
     if principal is not None:
+        await _ensure_active_principal(principal=principal, session=_db)
         return principal
 
     raise AuthenticationError("Authentication required")

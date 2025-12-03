@@ -57,6 +57,12 @@ async def list_workspace_members(
             description="Optional filter by user id",
         ),
     ] = None,
+    include_inactive: Annotated[
+        bool,
+        Query(
+            description="Include inactive users in the response.",
+        ),
+    ] = False,
     service: WorkspacesService = workspaces_service_dependency,
 ) -> WorkspaceMemberPage:
     return await service.list_workspace_members(
@@ -65,6 +71,7 @@ async def list_workspace_members(
         page_size=page.page_size,
         include_total=page.include_total,
         user_id=user_id,
+        include_inactive=include_inactive,
     )
 
 
