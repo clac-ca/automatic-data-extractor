@@ -119,16 +119,6 @@ class Engine:
             )
 
             phase = RunPhase.COMPLETED
-            events_path = str(logs_dir / "events.ndjson")
-            pipeline_logger.event(
-                "completed",
-                level=None,
-                status="succeeded",
-                output_paths=[str(path) for path in output_paths],
-                processed_files=processed_files,
-                events_path=events_path,
-            )
-
             run_ctx.completed_at = datetime.now(timezone.utc)
             provisional = RunResult(
                 status=RunStatus.SUCCEEDED,
@@ -159,17 +149,7 @@ class Engine:
 
             try:
                 if "pipeline_logger" in locals():
-                    payload: dict[str, Any] = {
-                        "status": "failed",
-                        "error": {
-                            "code": error.code,
-                            "stage": error.stage.value if error.stage else None,
-                            "message": error.message,
-                        },
-                    }
-                    if "logs_dir" in locals():
-                        payload["events_path"] = str(Path(logs_dir) / "events.ndjson")  # type: ignore[arg-type]
-                    pipeline_logger.event("completed", level=None, **payload)  # type: ignore[arg-type]
+                    pass  # Completion events are emitted by the API layer.
             except Exception:
                 # Telemetry failures should never mask the underlying error.
                 pass
