@@ -19,7 +19,7 @@ relies on the legacy runs endpoints. Key touchpoints:
     to show historical runs. Replace it with the new runs log endpoint and
     add pagination/`after_id` handling.
   - The "Safe mode" tooltips gate run buttons. Surface the new run status
-    states (queued, running, succeeded, failed, canceled) and error
+    states (queued, running, succeeded, failed, cancelled) and error
     messaging in the drawer summary.
 
 ## Config Builder panel (Terminal | Run | Problems)

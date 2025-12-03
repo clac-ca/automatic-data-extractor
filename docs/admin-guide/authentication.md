@@ -25,6 +25,13 @@ The dependency `get_current_principal` tries bearer → session cookie → API k
 - CSRF enforcement is **not implemented**. The `require_csrf` dependency is wired into routers as a placeholder to ease future
   activation but currently no-ops.
 
+## Account deactivation
+
+- The `users.is_active` flag now hard-blocks authentication across password, refresh tokens, and API keys; existing sessions fail
+  with 401 once a user is deactivated.
+- Deactivating a user also revokes all of their API keys and places a long-lived lock on the account; audit foreign keys remain
+  intact. Reactivated users must be issued fresh API keys.
+
 ## Single sign-on
 
 SSO endpoints exist but the OIDC service is not implemented. With `ADE_OIDC_ENABLED=true`, the API exposes:

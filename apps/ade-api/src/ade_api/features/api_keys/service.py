@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.pagination import Page, paginate_sql
 from ade_api.common.time import utc_now
+from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 from ade_api.core.models import ApiKey, User, Workspace
 from ade_api.core.rbac.types import ScopeType
@@ -55,6 +57,10 @@ class ApiKeyExpiredError(PermissionError):
     """Raised when an API key is expired but still used."""
 
 
+class ApiKeyOwnerInactiveError(PermissionError):
+    """Raised when the owner of an API key is inactive."""
+
+
 class InvalidApiKeyFormatError(ValueError):
     """Raised when a raw API key token is malformed."""
 
@@ -74,6 +80,14 @@ def _canonical_email(value: str) -> str:
         msg = "Email must not be empty"
         raise ValueError(msg)
     return cleaned.lower()
+
+
+def _normalize_dt(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
 
 
 class ApiKeyService:
@@ -126,6 +140,8 @@ class ApiKeyService:
 
         if owner is None:
             raise ValueError("Owner user not found")
+        if not owner.is_active:
+            raise ValueError("Owner user is inactive")
         return owner
 
     async def _create_api_key(
@@ -287,6 +303,17 @@ class ApiKeyService:
         await self._session.refresh(api_key)
         return api_key
 
+    async def revoke_all_for_owner(self, *, owner_user_id: UUID) -> None:
+        """Revoke all API keys owned by the specified user."""
+
+        now = utc_now()
+        await self._session.execute(
+            sa.update(ApiKey)
+            .where(ApiKey.owner_user_id == owner_user_id, ApiKey.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await self._session.flush()
+
     # -- Authentication ---------------------------------------------------
 
     async def authenticate_token(
@@ -307,22 +334,34 @@ class ApiKeyService:
             raise InvalidApiKeyFormatError("API key prefix and secret must be non-empty")
 
         result = await self._session.execute(
-            self._base_query().where(ApiKey.token_prefix == prefix)
+            self._base_query()
+            .where(ApiKey.token_prefix == prefix)
+            .execution_options(populate_existing=True)
         )
         api_key = result.scalar_one_or_none()
         if api_key is None:
             raise ApiKeyNotFoundError("API key not recognized")
 
         now = utc_now()
-        if api_key.expires_at is not None and api_key.expires_at < now:
+        expires_at = _normalize_dt(api_key.expires_at)
+        if expires_at is not None and expires_at < now:
             raise ApiKeyExpiredError("API key has expired")
-        if api_key.revoked_at is not None and api_key.revoked_at <= now:
+        revoked_at = _normalize_dt(api_key.revoked_at)
+        if revoked_at is not None and revoked_at <= now:
             raise ApiKeyRevokedError("API key has been revoked")
 
         expected_hash = api_key.token_hash
         candidate_hash = hash_api_key_secret(secret)
         if not secrets.compare_digest(expected_hash, candidate_hash):
             raise ApiKeyNotFoundError("API key not recognized")
+
+        owner = getattr(api_key, "owner", None)
+        if owner is None:
+            owner = await self._session.get(User, api_key.owner_user_id)
+        if owner is None:
+            raise ApiKeyNotFoundError("API key not recognized")
+        if not owner.is_active:
+            raise ApiKeyOwnerInactiveError("API key owner is inactive")
 
         if touch_usage:
             api_key.last_used_at = now
@@ -340,8 +379,9 @@ class ApiKeyService:
             ApiKeyNotFoundError,
             ApiKeyExpiredError,
             ApiKeyRevokedError,
-        ):
-            return None
+            ApiKeyOwnerInactiveError,
+        ) as exc:
+            raise AuthenticationError(str(exc)) from exc
 
         api_key = result.api_key
         owner = getattr(api_key, "owner", None)
@@ -366,5 +406,6 @@ __all__ = [
     "ApiKeyAccessDeniedError",
     "ApiKeyRevokedError",
     "ApiKeyExpiredError",
+    "ApiKeyOwnerInactiveError",
     "InvalidApiKeyFormatError",
 ]

@@ -493,11 +493,13 @@ class WorkspacesService:
         page_size: int,
         include_total: bool,
         user_id: str | None = None,
+        include_inactive: bool = False,
     ) -> WorkspaceMemberPage:
         await self._ensure_workspace(workspace_id)
         assignments = await self._get_workspace_assignments(
             workspace_id=workspace_id,
             user_id=user_id,
+            include_inactive=include_inactive,
         )
         members = self._group_members(assignments)
         page_result = paginate_sequence(
@@ -752,6 +754,7 @@ class WorkspacesService:
         *,
         workspace_id: str,
         user_id: str | None = None,
+        include_inactive: bool = True,
     ) -> list[UserRoleAssignment]:
         stmt = (
             select(UserRoleAssignment)
@@ -768,6 +771,8 @@ class WorkspacesService:
         )
         if user_id:
             stmt = stmt.where(UserRoleAssignment.user_id == user_id)
+        if not include_inactive:
+            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active.is_(True))
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

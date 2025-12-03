@@ -85,7 +85,7 @@ export function useRunSessionModel({
     const normalizedStatus = normalizeRunStatusValue(
       (completedPayload.status as RunStatus | undefined) ?? runStatus,
     );
-    const completionStatus: RunStatus = normalizedStatus === "canceled" ? "cancelled" : normalizedStatus;
+    const completionStatus: RunStatus = normalizedStatus;
     const resolvedMode: "validation" | "extraction" = runMode ?? runMetadata?.mode ?? "extraction";
     const startedAtIso = payloadStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;
     const completedIso = (completedPayload.completed_at as string | undefined) ?? runResource?.completed_at ?? new Date().toISOString();

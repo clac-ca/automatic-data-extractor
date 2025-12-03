@@ -18,7 +18,7 @@ export type RunStreamStatus =
   | "running"
   | "succeeded"
   | "failed"
-  | "canceled";
+  | "cancelled";
 
 export type PhaseState = {
   readonly status: PhaseStatus;
@@ -218,12 +218,11 @@ function resolveStatus(current: RunStreamStatus, type: string, payload: Record<s
 export function normalizeRunStatusValue(value?: RunStatus | RunStreamStatus | null): RunStreamStatus {
   if (value === "queued") return "queued";
   if (value === "waiting_for_build") return "waiting_for_build";
-  if (value === "cancelled") return "canceled";
+  if (value === "cancelled") return "cancelled";
   if (value === "building") return "building";
   if (value === "running") return "running";
   if (value === "succeeded") return "succeeded";
   if (value === "failed") return "failed";
-  if (value === "canceled") return "canceled";
   return "idle";
 }
 
@@ -239,13 +238,13 @@ export function isRunStatusInProgress(status?: RunStatus | RunStreamStatus | nul
 
 export function isRunStatusTerminal(status?: RunStatus | RunStreamStatus | null): boolean {
   const normalized = normalizeRunStatusValue(status);
-  return normalized === "succeeded" || normalized === "failed" || normalized === "canceled";
+  return normalized === "succeeded" || normalized === "failed" || normalized === "cancelled";
 }
 
 function normalizeRunStatusFromPayload(value: unknown): RunStreamStatus {
   if (value === "succeeded") return "succeeded";
   if (value === "failed") return "failed";
-  if (value === "canceled" || value === "cancelled") return "canceled";
+  if (value === "cancelled") return "cancelled";
   if (value === "waiting_for_build") return "waiting_for_build";
   return "running";
 }
@@ -342,7 +341,7 @@ export function deriveValidationStateFromStream(
   let derivedStatus: WorkbenchValidationState["status"];
   if (inProgress && mode === "validation") {
     derivedStatus = "running";
-  } else if (hasError || status === "failed" || status === "canceled") {
+  } else if (hasError || status === "failed" || status === "cancelled") {
     derivedStatus = "error";
   } else if (issues.length > 0 || status === "succeeded") {
     derivedStatus = "success";

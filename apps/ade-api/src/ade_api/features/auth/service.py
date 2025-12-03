@@ -329,13 +329,19 @@ class AuthService:
         except ValueError as exc:
             raise AuthenticationError("Access token subject is invalid.") from exc
 
+        user = await self._session.get(User, user_id)
+        if user is None:
+            raise AuthenticationError("Unknown principal")
+        if not user.is_active:
+            raise AuthenticationError("User account is inactive.")
+
         try:
             principal_enum = PrincipalType(principal_type)
         except ValueError:
             principal_enum = PrincipalType.USER
 
         return AuthenticatedPrincipal(
-            user_id=user_id,
+            user_id=user.id,
             principal_type=principal_enum,
             auth_via=AuthVia.SESSION,
             api_key_id=None,
