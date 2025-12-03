@@ -540,7 +540,7 @@ class DocumentsService:
                 continue
             timestamp = row.finished_at or row.started_at or row.created_at
             status_value = (
-                RunStatus.CANCELED if row.status == RunStatus.CANCELED else row.status
+                RunStatus.CANCELLED if row.status == RunStatus.CANCELLED else row.status
             )
             summary_payload = None
             if row.summary:

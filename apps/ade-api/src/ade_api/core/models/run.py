@@ -25,7 +25,7 @@ class RunStatus(str, Enum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-    CANCELED = "canceled"
+    CANCELLED = "cancelled"
 
 
 class Run(Base):

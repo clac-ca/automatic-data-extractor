@@ -1,7 +1,12 @@
 import { describeBuildEvent, describeRunEvent } from "../utils/console";
-import type { WorkbenchConsoleLine } from "../types";
+import type {
+  WorkbenchConsoleLine,
+  WorkbenchValidationMessage,
+  WorkbenchValidationState,
+} from "../types";
 
 import type { AdeEvent as RunStreamEvent } from "@shared/runs/types";
+import type { RunStatus } from "@shared/runs/types";
 
 export type PhaseStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
@@ -21,6 +26,19 @@ export type PhaseState = {
   readonly message?: string;
 };
 
+export interface ValidationIssue {
+  readonly level: "info" | "warning" | "error";
+  readonly message: string;
+  readonly path?: string;
+  readonly code?: string;
+}
+
+export interface ValidationSummary {
+  readonly issues?: ValidationIssue[];
+  readonly content_digest?: string | null;
+  readonly error?: string | null;
+}
+
 export interface RunStreamState {
   readonly runId: string | null;
   readonly runMode?: "validation" | "extraction";
@@ -28,15 +46,17 @@ export interface RunStreamState {
   readonly buildPhases: Record<string, PhaseState>;
   readonly runPhases: Record<string, PhaseState>;
   readonly consoleLines: WorkbenchConsoleLine[];
-  readonly tableSummaries: Record<string, unknown>;
-  readonly validationSummary: Record<string, unknown> | null;
+  readonly validationSummary: ValidationSummary | null;
   readonly completedPayload: Record<string, unknown> | null;
-  readonly lastSequence: number;
   readonly maxConsoleLines: number;
 }
 
 export type RunStreamAction =
-  | { type: "RESET"; runId?: string | null; initialLines?: WorkbenchConsoleLine[] }
+  | {
+      type: "RESET";
+      runId?: string | null;
+      initialLines?: WorkbenchConsoleLine[];
+    }
   | { type: "ATTACH_RUN"; runId: string | null; runMode?: "validation" | "extraction" }
   | { type: "CLEAR_CONSOLE" }
   | { type: "APPEND_LINE"; line: WorkbenchConsoleLine }
@@ -54,10 +74,8 @@ export function createRunStreamState(
     buildPhases: {},
     runPhases: {},
     consoleLines: seededLines,
-    tableSummaries: {},
     validationSummary: null,
     completedPayload: null,
-    lastSequence: 0,
     maxConsoleLines,
   };
 }
@@ -95,10 +113,6 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
 function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStreamState {
   const payload = extractPayload(event);
   const type = typeof event.type === "string" ? event.type : "";
-  const sequence =
-    typeof event.sequence === "number" && Number.isFinite(event.sequence)
-      ? event.sequence
-      : state.lastSequence;
 
   const isBuildEvent =
     type.startsWith("build.") || (type === "console.line" && (payload.scope as string | undefined) === "build");
@@ -143,13 +157,17 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
           }
         : state.runPhases;
 
-  const validationSummary =
-    type === "run.validation.summary" ? (payload as Record<string, unknown>) : state.validationSummary;
-
-  const tableSummaries =
-    type === "run.table.summary" && typeof payload.table_id === "string"
-      ? { ...state.tableSummaries, [payload.table_id]: payload }
-      : state.tableSummaries;
+  let validationSummary: ValidationSummary | null = state.validationSummary;
+  if (type === "run.validation.issue") {
+    const issue = toValidationIssue(payload);
+    const existingIssues = validationSummary?.issues ?? [];
+    validationSummary = {
+      ...validationSummary,
+      issues: issue ? [...existingIssues, issue] : existingIssues,
+    };
+  } else if (type === "run.validation.summary") {
+    validationSummary = normalizeValidationSummary(payload, validationSummary);
+  }
 
   const completedPayload =
     type === "run.completed" ? (payload as Record<string, unknown>) : state.completedPayload;
@@ -171,10 +189,8 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     buildPhases,
     runPhases,
     consoleLines,
-    tableSummaries,
     validationSummary,
     completedPayload,
-    lastSequence: Math.max(state.lastSequence, sequence),
   };
 }
 
@@ -191,13 +207,39 @@ function resolveStatus(current: RunStreamStatus, type: string, payload: Record<s
     case "run.error":
       return current === "failed" ? current : "failed";
     case "run.completed":
-      return normalizeRunStatus(payload.status);
+      return normalizeRunStatusFromPayload(payload.status);
     default:
       return current;
   }
 }
 
-function normalizeRunStatus(value: unknown): RunStreamStatus {
+export function normalizeRunStatusValue(value?: RunStatus | RunStreamStatus | null): RunStreamStatus {
+  if (value === "queued") return "queued";
+  if (value === "waiting_for_build") return "waiting_for_build";
+  if (value === "building") return "building";
+  if (value === "running") return "running";
+  if (value === "succeeded") return "succeeded";
+  if (value === "failed") return "failed";
+  if (value === "canceled") return "canceled";
+  return "idle";
+}
+
+export function isRunStatusInProgress(status?: RunStatus | RunStreamStatus | null): boolean {
+  const normalized = normalizeRunStatusValue(status);
+  return (
+    normalized === "queued" ||
+    normalized === "waiting_for_build" ||
+    normalized === "building" ||
+    normalized === "running"
+  );
+}
+
+export function isRunStatusTerminal(status?: RunStatus | RunStreamStatus | null): boolean {
+  const normalized = normalizeRunStatusValue(status);
+  return normalized === "succeeded" || normalized === "failed" || normalized === "canceled";
+}
+
+function normalizeRunStatusFromPayload(value: unknown): RunStreamStatus {
   if (value === "succeeded") return "succeeded";
   if (value === "failed") return "failed";
   if (value === "canceled" || value === "cancelled") return "canceled";
@@ -219,6 +261,86 @@ function extractPayload(event: RunStreamEvent): Record<string, unknown> {
     return payload as Record<string, unknown>;
   }
   return {};
+}
+
+function toValidationIssue(payload: Record<string, unknown>): ValidationIssue | null {
+  const severity = (payload.severity as string | undefined) ?? (payload.level as string | undefined);
+  const level: ValidationIssue["level"] =
+    severity === "error" ? "error" : severity === "warning" ? "warning" : "info";
+  const message =
+    (payload.message as string | undefined) ??
+    (payload.code as string | undefined) ??
+    "Validation issue";
+  const path = payload.path as string | undefined;
+  const code = payload.code as string | undefined;
+  return { level, message, path, code };
+}
+
+function normalizeValidationSummary(
+  payload: Record<string, unknown>,
+  current?: ValidationSummary | null,
+): ValidationSummary {
+  const rawIssues = payload.issues;
+  const issues = Array.isArray(rawIssues)
+    ? rawIssues
+        .map((issue) => (issue && typeof issue === "object" ? toValidationIssue(issue as Record<string, unknown>) : null))
+        .filter(Boolean) as ValidationIssue[]
+    : current?.issues ?? [];
+  const summary: ValidationSummary = {
+    ...current,
+    issues,
+  };
+  if (typeof payload.content_digest === "string") {
+    summary.content_digest = payload.content_digest;
+  } else if (current?.content_digest) {
+    summary.content_digest = current.content_digest;
+  }
+  if (typeof payload.error === "string") {
+    summary.error = payload.error;
+  }
+  return summary;
+}
+
+export function deriveValidationStateFromStream(
+  runStream: RunStreamState,
+  seedValidation?: readonly WorkbenchValidationMessage[],
+): WorkbenchValidationState {
+  const summary = runStream.validationSummary ?? (seedValidation ? { issues: seedValidation } : null);
+  const mode = runStream.runMode ?? (summary ? "validation" : undefined);
+  if (!mode && !summary) {
+    return { status: "idle", messages: [], lastRunAt: undefined, error: null, digest: null };
+  }
+
+  const status = normalizeRunStatusValue(runStream.status);
+  const inProgress = isRunStatusInProgress(status);
+  const issues = summary?.issues ?? [];
+  const hasError = Boolean(summary?.error);
+  const lastRunAt =
+    (typeof runStream.completedPayload?.completed_at === "string" && runStream.completedPayload.completed_at) || undefined;
+
+  let derivedStatus: WorkbenchValidationState["status"];
+  if (inProgress && mode === "validation") {
+    derivedStatus = "running";
+  } else if (hasError || status === "failed" || status === "canceled") {
+    derivedStatus = "error";
+  } else if (issues.length > 0 || status === "succeeded") {
+    derivedStatus = "success";
+  } else {
+    derivedStatus = "idle";
+  }
+
+  const error =
+    derivedStatus === "error"
+      ? summary?.error ?? "Validation failed."
+      : null;
+
+  return {
+    status: derivedStatus,
+    messages: issues,
+    lastRunAt: lastRunAt ?? undefined,
+    error,
+    digest: summary?.content_digest ?? null,
+  };
 }
 
 function clampConsoleLines(

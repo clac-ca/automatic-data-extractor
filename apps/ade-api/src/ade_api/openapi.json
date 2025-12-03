@@ -9560,10 +9560,11 @@
         "type": "string",
         "enum": [
           "queued",
+          "waiting_for_build",
           "running",
           "succeeded",
           "failed",
-          "canceled"
+          "cancelled"
         ],
         "title": "RunStatus",
         "description": "Lifecycle states for ADE runs."
@@ -9812,7 +9813,7 @@
             "enum": [
               "succeeded",
               "failed",
-              "canceled"
+              "cancelled"
             ],
             "title": "Status"
           },

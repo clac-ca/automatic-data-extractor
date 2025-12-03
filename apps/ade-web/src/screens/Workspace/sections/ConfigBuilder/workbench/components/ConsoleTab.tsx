@@ -232,13 +232,18 @@ export function ConsoleTab({
           </div>
         ) : null}
       </div>
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-auto">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-auto bg-[#1e1e1e] [color-scheme:dark]"
+        style={{ scrollbarColor: "#2f2f2f #111111" }}
+      >
         {hasConsoleLines ? (
-          <ul className="divide-y divide-[#252525]">
+          <ul className="bg-[#1e1e1e]">
             {renderableLines.map((line) => (
               <li
                 key={line.key}
-                className="flex items-start gap-3 px-3 py-[2px] transition hover:bg-[#232323]"
+                className="flex items-start gap-3 border-b border-[#1a1a1a] px-3 py-[2px] transition hover:bg-[#232323] last:border-b-0"
               >
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {renderTimestamp(line.timestamp)}

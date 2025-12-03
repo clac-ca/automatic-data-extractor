@@ -1,5 +1,5 @@
 import type { ConfigBuilderPane } from "@app/nav/urlState";
-import type { RunStreamStatus } from "../state/runStream";
+import type { PhaseState, RunStreamStatus } from "../state/runStream";
 import type {
   WorkbenchConsoleLine,
   WorkbenchRunSummary,
@@ -22,6 +22,10 @@ interface BottomPanelProps {
   readonly onShowRunDetails?: () => void;
   readonly onClearConsole?: () => void;
   readonly runStatus?: RunStreamStatus;
+  readonly buildPhases: Record<string, PhaseState>;
+  readonly runPhases: Record<string, PhaseState>;
+  readonly runMode?: "validation" | "extraction";
+  readonly onToggleCollapse?: () => void;
 }
 
 export function BottomPanel({
@@ -34,6 +38,10 @@ export function BottomPanel({
   onShowRunDetails,
   onClearConsole,
   runStatus,
+  buildPhases,
+  runPhases,
+  runMode,
+  onToggleCollapse,
 }: BottomPanelProps) {
   const hasProblems = validation.messages.length > 0;
   const hasRun = Boolean(latestRun);
@@ -78,6 +86,16 @@ export function BottomPanel({
               ) : null}
             </TabsTrigger>
           </TabsList>
+          {onToggleCollapse ? (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 shadow-sm transition hover:border-slate-400"
+              title="Hide console"
+            >
+              Hide
+            </button>
+          ) : null}
         </div>
 
         <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col">
@@ -101,7 +119,7 @@ export function BottomPanel({
           value="runSummary"
           className="flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2 text-sm"
         >
-          <RunSummaryTab latestRun={latestRun} />
+          <RunSummaryTab latestRun={latestRun} buildPhases={buildPhases} runPhases={runPhases} runStatus={runStatus} runMode={runMode} />
         </TabsContent>
       </TabsRoot>
     </section>

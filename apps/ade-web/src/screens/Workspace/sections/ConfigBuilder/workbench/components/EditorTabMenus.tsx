@@ -143,11 +143,21 @@ export function buildTabCatalogItems({
 
   const items: ContextMenuItem[] = [];
   const appendItem = (tab: WorkbenchFileTab, dividerAbove: boolean) => {
+    const isDirty = tab.status === "ready" && tab.content !== tab.initialContent;
+    const badges: string[] = [];
+    if (tab.id === activeTabId) {
+      badges.push("Active");
+    }
+    if (tab.saving) {
+      badges.push("Saving…");
+    } else if (isDirty) {
+      badges.push("Unsaved");
+    }
     items.push({
       id: `switch-${tab.id}`,
-      label: tab.name,
+      label: `${tab.saving ? "↻ " : isDirty ? "● " : ""}${tab.name}`,
       icon: tab.pinned ? <MenuIconPin /> : <MenuIconFile />,
-      shortcut: tab.id === activeTabId ? "Active" : undefined,
+      shortcut: badges.length > 0 ? badges.join(" · ") : undefined,
       dividerAbove,
       onSelect: () => onSelectTab(tab.id),
     });
