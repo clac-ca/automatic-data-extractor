@@ -6,14 +6,14 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
+from .app.lifecycles import create_application_lifespan
+from .common.exceptions import http_exception_handler, unhandled_exception_handler
+from .common.logging import log_context, setup_logging
+from .common.middleware import register_middleware
+from .common.openapi import configure_openapi
+from .core.http.errors import register_auth_exception_handlers
 from .routers import api_router
 from .settings import Settings, get_settings
-from .shared.core.exceptions import http_exception_handler, unhandled_exception_handler
-from .shared.core.lifecycles import create_application_lifespan
-from .shared.core.logging import log_context, setup_logging
-from .shared.core.middleware import register_middleware
-from .shared.core.openapi import configure_openapi
-from .shared.dependency import configure_auth_dependencies
 from .web.spa import mount_spa
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Global exception handlers.
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+    register_auth_exception_handlers(app)
 
     # Application state and startup metadata.
     app.state.settings = settings
@@ -83,8 +84,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "auth.disabled",
             extra=log_context(auth_disabled=True),
         )
-
-    configure_auth_dependencies(settings=settings)
 
     # Middleware, routers, SPA, and OpenAPI configuration.
     register_middleware(app)

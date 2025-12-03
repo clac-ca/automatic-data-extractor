@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Security, status
+from fastapi import APIRouter, Depends, Response, Security, status
 
-from ade_api.shared.dependency import (
-    get_safe_mode_service,
-    require_authenticated,
-    require_csrf,
-    require_global,
-)
+from ade_api.app.dependencies import get_safe_mode_service
+from ade_api.core.http import require_authenticated, require_csrf, require_global
 
 from .schemas import SafeModeStatus, SafeModeUpdateRequest
 from .service import SafeModeService
@@ -39,22 +35,22 @@ async def read_safe_mode(
 
 @router.put(
     "/safe-mode",
-    response_model=SafeModeStatus,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="Toggle ADE safe mode",
     dependencies=[Security(require_csrf)],
 )
 async def update_safe_mode(
     payload: SafeModeUpdateRequest,
     service: Annotated[SafeModeService, Depends(get_safe_mode_service)],
-    _actor: Annotated[object, Security(require_global("System.Settings.ReadWrite"))],
-) -> SafeModeStatus:
+    _actor: Annotated[object, Security(require_global("system.settings.manage"))],
+) -> Response:
     """Persist and broadcast an updated ADE safe mode state."""
 
-    return await service.update_status(
+    await service.update_status(
         enabled=payload.enabled,
         detail=payload.detail,
     )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 __all__ = ["router"]

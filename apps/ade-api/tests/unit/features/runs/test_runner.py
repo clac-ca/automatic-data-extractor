@@ -11,6 +11,8 @@ from ade_api.features.runs.runner import EngineSubprocessRunner, StdoutFrame
 
 pytestmark = pytest.mark.asyncio()
 
+RUN_ID = "00000000-0000-0000-0000-000000000001"
+
 
 async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     script = tmp_path / "writer.py"
@@ -21,7 +23,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "events.parent.mkdir(parents=True, exist_ok=True)\n"
         "print('engine ready', flush=True)\n"
         "payload = {\n"
-        "    'run_id': 'run-1',\n"
+        f"    'run_id': '{RUN_ID}',\n"
         "    'created_at': '2024-01-01T00:00:00Z',\n"
         "    'type': 'run.phase.started',\n"
         "    'payload': {'phase': 'mapping'},\n"

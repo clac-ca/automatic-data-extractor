@@ -43,7 +43,24 @@ class ConfigStateError(Exception):
     """Raised when lifecycle transitions are not permitted."""
 
 
+class ConfigImportError(Exception):
+    """Raised when archives cannot be imported safely."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        detail: str | None = None,
+        limit: int | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+        self.detail = detail
+        self.limit = limit
+
+
 __all__ = [
+    "ConfigImportError",
     "ConfigPublishConflictError",
     "ConfigSourceInvalidError",
     "ConfigSourceNotFoundError",

@@ -49,6 +49,17 @@ describe("describeBuildEvent", () => {
     expect(line.level).toBe("success");
     expect(line.message).toBe("ready");
   });
+
+  it("formats build progress events", () => {
+    const event: AdeEvent = {
+      type: "build.progress",
+      created_at: "2024-01-01T00:00:05Z",
+      payload: { step: "create_venv", message: "Creating virtual environment" },
+    };
+    const line = describeBuildEvent(event);
+    expect(line.level).toBe("info");
+    expect(line.message).toContain("Creating virtual environment");
+  });
 });
 
 describe("describeRunEvent", () => {
@@ -67,7 +78,7 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.completed",
       created_at: "2024-01-01T00:00:30Z",
-      run_id: "run_123",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10",
       payload: { status: "failed", execution: { exit_code: 2 }, failure: { message: "Runtime error" } },
     };
     const line = describeRunEvent(event);
@@ -80,7 +91,7 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.completed",
       created_at: "2024-01-01T00:00:31Z",
-      run_id: "run_456",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d20",
       payload: { status: "succeeded", summary: { run: { status: "succeeded" } } },
     };
     const line = describeRunEvent(event);
@@ -92,11 +103,23 @@ describe("describeRunEvent", () => {
     const event: AdeEvent = {
       type: "run.phase.started",
       created_at: new Date().toISOString(),
-      run_id: "run_123",
+      run_id: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10",
       payload: { phase: "mapping", level: "warning" },
     };
     const line = describeRunEvent(event);
     expect(line.level).toBe("warning");
     expect(line.message).toContain("mapping");
+  });
+
+  it("formats waiting_for_build events", () => {
+    const event: AdeEvent = {
+      type: "run.waiting_for_build",
+      created_at: "2024-01-01T00:00:25Z",
+      payload: { reason: "build_not_ready", build_id: "bld_123" },
+    };
+    const line = describeRunEvent(event);
+    expect(line.origin).toBe("run");
+    expect(line.message).toContain("build_not_ready");
+    expect(line.message).toContain("bld_123");
   });
 });

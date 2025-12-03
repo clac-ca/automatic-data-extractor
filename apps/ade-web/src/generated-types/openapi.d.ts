@@ -24,60 +24,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/setup/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Return whether initial administrator setup is required */
-        get: operations["read_setup_status_api_v1_setup_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/setup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create the first administrator account */
-        post: operations["complete_setup_api_v1_setup_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/bootstrap": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Bootstrap session, permissions, workspaces, and safe-mode status
-         * @description Return a consolidated payload for initial SPA bootstrap.
-         */
-        get: operations["bootstrap_api_v1_bootstrap_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/providers": {
         parameters: {
             query?: never;
@@ -95,6 +41,24 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return whether initial administrator setup is required */
+        get: operations["read_setup_status_api_v1_auth_setup_get"];
+        put?: never;
+        /** Create the first administrator account and start a session */
+        post: operations["complete_setup_api_v1_auth_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/session": {
         parameters: {
             query?: never;
@@ -102,19 +66,13 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Return the active session profile */
+        /** Return the current session snapshot */
         get: operations["read_session_api_v1_auth_session_get"];
         put?: never;
-        /**
-         * Create a browser session with email and password
-         * @description Authenticate with credentials and establish the session cookies.
-         */
+        /** Create a session via email/password */
         post: operations["create_session_api_v1_auth_session_post"];
-        /**
-         * Terminate the active session
-         * @description Remove authentication cookies and end the session.
-         */
-        delete: operations["delete_session_api_v1_auth_session_delete"];
+        /** Terminate the current session */
+        delete: operations["end_session_api_v1_auth_session_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -129,10 +87,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /**
-         * Refresh the active browser session
-         * @description Rotate the session using the refresh cookie and re-issue cookies.
-         */
+        /** Refresh an existing session using a refresh token */
         post: operations["refresh_session_api_v1_auth_session_refresh_post"];
         delete?: never;
         options?: never;
@@ -140,18 +95,15 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/me": {
+    "/api/v1/auth/sso/{provider}/authorize": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Return the authenticated user profile
-         * @description Return profile information for the active user.
-         */
-        get: operations["read_me_api_v1_auth_me_get"];
+        /** Initiate the SSO login flow */
+        get: operations["start_sso_login_api_v1_auth_sso__provider__authorize_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -160,25 +112,42 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/api-keys": {
+    "/api/v1/auth/sso/{provider}/callback": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List issued API keys */
-        get: operations["list_api_keys_api_v1_auth_api_keys_get"];
+        /** Handle the SSO callback and issue tokens */
+        get: operations["finish_sso_login_api_v1_auth_sso__provider__callback_get"];
         put?: never;
-        /** Issue a new API key for a user */
-        post: operations["create_api_key_api_v1_auth_api_keys_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/api-keys/{api_key_id}": {
+    "/api/v1/me/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List API keys for the current user */
+        get: operations["list_my_api_keys_api_v1_me_api_keys_get"];
+        put?: never;
+        /** Create an API key for the current user */
+        post: operations["create_my_api_key_api_v1_me_api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -188,59 +157,79 @@ export type paths = {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke an API key */
-        delete: operations["revoke_api_key_api_v1_auth_api_keys__api_key_id__delete"];
+        /** Revoke one of the current user's API keys */
+        delete: operations["revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/sso/login": {
+    "/api/v1/api-keys": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Initiate the SSO login flow */
-        get: operations["start_sso_login_api_v1_auth_sso_login_get"];
+        /** List API keys across the tenant (admin) */
+        get: operations["list_api_keys_api_v1_api_keys_get"];
         put?: never;
-        post?: never;
+        /** Create an API key for a user (admin) */
+        post: operations["create_api_key_api_v1_api_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/sso/callback": {
+    "/api/v1/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Handle the SSO callback and establish a session */
-        get: operations["finish_sso_login_api_v1_auth_sso_callback_get"];
+        /** Retrieve a single API key (admin) */
+        get: operations["get_api_key_api_v1_api_keys__api_key_id__get"];
         put?: never;
         post?: never;
+        /** Revoke an API key (admin) */
+        delete: operations["revoke_api_key_api_v1_api_keys__api_key_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List API keys for a specific user (admin) */
+        get: operations["list_user_api_keys_api_v1_users__user_id__api_keys_get"];
+        put?: never;
+        /** Create an API key for a specific user (admin) */
+        post: operations["create_user_api_key_api_v1_users__user_id__api_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/me": {
+    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Return the authenticated user profile */
-        get: operations["read_me_api_v1_users_me_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Revoke an API key for a specific user (admin) */
+        delete: operations["revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -263,83 +252,113 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roles": {
+    "/api/v1/users/{user_id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List global role definitions
-         * @description Return the catalog of global roles.
-         */
-        get: operations["list_global_roles_api_v1_roles_get"];
-        put?: never;
-        /**
-         * Create a global role
-         * @description Create a new global role definition.
-         */
-        post: operations["create_global_role_endpoint_api_v1_roles_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roles/{role_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Retrieve a role definition
-         * @description Return a single role definition with permissions.
-         */
-        get: operations["read_role_detail_api_v1_roles__role_id__get"];
+        /** Retrieve a user (administrator only) */
+        get: operations["get_user_api_v1_users__user_id__get"];
         put?: never;
         post?: never;
-        /**
-         * Delete a role
-         * @description Delete the specified role definition.
-         */
-        delete: operations["delete_role_definition_api_v1_roles__role_id__delete"];
+        delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Update a role
-         * @description Update the specified role in its scope.
-         */
-        patch: operations["update_role_definition_api_v1_roles__role_id__patch"];
+        /** Update a user (administrator only) */
+        patch: operations["update_user_api_v1_users__user_id__patch"];
         trace?: never;
     };
-    "/api/v1/role-assignments": {
+    "/api/v1/rbac/permissions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List global role assignments
-         * @description Return global role assignments filtered by optional identifiers.
-         */
-        get: operations["list_global_role_assignments_api_v1_role_assignments_get"];
+        /** List permissions */
+        get: operations["list_permissions_api_v1_rbac_permissions_get"];
         put?: never;
-        /**
-         * Assign a global role to a principal
-         * @description Create or return an existing global role assignment.
-         */
-        post: operations["create_global_role_assignment_api_v1_role_assignments_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/role-assignments/{assignment_id}": {
+    "/api/v1/rbac/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List role definitions */
+        get: operations["list_roles_api_v1_rbac_roles_get"];
+        put?: never;
+        /** Create a role */
+        post: operations["create_role_api_v1_rbac_roles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rbac/roles/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a role definition */
+        get: operations["read_role_api_v1_rbac_roles__role_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete a role */
+        delete: operations["delete_role_api_v1_rbac_roles__role_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update an existing role */
+        patch: operations["update_role_api_v1_rbac_roles__role_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/rbac/role-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List role assignments (admin view) */
+        get: operations["list_assignments_api_v1_rbac_role_assignments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List global roles assigned to a user */
+        get: operations["list_user_roles_api_v1_users__user_id__roles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/roles/{role_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -347,19 +366,17 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Assign a global role to a user (idempotent) */
+        put: operations["assign_user_role_api_v1_users__user_id__roles__role_id__put"];
         post?: never;
-        /**
-         * Delete a global role assignment
-         * @description Delete a global role assignment by identifier.
-         */
-        delete: operations["delete_global_role_assignment_api_v1_role_assignments__assignment_id__delete"];
+        /** Remove a global role from a user */
+        delete: operations["remove_user_role_api_v1_users__user_id__roles__role_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/role-assignments": {
+    "/api/v1/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -367,43 +384,19 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * List workspace role assignments
-         * @description Return workspace role assignments filtered by optional identifiers.
+         * Return the authenticated user's profile
+         * @description Return the current principal's profile.
          */
-        get: operations["list_workspace_role_assignments_api_v1_workspaces__workspace_id__role_assignments_get"];
+        get: operations["get_me_api_v1_me_get"];
         put?: never;
-        /**
-         * Assign a workspace role to a principal
-         * @description Create or return an existing workspace role assignment.
-         */
-        post: operations["create_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a workspace role assignment
-         * @description Delete a workspace role assignment by identifier.
-         */
-        delete: operations["delete_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments__assignment_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/permissions": {
+    "/api/v1/me/bootstrap": {
         parameters: {
             query?: never;
             header?: never;
@@ -411,10 +404,10 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * List permission catalog entries
-         * @description Return permission registry entries filtered by ``scope``.
+         * Bootstrap the session with profile, roles, permissions, and workspaces
+         * @description Return a consolidated bootstrap payload for the current principal.
          */
-        get: operations["list_permissions_api_v1_permissions_get"];
+        get: operations["get_me_bootstrap_api_v1_me_bootstrap_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -431,10 +424,10 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * Return the caller's effective permission set
-         * @description Return global and optional workspace permissions for the active user.
+         * Return the caller's effective global and workspace permissions
+         * @description Return the effective permissions for the current principal.
          */
-        get: operations["read_effective_permissions_api_v1_me_permissions_get"];
+        get: operations["get_me_permissions_api_v1_me_permissions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -454,7 +447,7 @@ export type paths = {
         put?: never;
         /**
          * Check whether the caller has specific permissions
-         * @description Return a permission map describing whether the caller has each key.
+         * @description Evaluate a set of permission keys for the current principal.
          */
         post: operations["check_permissions_api_v1_me_permissions_check_post"];
         delete?: never;
@@ -500,94 +493,6 @@ export type paths = {
         patch: operations["update_workspace_api_v1_workspaces__workspace_id__patch"];
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List members within the workspace */
-        get: operations["list_members_api_v1_workspaces__workspace_id__members_get"];
-        put?: never;
-        /** Add a member to a workspace */
-        post: operations["add_member_api_v1_workspaces__workspace_id__members_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List roles available to the workspace */
-        get: operations["list_workspace_roles_api_v1_workspaces__workspace_id__roles_get"];
-        put?: never;
-        /** Create a workspace role */
-        post: operations["create_workspace_role_api_v1_workspaces__workspace_id__roles_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/roles/{role_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update a workspace role */
-        put: operations["update_workspace_role_api_v1_workspaces__workspace_id__roles__role_id__put"];
-        post?: never;
-        /** Delete a workspace role */
-        delete: operations["delete_workspace_role_api_v1_workspaces__workspace_id__roles__role_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/members/{membership_id}/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Replace the set of roles for a workspace member */
-        put: operations["update_member_api_v1_workspaces__workspace_id__members__membership_id__roles_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/members/{membership_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove a workspace member */
-        delete: operations["remove_member_api_v1_workspaces__workspace_id__members__membership_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/default": {
         parameters: {
             query?: never;
@@ -596,10 +501,46 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        put?: never;
         /** Mark a workspace as the caller's default */
-        post: operations["set_default_workspace_api_v1_workspaces__workspace_id__default_post"];
+        put: operations["set_default_workspace_api_v1_workspaces__workspace_id__default_put"];
+        post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List workspace members with their roles */
+        get: operations["list_workspace_members_api_v1_workspaces__workspace_id__members_get"];
+        put?: never;
+        /** Add a workspace member with roles */
+        post: operations["add_workspace_member_api_v1_workspaces__workspace_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace workspace member roles */
+        put: operations["update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__put"];
+        post?: never;
+        /** Remove a workspace member */
+        delete: operations["remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -710,23 +651,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configuration versions (drafts and published) */
-        get: operations["list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
         parameters: {
             query?: never;
@@ -738,6 +662,23 @@ export type paths = {
         get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/configurations/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a configuration from an uploaded archive */
+        post: operations["import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -850,6 +791,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a draft configuration from an uploaded archive */
+        put: operations["replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
         parameters: {
             query?: never;
@@ -858,9 +816,9 @@ export type paths = {
             cookie?: never;
         };
         get?: never;
-        put?: never;
         /** Create Config Directory */
-        post: operations["create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__post"];
+        put: operations["create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__put"];
+        post?: never;
         /** Delete Config Directory */
         delete: operations["delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete"];
         options?: never;
@@ -875,7 +833,8 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Builds Endpoint */
+        get: operations["list_builds_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_get"];
         put?: never;
         /** Create Build Endpoint */
         post: operations["create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post"];
@@ -902,6 +861,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/builds/{build_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Build Events Endpoint */
+        get: operations["list_build_events_endpoint_api_v1_builds__build_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/builds/{build_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Build Events Endpoint */
+        get: operations["stream_build_events_endpoint_api_v1_builds__build_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/configurations/{configuration_id}/runs": {
         parameters: {
             query?: never;
@@ -909,11 +902,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Configuration Runs Endpoint */
+        get: operations["list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"];
         put?: never;
         /**
          * Create Run Endpoint
-         * @description Create a run for ``configuration_id`` and optionally stream execution events.
+         * @description Create a run for ``configuration_id`` and enqueue execution.
          */
         post: operations["create_run_endpoint_api_v1_configurations__configuration_id__runs_post"];
         delete?: never;
@@ -990,15 +984,15 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/logs": {
+    "/api/v1/runs/{run_id}/events/stream": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Run Logs Endpoint */
-        get: operations["get_run_logs_endpoint_api_v1_runs__run_id__logs_get"];
+        /** Stream Run Events Endpoint */
+        get: operations["stream_run_events_endpoint_api_v1_runs__run_id__events_stream_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1007,7 +1001,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/logfile": {
+    "/api/v1/runs/{run_id}/logs": {
         parameters: {
             query?: never;
             header?: never;
@@ -1015,7 +1009,7 @@ export type paths = {
             cookie?: never;
         };
         /** Download Run Logs File Endpoint */
-        get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logfile_get"];
+        get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1087,104 +1081,6 @@ export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
         /**
-         * APIKeyIssueRequest
-         * @description Payload for issuing a new API key.
-         */
-        APIKeyIssueRequest: {
-            /** User Id */
-            user_id?: string | null;
-            /** Email */
-            email?: string | null;
-            /** Expires In Days */
-            expires_in_days?: number | null;
-            /** Label */
-            label?: string | null;
-        };
-        /**
-         * APIKeyIssueResponse
-         * @description Representation of a freshly issued API key secret.
-         */
-        APIKeyIssueResponse: {
-            /** Api Key */
-            api_key: string;
-            /**
-             * Principal Type
-             * @enum {string}
-             */
-            principal_type: "user" | "service_account";
-            /**
-             * Principal Id
-             * @description ULID (26-character string).
-             */
-            principal_id: string;
-            /** Principal Label */
-            principal_label: string;
-            /** Expires At */
-            expires_at?: string | null;
-            /** Label */
-            label?: string | null;
-        };
-        /**
-         * APIKeyPage
-         * @description Paginated collection of API keys.
-         */
-        APIKeyPage: {
-            /** Items */
-            items: components["schemas"]["APIKeySummary"][];
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Has Next */
-            has_next: boolean;
-            /** Has Previous */
-            has_previous: boolean;
-            /** Total */
-            total?: number | null;
-        };
-        /**
-         * APIKeySummary
-         * @description Metadata describing an issued API key.
-         */
-        APIKeySummary: {
-            /**
-             * Id
-             * @description ULID (26-character string).
-             */
-            id: string;
-            /**
-             * Principal Type
-             * @enum {string}
-             */
-            principal_type: "user" | "service_account";
-            /**
-             * Principal Id
-             * @description ULID (26-character string).
-             */
-            principal_id: string;
-            /** Principal Label */
-            principal_label: string;
-            /** Token Prefix */
-            token_prefix: string;
-            /** Label */
-            label?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Expires At */
-            expires_at?: string | null;
-            /** Last Seen At */
-            last_seen_at?: string | null;
-            /** Last Seen Ip */
-            last_seen_ip?: string | null;
-            /** Last Seen User Agent */
-            last_seen_user_agent?: string | null;
-            /** Revoked At */
-            revoked_at?: string | null;
-        };
-        /**
          * AdeEvent
          * @description Canonical ADE event envelope for build + run streaming.
          */
@@ -1223,18 +1119,302 @@ export type components = {
             [key: string]: unknown;
         };
         /**
+         * ApiKeyCreateRequest
+         * @description Request payload to create a new API key.
+         */
+        ApiKeyCreateRequest: {
+            /**
+             * Label
+             * @description Optional human-friendly label (e.g. 'CLI on laptop').
+             */
+            label?: string | null;
+            /**
+             * Expires In Days
+             * @description Optional TTL in days; omit for a non-expiring key.
+             */
+            expires_in_days?: number | null;
+            /**
+             * @description Scope of the key: global or workspace.
+             * @default global
+             */
+            scope_type: components["schemas"]["ScopeType"];
+            /**
+             * Scope Id
+             * @description Workspace identifier when scope_type=workspace. Must be null for global keys.
+             */
+            scope_id?: string | null;
+        };
+        /**
+         * ApiKeyCreateResponse
+         * @description Response returned when a new API key is created.
+         */
+        ApiKeyCreateResponse: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Owner User Id
+             * Format: uuid
+             * @description User that this key authenticates as.
+             */
+            owner_user_id: string;
+            /**
+             * Created By User Id
+             * @description User who created the key (may equal owner for self-service).
+             */
+            created_by_user_id?: string | null;
+            /**
+             * Secret
+             * @description Full API key secret, returned once at creation time.
+             */
+            secret: string;
+            /**
+             * Token Prefix
+             * @description Prefix used for identification in logs/UI.
+             */
+            token_prefix: string;
+            /** Label */
+            label?: string | null;
+            scope_type: components["schemas"]["ScopeType"];
+            /** Scope Id */
+            scope_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+        };
+        /**
+         * ApiKeyIssueRequest
+         * @description Admin payload to issue a key by user id or email.
+         */
+        ApiKeyIssueRequest: {
+            /**
+             * Label
+             * @description Optional human-friendly label (e.g. 'CLI on laptop').
+             */
+            label?: string | null;
+            /**
+             * Expires In Days
+             * @description Optional TTL in days; omit for a non-expiring key.
+             */
+            expires_in_days?: number | null;
+            /**
+             * @description Scope of the key: global or workspace.
+             * @default global
+             */
+            scope_type: components["schemas"]["ScopeType"];
+            /**
+             * Scope Id
+             * @description Workspace identifier when scope_type=workspace. Must be null for global keys.
+             */
+            scope_id?: string | null;
+            /**
+             * User Id
+             * @description Target user id; provide exactly one of user_id or email.
+             */
+            user_id?: string | null;
+            /**
+             * Email
+             * @description Target user email; provide exactly one of user_id or email.
+             */
+            email?: string | null;
+        };
+        /**
+         * ApiKeyPage
+         * @description Paginated collection of API keys.
+         */
+        ApiKeyPage: {
+            /** Items */
+            items: components["schemas"]["ApiKeySummary"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * ApiKeySummary
+         * @description Metadata describing an API key without exposing the secret.
+         */
+        ApiKeySummary: {
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            id: string;
+            /**
+             * Owner User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            owner_user_id: string;
+            /** Created By User Id */
+            created_by_user_id?: string | null;
+            /** Token Prefix */
+            token_prefix: string;
+            /** Label */
+            label?: string | null;
+            scope_type: components["schemas"]["ScopeType"];
+            /** Scope Id */
+            scope_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Last Used At */
+            last_used_at?: string | null;
+        };
+        /**
+         * AuthLoginRequest
+         * @description Credentials submitted when performing a password login.
+         */
+        AuthLoginRequest: {
+            /**
+             * Email
+             * Format: email
+             * @description User email address.
+             */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             * @description User password.
+             */
+            password: string;
+        };
+        /**
          * AuthProvider
-         * @description Representation of an interactive authentication provider.
+         * @description Describes an interactive authentication provider option.
          */
         AuthProvider: {
-            /** Id */
+            /**
+             * Id
+             * @description Provider identifier, e.g. 'password' or 'sso'.
+             */
             id: string;
-            /** Label */
+            /**
+             * Label
+             * @description Human-friendly label for the provider.
+             */
             label: string;
-            /** Start Url */
-            start_url: string;
-            /** Icon Url */
+            /**
+             * Type
+             * @description Provider type: 'password' or 'oidc' (for SSO/OIDC providers).
+             * @enum {string}
+             */
+            type: "password" | "oidc";
+            /**
+             * Start Url
+             * @description URL to initiate login for this provider, if applicable.
+             */
+            start_url?: string | null;
+            /**
+             * Icon Url
+             * @description Optional icon URL for UI rendering.
+             */
             icon_url?: string | null;
+        };
+        /**
+         * AuthProviderListResponse
+         * @description Response payload returned by /auth/providers.
+         */
+        AuthProviderListResponse: {
+            /** Providers */
+            providers: components["schemas"]["AuthProvider"][];
+            /**
+             * Force Sso
+             * @description When true, the frontend should offer only SSO.
+             * @default false
+             */
+            force_sso: boolean;
+        };
+        /**
+         * AuthRefreshRequest
+         * @description Optional payload for refresh / logout.
+         *
+         *     Browser clients typically rely on the refresh cookie; API clients can
+         *     supply the token in the request body instead.
+         */
+        AuthRefreshRequest: {
+            /**
+             * Refresh Token
+             * @description Refresh token to rotate. Optional when using the refresh cookie.
+             */
+            refresh_token?: string | null;
+        };
+        /**
+         * AuthSetupRequest
+         * @description Payload used to create the first administrator account.
+         */
+        AuthSetupRequest: {
+            /**
+             * Email
+             * Format: email
+             * @description Administrator email.
+             */
+            email: string;
+            /**
+             * Password
+             * Format: password
+             * @description Administrator password.
+             */
+            password: string;
+            /**
+             * Display Name
+             * @description Optional display name for the administrator.
+             */
+            display_name?: string | null;
+        };
+        /**
+         * AuthSetupStatusResponse
+         * @description Describes whether initial administrator setup is required.
+         */
+        AuthSetupStatusResponse: {
+            /**
+             * Requires Setup
+             * @description True when no users exist and an initial admin must be created.
+             */
+            requires_setup: boolean;
+            /**
+             * Has Users
+             * @description True when at least one user already exists.
+             */
+            has_users: boolean;
+        };
+        /** Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post */
+        Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
+        /** Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put */
+        Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
         };
         /** Body_upload_document_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_document_api_v1_workspaces__workspace_id__documents_post: {
@@ -1247,19 +1427,6 @@ export type components = {
             metadata?: string | null;
             /** Expires At */
             expires_at?: string | null;
-        };
-        /**
-         * BootstrapEnvelope
-         * @description Consolidated bootstrap payload for SPA initialization.
-         */
-        BootstrapEnvelope: {
-            user: components["schemas"]["UserProfile"];
-            /** Global Roles */
-            global_roles: string[];
-            /** Global Permissions */
-            global_permissions: string[];
-            workspaces: components["schemas"]["WorkspacePage"];
-            safe_mode: components["schemas"]["SafeModeStatus"];
         };
         /**
          * BuildCreateOptions
@@ -1284,19 +1451,58 @@ export type components = {
          * @description Request body for POST /builds.
          */
         BuildCreateRequest: {
-            /**
-             * Stream
-             * @default false
-             */
-            stream: boolean;
             options?: components["schemas"]["BuildCreateOptions"];
+        };
+        /**
+         * BuildEventsPage
+         * @description Paginated ADE events for a build.
+         */
+        BuildEventsPage: {
+            /** Items */
+            items: components["schemas"]["AdeEvent"][];
+            /** Next After Sequence */
+            next_after_sequence?: number | null;
+        };
+        /**
+         * BuildLinks
+         * @description Hypermedia links for build-related resources.
+         */
+        BuildLinks: {
+            /** Self */
+            self: string;
+            /** Events */
+            events: string;
+            /** Events Stream */
+            events_stream: string;
+        };
+        /**
+         * BuildPage
+         * @description Paginated collection of ``BuildResource`` items.
+         */
+        BuildPage: {
+            /** Items */
+            items: components["schemas"]["BuildResource"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * BuildResource
          * @description API representation of a build row.
          */
         BuildResource: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             id: string;
             /**
              * Object
@@ -1304,15 +1510,19 @@ export type components = {
              * @constant
              */
             object: "ade.build";
-            /** Workspace Id */
-            workspace_id: string;
-            /** Configuration Id */
-            configuration_id: string;
             /**
-             * Status
-             * @enum {string}
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
-            status: "queued" | "building" | "active" | "failed" | "canceled";
+            workspace_id: string;
+            /**
+             * Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            configuration_id: string;
+            status: components["schemas"]["BuildStatus"];
             /**
              * Created
              * @description Unix timestamp when the build request was created
@@ -1334,7 +1544,14 @@ export type components = {
             summary?: string | null;
             /** Error Message */
             error_message?: string | null;
+            links: components["schemas"]["BuildLinks"];
         };
+        /**
+         * BuildStatus
+         * @description Lifecycle states for API-facing build resources.
+         * @enum {string}
+         */
+        BuildStatus: "queued" | "building" | "ready" | "failed" | "canceled";
         /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
@@ -1347,7 +1564,8 @@ export type components = {
             type: "clone";
             /**
              * Configuration Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
         };
@@ -1373,46 +1591,6 @@ export type components = {
             path: string;
             /** Message */
             message: string;
-        };
-        /**
-         * ConfigVersionRecord
-         * @description Serialized configuration version metadata.
-         */
-        ConfigVersionRecord: {
-            /**
-             * Configuration Version Id
-             * @description ULID (26-character string).
-             */
-            configuration_version_id: string;
-            /**
-             * Configuration Id
-             * @description ULID (26-character string).
-             */
-            configuration_id: string;
-            /**
-             * Workspace Id
-             * @description ULID (26-character string).
-             */
-            workspace_id: string;
-            status: components["schemas"]["ConfigurationStatus"];
-            /** Semver */
-            semver?: string | null;
-            /** Content Digest */
-            content_digest?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Activated At */
-            activated_at?: string | null;
-            /** Deleted At */
-            deleted_at?: string | null;
         };
         /**
          * ConfigurationActivateRequest
@@ -1460,19 +1638,19 @@ export type components = {
         ConfigurationRecord: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /** Display Name */
             display_name: string;
             status: components["schemas"]["ConfigurationStatus"];
-            /** Configuration Version */
-            configuration_version: number;
             /** Content Digest */
             content_digest?: string | null;
             /**
@@ -1501,12 +1679,14 @@ export type components = {
         ConfigurationValidateResponse: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             status: components["schemas"]["ConfigurationStatus"];
@@ -1515,19 +1695,12 @@ export type components = {
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
         };
-        /**
-         * DefaultResponse
-         * @description Consistent envelope for success/failure acknowledgements.
-         */
-        DefaultResponse: {
-            /** Status */
-            status: boolean;
-            /** Message */
-            message: string;
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            } | null;
+        /** DirectoryWriteResponse */
+        DirectoryWriteResponse: {
+            /** Path */
+            path: string;
+            /** Created */
+            created: boolean;
         };
         /**
          * DocumentLastRun
@@ -1558,12 +1731,14 @@ export type components = {
         DocumentOut: {
             /**
              * Id
-             * @description Document ULID (26-character string).
+             * Format: uuid
+             * @description Document UUIDv7 (RFC 9562).
              */
             id: string;
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /**
@@ -1664,16 +1839,22 @@ export type components = {
          */
         DocumentStatus: "uploaded" | "processing" | "processed" | "failed" | "archived";
         /**
-         * EffectivePermissionsResponse
-         * @description Effective permissions for the authenticated principal.
+         * EffectivePermissions
+         * @description Effective permission sets for the current principal.
          */
-        EffectivePermissionsResponse: {
-            /** Global Permissions */
-            global_permissions?: string[];
-            /** Workspace Id */
-            workspace_id?: string | null;
-            /** Workspace Permissions */
-            workspace_permissions?: string[];
+        EffectivePermissions: {
+            /**
+             * Global
+             * @description Global permission keys granted to the principal.
+             */
+            global?: string[];
+            /**
+             * Workspaces
+             * @description Workspace-scoped permissions keyed by workspace id.
+             */
+            workspaces?: {
+                [key: string]: string[];
+            };
         };
         /** FileCapabilities */
         FileCapabilities: {
@@ -1719,12 +1900,14 @@ export type components = {
         FileListing: {
             /**
              * Workspace Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             workspace_id: string;
             /**
              * Configuration Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
             status: components["schemas"]["ConfigurationStatus"];
@@ -1869,46 +2052,184 @@ export type components = {
             detail?: string | null;
         };
         /**
-         * LoginRequest
-         * @description Credentials submitted when performing a password login.
+         * MeContext
+         * @description Full bootstrap payload for SPA initialization.
          */
-        LoginRequest: {
-            /** Email */
-            email: unknown;
+        MeContext: {
+            /** @description Current principal profile. */
+            user: components["schemas"]["MeProfile"];
             /**
-             * Password
-             * Format: password
+             * Roles
+             * @description Global role slugs assigned to the principal.
              */
-            password: string;
+            roles?: string[];
+            /**
+             * Permissions
+             * @description Global permission keys granted to the principal.
+             */
+            permissions?: string[];
+            /** @description Workspaces visible to the principal. */
+            workspaces: components["schemas"]["MeWorkspacePage"];
+        };
+        /**
+         * MeProfile
+         * @description Profile for the authenticated principal.
+         */
+        MeProfile: {
+            /**
+             * Id
+             * Format: uuid
+             * @description Unique user identifier.
+             */
+            id: string;
+            /**
+             * Email
+             * Format: email
+             * @description Primary email address.
+             */
+            email: string;
+            /**
+             * Display Name
+             * @description Human-friendly name for display.
+             */
+            display_name?: string | null;
+            /**
+             * Is Service Account
+             * @description True when this principal is a service account.
+             */
+            is_service_account: boolean;
+            /**
+             * Preferred Workspace Id
+             * @description Default workspace selection for this principal, when set.
+             */
+            preferred_workspace_id?: string | null;
+            /**
+             * Roles
+             * @description Global role slugs assigned to the principal.
+             */
+            roles?: string[];
+            /**
+             * Permissions
+             * @description Global permission keys granted to the principal.
+             */
+            permissions?: string[];
+            /**
+             * Created At
+             * Format: date-time
+             * @description User creation timestamp.
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * @description Timestamp of last profile update, if any.
+             */
+            updated_at?: string | null;
+        };
+        /**
+         * MeWorkspacePage
+         * @description Paged collection of workspaces for the current principal.
+         */
+        MeWorkspacePage: {
+            /**
+             * Items
+             * @description Workspace entries.
+             */
+            items?: components["schemas"]["MeWorkspaceSummary"][];
+            /**
+             * Page
+             * @description Current page (1-based).
+             */
+            page: number;
+            /**
+             * Page Size
+             * @description Page size used for the query.
+             */
+            page_size: number;
+            /**
+             * Total
+             * @description Total number of workspaces, when requested.
+             */
+            total?: number | null;
+            /**
+             * Has Next
+             * @description True when a subsequent page exists.
+             */
+            has_next: boolean;
+            /**
+             * Has Previous
+             * @description True when a previous page exists.
+             */
+            has_previous: boolean;
+        };
+        /**
+         * MeWorkspaceSummary
+         * @description Lightweight view of a workspace visible to the current principal.
+         */
+        MeWorkspaceSummary: {
+            /**
+             * Id
+             * Format: uuid
+             * @description Workspace identifier.
+             */
+            id: string;
+            /**
+             * Name
+             * @description Workspace display name.
+             */
+            name: string;
+            /**
+             * Slug
+             * @description Optional URL-friendly slug for the workspace.
+             */
+            slug?: string | null;
+            /**
+             * Is Default
+             * @description True when this is the principal's default workspace.
+             */
+            is_default: boolean;
+            /**
+             * Joined At
+             * @description When the user was added to this workspace, if known.
+             */
+            joined_at?: string | null;
         };
         /**
          * PermissionCheckRequest
-         * @description Batch permission check payload.
+         * @description Payload for checking specific permission keys.
          */
         PermissionCheckRequest: {
-            /** Permissions */
+            /**
+             * Permissions
+             * @description Permission keys to evaluate.
+             */
             permissions: string[];
-            /** Workspace Id */
+            /**
+             * Workspace Id
+             * @description Workspace identifier to use when checking workspace-scoped permissions. Required when any requested permission is workspace-scoped.
+             */
             workspace_id?: string | null;
         };
         /**
          * PermissionCheckResponse
-         * @description Result map produced by the batch permission check.
+         * @description Result of permission checks for the current principal.
          */
         PermissionCheckResponse: {
-            /** Results */
-            results?: {
+            /**
+             * Results
+             * @description Mapping of permission key -> whether it is granted.
+             */
+            results: {
                 [key: string]: boolean;
             };
         };
         /**
          * PermissionOut
-         * @description Serialized permission registry entry.
+         * @description API representation of a permission from the catalog.
          */
         PermissionOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
              */
             id: string;
             /** Key */
@@ -1942,68 +2263,30 @@ export type components = {
             total?: number | null;
         };
         /**
-         * PrincipalType
-         * @description Kinds of principals that can hold assignments.
-         * @enum {string}
-         */
-        PrincipalType: "user";
-        /**
-         * ProviderDiscoveryResponse
-         * @description Response payload returned by `/auth/providers`.
-         */
-        ProviderDiscoveryResponse: {
-            /** Providers */
-            providers: components["schemas"]["AuthProvider"][];
-            /** Force Sso */
-            force_sso: boolean;
-        };
-        /**
-         * RoleAssignmentCreate
-         * @description Payload for creating a role assignment.
-         */
-        RoleAssignmentCreate: {
-            /**
-             * Role Id
-             * @description ULID (26-character string).
-             */
-            role_id: string;
-            /** Principal Id */
-            principal_id?: string | null;
-            /** User Id */
-            user_id?: string | null;
-        };
-        /**
          * RoleAssignmentOut
-         * @description Serialized representation of a role assignment.
+         * @description API representation of a role assignment to a user in a scope.
          */
         RoleAssignmentOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
              */
             id: string;
             /**
-             * Principal Id
-             * @description ULID (26-character string).
+             * User Id
+             * Format: uuid
              */
-            principal_id: string;
-            principal_type: components["schemas"]["PrincipalType"];
-            /** User Id */
-            user_id?: string | null;
-            /** User Email */
-            user_email?: string | null;
-            /** User Display Name */
-            user_display_name?: string | null;
+            user_id: string;
             /**
              * Role Id
-             * @description ULID (26-character string).
+             * Format: uuid
              */
             role_id: string;
             /** Role Slug */
             role_slug: string;
             scope_type: components["schemas"]["ScopeType"];
             /** Scope Id */
-            scope_id?: string | null;
+            scope_id: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2030,7 +2313,7 @@ export type components = {
         };
         /**
          * RoleCreate
-         * @description Payload for creating a workspace or global role.
+         * @description Payload for creating a new role.
          */
         RoleCreate: {
             /** Name */
@@ -2040,16 +2323,16 @@ export type components = {
             /** Description */
             description?: string | null;
             /** Permissions */
-            permissions?: string[];
+            permissions: string[];
         };
         /**
          * RoleOut
-         * @description Serialized representation of a role definition.
+         * @description API representation of a role.
          */
         RoleOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
              */
             id: string;
             /** Slug */
@@ -2057,16 +2340,20 @@ export type components = {
             /** Name */
             name: string;
             /** Description */
-            description?: string | null;
-            scope_type: components["schemas"]["ScopeType"];
-            /** Scope Id */
-            scope_id?: string | null;
+            description: string | null;
             /** Permissions */
             permissions: string[];
-            /** Built In */
-            built_in: boolean;
-            /** Editable */
-            editable: boolean;
+            /** Is System */
+            is_system: boolean;
+            /** Is Editable */
+            is_editable: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
         };
         /**
          * RolePage
@@ -2092,11 +2379,11 @@ export type components = {
          */
         RoleUpdate: {
             /** Name */
-            name: string;
+            name?: string | null;
             /** Description */
             description?: string | null;
             /** Permissions */
-            permissions?: string[];
+            permissions?: string[] | null;
         };
         /**
          * RunCreateOptions
@@ -2152,11 +2439,6 @@ export type components = {
          * @description Payload accepted by the run creation endpoint.
          */
         RunCreateRequest: {
-            /**
-             * Stream
-             * @default false
-             */
-            stream: boolean;
             options?: components["schemas"]["RunCreateOptions"];
         };
         /**
@@ -2194,47 +2476,12 @@ export type components = {
             summary: string;
             /** Events */
             events: string;
+            /** Events Stream */
+            events_stream: string;
             /** Logs */
             logs: string;
-            /** Logfile */
-            logfile: string;
             /** Outputs */
             outputs: string;
-        };
-        /**
-         * RunLogEntry
-         * @description Single run log entry returned by the logs endpoint.
-         */
-        RunLogEntry: {
-            /** Id */
-            id: number;
-            /** Created */
-            created: number;
-            /**
-             * Stream
-             * @enum {string}
-             */
-            stream: "stdout" | "stderr";
-            /** Message */
-            message: string;
-        };
-        /**
-         * RunLogsResponse
-         * @description Envelope for run log fetch responses.
-         */
-        RunLogsResponse: {
-            /** Run Id */
-            run_id: string;
-            /**
-             * Object
-             * @default ade.run.logs
-             * @constant
-             */
-            object: "ade.run.logs";
-            /** Entries */
-            entries: components["schemas"]["RunLogEntry"][];
-            /** Next After Id */
-            next_after_id?: number | null;
         };
         /**
          * RunOutput
@@ -2301,7 +2548,11 @@ export type components = {
          * @description API representation of a persisted ADE run.
          */
         RunResource: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             id: string;
             /**
              * Object
@@ -2309,19 +2560,21 @@ export type components = {
              * @constant
              */
             object: "ade.run";
-            /** Workspace Id */
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             workspace_id: string;
-            /** Configuration Id */
+            /**
+             * Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
             configuration_id: string;
-            /** Configuration Version */
-            configuration_version?: string | null;
             /** Build Id */
             build_id?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+            status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
             /** Failure Stage */
@@ -2358,7 +2611,7 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
+        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
         /**
          * RunSummaryBreakdowns
          * @description Nested breakdowns for files and fields.
@@ -2487,19 +2740,20 @@ export type components = {
          * @description Identity and lifecycle info for a run summary.
          */
         RunSummaryRun: {
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             */
             id: string;
             /** Workspace Id */
             workspace_id?: string | null;
             /** Configuration Id */
             configuration_id?: string | null;
-            /** Configuration Version */
-            configuration_version?: string | null;
             /**
              * Status
              * @enum {string}
              */
-            status: "succeeded" | "failed" | "canceled";
+            status: "succeeded" | "failed" | "cancelled";
             /** Failure Code */
             failure_code?: string | null;
             /** Failure Stage */
@@ -2578,52 +2832,102 @@ export type components = {
         };
         /**
          * ScopeType
-         * @description Scope dimensions supported by RBAC.
+         * @description Scopes supported by RBAC-aware resources.
          * @enum {string}
          */
         ScopeType: "global" | "workspace";
         /**
          * SessionEnvelope
-         * @description Envelope returned when a session is established or refreshed.
+         * @description Wrapper around issued session tokens.
          */
         SessionEnvelope: {
-            user: components["schemas"]["UserProfile"];
-            /** Expires At */
-            expires_at?: string | null;
-            /** Refresh Expires At */
+            /** @description Issued session token pair. */
+            session: components["schemas"]["SessionTokens"];
+            /**
+             * Csrf Token
+             * @description CSRF token mirrored in the ade_csrf cookie for double-submit.
+             */
+            csrf_token?: string | null;
+        };
+        /**
+         * SessionSnapshot
+         * @description Minimal view of the current session.
+         */
+        SessionSnapshot: {
+            /**
+             * User Id
+             * Format: uuid
+             * @description Subject of the session.
+             */
+            user_id: string;
+            /**
+             * Principal Type
+             * @description Type of principal represented by the session.
+             * @enum {string}
+             */
+            principal_type: "user" | "service_account";
+            /**
+             * Issued At
+             * @description When the session was issued (UTC), if known.
+             */
+            issued_at?: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the session expires (UTC).
+             */
+            expires_at: string;
+        };
+        /**
+         * SessionStatusResponse
+         * @description Snapshot response for GET /auth/session.
+         */
+        SessionStatusResponse: {
+            /** @description Details about the currently authenticated session. */
+            session: components["schemas"]["SessionSnapshot"];
+        };
+        /**
+         * SessionTokens
+         * @description Session token pair issued to a client.
+         */
+        SessionTokens: {
+            /**
+             * Access Token
+             * @description JWT access token.
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @description Refresh token, if one is issued.
+             */
+            refresh_token?: string | null;
+            /**
+             * Token Type
+             * @description Token type, usually 'bearer'.
+             * @default bearer
+             */
+            token_type: string;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the access token expires (UTC).
+             */
+            expires_at: string;
+            /**
+             * Refresh Expires At
+             * @description When the refresh token expires (UTC), if applicable.
+             */
             refresh_expires_at?: string | null;
-            /** Return To */
-            return_to?: string | null;
-        };
-        /**
-         * SetupRequest
-         * @description Payload submitted when creating the first administrator.
-         */
-        SetupRequest: {
-            /** Email */
-            email: unknown;
             /**
-             * Password
-             * Format: password
+             * Expires In
+             * @description Seconds until the access token expires.
              */
-            password: string;
-            /** Display Name */
-            display_name?: string | null;
-        };
-        /**
-         * SetupStatus
-         * @description Response payload describing the initial setup state.
-         */
-        SetupStatus: {
-            /** Requires Setup */
-            requires_setup: boolean;
-            /** Completed At */
-            completed_at?: string | null;
+            expires_in: number;
             /**
-             * Force Sso
-             * @default false
+             * Refresh Expires In
+             * @description Seconds until the refresh token expires, if applicable.
              */
-            force_sso: boolean;
+            refresh_expires_in?: number | null;
         };
         /**
          * UploaderOut
@@ -2632,7 +2936,8 @@ export type components = {
         UploaderOut: {
             /**
              * Id
-             * @description Uploader ULID (26-character string).
+             * Format: uuid
+             * @description Uploader UUID (RFC 9562 UUIDv7).
              */
             id: string;
             /**
@@ -2653,7 +2958,8 @@ export type components = {
         UserOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Email */
@@ -2700,29 +3006,51 @@ export type components = {
             total?: number | null;
         };
         /**
-         * UserProfile
-         * @description Minimal view of the authenticated user.
+         * UserRoleSummary
+         * @description Summary of a single role assignment for a user (global scope).
          */
-        UserProfile: {
+        UserRoleSummary: {
             /**
-             * Id
-             * @description ULID (26-character string).
+             * Role Id
+             * Format: uuid
              */
-            id: string;
-            /** Email */
-            email: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Is Service Account */
-            is_service_account: boolean;
-            /** Display Name */
-            display_name?: string | null;
-            /** Preferred Workspace Id */
-            preferred_workspace_id?: string | null;
+            role_id: string;
+            /** Role Slug */
+            role_slug: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * UserRolesEnvelope
+         * @description Envelope for listing all global roles for a user.
+         */
+        UserRolesEnvelope: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
             /** Roles */
-            roles?: string[];
-            /** Permissions */
-            permissions?: string[];
+            roles: components["schemas"]["UserRoleSummary"][];
+        };
+        /**
+         * UserUpdate
+         * @description Fields administrators can update for a user.
+         */
+        UserUpdate: {
+            /**
+             * Display Name
+             * @description Human-friendly display name for the user.
+             */
+            display_name?: string | null;
+            /**
+             * Is Active
+             * @description Whether the account is active and allowed to authenticate.
+             */
+            is_active?: boolean | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2750,57 +3078,43 @@ export type components = {
             } | null;
         };
         /**
-         * WorkspaceDefaultSelectionOut
-         * @description Response indicating the caller's default workspace selection.
-         */
-        WorkspaceDefaultSelectionOut: {
-            /**
-             * Workspace Id
-             * @description ULID (26-character string).
-             */
-            workspace_id: string;
-            /** Is Default */
-            is_default: boolean;
-        };
-        /**
          * WorkspaceMemberCreate
-         * @description Payload for adding a member to a workspace.
+         * @description Payload for adding a new workspace member with roles.
          */
         WorkspaceMemberCreate: {
             /**
              * User Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             user_id: string;
             /** Role Ids */
-            role_ids?: string[] | null;
+            role_ids: string[];
         };
         /**
          * WorkspaceMemberOut
-         * @description Representation of a workspace membership.
+         * @description Workspace member with their role IDs and slugs.
          */
         WorkspaceMemberOut: {
             /**
-             * Id
-             * @description ULID (26-character string).
+             * User Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
-            id: string;
+            user_id: string;
+            /** Role Ids */
+            role_ids: string[];
+            /** Role Slugs */
+            role_slugs: string[];
             /**
-             * Workspace Id
-             * @description ULID (26-character string).
+             * Created At
+             * Format: date-time
              */
-            workspace_id: string;
-            /** Roles */
-            roles: string[];
-            /** Permissions */
-            permissions: string[];
-            /** Is Default */
-            is_default: boolean;
-            user: components["schemas"]["UserOut"];
+            created_at: string;
         };
         /**
          * WorkspaceMemberPage
-         * @description Paginated workspace member listing.
+         * @description Paginated collection of workspace members.
          */
         WorkspaceMemberPage: {
             /** Items */
@@ -2817,12 +3131,12 @@ export type components = {
             total?: number | null;
         };
         /**
-         * WorkspaceMemberRolesUpdate
-         * @description Payload used to replace the set of roles for a membership.
+         * WorkspaceMemberUpdate
+         * @description Payload for updating workspace member roles.
          */
-        WorkspaceMemberRolesUpdate: {
+        WorkspaceMemberUpdate: {
             /** Role Ids */
-            role_ids?: string[];
+            role_ids: string[];
         };
         /**
          * WorkspaceOut
@@ -2831,7 +3145,8 @@ export type components = {
         WorkspaceOut: {
             /**
              * Id
-             * @description ULID (26-character string).
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             id: string;
             /** Name */
@@ -2906,99 +3221,6 @@ export interface operations {
             };
         };
     };
-    read_setup_status_api_v1_setup_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SetupStatus"];
-                };
-            };
-        };
-    };
-    complete_setup_api_v1_setup_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetupRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
-                };
-            };
-            /** @description Initial setup already completed or email already in use. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    bootstrap_api_v1_bootstrap_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-                include_total?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BootstrapEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_auth_providers_api_v1_auth_providers_get: {
         parameters: {
             query?: never;
@@ -3014,7 +3236,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderDiscoveryResponse"];
+                    "application/json": components["schemas"]["AuthProviderListResponse"];
+                };
+            };
+        };
+    };
+    read_setup_status_api_v1_auth_setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthSetupStatusResponse"];
+                };
+            };
+        };
+    };
+    complete_setup_api_v1_auth_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3034,15 +3309,8 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
+                    "application/json": components["schemas"]["SessionStatusResponse"];
                 };
-            };
-            /** @description Authentication required to access the session profile. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -3055,7 +3323,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoginRequest"];
+                "application/json": components["schemas"]["AuthLoginRequest"];
             };
         };
         responses: {
@@ -3068,15 +3336,32 @@ export interface operations {
                     "application/json": components["schemas"]["SessionEnvelope"];
                 };
             };
-            /** @description Invalid credentials provided. */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
-            /** @description User account is inactive or locked. */
-            403: {
+        };
+    };
+    end_session_api_v1_auth_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuthRefreshRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3093,43 +3378,83 @@ export interface operations {
             };
         };
     };
-    delete_session_api_v1_auth_session_delete: {
+    refresh_session_api_v1_auth_session_refresh_post: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuthRefreshRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SessionEnvelope"];
+                };
             };
-            /** @description Session token is missing or invalid. */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description CSRF validation failed for the logout request. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    refresh_session_api_v1_auth_session_refresh_post: {
+    start_sso_login_api_v1_auth_sso__provider__authorize_get: {
         parameters: {
-            query?: never;
+            query?: {
+                next_path?: string | null;
+            };
             header?: never;
-            path?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_sso_login_api_v1_auth_sso__provider__callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+                response_mode?: ("json" | "redirect") | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3143,60 +3468,28 @@ export interface operations {
                     "application/json": components["schemas"]["SessionEnvelope"];
                 };
             };
-            /** @description Refresh token missing or invalid. */
-            401: {
+            /** @description Redirect to the frontend after establishing a browser session. Includes session cookies. */
+            302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description CSRF validation failed for the refresh request. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    read_me_api_v1_auth_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-            };
-            /** @description Authentication required to access the profile. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Service account credentials cannot access this endpoint. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    list_api_keys_api_v1_auth_api_keys_get: {
+    list_my_api_keys_api_v1_me_api_keys_get: {
         parameters: {
             query?: {
-                /** @description Include revoked API keys in the response. */
+                /** @description Include revoked keys in the response. */
                 include_revoked?: boolean;
                 page?: number;
                 page_size?: number;
@@ -3214,18 +3507,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["APIKeyPage"];
+                    "application/json": components["schemas"]["ApiKeyPage"];
                 };
             };
-            /** @description Authentication required to list API keys. */
+            /** @description Authentication required. */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Administrator role required to list API keys. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3242,7 +3528,7 @@ export interface operations {
             };
         };
     };
-    create_api_key_api_v1_auth_api_keys_post: {
+    create_my_api_key_api_v1_me_api_keys_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3251,7 +3537,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["APIKeyIssueRequest"];
+                "application/json": components["schemas"]["ApiKeyCreateRequest"];
             };
         };
         responses: {
@@ -3261,32 +3547,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["APIKeyIssueResponse"];
+                    "application/json": components["schemas"]["ApiKeyCreateResponse"];
                 };
             };
-            /** @description Email required or target user is inactive. */
+            /** @description Invalid API key payload. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Authentication required to manage API keys. */
+            /** @description Authentication required. */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Administrator role required to issue API keys. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Specified user could not be found. */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3303,7 +3575,7 @@ export interface operations {
             };
         };
     };
-    revoke_api_key_api_v1_auth_api_keys__api_key_id__delete: {
+    revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -3315,22 +3587,20 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
-            /** @description Authentication required to revoke API keys. */
+            /** @description Authentication required. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Administrator role required to revoke API keys. */
+            /** @description API key not owned by caller. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3355,10 +3625,16 @@ export interface operations {
             };
         };
     };
-    start_sso_login_api_v1_auth_sso_login_get: {
+    list_api_keys_api_v1_api_keys_get: {
         parameters: {
             query?: {
-                next?: string | null;
+                /** @description Include revoked keys in the response. */
+                include_revoked?: boolean;
+                /** @description Optional filter by owner user id. */
+                owner_user_id?: string | null;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
             path?: never;
@@ -3367,15 +3643,128 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            302: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiKeyPage"];
                 };
             };
-            /** @description SSO login is not configured for this deployment. */
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.read_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_key_api_v1_api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreateResponse"];
+                };
+            };
+            /** @description Invalid API key payload. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_api_key_api_v1_api_keys__api_key_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                api_key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeySummary"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.read_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3393,14 +3782,69 @@ export interface operations {
             };
         };
     };
-    finish_sso_login_api_v1_auth_sso_callback_get: {
+    revoke_api_key_api_v1_api_keys__api_key_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                api_key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_user_api_keys_api_v1_users__user_id__api_keys_get: {
         parameters: {
             query?: {
-                code?: string | null;
-                state?: string | null;
+                /** @description Include revoked keys in the response. */
+                include_revoked?: boolean;
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
             };
             header?: never;
-            path?: never;
+            path: {
+                user_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3411,17 +3855,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
+                    "application/json": components["schemas"]["ApiKeyPage"];
                 };
             };
-            /** @description Callback parameters invalid or identity provider response rejected. */
-            400: {
+            /** @description Authentication required. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description User account associated with the SSO identity is disabled. */
+            /** @description Requires api_keys.read_all global permission. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3437,31 +3881,111 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description ADE could not reach the identity provider during the SSO exchange. */
-            502: {
+        };
+    };
+    create_user_api_key_api_v1_users__user_id__api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyCreateResponse"];
+                };
+            };
+            /** @description Invalid API key payload. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    read_me_api_v1_users_me_get: {
+    revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                user_id: string;
+                api_key_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requires api_keys.manage_all global permission. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API key not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3504,10 +4028,153 @@ export interface operations {
             };
         };
     };
-    list_global_roles_api_v1_roles_get: {
+    get_user_api_v1_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to read users. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.read_all permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_api_v1_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to update users. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.manage_all permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No valid fields were provided for update. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_permissions_api_v1_rbac_permissions_get: {
         parameters: {
             query?: {
-                /** @description Role scope to list (global only) */
+                /** @description Scope to filter permissions by */
+                scope?: components["schemas"]["ScopeType"];
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_v1_rbac_roles_get: {
+        parameters: {
+            query?: {
+                /** @description Scope to filter roles by */
                 scope?: components["schemas"]["ScopeType"];
                 page?: number;
                 page_size?: number;
@@ -3528,20 +4195,6 @@ export interface operations {
                     "application/json": components["schemas"]["RolePage"];
                 };
             };
-            /** @description Authentication required to list roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks global role read permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3553,12 +4206,9 @@ export interface operations {
             };
         };
     };
-    create_global_role_endpoint_api_v1_roles_post: {
+    create_role_api_v1_rbac_roles_post: {
         parameters: {
-            query?: {
-                /** @description Role scope to create (global only) */
-                scope?: components["schemas"]["ScopeType"];
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3578,41 +4228,23 @@ export interface operations {
                     "application/json": components["schemas"]["RoleOut"];
                 };
             };
-            /** @description Authentication required to manage roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks global role management permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role slug already exists. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role payload is invalid. */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
-    read_role_detail_api_v1_roles__role_id__get: {
+    read_role_api_v1_rbac_roles__role_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Role identifier */
                 role_id: string;
             };
             cookie?: never;
@@ -3628,27 +4260,6 @@ export interface operations {
                     "application/json": components["schemas"]["RoleOut"];
                 };
             };
-            /** @description Authentication required to view roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks permission to view the role. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3660,11 +4271,12 @@ export interface operations {
             };
         };
     };
-    delete_role_definition_api_v1_roles__role_id__delete: {
+    delete_role_api_v1_rbac_roles__role_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Role identifier */
                 role_id: string;
             };
             cookie?: never;
@@ -3678,41 +4290,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Role is not deletable. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to delete roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks permission to delete the role. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role is still assigned to principals. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3724,11 +4301,12 @@ export interface operations {
             };
         };
     };
-    update_role_definition_api_v1_roles__role_id__patch: {
+    update_role_api_v1_rbac_roles__role_id__patch: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Role identifier */
                 role_id: string;
             };
             cookie?: never;
@@ -3748,55 +4326,27 @@ export interface operations {
                     "application/json": components["schemas"]["RoleOut"];
                 };
             };
-            /** @description Role is not editable. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to update roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks permission to modify the role. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role slug or permissions conflict. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role payload is invalid. */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
-    list_global_role_assignments_api_v1_role_assignments_get: {
+    list_assignments_api_v1_rbac_role_assignments_get: {
         parameters: {
             query?: {
-                principal_id?: string | null;
+                /** @description Scope to filter assignments by */
+                scope?: components["schemas"]["ScopeType"];
+                /** @description Scope ID (required when scope=workspace) */
+                scope_id?: string | null;
+                /** @description Filter by user id */
                 user_id?: string | null;
+                /** @description Filter by role id */
                 role_id?: string | null;
                 page?: number;
                 page_size?: number;
@@ -3817,15 +4367,99 @@ export interface operations {
                     "application/json": components["schemas"]["RoleAssignmentPage"];
                 };
             };
-            /** @description Authentication required to list role assignments. */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
-            /** @description Caller lacks global role assignment read permission. */
-            403: {
+        };
+    };
+    list_user_roles_api_v1_users__user_id__roles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRolesEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_user_role_api_v1_users__user_id__roles__role_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier */
+                user_id: string;
+                /** @description Role identifier */
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRolesEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_user_role_api_v1_users__user_id__roles__role_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier */
+                user_id: string;
+                /** @description Role identifier */
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3842,18 +4476,14 @@ export interface operations {
             };
         };
     };
-    create_global_role_assignment_api_v1_role_assignments_post: {
+    get_me_api_v1_me_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RoleAssignmentCreate"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3861,32 +4491,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoleAssignmentOut"];
+                    "application/json": components["schemas"]["MeProfile"];
                 };
             };
-            /** @description Authentication required to manage role assignments. */
+            /** @description Authentication required to access the profile. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Caller lacks global role assignment permission. */
+            /** @description Service account principals cannot access this endpoint. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Principal or role not found. */
+            /** @description User record not found. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid role assignment payload. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3894,227 +4517,14 @@ export interface operations {
             };
         };
     };
-    delete_global_role_assignment_api_v1_role_assignments__assignment_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                assignment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage role assignments. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks global role assignment permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role assignment not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_workspace_role_assignments_api_v1_workspaces__workspace_id__role_assignments_get: {
+    get_me_bootstrap_api_v1_me_bootstrap_get: {
         parameters: {
             query?: {
-                principal_id?: string | null;
-                user_id?: string | null;
-                role_id?: string | null;
+                /** @description Workspace page number (1-based). */
                 page?: number;
+                /** @description Number of workspaces to include in the page. */
                 page_size?: number;
-                include_total?: boolean;
-            };
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleAssignmentPage"];
-                };
-            };
-            /** @description Authentication required to list assignments. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks workspace membership read permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RoleAssignmentCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleAssignmentOut"];
-                };
-            };
-            /** @description Authentication required to manage workspace assignments. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks workspace membership management permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace, principal, or role not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid role assignment payload. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_workspace_role_assignment_api_v1_workspaces__workspace_id__role_assignments__assignment_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-                assignment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace assignments. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller lacks workspace membership management permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role assignment or workspace not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_permissions_api_v1_permissions_get: {
-        parameters: {
-            query: {
-                scope: string;
-                workspace_id?: string | null;
-                page?: number;
-                page_size?: number;
+                /** @description When true, includes the total workspace count in the response. */
                 include_total?: boolean;
             };
             header?: never;
@@ -4129,17 +4539,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PermissionPage"];
+                    "application/json": components["schemas"]["MeContext"];
                 };
             };
-            /** @description Authentication required to list permissions. */
+            /** @description Authentication required to bootstrap the session. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Caller lacks permission catalog access. */
+            /** @description Service account principals cannot access this endpoint. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4157,12 +4567,9 @@ export interface operations {
             };
         };
     };
-    read_effective_permissions_api_v1_me_permissions_get: {
+    get_me_permissions_api_v1_me_permissions_get: {
         parameters: {
-            query?: {
-                /** @description Optional workspace identifier for scoped permissions. */
-                workspace_id?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -4175,7 +4582,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EffectivePermissionsResponse"];
+                    "application/json": components["schemas"]["EffectivePermissions"];
                 };
             };
             /** @description Authentication required to inspect permissions. */
@@ -4184,29 +4591,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Workspace access denied for the requested identifier. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace not found when scoped permissions are requested. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -4234,13 +4618,6 @@ export interface operations {
             };
             /** @description Authentication required to evaluate permissions. */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace access denied for the requested identifier. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4434,13 +4811,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["DefaultResponse"];
-                };
+                content?: never;
             };
             /** @description Authentication required to delete workspaces. */
             401: {
@@ -4536,9 +4911,55 @@ export interface operations {
             };
         };
     };
-    list_members_api_v1_workspaces__workspace_id__members_get: {
+    set_default_workspace_api_v1_workspaces__workspace_id__default_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required to set the default workspace. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace access denied for the authenticated user. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workspace_members_api_v1_workspaces__workspace_id__members_get: {
         parameters: {
             query?: {
+                /** @description Optional filter by user id */
+                user_id?: string | null;
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
@@ -4561,20 +4982,6 @@ export interface operations {
                     "application/json": components["schemas"]["WorkspaceMemberPage"];
                 };
             };
-            /** @description Authentication required to list workspace members. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow member access. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4586,7 +4993,7 @@ export interface operations {
             };
         };
     };
-    add_member_api_v1_workspaces__workspace_id__members_post: {
+    add_workspace_member_api_v1_workspaces__workspace_id__members_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -4611,34 +5018,6 @@ export interface operations {
                     "application/json": components["schemas"]["WorkspaceMemberOut"];
                 };
             };
-            /** @description Authentication required to manage workspace members. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow member management. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace or user not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description User is already a member of the workspace. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4650,269 +5029,21 @@ export interface operations {
             };
         };
     };
-    list_workspace_roles_api_v1_workspaces__workspace_id__roles_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-                include_total?: boolean;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RolePage"];
-                };
-            };
-            /** @description Authentication required to list workspace roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow viewing role definitions. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_workspace_role_api_v1_workspaces__workspace_id__roles_post: {
+    update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
+                /** @description User identifier */
+                user_id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RoleCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleOut"];
-                };
-            };
-            /** @description System roles cannot be managed via this endpoint. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow managing roles. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role slug already exists or conflicts with a system role. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid role name, slug, or permissions. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    update_workspace_role_api_v1_workspaces__workspace_id__roles__role_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                role_id: string;
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RoleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleOut"];
-                };
-            };
-            /** @description System roles cannot be modified. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow managing roles. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role not found for this workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Operation would violate governor guardrails. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid role payload. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    delete_workspace_role_api_v1_workspaces__workspace_id__roles__role_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                role_id: string;
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description System roles cannot be deleted. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace roles. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow managing roles. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role not found for this workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Role is assigned or would violate governor guardrails. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_member_api_v1_workspaces__workspace_id__members__membership_id__roles_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Membership identifier */
-                membership_id: string;
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkspaceMemberRolesUpdate"];
+                "application/json": components["schemas"]["WorkspaceMemberUpdate"];
             };
         };
         responses: {
@@ -4925,34 +5056,6 @@ export interface operations {
                     "application/json": components["schemas"]["WorkspaceMemberOut"];
                 };
             };
-            /** @description Workspace must retain at least one owner. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace members. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow member management. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Membership not found within the workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4964,98 +5067,22 @@ export interface operations {
             };
         };
     };
-    remove_member_api_v1_workspaces__workspace_id__members__membership_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Membership identifier */
-                membership_id: string;
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DefaultResponse"];
-                };
-            };
-            /** @description Workspace must retain at least one owner. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required to manage workspace members. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow member management. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Membership not found within the workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_default_workspace_api_v1_workspaces__workspace_id__default_post: {
+    remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
+                /** @description User identifier */
+                user_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceDefaultSelectionOut"];
-                };
-            };
-            /** @description Authentication required to set the default workspace. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace access denied for the authenticated user. */
-            403: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5503,40 +5530,6 @@ export interface operations {
             };
         };
     };
-    list_configuration_versions_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__versions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigVersionRecord"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
         parameters: {
             query?: {
@@ -5567,6 +5560,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
                 };
             };
             /** @description Validation Error */
@@ -5968,7 +5997,45 @@ export interface operations {
             };
         };
     };
-    create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__post: {
+    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__put: {
         parameters: {
             query?: never;
             header?: never;
@@ -5983,15 +6050,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Directory already exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectoryWriteResponse"];
+                };
+            };
+            /** @description Directory created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DirectoryWriteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6028,6 +6102,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_builds_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_get: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number */
+                page?: number;
+                page_size?: number | null;
+                limit?: number | null;
+                /** @description Include total item count */
+                include_total?: boolean;
+                status?: components["schemas"]["BuildStatus"][] | null;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildPage"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -6110,6 +6226,114 @@ export interface operations {
             };
         };
     };
+    list_build_events_endpoint_api_v1_builds__build_id__events_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "ndjson";
+                after_sequence?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Build identifier */
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildEventsPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_build_events_endpoint_api_v1_builds__build_id__events_stream_get: {
+        parameters: {
+            query?: {
+                after_sequence?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Build identifier */
+                build_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+                status?: components["schemas"]["RunStatus"][] | null;
+                input_document_id?: string | null;
+            };
+            header?: never;
+            path: {
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
@@ -6152,6 +6376,7 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
+                status?: components["schemas"]["RunStatus"][] | null;
                 input_document_id?: string | null;
             };
             header?: never;
@@ -6161,11 +6386,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": ("queued" | "running" | "succeeded" | "failed" | "canceled")[] | null;
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -6262,7 +6483,6 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "json" | "ndjson";
-                stream?: boolean;
                 after_sequence?: number | null;
                 limit?: number;
             };
@@ -6295,11 +6515,10 @@ export interface operations {
             };
         };
     };
-    get_run_logs_endpoint_api_v1_runs__run_id__logs_get: {
+    stream_run_events_endpoint_api_v1_runs__run_id__events_stream_get: {
         parameters: {
             query?: {
-                after_id?: number | null;
-                limit?: number;
+                after_sequence?: number | null;
             };
             header?: never;
             path: {
@@ -6316,7 +6535,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunLogsResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -6330,7 +6549,7 @@ export interface operations {
             };
         };
     };
-    download_run_logs_file_endpoint_api_v1_runs__run_id__logfile_get: {
+    download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6478,13 +6697,11 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["SafeModeStatus"];
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

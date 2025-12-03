@@ -29,7 +29,7 @@ export function FormField({
   className,
 }: FormFieldProps) {
   const generatedId = useId();
-  const childProps = isValidElement(children) ? children.props ?? {} : {};
+  const childProps: ControlProps = isValidElement(children) ? (children.props as ControlProps) ?? {} : {};
   const controlId = (childProps as ControlProps).id ?? generatedId;
   const hintId = hint ? `${controlId}-hint` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;

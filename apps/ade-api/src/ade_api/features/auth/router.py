@@ -1,661 +1,497 @@
-"""Routes for authentication flows."""
+"""HTTP interface for authentication endpoints."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Annotated
+import secrets
+from datetime import UTC, datetime
+from typing import Annotated, Literal
+from urllib.parse import quote
+from uuid import UUID
 
-import jwt
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    Request,
-    Response,
-    Security,
-    status,
-)
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.app.dependencies import get_auth_service
+from ade_api.common.time import utc_now
+from ade_api.core.auth.principal import PrincipalType
+from ade_api.core.security.tokens import decode_token
 from ade_api.settings import Settings, get_settings
-from ade_api.shared.db.session import get_session
-from ade_api.shared.dependency import (
-    get_current_identity,
-    get_safe_mode_service,
-    require_authenticated,
-    require_csrf,
-    require_global,
-)
-from ade_api.shared.pagination import PageParams
 
-from ..system_settings.service import SafeModeService
-from ..users.models import User
-from ..users.schemas import UserProfile
-from ..users.service import UsersService
-from .models import APIKey
 from .schemas import (
-    APIKeyIssueRequest,
-    APIKeyIssueResponse,
-    APIKeyPage,
-    APIKeySummary,
-    AuthProvider,
-    BootstrapEnvelope,
-    LoginRequest,
-    ProviderDiscoveryResponse,
+    AuthLoginRequest,
+    AuthProviderListResponse,
+    AuthRefreshRequest,
+    AuthSetupRequest,
+    AuthSetupStatusResponse,
     SessionEnvelope,
-    SetupRequest,
-    SetupStatus,
+    SessionSnapshot,
+    SessionStatusResponse,
+)
+from .schemas import (
+    SessionTokens as SessionTokensSchema,
 )
 from .service import (
-    SSO_STATE_COOKIE,
-    AuthenticatedIdentity,
+    AccountLockedError,
     AuthService,
+    InactiveUserError,
+    InvalidCredentialsError,
+    RefreshTokenError,
+    SessionTokens,
+    SetupAlreadyCompletedError,
 )
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-setup_router = APIRouter(prefix="/setup", tags=["setup"])
-bootstrap_router = APIRouter(prefix="/bootstrap", tags=["bootstrap"])
+router = APIRouter(tags=["auth"])
 
 
-def _serialize_api_key(record: APIKey) -> APIKeySummary:
+# ---- Helpers ----
+
+
+def _auth_error(status_code: int, *, code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"error": code, "message": message})
+
+
+def _serialize_tokens(tokens: SessionTokens) -> SessionTokensSchema:
+    now = utc_now()
+    access_expires_in = max(0, int((tokens.access_expires_at - now).total_seconds()))
+    refresh_expires_in = (
+        max(0, int((tokens.refresh_expires_at - now).total_seconds()))
+        if tokens.refresh_expires_at
+        else None
+    )
+    return SessionTokensSchema(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        token_type="bearer",
+        expires_at=tokens.access_expires_at,
+        refresh_expires_at=tokens.refresh_expires_at,
+        expires_in=access_expires_in,
+        refresh_expires_in=refresh_expires_in,
+    )
+
+
+def _cookie_kwargs(settings: Settings, *, http_only: bool) -> dict[str, object]:
+    public_url = (getattr(settings, "server_public_url", "") or "").lower()
+    kwargs: dict[str, object] = {
+        "httponly": http_only,
+        "secure": public_url.startswith("https://"),
+        "samesite": "lax",
+        "path": settings.session_cookie_path or "/",
+    }
+    if settings.session_cookie_domain:
+        kwargs["domain"] = settings.session_cookie_domain
+    return kwargs
+
+
+def _set_session_cookies(
+    response: Response,
+    tokens: SessionTokens,
+    settings: Settings,
+    *,
+    csrf_token: str | None = None,
+) -> None:
+    access_cookie_kwargs = _cookie_kwargs(settings, http_only=True)
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=tokens.access_token,
+        max_age=max(1, int((tokens.access_expires_at - utc_now()).total_seconds())),
+        expires=tokens.access_expires_at,
+        **access_cookie_kwargs,
+    )
+
+    if tokens.refresh_token and tokens.refresh_expires_at:
+        response.set_cookie(
+            key=settings.session_refresh_cookie_name,
+            value=tokens.refresh_token,
+            max_age=max(1, int((tokens.refresh_expires_at - utc_now()).total_seconds())),
+            expires=tokens.refresh_expires_at,
+            **access_cookie_kwargs,
+        )
+
+    if csrf_token:
+        csrf_kwargs = _cookie_kwargs(settings, http_only=False)
+        response.set_cookie(
+            key=settings.session_csrf_cookie_name,
+            value=csrf_token,
+            max_age=max(1, int((tokens.access_expires_at - utc_now()).total_seconds())),
+            expires=tokens.access_expires_at,
+            **csrf_kwargs,
+        )
+
+
+def _clear_session_cookies(response: Response, settings: Settings) -> None:
+    base_kwargs = {
+        "path": settings.session_cookie_path or "/",
+        "domain": settings.session_cookie_domain,
+    }
+    response.delete_cookie(settings.session_cookie_name, **base_kwargs)
+    response.delete_cookie(settings.session_refresh_cookie_name, **base_kwargs)
+    response.delete_cookie(settings.session_csrf_cookie_name, **base_kwargs)
+
+
+def _issue_session_envelope(
+    *,
+    tokens: SessionTokens,
+    response: Response,
+    settings: Settings,
+) -> SessionEnvelope:
+    csrf_token = secrets.token_urlsafe(32)
+    _set_session_cookies(response, tokens, settings, csrf_token=csrf_token)
+    return SessionEnvelope(session=_serialize_tokens(tokens), csrf_token=csrf_token)
+
+
+def _extract_refresh_token(
+    request: Request,
+    payload: AuthRefreshRequest | None,
+    settings: Settings,
+) -> str:
+    if payload and payload.refresh_token:
+        return payload.refresh_token
+
+    cookie_token = request.cookies.get(settings.session_refresh_cookie_name)
+    if cookie_token:
+        return cookie_token
+
+    raise _auth_error(
+        status.HTTP_400_BAD_REQUEST,
+        code="refresh_token_required",
+        message="Refresh token is required.",
+    )
+
+
+def _extract_access_token(request: Request, settings: Settings) -> str | None:
+    header = request.headers.get("authorization") or ""
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+
+    cookie_token = request.cookies.get(settings.session_cookie_name)
+    if cookie_token:
+        return cookie_token
+
+    return None
+
+
+def _decode_access_snapshot(token: str, settings: Settings) -> SessionSnapshot:
+    try:
+        payload = decode_token(
+            token=token,
+            secret=settings.jwt_secret_value,
+            algorithms=[settings.jwt_algorithm],
+        )
+    except Exception as exc:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_token",
+            message="Invalid or expired access token.",
+        ) from exc
+
+    token_type = str(payload.get("typ") or "").lower()
+    if token_type != "access":
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_token",
+            message="Access token required.",
+        )
+
+    subject = str(payload.get("sub") or "").strip()
+    if not subject:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_token",
+            message="Access token is missing subject.",
+        )
+
+    try:
+        user_id = UUID(subject)
+    except ValueError as exc:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_token",
+            message="Access token subject is invalid.",
+        ) from exc
+
+    principal_type_raw = str(payload.get("pt") or PrincipalType.USER.value).lower()
+    principal_types = {pt.value for pt in PrincipalType}
     principal_type = (
-        "service_account"
-        if record.user is not None and record.user.is_service_account
-        else "user"
+        principal_type_raw
+        if principal_type_raw in principal_types
+        else PrincipalType.USER.value
     )
-    principal_label = (
-        record.user.label if record.user is not None else record.label or ""
+
+    exp = payload.get("exp")
+    if exp is None:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_token",
+            message="Access token is missing expiry.",
+        )
+    expires_at = datetime.fromtimestamp(int(exp), tz=UTC)
+
+    issued_at_val = payload.get("iat")
+    issued_at = datetime.fromtimestamp(int(issued_at_val), tz=UTC) if issued_at_val else None
+
+    return SessionSnapshot(
+        user_id=user_id,
+        principal_type=principal_type,  # type: ignore[arg-type]
+        issued_at=issued_at,
+        expires_at=expires_at,
     )
-    return APIKeySummary(
-        id=record.id,
-        principal_type=principal_type,
-        principal_id=record.user_id,
-        principal_label=principal_label,
-        token_prefix=record.token_prefix,
-        label=record.label,
-        created_at=record.created_at,
-        expires_at=record.expires_at,
-        last_seen_at=record.last_seen_at,
-        last_seen_ip=record.last_seen_ip,
-        last_seen_user_agent=record.last_seen_user_agent,
-        revoked_at=record.revoked_at,
-    )
+
+
+def _should_redirect_to_frontend(
+    request: Request,
+    response_mode: Literal["json", "redirect"] | None = None,
+) -> bool:
+    if response_mode == "json":
+        return False
+    if response_mode == "redirect":
+        return True
+
+    accept = (request.headers.get("accept") or "").lower()
+    wants_json = "application/json" in accept or "+json" in accept
+    return not wants_json
+
+
+def _frontend_redirect_target(settings: Settings, state: str) -> str:
+    base = (getattr(settings, "frontend_url", None) or settings.server_public_url).rstrip("/")
+    return f"{base}/sso-complete?state={quote(state, safe='')}"
+
+
+# ---- Routes ----
 
 
 @router.get(
     "/providers",
-    response_model=ProviderDiscoveryResponse,
+    response_model=AuthProviderListResponse,
     status_code=status.HTTP_200_OK,
     summary="List configured authentication providers",
-    openapi_extra={"security": []},
 )
 async def list_auth_providers(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> ProviderDiscoveryResponse:
-    service = AuthService(session=session, settings=settings)
-    discovery = service.get_provider_discovery()
-    providers = [
-        AuthProvider(
-            id=provider.id,
-            label=provider.label,
-            start_url=provider.start_url,
-            icon_url=provider.icon_url,
-        )
-        for provider in discovery.providers
-    ]
-    return ProviderDiscoveryResponse(providers=providers, force_sso=discovery.force_sso)
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> AuthProviderListResponse:
+    return service.list_auth_providers()
 
 
-@setup_router.get(
-    "/status",
-    response_model=SetupStatus,
+@router.get(
+    "/setup",
+    response_model=AuthSetupStatusResponse,
     status_code=status.HTTP_200_OK,
     summary="Return whether initial administrator setup is required",
-    openapi_extra={"security": []},
 )
 async def read_setup_status(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> SetupStatus:
-    if settings.auth_disabled:
-        return SetupStatus(
-            requires_setup=False,
-            completed_at=None,
-            force_sso=settings.auth_force_sso,
-        )
-    service = AuthService(session=session, settings=settings)
-    requires_setup, completed_at = await service.get_initial_setup_status()
-    return SetupStatus(
-        requires_setup=requires_setup,
-        completed_at=completed_at,
-        force_sso=settings.auth_force_sso,
-    )
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> AuthSetupStatusResponse:
+    return await service.get_setup_status()
 
 
-@setup_router.post(
-    "",
+@router.post(
+    "/setup",
     response_model=SessionEnvelope,
-    status_code=status.HTTP_200_OK,
-    summary="Create the first administrator account",
-    openapi_extra={"security": []},
-    responses={
-        status.HTTP_409_CONFLICT: {
-            "description": "Initial setup already completed or email already in use."
-        }
-    },
+    status_code=status.HTTP_201_CREATED,
+    summary="Create the first administrator account and start a session",
 )
 async def complete_setup(
-    request: Request,
+    payload: AuthSetupRequest,
     response: Response,
-    payload: SetupRequest,
-    session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> SessionEnvelope:
-    if settings.auth_disabled:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="Interactive setup is disabled because ADE_AUTH_DISABLED is enabled.",
-        )
-    service = AuthService(session=session, settings=settings)
-    user = await service.complete_initial_setup(
-        email=payload.email,
-        password=payload.password.get_secret_value(),
-        display_name=payload.display_name,
-    )
-    tokens = await service.start_session(user=user)
-    secure_cookie = service.is_secure_request(request)
-    service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=user)
-    return SessionEnvelope(
-        user=profile,
-        expires_at=tokens.access_expires_at,
-        refresh_expires_at=tokens.refresh_expires_at,
-    )
+    try:
+        tokens = await service.complete_initial_setup(payload)
+    except SetupAlreadyCompletedError as exc:
+        raise _auth_error(
+            status.HTTP_409_CONFLICT,
+            code="setup_already_completed",
+            message=str(exc),
+        ) from exc
 
-
-@bootstrap_router.get(
-    "",
-    response_model=BootstrapEnvelope,
-    status_code=status.HTTP_200_OK,
-    summary="Bootstrap session, permissions, workspaces, and safe-mode status",
-    openapi_extra={"security": []},
-)
-async def bootstrap(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    identity: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    safe_mode_service: Annotated[
-        SafeModeService, Depends(get_safe_mode_service)
-    ],
-    page_params: Annotated[PageParams, Depends(PageParams)],
-) -> BootstrapEnvelope:
-    """Return a consolidated payload for initial SPA bootstrap."""
-
-    # Reuse session envelope logic
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=identity.user)
-
-    # Permissions and roles already resolved in the user profile builder
-    global_permissions = frozenset(profile.permissions)
-    global_roles = frozenset(profile.roles)
-
-    # Workspaces list (first page)
-    from ade_api.features.workspaces.service import WorkspacesService
-    workspaces_service = WorkspacesService(session=session)
-    workspaces_page = await workspaces_service.list_workspaces(
-        user=identity.user,
-        page=page_params.page,
-        page_size=page_params.page_size,
-        include_total=True,
-        global_permissions=global_permissions,
-    )
-
-    safe_mode_status = await safe_mode_service.get_status()
-
-    return BootstrapEnvelope(
-        user=profile,
-        global_roles=sorted(global_roles),
-        global_permissions=sorted(global_permissions),
-        workspaces=workspaces_page,
-        safe_mode=safe_mode_status,
-    )
+    return _issue_session_envelope(tokens=tokens, response=response, settings=settings)
 
 
 @router.post(
     "/session",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
-    summary="Create a browser session with email and password",
-    openapi_extra={"security": []},
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Invalid credentials provided."
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "User account is inactive or locked."
-        },
-    },
+    summary="Create a session via email/password",
 )
 async def create_session(
-    request: Request,
+    payload: AuthLoginRequest,
     response: Response,
-    payload: LoginRequest,
-    session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> SessionEnvelope:
-    """Authenticate with credentials and establish the session cookies."""
-
-    service = AuthService(session=session, settings=settings)
-    user = await service.authenticate(
-        email=payload.email,
-        password=payload.password.get_secret_value(),
-    )
-    tokens = await service.start_session(user=user)
-    secure_cookie = service.is_secure_request(request)
-    service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=user)
-    return SessionEnvelope(
-        user=profile,
-        expires_at=tokens.access_expires_at,
-        refresh_expires_at=tokens.refresh_expires_at,
-    )
-
-
-@router.get(
-    "/session",
-    response_model=SessionEnvelope,
-    status_code=status.HTTP_200_OK,
-    summary="Return the active session profile",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to access the session profile.",
-        }
-    },
-    dependencies=[Security(require_authenticated)],
-)
-async def read_session(
-    request: Request,
-    principal: Annotated[AuthenticatedIdentity, Depends(get_current_identity)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> SessionEnvelope:
-    service = AuthService(session=session, settings=settings)
-    expires_at: datetime | None = None
-    refresh_expires_at: datetime | None = None
-
-    if principal.credentials == "session_cookie":
-        access_payload, refresh_payload = service.extract_session_payloads(
-            request, include_refresh=False
+    try:
+        tokens = await service.login_with_password(
+            email=str(payload.email),
+            password=payload.password.get_secret_value(),
         )
-        expires_at = access_payload.expires_at
-        if refresh_payload is not None:
-            refresh_expires_at = refresh_payload.expires_at
-    elif principal.credentials == "bearer_token":
-        auth_header = request.headers.get("authorization")
-        token_value: str | None = None
-        if auth_header:
-            scheme, _, candidate = auth_header.partition(" ")
-            if scheme.lower() == "bearer":
-                token_value = candidate.strip() or None
-        if not token_value:
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session token missing")
-        try:
-            payload = service.decode_token(token_value, expected_type="access")
-        except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid session token",
-            ) from exc
-        expires_at = payload.expires_at
+    except InvalidCredentialsError as exc:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_credentials",
+            message=str(exc),
+        ) from exc
+    except InactiveUserError as exc:
+        raise _auth_error(
+            status.HTTP_403_FORBIDDEN,
+            code="inactive_user",
+            message=str(exc),
+        ) from exc
+    except AccountLockedError as exc:
+        raise _auth_error(
+            status.HTTP_423_LOCKED,
+            code="account_locked",
+            message=str(exc),
+        ) from exc
 
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=principal.user)
-    return SessionEnvelope(
-        user=profile,
-        expires_at=expires_at,
-        refresh_expires_at=refresh_expires_at,
-    )
+    return _issue_session_envelope(tokens=tokens, response=response, settings=settings)
 
 
 @router.post(
     "/session/refresh",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
-    summary="Refresh the active browser session",
-    openapi_extra={"security": []},
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Refresh token missing or invalid.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "CSRF validation failed for the refresh request.",
-        },
-    },
+    summary="Refresh an existing session using a refresh token",
 )
 async def refresh_session(
     request: Request,
-    response: Response,
-    session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+    response: Response,
+    payload: Annotated[AuthRefreshRequest | None, Body()] = None,
 ) -> SessionEnvelope:
-    """Rotate the session using the refresh cookie and re-issue cookies."""
-
-    service = AuthService(session=session, settings=settings)
-    refresh_cookie = request.cookies.get(service.settings.session_refresh_cookie_name)
-    if not refresh_cookie:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Refresh token missing")
+    refresh_token = _extract_refresh_token(request, payload, settings)
     try:
-        payload = service.decode_token(refresh_cookie, expected_type="refresh")
-    except jwt.PyJWTError as exc:  # pragma: no cover - dependent on jwt internals
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+        tokens = await service.refresh_session(refresh_token=refresh_token)
+    except RefreshTokenError as exc:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="invalid_refresh_token",
+            message=str(exc),
+        ) from exc
+    except AccountLockedError as exc:
+        raise _auth_error(
+            status.HTTP_423_LOCKED,
+            code="account_locked",
+            message=str(exc),
+        ) from exc
 
-    service.enforce_csrf(request, payload)
-    user = await service.resolve_user(payload)
-    tokens = await service.refresh_session(payload=payload, user=user)
-    secure_cookie = service.is_secure_request(request)
-    service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=user)
-    return SessionEnvelope(
-        user=profile,
-        expires_at=tokens.access_expires_at,
-        refresh_expires_at=tokens.refresh_expires_at,
-    )
+    return _issue_session_envelope(tokens=tokens, response=response, settings=settings)
+
+
+@router.get(
+    "/session",
+    response_model=SessionStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Return the current session snapshot",
+)
+async def read_session(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SessionStatusResponse:
+    token = _extract_access_token(request, settings)
+    if not token:
+        raise _auth_error(
+            status.HTTP_401_UNAUTHORIZED,
+            code="unauthenticated",
+            message="No active session.",
+        )
+
+    snapshot = _decode_access_snapshot(token, settings)
+    return SessionStatusResponse(session=snapshot)
 
 
 @router.delete(
     "/session",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Terminate the active session",
-    openapi_extra={"security": []},
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Session token is missing or invalid.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "CSRF validation failed for the logout request.",
-        },
-    },
-    dependencies=[Security(require_authenticated), Security(require_csrf)],
+    summary="Terminate the current session",
 )
-async def delete_session(
+async def end_session(
     request: Request,
-    response: Response,
-    session: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+    response: Response,
+    payload: Annotated[AuthRefreshRequest | None, Body()] = None,
 ) -> Response:
-    """Remove authentication cookies and end the session."""
+    try:
+        refresh_token = _extract_refresh_token(request, payload, settings)
+    except HTTPException:
+        refresh_token = None
 
-    service = AuthService(session=session, settings=settings)
-    service.clear_session_cookies(response)
+    await service.logout(refresh_token=refresh_token)
+    _clear_session_cookies(response, settings)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
 
 
 @router.get(
-    "/me",
-    response_model=UserProfile,
-    status_code=status.HTTP_200_OK,
-    response_model_exclude_none=True,
-    summary="Return the authenticated user profile",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to access the profile.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Service account credentials cannot access this endpoint.",
-        },
-    },
-)
-async def read_me(
-    current_user: Annotated[User, Security(require_authenticated)],
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> UserProfile:
-    """Return profile information for the active user."""
-
-    service = UsersService(session=session)
-    profile = await service.get_profile(user=current_user)
-    return profile
-
-
-@router.post(
-    "/api-keys",
-    response_model=APIKeyIssueResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Issue a new API key for a user",
-    responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Email required or target user is inactive.",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to manage API keys.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Administrator role required to issue API keys.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Specified user could not be found.",
-        },
-    },
-    dependencies=[Security(require_csrf)],
-)
-async def create_api_key(
-    payload: APIKeyIssueRequest,
-    _admin: Annotated[
-        User,
-        Security(require_global("System.Settings.ReadWrite")),
-    ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> APIKeyIssueResponse:
-    service = AuthService(session=session, settings=settings)
-    if payload.user_id is not None:
-        result = await service.issue_api_key_for_user_id(
-            user_id=payload.user_id,
-            expires_in_days=payload.expires_in_days,
-            label=payload.label,
-        )
-    else:
-        email = payload.email
-        if email is None:  # pragma: no cover - validated upstream
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="Email required",
-            )
-        result = await service.issue_api_key_for_email(
-            email=email,
-            expires_in_days=payload.expires_in_days,
-            label=payload.label,
-        )
-
-    return APIKeyIssueResponse(
-        api_key=result.raw_key,
-        principal_type=result.principal_type,
-        principal_id=result.user.id,
-        principal_label=result.principal_label,
-        expires_at=result.api_key.expires_at,
-        label=result.api_key.label,
-    )
-
-
-@router.get(
-    "/api-keys",
-    response_model=APIKeyPage,
-    status_code=status.HTTP_200_OK,
-    summary="List issued API keys",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to list API keys.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Administrator role required to list API keys.",
-        },
-    },
-)
-async def list_api_keys(
-    _admin: Annotated[
-        User,
-        Security(require_global("System.Settings.ReadWrite")),
-    ],
-    page: Annotated[PageParams, Depends()],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    include_revoked: Annotated[
-        bool,
-        Query(
-            description="Include revoked API keys in the response.",
-        ),
-    ] = False,
-) -> APIKeyPage:
-    service = AuthService(session=session, settings=settings)
-    api_key_page = await service.paginate_api_keys(
-        include_revoked=include_revoked,
-        page=page.page,
-        page_size=page.page_size,
-        include_total=page.include_total,
-    )
-    summaries = [_serialize_api_key(record) for record in api_key_page.items]
-    return APIKeyPage(
-        items=summaries,
-        page=api_key_page.page,
-        page_size=api_key_page.page_size,
-        has_next=api_key_page.has_next,
-        has_previous=api_key_page.has_previous,
-        total=api_key_page.total,
-    )
-
-
-@router.delete(
-    "/api-keys/{api_key_id}",
-    summary="Revoke an API key",
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to revoke API keys.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Administrator role required to revoke API keys.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "API key not found.",
-        },
-    },
-    dependencies=[Security(require_csrf)],
-)
-async def revoke_api_key(
-    api_key_id: str,
-    _admin: Annotated[
-        User,
-        Security(require_global("System.Settings.ReadWrite")),
-    ],
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> Response:
-    service = AuthService(session=session, settings=settings)
-    await service.revoke_api_key(api_key_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.get(
-    "/sso/login",
+    "/sso/{provider}/authorize",
     status_code=status.HTTP_302_FOUND,
     summary="Initiate the SSO login flow",
-    openapi_extra={"security": []},
-    responses={
-        status.HTTP_404_NOT_FOUND: {
-            "description": "SSO login is not configured for this deployment.",
-        }
-    },
 )
 async def start_sso_login(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(get_session)],
-    settings: Annotated[Settings, Depends(get_settings)],
-    next_path: Annotated[str | None, Query(alias="next")] = None,
+    service: Annotated[AuthService, Depends(get_auth_service)],
+    provider: str,
+    next_path: str | None = None,
 ) -> RedirectResponse:
-    service = AuthService(session=session, settings=settings)
-    challenge = await service.prepare_sso_login(return_to=next_path)
-    redirect = RedirectResponse(challenge.redirect_url, status_code=status.HTTP_302_FOUND)
-    secure_cookie = service.is_secure_request(request)
-    cookie_path = request.url.path.rsplit("/", 1)[0]
-    redirect.set_cookie(
-        key=SSO_STATE_COOKIE,
-        value=challenge.state_token,
-        httponly=True,
-        secure=secure_cookie,
-        max_age=challenge.expires_in,
-        samesite="lax",
-        path=cookie_path,
-    )
-    return redirect
+    try:
+        redirect_url = await service.start_sso_login(provider=provider, return_to=next_path)
+    except NotImplementedError:
+        raise _auth_error(
+            status.HTTP_404_NOT_FOUND,
+            code="sso_not_configured",
+            message="SSO login is not configured for this deployment.",
+        ) from None
+
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get(
-    "/sso/callback",
+    "/sso/{provider}/callback",
     response_model=SessionEnvelope,
     status_code=status.HTTP_200_OK,
-    summary="Handle the SSO callback and establish a session",
-    openapi_extra={"security": []},
+    summary="Handle the SSO callback and issue tokens",
     responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "Callback parameters invalid or identity provider response rejected.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "User account associated with the SSO identity is disabled.",
-        },
-        status.HTTP_502_BAD_GATEWAY: {
-            "description": "ADE could not reach the identity provider during the SSO exchange.",
-        },
+        status.HTTP_302_FOUND: {
+            "description": (
+                "Redirect to the frontend after establishing a browser session. "
+                "Includes session cookies."
+            )
+        }
     },
 )
 async def finish_sso_login(
     request: Request,
     response: Response,
-    session: Annotated[AsyncSession, Depends(get_session)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
     settings: Annotated[Settings, Depends(get_settings)],
+    provider: str,
     code: str | None = None,
     state: str | None = None,
-) -> SessionEnvelope:
-    service = AuthService(session=session, settings=settings)
+    response_mode: Literal["json", "redirect"] | None = None,
+) -> SessionEnvelope | RedirectResponse:
     if not code or not state:
-        raise HTTPException(
+        raise _auth_error(
             status.HTTP_400_BAD_REQUEST,
-            detail="Missing authorization code or state",
-        )
-
-    state_cookie = request.cookies.get(SSO_STATE_COOKIE)
-    if not state_cookie:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="Missing SSO state cookie",
+            code="invalid_sso_callback",
+            message="Missing SSO authorization code or state.",
         )
 
     try:
-        result = await service.complete_sso_login(
-            code=code,
-            state=state,
-            state_token=state_cookie,
+        tokens = await service.complete_sso_login(provider=provider, code=code, state=state)
+    except NotImplementedError:
+        raise _auth_error(
+            status.HTTP_404_NOT_FOUND,
+            code="sso_not_configured",
+            message="SSO login is not configured for this deployment.",
+        ) from None
+
+    if _should_redirect_to_frontend(request, response_mode=response_mode):
+        redirect = RedirectResponse(
+            url=_frontend_redirect_target(settings, state),
+            status_code=status.HTTP_302_FOUND,
         )
-    finally:
-        cookie_path = request.url.path.rsplit("/", 1)[0]
-        response.delete_cookie(SSO_STATE_COOKIE, path=cookie_path)
+        _set_session_cookies(redirect, tokens, settings, csrf_token=secrets.token_urlsafe(32))
+        return redirect
 
-    tokens = await service.start_session(user=result.user)
-    secure_cookie = service.is_secure_request(request)
-    service.apply_session_cookies(response, tokens, secure=secure_cookie)
-    user_profiles = UsersService(session=session)
-    profile = await user_profiles.get_profile(user=result.user)
-    return SessionEnvelope(
-        user=profile,
-        expires_at=tokens.access_expires_at,
-        refresh_expires_at=tokens.refresh_expires_at,
-        return_to=result.return_to,
-    )
-
-
-__all__ = ["router", "setup_router"]
+    return _issue_session_envelope(tokens=tokens, response=response, settings=settings)

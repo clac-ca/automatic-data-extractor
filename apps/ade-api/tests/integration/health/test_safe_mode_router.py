@@ -6,13 +6,9 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.features.system_settings.service import SAFE_MODE_DEFAULT_DETAIL
-from ade_api.settings import get_settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
-
-_SETTINGS = get_settings()
-CSRF_COOKIE = _SETTINGS.session_csrf_cookie_name
 
 
 async def test_safe_mode_toggle_persists_state(
@@ -21,12 +17,10 @@ async def test_safe_mode_toggle_persists_state(
     """Safe mode state can be toggled and reflected in health checks."""
 
     admin = seed_identity["admin"]
-    await login(async_client, email=admin["email"], password=admin["password"])
-    csrf_token = async_client.cookies.get(CSRF_COOKIE)
-    assert csrf_token
-    headers = {"X-CSRF-Token": csrf_token}
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    headers = {"Authorization": f"Bearer {token}"}
 
-    initial = await async_client.get("/api/v1/system/safe-mode")
+    initial = await async_client.get("/api/v1/system/safe-mode", headers=headers)
     assert initial.status_code == 200
     payload = initial.json()
     assert payload == {"enabled": False, "detail": SAFE_MODE_DEFAULT_DETAIL}
@@ -36,10 +30,10 @@ async def test_safe_mode_toggle_persists_state(
         json={"enabled": True, "detail": "Maintenance window"},
         headers=headers,
     )
-    assert updated.status_code == 200
-    assert updated.json()["enabled"] is True
+    assert updated.status_code == 204
+    assert updated.text == ""
 
-    reread = await async_client.get("/api/v1/system/safe-mode")
+    reread = await async_client.get("/api/v1/system/safe-mode", headers=headers)
     assert reread.status_code == 200
     reread_payload = reread.json()
     assert reread_payload["enabled"] is True

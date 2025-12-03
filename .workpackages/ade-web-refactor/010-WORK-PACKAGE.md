@@ -1,725 +1,771 @@
+# 010-WORK-PACKAGE – ADE Web
+
 > **Agent instruction (read first):**
 >
 > * Treat this workpackage as the **single source of truth** for this task.
 > * Keep the checklist below up to date: change `[ ]` → `[x]` as you complete tasks, and add new items when you discover more work.
-> * When you make a design/architecture decision, **update this document first**, then the code.
+> * When you make a design/architecture decision, **update this document first**, then the relevant supporting doc, then the code.
 > * Prefer small, incremental commits aligned to checklist items.
-> * Do not introduce new navigation/streaming patterns outside the ones defined here.
+> * Do not introduce new navigation/streaming/auth patterns outside the ones defined here and in the supporting specs.
+
+---
+
+## Related Documents (read alongside this workpackage)
+
+These documents live in the same folder as this workpackage:
+
+- `020-ARCHITECTURE.md` – High-level architecture, folder structure, data layer, and diagrams.
+- `030-UX-FLOWS.md` – UX goals and detailed flows for Workspace, Documents, Run Detail, and Config Builder.
+- `040-DESIGN-SYSTEM.md` – Design tokens, visual language, and component guidelines.
+- `050-RUN-STREAMING-SPEC.md` – Run streaming behavior, `RunStreamState`, SSE/NDJSON handling, and replay rules.
+- `060-NAVIGATION.md` – Custom navigation/router design (vanilla React + history), route definitions, and URL patterns.
+- `070-TEST-PLAN.md` – Test strategy, coverage expectations, and concrete test cases.
+- `080-MIGRATION-AND-ROLLOUT.md` – Archive strategy, parity checklist, and go-live plan vs `apps/ade-web-legacy`.
+- `090-FUTURE-WORKSPACES.md` – Workspaces UX & architecture; **Phase 1 workspace selector + create flows are now in scope** for this workpackage.
+- `100-CONFIG-BUILDER-EDITOR.md` – Detailed specification for the **VS Code–style Config Builder workbench** (Explorer, editor tabs, bottom console panel, run integration).
+- `110-BACKEND-API.md` – Backend API surface, route groupings, and frontend integration conventions (including OpenAPI-generated types).
+- `120-AUTH-AND-SESSIONS.md` – Auth/session/SSO model, bootstrap flow, and `AuthProvider` state machine.
+- `130-DOCUMENTS-UX-AND-API.md` – Documents list/detail UX and corresponding API integration.
+- `140-RUNS-AND-OUTPUTS.md` – Runs, outputs, logs, summaries, and how they map to UI.
+- `150-CONFIGURATIONS-API.md` – Configurations API: metadata, file tree, validation, builds.
+
+If a section here feels too high-level, check the corresponding document for details.
 
 ---
 
 ## Work Package Checklist
 
-> **Agent note:**
-> Add brief status notes inline when helpful, e.g.
-> `- [x] Archive old app — apps/ade-web → apps/ade-web-legacy (2025‑12‑03)`
+> **Agent note:**  
+> Add brief status notes inline when helpful, e.g.  
+> `- [x] Login screen wired to /auth/session (2025-12-02)`  
 
-### 0. Planning & decisions
+This checklist is ordered in the **sequence we design and implement things**:  
+1) **Auth & bootstrap**, 2) **Workspaces**, 3) **Shell & navigation**, 4) **Design system**, 5) **API wiring**, 6) **Screens & streaming**, 7) **Tests & migration**, 8) **UX polish**.
 
-* [ ] Confirm and document foundational decisions:
+---
 
-  * [ ] **Navigation:** custom, “vanilla React” history-based router module (`useRoute`, `navigate`), no 3rd-party router.
-  * [ ] **Styling:** CSS variables for design tokens + Tailwind (or utility classes) for layout/spacing.
-  * [ ] **Data:** React Query for server data; React context/hooks for app + streaming state.
-* [ ] Capture UX goals for:
+### 1. Planning, terminology & doc alignment
 
-  * [ ] Config Builder (existing mental model, but cleaned up).
-  * [ ] Documents flow (upload → start run → watch progress → inspect results/errors → download outputs).
+- [ ] Confirm core terminology and keep it consistent across all docs:
+  - Workspace, Configuration, Document, Run, Build, Sheet, Output, Session, Login.
+- [ ] Update `020-ARCHITECTURE.md` to reflect auth + workspace selector as first-class concerns (AuthProvider, WorkspaceProvider, workspace-aware routes).
+- [ ] Update `030-UX-FLOWS.md` with end-to-end flows starting at **login → workspace → Documents/Configs**.
+- [ ] Update `090-FUTURE-WORKSPACES.md` to:
+  - [ ] Mark **Phase 1** workspace selector + create workspace flows as **in scope** for this workpackage.
+  - [ ] Keep advanced workspace UX/features (activity feed, cross-workspace analytics) as **future work**.
+- [ ] Update `100-CONFIG-BUILDER-EDITOR.md` to match the VS Code–style workbench described here (Explorer, editor tabs, bottom console).
+- [ ] Confirm `110-BACKEND-API.md` and `120-AUTH-AND-SESSIONS.md` match the actual OpenAPI surface in the repo.
 
-### 1. Archive old app & scaffold new baseline
+---
 
-* [ ] Move current `apps/ade-web` → `apps/ade-web-legacy`.
-* [ ] Create a new `apps/ade-web` Vite + React + TypeScript project with strict TS settings.
-* [ ] Update workspace scripts:
+### 2. App scaffolding & architecture (vanilla React)
 
-  * [ ] `pnpm dev ade-web` (or equivalent) runs the **new** app.
-  * [ ] Provide an explicit script to run the legacy app (e.g. `dev:ade-web-legacy`).
-* [ ] Ensure CI:
+- [ ] Create new `apps/ade-web` Vite+React+TS app (strict mode) with **vanilla React navigation** (no React Router).
+- [ ] Configure base folder structure with aliases (matching `020-ARCHITECTURE.md`):
 
-  * [ ] Builds and tests the new app.
-  * [ ] Either runs or intentionally skips the legacy app with a clear comment.
+```text
+  apps/ade-web/src/
+    app/          # AppShell, nav, providers
+    screens/      # Login, Setup, WorkspaceList, WorkspaceHome, Documents, RunDetail, ConfigBuilder
+    features/     # auth, workspaces, documents, runs, configs, ui, etc.
+    ui/           # design system
+    shared/       # api-client, hooks, storage, errors
+    schema/       # curated OpenAPI exports + view models
+    test/         # testing setup & helpers
+```
 
-### 2. Architecture & foundations
+* [ ] Wire TypeScript strict mode, ESLint, Prettier, and Vitest (per `070-TEST-PLAN.md`).
+* [ ] Implement `shared/api-client/client.ts`:
 
-* [ ] Implement target folder structure (see Section 3).
-* [ ] Implement navigation shell:
+  * [ ] Uses `fetch` with `credentials: "include"` and base URL from env.
+  * [ ] Normalizes errors to a typed `ApiError`.
+  * [ ] Hooks in 401-handling (lazy `session/refresh`, see `120-AUTH-AND-SESSIONS.md`).
 
-  * [ ] `AppShell` with top bar, workspace context, and main content area.
-  * [ ] Custom navigation module with `useRoute()` hook and `navigate()` function (no external router).
-* [ ] Implement global providers:
+---
 
-  * [ ] QueryClientProvider.
-  * [ ] ThemeProvider (light/dark, design tokens).
-  * [ ] Auth/session provider.
-  * [ ] Global error boundary.
-* [ ] Establish design tokens (CSS variables) for:
+### 3. Auth, setup, login & bootstrap (Day-one API wiring)
 
-  * [ ] Colors, semantic color roles (success/warn/error/info).
-  * [ ] Typography (font families, sizes, line heights).
-  * [ ] Spacing, radii, shadows, border widths.
-* [ ] Implement initial design-system primitives:
+> **Goal:** On day one, the app should boot into a real **login / SSO / setup** flow backed by the actual API — no fake auth.
 
-  * [ ] Button, IconButton, Link, Text, Heading.
-  * [ ] Input, Textarea, Select, Checkbox, Switch.
-  * [ ] Tabs, Dialog, Tooltip, Toast.
-  * [ ] Card, PageLayout, PageHeader, EmptyState, Skeleton.
+* [ ] Implement `features/auth/api/authApi.ts` (per `120-AUTH-AND-SESSIONS.md`):
 
-### 3. Run streaming foundation
+  * [ ] `getSetupStatus() → /setup/status`
+  * [ ] `runSetup() → /setup`
+  * [ ] `getSession() → /auth/session`
+  * [ ] `loginWithPassword() → /auth/session (POST)`
+  * [ ] `logout() → /auth/session (DELETE)`
+  * [ ] `refreshSession() → /auth/session/refresh`
+  * [ ] `getProviders() → /auth/providers`
+  * [ ] `getBootstrap() → /bootstrap`
 
-* [ ] Define `RunStreamState` and `runStreamReducer` around `AdeEvent` (discriminated union for known event types).
-* [ ] Implement `RunStreamProvider`:
+* [ ] Implement `AuthProvider` with state machine:
 
-  * [ ] Holds `RunStreamState` per run.
-  * [ ] Manages EventSource to `/runs/{run_id}/events?stream=true&after_sequence=...`.
-  * [ ] Handles reconnection, backoff, and teardown.
-* [ ] Implement `useRunStream(runId)` hook:
+  States: `unknown` → `setup-required` → `unauthenticated` → `authenticating` → `authenticated` → `error`.
 
-  * [ ] Provides state, derived selectors, and control actions (e.g. pause/resume).
-  * [ ] Derived outputs: status, phases, consoleLines, validationSummary, tableSummaries, lastSequence.
-* [ ] Implement `createAndStreamRun` and `attachToRun` helpers:
+  * [ ] On mount: `setup/status` → `auth/session` → `bootstrap`.
+  * [ ] Lazy refresh on 401 (call `refreshSession`, then retry once).
+  * [ ] Expose `useAuth()` with:
 
-  * [ ] `createAndStreamRun(configId | documentId, options)` — creates a run and wires `RunStreamProvider`.
-  * [ ] `attachToRun(runId)` — replays history and continues streaming.
-* [ ] Implement `useRunTelemetry(runId)` for historical runs:
+    * `state`, `user`, `bootstrap`, `permissions`.
+    * `loginWithPassword(credentials)`.
+    * `beginSso(provider)` → redirect to `provider.start_url`.
+    * `logout()`.
 
-  * [ ] Streams `events.ndjson` incrementally using `ReadableStream` + `TextDecoder`.
-  * [ ] Feeds events through the same `runStreamReducer` used for live SSE.
-* [ ] Implement basic backpressure strategy:
+* [ ] Implement **Setup screen** (`screens/Auth/SetupScreen.tsx`):
 
-  * [ ] Clamp console buffer to a max number of lines; drop oldest; allow “show all” on demand.
-* [ ] Add tests for:
+  * [ ] Shown when `authState === "setup-required"`.
+  * [ ] Supports initial admin creation via `/setup`.
+  * [ ] Handles `force_sso` case (SSO-based setup only).
 
-  * [ ] `runStreamReducer`.
+* [ ] Implement **Login screen** (`screens/Auth/LoginScreen.tsx`):
 
-### 4. Shared run components & insights
+  * [ ] Uses `authApi.getProviders()` to discover SSO providers + `force_sso`.
+  * [ ] If `force_sso`, show only SSO buttons.
+  * [ ] Else show:
 
-* [ ] Implement `features/runs/components/RunConsole`:
+    * Email/password form (password login).
+    * SSO provider buttons (with labels/icons).
+  * [ ] Error UX:
 
-  * [ ] Renders console lines with timestamps, origin (build/run), level, and phase tags.
-  * [ ] Filters: origin, level, phase, text search.
-  * [ ] “Follow tail” toggle; pause/resume auto-scroll.
-  * [ ] “Error-first” mode: jumps to first error event and highlights nearby context.
-* [ ] Implement `RunTimeline`:
+    * Friendly messages for invalid credentials, rate limiting, generic errors.
+    * No raw error codes.
 
-  * [ ] Linear, compact timeline visualizing build + run phases in order.
-  * [ ] Uses durations from `created_at`/`duration_ms`; colors by status (pending/running/succeeded/failed/skipped).
-  * [ ] Hover/tooltip showing duration, phase name, key metrics.
-* [ ] Implement `RunSummary`:
+* [ ] Integrate auth into `AppShell`:
 
-  * [ ] Status, total duration, start/end timestamps.
-  * [ ] Key counts (e.g., rows processed, tables impacted) if available.
-* [ ] Implement `ValidationSummary` + per-table cards:
+  * [ ] While `state === "unknown"` → show centered loading/splash.
+  * [ ] `setup-required` → Setup screen.
+  * [ ] `unauthenticated` → Login screen.
+  * [ ] `authenticated` → main app (Workspace routes).
 
-  * [ ] For each table: rows, mapped/unmapped columns, severity indicators.
-  * [ ] Overall validation health bar for the run.
-  * [ ] Clicking an issue highlights relevant context in the console (when possible).
-* [ ] Implement deep-link support:
+---
 
-  * [ ] Given `runId` + `sequence`, replays state up to that event before showing the UI.
-  * [ ] Expose a helper to construct deep-linkable URLs (encoded via our custom navigation scheme).
+### 4. Workspaces: selector, creation & current workspace context
 
-### 5. Run Detail screen (streaming-first)
+> **Goal:** After login, users choose or create a workspace, and the rest of the app runs **inside that workspace context**.
 
-* [ ] Add route definition for “Run Detail” in the custom router (e.g. `run-detail/:workspaceId/:runId`).
-* [ ] Implement `RunDetail` screen:
+* [ ] Implement `features/workspaces/api/workspacesApi.ts`:
 
-  * [ ] Layout:
+  * [ ] `listWorkspaces() → GET /workspaces`
+  * [ ] `getWorkspace(workspaceId) → GET /workspaces/{id}`
+  * [ ] `createWorkspace(payload) → POST /workspaces`
+  * [ ] `setDefaultWorkspace(workspaceId) → POST /workspaces/{id}/default`
+  * [ ] (Optional) membership/roles endpoints for later UI.
 
-    * Header: run name/id, workspace, status pill, key actions.
-    * Left column: RunTimeline + summaries.
-    * Right column: RunConsole, with filters and error-first toggle.
-  * [ ] Use `useRunStream` for active runs; `useRunTelemetry` for completed runs when loading from history.
-  * [ ] Sequence scrubber:
+* [ ] Add workspace-aware routes (update `060-NAVIGATION.md` + code):
 
-    * Slider that clamps max sequence passed into the reducer.
-    * UI label (“Replaying to event N of M”).
-  * [ ] Expose actions:
+  ```ts
+  type Route =
+    | { name: 'workspaceList' }
+    | { name: 'workspaceCreate' }
+    | { name: 'workspaceHome'; params: { workspaceId: string } }
+    | { name: 'documents'; params: { workspaceId: string } }
+    | { name: 'documentDetail'; params: { workspaceId: string; documentId: string } }
+    | { name: 'runDetail'; params: { workspaceId: string; runId: string; sequence?: number | null } }
+    | { name: 'configBuilder'; params: { workspaceId: string; configId: string } }
+    | { name: 'notFound' };
+  ```
 
-    * Download original file(s) (if run is document-based).
-    * Download normalized outputs.
-    * Download raw log (NDJSON or text).
-  * [ ] Show validation/table summaries in a dedicated “Insights” section.
-* [ ] Support deep linking via custom routing:
+* [ ] Implement **Workspace context provider** (`WorkspaceProvider`):
 
-  * [ ] Route includes `runId` and optional `sequence` param/query.
-  * [ ] Opening such a link replays to the target sequence and focuses relevant console line.
-* [ ] Ensure “resume after reload” works:
+  * [ ] Tracks `currentWorkspaceId` + `currentWorkspace` object.
+  * [ ] Derives initial workspace from:
 
-  * [ ] Persist `lastSequence` + run metadata in memory and/or session storage.
-  * [ ] On load, detect active run and call `attachToRun(runId)` with correct `after_sequence`.
+    * `BootstrapEnvelope.workspaces` + `user.preferred_workspace_id`.
+    * URL route params.
+  * [ ] Exposes `useWorkspace()` + `setCurrentWorkspaceId()`.
 
-### 6. Documents & end-user file workflow (primary UX focus)
+* [ ] Implement **Workspace list screen** (`screens/Workspace/WorkspaceListScreen.tsx`):
 
-* [ ] Add route definition for “Documents” (e.g. `documents/:workspaceId`).
-* [ ] Implement Documents screen layout:
+  * [ ] Shows list of workspaces (`listWorkspaces()`).
+  * [ ] Primary action: “Create workspace” → `workspaceCreate` route.
+  * [ ] Selecting a workspace navigates to `workspaceHome` (Documents or Home, depending on UX choice in `030-UX-FLOWS.md`).
 
-  * [ ] Left: document list/table with:
+* [ ] Implement **Workspace create screen** (`screens/Workspace/WorkspaceCreateScreen.tsx`):
 
-    * Name, size, uploaded by, last run status, last run time.
-    * Clear status chips (Never run / In progress / Failed / Succeeded).
-  * [ ] Right: “Document details” panel for selected document:
+  * [ ] Form: workspace name + optional description.
+  * [ ] On success → mark as default + navigate to its `workspaceHome`.
 
-    * Tabs: **Overview**, **Runs**, **Outputs**.
-    * Overview: file metadata, last run status, quick actions.
-    * Runs: run history list with status, duration, config used, created by.
-    * Outputs: list of downloadable outputs for the most recent run (or the selected run).
-* [ ] Implement upload UX:
+* [ ] Implement **Workspace switcher** in app header:
 
-  * [ ] Prominent drag-and-drop zone + “Browse files” button.
-  * [ ] Show upload progress per file (and any server-side validation errors).
-  * [ ] After success:
+  * [ ] Shows current workspace name.
+  * [ ] Dropdown list of accessible workspaces.
+  * [ ] “Create workspace…” option at the bottom.
+  * [ ] Switch updates workspace context and navigates to that workspace’s home route.
 
-    * Newly uploaded document appears in the list and becomes selected.
-    * Show a “Next step” hint: “Start a run to normalize this file.”
-* [ ] Implement “start run” UX from Documents:
+* [ ] Update `030-UX-FLOWS.md` to document:
 
-  * [ ] Each document shows a “Start run” primary action when no run is active.
-  * [ ] If multiple configs are applicable:
+  * [ ] First-login flow when 0, 1, or >1 workspaces exist.
+  * [ ] Guidelines for invalid workspace IDs (friendly error and redirect to workspace list).
 
-    * Inline selection control (dropdown or side panel) to choose config.
-  * [ ] After starting a run:
+---
 
-    * The document gets an “In progress” status chip with spinner/progress.
-    * The Document details panel shows a **Live Run** card:
+### 5. Navigation, shell & layout
 
-      * Summary: phase, progress, elapsed time.
-      * Mini console snippet (last N lines).
-      * “Open full run view” link (opens Run Detail with streaming).
-* [ ] Implement run progress & inspection from Documents:
+* [ ] Implement `NavigationProvider` and `useNavigation()` per `060-NAVIGATION.md` (no React Router):
 
-  * [ ] When a run is active for a document:
+  * [ ] `parseLocation(location) → Route`.
+  * [ ] `buildUrl(route) → string`.
+  * [ ] `navigate(route)` / `replace(route)`.
+  * [ ] `Link` component that respects middle-click / new tab.
+* [ ] Implement `AppShell` layout:
 
-    * Use `useRunStream(runId)` in the Live Run card to show current phase + last console lines.
-    * Provide a “Show errors” toggle that jumps the snippet to error lines (if any).
-  * [ ] When a run completes:
+  * [ ] Global providers: Auth, Workspace, Query, Theme, Toast, RunStreamRoot.
+  * [ ] Header with:
 
-    * Update status chip & card (Succeeded / Failed).
-    * Show a “Review results” CTA:
+    * Brand, workspace switcher, user menu (profile, logout).
+  * [ ] Main content switching on `route.name`.
+* [ ] Add skeleton screens (rendered once auth+workspace are wired) for:
 
-      * For success: “Review normalized outputs”.
-      * For failure: “Review errors”.
-* [ ] Implement document-centric run history:
+  * [ ] `WorkspaceHomeScreen`
+  * [ ] `DocumentsScreen`
+  * [ ] `RunDetailScreen`
+  * [ ] `ConfigBuilderScreen`
+  * [ ] Each starting with real data fetch hooks (no stub data).
 
-  * [ ] Runs tab:
+---
 
-    * List of past runs (most recent first) with status, duration, config name, and user.
-    * Each row has:
+### 6. Design system & first-class UX details
 
-      * “Open run details” (Run Detail deep link).
-      * Status icon and subtle color-coding.
-  * [ ] Support quick-run comparison:
+> **Goal:** Small details (empty states, loading, focus, microcopy) are planned, not bolted on last-minute.
 
-    * At minimum: show a small inline diff for row counts/validation severity vs previous run when available.
-* [ ] Implement downloads UX:
+* [ ] Implement design tokens + theme provider per `040-DESIGN-SYSTEM.md`:
 
-  * [ ] Outputs tab or section:
+  * [ ] Colors, status tokens, typography, spacing, radii.
+  * [ ] Light theme default; dark theme optional.
+* [ ] Implement UI primitives (`ui/components`):
 
-    * Separate groups:
+  * [ ] Button, IconButton, Input, Select, Checkbox, Radio, Switch.
+  * [ ] Tabs, Dialog, Tooltip, Toast, StatusPill.
+  * [ ] Table, EmptyState, Skeleton.
+* [ ] Implement layout primitives (`ui/layout`):
 
-      * **Original file** — “Download original”.
-      * **Normalized output(s)** — list with format (e.g., CSV/Parquet), size, and description.
-      * **Logs** — link(s) to log download (text/NDJSON).
-    * Each group has a clear label and icons to avoid confusion.
-  * [ ] From Run Detail:
+  * [ ] `Page`, `PageHeader`.
+  * [ ] `SplitPane`, `Panel`, `Sidebar`, `ScrollArea`.
+  * [ ] `SplitPane` behavior:
 
-    * Same downloads, but scoped to that specific run.
-  * [ ] Ensure that when multiple runs exist, the UI always communicates **which run** an output belongs to (e.g., “Outputs from run #1234”).
+    * [ ] Drag-to-resize handles (horizontal + vertical).
+    * [ ] Double-click to reset to default ratio.
+    * [ ] Programmatic collapse/expand of panes.
+    * [ ] Persisted sizes per user + per screen (esp. Config Builder) via local storage.
+* [ ] Define micro UX patterns in `040-DESIGN-SYSTEM.md`:
 
-### 7. Config Builder migration (Workbench, on top of new foundations)
+  * [ ] Loading skeleton standards (for lists, details, console).
+  * [ ] Empty state patterns (icon + title + body + CTA).
+  * [ ] Error display patterns (inline vs toast).
+  * [ ] Focus & keyboard behavior (tabs, dialogs, lists).
 
-* [ ] Add route definition for Config Builder (e.g. `config/:workspaceId/:configId`).
-* [ ] Rebuild Config Builder screen using:
+---
 
-  * [ ] New layout primitives (PageLayout, PageHeader, sidebars).
-  * [ ] New design system controls (inputs, tabs, etc.).
-* [ ] Extract `useWorkbenchRun` hook:
+### 7. API integration: backend wiring (no local mocks in production code)
 
-  * [ ] Encapsulates:
+* [ ] Wire `schema/` to re-export OpenAPI-generated types (`openapi.d.ts`) per `110-BACKEND-API.md`.
+* [ ] Implement feature API modules:
 
-    * Starting runs for a config.
-    * Tracking “current run” metadata.
-    * Tying Config Builder to the RunStream foundation (no local EventSource management).
-* [ ] Replace local run/validation logic with:
+  * [ ] `features/auth/api/authApi.ts` (already above).
+  * [ ] `features/workspaces/api/workspacesApi.ts`.
+  * [ ] `features/documents/api/documentsApi.ts` (per `130-DOCUMENTS-UX-AND-API.md`).
+  * [ ] `features/runs/api/runsApi.ts` (per `140-RUNS-AND-OUTPUTS.md`).
+  * [ ] `features/configs/api/configsApi.ts` (per `150-CONFIGURATIONS-API.md`).
+* [ ] Ensure **no screen** calls `fetch` directly; everything goes through feature API modules.
+* [ ] Ensure all feature APIs use OpenAPI types for inputs/outputs and convert only to small view models at the edges.
 
-  * [ ] `createAndStreamRun` for starting runs.
-  * [ ] `useRunStream` for streaming status/console.
-* [ ] Use shared run components:
+---
 
-  * [ ] In the bottom panel, use `RunConsole`, `RunTimeline`, `RunSummary`, `ValidationSummary`.
-* [ ] Ensure UX still feels familiar but visually upgraded:
+### 8. Screens & UX flows – implementation order
 
-  * [ ] Clear 3-step mental model: **Edit config → Validate → Run and inspect**.
+We build screens in this order, each time **hooked to real backend data**:
 
-### 8. Global run awareness (v1 + phase 2)
+#### 8.1 Workspace Home
 
-* [ ] Implement minimal “Recent runs” overview:
+* [ ] Implement `WorkspaceHomeScreen` as launchpad:
 
-  * [ ] “Runs” section on Workspace home showing last N runs:
+  * [ ] Top-level page showing:
 
-    * Status, duration, source (config vs document), and link to Run Detail.
-* [ ] (Phase 2, separate checklist items if/when in scope):
+    * “Documents” card with shortcut to Documents list + some recent docs.
+    * “Configurations” card with shortcut to Config Builder + some recent configs.
+    * “Recent runs” list (from `workspaces/{id}/runs`).
+  * [ ] Uses design system components.
 
-  * [ ] Workspace “live activity” feed.
-  * [ ] Active-runs wallboard with cards per active run and live summaries.
+#### 8.2 Documents
 
-### 9. Types, schema, and hygiene
+* [ ] Implement document list & detail per `030-UX-FLOWS.md` + `130-DOCUMENTS-UX-AND-API.md`:
 
-* [ ] Create `schema/` module in the new app:
+  * [ ] `DocumentList`:
 
-  * [ ] Re-export selected OpenAPI-generated types via `@schema`.
-  * [ ] Add view-model types where API responses are adapted to UI needs.
-* [ ] Centralize run-related types in `features/runs/schema`:
+    * Columns: name, status, last run, uploader, size, expires.
+    * Sorting wired to `sort` query param.
+  * [ ] `UploadPanel`:
 
-  * [ ] `RunResource`, `RunStatus`, `RunStreamEvent`, etc.
-  * [ ] `AdeEvent` as a discriminated union for events used in UI.
-* [ ] Ensure strict TypeScript:
+    * Real `POST /documents` with metadata + `expires_at`.
+    * Progress, error states (413, 400, etc.).
+  * [ ] `DocumentDetail`:
 
-  * [ ] No implicit `any`.
-  * [ ] Strict null checks.
-  * [ ] Use exhaustive `switch` on event types where appropriate.
+    * Uses `GET /documents/{id}` + `/sheets` + `listWorkspaceRuns(..., input_document_id)`.
+    * Header with name + status + last run summary.
+    * Tabs: Overview, Runs, Outputs (Outputs via runs outputs).
+  * [ ] “Start run” from document:
 
-### 10. Testing, accessibility & Definition of Done
+    * Creates run via configs endpoint (user picks config if multiple).
+    * Immediately connects streaming via `useRunStream`.
 
-* [ ] Unit tests (Vitest):
+#### 8.3 Run Detail
 
-  * [ ] `runStreamReducer` and selectors.
-  * [ ] NDJSON streaming parser.
-  * [ ] Console formatting + filters.
-* [ ] Integration / E2E tests (Playwright or equivalent):
+* [ ] Implement `RunDetailScreen` per `030-UX-FLOWS.md` + `050-RUN-STREAMING-SPEC.md` + `140-RUNS-AND-OUTPUTS.md`:
 
-  * [ ] **Documents flow:**
-    Upload file → start run → see live progress → inspect errors/success → download normalized file.
-  * [ ] **Run Detail:**
-    Open historical run → scrub timeline → deep-link to a specific event → refresh and resume.
-  * [ ] **Config Builder:**
-    Edit config → run → observe streaming console and summary.
-* [ ] Accessibility checks:
+  * [ ] Load `RunResource` and `RunSummaryV1`.
+  * [ ] Use `useRunStream` and `useRunTelemetry` for live/replay.
+  * [ ] Show:
 
-  * [ ] Keyboard navigation across Documents, Run Detail, Config Builder.
-  * [ ] Focus outlines and skip-to-content where appropriate.
-  * [ ] ARIA labels for critical components (upload area, run progress, tabs).
-* [ ] Definition of Done:
+    * Header (run ID, status, config, document link).
+    * `RunTimeline`, `RunSummaryPanel`.
+    * Console tab (`RunConsole`) with filters + follow-tail + “jump to first error”.
+    * Validation tab (table summaries) linking back to Config Builder when possible.
+    * Outputs panel listing `RunOutputFile` with download actions.
+  * [ ] Support `sequence` query param deep links (replay to a specific event).
 
-  * [ ] New ade-web covers all critical flows currently supported by legacy app (Documents + Config Builder).
-  * [ ] Run streaming works reliably for both live runs and historical replays.
-  * [ ] Documents UX clearly guides users from **upload → run → review → download** with minimal ambiguity.
-  * [ ] Legacy app is no longer required in the main deploy pipeline.
+#### 8.4 Config Builder (VS Code–style workbench)
+
+> **Goal:** The Config Builder should **look and feel like VS Code**.
+> Left: collapsible **Explorer** with configuration files.
+> Center: tabbed **code editor** that dominates the layout.
+> Bottom: resizable **console panel** for runs/validation.
+> Everything is draggable, resizable, and collapsible; the emphasis is always on the code.
+
+* [ ] Implement Config Builder as a **VS Code–style workbench**, per `100-CONFIG-BUILDER-EDITOR.md` (update that doc accordingly):
+
+  ##### Layout
+
+  * [ ] Full-screen `ConfigBuilderScreen` organized as:
+
+    ```text
+    ┌───────────────────────────────────────────────────────────────┐
+    │ Header / Toolbar (Config title, actions, breadcrumbs)        │
+    ├───────────────┬───────────────────────────────────────────────┤
+    │ Explorer       │ Editor Area (tabs + code editor)             │
+    │ (left)         │                                             │
+    │                │                                             │
+    │                │                                             │
+    ├───────────────┴───────────────────────────────────────────────┤
+    │ Bottom Panel (Console / Validation / Problems)               │
+    └───────────────────────────────────────────────────────────────┘
+    ```
+
+  * [ ] **Explorer (left sidebar)**:
+
+    * Default width ~260–280px.
+    * Implemented via `SplitPane` so it’s **resizable** and **collapsible**.
+    * Contains a single primary view for now: **“Explorer”** showing the configuration file tree.
+
+  * [ ] **Editor Area (center)**:
+
+    * Occupies the majority of the horizontal and vertical space.
+    * At top: VS Code–style **tab strip** (`EditorTabs`) showing open files.
+    * Below tabs: main **code editor** (Monaco-like) with:
+
+      * Line numbers, syntax highlighting, bracket matching.
+      * Search within file (Ctrl+F), optional minimap (future).
+      * Error/warning squiggles wired to validation results.
+    * Optional secondary “inspector”/form view is:
+
+      * Shown as a **collapsible right-hand panel** or a split inside the editor.
+      * Always secondary to the code; code editor stays visible.
+
+  * [ ] **Bottom Panel (console)**:
+
+    * VS Code–style **panel** docked to the bottom.
+    * Resizable via horizontal `SplitPane` and **collapsible** with a toggle button in the toolbar.
+    * Contains tabs (at least):
+
+      * **Console** – streaming logs and events for the active workbench run.
+      * **Validation / Problems** – structured list of config validation issues.
+      * (Future) “Runs” or “History”.
+
+  * [ ] **Responsiveness & persistence**:
+
+    * [ ] All splits (Explorer width, bottom panel height, optional inspector width) are resizable.
+    * [ ] Each pane (Explorer, bottom panel, inspector) is collapsible via:
+
+      * Clickable icons in the toolbar.
+      * Double-click on splitter (optional).
+    * [ ] Persist layout settings **per user + config** in local storage:
+
+      * Last Explorer width.
+      * Last bottom panel height.
+      * Whether panels were collapsed.
+
+  ##### Explorer (file tree)
+
+  * [ ] Implement `ConfigExplorerPane`:
+
+    * [ ] Displays configuration file tree, grouped by logical roots (e.g., `config/`, `schemas/`, `transforms/`, etc.).
+    * [ ] Supports:
+
+      * Expand/collapse of folders.
+      * Click to open file → focuses or adds tab in `EditorTabs`.
+      * Context menu or inline icons for:
+
+        * **New file** (under folder or root).
+        * **New folder**.
+        * **Rename**.
+        * **Delete** (with confirmation).
+    * [ ] Visual cues:
+
+      * “Dirty”/unsaved indicator (●) next to file names.
+      * Icons per file type (YAML, JSON, script, etc.) using design system icon set.
+    * [ ] Keyboard behavior:
+
+      * Arrow keys to navigate tree.
+      * Enter to open.
+      * Delete to delete (with confirm).
+
+  ##### Editor tabs & code editor
+
+  * [ ] Implement `ConfigEditorTabs`:
+
+    * [ ] Standard VS Code–like tab strip:
+
+      * Shows file name and relative path on hover.
+      * Close button on each tab.
+      * Unsaved indicator (●) on tab title.
+      * Support for reordering tabs via drag-and-drop (stretch goal).
+    * [ ] Right-click context menu (stretch):
+
+      * “Close”, “Close Others”, “Close to the Right”, “Reveal in Explorer”.
+
+  * [ ] Code editor behavior:
+
+    * [ ] Use a code editor component (Monaco or similar) configured with:
+
+      * Line numbers, syntax highlight, indent guides.
+      * Auto-indent on newline.
+      * Config-specific language or YAML/JSON modes.
+    * [ ] Integrate validation:
+
+      * Errors/warnings from validation feed into editor diagnostics.
+      * Clicking a “Problem” scrolls and focuses the corresponding location in the code.
+    * [ ] Emphasis on **code-first**:
+
+      * The code editor is always visible (unless the user explicitly closes all tabs).
+      * Any structured inspector or helper UI must be secondary (side panel or overlay).
+
+  ##### Header toolbar
+
+  * [ ] Implement `ConfigHeaderToolbar` across the top:
+
+    * Left:
+
+      * Breadcrumbs: Workspace → Configurations → [Config Name].
+      * Config status pill (Draft, Valid, Invalid, Published).
+    * Right:
+
+      * Primary actions: **Save**, **Validate**, **Run**.
+      * Drop-down to choose run target (document set, sample, etc., as defined in flows).
+      * “Open latest run” shortcut when there is a recent workbench run.
+
+  ##### Bottom console & problems
+
+  * [ ] Implement `ConfigRunPanel` anchored in the bottom panel:
+
+    * Tabs (at minimum):
+
+      * **Console**:
+
+        * Stream of log lines from `useRunStream`.
+        * Filters (info/warn/error).
+        * “Follow tail” toggle.
+      * **Validation / Problems**:
+
+        * Table/list of validation issues (severity, message, file, line).
+        * Clicking an item focuses file + line in editor.
+    * [ ] Connected to shared run streaming (`features/runs/stream`):
+
+      * Reuses `RunConsole` component under the hood.
+      * Uses the same `RunStreamState` and replay behavior as Run Detail.
+
+  ##### Workbench run behavior
+
+  * [ ] Implement `useWorkbenchRun` hook:
+
+    * [ ] Creates runs via `createRun(configurationId, { stream: true, options })`.
+    * [ ] Attaches to streaming via `useRunStream`.
+    * [ ] Exposes:
+
+      * `status` (idle, running, failed, succeeded).
+      * `currentRunId`.
+      * Start/stop/retry operations.
+    * [ ] Used by both:
+
+      * Header toolbar “Run” button.
+      * Bottom panel run controls (e.g., “Re-run with same inputs”).
+
+  ##### Keyboard & VS Code affordances (MVP)
+
+  * [ ] Implement basic shortcuts:
+
+    * [ ] `Ctrl+S` / `Cmd+S` → Save.
+    * [ ] `Ctrl+Enter` / `Cmd+Enter` → Run.
+    * [ ] `Ctrl+`` (backtick) → toggle bottom console panel (optional).
+  * [ ] Keep command palette (`Ctrl+Shift+P`) as future work, but design layout so it could be added later without major changes.
+
+---
+
+### 9. Run streaming & shared run UI
+
+> **Goal:** One shared streaming foundation and UI used in Documents, Run Detail, and Config Builder — no per-screen special cases.
+
+* [ ] Implement `features/runs/stream` exactly per `050-RUN-STREAMING-SPEC.md`:
+
+  * [ ] `RunStreamState`, `runStreamReducer`, action types.
+  * [ ] `RunStreamProvider` at app root (supports multiple runs in parallel).
+  * [ ] `useRunStream(runId, options)` for live SSE + replay controls.
+  * [ ] `useRunTelemetry(runId, options)` for NDJSON/historical replay.
+  * [ ] Backpressure:
+
+    * Caps on `events` and `consoleLines`.
+    * Batched updates to avoid render storms.
+* [ ] Implement shared run components (`features/runs/components`):
+
+  * [ ] `RunConsole`
+  * [ ] `RunTimeline`
+  * [ ] `RunSummaryPanel`
+  * [ ] `ValidationSummary`
+* [ ] Integrate streaming into all relevant screens:
+
+  * [ ] Documents: live run cards + document detail run panel.
+  * [ ] Run Detail: full replay/live experience.
+  * [ ] Config Builder: bottom run panel.
+
+---
+
+### 10. Testing, migration & rollout
+
+* [ ] Implement unit tests per `070-TEST-PLAN.md`:
+
+  * [ ] `runStreamReducer` behavior.
+  * [ ] Navigation parsing/building round-trips.
+  * [ ] Auth state machine (`AuthProvider`).
+* [ ] Implement React Testing Library tests for:
+
+  * [ ] Login + SSO flows.
+  * [ ] Documents: upload → run → outputs.
+  * [ ] Config Builder: open config → edit file → save → run → see console output.
+  * [ ] Run Detail: open via URL, deep link with `sequence`.
+* [ ] Implement selected E2E (Playwright or similar) for:
+
+  * [ ] Full journey: login → pick workspace → upload doc → run → view run → download outputs.
+  * [ ] Config journey: login → pick workspace → open config → edit → run → debug errors in Problems tab.
+* [ ] Complete migration tasks per `080-MIGRATION-AND-ROLLOUT.md`:
+
+  * [ ] Move legacy app to `apps/ade-web-legacy`.
+  * [ ] Ensure CI builds only new app by default.
+  * [ ] Implement rollout + rollback plan.
+  * [ ] Validate monitoring dashboards and alerts.
+
+---
+
+### 11. UX polish & “small details that count”
+
+* [ ] Loading & skeletons:
+
+  * [ ] Login & Setup: avoid sudden layout jumps.
+  * [ ] Workspace list, Documents list, Run Detail, Config Builder: skeleton states per `040-DESIGN-SYSTEM.md`.
+* [ ] Empty states:
+
+  * [ ] No workspaces.
+  * [ ] No documents.
+  * [ ] No runs yet for a document/config.
+* [ ] Error messaging:
+
+  * [ ] Friendly, non-technical messages for common errors (auth, upload failed, run failed).
+  * [ ] Clear microcopy for destructive actions (“Archive document”, “Delete config file”).
+* [ ] Keyboard accessibility:
+
+  * [ ] Navigation, Tabs, Dialogs, Workspace switcher.
+  * [ ] Config Builder: Explorer navigation, tab switching, editor focus, console toggle.
+* [ ] Visual polish:
+
+  * [ ] Consistent use of spacing, typography, and color tokens.
+  * [ ] Status pills and icons consistent across all screens (runs, documents, configs).
+  * [ ] Config Builder theme evokes VS Code (especially in dark mode) while still using our brand tokens.
 
 ---
 
 ## 1. Objective
 
-**Goal:**
-Rebuild `apps/ade-web` from scratch with a clean, maintainable architecture and a **holistic UX** for:
+Rebuild `apps/ade-web` as a **vanilla React** (no React Router) + TypeScript app that:
 
-1. **Configuration authors** in the Config Builder, and
-2. **End users** working in the Documents pane who:
+1. Starts at a **real login/setup flow** (auth, SSO, sessions).
+2. Guides users to a **workspace selector & creator**.
+3. Provides first-class experiences for:
 
-   * Upload files,
-   * Start runs,
-   * Watch progress and debug issues,
-   * Download normalized outputs and logs.
+   * **Documents**: upload → run → monitor → download.
+   * **Configurations**: a **VS Code–style Config Builder** with Explorer, editor tabs, and a bottom console.
+   * **Runs**: shared run detail with streaming logs, timeline, validation, and outputs.
+4. Is **fully wired to the backend API** from day one (no long-lived mock data in production code).
+5. Uses a shared design system and a single streaming foundation across all screens.
 
-We want:
-
-* A **design-forward** application with consistent layout, typography, spacing, and interaction states.
-* First-class **event streaming** support that powers run replay, timelines, and rich debugging workflows.
-* A composable set of **run-centric UI primitives** used across Config Builder, Documents, and Run Detail.
-
-We are explicitly allowed to:
-
-* Rename/archive the current `apps/ade-web` and build a new app in its place.
-* Delete legacy patterns in favor of a standard architecture and consistent UX, even if this means more upfront work.
+We are allowed to archive the current `apps/ade-web` and rebuild as `apps/ade-web` with a clean architecture and UX.
 
 ---
 
-## 2. Context (what we’re starting from)
+## 2. Scope & Non-Goals
 
-Today’s `apps/ade-web`:
+### In scope (for this workpackage)
 
-* Is a Vite + React + TS app with:
+* Auth/session handling with password + SSO (`120-AUTH-AND-SESSIONS.md`).
+* Setup/first admin flow.
+* Workspace list and creation, workspace switcher (Phase 1 from `090-FUTURE-WORKSPACES.md`).
+* Navigation, layout, design system (`020-ARCHITECTURE.md`, `040-DESIGN-SYSTEM.md`, `060-NAVIGATION.md`).
+* Documents list/detail, upload, and linkage to runs (`130-DOCUMENTS-UX-AND-API.md`).
+* Runs detail, streaming SSE/NDJSON, logs, outputs, and summary (`050-RUN-STREAMING-SPEC.md`, `140-RUNS-AND-OUTPUTS.md`).
+* **VS Code–style Config Builder workbench** on top of configuration file APIs (`100-CONFIG-BUILDER-EDITOR.md`, `150-CONFIGURATIONS-API.md`).
+* Migration & rollout from the legacy app (`080-MIGRATION-AND-ROLLOUT.md`).
+* Baseline accessibility and tests (`070-TEST-PLAN.md`).
 
-  * Routerless navigation and bespoke history helpers.
-  * Streaming logic embedded inside Config Builder’s Workbench.
-  * Ad-hoc UI primitives and inconsistent visual language.
-* Treats streaming as a **local concern**:
+### Out of scope (future workpackages)
 
-  * Workbench manages its own EventSource, reducer, and state.
-  * Documents screen only gets basic telemetry snippets, not full streaming power.
-
-We now have:
-
-* A unified `AdeEvent` stream for runs (build + run + logs), with:
-
-  * SSE: `/runs/{run_id}/events?stream=true&after_sequence=0`.
-  * Persisted NDJSON: `/runs/{run_id}/events.ndjson`.
-* Frontend primitives (or prototypes) such as:
-
-  * `streamRunEvents`, `RunStreamState`, `runStreamReducer`.
-  * `fetchRunTelemetry`.
-
-Pain points:
-
-* Documents UX is under-designed:
-
-  * Upload, run start, progress, results, and downloads are not a coherent, guided journey.
-* Workbench is a **mega-component** blending layout, editing, streaming, and persistence logic.
-* Telemetry loading can freeze the UI on large runs.
-* There is no single, composable **Run Experience** that can be reused in multiple contexts.
+* Advanced workspace UX (activity feeds, cross-workspace dashboards).
+* Full admin UIs for global roles/permissions and workspace member management.
+* Rich API key / service-account management UI.
+* Run comparison dashboards, regression analytics, and long-term trends.
+* Config diffing/version browser UI and **command palette** (nice-to-have for later).
 
 ---
 
-## 3. Target architecture / structure
+## 3. Core Terminology
 
-We retain Vite + React + TypeScript, but rebuild the app with a clear layering and a small, well-typed navigation module (instead of an external router).
+Keep these terms consistent across code, UX, and docs:
 
-```text
-apps/ade-web/
-  src/
-    app/
-      AppShell.tsx          # Top-level layout and providers
-      navigation/           # Custom "vanilla React" routing
-        routes.ts           # Route definitions (typed)
-        useRoute.ts         # Hook that returns current route
-        navigate.ts         # Programmatic navigation API
-    routes/                 # Route-level screens, thin composition
-      WorkspaceHome/
-      Documents/
-      RunDetail/
-      ConfigBuilder/
-    features/
-      runs/
-        api/                # Run API clients (start run, fetch summaries, etc.)
-        stream/             # RunStreamProvider, hooks, reducer, selectors
-        components/         # RunConsole, RunTimeline, RunSummary, ValidationSummary
-        schema/             # Run-related types shared with UI
-      documents/
-        api/
-        components/         # DocumentList, UploadPanel, DocumentDetails, etc.
-      configs/
-        api/
-        components/
-      auth/
-        api/
-        hooks/
-    ui/                     # Design system primitives
-      Button.tsx
-      Input.tsx
-      Tabs.tsx
-      Dialog.tsx
-      ...
-    shared/                 # Cross-cutting (env, storage, formatting, hooks)
-    schema/                 # Curated OpenAPI exports via @schema
-    test/                   # Testing setup & helpers
-```
+* **Session** – the authenticated browser session (via cookies).
+* **User** – logged-in person (not service account).
+* **Workspace** – top-level container for documents, configurations, and runs.
+* **Configuration** – a config package (files + versions) used to drive runs.
+* **Document** – an uploaded file, possibly with multiple sheets.
+* **Sheet** – a worksheet within a document (e.g., Excel tab).
+* **Run** – an execution of a configuration against input documents.
+* **Build** – configuration build step; may precede runs.
+* **Output** – files produced by a run (normalized data, reports, logs).
+* **Explorer** – the left-hand pane in Config Builder showing the configuration file tree.
+* **Bottom Panel** – the console/problems area at the bottom of Config Builder.
 
-**Navigation (custom, vanilla React):**
-
-* `routes.ts` defines a small set of route descriptors, e.g.:
-
-  ```ts
-  type Route =
-    | { kind: 'workspaceHome'; workspaceId: string }
-    | { kind: 'documents'; workspaceId: string }
-    | { kind: 'runDetail'; workspaceId: string; runId: string; sequence?: number }
-    | { kind: 'configBuilder'; workspaceId: string; configId: string };
-  ```
-
-* `useRoute()`:
-
-  * Parses `window.location` into a `Route`.
-  * Subscribes to `popstate` to react to back/forward.
-
-* `navigate(route: Route)`:
-
-  * Serializes the `Route` to a URL.
-  * Calls `history.pushState` and triggers re-render.
-
-This gives us URL-based navigation, deep links, and browser back/forward, but keeps us in “vanilla React” with a small, well-scoped routing module.
+When in doubt, prefer these names in code and UI.
 
 ---
 
-## 4. UX & design
+## 4. User Flows (high-level)
 
-### 4.1 Design principles
+### 4.1 First-time user
 
-* **Guided, end-to-end flows:**
-  Especially for Documents, users should always see the “next step”:
+1. Visit app → Setup wizard appears (no admin yet).
+2. Complete setup (password or SSO, depending on backend).
+3. Land on login/auto-login → authenticated.
+4. Create first workspace.
+5. Enter workspace home:
 
-  * After upload → “Start a run”.
-  * During run → “Review progress”.
-  * On completion → “Download outputs” or “Review errors”.
+   * See “Upload documents” CTA.
+   * See “Create configuration” CTA.
 
-* **Calm, legible information hierarchy:**
+### 4.2 Returning user with one workspace
 
-  * Clear page headers with context (workspace, document, run).
-  * Primary actions are obvious, secondary actions subdued.
-  * Status chips and colors are consistent across screens.
+1. Visit app → existing session or login.
+2. Workspace choice:
 
-* **Consistency across screens:**
+   * If a preferred workspace exists → go directly to that workspace.
+   * Else → workspace list, pick one.
+3. In workspace home, choose:
 
-  * Shared components for run console, timelines, and summaries.
-  * Common layout patterns (PageHeader + content + side panels).
+   * Documents (upload & process files).
+   * Config Builder (work on configs).
 
-* **Streaming-aware design:**
+### 4.3 Document-driven flow
 
-  * Live updates feel smooth, not noisy.
-  * Users can switch between “live tail” and “investigate past events” (with scrubbers and filters).
+1. Login → choose workspace.
+2. Go to Documents.
+3. Upload file(s).
+4. Select document → start run (select config if multiple).
+5. Watch progress (live run card, console tail).
+6. When complete:
 
-### 4.2 Key flows
+   * Download normalized outputs.
+   * If failed, open Run Detail to debug.
 
-#### A. Documents: Upload → Run → Review → Download
+### 4.4 Config-driven flow
 
-**User story:**
-“As an end user, I upload a file, start a run, watch how it progresses, understand errors quickly if it fails, and download the normalized outputs and logs when it succeeds.”
+1. Login → choose workspace.
+2. Go to Config Builder.
+3. Choose or create configuration.
+4. In VS Code–style workbench:
 
-**UX shape:**
+   * Use Explorer to navigate config files.
+   * Open multiple files as tabs.
+   * Edit code in central editor.
+5. Run config:
 
-* **Documents list (left column):**
+   * Observe logs/validation in bottom console & Problems tab.
+6. On error:
 
-  * Table with:
-
-    * Name, size, uploaded by, last run status, last run time.
-  * Status chips:
-
-    * Grey: Never run.
-    * Blue: In progress.
-    * Green: Succeeded.
-    * Red: Failed.
-
-* **Document details (right panel):**
-
-  * Persistently visible for the selected document.
-  * Tabs:
-
-    * **Overview:** Summary tile (status, last run, quick actions).
-    * **Runs:** History list (see run trajectories).
-    * **Outputs:** Downloadable artifacts for the selected or latest run.
-
-* **Upload panel:**
-
-  * Big drag & drop zone plus “Browse files” button.
-  * Shows per-file upload progress and errors inline.
-  * After upload, automatically selects the new document and reveals a “Start run” call to action.
-
-* **Start run panel:**
-
-  * Inline in the details panel:
-
-    * If only one config is applicable, show a single “Start run” button.
-    * If multiple, show a small config selector, then “Start run”.
-  * Provide a short, human description:
-
-    * “Run with config X to normalize into Y schema.”
-
-* **Live Run card (for active run):**
-
-  * When a run is in progress:
-
-    * Status chip and phase (“Normalizing”, “Validating”).
-    * Time elapsed.
-    * Mini timeline bar (basic phase progression).
-    * Mini console snippet (last N lines).
-    * “Open full run view” link to the Run Detail screen.
-  * Error-first toggle:
-
-    * When errors appear, a small badge:
-
-      * “Errors detected – View errors”
-    * Clicking focuses console snippet around the first error.
-
-* **Run history:**
-
-  * Runs tab shows:
-
-    * List of runs with status icon, duration, config, and created time/user.
-    * Quick visual indicator for regression vs previous run (e.g., more severe validation level).
-
-* **Outputs:**
-
-  * Clearly separated sections:
-
-    * Original file.
-    * Normalized outputs (possibly multiple formats).
-    * Logs.
-  * Each item:
-
-    * Label, file type, size, last updated time.
-    * Download button with a consistent icon.
-  * Always communicates which run you’re looking at (“Outputs from run #1234”).
-
-#### B. Run Detail: Inspection, replay, and debugging
-
-**User story:**
-“As anyone investigating an issue, I open a run, scrub through its events, quickly find where it failed, and cross-reference validation issues with console logs and phase timelines.”
-
-**UX shape:**
-
-* Page header:
-
-  * Run title or ID, workspace, created by, creation time.
-  * Status pill (Queued / Running / Succeeded / Failed / Cancelled).
-  * Key actions:
-
-    * Download artifacts (normalized output, logs).
-    * Copy link to this run (deep link).
-* Main layout:
-
-  * Left side:
-
-    * RunSummary (status, duration, high-level metrics).
-    * RunTimeline (build + run phases in order).
-    * ValidationSummary (overall health).
-  * Right side:
-
-    * RunConsole with:
-
-      * Filters (origin/level/phase/text).
-      * Follow tail toggle.
-      * Error-first toggle and navigation between errors.
-* Sequence scrubber:
-
-  * Slider or timeline bar to “replay” from start to sequence N.
-  * Indicator text (“Replaying up to event 132/600”).
-* Deep links:
-
-  * “Copy link to this error” from console:
-
-    * Generates a URL embedding `runId` + `sequence`.
-  * Opening the link:
-
-    * Replays events up to that sequence and centers the console on that event.
-
-#### C. Config Builder: Authoring & streaming feedback
-
-We keep the existing mental model but align visuals and streaming behavior with the new system:
-
-* Clear structure:
-
-  * Left: config tree/navigation.
-  * Center: editor/form views.
-  * Bottom: Run panel using shared components (timeline, console, summaries).
-* Runs are started via `useWorkbenchRun` which calls `createAndStreamRun` under the hood.
-* Validations and runs share the same streaming mechanics for console + summaries.
-
-#### D. Workspace: Orientation & recent activity
-
-* Workspace home:
-
-  * Overview cards:
-
-    * “Documents” summary (count, recent uploads).
-    * “Recent runs” list (no streaming required in v1).
-  * Each recent run links to Run Detail.
+   * Click validation issue → jump to file + line in editor.
+   * Fix config and re-run.
+7. Share link to Run Detail for deeper investigation if needed.
 
 ---
 
-## 5. Streaming & data design
+## 5. Implementation Order (summary)
 
-* **Unified run state:**
+1. **Scaffold app & tooling** (Vite, TS, lint/test, architecture).
+2. **Auth & Setup**:
 
-  * `RunStreamState` represents:
+   * AuthProvider, Setup & Login screens, /bootstrap wiring.
+3. **Workspaces**:
 
-    * Raw events, derived phases, console lines, validation and table summaries, status, last sequence.
-* **SSE & NDJSON:**
+   * Workspace list, create, and switcher.
+4. **Navigation & Shell**:
 
-  * For active runs:
+   * Route union, parse/build, AppShell, layout.
+5. **Design System**:
 
-    * Use EventSource from `streamRunEvents`.
-  * For historical runs:
+   * Tokens, primitives, layout (`SplitPane`, `Panel`, etc.).
+6. **API integration**:
 
-    * Use `fetchRunTelemetry` wrapped in a streaming parser and feed into the same reducer.
-* **Backpressure:**
+   * Feature API modules for auth, workspaces, documents, runs, configs.
+7. **Screens**:
 
-  * Maintain capped buffers for console lines by default.
-  * Allow user to “Load more history” or “View full log” if needed.
-* **Resilience:**
+   * Workspace Home → Documents → Run Detail → **VS Code–style Config Builder**.
+8. **Run streaming**:
 
-  * On network hiccups:
+   * RunStream foundation, shared run UI components, integration.
+9. **Tests & migration**:
 
-    * Reconnect automatically with `after_sequence = lastSequence`.
-    * Indicate reconnection state subtly in the UI (icon/spinner, not a disruptive modal).
+   * Unit/RTL/E2E, legacy archive, rollout.
+10. **UX polish**:
 
----
+* Loading/empty/error states, microcopy, accessibility.
 
-## 6. Implementation plan / phases
-
-You can adapt this, but a reasonable sequence:
-
-1. **Phase 0 – Archive & scaffold**
-
-   * Archive existing app, scaffold new Vite+React+TS app.
-   * Set up navigation module, providers, and basic design system.
-
-2. **Phase 1 – Run streaming foundation**
-
-   * Implement RunStream reducer, provider, hooks, and NDJSON parser.
-   * Add basic tests.
-
-3. **Phase 2 – Shared run components**
-
-   * Build RunConsole, RunTimeline, RunSummary, ValidationSummary.
-   * Wire them up with RunStream state.
-
-4. **Phase 3 – Run Detail screen**
-
-   * Implement the Run Detail route using shared components.
-   * Add replay and deep-link support.
-
-5. **Phase 4 – Documents experience**
-
-   * Build Documents list, upload UX, document details, run history, and outputs.
-   * Integrate streaming Run cards for active runs.
-
-6. **Phase 5 – Config Builder migration**
-
-   * Rebuild Config Builder on top of new design system and streaming foundation.
-   * Remove legacy streaming logic.
-
-7. **Phase 6 – Polish & cutover**
-
-   * UX polish, accessibility, and E2E tests.
-   * Decide on timeline to stop exposing the legacy app.
+Each of these is reflected in the checklist above.
 
 ---
 
-## 7. Definition of Done (for this workpackage)
+## 6. Notes for Agents
 
-This workpackage is considered complete when:
+* **Vanilla React navigation only.** Do not add React Router or other routing libraries. Extend `060-NAVIGATION.md` if you need new routes.
+* **Single streaming foundation.** All run streaming logic must live in `features/runs/stream`. Screens consume it via hooks and shared components.
+* **Auth first.** Do not implement deep screens without wiring them to real auth/bootstrap and workspace context; avoid persistent local stubs.
+* **OpenAPI types only.** When you need API types, import from the generated OpenAPI declarations via `schema/`, not hand-written interfaces.
+* **VS Code mental model for Config Builder.**
 
-1. **Architecture & routing**
+  * Explorer (left), Editor (center), Bottom Panel (console/problems).
+  * Code comes first; inspectors/helpers are secondary.
+  * Resizable/collapsible panels with persisted layout.
+* **UX details matter.** For each screen you touch, think:
 
-   * New `apps/ade-web` uses the custom navigation module (no external router).
-   * All primary flows are reachable via URL and support browser back/forward.
+  * What does loading look like?
+  * How does it fail?
+  * What happens if there’s no data yet?
+  * Is it keyboard accessible?
+* **Keep docs in sync.** When behavior changes, update:
 
-2. **Streaming foundation**
+  1. This workpackage.
+  2. The relevant spec (e.g., `030-UX-FLOWS.md`, `050-RUN-STREAMING-SPEC.md`, `100-CONFIG-BUILDER-EDITOR.md`, `120-AUTH-AND-SESSIONS.md`).
+  3. Then the code.
 
-   * `RunStreamProvider` and `useRunStream` are the single way to stream run events.
-   * Both live and historical runs use the same state/reducer.
-   * Large runs are manageable (no UI freezes due to full NDJSON loads).
-
-3. **UX for Documents**
-
-   * A user can:
-
-     * Upload file(s).
-     * Start a run from a document.
-     * Observe live progress with clear status and phase feedback.
-     * Investigate failures via error-first views.
-     * Download original, normalized outputs, and logs, always knowing which run they belong to.
-   * The flow feels cohesive and self-explanatory.
-
-4. **Run Detail & Config Builder**
-
-   * Run Detail provides replay, timeline, console with filters, and download actions.
-   * Config Builder uses shared run components and the RunStream foundation (no ad-hoc streaming).
-
-5. **Quality**
-
-   * Unit tests pass for streaming primitives and formatting.
-   * E2E tests pass for key flows in Documents, Run Detail, and Config Builder.
-   * Basic accessibility checks pass (keyboard nav, focus, ARIA on key components).
-
-6. **Legacy**
-
-   * Legacy app is kept only as `apps/ade-web-legacy` and is not relied on for primary workflows or deploys.
+When in doubt, document the decision here before implementing it.

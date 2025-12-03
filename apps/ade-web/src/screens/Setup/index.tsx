@@ -136,12 +136,6 @@ export default function SetupRoute() {
           </p>
         </header>
 
-        {setupQuery.data.force_sso ? (
-          <Alert tone="info" className="mt-6">
-            This deployment enforces single sign-on after the initial administrator is created.
-          </Alert>
-        ) : null}
-
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <div className="grid gap-6 md:grid-cols-2">

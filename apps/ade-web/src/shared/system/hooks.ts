@@ -26,8 +26,8 @@ export function useUpdateSafeModeStatus() {
   const queryClient = useQueryClient();
   return useMutation<SafeModeStatus, Error, SafeModeUpdateRequest>({
     mutationFn: (payload) => updateSafeModeStatus(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: SAFE_MODE_QUERY_KEY });
+    onSuccess: (nextStatus) => {
+      queryClient.setQueryData(SAFE_MODE_QUERY_KEY, nextStatus);
     },
   });
 }

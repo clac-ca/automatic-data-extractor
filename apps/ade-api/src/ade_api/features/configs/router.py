@@ -6,32 +6,38 @@ import base64
 import io
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Body,
     Depends,
+    File,
+    Form,
     HTTPException,
     Path,
     Query,
     Request,
     Response,
     Security,
+    UploadFile,
     status,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
-from ade_api.shared.dependency import (
-    get_configurations_service,
-    require_authenticated,
-    require_csrf,
-    require_workspace,
-)
-from ade_api.shared.pagination import PageParams, paginate_sequence
+from ade_api.app.dependencies import get_builds_service, get_configurations_service
+from ade_api.common.pagination import PageParams, paginate_sequence
+from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.core.models import User
+from ade_api.features.builds.router import _execute_build_background
+from ade_api.features.builds.schemas import BuildCreateOptions
+from ade_api.features.builds.service import BuildsService
 
-from ..users.models import User
 from .etag import canonicalize_etag, format_etag, format_weak_etag
 from .exceptions import (
+    ConfigImportError,
     ConfigPublishConflictError,
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
@@ -46,7 +52,7 @@ from .schemas import (
     ConfigurationPage,
     ConfigurationRecord,
     ConfigurationValidateResponse,
-    ConfigVersionRecord,
+    DirectoryWriteResponse,
     FileListing,
     FileReadJson,
     FileRenameRequest,
@@ -70,6 +76,8 @@ router = APIRouter(
     tags=["configurations"],
     dependencies=[Security(require_authenticated)],
 )
+
+UPLOAD_ARCHIVE_FIELD = File(...)
 
 CONFIG_CREATE_BODY = Body(
     ...,
@@ -160,6 +168,24 @@ def _parse_range_header(header_value: str, total_size: int) -> tuple[int, int]:
     return start, end
 
 
+def _upsert_response(
+    payload: BaseModel,
+    *,
+    created: bool,
+    request: Request,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    response_headers = dict(headers or {})
+    if created:
+        response_headers.setdefault("Location", str(request.url.path))
+    status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return JSONResponse(
+        status_code=status_code,
+        content=payload.model_dump(mode="json"),
+        headers=response_headers,
+    )
+
+
 @router.get(
     "/configurations",
     response_model=ConfigurationPage,
@@ -173,7 +199,7 @@ async def list_configurations(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -202,7 +228,7 @@ async def read_configuration(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -220,34 +246,6 @@ async def read_configuration(
 
 
 @router.get(
-    "/configurations/{configuration_id}/versions",
-    response_model=list[ConfigVersionRecord],
-    summary="List configuration versions (drafts and published)",
-    response_model_exclude_none=False,
-)
-async def list_configuration_versions_endpoint(
-    workspace_id: WorkspaceIdPath,
-    configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("Workspace.Configurations.Read"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
-) -> list[ConfigVersionRecord]:
-    try:
-        versions = await service.list_configuration_versions(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    return [ConfigVersionRecord.model_validate(version) for version in versions]
-
-
-@router.get(
     "/configurations/{configuration_id}/files",
     response_model=FileListing,
     response_model_exclude_none=True,
@@ -261,7 +259,7 @@ async def list_config_files(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -328,7 +326,7 @@ async def create_configuration(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -362,6 +360,57 @@ async def create_configuration(
 
 
 @router.post(
+    "/configurations/import",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a configuration from an uploaded archive",
+    response_model_exclude_none=True,
+)
+async def import_configuration(
+    workspace_id: WorkspaceIdPath,
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    *,
+    display_name: Annotated[str, Form(min_length=1)],
+    file: UploadFile = UPLOAD_ARCHIVE_FIELD,
+) -> ConfigurationRecord:
+    try:
+        archive = await file.read()
+        record = await service.import_configuration_from_archive(
+            workspace_id=workspace_id,
+            display_name=display_name.strip(),
+            archive=archive,
+        )
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigPublishConflictError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="publish_conflict") from exc
+    except ConfigImportError as exc:
+        status_code = (
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            if exc.code == "archive_too_large" and exc.limit
+            else status.HTTP_400_BAD_REQUEST
+        )
+        detail: str | dict = exc.code
+        if exc.limit:
+            detail = {"error": exc.code, "limit": exc.limit}
+        raise HTTPException(status_code, detail=detail) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.post(
     "/configurations/{configuration_id}/validate",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationValidateResponse,
@@ -372,15 +421,35 @@ async def validate_configuration(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    builds_service: Annotated[BuildsService, Depends(get_builds_service)],
+    background_tasks: BackgroundTasks,
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
 ) -> ConfigurationValidateResponse:
     try:
+        workspace_uuid = UUID(str(workspace_id))
+        configuration_uuid = UUID(str(configuration_id))
+        # Ensure configuration build exists/reused; non-blocking if build already ready/inflight.
+        build, context = await builds_service.ensure_build_for_run(
+            workspace_id=workspace_uuid,
+            configuration_id=configuration_uuid,
+            force_rebuild=False,
+            run_id=None,
+            reason="validation",
+        )
+        if context.should_run:
+            background_tasks.add_task(
+                _execute_build_background,
+                context.as_dict(),
+                BuildCreateOptions(force=False, wait=False).model_dump(),
+                builds_service.settings.model_dump(mode="python"),
+            )
+
         result = await service.validate_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
@@ -421,7 +490,7 @@ async def read_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -522,7 +591,7 @@ async def head_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -572,7 +641,7 @@ async def activate_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -618,7 +687,7 @@ async def publish_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -663,7 +732,7 @@ async def deactivate_configuration_endpoint(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -691,7 +760,7 @@ async def export_config(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.Read"),
+            require_workspace("workspace.configurations.read"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -714,6 +783,72 @@ async def export_config(
 
 
 @router.put(
+    "/configurations/{configuration_id}/import",
+    dependencies=[Security(require_csrf)],
+    response_model=ConfigurationRecord,
+    summary="Replace a draft configuration from an uploaded archive",
+    response_model_exclude_none=True,
+)
+async def replace_configuration_from_archive(
+    workspace_id: WorkspaceIdPath,
+    configuration_id: ConfigurationIdPath,
+    request: Request,
+    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
+    _actor: Annotated[
+        User,
+        Security(
+            require_workspace("workspace.configurations.manage"),
+            scopes=["{workspace_id}"],
+        ),
+    ],
+    file: UploadFile = UPLOAD_ARCHIVE_FIELD,
+) -> ConfigurationRecord:
+    archive = await file.read()
+    try:
+        record = await service.replace_configuration_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+            if_match=request.headers.get("if-match"),
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStorageNotFoundError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="configuration_storage_missing",
+        ) from exc
+    except ConfigStateError as exc:
+        _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
+    except PreconditionRequiredError:
+        _problem("precondition_required", status.HTTP_428_PRECONDITION_REQUIRED)
+    except PreconditionFailedError as exc:
+        _problem(
+            "precondition_failed",
+            status.HTTP_412_PRECONDITION_FAILED,
+            meta={"current_etag": format_etag(exc.current_etag)},
+        )
+    except ConfigSourceInvalidError as exc:
+        detail = {
+            "error": "invalid_source_shape",
+            "issues": [issue.model_dump() for issue in exc.issues],
+        }
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
+    except ConfigImportError as exc:
+        status_code = (
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            if exc.code == "archive_too_large" and exc.limit
+            else status.HTTP_400_BAD_REQUEST
+        )
+        detail: str | dict = exc.code
+        if exc.limit:
+            detail = {"error": exc.code, "limit": exc.limit}
+        raise HTTPException(status_code, detail=detail) from exc
+
+    return ConfigurationRecord.model_validate(record)
+
+
+@router.put(
     "/configurations/{configuration_id}/files/{file_path:path}",
     dependencies=[Security(require_csrf)],
     response_model=FileWriteResponse,
@@ -731,7 +866,7 @@ async def upsert_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -784,14 +919,11 @@ async def upsert_config_file(
         mtime=result["mtime"],
         etag=result["etag"],
     )
-    headers = {"ETag": format_etag(result["etag"]) or ""}
-    status_code = status.HTTP_201_CREATED if payload.created else status.HTTP_200_OK
-    if payload.created:
-        headers["Location"] = request.url.path
-    return JSONResponse(
-        status_code=status_code,
-        content=payload.model_dump(mode="json"),
-        headers=headers,
+    return _upsert_response(
+        payload,
+        created=payload.created,
+        request=request,
+        headers={"ETag": format_etag(result["etag"]) or ""},
     )
 
 
@@ -809,7 +941,7 @@ async def delete_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -845,28 +977,39 @@ async def delete_config_file(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post(
+@router.put(
     "/configurations/{configuration_id}/directories/{directory_path:path}",
     dependencies=[Security(require_csrf)],
-    status_code=status.HTTP_201_CREATED,
+    response_model=DirectoryWriteResponse,
+    responses={
+        status.HTTP_200_OK: {
+            "model": DirectoryWriteResponse,
+            "description": "Directory already exists",
+        },
+        status.HTTP_201_CREATED: {
+            "model": DirectoryWriteResponse,
+            "description": "Directory created",
+        },
+    },
 )
 async def create_config_directory(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     directory_path: str,
+    request: Request,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
-) -> dict:
+) -> Response:
     if not directory_path:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path_required")
     try:
-        await service.create_directory(
+        _, created = await service.create_directory(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             relative_path=directory_path,
@@ -879,7 +1022,8 @@ async def create_config_directory(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except PathNotAllowedError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    return {"path": directory_path}
+    payload = DirectoryWriteResponse(path=directory_path, created=created)
+    return _upsert_response(payload, created=payload.created, request=request)
 
 
 @router.delete(
@@ -895,7 +1039,7 @@ async def delete_config_directory(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],
@@ -938,7 +1082,7 @@ async def rename_config_file(
     _actor: Annotated[
         User,
         Security(
-            require_workspace("Workspace.Configurations.ReadWrite"),
+            require_workspace("workspace.configurations.manage"),
             scopes=["{workspace_id}"],
         ),
     ],

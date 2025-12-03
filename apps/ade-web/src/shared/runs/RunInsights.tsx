@@ -112,9 +112,9 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
   );
 }
 
-function formatTimestamp(timestamp: string | number): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return timestamp;
+function formatTimestamp(timestamp: string | number | Date): string {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return String(timestamp);
   return date.toLocaleString();
 }
 

@@ -153,7 +153,7 @@ Each workspace is represented by a card that includes:
 - Name.
 - Slug or human‑friendly short ID.
 - Optional **environment label** (e.g. Production, Staging).
-- Optional indication that this is the user’s **default workspace**.
+- Optional indication that this is the user’s **default workspace** plus a “Set as default” action on non‑default cards (calls `PUT /api/v1/workspaces/{workspace_id}/default`).
 - Compact summary of the user’s roles/permissions (e.g. “Owner”, “Editor”).
 
 Clicking a card:
@@ -429,7 +429,7 @@ Immediately beneath `GlobalTopBar` is a **banner strip** reserved for:
 
 - **Other cross‑cutting banners**:
   - Connectivity issues (“Lost connection; retrying…”).
-  - Global warnings (e.g. “Using a deprecated configuration version”).
+  - Global warnings (e.g. “Using a deprecated configuration”).
 
 Ordering is:
 

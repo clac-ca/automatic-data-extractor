@@ -26,7 +26,8 @@ export function WorkspaceProvider({ workspace, workspaces, children }: Workspace
       workspaces,
       permissions,
       hasPermission(permission: string) {
-        return permissions.includes(permission);
+        const normalized = permission.toLowerCase();
+        return permissions.includes(permission) || permissions.includes(normalized);
       },
     };
   }, [workspace, workspaces]);

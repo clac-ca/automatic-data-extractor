@@ -4,10 +4,9 @@ from pydantic import Field, field_validator
 from sqlalchemy import func, or_
 from sqlalchemy.sql import Select
 
+from ade_api.common.filters import FilterBase
+from ade_api.core.models import User
 from ade_api.settings import MAX_SEARCH_LEN, MIN_SEARCH_LEN
-from ade_api.shared.filters import FilterBase
-
-from .models import User
 
 
 class UserFilters(FilterBase):

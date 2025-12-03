@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import Field
 
-from ade_api.shared.core.ids import ULIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from ..users.schemas import UserOut
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
 
 
 class WorkspaceOut(BaseSchema):
     """Workspace information decorated with membership metadata."""
 
-    id: ULIDStr
+    id: UUIDStr
     name: str
     slug: str
     roles: list[str]
@@ -29,7 +28,7 @@ class WorkspaceCreate(BaseSchema):
 
     name: str = Field(min_length=1, max_length=255)
     slug: str | None = Field(default=None, min_length=1, max_length=100)
-    owner_user_id: ULIDStr | None = Field(default=None, alias="owner_user_id")
+    owner_user_id: UUIDStr | None = Field(default=None, alias="owner_user_id")
     settings: dict[str, Any] | None = None
 
 
@@ -41,34 +40,10 @@ class WorkspaceUpdate(BaseSchema):
     settings: dict[str, Any] | None = None
 
 
-class WorkspaceMemberCreate(BaseSchema):
-    """Payload for adding a member to a workspace."""
-
-    user_id: ULIDStr
-    role_ids: list[ULIDStr] | None = Field(default=None, min_length=0)
-
-
-class WorkspaceMemberRolesUpdate(BaseSchema):
-    """Payload used to replace the set of roles for a membership."""
-
-    role_ids: list[ULIDStr] = Field(default_factory=list)
-
-
-class WorkspaceMemberOut(BaseSchema):
-    """Representation of a workspace membership."""
-
-    id: ULIDStr
-    workspace_id: ULIDStr
-    roles: list[str]
-    permissions: list[str]
-    is_default: bool
-    user: UserOut
-
-
 class WorkspaceDefaultSelectionOut(BaseSchema):
     """Response indicating the caller's default workspace selection."""
 
-    workspace_id: ULIDStr
+    workspace_id: UUIDStr
     is_default: bool
 
 
@@ -76,18 +51,40 @@ class WorkspacePage(Page[WorkspaceOut]):
     """Paginated workspace listing."""
 
 
+class WorkspaceMemberOut(BaseSchema):
+    """Workspace member with their role IDs and slugs."""
+
+    user_id: UUIDStr
+    role_ids: list[UUIDStr]
+    role_slugs: list[str]
+    created_at: datetime
+
+
+class WorkspaceMemberCreate(BaseSchema):
+    """Payload for adding a new workspace member with roles."""
+
+    user_id: UUIDStr
+    role_ids: list[UUIDStr]
+
+
+class WorkspaceMemberUpdate(BaseSchema):
+    """Payload for updating workspace member roles."""
+
+    role_ids: list[UUIDStr]
+
+
 class WorkspaceMemberPage(Page[WorkspaceMemberOut]):
-    """Paginated workspace member listing."""
+    """Paginated collection of workspace members."""
 
 
 __all__ = [
     "WorkspaceCreate",
     "WorkspaceDefaultSelectionOut",
-    "WorkspaceMemberOut",
     "WorkspaceMemberCreate",
-    "WorkspaceMemberRolesUpdate",
+    "WorkspaceMemberOut",
+    "WorkspaceMemberPage",
+    "WorkspaceMemberUpdate",
     "WorkspaceOut",
     "WorkspaceUpdate",
     "WorkspacePage",
-    "WorkspaceMemberPage",
 ]

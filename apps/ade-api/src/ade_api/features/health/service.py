@@ -7,13 +7,13 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
+from ade_api.common.logging import log_context
 from ade_api.features.system_settings.schemas import SafeModeStatus
 from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
 )
 from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
 
 from .exceptions import HealthCheckError
 from .schemas import HealthCheckResponse, HealthComponentStatus

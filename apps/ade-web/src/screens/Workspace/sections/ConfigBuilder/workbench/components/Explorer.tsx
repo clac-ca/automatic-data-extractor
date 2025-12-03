@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 import clsx from "clsx";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
+import { createScopedStorage } from "@shared/storage";
 
 import type { WorkbenchFileNode } from "../types";
 
 type ExplorerTheme = "light" | "dark";
+type CreateTarget = { readonly parentId: string; readonly kind: "file" | "folder" } | null;
 
 interface ExplorerThemeTokens {
   readonly surface: string;
@@ -71,83 +73,151 @@ const FOCUS_RING_CLASS: Record<ExplorerTheme, string> = {
   light: "focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
 };
 
-function collectExpandedFolderIds(root: WorkbenchFileNode): Set<string> {
-  const expanded = new Set<string>();
-  const visit = (node: WorkbenchFileNode) => {
-    expanded.add(node.id);
-    node.children?.forEach((child) => {
-      if (child.kind === "folder") {
-        visit(child);
-      }
-    });
+function collectFolderIds(node: WorkbenchFileNode): Set<string> {
+  const ids = new Set<string>();
+  const visit = (current: WorkbenchFileNode) => {
+    if (current.kind !== "folder") {
+      return;
+    }
+    ids.add(current.id);
+    current.children?.forEach(visit);
   };
-  visit(root);
-  return expanded;
+  visit(node);
+  return ids;
+}
+
+function sanitizeExpandedSet(
+  candidate: Iterable<string>,
+  availableFolderIds: ReadonlySet<string>,
+  rootId: string,
+): Set<string> {
+  const next = new Set<string>();
+  for (const id of candidate) {
+    if (availableFolderIds.has(id)) {
+      next.add(id);
+    }
+  }
+  next.add(rootId);
+  return next;
+}
+
+function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>) {
+  if (a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 interface ExplorerProps {
   readonly width: number;
   readonly tree: WorkbenchFileNode;
-  readonly activeFileId: string;
-  readonly openFileIds: readonly string[];
+  readonly activeFileId?: string;
+  readonly openFileIds?: readonly string[];
   readonly onSelectFile: (fileId: string) => void;
   readonly theme: ExplorerTheme;
   readonly canCreateFile?: boolean;
-  readonly isCreatingFile?: boolean;
-  readonly onCreateFile?: (folderPath: string, fileName: string) => Promise<void> | void;
+  readonly canCreateFolder?: boolean;
+  readonly isCreatingEntry?: boolean;
+  readonly onCreateFile?: (folderPath: string, fileName: string) => Promise<void>;
+  readonly onCreateFolder?: (folderPath: string, folderName: string) => Promise<void>;
   readonly canDeleteFile?: boolean;
   readonly deletingFilePath?: string | null;
-  readonly onDeleteFile?: (filePath: string) => Promise<void> | void;
-  readonly onCloseFile: (fileId: string) => void;
-  readonly onCloseOtherFiles: (fileId: string) => void;
-  readonly onCloseTabsToRight: (fileId: string) => void;
-  readonly onCloseAllFiles: () => void;
+  readonly canDeleteFolder?: boolean;
+  readonly deletingFolderPath?: string | null;
+  readonly onDeleteFile?: (filePath: string) => Promise<void>;
+  readonly onDeleteFolder?: (folderPath: string) => Promise<void>;
+  readonly expandedStorageKey?: string;
   readonly onHide: () => void;
 }
 
 export function Explorer({
   width,
   tree,
-  activeFileId,
-  openFileIds,
+  activeFileId = "",
+  openFileIds = [],
   onSelectFile,
   theme,
   canCreateFile = false,
-  isCreatingFile = false,
+  canCreateFolder = false,
+  isCreatingEntry = false,
   onCreateFile,
+  onCreateFolder,
   canDeleteFile = false,
   deletingFilePath = null,
+  canDeleteFolder = false,
+  deletingFolderPath = null,
   onDeleteFile,
-  onCloseFile,
-  onCloseOtherFiles,
-  onCloseTabsToRight,
-  onCloseAllFiles,
+  onDeleteFolder,
+  expandedStorageKey,
   onHide,
 }: ExplorerProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => collectExpandedFolderIds(tree));
+  const expansionStorage = useMemo(
+    () => (expandedStorageKey ? createScopedStorage(expandedStorageKey) : null),
+    [expandedStorageKey],
+  );
+  const availableFolderIds = useMemo(() => collectFolderIds(tree), [tree]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const stored = expansionStorage?.get<string[]>() ?? null;
+    const candidate = stored ? new Set(stored) : new Set<string>([tree.id]);
+    return sanitizeExpandedSet(candidate, availableFolderIds, tree.id);
+  });
   const [contextMenu, setContextMenu] = useState<{
     readonly node: WorkbenchFileNode;
     readonly position: { readonly x: number; readonly y: number };
   } | null>(null);
-  const [createTarget, setCreateTarget] = useState<{ readonly folderId: string } | null>(null);
+  const [editing, setEditing] = useState<CreateTarget>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const pendingCreate = createTarget?.folderId ?? null;
 
   useEffect(() => {
-    setExpanded(collectExpandedFolderIds(tree));
-  }, [tree]);
+    setEditing(null);
+    setCreateError(null);
+  }, [tree.id]);
 
-  const toggleFolder = useCallback((nodeId: string) => {
+  useEffect(() => {
     setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
+      const next = sanitizeExpandedSet(prev, availableFolderIds, tree.id);
+      return areSetsEqual(prev, next) ? prev : next;
     });
-  }, []);
+  }, [availableFolderIds, tree.id]);
+
+  useEffect(() => {
+    if (!expansionStorage) {
+      return;
+    }
+    const stored = expansionStorage.get<string[]>();
+    if (!stored) {
+      return;
+    }
+    const next = sanitizeExpandedSet(new Set(stored), availableFolderIds, tree.id);
+    setExpanded((prev) => (areSetsEqual(prev, next) ? prev : next));
+  }, [expansionStorage, availableFolderIds, tree.id]);
+
+  useEffect(() => {
+    if (!expansionStorage) {
+      return;
+    }
+    const payload = Array.from(expanded).filter((id) => id !== tree.id && availableFolderIds.has(id));
+    expansionStorage.set(payload);
+  }, [expanded, expansionStorage, availableFolderIds, tree.id]);
+
+  const toggleFolder = useCallback(
+    (nodeId: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        next.add(tree.id);
+        return next;
+      });
+    },
+    [tree.id],
+  );
 
   const setFolderExpanded = useCallback(
     (nodeId: string, nextExpanded: boolean) => {
@@ -158,9 +228,7 @@ export function Explorer({
         } else if (nodeId !== tree.id) {
           next.delete(nodeId);
         }
-        if (!next.has(tree.id)) {
-          next.add(tree.id);
-        }
+        next.add(tree.id);
         return next;
       });
     },
@@ -171,10 +239,49 @@ export function Explorer({
     setExpanded(new Set([tree.id]));
   }, [tree.id]);
 
-  const rootChildren = useMemo(() => tree.children ?? [], [tree]);
-  const menuAppearance = theme === "dark" ? "dark" : "light";
+  const startCreateEntry = useCallback(
+    (parentId: string, kind: "file" | "folder") => {
+      setCreateError(null);
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        next.add(tree.id);
+        next.add(parentId);
+        return next;
+      });
+      setEditing({ parentId, kind });
+    },
+    [tree.id],
+  );
 
-  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: WorkbenchFileNode) => {
+  const handleSubmitCreate = useCallback(
+    async (parentId: string, name: string, kind: "file" | "folder") => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        setCreateError("Name cannot be empty.");
+        return;
+      }
+      const handler = kind === "folder" ? onCreateFolder : onCreateFile;
+      if (!handler) {
+        return;
+      }
+      try {
+        setCreateError(null);
+        await handler(parentId === tree.id ? "" : parentId, trimmed);
+        setEditing(null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to create entry.";
+        setCreateError(message);
+      }
+    },
+    [onCreateFile, onCreateFolder, tree.id],
+  );
+
+  const handleCancelCreate = useCallback(() => {
+    setEditing(null);
+    setCreateError(null);
+  }, []);
+
+  const handleNodeContextMenu = useCallback((event: MouseEvent, node: WorkbenchFileNode) => {
     event.preventDefault();
     setContextMenu({ node, position: { x: event.clientX, y: event.clientY } });
   }, []);
@@ -202,61 +309,45 @@ export function Explorer({
     document.body.removeChild(textarea);
   }, []);
 
+  const handleDeleteFile = useCallback(
+    (path: string) => {
+      if (!onDeleteFile) {
+        return;
+      }
+      void onDeleteFile(path);
+      setContextMenu(null);
+    },
+    [onDeleteFile],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (path: string) => {
+      if (!onDeleteFolder) {
+        return;
+      }
+      void onDeleteFolder(path);
+      setContextMenu(null);
+    },
+    [onDeleteFolder],
+  );
+
   const explorerMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!contextMenu) {
       return [];
     }
-    const node = contextMenu.node;
+    const { node } = contextMenu;
     const shortcuts = {
       open: "Enter",
-      close: "Ctrl+W",
-      closeOthers: "Ctrl+K Ctrl+O",
-      closeRight: "Ctrl+K Ctrl+Right",
-      closeAll: "Ctrl+K Ctrl+W",
+      newFile: "Ctrl+N",
+      newFolder: "Ctrl+Shift+N",
       copyPath: "Ctrl+K Ctrl+C",
       collapseAll: "Ctrl+K Ctrl+0",
       delete: "Delete",
     };
+
     if (node.kind === "file") {
-      const isOpen = openFileIds.includes(node.id);
-      const openCount = openFileIds.length;
-      const tabIndex = openFileIds.indexOf(node.id);
-      const hasTabsToRight = tabIndex >= 0 && tabIndex < openCount - 1;
       return [
         { id: "open-file", label: "Open", icon: <MenuIconOpenFile />, shortcut: shortcuts.open, onSelect: () => onSelectFile(node.id) },
-        {
-          id: "close-file",
-          label: "Close",
-          icon: <MenuIconClose />,
-          disabled: !isOpen,
-          shortcut: shortcuts.close,
-          onSelect: () => onCloseFile(node.id),
-        },
-        {
-          id: "close-file-others",
-          label: "Close Others",
-          icon: <MenuIconCloseOthers />,
-          disabled: !isOpen || openCount <= 1,
-          shortcut: shortcuts.closeOthers,
-          onSelect: () => onCloseOtherFiles(node.id),
-        },
-        {
-          id: "close-file-right",
-          label: "Close Tabs to the Right",
-          icon: <MenuIconCloseRight />,
-          disabled: !isOpen || !hasTabsToRight,
-          shortcut: shortcuts.closeRight,
-          onSelect: () => onCloseTabsToRight(node.id),
-        },
-        {
-          id: "close-file-all",
-          label: "Close All",
-          dividerAbove: true,
-          disabled: openCount === 0,
-          icon: <MenuIconCloseAll />,
-          shortcut: shortcuts.closeAll,
-          onSelect: () => onCloseAllFiles(),
-        },
         {
           id: "copy-path",
           label: "Copy Path",
@@ -273,30 +364,38 @@ export function Explorer({
           icon: <MenuIconDelete />,
           shortcut: shortcuts.delete,
           disabled: !canDeleteFile || !onDeleteFile,
-          onSelect: () => {
-            if (!onDeleteFile) {
-              return;
-            }
-            void onDeleteFile(node.id);
-            setContextMenu(null);
-          },
+          onSelect: () => handleDeleteFile(node.id),
         },
       ];
     }
+
     const isExpanded = expanded.has(node.id);
     return [
       {
         id: "new-file",
         label: "New File…",
         icon: <MenuIconNewFile />,
+        shortcut: shortcuts.newFile,
         disabled: !canCreateFile || !onCreateFile,
         onSelect: () => {
           if (!canCreateFile || !onCreateFile) {
             return;
           }
-          setCreateError(null);
-          setFolderExpanded(node.id, true);
-          setCreateTarget({ folderId: node.id });
+          startCreateEntry(node.id, "file");
+          setContextMenu(null);
+        },
+      },
+      {
+        id: "new-folder",
+        label: "New Folder…",
+        icon: <MenuIconNewFolder />,
+        shortcut: shortcuts.newFolder,
+        disabled: !canCreateFolder || !onCreateFolder,
+        onSelect: () => {
+          if (!canCreateFolder || !onCreateFolder) {
+            return;
+          }
+          startCreateEntry(node.id, "folder");
           setContextMenu(null);
         },
       },
@@ -324,29 +423,39 @@ export function Explorer({
           void handleCopyPath(node.id);
         },
       },
+      {
+        id: "delete-folder",
+        label: "Delete Folder",
+        icon: <MenuIconDelete />,
+        shortcut: shortcuts.delete,
+        disabled: !canDeleteFolder || !onDeleteFolder,
+        onSelect: () => handleDeleteFolder(node.id),
+      },
     ];
   }, [
     contextMenu,
-    openFileIds,
     onSelectFile,
-    onCloseFile,
-    onCloseOtherFiles,
-    onCloseTabsToRight,
-    onCloseAllFiles,
     handleCopyPath,
+    canDeleteFile,
+    onDeleteFile,
     expanded,
     setFolderExpanded,
     collapseAll,
     canCreateFile,
+    canCreateFolder,
     onCreateFile,
-    canDeleteFile,
-    onDeleteFile,
-    setCreateError,
-    setCreateTarget,
-    setContextMenu,
+    onCreateFolder,
+    startCreateEntry,
+    canDeleteFolder,
+    onDeleteFolder,
+    handleDeleteFolder,
+    handleDeleteFile,
   ]);
+
   const tokens = EXPLORER_THEME_TOKENS[theme];
   const focusRingClass = FOCUS_RING_CLASS[theme];
+  const rootChildren = useMemo(() => tree.children ?? [], [tree]);
+  const menuAppearance = theme === "dark" ? "dark" : "light";
 
   return (
     <>
@@ -392,55 +501,31 @@ export function Explorer({
                 activeFileId={activeFileId}
                 openFileIds={openFileIds}
                 onToggleFolder={toggleFolder}
-        onSelectFile={onSelectFile}
-        tokens={tokens}
-        focusRingClass={focusRingClass}
-        onContextMenu={handleNodeContextMenu}
-        canCreateFile={canCreateFile}
-        isCreatingFile={isCreatingFile}
-        pendingCreateFolderId={pendingCreate}
-        createError={createError}
-        onSubmitCreateFile={async (folderId, fileName) => {
-          if (!onCreateFile) {
-            return;
-          }
-          setCreateError(null);
-          try {
-            await onCreateFile(folderId, fileName);
-            setCreateTarget(null);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "Unable to create file.";
-            setCreateError(message);
-          }
-        }}
-        onCancelCreateFile={() => {
-          setCreateTarget(null);
-          setCreateError(null);
-        }}
-        canDeleteFile={canDeleteFile}
-        deletingFilePath={deletingFilePath}
-        onDeleteFile={onDeleteFile}
-      />
-    ))}
-            {pendingCreate && !rootChildren.some((node) => node.id === pendingCreate) ? (
+                onSelectFile={onSelectFile}
+                tokens={tokens}
+                theme={theme}
+                focusRingClass={focusRingClass}
+                onContextMenu={handleNodeContextMenu}
+                editing={editing}
+                onSubmitCreateEntry={handleSubmitCreate}
+                onCancelCreateEntry={handleCancelCreate}
+                createError={createError}
+                isCreatingEntry={isCreatingEntry}
+                deletingFilePath={deletingFilePath}
+                deletingFolderPath={deletingFolderPath}
+                onClearCreateError={() => setCreateError(null)}
+              />
+            ))}
+            {editing?.parentId === tree.id ? (
               <li className="pl-2">
-                <CreateFileRow
+                <CreateEntryRow
                   appearance={theme}
-                  onSubmit={(name) => {
-                    if (!onCreateFile) {
-                      return;
-                    }
-                    setCreateError(null);
-                    void onCreateFile("", name).then(
-                      () => setCreateTarget(null),
-                      (error) => setCreateError(error instanceof Error ? error.message : "Unable to create file."),
-                    );
-                  }}
-                  onCancel={() => {
-                    setCreateTarget(null);
-                    setCreateError(null);
-                  }}
-                  isSubmitting={isCreatingFile}
+                  icon={editing.kind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  placeholder={editing.kind === "folder" ? "new_folder" : "new_file.py"}
+                  onSubmit={(name) => handleSubmitCreate(tree.id, name, editing.kind)}
+                  onCancel={handleCancelCreate}
+                  onChange={() => setCreateError(null)}
+                  isSubmitting={isCreatingEntry}
                   error={createError}
                 />
               </li>
@@ -450,7 +535,7 @@ export function Explorer({
       </aside>
       <ContextMenu
         open={Boolean(contextMenu)}
-        position={contextMenu && contextMenu.position}
+        position={contextMenu ? contextMenu.position : null}
         onClose={() => setContextMenu(null)}
         items={explorerMenuItems}
         appearance={menuAppearance}
@@ -468,17 +553,17 @@ interface ExplorerNodeProps {
   readonly onToggleFolder: (nodeId: string) => void;
   readonly onSelectFile: (fileId: string) => void;
   readonly tokens: ExplorerThemeTokens;
+  readonly theme: ExplorerTheme;
   readonly focusRingClass: string;
-  readonly onContextMenu: (event: React.MouseEvent, node: WorkbenchFileNode) => void;
-  readonly canCreateFile: boolean;
-  readonly isCreatingFile: boolean;
-  readonly pendingCreateFolderId: string | null;
+  readonly onContextMenu: (event: MouseEvent, node: WorkbenchFileNode) => void;
+  readonly editing: CreateTarget;
+  readonly onSubmitCreateEntry: (folderId: string, name: string, kind: "file" | "folder") => Promise<void> | void;
+  readonly onCancelCreateEntry: () => void;
   readonly createError: string | null;
-  readonly onSubmitCreateFile: (folderId: string, fileName: string) => Promise<void> | void;
-  readonly onCancelCreateFile: () => void;
-  readonly canDeleteFile: boolean;
+  readonly isCreatingEntry: boolean;
   readonly deletingFilePath: string | null;
-  readonly onDeleteFile?: (filePath: string) => Promise<void> | void;
+  readonly deletingFolderPath: string | null;
+  readonly onClearCreateError: () => void;
 }
 
 function ExplorerNode({
@@ -490,17 +575,17 @@ function ExplorerNode({
   onToggleFolder,
   onSelectFile,
   tokens,
+  theme,
   focusRingClass,
   onContextMenu,
-  canCreateFile,
-  isCreatingFile,
-  pendingCreateFolderId,
+  editing,
+  onSubmitCreateEntry,
+  onCancelCreateEntry,
   createError,
-  onSubmitCreateFile,
-  onCancelCreateFile,
-  canDeleteFile,
+  isCreatingEntry,
   deletingFilePath,
-  onDeleteFile,
+  deletingFolderPath,
+  onClearCreateError,
 }: ExplorerNodeProps) {
   const paddingLeft = 8 + depth * 16;
   const baseStyle: CSSProperties & { ["--tree-hover-bg"]?: string } = {
@@ -510,6 +595,8 @@ function ExplorerNode({
 
   if (node.kind === "folder") {
     const isOpen = expanded.has(node.id);
+    const isDeleting = deletingFolderPath === node.id;
+    const isEditingHere = editing?.parentId === node.id;
     const folderStyle: CSSProperties = {
       ...baseStyle,
       color: isOpen ? tokens.textPrimary : tokens.textMuted,
@@ -527,15 +614,17 @@ function ExplorerNode({
           className={clsx(
             "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-left font-medium transition hover:bg-[var(--tree-hover-bg)]",
             focusRingClass,
+            isDeleting && "opacity-60",
           )}
           style={folderStyle}
           aria-expanded={isOpen}
+          disabled={isDeleting}
         >
           <ChevronIcon open={isOpen} tokens={tokens} />
           <FolderIcon open={isOpen} tokens={tokens} />
           <span className="truncate">{node.name}</span>
         </button>
-        {isOpen && (node.children?.length || pendingCreateFolderId === node.id) ? (
+        {isOpen ? (
           <ul className="mt-0.5 space-y-0.5">
             {node.children?.map((child) => (
               <ExplorerNode
@@ -548,26 +637,32 @@ function ExplorerNode({
                 onToggleFolder={onToggleFolder}
                 onSelectFile={onSelectFile}
                 tokens={tokens}
+                theme={theme}
                 focusRingClass={focusRingClass}
                 onContextMenu={onContextMenu}
-                canCreateFile={canCreateFile}
-                isCreatingFile={isCreatingFile}
-                pendingCreateFolderId={pendingCreateFolderId}
+                editing={editing}
+                onSubmitCreateEntry={onSubmitCreateEntry}
+                onCancelCreateEntry={onCancelCreateEntry}
                 createError={createError}
-                onSubmitCreateFile={onSubmitCreateFile}
-                onCancelCreateFile={onCancelCreateFile}
-                canDeleteFile={canDeleteFile}
+                isCreatingEntry={isCreatingEntry}
                 deletingFilePath={deletingFilePath}
-                onDeleteFile={onDeleteFile}
+                deletingFolderPath={deletingFolderPath}
+                onClearCreateError={onClearCreateError}
               />
             ))}
-            {pendingCreateFolderId === node.id ? (
+            {isEditingHere ? (
               <li className="pl-2">
-                <CreateFileRow
-                  appearance={tokens === EXPLORER_THEME_TOKENS.dark ? "dark" : "light"}
-                  onSubmit={(name) => onSubmitCreateFile(node.id, name)}
-                  onCancel={onCancelCreateFile}
-                  isSubmitting={isCreatingFile}
+                <CreateEntryRow
+                  appearance={theme}
+                  icon={editing?.kind === "folder" ? <MenuIconNewFolder /> : undefined}
+                  placeholder={editing?.kind === "folder" ? "new_folder" : "new_file.py"}
+                  onSubmit={(name) => {
+                    if (!editing) return;
+                    onSubmitCreateEntry(node.id, name, editing.kind);
+                  }}
+                  onCancel={onCancelCreateEntry}
+                  onChange={onClearCreateError}
+                  isSubmitting={isCreatingEntry}
                   error={createError}
                 />
               </li>
@@ -580,6 +675,7 @@ function ExplorerNode({
 
   const isActive = activeFileId === node.id;
   const isOpen = openFileIds.includes(node.id);
+  const isDeleting = deletingFilePath === node.id;
   const fileAccent = getFileAccent(node.name, node.language);
   const fileStyle: CSSProperties = { ...baseStyle, color: tokens.textPrimary };
   if (isActive) {
@@ -597,24 +693,16 @@ function ExplorerNode({
           "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition hover:bg-[var(--tree-hover-bg)]",
           focusRingClass,
           isActive && "shadow-inner shadow-[#00000033]",
-          deletingFilePath === node.id && "opacity-60",
+          isDeleting && "opacity-60",
         )}
         style={fileStyle}
-        disabled={deletingFilePath === node.id}
+        disabled={isDeleting}
       >
         <span className="inline-flex w-4 justify-center">
-          <FileIcon className={fileAccent} />
+          <FileIcon className={clsx(fileAccent, isOpen && !isActive && "opacity-90", !isOpen && !isActive && "opacity-75")} />
         </span>
-        <span className="flex-1 truncate">{node.name}</span>
-        {isActive ? (
-          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: tokens.badgeActive }}>
-            Active
-          </span>
-        ) : isOpen ? (
-          <span className="text-[9px] uppercase tracking-wide" style={{ color: tokens.badgeOpen }}>
-            Open
-          </span>
-        ) : null}
+        <span className={clsx("flex-1 truncate", isActive && "font-semibold")}>{node.name}</span>
+        {isOpen && !isActive ? <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tokens.badgeOpen }} /> : null}
       </button>
     </li>
   );
@@ -648,10 +736,7 @@ function getFileAccent(name: string, language?: string) {
 function ChevronIcon({ open, tokens }: { readonly open: boolean; readonly tokens: ExplorerThemeTokens }) {
   return (
     <svg
-      className={clsx(
-        "h-3 w-3 flex-shrink-0 transition-transform duration-150",
-        open ? "rotate-90" : undefined,
-      )}
+      className={clsx("h-3 w-3 flex-shrink-0 transition-transform duration-150", open ? "rotate-90" : undefined)}
       viewBox="0 0 10 10"
       aria-hidden
     >
@@ -759,6 +844,22 @@ function MenuIconNewFile() {
   );
 }
 
+function MenuIconNewFolder() {
+  return (
+    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M3.5 5h3.5l1.2 1.4H12.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        fill="none"
+        strokeLinejoin="round"
+      />
+      <path d="M8 8v3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M6.5 9.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function MenuIconExpand() {
   return (
     <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
@@ -777,71 +878,42 @@ function MenuIconCollapseAll() {
   );
 }
 
-function MenuIconClose() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M4 4l8 8m0-8l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconCloseOthers() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <rect x="2.5" y="3" width="8" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.2" fill="none" />
-      <path d="M7 7l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconCloseRight() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path d="M5 3v10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M7 5l5 3-5 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconCloseAll() {
-  return (
-    <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M3.5 4.5h3.5a1 1 0 0 1 1 1V13M12.5 11.5h-3.5a1 1 0 0 1-1-1V3"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-      <path d="M4.5 6.5l7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function MenuIconDelete() {
   return (
     <svg className={MENU_ICON_CLASS} viewBox="0 0 16 16" aria-hidden>
       <path d="M6 3.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M4 4.5h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M5.5 4.5v7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M5.5 4.5v7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-7"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path d="M6.5 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M9.5 6v4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
 
-function CreateFileRow({
+function CreateEntryRow({
   appearance,
   onSubmit,
   onCancel,
+  onChange,
   isSubmitting,
   error,
+  placeholder = "new_file.py",
+  icon,
 }: {
   readonly appearance: "light" | "dark";
   readonly onSubmit: (fileName: string) => void;
   readonly onCancel: () => void;
+  readonly onChange?: () => void;
   readonly isSubmitting: boolean;
   readonly error: string | null;
+  readonly placeholder?: string;
+  readonly icon?: ReactNode;
 }) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -849,9 +921,15 @@ function CreateFileRow({
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
+
+  const handleSubmit = useCallback(() => {
+    onSubmit(value.trim());
+  }, [onSubmit, value]);
+
   const muted = appearance === "dark" ? "text-slate-300" : "text-slate-600";
   const bg = appearance === "dark" ? "#232323" : "#e8e8e8";
   const border = appearance === "dark" ? "#2f2f2f" : "#d4d4d4";
+
   return (
     <div
       className="rounded-md border px-2 py-1"
@@ -859,17 +937,18 @@ function CreateFileRow({
       onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex w-4 justify-center text-[#4fc1ff]">
-          <MenuIconNewFile />
-        </span>
+        <span className="inline-flex w-4 justify-center text-[#4fc1ff]">{icon ?? <MenuIconNewFile />}</span>
         <input
           ref={inputRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            setValue(event.target.value);
+            onChange?.();
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              onSubmit(value.trim());
+              handleSubmit();
             }
             if (event.key === "Escape") {
               event.preventDefault();
@@ -877,18 +956,16 @@ function CreateFileRow({
             }
           }}
           className="flex-1 rounded-sm border border-transparent bg-white/80 px-2 py-1 text-[13px] text-slate-900 outline-none focus:border-[#007acc]"
-          placeholder="new_file.py"
+          placeholder={placeholder}
           disabled={isSubmitting}
         />
         <button
           type="button"
           className={clsx(
             "rounded-sm px-2 py-1 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]",
-            isSubmitting
-              ? "cursor-wait bg-slate-300 text-slate-500"
-              : "bg-[#007acc] text-white hover:bg-[#0e78c6]",
+            isSubmitting ? "cursor-wait bg-slate-300 text-slate-500" : "bg-[#007acc] text-white hover:bg-[#0e78c6]",
           )}
-          onClick={() => onSubmit(value.trim())}
+          onClick={handleSubmit}
           disabled={isSubmitting}
         >
           {isSubmitting ? "Creating…" : "Create"}
@@ -902,9 +979,7 @@ function CreateFileRow({
           Cancel
         </button>
       </div>
-      <div className={clsx("mt-1 text-[11px]", muted)}>
-        Enter a name and press Enter. Escape to cancel.
-      </div>
+      <div className={clsx("mt-1 text-[11px]", muted)}>Enter a name and press Enter. Escape to cancel.</div>
       {error ? <div className="mt-1 text-[11px] font-semibold text-danger-500">{error}</div> : null}
     </div>
   );

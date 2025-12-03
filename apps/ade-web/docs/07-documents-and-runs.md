@@ -52,7 +52,7 @@ Key property: **Documents and Runs are loosely coupled.**
 
 ADE Web distinguishes three related concepts:
 
-* **Build** – prepares or refreshes the environment for a configuration version.
+* **Build** – prepares or refreshes the environment for a configuration.
 
   * Lives under `/builds` endpoints.
   * Represented by the `Build` type.
@@ -398,7 +398,7 @@ Semantics:
   * Runs started from the Runs screen,
   * Configuration‑scoped runs from Configuration Builder.
 * ADE Web **never infers** run status; it always displays what the backend reports.
-* Regardless of how the run was created (`/workspaces/{workspace_id}/runs` or `/configurations/{configuration_id}/runs`), each run:
+* Runs are created via `/configurations/{configuration_id}/runs`; once created, each run:
 
   * Has a globally unique `runId`.
   * Is accessible as `/api/v1/runs/{run_id}`.
@@ -572,63 +572,32 @@ General UI rules:
 * Defaults are a product decision and can be remembered per document (see §8).
 * This section is the **canonical definition** of `RunOptions`; other docs should link here instead of redefining the shape.
 
-### 7.2 Workspace‑level run creation (Documents & Runs)
+### 7.2 Run creation (Documents, Runs, Configuration Builder)
 
-From the **Documents** screen:
+All run submissions target the configuration-scoped endpoint:
 
-1. User clicks “Run extraction” on a document row.
+```text
+POST /api/v1/configurations/{configuration_id}/runs
+```
 
-2. ADE Web opens `RunDocumentDialog` with:
+Common payload fields:
 
-   * Selected document pre‑filled.
-   * Preferred configuration / version / sheets preloaded from per‑document preferences (if any).
+* `input_document_ids: [...]` (usually one document from Documents; may be multiple from Runs).
+* Optional `input_sheet_names`.
+* Run options mapped from `RunOptions` → snake_case (`dry_run`, `validate_only`, `force_rebuild`).
+* `stream` flag when inline streaming is desired (Configuration Builder often sets this to `true`).
 
-3. On submit, ADE Web calls:
+Flows:
 
-   ```text
-   POST /api/v1/workspaces/{workspace_id}/runs
-   ```
-
-   with payload including:
-
-   * `input_document_ids: [documentId]`
-   * Optional `input_sheet_names`
-   * Optional run options mapped from `RunOptions` → snake_case:
-
-     * `dry_run`, `validate_only`, `force_rebuild`
-   * Selected configuration and version identifiers.
-
-4. On success:
-
-   * Show a success toast.
-   * Optionally navigate to the Run detail view.
-   * Invalidate runs and documents queries.
-
-From the **Runs** screen:
-
-* A “New run” action can open a similar dialog, but allow users to select **multiple** documents before submitting.
-
-### 7.3 Configuration‑scoped runs (Configuration Builder)
-
-Configuration Builder uses configuration‑scoped runs mainly for **validation** and **test** scenarios.
-
-* Endpoint:
+* **Documents screen** – `RunDocumentDialog` pre-fills the selected document and preferred configuration/version/sheets. On submit, it calls the endpoint above and invalidates runs/documents queries or navigates to run detail.
+* **Runs screen** – “New run” allows selecting multiple documents and a configuration, then calls the same endpoint.
+* **Configuration Builder** – uses the same endpoint (typically with `stream: true`) for validation/test runs and streams events into the workbench console via:
 
   ```text
-  POST /api/v1/configurations/{configuration_id}/runs
+  GET /api/v1/runs/{run_id}/events?stream=true
   ```
 
-  with a similar payload structure to workspace‑level runs.
-
-* The response includes a `run_id`.
-
-* ADE Web streams that run’s events into the workbench console via:
-
-  ```text
-  GET /api/v1/runs/{run_id}/logs
-  ```
-
-Semantics (status transitions, options, outputs) are identical to workspace runs; only the **entry point** and **visual context** differ. More detail lives in `09-workbench-editor-and-scripting.md`.
+Responses include `run_id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, outputs) are identical regardless of surface.
 
 ---
 
@@ -742,47 +711,29 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/workspaces/{workspace_id}/runs`
   List runs in a workspace (filters by status, configuration, initiator, date).
 
-* `POST /api/v1/workspaces/{workspace_id}/runs`
-  Start a new workspace‑level run (used by Documents and Runs screens).
-
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}`
-  Workspace‑scoped run detail.
-
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logfile`
-  Download telemetry log.
-
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs`
-  List individual output files for a run.
-
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/outputs/{output_path}`
-  Download a single output file.
-
-* `GET /api/v1/workspaces/{workspace_id}/runs/{run_id}/logs`
-  Run event stream (NDJSON preferred; log file is acceptable fallback).
-
-### 9.3 Configuration‑scoped runs
-
-Used primarily by Configuration Builder:
-
-* `POST /api/v1/configurations/{configuration_id}/runs`
-  Start a configuration‑scoped run.
+### 9.3 Run detail & artifacts (global)
 
 * `GET /api/v1/runs/{run_id}`
   Global run detail.
 
-* `GET /api/v1/runs/{run_id}/logfile`
+* `GET /api/v1/runs/{run_id}/logs`
   Download telemetry log.
 
 * `GET /api/v1/runs/{run_id}/outputs`
-  List individual output files.
+  List individual output files for a run.
 
 * `GET /api/v1/runs/{run_id}/outputs/{output_path}`
   Download a single output file.
 
-* `GET /api/v1/runs/{run_id}/logs`
-  NDJSON event stream.
+* `GET /api/v1/runs/{run_id}/events?stream=true`
+  Run event stream (NDJSON SSE; log file is acceptable fallback).
 
-All run endpoints should share consistent `RunStatus` values and event semantics.
+### 9.4 Run creation (configuration-scoped)
+
+* `POST /api/v1/configurations/{configuration_id}/runs`
+  Start a run for a configuration (used by Documents, Runs, and Configuration Builder surfaces).
+
+All run endpoints share consistent `RunStatus` values and event semantics.
 
 ---
 
@@ -831,7 +782,7 @@ To keep Documents and Runs predictable (for both humans and agents), ADE Web rel
 
 3. **Runs are append‑only.**
    Runs are created, progress, and complete; they are not edited afterward.
-   “Run again” always creates a new run using the previous run’s configuration version, document set, and run options unless the user explicitly changes them.
+   “Run again” always creates a new run using the previous run’s configuration, document set, and run options unless the user explicitly changes them.
 
 4. **Per‑document run preferences are hints, not configuration.**
    Preferences only influence UI defaults. If configurations or versions disappear or become invalid, those preferences are ignored.

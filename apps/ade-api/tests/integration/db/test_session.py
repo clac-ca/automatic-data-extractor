@@ -10,9 +10,9 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.shared.db.engine import get_engine
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.shared.db.session import get_session
+from ade_api.infra.db.engine import get_engine
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.db.session import get_session
 
 
 @pytest.mark.asyncio
@@ -25,6 +25,7 @@ async def test_session_dependency_commits_and_populates_context(
 
     route_path = "/__tests__/configurations"
     workspace_id = seed_identity["workspace_id"]
+    workspace_id_str = str(workspace_id)
 
     if not any(route.path == route_path for route in app.router.routes):
 
@@ -36,14 +37,13 @@ async def test_session_dependency_commits_and_populates_context(
             assert isinstance(session, AsyncSession)
             assert request.state.db_session is session
 
-            configuration_id = generate_ulid()
+            configuration_id = str(generate_uuid7())
             now_iso = datetime.now(UTC).isoformat()
             payload = {
                 "id": configuration_id,
-                "workspace_id": workspace_id,
+                "workspace_id": workspace_id_str,
                 "display_name": "Session Configuration",
                 "status": "draft",
-                "configuration_version": 0,
                 "content_digest": None,
                 "activated_at": None,
                 "created_at": now_iso,
@@ -57,7 +57,6 @@ async def test_session_dependency_commits_and_populates_context(
                         workspace_id,
                         display_name,
                         status,
-                        configuration_version,
                         content_digest,
                         activated_at,
                         created_at,
@@ -67,7 +66,6 @@ async def test_session_dependency_commits_and_populates_context(
                         :workspace_id,
                         :display_name,
                         :status,
-                        :configuration_version,
                         :content_digest,
                         :activated_at,
                         :created_at,

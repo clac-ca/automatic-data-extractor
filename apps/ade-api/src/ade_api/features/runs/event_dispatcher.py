@@ -6,14 +6,15 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
 
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.time import utc_now
+from ade_api.infra.storage import workspace_run_root
 from ade_api.settings import Settings
-from ade_api.shared.core.ids import generate_ulid
-from ade_api.shared.core.time import utc_now
-from ade_api.storage_layout import workspace_run_root
 
 __all__ = [
     "RunEventDispatcher",
@@ -27,9 +28,9 @@ __all__ = [
 class RunEventSubscription:
     """Live stream handle for a run's event stream."""
 
-    run_id: str
+    run_id: UUID
     _queue: asyncio.Queue[AdeEvent | None]
-    _on_close: Callable[[str, asyncio.Queue[AdeEvent | None]], None]
+    _on_close: Callable[[UUID, asyncio.Queue[AdeEvent | None]], None]
     _closed: bool = False
 
     def __aiter__(self) -> AsyncIterator[AdeEvent]:
@@ -55,8 +56,8 @@ class RunEventStorage:
     def __init__(self, *, settings: Settings) -> None:
         self._settings = settings
 
-    def events_path(self, *, workspace_id: str, run_id: str, create: bool = True) -> Path:
-        run_dir = workspace_run_root(self._settings, workspace_id, run_id)
+    def events_path(self, *, workspace_id: UUID, run_id: UUID, create: bool = True) -> Path:
+        run_dir = workspace_run_root(self._settings, str(workspace_id), str(run_id))
         logs_dir = run_dir / "logs"
         if create:
             logs_dir.mkdir(parents=True, exist_ok=True)
@@ -74,11 +75,15 @@ class RunEventStorage:
     def iter_events(
         self,
         *,
-        workspace_id: str,
-        run_id: str,
+        workspace_id: UUID,
+        run_id: UUID,
         after_sequence: int | None = None,
     ) -> Iterable[AdeEvent]:
-        path = self.events_path(workspace_id=workspace_id, run_id=run_id, create=False)
+        path = self.events_path(
+            workspace_id=workspace_id,
+            run_id=run_id,
+            create=False,
+        )
 
         def _iter() -> Iterable[AdeEvent]:
             if not path.exists():
@@ -95,7 +100,7 @@ class RunEventStorage:
 
         return _iter()
 
-    def last_sequence(self, *, workspace_id: str, run_id: str) -> int:
+    def last_sequence(self, *, workspace_id: UUID, run_id: UUID) -> int:
         last_seen = 0
         for event in self.iter_events(workspace_id=workspace_id, run_id=run_id):
             if event.sequence:
@@ -117,24 +122,24 @@ class RunEventDispatcher:
         self,
         *,
         storage: RunEventStorage,
-        id_factory: Callable[[], str] = generate_ulid,
+        id_factory: Callable[[], UUID] = generate_uuid7,
     ) -> None:
         self.storage = storage
         self._id_factory = id_factory
-        self._sequence_by_run: dict[str, int] = {}
-        self._subscribers: dict[str, set[asyncio.Queue[AdeEvent | None]]] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+        self._sequence_by_run: dict[UUID, int] = {}
+        self._subscribers: dict[UUID, set[asyncio.Queue[AdeEvent | None]]] = {}
+        self._locks: dict[UUID, asyncio.Lock] = {}
 
     async def emit(
         self,
         *,
         type: str,
-        workspace_id: str,
-        configuration_id: str,
-        run_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        run_id: UUID,
         payload: AdeEventPayload | dict[str, Any] | None = None,
         source: str = "api",
-        build_id: str | None = None,
+        build_id: UUID | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
             payload = payload.model_dump()
@@ -156,7 +161,7 @@ class RunEventDispatcher:
         return event
 
     @asynccontextmanager
-    async def subscribe(self, run_id: str) -> AsyncIterator[RunEventSubscription]:
+    async def subscribe(self, run_id: UUID) -> AsyncIterator[RunEventSubscription]:
         queue: asyncio.Queue[AdeEvent | None] = asyncio.Queue()
         if run_id not in self._subscribers:
             self._subscribers[run_id] = set()
@@ -168,14 +173,16 @@ class RunEventDispatcher:
             await subscription.close()
 
     async def _publish(self, event: AdeEvent) -> None:
-        for queue in list(self._subscribers.get(event.run_id or "", [])):
+        if event.run_id is None:
+            return
+        for queue in list(self._subscribers.get(event.run_id, [])):
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 continue
 
     def _remove_subscriber(
-        self, run_id: str, queue: asyncio.Queue[AdeEvent | None]
+        self, run_id: UUID, queue: asyncio.Queue[AdeEvent | None]
     ) -> None:
         subscribers = self._subscribers.get(run_id)
         if not subscribers:
@@ -184,7 +191,7 @@ class RunEventDispatcher:
         if not subscribers:
             self._subscribers.pop(run_id, None)
 
-    async def _next_sequence(self, *, workspace_id: str, run_id: str) -> int:
+    async def _next_sequence(self, *, workspace_id: UUID, run_id: UUID) -> int:
         lock = self._locks.setdefault(run_id, asyncio.Lock())
         async with lock:
             if run_id not in self._sequence_by_run:
@@ -200,7 +207,7 @@ class RunEventDispatcher:
 class RunEventLogReader:
     """Streaming iterator for a run's persisted events."""
 
-    def __init__(self, *, storage: RunEventStorage, workspace_id: str, run_id: str) -> None:
+    def __init__(self, *, storage: RunEventStorage, workspace_id: UUID, run_id: UUID) -> None:
         self._storage = storage
         self._workspace_id = workspace_id
         self._run_id = run_id

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
-import { useInviteUserMutation } from "@shared/users/hooks/useInviteUserMutation";
 import {
   useAddWorkspaceMemberMutation,
   useRemoveWorkspaceMemberMutation,
@@ -21,14 +20,13 @@ import { Avatar } from "@ui/Avatar";
 
 export function WorkspaceMembersSection() {
   const { workspace, hasPermission } = useWorkspaceContext();
-  const canManageMembers = hasPermission("Workspace.Members.ReadWrite");
+  const canManageMembers = hasPermission("workspace.members.manage");
   const membersQuery = useWorkspaceMembersQuery(workspace.id);
   const rolesQuery = useWorkspaceRolesQuery(workspace.id);
 
   const addMember = useAddWorkspaceMemberMutation(workspace.id);
   const updateMemberRoles = useUpdateWorkspaceMemberRolesMutation(workspace.id);
   const removeMember = useRemoveWorkspaceMemberMutation(workspace.id);
-  const inviteUserMutation = useInviteUserMutation();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [roleDraft, setRoleDraft] = useState<string[]>([]);
@@ -36,9 +34,6 @@ export function WorkspaceMembersSection() {
   const [inviteRoleIds, setInviteRoleIds] = useState<string[]>([]);
   const [inviteSearch, setInviteSearch] = useState<string>("");
   const [debouncedInviteSearch, setDebouncedInviteSearch] = useState<string>("");
-  const [inviteOption, setInviteOption] = useState<"existing" | "new">("existing");
-  const [inviteEmail, setInviteEmail] = useState<string>("");
-  const [inviteDisplayName, setInviteDisplayName] = useState<string>("");
   const [memberSearch, setMemberSearch] = useState<string>("");
   const [feedbackMessage, setFeedbackMessage] = useState<{ tone: "success" | "danger"; message: string } | null>(null);
 
@@ -55,6 +50,14 @@ export function WorkspaceMembersSection() {
     pageSize: 50,
   });
 
+  const userLookup = useMemo(() => {
+    const map = new Map<string, UserSummary>();
+    for (const user of usersQuery.users) {
+      map.set(user.id, user);
+    }
+    return map;
+  }, [usersQuery.users]);
+
   const roleLookup = useMemo(() => {
     const map = new Map<string, RoleDefinition>();
     for (const role of rolesQuery.data?.items ?? []) {
@@ -65,14 +68,18 @@ export function WorkspaceMembersSection() {
 
   const members = useMemo(() => {
     const list = membersQuery.data?.items ?? [];
+    const withUser = list.map((member) => ({
+      ...member,
+      user: member.user ?? userLookup.get(member.user_id),
+    }));
     const collator = new Intl.Collator("en", { sensitivity: "base" });
-    return Array.from(list).sort((a, b) => {
-      const nameA = a.user.display_name ?? a.user.email;
-      const nameB = b.user.display_name ?? b.user.email;
+    return withUser.sort((a, b) => {
+      const nameA = a.user?.display_name ?? a.user?.email ?? a.user_id;
+      const nameB = b.user?.display_name ?? b.user?.email ?? b.user_id;
       return collator.compare(nameA ?? "", nameB ?? "");
     });
-  }, [membersQuery.data]);
-  const memberIds = useMemo(() => new Set(members.map((member) => member.user.id)), [members]);
+  }, [membersQuery.data, userLookup]);
+  const memberIds = useMemo(() => new Set(members.map((member) => member.user?.id ?? member.user_id)), [members]);
 
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const filteredMembers = useMemo(() => {
@@ -80,12 +87,12 @@ export function WorkspaceMembersSection() {
       return members;
     }
     return members.filter((member) => {
-      const name = member.user.display_name ?? "";
-      const email = member.user.email ?? "";
+      const name = member.user?.display_name ?? "";
+      const email = member.user?.email ?? "";
       return (
         name.toLowerCase().includes(normalizedMemberSearch) ||
         email.toLowerCase().includes(normalizedMemberSearch) ||
-        member.id.toLowerCase().includes(normalizedMemberSearch)
+        member.user_id.toLowerCase().includes(normalizedMemberSearch)
       );
     });
   }, [members, normalizedMemberSearch]);
@@ -107,7 +114,7 @@ export function WorkspaceMembersSection() {
   const normalizedInviteSearch = inviteSearch.trim().toLowerCase();
   const serverInviteSearch = debouncedInviteSearch.trim().toLowerCase();
   const usingServerSearch = serverInviteSearch.length >= 2;
-  const inviteSearchTooShort = inviteOption === "existing" && inviteSearch.trim().length > 0 && inviteSearch.trim().length < 2;
+  const inviteSearchTooShort = inviteSearch.trim().length > 0 && inviteSearch.trim().length < 2;
   const filteredAvailableUsers = useMemo(() => {
     if (!normalizedInviteSearch || usingServerSearch) {
       return availableUsers;
@@ -122,18 +129,13 @@ export function WorkspaceMembersSection() {
   }, [availableUsers, normalizedInviteSearch, usingServerSearch]);
 
   const selectedInviteUser = useMemo(
-    () =>
-      inviteOption === "existing"
-        ? availableUsers.find((user) => user.id === inviteUserId)
-        : undefined,
-    [availableUsers, inviteOption, inviteUserId],
+    () => availableUsers.find((user) => user.id === inviteUserId),
+    [availableUsers, inviteUserId],
   );
 
   const availableRoles = useMemo(() => {
     const collator = new Intl.Collator("en", { sensitivity: "base" });
-    return (rolesQuery.data?.items ?? [])
-      .filter((role) => role.scope_type === "workspace")
-      .sort((a, b) => collator.compare(a.name, b.name));
+    return (rolesQuery.data?.items ?? []).sort((a, b) => collator.compare(a.name, b.name));
   }, [rolesQuery.data]);
 
   const handleToggleRoleDraft = (roleId: string, selected: boolean) => {
@@ -155,8 +157,8 @@ export function WorkspaceMembersSection() {
   };
 
   const startEdit = (member: WorkspaceMember) => {
-    setEditingId(member.id);
-    setRoleDraft(member.roles);
+    setEditingId(member.user_id);
+    setRoleDraft(member.role_ids);
     setFeedbackMessage(null);
   };
 
@@ -171,7 +173,7 @@ export function WorkspaceMembersSection() {
     }
     setFeedbackMessage(null);
     updateMemberRoles.mutate(
-      { membershipId: editingId, roleIds: roleDraft },
+      { userId: editingId, roleIds: roleDraft },
       {
         onSuccess: () => {
           setFeedbackMessage({ tone: "success", message: "Member roles updated." });
@@ -190,12 +192,14 @@ export function WorkspaceMembersSection() {
     if (!canManageMembers) {
       return;
     }
-    const confirmed = window.confirm(`Remove ${member.user.display_name ?? member.user.email} from the workspace?`);
+    const confirmed = window.confirm(
+      `Remove ${member.user?.display_name ?? member.user?.email ?? member.user_id} from the workspace?`,
+    );
     if (!confirmed) {
       return;
     }
     setFeedbackMessage(null);
-    removeMember.mutate(member.id, {
+    removeMember.mutate(member.user_id, {
       onSuccess: () => {
         setFeedbackMessage({ tone: "success", message: "Member removed." });
       },
@@ -207,91 +211,54 @@ export function WorkspaceMembersSection() {
     });
   };
 
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isInvitePending = addMember.isPending || inviteUserMutation.isPending;
-  const canSubmitInvite =
-    inviteOption === "existing"
-      ? Boolean(inviteUserId)
-      : emailPattern.test(inviteEmail.trim());
+  const isInvitePending = addMember.isPending;
+  const canSubmitInvite = Boolean(inviteUserId) && inviteRoleIds.length > 0;
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFeedbackMessage(null);
     try {
-      if (inviteOption === "existing") {
-        if (!inviteUserId) {
-          setFeedbackMessage({ tone: "danger", message: "Select a user to invite." });
-          return;
-        }
-        const user = availableUsers.find((candidate) => candidate.id === inviteUserId);
-        if (!user) {
-          setFeedbackMessage({ tone: "danger", message: "Selected user is no longer available." });
-          return;
-        }
-        await addMember.mutateAsync({ user, roleIds: inviteRoleIds });
-        setInviteUserId("");
-        setInviteRoleIds([]);
-        setInviteSearch("");
-        setFeedbackMessage({
-          tone: "success",
-          message: `${user.display_name ?? user.email} added to the workspace.`,
-        });
+      if (!inviteUserId) {
+        setFeedbackMessage({ tone: "danger", message: "Select a user to add." });
         return;
       }
-
-      const normalizedEmail = inviteEmail.trim().toLowerCase();
-      if (!normalizedEmail || !emailPattern.test(normalizedEmail)) {
-        setFeedbackMessage({ tone: "danger", message: "Enter a valid email address to send an invite." });
+      if (inviteRoleIds.length === 0) {
+        setFeedbackMessage({ tone: "danger", message: "Select at least one role for this member." });
         return;
       }
-
-      const invitedUser = await inviteUserMutation.mutateAsync({
-        email: normalizedEmail,
-        displayName: inviteDisplayName.trim() || undefined,
-      });
-
-      await addMember.mutateAsync({ user: invitedUser, roleIds: inviteRoleIds });
-      setInviteEmail("");
-      setInviteDisplayName("");
+      const user =
+        availableUsers.find((candidate) => candidate.id === inviteUserId) ??
+        userLookup.get(inviteUserId);
+      if (!user) {
+        setFeedbackMessage({ tone: "danger", message: "Selected user is no longer available." });
+        return;
+      }
+      await addMember.mutateAsync({ user, roleIds: inviteRoleIds });
+      setInviteUserId("");
       setInviteRoleIds([]);
+      setInviteSearch("");
       setFeedbackMessage({
         tone: "success",
-        message: `Invitation sent to ${invitedUser.display_name ?? invitedUser.email}.`,
+        message: `${user.display_name ?? user.email} added to the workspace.`,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to invite member.";
+      const message = error instanceof Error ? error.message : "Unable to add member.";
       setFeedbackMessage({ tone: "danger", message });
     }
   };
 
   useEffect(() => {
-    if (inviteOption !== "existing" || !selectedInviteUser) {
+    if (!selectedInviteUser) {
       return;
     }
     if (!filteredAvailableUsers.some((user) => user.id === selectedInviteUser.id)) {
       setInviteSearch("");
     }
-  }, [filteredAvailableUsers, inviteOption, selectedInviteUser]);
-
-  useEffect(() => {
-    setFeedbackMessage(null);
-    if (inviteOption === "existing") {
-      setInviteEmail("");
-      setInviteDisplayName("");
-      return;
-    }
-    setInviteUserId("");
-    setInviteSearch("");
-  }, [inviteOption]);
+  }, [filteredAvailableUsers, selectedInviteUser]);
 
   const resetInviteDraft = () => {
-    if (inviteOption === "existing") {
-      setInviteUserId("");
-      setInviteSearch("");
-    } else {
-      setInviteEmail("");
-      setInviteDisplayName("");
-    }
+    setInviteUserId("");
+    setInviteSearch("");
     setInviteRoleIds([]);
   };
 
@@ -315,158 +282,82 @@ export function WorkspaceMembersSection() {
           className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"
         >
           <header className="space-y-1">
-            <h2 className="text-lg font-semibold text-slate-900">Invite member</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Add member</h2>
             <p className="text-sm text-slate-500">
-              Invite someone new by email or add an existing teammate, then choose the roles that reflect what they should be able
-              to do here.
+              Add an existing teammate and choose the roles that reflect what they should be able to do here.
             </p>
           </header>
           {usersQuery.isError ? (
             <Alert tone="warning">
-              We couldn't load the user directory. Retry or invite later.
+              We couldn't load the user directory. Retry or add a member later.
             </Alert>
           ) : null}
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-semibold text-slate-700">Invite method</legend>
-            <p className="text-xs text-slate-500">Choose whether you are inviting someone who already has an account or sending a brand-new invite.</p>
-            <div className="flex flex-wrap gap-2">
-              <label
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                  inviteOption === "existing"
-                    ? "border-brand-300 bg-brand-50 text-brand-700"
-                    : "border-slate-200 bg-white text-slate-600"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="invite-method"
-                  value="existing"
-                  checked={inviteOption === "existing"}
-                  onChange={() => setInviteOption("existing")}
-                  disabled={isInvitePending}
-                  className="h-4 w-4"
-                />
-                <span>Existing teammate</span>
-              </label>
-              <label
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-                  inviteOption === "new"
-                    ? "border-brand-300 bg-brand-50 text-brand-700"
-                    : "border-slate-200 bg-white text-slate-600"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="invite-method"
-                  value="new"
-                  checked={inviteOption === "new"}
-                  onChange={() => setInviteOption("new")}
-                  disabled={isInvitePending}
-                  className="h-4 w-4"
-                />
-                <span>Invite by email</span>
-              </label>
-            </div>
-          </fieldset>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-4">
-              {inviteOption === "existing" ? (
-                <>
-                  <FormField
-                    label="Search directory"
-                    hint="Filter by name or email to quickly find a teammate."
+              <FormField
+                label="Search directory"
+                hint="Filter by name or email to quickly find a teammate."
+              >
+                <Input
+                  value={inviteSearch}
+                  onChange={(event) => setInviteSearch(event.target.value)}
+                  placeholder="e.g. Casey or casey@example.com"
+                  disabled={isInvitePending || usersLoading}
+                />
+              </FormField>
+              {inviteSearchTooShort ? (
+                <p className="text-xs text-slate-500">
+                  Enter at least two characters to search the full directory.
+                </p>
+              ) : null}
+              {usersQuery.isError ? (
+                <p className="text-xs text-rose-600">Unable to load users. Try again shortly.</p>
+              ) : null}
+              <FormField label="User" required>
+                <Select
+                  value={inviteUserId}
+                  onChange={(event) => {
+                    setInviteUserId(event.target.value);
+                    if (event.target.value) {
+                      setInviteSearch("");
+                    }
+                  }}
+                  disabled={isInvitePending || usersLoading}
+                  required
+                >
+                  <option value="">Select a user</option>
+                  {selectedInviteUser &&
+                  !filteredAvailableUsers.some((user) => user.id === selectedInviteUser.id) ? (
+                    <option value={selectedInviteUser.id}>
+                      {selectedInviteUser.display_name
+                        ? `${selectedInviteUser.display_name} (${selectedInviteUser.email})`
+                        : selectedInviteUser.email}
+                    </option>
+                  ) : null}
+                  {filteredAvailableUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.display_name ? `${user.display_name} (${user.email})` : user.email}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              {filteredAvailableUsers.length === 0 && inviteSearch ? (
+                <p className="text-xs text-slate-500">
+                  No users matched "{inviteSearch}". Clear the search to see everyone.
+                </p>
+              ) : null}
+              {usersQuery.hasNextPage ? (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => usersQuery.fetchNextPage()}
+                    disabled={usersLoading || usersFetchingMore}
                   >
-                    <Input
-                      value={inviteSearch}
-                      onChange={(event) => setInviteSearch(event.target.value)}
-                      placeholder="e.g. Casey or casey@example.com"
-                      disabled={isInvitePending || usersLoading}
-                    />
-                  </FormField>
-                  {inviteSearchTooShort ? (
-                    <p className="text-xs text-slate-500">
-                      Enter at least two characters to search the full directory.
-                    </p>
-                  ) : null}
-                  {usersQuery.isError ? (
-                    <p className="text-xs text-rose-600">Unable to load users. Try again shortly.</p>
-                  ) : null}
-                  <FormField label="User" required>
-                    <Select
-                      value={inviteUserId}
-                      onChange={(event) => {
-                        setInviteUserId(event.target.value);
-                        if (event.target.value) {
-                          setInviteSearch("");
-                        }
-                      }}
-                      disabled={isInvitePending || usersLoading}
-                      required
-                    >
-                      <option value="">Select a user</option>
-                      {selectedInviteUser &&
-                      !filteredAvailableUsers.some((user) => user.id === selectedInviteUser.id) ? (
-                        <option value={selectedInviteUser.id}>
-                          {selectedInviteUser.display_name
-                            ? `${selectedInviteUser.display_name} (${selectedInviteUser.email})`
-                            : selectedInviteUser.email}
-                        </option>
-                      ) : null}
-                      {filteredAvailableUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.display_name ? `${user.display_name} (${user.email})` : user.email}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  {filteredAvailableUsers.length === 0 && inviteSearch ? (
-                    <p className="text-xs text-slate-500">
-                      No users matched "{inviteSearch}". Clear the search to see everyone.
-                    </p>
-                  ) : null}
-                  {usersQuery.hasNextPage ? (
-                    <div className="pt-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => usersQuery.fetchNextPage()}
-                        disabled={usersLoading || usersFetchingMore}
-                      >
-                        {usersFetchingMore ? "Loading more users…" : "Load more users"}
-                      </Button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <FormField label="Email" required>
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(event) => setInviteEmail(event.target.value)}
-                      placeholder="name@example.com"
-                      autoComplete="off"
-                      disabled={isInvitePending}
-                      required
-                    />
-                  </FormField>
-                  <FormField
-                    label="Display name"
-                    hint="Optional – helps teammates recognise them."
-                  >
-                    <Input
-                      value={inviteDisplayName}
-                      onChange={(event) => setInviteDisplayName(event.target.value)}
-                      placeholder="Casey Lee"
-                      autoComplete="off"
-                      disabled={isInvitePending}
-                    />
-                  </FormField>
-                  <p className="text-xs text-slate-500">
-                    We'll email an invitation so they can create their account and join this workspace.
-                  </p>
-                </>
-              )}
+                    {usersFetchingMore ? "Loading more users…" : "Load more users"}
+                  </Button>
+                </div>
+              ) : null}
             </div>
 
             <fieldset className="space-y-3">
@@ -502,15 +393,13 @@ export function WorkspaceMembersSection() {
           </div>
 
           <div className="flex justify-end gap-2">
-            {(inviteOption === "existing"
-            ? inviteUserId || inviteSearch || inviteRoleIds.length > 0
-            : inviteEmail || inviteDisplayName || inviteRoleIds.length > 0) ? (
+            {inviteUserId || inviteSearch || inviteRoleIds.length > 0 ? (
               <Button type="button" variant="ghost" onClick={resetInviteDraft} disabled={isInvitePending}>
                 Clear
               </Button>
             ) : null}
             <Button type="submit" isLoading={isInvitePending} disabled={!canSubmitInvite || isInvitePending}>
-              {inviteOption === "existing" ? "Add member" : "Send invite"}
+              Add member
             </Button>
           </div>
         </form>
@@ -544,7 +433,7 @@ export function WorkspaceMembersSection() {
           <p className="text-sm text-slate-600">Loading members…</p>
         ) : members.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            No members yet. Invite teammates to collaborate on this workspace.
+            No members yet. Add teammates to collaborate on this workspace.
           </p>
         ) : filteredMembers.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
@@ -553,27 +442,22 @@ export function WorkspaceMembersSection() {
         ) : (
           <ul className="space-y-4" role="list">
             {filteredMembers.map((member) => {
-              const userLabel = member.user.display_name ?? member.user.email;
-              const roleChips = member.roles.map((roleId) => roleLookup.get(roleId)?.name ?? roleId);
-              const isEditing = editingId === member.id;
+              const userLabel = member.user?.display_name ?? member.user?.email ?? member.user_id;
+              const roleChips = member.role_ids.map((roleId) => roleLookup.get(roleId)?.name ?? roleId);
+              const isEditing = editingId === member.user_id;
               return (
                 <li
-                  key={member.id}
+                  key={member.user_id}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <Avatar name={member.user.display_name} email={member.user.email} size="sm" />
+                      <Avatar name={member.user?.display_name} email={member.user?.email} size="sm" />
                       <div className="space-y-1">
                         <p className="text-base font-semibold text-slate-900">{userLabel}</p>
-                        <p className="text-sm text-slate-500">{member.user.email}</p>
+                        <p className="text-sm text-slate-500">{member.user?.email ?? member.user_id}</p>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          {member.is_default ? (
-                            <span className="inline-flex items-center rounded-full bg-brand-100 px-2 py-0.5 font-semibold text-brand-700">
-                              Default workspace
-                            </span>
-                          ) : null}
-                          <span>ID: {member.id}</span>
+                          <span>ID: {member.user_id}</span>
                         </div>
                       </div>
                     </div>
@@ -609,7 +493,7 @@ export function WorkspaceMembersSection() {
                     {roleChips.length > 0 ? (
                       roleChips.map((roleName) => (
                         <span
-                          key={`${member.id}-${roleName}`}
+                          key={`${member.user_id}-${roleName}`}
                           className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm"
                         >
                           {roleName}

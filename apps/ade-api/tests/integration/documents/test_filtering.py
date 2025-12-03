@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -11,18 +12,23 @@ from ade_api.features.documents.filters import (
     DocumentStatus,
 )
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.shared.sorting import parse_sort, resolve_sort
+from ade_api.common.sorting import parse_sort, resolve_sort
 
 
 def test_document_filters_normalise_sets_and_strings() -> None:
+    uploader_one = str(uuid4())
+    uploader_two = str(uuid4())
     filters = DocumentFilters(
-        status_in=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED],
-        source_in=[DocumentSource.MANUAL_UPLOAD, DocumentSource.MANUAL_UPLOAD.value],
+        status_in=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED.value],
+        source_in=[
+            DocumentSource.MANUAL_UPLOAD.value,
+            DocumentSource.MANUAL_UPLOAD.value,
+        ],
         tags_in=[" alpha ", "beta", "alpha", ""],
         uploader_id_in=[
-            "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
-            "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
-            "01H8M8Z1QB9X4Y7V5T2R3S4Q6A",
+            uploader_one,
+            uploader_one,
+            uploader_two,
         ],
         q="  quarterly ",
     )
@@ -34,8 +40,8 @@ def test_document_filters_normalise_sets_and_strings() -> None:
     assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
     assert filters.tags_in == {"alpha", "beta"}
     assert filters.uploader_id_in == {
-        "01H8M8Z1QB9X4Y7V5T2R3S4Q5A",
-        "01H8M8Z1QB9X4Y7V5T2R3S4Q6A",
+        UUID(uploader_one),
+        UUID(uploader_two),
     }
     assert filters.q == "quarterly"
 

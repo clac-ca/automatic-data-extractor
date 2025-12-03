@@ -29,10 +29,6 @@ interface UseWorkbenchFilesOptions {
 
 type WorkbenchTabZone = "pinned" | "regular";
 
-interface MoveTabOptions {
-  readonly zone?: WorkbenchTabZone;
-}
-
 interface WorkbenchFilesApi {
   readonly tree: WorkbenchFileNode | null;
   readonly tabs: readonly WorkbenchFileTab[];
@@ -44,7 +40,8 @@ interface WorkbenchFilesApi {
   readonly closeOtherTabs: (fileId: string) => void;
   readonly closeTabsToRight: (fileId: string) => void;
   readonly closeAllTabs: () => void;
-  readonly moveTab: (fileId: string, targetIndex: number, options?: MoveTabOptions) => void;
+  readonly moveTab: (fileId: string, targetIndex: number) => void;
+  readonly reloadTab: (fileId: string) => void;
   readonly pinTab: (fileId: string) => void;
   readonly unpinTab: (fileId: string) => void;
   readonly toggleTabPin: (fileId: string, pinned: boolean) => void;
@@ -53,7 +50,7 @@ interface WorkbenchFilesApi {
   readonly beginSavingTab: (fileId: string) => void;
   readonly completeSavingTab: (
     fileId: string,
-    options?: { metadata?: WorkbenchFileMetadata; etag?: string | null },
+    options?: { metadata?: WorkbenchFileMetadata; etag?: string | null; savedContent?: string },
   ) => void;
   readonly failSavingTab: (fileId: string, message: string) => void;
   readonly replaceTabContent: (
@@ -381,51 +378,66 @@ export function useWorkbenchFiles({
     setRecentOrder([]);
   }, []);
 
-  const moveTab = useCallback(
-    (fileId: string, targetIndex: number, options?: MoveTabOptions) => {
-      setTabs((current) => {
-        if (current.length <= 1) {
-          return current;
-        }
-        const fromIndex = current.findIndex((tab) => tab.id === fileId);
-        if (fromIndex === -1) {
-          return current;
-        }
-        const boundedTarget = Math.max(0, Math.min(targetIndex, current.length));
-        let insertIndex = boundedTarget;
-        if (fromIndex < boundedTarget) {
-          insertIndex -= 1;
-        }
-        const pinned: WorkbenchFileTab[] = [];
-        const regular: WorkbenchFileTab[] = [];
-        let moving: WorkbenchFileTab | null = null;
-        current.forEach((tab, index) => {
-          if (index === fromIndex) {
-            moving = tab;
-            return;
-          }
-          if (tab.pinned) {
-            pinned.push(tab);
-          } else {
-            regular.push(tab);
-          }
-        });
-        if (!moving) {
-          return current;
-        }
-        const zone: WorkbenchTabZone =
-          options?.zone ?? (insertIndex <= pinned.length ? "pinned" : "regular");
-        if (zone === "pinned") {
-          const clampedIndex = Math.max(0, Math.min(insertIndex, pinned.length));
-          pinned.splice(clampedIndex, 0, { ...moving, pinned: true });
+  const moveTab = useCallback((fileId: string, targetIndex: number) => {
+    setTabs((current) => {
+      if (current.length <= 1) {
+        return current;
+      }
+      const fromIndex = current.findIndex((tab) => tab.id === fileId);
+      if (fromIndex === -1) {
+        return current;
+      }
+      const withoutMoving = current.filter((_, index) => index !== fromIndex);
+      const boundedTarget = Math.max(0, Math.min(targetIndex, withoutMoving.length));
+      const pinned: WorkbenchFileTab[] = [];
+      const regular: WorkbenchFileTab[] = [];
+      const moving = current[fromIndex];
+
+      withoutMoving.forEach((tab) => {
+        if (tab.pinned) {
+          pinned.push(tab);
         } else {
-          const relativeIndex = Math.max(0, Math.min(insertIndex - pinned.length, regular.length));
-          regular.splice(relativeIndex, 0, { ...moving, pinned: false });
+          regular.push(tab);
         }
-        return [...pinned, ...regular];
+      });
+
+      const zone: WorkbenchTabZone = boundedTarget <= pinned.length ? "pinned" : "regular";
+      if (zone === "pinned") {
+        const clampedIndex = Math.max(0, Math.min(boundedTarget, pinned.length));
+        pinned.splice(clampedIndex, 0, { ...moving, pinned: true });
+      } else {
+        const relativeIndex = Math.max(0, Math.min(boundedTarget - pinned.length, regular.length));
+        regular.splice(relativeIndex, 0, { ...moving, pinned: false });
+      }
+
+      return [...pinned, ...regular];
+    });
+  }, []);
+
+  const reloadTab = useCallback(
+    (fileId: string) => {
+      if (pendingLoadsRef.current.has(fileId)) {
+        return;
+      }
+      let found = false;
+      setTabs((current) =>
+        current.map((tab) => {
+          if (tab.id !== fileId) {
+            return tab;
+          }
+          found = true;
+          return { ...tab, status: "loading", error: null };
+        }),
+      );
+      if (!found) {
+        return;
+      }
+      pendingLoadsRef.current.add(fileId);
+      loadIntoTab(fileId).finally(() => {
+        pendingLoadsRef.current.delete(fileId);
       });
     },
-    [],
+    [loadIntoTab],
   );
 
   const pinTab = useCallback((fileId: string) => {
@@ -539,7 +551,10 @@ export function useWorkbenchFiles({
   }, []);
 
   const completeSavingTab = useCallback(
-    (fileId: string, options?: { metadata?: WorkbenchFileMetadata; etag?: string | null }) => {
+    (
+      fileId: string,
+      options?: { metadata?: WorkbenchFileMetadata; etag?: string | null; savedContent?: string },
+    ) => {
       setTabs((current) =>
         current.map((tab) => {
           if (tab.id !== fileId) {
@@ -547,11 +562,12 @@ export function useWorkbenchFiles({
           }
           const resolvedMetadata = options?.metadata ?? tab.metadata ?? null;
           const resolvedEtag = options?.etag ?? tab.etag ?? null;
+          const savedContent = options?.savedContent ?? tab.content;
           return {
             ...tab,
             saving: false,
             saveError: null,
-            initialContent: tab.content,
+            initialContent: savedContent,
             etag: resolvedEtag,
             metadata: resolvedMetadata
               ? {
@@ -667,6 +683,7 @@ export function useWorkbenchFiles({
     closeTabsToRight,
     closeAllTabs,
     moveTab,
+    reloadTab,
     pinTab,
     unpinTab,
     toggleTabPin,

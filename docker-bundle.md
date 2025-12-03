@@ -74,7 +74,7 @@ runs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: |
             apps/ade-cli/pyproject.toml
@@ -96,7 +96,7 @@ runs:
         run: |
           python -m pip install -U pip
           python -m pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api
-          python -m pip install ruff==0.13.1 pytest==8.4.2 pytest-asyncio==1.2.0 pytest-cov==5.0.0 asgi-lifespan==2.1.0 openapi-spec-validator==0.7.2
+          python -m pip install ruff==0.14.7 pytest==9.0.1 pytest-asyncio==1.3.0 pytest-cov==7.0.0 asgi-lifespan==2.1.0 openapi-spec-validator==0.7.2
 
       - name: Run repo CI (lint, test, build)
         run: ade ci
@@ -159,10 +159,10 @@ runs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
       - name: Determine project version
         id: versions
@@ -306,7 +306,7 @@ runs:
 ```
 # syntax=docker/dockerfile:1.6
 
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.14
 ARG NODE_VERSION=20
 
 # -----------------------------------------------------------------------------

@@ -8,15 +8,14 @@ import {
   updateWorkspaceMemberRoles,
   type WorkspaceMember,
   type WorkspaceMemberPage,
-  type WorkspaceMemberRolesUpdatePayload,
   type WorkspaceMemberCreatePayload,
 } from "@features/Workspace/api/workspaces-api";
-import type { components } from "@schema";
+import type { User } from "@schema";
 
 const MEMBERS_PAGE_SIZE = 200;
 
 export function useWorkspaceMembersQuery(workspaceId: string) {
-  const memberListParams = { page: 1, pageSize: MEMBERS_PAGE_SIZE };
+  const memberListParams = { page: 1, pageSize: MEMBERS_PAGE_SIZE, includeTotal: true };
   return useQuery<WorkspaceMemberPage>({
     queryKey: workspacesKeys.members(workspaceId, memberListParams),
     queryFn: ({ signal }) =>
@@ -28,13 +27,17 @@ export function useWorkspaceMembersQuery(workspaceId: string) {
 }
 
 interface AddMemberInput {
-  readonly user: UserProfile;
+  readonly user: User;
   readonly roleIds: readonly string[];
 }
 
 export function useAddWorkspaceMemberMutation(workspaceId: string) {
   const queryClient = useQueryClient();
-  const queryKey = workspacesKeys.members(workspaceId, { page: 1, pageSize: MEMBERS_PAGE_SIZE });
+  const queryKey = workspacesKeys.members(workspaceId, {
+    page: 1,
+    pageSize: MEMBERS_PAGE_SIZE,
+    includeTotal: true,
+  });
 
   return useMutation<
     WorkspaceMember,
@@ -53,11 +56,10 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<WorkspaceMemberPage>(queryKey);
       const optimisticMember: WorkspaceMember = {
-        id: `optimistic-${Date.now()}`,
-        workspace_id: workspaceId,
-        roles: Array.from(roleIds),
-        permissions: [],
-        is_default: false,
+        user_id: user.id,
+        role_ids: Array.from(roleIds),
+        role_slugs: [],
+        created_at: new Date().toISOString(),
         user,
       };
       queryClient.setQueryData<WorkspaceMemberPage>(queryKey, (current) => {
@@ -70,7 +72,7 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
           total: typeof current.total === "number" ? current.total + 1 : current.total,
         };
       });
-      return { previous, optimisticId: optimisticMember.id };
+      return { previous, optimisticId: optimisticMember.user_id };
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
@@ -91,7 +93,9 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
         }
         return {
           ...current,
-          items: current.items.map((entry) => (entry.id === context.optimisticId ? member : entry)),
+          items: current.items.map((entry) =>
+            entry.user_id === context.optimisticId ? { ...member, user: entry.user ?? member.user } : entry,
+          ),
         };
       });
     },
@@ -102,18 +106,22 @@ export function useAddWorkspaceMemberMutation(workspaceId: string) {
 }
 
 interface UpdateMemberRolesInput {
-  readonly membershipId: string;
+  readonly userId: string;
   readonly roleIds: readonly string[];
 }
 
 export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
   const queryClient = useQueryClient();
-  const queryKey = workspacesKeys.members(workspaceId, { page: 1, pageSize: MEMBERS_PAGE_SIZE });
+  const queryKey = workspacesKeys.members(workspaceId, {
+    page: 1,
+    pageSize: MEMBERS_PAGE_SIZE,
+    includeTotal: true,
+  });
 
   return useMutation<WorkspaceMember, Error, UpdateMemberRolesInput, { previous?: WorkspaceMemberPage }>({
-    mutationFn: ({ membershipId, roleIds }: UpdateMemberRolesInput) =>
-      updateWorkspaceMemberRoles(workspaceId, membershipId, buildRolesUpdatePayload(roleIds)),
-    onMutate: async ({ membershipId, roleIds }) => {
+    mutationFn: ({ userId, roleIds }: UpdateMemberRolesInput) =>
+      updateWorkspaceMemberRoles(workspaceId, userId, { role_ids: Array.from(roleIds) }),
+    onMutate: async ({ userId, roleIds }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<WorkspaceMemberPage>(queryKey);
       queryClient.setQueryData<WorkspaceMemberPage>(queryKey, (current) => {
@@ -123,7 +131,7 @@ export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
         return {
           ...current,
           items: current.items.map((member) =>
-            member.id === membershipId ? { ...member, roles: Array.from(roleIds) } : member,
+            member.user_id === userId ? { ...member, role_ids: Array.from(roleIds) } : member,
           ),
         };
       });
@@ -141,7 +149,9 @@ export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
         }
         return {
           ...current,
-          items: current.items.map((entry) => (entry.id === member.id ? member : entry)),
+          items: current.items.map((entry) =>
+            entry.user_id === member.user_id ? { ...member, user: entry.user ?? member.user } : entry,
+          ),
         };
       });
     },
@@ -153,18 +163,22 @@ export function useUpdateWorkspaceMemberRolesMutation(workspaceId: string) {
 
 export function useRemoveWorkspaceMemberMutation(workspaceId: string) {
   const queryClient = useQueryClient();
-  const queryKey = workspacesKeys.members(workspaceId, { page: 1, pageSize: MEMBERS_PAGE_SIZE });
+  const queryKey = workspacesKeys.members(workspaceId, {
+    page: 1,
+    pageSize: MEMBERS_PAGE_SIZE,
+    includeTotal: true,
+  });
 
   return useMutation<void, Error, string, { previous?: WorkspaceMemberPage }>({
-    mutationFn: (membershipId: string) => removeWorkspaceMember(workspaceId, membershipId),
-    onMutate: async (membershipId) => {
+    mutationFn: (userId: string) => removeWorkspaceMember(workspaceId, userId),
+    onMutate: async (userId) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<WorkspaceMemberPage>(queryKey);
       queryClient.setQueryData<WorkspaceMemberPage>(queryKey, (current) => {
         if (!current) {
           return current;
         }
-        const nextItems = current.items.filter((member) => member.id !== membershipId);
+        const nextItems = current.items.filter((member) => member.user_id !== userId);
         return {
           ...current,
           items: nextItems,
@@ -182,12 +196,4 @@ export function useRemoveWorkspaceMemberMutation(workspaceId: string) {
       queryClient.invalidateQueries({ queryKey });
     },
   });
-}
-
-type UserProfile = components["schemas"]["UserProfile"];
-
-function buildRolesUpdatePayload(roleIds: readonly string[]): WorkspaceMemberRolesUpdatePayload {
-  return {
-    role_ids: Array.from(roleIds),
-  };
 }

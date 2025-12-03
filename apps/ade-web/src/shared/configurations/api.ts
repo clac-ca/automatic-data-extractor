@@ -4,25 +4,21 @@ import { ApiError } from "@shared/api";
 
 import type {
   ConfigurationRecord,
-  ConfigurationScriptContent,
-  ConfigurationVersionRecord,
-  ConfigurationVersionTestResponse,
-  ConfigurationVersionValidateResponse,
   ConfigurationValidateResponse,
-  ManifestEnvelope,
-  ManifestEnvelopeWithEtag,
-  ManifestPatchRequest,
   FileListing,
   FileReadJson,
   FileWriteResponse,
   FileRenameResponse,
   ConfigurationPage,
+  DirectoryWriteResponse,
 } from "./types";
 import type { paths } from "@schema";
 
 const textEncoder = new TextEncoder();
 
 type ListConfigurationsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
+type DeleteDirectoryQuery =
+  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}"]["delete"]["parameters"]["query"];
 
 export interface ListConfigurationsOptions {
   readonly page?: number;
@@ -189,6 +185,31 @@ export async function readConfigurationFileJson(
   return data as FileReadJson;
 }
 
+export interface ExportConfigurationResult {
+  readonly blob: Blob;
+  readonly filename?: string;
+}
+
+export async function exportConfiguration(
+  workspaceId: string,
+  configId: string,
+): Promise<ExportConfigurationResult> {
+  const { data, response } = await client.GET(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export",
+    {
+      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      parseAs: "blob",
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration archive payload.");
+  }
+  const disposition = response?.headers?.get("content-disposition") ?? "";
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = filenameMatch?.[1];
+  return { blob: data as Blob, filename: filename ?? undefined };
+}
+
 export interface UpsertConfigurationFilePayload {
   readonly path: string;
   readonly content: string;
@@ -275,6 +296,106 @@ export async function deleteConfigurationFile(
   });
 }
 
+export async function createConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+): Promise<DirectoryWriteResponse> {
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          configuration_id: configId,
+          directory_path: directoryPath,
+        },
+      },
+    },
+  );
+  if (!data) {
+    throw new Error("Expected directory response payload.");
+  }
+  return data as DirectoryWriteResponse;
+}
+
+export async function deleteConfigurationDirectory(
+  workspaceId: string,
+  configId: string,
+  directoryPath: string,
+  options: { recursive?: boolean } = {},
+): Promise<void> {
+  const query: DeleteDirectoryQuery = {};
+  if (options.recursive) {
+    query.recursive = true;
+  }
+  await client.DELETE(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}",
+    {
+      params: {
+        path: {
+          workspace_id: workspaceId,
+          configuration_id: configId,
+          directory_path: directoryPath,
+        },
+        query,
+      },
+    },
+  );
+}
+
+export interface ImportConfigurationPayload {
+  readonly displayName: string;
+  readonly file: File | Blob;
+}
+
+export async function importConfiguration(
+  workspaceId: string,
+  payload: ImportConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("display_name", payload.displayName);
+  formData.append("file", payload.file);
+
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/configurations/import", {
+    params: { path: { workspace_id: workspaceId } },
+    body: formData,
+    bodySerializer: () => formData,
+  });
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
+export interface ReplaceConfigurationPayload {
+  readonly file: File | Blob;
+  readonly ifMatch?: string | null;
+}
+
+export async function replaceConfigurationFromArchive(
+  workspaceId: string,
+  configId: string,
+  payload: ReplaceConfigurationPayload,
+): Promise<ConfigurationRecord> {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+
+  const { data } = await client.PUT(
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import",
+    {
+      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
+      body: formData,
+      bodySerializer: () => formData,
+    },
+  );
+  if (!data) {
+    throw new Error("Expected configuration payload.");
+  }
+  return data as ConfigurationRecord;
+}
+
 export type ConfigurationSourceInput =
   | { readonly type: "template"; readonly templateId: string }
   | { readonly type: "clone"; readonly configurationId: string };
@@ -317,364 +438,6 @@ export async function createConfiguration(
     throw new Error("Expected configuration payload.");
   }
   return data as ConfigurationRecord;
-}
-
-export interface ListConfigurationVersionsOptions {
-  readonly signal?: AbortSignal;
-}
-
-export async function listConfigurationVersions(
-  workspaceId: string,
-  configId: string,
-  options: ListConfigurationVersionsOptions = {},
-): Promise<ConfigurationVersionRecord[]> {
-  const { signal } = options;
-  const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId },
-      },
-      signal,
-    },
-  );
-  return (data ?? []) as ConfigurationVersionRecord[];
-}
-
-export async function readConfigurationVersion(
-  workspaceId: string,
-  configId: string,
-  configurationVersionId: string,
-  signal?: AbortSignal,
-): Promise<ConfigurationVersionRecord | null> {
-  const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}",
-    {
-      params: {
-    path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configurationVersionId },
-      },
-      signal,
-    },
-  );
-  return (data ?? null) as ConfigurationVersionRecord | null;
-}
-
-export async function createVersion(
-  workspaceId: string,
-  configId: string,
-  payload: { semver: string; message?: string | null; sourceVersionId?: string | null; seedDefaults?: boolean },
-) {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions",
-    {
-      params: { path: { workspace_id: workspaceId, configuration_id: configId } },
-      body: {
-        semver: payload.semver,
-        message: payload.message ?? null,
-        source_version_id: payload.sourceVersionId ?? null,
-        seed_defaults: payload.seedDefaults ?? false,
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected version payload.");
-  }
-  return data;
-}
-
-export async function activateVersion(workspaceId: string, configId: string, configVersionId: string) {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/activate",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected version payload.");
-  }
-  return data;
-}
-
-export async function archiveVersion(workspaceId: string, configId: string, configVersionId: string) {
-  await client.DELETE(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-    },
-  );
-}
-
-export async function permanentlyDeleteVersion(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-) {
-  await client.DELETE(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-        query: { purge: true },
-      },
-    },
-  );
-}
-
-export async function restoreVersion(workspaceId: string, configId: string, configVersionId: string) {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/restore",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected version payload.");
-  }
-  return data;
-}
-
-export async function validateVersion(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-): Promise<ConfigurationVersionValidateResponse> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/validate",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected validation payload.");
-  }
-  return data;
-}
-
-export async function testVersion(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  documentId: string,
-  notes?: string | null,
-): Promise<ConfigurationVersionTestResponse> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/test",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-      body: {
-        document_id: documentId,
-        notes: notes ?? null,
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected test response payload.");
-  }
-  return data;
-}
-
-export async function listScripts(workspaceId: string, configId: string, configVersionId: string, signal?: AbortSignal) {
-  const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/scripts",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-      signal,
-    },
-  );
-  return data ?? [];
-}
-
-export async function readScript(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  scriptPath: string,
-  signal?: AbortSignal,
-): Promise<ConfigurationScriptContent | null> {
-  const { data } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/scripts/{script_path}",
-    {
-      params: {
-        path: {
-          workspace_id: workspaceId,
-          configuration_id: configId,
-          configuration_version_id: configVersionId,
-          script_path: scriptPath,
-        },
-      },
-      signal,
-    },
-  );
-  return data ?? null;
-}
-
-export async function createScript(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  payload: { path: string; template?: string | null; language?: string | null },
-): Promise<ConfigurationScriptContent> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/scripts",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-      body: {
-        path: payload.path,
-        template: payload.template ?? null,
-        language: payload.language ?? null,
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected script payload.");
-  }
-  return data;
-}
-
-export interface UpdateScriptPayload {
-  readonly code: string;
-  readonly etag?: string | null;
-}
-
-export async function updateScript(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  scriptPath: string,
-  payload: UpdateScriptPayload,
-): Promise<ConfigurationScriptContent> {
-  const { data } = await client.PUT(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/scripts/{script_path}",
-    {
-      params: {
-        path: {
-          workspace_id: workspaceId,
-          configuration_id: configId,
-          configuration_version_id: configVersionId,
-          script_path: scriptPath,
-        },
-      },
-      body: { code: payload.code },
-      headers: payload.etag ? { "If-Match": payload.etag } : undefined,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected script payload.");
-  }
-  return data;
-}
-
-export async function deleteScript(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  scriptPath: string,
-) {
-  await client.DELETE(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/scripts/{script_path}",
-    {
-      params: {
-        path: {
-          workspace_id: workspaceId,
-          configuration_id: configId,
-          configuration_version_id: configVersionId,
-          script_path: scriptPath,
-        },
-      },
-    },
-  );
-}
-
-export async function readManifest(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  signal?: AbortSignal,
-): Promise<ManifestEnvelopeWithEtag> {
-  const { data, response } = await client.GET(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/manifest",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-      signal,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected manifest payload.");
-  }
-  const etag = response.headers.get("etag");
-  return { ...data, etag } as ManifestEnvelopeWithEtag;
-}
-
-export async function patchManifest(
-  workspaceId: string,
-  configId: string,
-  configVersionId: string,
-  manifest: ManifestPatchRequest,
-  etag?: string | null,
-): Promise<ManifestEnvelope> {
-  const { data } = await client.PATCH(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/manifest",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: configVersionId },
-      },
-      body: manifest,
-      headers: etag ? { "If-Match": etag } : undefined,
-    },
-  );
-  if (!data) {
-    throw new Error("Expected manifest payload.");
-  }
-  return data;
-}
-
-export async function cloneVersion(
-  workspaceId: string,
-  configId: string,
-  sourceVersionId: string,
-  options: { semver: string; message?: string | null },
-): Promise<ConfigurationVersionRecord> {
-  const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions/{configuration_version_id}/clone",
-    {
-      params: {
-        path: { workspace_id: workspaceId, configuration_id: configId, configuration_version_id: sourceVersionId },
-      },
-      body: {
-        semver: options.semver,
-        message: options.message ?? null,
-      },
-    },
-  );
-  if (!data) {
-    throw new Error("Expected version payload.");
-  }
-  return data;
-}
-
-export function findActiveVersion(versions: readonly ConfigurationVersionRecord[]) {
-  return versions.find((version) => version.status === "active" || version.activated_at) ?? null;
-}
-
-export function findLatestInactiveVersion(versions: readonly ConfigurationVersionRecord[]) {
-  const inactive = versions.filter((version) => version.status !== "active" && !version.deleted_at);
-  return inactive.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
 }
 
 function encodeFilePath(path: string) {

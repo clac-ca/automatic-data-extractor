@@ -1,3 +1,6 @@
+import type { RunSummaryV1 } from "@schema";
+import type { AdeEvent, RunStatus } from "@shared/runs/types";
+
 export type WorkbenchFileKind = "file" | "folder";
 
 export interface WorkbenchFileMetadata {
@@ -37,10 +40,12 @@ export interface WorkbenchFileTab {
 export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";
 
 export interface WorkbenchConsoleLine {
+  readonly id?: string;
   readonly level: WorkbenchConsoleLevel;
   readonly message: string;
   readonly origin?: "run" | "build" | "raw";
   readonly timestamp?: string;
+  readonly raw?: unknown;
 }
 
 export interface WorkbenchValidationMessage {
@@ -62,4 +67,30 @@ export interface WorkbenchValidationState {
   readonly lastRunAt?: string;
   readonly error?: string | null;
   readonly digest?: string | null;
+}
+
+export interface WorkbenchRunSummary {
+  readonly runId: string;
+  readonly status: RunStatus;
+  readonly outputsBase?: string;
+  readonly logsUrl?: string;
+  readonly outputs: ReadonlyArray<{
+    name: string;
+    path?: string;
+    byte_size: number;
+    download_url?: string | null;
+  }>;
+  readonly outputsLoaded: boolean;
+  readonly summary?: RunSummaryV1 | null;
+  readonly summaryLoaded: boolean;
+  readonly summaryError?: string | null;
+  readonly telemetry?: readonly AdeEvent[] | null;
+  readonly telemetryLoaded: boolean;
+  readonly telemetryError?: string | null;
+  readonly documentName?: string;
+  readonly sheetNames?: readonly string[];
+  readonly error?: string | null;
+  readonly startedAt?: string | null;
+  readonly completedAt?: string | null;
+  readonly durationMs?: number | null;
 }

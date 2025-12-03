@@ -3,7 +3,7 @@
 ADE turns messy spreadsheets into consistent, auditable workbooks through a simple, repeatable flow:
 
 1. **Config** — define detection, mapping, and transformation rules ([`01-config-packages.md`](./01-config-packages.md))
-2. **Build** — set up a dedicated virtual environment (`ADE_VENVS_DIR/<workspace_id>/<config_id>/<build_id>/.venv/`) with `ade_engine` and your `ade_config` installed
+2. **Build** — set up a dedicated virtual environment (`ADE_VENVS_DIR/<workspace_id>/<configuration_id>/<build_id>/.venv/`) with `ade_engine` and your `ade_config` installed
 3. **Run** — use that frozen environment to process one or more input files deterministically
 
 At run runtime, the **ADE Engine** and your versioned **ADE Config** are installed in an isolated virtual environment (venv) and produce a normalized Excel workbook.
@@ -59,7 +59,7 @@ automatic-data-extractor/
 
 Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
 
-Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<config_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
+Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
 
 If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates** the required build from DB metadata on demand before executing runs.
 
@@ -76,7 +76,6 @@ If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
 │     │        ├─ manifest.json     # read via importlib.resources
 │     ├─ .venv/                     # (legacy) not used for runtime venvs
-│     ├─ runs/
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files

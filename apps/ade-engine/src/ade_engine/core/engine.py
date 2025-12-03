@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import uuid7
 
 from ade_engine.config.loader import ConfigRuntime, load_config_runtime
 from ade_engine.config.hook_registry import HookStage
@@ -62,7 +62,7 @@ class Engine:
             _ensure_dirs(output_dir, logs_dir)
 
             run_ctx = RunContext(
-                run_id=str(uuid4()),
+                run_id=uuid7(),
                 metadata=dict(normalized_request.metadata) if normalized_request.metadata else {},
                 manifest=None,
                 paths=RunPaths(
@@ -184,7 +184,7 @@ class Engine:
                 .get(
                     "run_ctx",
                     RunContext(
-                        run_id="",
+                        run_id=uuid7(),
                         metadata={},
                         manifest=None,
                         paths=None,  # type: ignore[arg-type]

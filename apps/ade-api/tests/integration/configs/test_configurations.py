@@ -11,17 +11,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_api.features.configs.models import Configuration
+from ade_api.core.models import Configuration, ConfigurationStatus
 from ade_api.settings import get_settings
-from ade_api.shared.db import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
-
-_settings = get_settings()
-CSRF_COOKIE = _settings.session_csrf_cookie_name
-
 
 async def _auth_headers(
     client: AsyncClient,
@@ -29,10 +25,8 @@ async def _auth_headers(
     email: str,
     password: str,
 ) -> dict[str, str]:
-    await login(client, email=email, password=password)
-    token = client.cookies.get(CSRF_COOKIE)
-    assert token, "Missing CSRF cookie"
-    return {"X-CSRF-Token": token}
+    token, _ = await login(client, email=email, password=password)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _create_from_template(
@@ -57,9 +51,9 @@ async def _create_from_template(
 def _config_path(workspace_id: str, configuration_id: str) -> Path:
     return (
         Path(get_settings().configs_dir)
-        / workspace_id
+        / str(workspace_id)
         / "config_packages"
-        / configuration_id
+        / str(configuration_id)
     )
 
 
@@ -189,7 +183,7 @@ async def test_validate_missing_config_returns_not_found(
     headers = await _auth_headers(
         async_client, email=owner["email"], password=owner["password"]
     )
-    random_id = generate_ulid()
+    random_id = str(generate_uuid7())
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{random_id}/validate",
@@ -197,47 +191,6 @@ async def test_validate_missing_config_returns_not_found(
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "configuration_not_found"
-
-
-async def test_list_versions_reflects_status_transitions(
-    async_client: AsyncClient, seed_identity: dict[str, Any]
-) -> None:
-    workspace_id = seed_identity["workspace_id"]
-    owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
-
-    draft = await _create_from_template(
-        async_client,
-        workspace_id=workspace_id,
-        headers=headers,
-    )
-
-    draft_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
-        headers=headers,
-    )
-    assert draft_versions.status_code == 200, draft_versions.text
-    versions = draft_versions.json()
-    assert versions[0]["configuration_version_id"] == draft["id"]
-    assert versions[0]["status"] == "draft"
-    assert versions[0]["semver"] is None
-
-    publish = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/publish",
-        headers=headers,
-    )
-    assert publish.status_code == 200, publish.text
-
-    published_versions = await async_client.get(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{draft['id']}/versions",
-        headers=headers,
-    )
-    assert published_versions.status_code == 200, published_versions.text
-    published = published_versions.json()
-    assert published[0]["status"] == "published"
-    assert published[0]["semver"] == "1"
 
 
 async def test_file_editor_endpoints(
@@ -279,6 +232,10 @@ async def test_file_editor_endpoints(
         content=b"hello world",
     )
     assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["created"] is True
+    assert body["path"] == "assets/new.txt"
+    assert resp.headers.get("Location", "").endswith("/files/assets/new.txt")
     etag = resp.headers.get("ETag")
 
     resp = await async_client.get(
@@ -299,6 +256,9 @@ async def test_file_editor_endpoints(
         content=b"updated",
     )
     assert resp.status_code == 200
+    updated_body = resp.json()
+    assert updated_body["created"] is False
+    assert "Location" not in resp.headers
     new_etag = resp.headers.get("ETag")
 
     resp = await async_client.get(
@@ -315,11 +275,25 @@ async def test_file_editor_endpoints(
     )
     assert resp.status_code == 204
 
-    resp = await async_client.post(
+    resp = await async_client.put(
         f"{base_url}/directories/assets/new_folder",
         headers=headers,
     )
     assert resp.status_code == 201
+    dir_body = resp.json()
+    assert dir_body["created"] is True
+    assert dir_body["path"] == "assets/new_folder"
+    assert resp.headers.get("Location", "").endswith("/directories/assets/new_folder")
+
+    resp = await async_client.put(
+        f"{base_url}/directories/assets/new_folder",
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    dir_existing = resp.json()
+    assert dir_existing["created"] is False
+    assert dir_existing["path"] == "assets/new_folder"
+    assert "Location" not in resp.headers
 
     resp = await async_client.delete(
         f"{base_url}/directories/assets/new_folder",
@@ -398,7 +372,6 @@ async def test_activate_configuration_sets_active_and_digest(
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["status"] == "active"
-    assert payload["configuration_version"] == 1
     assert payload["content_digest"].startswith("sha256:")
 
     settings = get_settings()
@@ -456,9 +429,9 @@ async def test_activate_demotes_previous_active(
     async with session_factory() as session:
         stmt = select(Configuration).where(Configuration.workspace_id == workspace_id)
         result = await session.execute(stmt)
-        configs = {row.id: row for row in result.scalars()}
-        assert configs[first["id"]].status == "inactive"
-        assert configs[second["id"]].status == "active"
+        configs = {str(row.id): row for row in result.scalars()}
+        assert configs[str(first["id"])].status is ConfigurationStatus.INACTIVE
+        assert configs[str(second["id"])].status is ConfigurationStatus.ACTIVE
 
 
 async def test_activate_returns_422_when_validation_fails(

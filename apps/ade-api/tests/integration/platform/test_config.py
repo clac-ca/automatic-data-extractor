@@ -11,7 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from ade_api.settings import Settings, get_settings, reload_settings
-from ade_api.shared.core.lifecycles import ensure_runtime_dirs
+from ade_api.app.lifecycles import ensure_runtime_dirs
 
 
 @pytest.fixture(autouse=True)

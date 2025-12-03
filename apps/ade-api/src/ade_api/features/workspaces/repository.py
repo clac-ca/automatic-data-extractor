@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Workspace, WorkspaceMembership
+from ade_api.core.models import Workspace, WorkspaceMembership
 
 
 class WorkspacesRepository:
@@ -41,23 +41,8 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_membership_by_id(
-        self, membership_id: str
-    ) -> WorkspaceMembership | None:
-        stmt = (
-            select(WorkspaceMembership)
-            .options(
-                selectinload(WorkspaceMembership.workspace),
-                selectinload(WorkspaceMembership.user),
-            )
-            .where(WorkspaceMembership.id == membership_id)
-            .execution_options(populate_existing=True)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
     async def get_membership_for_workspace(
-        self, *, membership_id: str, workspace_id: str
+        self, *, user_id: str, workspace_id: str
     ) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
@@ -67,7 +52,7 @@ class WorkspacesRepository:
             )
             .where(
                 and_(
-                    WorkspaceMembership.id == membership_id,
+                    WorkspaceMembership.user_id == user_id,
                     WorkspaceMembership.workspace_id == workspace_id,
                 )
             )

@@ -36,39 +36,53 @@ Only frontend‑relevant behaviour and contracts are covered here.
 
 ### 2.1 Session (who is signed in)
 
-The **Session** describes the current principal (signed‑in user) and their high‑level context.
+The **Session** describes the current principal (signed‑in user) and their high‑level context. It mirrors the backend’s `MeContext` shape returned by `GET /api/v1/me/bootstrap`:
 
 ```ts
-export interface Session {
-  readonly user: {
-    readonly id: string;
-    readonly name: string;
-    readonly email: string;
-    readonly avatarUrl?: string | null;
+export type SessionEnvelope = {
+  user: {
+    id: string;
+    email: string;
+    display_name: string | null;
+    is_service_account: boolean;
+    created_at: string;
+    updated_at: string | null;
+    roles: string[];        // global role slugs
+    permissions: string[];  // global permission keys
+    preferred_workspace_id: string | null;
   };
-
-  /** Optional "home" workspace used as a default landing. */
-  readonly defaultWorkspaceId?: string | null;
-
-  /** Lightweight view of where this user belongs. */
-  readonly workspaceMemberships: readonly WorkspaceMembershipSummary[];
-}
+  workspaces: {
+    items: WorkspaceMembershipSummary[];
+    page: number;
+    page_size: number;
+    total: number | null;
+    has_next: boolean;
+    has_previous: boolean;
+  };
+  global_roles: string[];
+  global_permissions: string[];
+  expires_at: string | null;         // ISO expiry derived from access token
+  refresh_expires_at: string | null; // ISO expiry derived from refresh token
+  return_to: string | null;
+};
 
 export interface WorkspaceMembershipSummary {
-  readonly workspaceId: string;
-  readonly workspaceName: string;
-  /** Role ids/slugs in this workspace (for display and mapping to permissions). */
-  readonly roles: readonly string[];
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string | null;
+  readonly is_default: boolean;
+  readonly joined_at: string | null;
 }
-````
+```
 
 Characteristics:
 
-* Fetched via `GET /api/v1/auth/session` (or `GET /api/v1/users/me` if that is the canonical endpoint).
+* Fetched via `GET /api/v1/me/bootstrap` with a bearer token header.
+* Normalised in `shared/auth/api.ts` from the generated OpenAPI types.
 * Cached with React Query.
 * Treated as the **single source of truth** for “who am I?”; we do not duplicate user identity elsewhere.
-
-We **do not** persist session data or tokens in `localStorage`. Auth is handled by the backend (typically via cookies). The frontend simply reads and reacts to the session.
+* Access tokens and expiry hints are persisted in `localStorage` (`ade.auth.tokens`) by `shared/auth/api.ts` so the SPA can resume sessions across reloads; refresh tokens stay in HttpOnly cookies and are never stored client-side.
+* Default workspace is server‑backed (`is_default` on memberships) and set via `PUT /api/v1/workspaces/{workspace_id}/default`.
 
 ### 2.2 Effective permissions
 
@@ -119,6 +133,24 @@ export interface SafeModeStatus {
 * Disabling all **run‑invoking** actions (starting new runs, configuration builds, validations, activations that trigger runs).
 * Status is **system‑wide**; the toggle lives on a system‑level Settings screen that only appears for users with `System.SafeMode.*`.
 
+### 2.4 Default workspace selection
+
+**What drives defaults**
+
+- One membership per user may be flagged `is_default` by the backend.
+- The SPA consumes that flag from `GET /api/v1/me/bootstrap` and from workspace listings.
+- We keep a lightweight local hint (`backend.app.active_workspace`), but the server default always wins when present.
+
+**How the UI sets it**
+
+- The Workspace directory shows “Set as default” on non‑default cards.
+- That action calls `PUT /api/v1/workspaces/{workspace_id}/default` via a typed helper, then updates cached workspace data and the local hint.
+- The endpoint is **idempotent**—repeated calls keep the same default.
+
+**Redirect behaviour**
+
+- After auth, the root route prefers the server default; otherwise it falls back to the first accessible workspace, then `/workspaces` if none exist.
+
 ---
 
 ## 3. Initial setup and authentication flows
@@ -129,7 +161,7 @@ On first deployment, ADE may require a “first admin” to be created.
 
 The entry strategy:
 
-1. Call `GET /api/v1/setup/status`.
+1. Call `GET /api/v1/auth/setup`.
 2. If `requires_setup == true`:
 
    * Navigate to `/setup`.
@@ -141,7 +173,7 @@ The entry strategy:
 The setup screen:
 
 * Collects the first admin’s information (e.g. name, email, password).
-* Calls `POST /api/v1/setup` to create the user and initial session.
+* Calls `POST /api/v1/auth/setup` to create the user and initial session.
 * On success, redirects to:
 
   * The workspace directory (`/workspaces`), or
@@ -153,9 +185,9 @@ Setup endpoints are public but should be callable only while `requires_setup == 
 
 Email/password authentication uses:
 
-* `POST /api/v1/auth/session` – create a session.
-* `DELETE /api/v1/auth/session` – terminate the current session.
-* `POST /api/v1/auth/session/refresh` – optional session refresh.
+* `POST /api/v1/auth/session` – create a session (public).
+* `DELETE /api/v1/auth/session` – terminate the current session (authenticated).
+* `POST /api/v1/auth/session/refresh` – optional session refresh (authenticated; refresh cookie for browsers, optional body for API clients).
 
 Flow:
 
@@ -165,6 +197,7 @@ Flow:
    * Call `createSession({ email, password })`.
    * On success:
 
+     * Store tokens via `persistTokens` (shared/auth/api) – access token + expiry only.
      * Invalidate and refetch the `session` and `effectivePermissions` queries.
      * Redirect to `redirectTo` (if safe) or to the default route.
 3. On invalid credentials:
@@ -178,23 +211,22 @@ Logout:
 
 * Initiated via “Sign out” in the profile menu.
 * Calls `DELETE /api/v1/auth/session`.
-* Clears the React Query cache and navigates to `/login`.
-
-At no point are credentials or tokens written to `localStorage`.
+* Clears the React Query cache, clears tokens from `localStorage`, and navigates to `/login`.
 
 ### 3.3 SSO login
 
 When SSO is enabled, providers are listed via:
 
 * `GET /api/v1/auth/providers`.
+* Public SSO endpoints (`/auth/providers`, `/auth/setup`, `/auth/session` for login, and the SSO redirects) are the only unauthenticated surface area; everything else requires a session cookie, bearer token, or API key.
 
 SSO flow:
 
 1. `/login` renders buttons for each provider.
-2. Clicking a provider navigates to `GET /api/v1/auth/sso/login?provider=<id>&redirectTo=<path>`:
+2. Clicking a provider navigates to `GET /api/v1/auth/sso/{provider}/authorize?redirectTo=<path>`:
 
    * Backend responds with a redirect to the IdP.
-3. After IdP authentication, the user is redirected to `GET /api/v1/auth/sso/callback`.
+3. After IdP authentication, the user is redirected to `GET /api/v1/auth/sso/{provider}/callback`.
 4. Backend verifies the callback, establishes a session, and then redirects to the ADE Web app (e.g. `/auth/callback`).
 
 The `/auth/callback` screen:
@@ -234,7 +266,7 @@ If validation fails or `redirectTo` is omitted:
 
 * Fallback to:
 
-  * The user’s default workspace (if `Session.defaultWorkspaceId` is set), or
+  * The user’s default workspace (if a workspace is marked `is_default`), or
   * The workspace directory (`/workspaces`).
 
 ---
@@ -245,7 +277,7 @@ If validation fails or `redirectTo` is omitted:
 
 On app startup and after any login/logout, ADE Web fetches the session:
 
-* `GET /api/v1/auth/session` (or equivalent).
+* `GET /api/v1/me/bootstrap` (canonical “who am I?” + roles/permissions/workspaces).
 
 `useSessionQuery()`:
 
@@ -260,16 +292,18 @@ Behaviour:
 
 ### 4.2 Refreshing the session
 
-If the backend offers `POST /api/v1/auth/session/refresh`, it can be used to:
-
-* Extend session lifetime without forcing the user back to `/login`.
+If the backend offers `POST /api/v1/auth/session/refresh`, it can be used to extend session lifetime without forcing the user back to `/login`.
 
 The frontend should:
 
-* Avoid implementing custom token logic.
+* Use the shared helper in `shared/auth/api.ts` which:
+
+  * Relies on the refresh cookie (no body for the SPA),
+  * Persists new access tokens + expiry hints,
+  * Re‑bootstraps the session via `/me/bootstrap`.
 * Trigger a refresh only when the backend’s contract requires it (e.g. via a small helper hook that calls refresh on certain error codes, then retries the failed request).
 
-The exact refresh policy is backend‑driven; the frontend’s run is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
+The exact refresh policy is backend‑driven; the frontend’s job is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
 
 ### 4.3 Global vs workspace‑local data
 
@@ -328,33 +362,27 @@ Roles are defined and assigned via the API; the frontend treats them as named bu
 
 * Endpoints:
 
-  * `GET /api/v1/roles`
-  * `POST /api/v1/roles`
-  * `GET /api/v1/roles/{role_id}`
-  * `PATCH /api/v1/roles/{role_id}`
-  * `DELETE /api/v1/roles/{role_id}`
+  * `GET /api/v1/rbac/roles`
+  * `POST /api/v1/rbac/roles`
+  * `GET /api/v1/rbac/roles/{role_id}`
+  * `PATCH /api/v1/rbac/roles/{role_id}`
+  * `DELETE /api/v1/rbac/roles/{role_id}`
 
 * Assignments:
 
-  * `GET /api/v1/role-assignments`
-  * `POST /api/v1/role-assignments`
-  * `DELETE /api/v1/role-assignments/{assignment_id}`
-
-**Workspace roles**
-
-* Endpoints:
-
-  * `GET /api/v1/workspaces/{workspace_id}/roles`
-  * `GET /api/v1/workspaces/{workspace_id}/role-assignments`
-  * `POST /api/v1/workspaces/{workspace_id}/role-assignments`
-  * `DELETE /api/v1/workspaces/{workspace_id}/role-assignments/{assignment_id}`
+  * `GET /api/v1/rbac/role-assignments`
+  * `POST /api/v1/rbac/role-assignments`
+  * `DELETE /api/v1/rbac/role-assignments/{assignment_id}`
+  * `GET /api/v1/users/{user_id}/roles`
+  * `PUT /api/v1/users/{user_id}/roles/{role_id}`
+  * `DELETE /api/v1/users/{user_id}/roles/{role_id}`
 
 * Membership:
 
   * `GET /api/v1/workspaces/{workspace_id}/members`
   * `POST /api/v1/workspaces/{workspace_id}/members`
-  * `DELETE /api/v1/workspaces/{workspace_id}/members/{membership_id}`
-  * `PUT /api/v1/workspaces/{workspace_id}/members/{membership_id}/roles`
+  * `PUT /api/v1/workspaces/{workspace_id}/members/{user_id}`
+  * `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}`
 
 The **Roles** and **Members** panels in Settings are thin UIs over these endpoints. The core run/document/configuration flows should not depend on the specifics of role assignment; they only consume effective permission keys.
 
@@ -648,13 +676,13 @@ If `redirectTo` is unsafe or missing:
 We **never** store:
 
 * Passwords,
-* Tokens,
-* Raw session objects,
+* Raw session objects outside the auth helper,
 
 in `localStorage` or `sessionStorage`.
 
 We **do** store:
 
+* Access tokens and derived expiries under `ade.auth.tokens` (managed centrally in `shared/auth/api.ts`). Refresh tokens remain in HttpOnly cookies.
 * UI preferences such as:
 
   * Left nav collapsed/expanded,

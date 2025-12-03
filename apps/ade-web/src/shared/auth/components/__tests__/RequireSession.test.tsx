@@ -28,7 +28,7 @@ describe("RequireSession", () => {
     mockUseSetupStatusQuery.mockReset();
 
     mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: false },
+      data: { requires_setup: false, has_users: true },
       isPending: false,
       isSuccess: true,
       isError: false,
@@ -88,7 +88,7 @@ describe("RequireSession", () => {
     });
 
     mockUseSetupStatusQuery.mockReturnValue({
-      data: { requires_setup: true, force_sso: false },
+      data: { requires_setup: true, has_users: false },
       isPending: false,
       isSuccess: true,
       isError: false,
@@ -141,16 +141,30 @@ describe("RequireSession", () => {
   it("renders children when a session is available and provides session context", async () => {
     const session: SessionEnvelope = {
       user: {
-        user_id: "user-1",
+        id: "user-1",
         email: "user@example.com",
-        is_active: true,
         is_service_account: false,
         display_name: "Test User",
-        permissions: ["Workspaces.Create"],
+        roles: [],
+        permissions: ["workspaces.create"],
+        preferred_workspace_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
+      workspaces: {
+        items: [],
+        page: 1,
+        page_size: 50,
+        total: 0,
+        has_next: false,
+        has_previous: false,
+      },
+      roles: [],
+      permissions: ["workspaces.create"],
       expires_at: new Date(Date.now() + 120_000).toISOString(),
       refresh_expires_at: new Date(Date.now() + 300_000).toISOString(),
       return_to: null,
+      state: null,
     };
 
     mockUseSessionQuery.mockReturnValue({
