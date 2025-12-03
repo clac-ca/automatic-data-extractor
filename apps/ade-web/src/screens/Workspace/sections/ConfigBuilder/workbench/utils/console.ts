@@ -27,49 +27,67 @@ export function formatConsoleTimestamp(value: string | Date): string {
 }
 
 export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
+  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine =>
+    line.raw ? line : { ...line, raw: event };
+
   if (!isAdeEvent(event)) {
-    return { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" };
+    return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
   }
   const payload = payloadOf(event);
   const ts = formatConsoleTimestamp(eventTimestamp(event));
   const type = event.type;
 
   if (type === "console.line") {
-    return formatConsole(event, payload, ts, "build");
+    return attachRaw(formatConsole(event, payload, ts, "build"));
   }
 
   if (!type?.startsWith("build.")) {
-    return {
+    return attachRaw({
       level: "info",
       message: JSON.stringify(event),
       timestamp: ts,
       origin: "build",
-    };
+    });
   }
 
   switch (type) {
+    case "build.queued": {
+      const reason = (payload.reason as string | undefined) ?? undefined;
+      return attachRaw({
+        level: "info",
+        message: reason ? `Build queued (${reason}).` : "Build queued.",
+        timestamp: ts,
+        origin: "build",
+      });
+    }
     case "build.created": {
       const reason = (payload.reason as string | undefined) ?? "queued";
-      return {
+      return attachRaw({
         level: "info",
         message: `Build queued (${reason}).`,
         timestamp: ts,
         origin: "build",
-      };
+      });
     }
     case "build.started": {
       const reason = (payload.reason as string | undefined) ?? undefined;
-      return {
+      return attachRaw({
         level: "info",
         message: reason ? `Build started (${reason}).` : "Build started.",
         timestamp: ts,
         origin: "build",
-      };
+      });
     }
     case "build.phase.started": {
       const phase = (payload.phase as string | undefined) ?? "building";
       const message = (payload.message as string | undefined) ?? `Starting ${phase}`;
-      return { level: "info", message, timestamp: ts, origin: "build" };
+      return attachRaw({ level: "info", message, timestamp: ts, origin: "build" });
+    }
+    case "build.progress": {
+      const message =
+        (payload.message as string | undefined) ??
+        ((payload.step as string | undefined) ? `Build: ${payload.step as string}` : "Build progress");
+      return attachRaw({ level: "info", message, timestamp: ts, origin: "build" });
     }
     case "build.phase.completed": {
       const phase = (payload.phase as string | undefined) ?? "build";
@@ -80,29 +98,34 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
         `${phase} ${status}${duration ? ` in ${duration}` : ""}`;
       const level: WorkbenchConsoleLine["level"] =
         status === "failed" ? "error" : status === "skipped" ? "warning" : "success";
-      return { level, message, timestamp: ts, origin: "build" };
+      return attachRaw({ level, message, timestamp: ts, origin: "build" });
     }
     case "build.completed":
-      return formatBuildCompletion(payload, ts);
+      return attachRaw(formatBuildCompletion(payload, ts));
     default:
-      return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" };
+      return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" });
   }
 }
 
 export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
+  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine =>
+    line.raw ? line : { ...line, raw: event };
+
   if (!isAdeEvent(event)) {
-    return { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" };
+    return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
   }
   const payload = payloadOf(event);
   const ts = formatConsoleTimestamp(eventTimestamp(event));
   const type = event.type;
 
   if (type === "console.line") {
-    return formatConsole(event, payload, ts, (payload.scope as string | undefined) === "build" ? "build" : "run");
+    return attachRaw(
+      formatConsole(event, payload, ts, (payload.scope as string | undefined) === "build" ? "build" : "run"),
+    );
   }
 
   if (!type?.startsWith("run.")) {
-    return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" };
+    return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
   }
 
   switch (type) {
@@ -110,34 +133,46 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
       const mode = (payload.mode as string | undefined) ?? undefined;
       const runId = event.run_id ?? "";
       const suffix = mode ? ` (${mode})` : "";
-      return {
+      return attachRaw({
         level: "info",
         message: `Run ${runId ? `${runId} ` : ""}queued${suffix}.`,
         timestamp: ts,
         origin: "run",
-      };
+      });
+    }
+    case "run.waiting_for_build": {
+      const reason = (payload.reason as string | undefined) ?? undefined;
+      const buildId = (payload.build_id as string | undefined) ?? undefined;
+      const reasonPart = reason ? ` (${reason})` : "";
+      const buildPart = buildId ? ` · ${buildId}` : "";
+      return attachRaw({
+        level: "info",
+        message: `Waiting for build${reasonPart}${buildPart}.`,
+        timestamp: ts,
+        origin: "run",
+      });
     }
     case "run.started": {
       const mode = (payload.mode as string | undefined) ?? undefined;
       const env = (payload.env as { reused?: boolean; reason?: string } | undefined) ?? undefined;
       const envNote = env?.reused ? " (reused environment)" : env?.reason ? ` (${env.reason})` : "";
-      return {
+      return attachRaw({
         level: "info",
         message: `Run started${mode ? ` (${mode})` : ""}${envNote}.`,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.phase.started": {
       const phase = (payload.phase as string | undefined) ?? "progress";
       const message = (payload.message as string | undefined) ?? `Phase: ${phase}`;
       const level = normalizeLevel((payload.level as string | undefined) ?? "info");
-      return {
+      return attachRaw({
         level,
         message,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.phase.completed": {
       const phase = (payload.phase as string | undefined) ?? "phase";
@@ -148,12 +183,12 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         `Phase ${phase} ${status}${duration ? ` in ${duration}` : ""}`;
       const level: WorkbenchConsoleLine["level"] =
         status === "failed" ? "error" : status === "skipped" ? "warning" : "success";
-      return {
+      return attachRaw({
         level,
         message,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.table.summary": {
       const name =
@@ -161,21 +196,21 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         (payload.source_file as string | undefined) ??
         (payload.table_id as string | undefined) ??
         "table";
-      return {
+      return attachRaw({
         level: "info",
         message: `Table completed (${name})`,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.validation.issue": {
       const sev = (payload.severity as string | undefined) ?? "info";
-      return {
+      return attachRaw({
         level: sev === "error" ? "error" : sev === "warning" ? "warning" : "info",
         message: `Validation issue${payload.code ? `: ${payload.code as string}` : ""}`,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.validation.summary": {
       const total = (payload.issues_total as number | undefined) ?? 0;
@@ -183,29 +218,29 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
       const level: WorkbenchConsoleLine["level"] =
         maxSeverity === "error" ? "error" : maxSeverity === "warning" || total > 0 ? "warning" : "info";
       const descriptor = maxSeverity ? `${maxSeverity}` : total > 0 ? "issues" : "clean";
-      return {
+      return attachRaw({
         level,
         message: `Validation summary: ${total} ${descriptor}`,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.error": {
       const code = (payload.code as string | undefined) ?? "unknown_error";
       const message = (payload.message as string | undefined) ?? "Run error.";
       const stage = (payload.stage as string | undefined) ?? (payload.phase as string | undefined);
       const stageLabel = stage ? ` [${stage}]` : "";
-      return {
+      return attachRaw({
         level: "error",
         message: `${message}${stageLabel} (${code})`,
         timestamp: ts,
         origin: "run",
-      };
+      });
     }
     case "run.completed":
-      return formatRunCompletion(payload, ts);
+      return attachRaw(formatRunCompletion(payload, ts));
     default:
-      return { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" };
+      return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
   }
 }
 
@@ -229,6 +264,7 @@ function formatConsole(
     message: String(message ?? ""),
     timestamp,
     origin,
+    raw: event,
   };
 }
 
@@ -247,10 +283,11 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
       message: summary || `Build ${status}.`,
       timestamp,
       origin: "build",
+      raw: payload,
     };
   }
   if (status === "canceled") {
-    return { level: "warning", message: "Build was canceled before completion.", timestamp, origin: "build" };
+    return { level: "warning", message: "Build was canceled before completion.", timestamp, origin: "build", raw: payload };
   }
   if (status === "failed") {
     const exit = typeof exitCode === "number" ? ` (exit code ${exitCode})` : "";
@@ -259,6 +296,7 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
       message: (errorMessage || summary || "Build failed.") + exit,
       timestamp,
       origin: "build",
+      raw: payload,
     };
   }
   if (status === "skipped") {
@@ -267,6 +305,7 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
       message: summary || "Build skipped.",
       timestamp,
       origin: "build",
+      raw: payload,
     };
   }
   return {
@@ -274,6 +313,7 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
     message: summary || `Build ${status}.`,
     timestamp,
     origin: "build",
+    raw: payload,
   };
 }
 
@@ -303,6 +343,7 @@ function formatRunCompletion(payload: Record<string, unknown>, timestamp: string
     message: `${base}${exitPart}.`,
     timestamp,
     origin: "run",
+    raw: payload,
   };
 }
 

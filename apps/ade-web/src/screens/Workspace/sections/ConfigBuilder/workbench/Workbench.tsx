@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
-import { BottomPanel, type WorkbenchRunSummary } from "./components/BottomPanel";
+import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
 import { Inspector } from "./components/Inspector";
@@ -23,7 +23,12 @@ import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
-import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
+import type {
+  WorkbenchConsoleLine,
+  WorkbenchDataSeed,
+  WorkbenchRunSummary,
+  WorkbenchValidationState,
+} from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode } from "./utils/tree";
 
@@ -49,16 +54,12 @@ import {
   fetchRunOutputs,
   fetchRunSummary,
   fetchRunTelemetry,
-  fetchRun,
   runLogsUrl,
   runOutputsUrl,
-  createRun,
-  runEventsUrl,
-  runQueryKeys,
-  streamRunEvents,
   type RunStreamOptions,
   type RunResource,
 } from "@shared/runs/api";
+import { connectRunJob, startRunJob, useRunJob, type RunJobMode } from "@shared/runs/jobStore";
 import type { RunStatus, RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -87,6 +88,8 @@ const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
 const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.editor-theme`;
+const buildExplorerExpandedStorageKey = (workspaceId: string, configId: string) =>
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.explorer.expanded`;
 
 const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
   { value: "system", label: "System" },
@@ -260,12 +263,8 @@ export function Workbench({
     digest: null,
   }));
 
-  const consoleStreamRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  const runMetadataRef = useRef<Record<string, (RunStreamMetadata & { startedAt?: string }) | undefined>>({});
   const lastCompletedRunRef = useRef<string | null>(null);
-  const [runConnectionState, setRunConnectionState] = useState<"idle" | "connecting" | "streaming" | "error">("idle");
-  const [runStreamRestartKey, setRunStreamRestartKey] = useState(0);
 
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
@@ -311,28 +310,29 @@ export function Workbench({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      consoleStreamRef.current?.abort();
     };
   }, []);
 
-  const runQuery = useQuery({
-    queryKey: runId ? runQueryKeys.detail(runId) : ["run", "none"],
-    queryFn: ({ signal }) => (runId ? fetchRun(runId, signal) : Promise.reject(new Error("No run id"))),
-    enabled: Boolean(runId),
-    staleTime: 15_000,
-    retry: false,
-  });
-
-  const currentRunMetadata = runId ? runMetadataRef.current[runId] : undefined;
-  const derivedRunStatus = combineRunStatuses(runQuery.data?.status, runStreamState.status);
-  const derivedRunMode = currentRunMetadata?.mode ?? runStreamState.runMode;
+  const runJob = useRunJob(runId);
+  const derivedRunStatus = combineRunStatuses(runJob?.resource?.status, runStreamState.status);
+  const derivedRunMode = runJob?.mode ?? runStreamState.runMode;
   const runInProgress = isRunStatusInProgress(derivedRunStatus);
+  const runConnectionState = runJob?.connectState ?? "idle";
 
   useEffect(() => {
     if (lastCompletedRunRef.current && lastCompletedRunRef.current !== runId) {
       lastCompletedRunRef.current = null;
     }
   }, [runId]);
+
+  useEffect(() => {
+    if (!runJob?.resource) {
+      return;
+    }
+    if (runJob.resource.configuration_id !== configId) {
+      setRunId(null);
+    }
+  }, [runJob?.resource, configId, setRunId]);
 
   const validateConfiguration = useValidateConfigurationMutation(workspaceId, configId);
 
@@ -833,102 +833,38 @@ export function Workbench({
 
   useEffect(() => {
     if (!runId) {
-      consoleStreamRef.current?.abort();
-      consoleStreamRef.current = null;
-      setRunConnectionState("idle");
       return;
     }
-
-    const controller = new AbortController();
-    consoleStreamRef.current?.abort();
-    consoleStreamRef.current = controller;
-
-    const lastSequence =
-      runStreamRef.current.runId === runId ? runStreamRef.current.lastSequence : 0;
-
-    if (runStreamRef.current.runId !== runId) {
-      dispatchRunStream({ type: "ATTACH_RUN", runId });
-      if (runStreamRef.current.consoleLines.length === 0) {
-        resetConsole("Replaying run log…", runId);
-      }
-    } else {
-      dispatchRunStream({ type: "ATTACH_RUN", runId });
+    dispatchRunStream({ type: "ATTACH_RUN", runId });
+    if (runStreamRef.current.consoleLines.length === 0) {
+      resetConsole("Replaying run log…", runId);
     }
+    void connectRunJob(runId).catch((error) => {
+      pushConsoleError(error);
+    });
+  }, [runId, dispatchRunStream, resetConsole, pushConsoleError]);
 
-    setRunConnectionState("connecting");
-
-    void (async () => {
-      try {
-        const cachedRun = queryClient.getQueryData(runQueryKeys.detail(runId)) as RunResource | undefined;
-        const runResource =
-          cachedRun ??
-          (await fetchRun(runId, controller.signal).catch((error) => {
-            if (controller.signal.aborted) return null;
-            throw error;
-          }));
-        if (!runResource) {
-          throw new Error("Run not found.");
-        }
-        if (runResource.configuration_id !== configId) {
-          setRunId(null);
-          return;
-        }
-        queryClient.setQueryData(runQueryKeys.detail(runId), runResource);
-        runMetadataRef.current[runId] = {
-          ...runMetadataRef.current[runId],
-          startedAt: runResource.started_at ?? runMetadataRef.current[runId]?.startedAt,
-        };
-        const eventsUrl = runEventsUrl(runResource, { afterSequence: lastSequence });
-        if (!eventsUrl) {
-          throw new Error("Run events link unavailable.");
-        }
-        setRunConnectionState("streaming");
-        for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
-          if (controller.signal.aborted) {
-            return;
-          }
-          const payload = extractEventPayload(event);
-          const mode = resolveRunModeFromPayload(payload);
-          if (mode) {
-            runMetadataRef.current[runId] = {
-              ...runMetadataRef.current[runId],
-              mode,
-            };
-            dispatchRunStream({ type: "ATTACH_RUN", runId, runMode: mode });
-          }
-          dispatchRunStream({ type: "EVENT", event });
-        }
-        setRunConnectionState("idle");
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        console.warn("Run stream interrupted", error);
-        setRunConnectionState("error");
-        if (runInProgress) {
-          setTimeout(() => setRunStreamRestartKey((key) => key + 1), 1500);
-        } else {
-          pushConsoleError(error);
-        }
-      } finally {
-        if (consoleStreamRef.current === controller) {
-          consoleStreamRef.current = null;
-        }
+  useEffect(() => {
+    if (!runId || !runJob) {
+      return;
+    }
+    const lastSequence = runStreamRef.current.lastSequence;
+    const newEvents = runJob.events.filter((event) => {
+      const seq = typeof event.sequence === "number" ? event.sequence : null;
+      return seq == null ? true : seq > lastSequence;
+    });
+    if (!newEvents.length) {
+      return;
+    }
+    for (const event of newEvents) {
+      const payload = extractEventPayload(event);
+      const mode = resolveRunModeFromPayload(payload);
+      if (mode) {
+        dispatchRunStream({ type: "ATTACH_RUN", runId, runMode: mode as RunJobMode });
       }
-    })();
-
-    return () => controller.abort();
-  }, [
-    runId,
-    configId,
-    queryClient,
-    resetConsole,
-    dispatchRunStream,
-    runInProgress,
-    setRunId,
-    pushConsoleError,
-    runStreamRestartKey,
-  ]);
+      dispatchRunStream({ type: "EVENT", event });
+    }
+  }, [runId, runJob, dispatchRunStream]);
 
   const startRun = useCallback(
     async (
@@ -975,19 +911,16 @@ export function Workbench({
       }
 
       try {
-        const runResource = await createRun(configId, effectiveOptions);
-        runMetadataRef.current[runResource.id] = { ...metadata, startedAt: startedIso };
-        setRunId(runResource.id);
-        dispatchRunStream({ type: "ATTACH_RUN", runId: runResource.id, runMode: metadata.mode });
-        queryClient.setQueryData(runQueryKeys.detail(runResource.id), runResource);
-        setRunConnectionState("connecting");
-        return { runId: runResource.id, startedAt: startedIso };
+        const runState = await startRunJob(configId, effectiveOptions, { ...metadata, mode: metadata.mode });
+        setRunId(runState.runId);
+        dispatchRunStream({ type: "ATTACH_RUN", runId: runState.runId, runMode: metadata.mode });
+        return { runId: runState.runId, startedAt: startedIso };
       } catch (error) {
         pushConsoleError(error);
         return null;
       }
     },
-  [
+    [
       usingSeed,
       tree,
       filesQuery.isLoading,
@@ -1002,11 +935,10 @@ export function Workbench({
       setValidationState,
       setLatestRun,
       configId,
-      queryClient,
       setRunId,
       dispatchRunStream,
-    pushConsoleError,
-  ],
+      pushConsoleError,
+    ],
   );
 
   useEffect(() => {
@@ -1040,10 +972,10 @@ export function Workbench({
     showConsoleBanner(notice, { intent });
 
     const runMode = derivedRunMode ?? "extraction";
-    const startedAtIso = currentRunMetadata?.startedAt ?? runQuery.data?.started_at ?? undefined;
+    const startedAtIso = runJob?.startedAt ?? runJob?.resource?.started_at ?? undefined;
     const completedIso =
       (completedPayload.completed_at as string | undefined) ??
-      runQuery.data?.completed_at ??
+      runJob?.resource?.completed_at ??
       new Date().toISOString();
     const startedAt = startedAtIso ? new Date(startedAtIso) : null;
     const completedAt = completedIso ? new Date(completedIso) : new Date();
@@ -1071,7 +1003,7 @@ export function Workbench({
     });
 
     void (async () => {
-      let runResource = runQuery.data;
+      let runResource = runJob?.resource;
       try {
         const telemetry = await fetchRunTelemetry(currentRunId);
         const lastSeen = runStreamRef.current.lastSequence;
@@ -1097,13 +1029,13 @@ export function Workbench({
       }
       const outputsBase = runResource ? runOutputsUrl(runResource) ?? undefined : undefined;
       const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : undefined;
-      const sheetNames = currentRunMetadata?.sheetNames ?? [];
+      const sheetNames = runJob?.metadata?.sheetNames ?? [];
       setLatestRun({
         runId: currentRunId,
         status: runStatus,
         outputsBase,
         logsUrl,
-        documentName: currentRunMetadata?.documentName,
+        documentName: runJob?.metadata?.documentName,
         sheetNames,
         outputs: [],
         outputsLoaded: false,
@@ -1172,8 +1104,7 @@ export function Workbench({
     runId,
     derivedRunStatus,
     derivedRunMode,
-    currentRunMetadata,
-    runQuery.data,
+    runJob,
     runStreamState.completedPayload,
     showConsoleBanner,
     appendConsoleLine,
@@ -1698,10 +1629,7 @@ export function Workbench({
                     deletingFolderPath={deletingFolderPath}
                     onDeleteFile={handleDeleteFile}
                     onDeleteFolder={handleDeleteFolder}
-                    onCloseFile={files.closeTab}
-                    onCloseOtherFiles={files.closeOtherTabs}
-                    onCloseTabsToRight={files.closeTabsToRight}
-                    onCloseAllFiles={files.closeAllTabs}
+                    expandedStorageKey={buildExplorerExpandedStorageKey(workspaceId, configId)}
                     onHide={handleHideExplorer}
                   />
                 ) : (
@@ -1747,6 +1675,7 @@ export function Workbench({
               onSaveTab={handleSaveTabShortcut}
               onSaveAllTabs={handleSaveAllTabs}
               onMoveTab={files.moveTab}
+              onRetryTabLoad={files.reloadTab}
               onPinTab={files.pinTab}
               onUnpinTab={files.unpinTab}
               onSelectRecentTab={files.selectRecentTab}
@@ -1781,6 +1710,7 @@ export function Workbench({
                 onSaveTab={handleSaveTabShortcut}
                 onSaveAllTabs={handleSaveAllTabs}
                 onMoveTab={files.moveTab}
+                onRetryTabLoad={files.reloadTab}
                 onPinTab={files.pinTab}
                 onUnpinTab={files.unpinTab}
                 onSelectRecentTab={files.selectRecentTab}

@@ -46,13 +46,14 @@ export function createRunStreamState(
   maxConsoleLines: number,
   initialLines?: readonly WorkbenchConsoleLine[],
 ): RunStreamState {
+  const seededLines = assignLineIds(clampConsoleLines(initialLines ?? [], maxConsoleLines), "initial");
   return {
     runId: null,
     runMode: undefined,
     status: "idle",
     buildPhases: {},
     runPhases: {},
-    consoleLines: clampConsoleLines(initialLines ?? [], maxConsoleLines),
+    consoleLines: seededLines,
     tableSummaries: {},
     validationSummary: null,
     completedPayload: null,
@@ -78,7 +79,10 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
     case "CLEAR_CONSOLE":
       return { ...state, consoleLines: [] };
     case "APPEND_LINE": {
-      const consoleLines = clampConsoleLines([...state.consoleLines, action.line], state.maxConsoleLines);
+      const consoleLines = clampConsoleLines(
+        [...state.consoleLines, withLineId(action.line, state.consoleLines.length)],
+        state.maxConsoleLines,
+      );
       return { ...state, consoleLines };
     }
     case "EVENT":
@@ -100,7 +104,10 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     type.startsWith("build.") || (type === "console.line" && (payload.scope as string | undefined) === "build");
 
   const line = isBuildEvent ? describeBuildEvent(event) : describeRunEvent(event);
-  const consoleLines = clampConsoleLines([...state.consoleLines, line], state.maxConsoleLines);
+  const consoleLines = clampConsoleLines(
+    [...state.consoleLines, withLineId(line, state.consoleLines.length)],
+    state.maxConsoleLines,
+  );
 
   const buildPhases: Record<string, PhaseState> =
     type === "build.phase.started"
@@ -222,6 +229,31 @@ function clampConsoleLines(
     return lines.slice();
   }
   return lines.slice(lines.length - maxConsoleLines);
+}
+
+function assignLineIds(
+  lines: readonly WorkbenchConsoleLine[],
+  seed: string,
+): WorkbenchConsoleLine[] {
+  return lines.map((line, index) => withLineId(line, index, seed));
+}
+
+function withLineId(
+  line: WorkbenchConsoleLine,
+  index: number,
+  seed = "line",
+): WorkbenchConsoleLine {
+  if (line.id) return line;
+  const random =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Math.random().toString(16).slice(2);
+  const origin = line.origin ?? "run";
+  const timestamp = line.timestamp ?? "ts";
+  return {
+    ...line,
+    id: `${seed}-${origin}-${timestamp}-${index}-${random}`,
+  };
 }
 
 function asNumber(value: unknown): number | undefined {

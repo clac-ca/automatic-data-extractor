@@ -1,6 +1,6 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { render } from "@test/test-utils";
 import type { WorkbenchFileNode } from "../../types";
@@ -22,6 +22,10 @@ function buildTree(): WorkbenchFileNode {
   };
 }
 
+afterEach(() => {
+  window.localStorage.clear();
+});
+
 describe("Explorer", () => {
   it("creates folders from the context menu", async () => {
     const onCreateFolder = vi.fn().mockResolvedValue(undefined);
@@ -42,10 +46,6 @@ describe("Explorer", () => {
         onCreateFile={vi.fn()}
         canDeleteFile={false}
         canDeleteFolder={false}
-        onCloseFile={() => {}}
-        onCloseOtherFiles={() => {}}
-        onCloseTabsToRight={() => {}}
-        onCloseAllFiles={() => {}}
         onHide={() => {}}
       />,
     );
@@ -61,6 +61,54 @@ describe("Explorer", () => {
     await user.type(input, "nested{enter}");
 
     expect(onCreateFolder).toHaveBeenCalledWith("src", "nested");
+  });
+
+  it("restores expanded folders from storage", () => {
+    const storageKey = "test.explorer.expanded.restore";
+    window.localStorage.setItem(storageKey, JSON.stringify(["src"]));
+
+    render(
+      <Explorer
+        width={300}
+        tree={buildTree()}
+        activeFileId=""
+        openFileIds={[]}
+        onSelectFile={() => {}}
+        theme="light"
+        expandedStorageKey={storageKey}
+        onHide={() => {}}
+      />,
+    );
+
+    const folderButton = screen.getByRole("button", { name: "src" });
+    expect(folderButton).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("persists folder expansion changes to storage", async () => {
+    const storageKey = "test.explorer.expanded.persist";
+    const user = userEvent.setup();
+
+    render(
+      <Explorer
+        width={300}
+        tree={buildTree()}
+        activeFileId=""
+        openFileIds={[]}
+        onSelectFile={() => {}}
+        theme="light"
+        expandedStorageKey={storageKey}
+        onHide={() => {}}
+      />,
+    );
+
+    const folderButton = screen.getByRole("button", { name: "src" });
+    expect(folderButton).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(folderButton);
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(storageKey)).toBe(JSON.stringify(["src"]));
+    });
   });
 
   it("creates files from the context menu", async () => {
@@ -82,10 +130,6 @@ describe("Explorer", () => {
         onCreateFile={onCreateFile}
         canDeleteFile={false}
         canDeleteFolder={false}
-        onCloseFile={() => {}}
-        onCloseOtherFiles={() => {}}
-        onCloseTabsToRight={() => {}}
-        onCloseAllFiles={() => {}}
         onHide={() => {}}
       />,
     );
@@ -123,10 +167,6 @@ describe("Explorer", () => {
         canDeleteFile
         canDeleteFolder
         onDeleteFolder={onDeleteFolder}
-        onCloseFile={() => {}}
-        onCloseOtherFiles={() => {}}
-        onCloseTabsToRight={() => {}}
-        onCloseAllFiles={() => {}}
         onHide={() => {}}
       />,
     );
