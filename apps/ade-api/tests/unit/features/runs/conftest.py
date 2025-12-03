@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from ade_api.shared.db import Base
+from ade_api.infra.db import Base
 
 
 @pytest_asyncio.fixture()

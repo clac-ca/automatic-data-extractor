@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
+
+from ade_api.common.encoding import json_dumps
 
 __all__ = ["compute_build_fingerprint"]
 
@@ -29,5 +30,5 @@ def compute_build_fingerprint(
         "python_bin": python_bin,
         "extra": extra or {},
     }
-    normalized = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    normalized = json_dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(normalized).hexdigest()

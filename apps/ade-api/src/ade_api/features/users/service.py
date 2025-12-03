@@ -3,25 +3,23 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.roles.service import (
-    get_global_permissions_for_user,
-    get_global_role_slugs_for_user,
-)
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.pagination import paginate_sql
-from ade_api.shared.types import OrderBy
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import paginate_sql
+from ade_api.common.types import OrderBy
+from ade_api.core.models import User
+from ade_api.core.security.hashing import hash_password
+from ade_api.features.rbac import RbacService
 
-from ..auth.security import hash_password
 from .filters import UserFilters, apply_user_filters
-from .models import User
 from .repository import UsersRepository
-from .schemas import UserOut, UserPage, UserProfile
+from .schemas import UserOut, UserPage, UserProfile, UserUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +45,28 @@ class UsersService:
             extra=log_context(user_id=str(user.id)),
         )
         return profile
+
+    async def get_user(self, *, user_id: str | UUID) -> UserOut:
+        """Return a single user profile by identifier."""
+
+        logger.debug(
+            "users.get.start",
+            extra=log_context(user_id=str(user_id)),
+        )
+
+        user = await self._repo.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        result = await self._serialize_user(user)
+        logger.info(
+            "users.get.success",
+            extra=log_context(user_id=str(user.id)),
+        )
+        return result
 
     async def list_users(
         self,
@@ -82,14 +102,7 @@ class UsersService:
 
         items: list[UserOut] = []
         for user in page_result.items:
-            profile = await self._build_profile(user)
-            items.append(
-                UserOut(
-                    **profile.model_dump(),
-                    created_at=user.created_at,
-                    updated_at=user.updated_at,
-                )
-            )
+            items.append(await self._serialize_user(user))
 
         result = UserPage(
             items=items,
@@ -111,20 +124,69 @@ class UsersService:
         )
         return result
 
+    async def update_user(
+        self,
+        *,
+        user_id: str | UUID,
+        payload: UserUpdate,
+    ) -> UserOut:
+        """Update mutable user fields."""
+
+        logger.debug(
+            "users.update.start",
+            extra=log_context(user_id=str(user_id)),
+        )
+
+        user = await self._repo.get_by_id_basic(user_id)
+        if user is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail="User not found.",
+            )
+
+        updates = payload.model_dump(exclude_unset=True, exclude_none=False)
+        if not updates:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Provide at least one field to update.",
+            )
+        if "is_active" in updates and updates["is_active"] is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="is_active must be true or false when provided.",
+            )
+
+        repo_kwargs = {}
+        if "display_name" in updates:
+            repo_kwargs["display_name"] = updates["display_name"]
+        if "is_active" in updates:
+            repo_kwargs["is_active"] = updates["is_active"]
+
+        await self._repo.update_user(
+            user,
+            **repo_kwargs,
+        )
+
+        result = await self._serialize_user(user)
+        logger.info(
+            "users.update.success",
+            extra=log_context(
+                user_id=str(user.id),
+                is_active=user.is_active,
+                has_display_name=bool(user.display_name),
+            ),
+        )
+        return result
+
     async def _build_profile(self, user: User) -> UserProfile:
         logger.debug(
             "user.profile.build",
             extra=log_context(user_id=str(user.id)),
         )
 
-        permissions = await get_global_permissions_for_user(
-            session=self._session,
-            user=user,
-        )
-        roles = await get_global_role_slugs_for_user(
-            session=self._session,
-            user=user,
-        )
+        rbac = RbacService(session=self._session)
+        permissions = await rbac.get_global_permissions_for_user(user=user)
+        roles = await rbac.get_global_role_slugs_for_user(user=user)
         return UserProfile(
             id=str(user.id),
             email=user.email,
@@ -133,6 +195,14 @@ class UsersService:
             display_name=user.display_name,
             roles=sorted(roles),
             permissions=sorted(permissions),
+        )
+
+    async def _serialize_user(self, user: User) -> UserOut:
+        profile = await self._build_profile(user)
+        return UserOut(
+            **profile.model_dump(),
+            created_at=user.created_at,
+            updated_at=user.updated_at,
         )
 
     async def create_admin(

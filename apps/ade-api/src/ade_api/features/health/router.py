@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from ade_api.shared.dependency import get_health_service
+from ade_api.app.dependencies import get_health_service
 
 from .schemas import HealthCheckResponse
 from .service import HealthService

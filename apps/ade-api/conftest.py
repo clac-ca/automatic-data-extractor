@@ -6,7 +6,7 @@ import os
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -17,22 +17,15 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from ade_api.features.auth.security import hash_password
-from ade_api.features.roles.models import Role, ScopeType
-from ade_api.features.roles.service import (
-    assign_global_role,
-    assign_role,
-    ensure_user_principal,
-    sync_permission_registry,
-)
-from ade_api.features.users.models import User, UserCredential
-from ade_api.features.workspaces.models import Workspace, WorkspaceMembership
+from ade_api.core.models import Role, User, UserCredential, Workspace, WorkspaceMembership
+from ade_api.core.rbac.types import ScopeType
+from ade_api.core.security.hashing import hash_password
+from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.settings import Settings, get_settings, reload_settings
-from ade_api.shared.core.lifecycles import ensure_runtime_dirs
-from ade_api.shared.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.shared.dependency import configure_auth_dependencies
+from ade_api.app.lifecycles import ensure_runtime_dirs
+from ade_api.infra.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from ade_api.infra.db.session import get_sessionmaker
 
 
 @pytest.fixture(scope="session")
@@ -126,7 +119,6 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
         app.dependency_overrides[get_settings] = lambda: updated
         app.state.settings = updated
         app.state.safe_mode = bool(updated.safe_mode)
-        configure_auth_dependencies(settings=updated)
         ensure_runtime_dirs(updated)
         return updated
 
@@ -140,7 +132,6 @@ def override_app_settings(app: FastAPI) -> Callable[..., Settings]:
     restored = reload_settings()
     app.state.settings = restored
     app.state.safe_mode = bool(restored.safe_mode)
-    configure_auth_dependencies(settings=restored)
     ensure_runtime_dirs(restored)
 
 
@@ -162,7 +153,8 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
     await ensure_database_ready(settings)
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
-        await sync_permission_registry(session=session)
+        rbac_service = RbacService(session=session)
+        await rbac_service.sync_registry()
 
         workspace_slug = f"acme-{uuid4().hex[:8]}"
         workspace = Workspace(name="Acme Corp", slug=workspace_slug)
@@ -176,12 +168,12 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         orphan_password = "orphan-password"
         invitee_password = "invitee-password"
 
-        admin_email = f"admin+{workspace_slug}@example.test"
-        workspace_owner_email = f"owner+{workspace_slug}@example.test"
-        member_email = f"member+{workspace_slug}@example.test"
-        member_manage_email = f"member-manage+{workspace_slug}@example.test"
-        orphan_email = f"orphan+{workspace_slug}@example.test"
-        invitee_email = f"invitee+{workspace_slug}@example.test"
+        admin_email = f"admin+{workspace_slug}@example.com"
+        workspace_owner_email = f"owner+{workspace_slug}@example.com"
+        member_email = f"member+{workspace_slug}@example.com"
+        member_manage_email = f"member-manage+{workspace_slug}@example.com"
+        orphan_email = f"orphan+{workspace_slug}@example.com"
+        invitee_email = f"invitee+{workspace_slug}@example.com"
 
         admin = User(email=admin_email, is_active=True)
         workspace_owner = User(email=workspace_owner_email, is_active=True)
@@ -204,24 +196,16 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         )
         await session.flush()
 
-        global_roles = await session.execute(
-            select(Role).where(
-                Role.scope_type == ScopeType.GLOBAL,
-                Role.scope_id.is_(None),
-                Role.slug.in_(["global-administrator", "global-user"]),
-            )
-        )
-        global_role_map = {role.slug: role for role in global_roles.scalars()}
-
-        admin_role = global_role_map.get("global-administrator")
+        admin_role = await rbac_service.get_role_by_slug(slug="global-admin")
         if admin_role is not None:
-            await assign_global_role(
-                session=session,
-                user_id=cast(str, admin.id),
-                role_id=cast(str, admin_role.id),
+            await rbac_service.assign_role_if_missing(
+                user_id=cast(UUID, admin.id),
+                role_id=admin_role.id,
+                scope_type=ScopeType.GLOBAL,
+                scope_id=None,
             )
 
-        member_role = global_role_map.get("global-user")
+        member_role = await rbac_service.get_role_by_slug(slug="global-user")
         if member_role is not None:
             for candidate in (
                 workspace_owner,
@@ -230,10 +214,11 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
                 orphan,
                 invitee,
             ):
-                await assign_global_role(
-                    session=session,
-                    user_id=cast(str, candidate.id),
-                    role_id=cast(str, member_role.id),
+                await rbac_service.assign_role_if_missing(
+                    user_id=cast(UUID, candidate.id),
+                    role_id=member_role.id,
+                    scope_type=ScopeType.GLOBAL,
+                    scope_id=None,
                 )
 
         def _add_password(user: User, password: str) -> None:
@@ -286,28 +271,23 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         )
         await session.flush()
 
-        result = await session.execute(
-            select(Role).where(
-                Role.scope_type == ScopeType.WORKSPACE,
-                Role.scope_id.is_(None),
-                Role.slug.in_(["workspace-owner", "workspace-member"]),
-            )
-        )
-        roles = {role.slug: role for role in result.scalars()}
+        workspace_roles: dict[str, Role] = {}
+        for slug in ("workspace-owner", "workspace-member"):
+            role = await rbac_service.get_role_by_slug(slug=slug)
+            if role is not None:
+                workspace_roles[slug] = role
 
         async def _assign_workspace_role(
             membership: WorkspaceMembership, user: User, slug: str
         ) -> None:
-            role = roles.get(slug)
+            role = workspace_roles.get(slug)
             if role is None:
                 return
-            principal = await ensure_user_principal(session=session, user=user)
-            await assign_role(
-                session=session,
-                principal_id=principal.id,
+            await rbac_service.assign_role_if_missing(
+                user_id=cast(UUID, user.id),
                 role_id=role.id,
                 scope_type=ScopeType.WORKSPACE,
-                scope_id=membership.workspace_id,
+                scope_id=cast(UUID, membership.workspace_id),
             )
 
         await _assign_workspace_role(
@@ -322,6 +302,14 @@ async def seed_identity(app: FastAPI) -> dict[str, Any]:
         await _assign_workspace_role(
             member_manage_secondary, member_with_manage, "workspace-member"
         )
+        owner_role = workspace_roles.get("workspace-owner")
+        if owner_role is not None:
+            await rbac_service.assign_role_if_missing(
+                user_id=cast(UUID, admin.id),
+                role_id=owner_role.id,
+                scope_type=ScopeType.WORKSPACE,
+                scope_id=cast(UUID, workspace.id),
+            )
 
         await session.commit()
 

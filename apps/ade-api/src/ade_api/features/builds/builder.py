@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 import sys
@@ -11,8 +10,11 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
+
+from ade_api.common.encoding import json_dumps
 
 from .exceptions import BuildExecutionError
 
@@ -75,9 +77,9 @@ class VirtualEnvironmentBuilder:
     async def build_stream(
         self,
         *,
-        build_id: str,
-        workspace_id: str,
-        configuration_id: str,
+        build_id: UUID,
+        workspace_id: UUID,
+        configuration_id: UUID,
         venv_root: Path,
         config_path: Path,
         engine_spec: str,
@@ -199,9 +201,9 @@ class VirtualEnvironmentBuilder:
             await self._write_metadata(
                 temp_path,
                 {
-                    "build_id": build_id,
-                    "workspace_id": workspace_id,
-                    "configuration_id": configuration_id,
+                    "build_id": str(build_id),
+                    "workspace_id": str(workspace_id),
+                    "configuration_id": str(configuration_id),
                     "python_version": python_version,
                     "engine_version": engine_version,
                     "fingerprint": fingerprint,
@@ -251,7 +253,7 @@ class VirtualEnvironmentBuilder:
         *,
         timeout: float,
         env: Mapping[str, str] | None = None,
-        build_id: str,
+        build_id: UUID,
     ) -> AsyncIterator[BuilderLogEvent]:
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -295,7 +297,7 @@ class VirtualEnvironmentBuilder:
         *,
         timeout: float,
         env: Mapping[str, str] | None = None,
-        build_id: str,
+        build_id: UUID,
     ) -> str:
         process = await asyncio.create_subprocess_exec(
             *command,
@@ -330,9 +332,9 @@ class VirtualEnvironmentBuilder:
 
         def _write() -> None:
             runtime_dir.mkdir(parents=True, exist_ok=True)
-            metadata_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            metadata_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
             packages_path.write_text("ade-engine\nade-config", encoding="utf-8")
-            marker_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            marker_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
 
         await run_in_threadpool(_write)
 
@@ -351,7 +353,7 @@ class VirtualEnvironmentBuilder:
         merged.update(env)
         return merged
 
-    async def _run_smoke_tests(self, venv_python: Path, *, timeout: float, build_id: str) -> None:
+    async def _run_smoke_tests(self, venv_python: Path, *, timeout: float, build_id: UUID) -> None:
         """Lightweight validation to ensure key packages import and report versions."""
 
         checks = [

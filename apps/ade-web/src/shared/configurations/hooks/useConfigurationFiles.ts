@@ -6,12 +6,20 @@ import {
   renameConfigurationFile,
   upsertConfigurationFile,
   deleteConfigurationFile,
+  createConfigurationDirectory,
+  deleteConfigurationDirectory,
   type ListConfigurationFilesOptions,
   type RenameConfigurationFilePayload,
   type UpsertConfigurationFilePayload,
 } from "../api";
 import { configurationKeys } from "../keys";
-import type { FileListing, FileReadJson, FileRenameResponse, FileWriteResponse } from "../types";
+import type {
+  DirectoryWriteResponse,
+  FileListing,
+  FileReadJson,
+  FileRenameResponse,
+  FileWriteResponse,
+} from "../types";
 
 interface UseConfigurationFilesQueryOptions extends Partial<ListConfigurationFilesOptions> {
   readonly workspaceId: string;
@@ -123,6 +131,32 @@ export function useDeleteConfigurationFileMutation(workspaceId: string, configId
   const queryClient = useQueryClient();
   return useMutation<void, Error, { path: string; etag?: string | null }>({
     mutationFn: (payload) => deleteConfigurationFile(workspaceId, configId, payload.path, { etag: payload.etag }),
+    async onSuccess(_, variables) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
+        queryClient.invalidateQueries({ queryKey: configurationKeys.file(workspaceId, configId, variables.path) }),
+      ]);
+    },
+  });
+}
+
+export function useCreateConfigurationDirectoryMutation(workspaceId: string, configId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<DirectoryWriteResponse, Error, { path: string }>({
+    mutationFn: (payload) => createConfigurationDirectory(workspaceId, configId, payload.path),
+    async onSuccess() {
+      await queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) });
+    },
+  });
+}
+
+export function useDeleteConfigurationDirectoryMutation(workspaceId: string, configId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { path: string; recursive?: boolean }>({
+    mutationFn: (payload) =>
+      deleteConfigurationDirectory(workspaceId, configId, payload.path, {
+        recursive: payload.recursive,
+      }),
     async onSuccess(_, variables) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),

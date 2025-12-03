@@ -259,7 +259,7 @@ Some APIs expose an explicit record for a configuration’s version (for example
 
 **User-facing naming**
 
-* Usually implied (e.g. “Latest build uses configuration version X”).
+* Usually implied (e.g. “Latest build uses configuration X”).
 * If you surface it explicitly, use phrasing like **Configuration version** and keep it tied to a Configuration.
 
 **Code & API naming**

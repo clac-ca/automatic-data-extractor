@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 from ade_engine.schemas import AdeEvent, ManifestV1, RunSummaryV1
 from pydantic import ValidationError
@@ -31,10 +32,9 @@ def build_run_summary(
     *,
     events: Iterable[AdeEvent],
     manifest: ManifestV1 | None,
-    workspace_id: str | None,
-    configuration_id: str | None,
-    configuration_version: str | None,
-    run_id: str,
+    workspace_id: UUID | None,
+    configuration_id: UUID | None,
+    run_id: UUID,
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:
@@ -308,7 +308,6 @@ def build_run_summary(
         "id": run_id,
         "workspace_id": workspace_id,
         "configuration_id": configuration_id,
-        "configuration_version": configuration_version,
         "status": summary_run_status,
         "failure_code": completion_error_dict.get("code"),
         "failure_stage": completion_error_dict.get("stage"),
@@ -347,10 +346,9 @@ def build_run_summary_from_paths(
     *,
     events_path: Path | None,
     manifest_path: Path | None,
-    workspace_id: str | None,
-    configuration_id: str | None,
-    configuration_version: str | None,
-    run_id: str,
+    workspace_id: UUID | None,
+    configuration_id: UUID | None,
+    run_id: UUID,
     env_reason: str | None = None,
     env_reused: bool | None = None,
 ) -> RunSummaryV1:
@@ -380,7 +378,6 @@ def build_run_summary_from_paths(
         manifest=manifest,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        configuration_version=configuration_version,
         run_id=run_id,
         env_reason=env_reason,
         env_reused=env_reused,

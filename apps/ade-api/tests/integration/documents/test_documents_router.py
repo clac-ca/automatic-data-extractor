@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import io
-import json
 
 import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
+from ade_api.core.models import Document, User
 from ade_api.features.documents.exceptions import DocumentFileMissingError
-from ade_api.features.documents.models import Document
 from ade_api.features.documents.service import DocumentsService
-from ade_api.features.users.models import User
+from ade_api.common.encoding import json_dumps
 from ade_api.settings import get_settings
-from ade_api.shared.db.session import get_sessionmaker
-from ade_api.storage_layout import workspace_documents_root
+from ade_api.infra.db.session import get_sessionmaker
+from ade_api.infra.storage import workspace_documents_root
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -42,7 +41,7 @@ async def test_upload_list_download_document(
         f"{workspace_base}/documents",
         headers=headers,
         files={"file": ("example.txt", b"hello world", "text/plain")},
-        data={"metadata": json.dumps({"source": "tests"})},
+        data={"metadata": json_dumps({"source": "tests"})},
     )
     assert upload.status_code == 201, upload.text
     payload = upload.json()

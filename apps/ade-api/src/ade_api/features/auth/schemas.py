@@ -1,209 +1,165 @@
-"""Schemas exposed by the auth module."""
+"""Request/response contracts for authentication endpoints."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
-from email_validator import EmailNotValidError, validate_email
-from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
+from pydantic import EmailStr, Field, SecretStr
 
-from ade_api.shared.core.ids import ULIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from ..system_settings.schemas import SafeModeStatus
-from ..users.schemas import UserProfile
-from ..workspaces.schemas import WorkspacePage
-from .utils import normalise_email
+from ade_api.common.schema import BaseSchema
 
 
-def _validate_email(value: EmailStr | str, *, allow_reserved: bool = False) -> str:
-    candidate = normalise_email(str(value))
-    try:
-        validated = validate_email(candidate)
-    except EmailNotValidError as exc:
-        message = str(exc)
-        if allow_reserved and candidate.endswith((".local", ".localhost", ".test")):
-            if "special-use or reserved" in message:
-                return candidate
-        raise ValueError(message) from exc
-    return validated.normalized
-
-
-class SetupStatus(BaseSchema):
-    """Response payload describing the initial setup state."""
-
-    requires_setup: bool
-    completed_at: datetime | None = None
-    force_sso: bool = False
-
-
-class SetupRequest(BaseSchema):
-    """Payload submitted when creating the first administrator."""
-
-    email: str
-    password: SecretStr
-    display_name: str | None = Field(default=None, max_length=255)
-
-    @field_validator("email", mode="plain")
-    @classmethod
-    def _normalise_email(cls, value: EmailStr | str) -> str:
-        return _validate_email(value, allow_reserved=True)
-
-    @field_validator("password", mode="before")
-    @classmethod
-    def _validate_password(cls, value: SecretStr | str) -> str:
-        if isinstance(value, SecretStr):
-            raw = value.get_secret_value()
-        else:
-            raw = str(value)
-        candidate = raw.strip()
-        if not candidate:
-            msg = "Password must not be empty"
-            raise ValueError(msg)
-        return candidate
-
-    @field_validator("display_name", mode="before")
-    @classmethod
-    def _clean_display_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = value.strip()
-        return cleaned or None
-
-
-class LoginRequest(BaseSchema):
+class AuthLoginRequest(BaseSchema):
     """Credentials submitted when performing a password login."""
 
-    email: str
-    password: SecretStr
+    email: EmailStr = Field(..., description="User email address.")
+    password: SecretStr = Field(..., description="User password.")
 
-    @field_validator("email", mode="plain")
-    @classmethod
-    def _normalise_email(cls, value: EmailStr | str) -> str:
-        """Lowercase, trim, and lightly validate the submitted email."""
 
-        return _validate_email(value, allow_reserved=True)
+class AuthRefreshRequest(BaseSchema):
+    """Optional payload for refresh / logout.
 
-    @field_validator("password", mode="before")
-    @classmethod
-    def _validate_password(cls, value: SecretStr | str) -> str:
-        """Ensure passwords are present after trimming whitespace."""
+    Browser clients typically rely on the refresh cookie; API clients can
+    supply the token in the request body instead.
+    """
 
-        if isinstance(value, SecretStr):
-            raw = value.get_secret_value()
-        else:
-            raw = str(value)
-        candidate = raw.strip()
-        if not candidate:
-            msg = "Password must not be empty"
-            raise ValueError(msg)
-        return candidate
+    refresh_token: str | None = Field(
+        default=None,
+        description="Refresh token to rotate. Optional when using the refresh cookie.",
+    )
+
+
+class AuthSetupStatusResponse(BaseSchema):
+    """Describes whether initial administrator setup is required."""
+
+    requires_setup: bool = Field(
+        ...,
+        description="True when no users exist and an initial admin must be created.",
+    )
+    has_users: bool = Field(
+        ...,
+        description="True when at least one user already exists.",
+    )
+
+
+class AuthSetupRequest(BaseSchema):
+    """Payload used to create the first administrator account."""
+
+    email: EmailStr = Field(..., description="Administrator email.")
+    password: SecretStr = Field(..., description="Administrator password.")
+    display_name: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Optional display name for the administrator.",
+    )
+
+
+class SessionTokens(BaseSchema):
+    """Session token pair issued to a client."""
+
+    access_token: str = Field(..., description="JWT access token.")
+    refresh_token: str | None = Field(
+        default=None,
+        description="Refresh token, if one is issued.",
+    )
+    token_type: str = Field(
+        default="bearer",
+        description="Token type, usually 'bearer'.",
+    )
+    expires_at: datetime = Field(
+        ...,
+        description="When the access token expires (UTC).",
+    )
+    refresh_expires_at: datetime | None = Field(
+        default=None,
+        description="When the refresh token expires (UTC), if applicable.",
+    )
+    expires_in: int = Field(
+        ...,
+        ge=0,
+        description="Seconds until the access token expires.",
+    )
+    refresh_expires_in: int | None = Field(
+        default=None,
+        ge=0,
+        description="Seconds until the refresh token expires, if applicable.",
+    )
 
 
 class SessionEnvelope(BaseSchema):
-    """Envelope returned when a session is established or refreshed."""
+    """Wrapper around issued session tokens."""
 
-    user: UserProfile
-    expires_at: datetime | None = None
-    refresh_expires_at: datetime | None = None
-    return_to: str | None = None
+    session: SessionTokens = Field(..., description="Issued session token pair.")
+    csrf_token: str | None = Field(
+        default=None,
+        description="CSRF token mirrored in the ade_csrf cookie for double-submit.",
+    )
 
 
-class BootstrapEnvelope(BaseSchema):
-    """Consolidated bootstrap payload for SPA initialization."""
+class SessionSnapshot(BaseSchema):
+    """Minimal view of the current session."""
 
-    user: UserProfile
-    global_roles: list[str]
-    global_permissions: list[str]
-    workspaces: WorkspacePage
-    safe_mode: SafeModeStatus
+    user_id: UUID = Field(..., description="Subject of the session.")
+    principal_type: Literal["user", "service_account"] = Field(
+        ...,
+        description="Type of principal represented by the session.",
+    )
+    issued_at: datetime | None = Field(
+        default=None,
+        description="When the session was issued (UTC), if known.",
+    )
+    expires_at: datetime = Field(..., description="When the session expires (UTC).")
+
+
+class SessionStatusResponse(BaseSchema):
+    """Snapshot response for GET /auth/session."""
+
+    session: SessionSnapshot = Field(
+        ...,
+        description="Details about the currently authenticated session.",
+    )
 
 
 class AuthProvider(BaseSchema):
-    """Representation of an interactive authentication provider."""
+    """Describes an interactive authentication provider option."""
 
-    id: str
-    label: str
-    start_url: str
-    icon_url: str | None = None
+    id: str = Field(..., description="Provider identifier, e.g. 'password' or 'sso'.")
+    label: str = Field(..., description="Human-friendly label for the provider.")
+    type: Literal["password", "oidc"] = Field(
+        ...,
+        description="Provider type: 'password' or 'oidc' (for SSO/OIDC providers).",
+    )
+    start_url: str | None = Field(
+        default=None,
+        description="URL to initiate login for this provider, if applicable.",
+    )
+    icon_url: str | None = Field(
+        default=None,
+        description="Optional icon URL for UI rendering.",
+    )
 
 
-class ProviderDiscoveryResponse(BaseSchema):
-    """Response payload returned by `/auth/providers`."""
+class AuthProviderListResponse(BaseSchema):
+    """Response payload returned by /auth/providers."""
 
     providers: list[AuthProvider]
-    force_sso: bool
-
-
-class APIKeyIssueRequest(BaseSchema):
-    """Payload for issuing a new API key."""
-
-    user_id: ULIDStr | None = Field(default=None)
-    email: str | None = None
-    expires_in_days: int | None = Field(default=None, ge=1, le=3650)
-    label: str | None = Field(default=None, max_length=100)
-
-    @model_validator(mode="after")
-    def _validate_target(self) -> APIKeyIssueRequest:
-        if self.user_id and self.email:
-            raise ValueError("specify either user_id or email, not both")
-        if not self.user_id and not self.email:
-            raise ValueError("user_id or email is required")
-        return self
-
-    @field_validator("email", mode="before")
-    @classmethod
-    def _normalise_optional_email(
-        cls, value: EmailStr | str | None
-    ) -> EmailStr | str | None:
-        if value is None:
-            return None
-        return _validate_email(value, allow_reserved=True)
-
-
-class APIKeyIssueResponse(BaseSchema):
-    """Representation of a freshly issued API key secret."""
-
-    api_key: str
-    principal_type: Literal["user", "service_account"]
-    principal_id: ULIDStr
-    principal_label: str
-    expires_at: datetime | None = None
-    label: str | None = None
-
-
-class APIKeySummary(BaseSchema):
-    """Metadata describing an issued API key."""
-
-    id: ULIDStr
-    principal_type: Literal["user", "service_account"]
-    principal_id: ULIDStr
-    principal_label: str
-    token_prefix: str
-    label: str | None = None
-    created_at: datetime
-    expires_at: datetime | None = None
-    last_seen_at: datetime | None = None
-    last_seen_ip: str | None = None
-    last_seen_user_agent: str | None = None
-    revoked_at: datetime | None = None
-
-
-class APIKeyPage(Page[APIKeySummary]):
-    """Paginated collection of API keys."""
+    force_sso: bool = Field(
+        default=False,
+        description="When true, the frontend should offer only SSO.",
+    )
 
 
 __all__ = [
-    "SetupStatus",
-    "SetupRequest",
-    "LoginRequest",
+    "AuthLoginRequest",
+    "AuthRefreshRequest",
+    "AuthSetupStatusResponse",
+    "AuthSetupRequest",
     "SessionEnvelope",
+    "SessionSnapshot",
+    "SessionStatusResponse",
+    "SessionTokens",
     "AuthProvider",
-    "ProviderDiscoveryResponse",
-    "APIKeyIssueRequest",
-    "APIKeyIssueResponse",
-    "APIKeyPage",
-    "APIKeySummary",
+    "AuthProviderListResponse",
 ]

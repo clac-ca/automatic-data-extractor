@@ -7,8 +7,8 @@ import logging
 
 from starlette.requests import Request
 
-from ade_api.shared.core.exceptions import unhandled_exception_handler
-from ade_api.shared.core.logging import (
+from ade_api.common.exceptions import unhandled_exception_handler
+from ade_api.common.logging import (
     ConsoleLogFormatter,
     bind_request_context,
     clear_request_context,

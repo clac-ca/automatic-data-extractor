@@ -211,7 +211,7 @@ Usage:
 
 * Section‑level issues or guidance.
 * Long‑lived success messages (“This configuration is now active.”).
-* Local warnings (“This run used an older configuration version.”).
+* Local warnings (“This run used an older configuration.”).
 
 Global banners and toasts are composed using `Alert` styles at higher layers (see § 5).
 
@@ -597,7 +597,7 @@ Current preferences include:
 * **Per‑document run preferences**
 
   * Suffix: `document.<documentId>.run-preferences`.
-  * Value: last used configuration, configuration version, sheet selections, optional run flags.
+  * Value: last used configuration, sheet selections, optional run flags.
 
 ### 7.3 Access patterns
 

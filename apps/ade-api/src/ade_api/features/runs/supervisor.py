@@ -7,8 +7,9 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
+from uuid import UUID
 
-from ade_api.shared.core.logging import log_context
+from ade_api.common.logging import log_context
 
 if TYPE_CHECKING:
     from .service import RunStreamFrame
@@ -41,11 +42,11 @@ class RunExecutionSupervisor:
     """
 
     def __init__(self) -> None:
-        self._handles: dict[str, _RunHandle] = {}
+        self._handles: dict[UUID, _RunHandle] = {}
         self._lock = asyncio.Lock()
 
     async def stream(
-        self, run_id: str, *, generator: _RunGenerator
+        self, run_id: UUID, *, generator: _RunGenerator
     ) -> AsyncIterator[RunStreamFrame]:
         """Return an iterator for ``run_id`` backed by a background task."""
 
@@ -70,7 +71,7 @@ class RunExecutionSupervisor:
             )
 
     async def _ensure_handle(
-        self, run_id: str, generator: _RunGenerator
+        self, run_id: UUID, generator: _RunGenerator
     ) -> _RunHandle:
         async with self._lock:
             existing = self._handles.get(run_id)
@@ -89,7 +90,7 @@ class RunExecutionSupervisor:
 
     async def _drive(
         self,
-        run_id: str,
+        run_id: UUID,
         generator_factory: _RunGenerator,
         queue: asyncio.Queue[object],
     ) -> None:
@@ -105,7 +106,7 @@ class RunExecutionSupervisor:
         finally:
             await queue.put(_COMPLETE)
 
-    async def _finalize(self, run_id: str) -> None:
+    async def _finalize(self, run_id: UUID) -> None:
         handle = self._handles.pop(run_id, None)
         if handle is None:
             return

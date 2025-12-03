@@ -18,12 +18,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import { useSession } from "@shared/auth/context/SessionContext";
-import {
-  findActiveVersion,
-  findLatestInactiveVersion,
-  useConfigurationVersionsQuery,
-  useConfigurationsQuery,
-} from "@shared/configurations";
+import { useConfigurationsQuery } from "@shared/configurations";
 import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
@@ -36,6 +31,8 @@ import {
   fetchRunOutputs,
   fetchRunSummary,
   fetchRunTelemetry,
+  runLogsUrl,
+  runOutputsUrl,
   runQueryKeys,
   type RunOutputListing,
   type RunResource,
@@ -675,7 +672,7 @@ function useSubmitRun(workspaceId: string) {
     mutationFn: async ({ configId, options }) => {
       const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
         params: { path: { configuration_id: configId } },
-        body: { stream: false, options },
+        body: { options },
       });
       if (!data) throw new Error("Expected run payload.");
       return data as RunResource;
@@ -708,7 +705,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
         ...all,
         [documentId]: {
           configId: next.configId,
-          configVersionId: next.configVersionId,
           sheetNames: next.sheetNames && next.sheetNames.length > 0 ? [...next.sheetNames] : null,
         },
       });
@@ -721,7 +717,6 @@ function useDocumentRunPreferences(workspaceId: string, documentId: string) {
 
 type DocumentRunPreferences = {
   readonly configId: string | null;
-  readonly configVersionId: string | null;
   readonly sheetNames: readonly string[] | null;
 };
 /* ------------------------ API helpers & small utilities ------------------------ */
@@ -805,12 +800,11 @@ function readRunPreferences(
 
       return {
         configId: entry.configId ?? null,
-        configVersionId: entry.configVersionId ?? null,
         sheetNames: mergedSheetNames,
       };
     }
   }
-  return { configId: null, configVersionId: null, sheetNames: null };
+  return { configId: null, sheetNames: null };
 }
 /* ---------------------- Command header + filter rail ---------------------- */
 
@@ -1447,7 +1441,6 @@ function RunExtractionDrawerContent({
   const descriptionId = useId();
   const configurationsQuery = useConfigurationsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
-  const [selectedVersionId, setSelectedVersionId] = useState<string>("");
   const submitRun = useSubmitRun(workspaceId);
   const { preferences, setPreferences } = useDocumentRunPreferences(
     workspaceId,
@@ -1484,71 +1477,15 @@ function RunExtractionDrawerContent({
     setSelectedConfigId(preferredConfigId);
   }, [preferredConfigId]);
 
-  const versionsQuery = useConfigurationVersionsQuery({
-    workspaceId,
-    configId: selectedConfigId,
-    enabled: Boolean(selectedConfigId),
-  });
-  const versionOptions = useMemo(
-    () => versionsQuery.data ?? [],
-    [versionsQuery.data],
-  );
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
-  const selectedVersion = useMemo(
-    () => versionOptions.find((version) => version.configuration_version_id === selectedVersionId) ?? null,
-    [versionOptions, selectedVersionId],
-  );
-  const activeVersion = useMemo(() => findActiveVersion(versionOptions), [versionOptions]);
-  const latestDraftVersion = useMemo(
-    () => findLatestInactiveVersion(versionOptions),
-    [versionOptions],
-  );
-  const preferredVersionId = useMemo(() => {
-    if (!selectedConfigId) return "";
-    if (preferences.configId === selectedConfigId && preferences.configVersionId) {
-      const preferred = versionOptions.find(
-        (version) => version.configuration_version_id === preferences.configVersionId,
-      );
-      if (preferred) {
-        return preferred.configuration_version_id;
-      }
-    }
-    if (activeVersion) return activeVersion.configuration_version_id;
-    if (latestDraftVersion) return latestDraftVersion.configuration_version_id;
-    return versionOptions[0]?.configuration_version_id ?? "";
-  }, [
-    activeVersion,
-    latestDraftVersion,
-    preferences.configId,
-    preferences.configVersionId,
-    selectedConfigId,
-    versionOptions,
-  ]);
-
-  useEffect(() => {
-    setSelectedVersionId(preferredVersionId);
-  }, [preferredVersionId]);
 
   const formatConfigLabel = useCallback((config: (typeof selectableConfigs)[number]) => {
     const statusLabel = typeof config.status === "string" ? config.status : "draft";
     const title = (config as { title?: string | null }).title ?? config.display_name ?? "Untitled configuration";
     return `${title} (${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)})`;
-  }, []);
-
-  const formatVersionLabel = useCallback((version: (typeof versionOptions)[number]) => {
-    const status =
-      version.status === "active"
-        ? "Active"
-        : version.status === "published"
-          ? "Published"
-          : version.status === "inactive"
-            ? "Inactive"
-            : "Draft";
-    const semver = version.semver ?? "–";
-    return `v${semver} (${status})`;
   }, []);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -1567,10 +1504,13 @@ function RunExtractionDrawerContent({
 
   const outputsQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.outputs(activeRunId) : ["run-outputs", "none"],
-    queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunOutputs(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+    queryFn: ({ signal }) => {
+      if (!activeRunId) {
+        return Promise.reject(new Error("No run selected"));
+      }
+      const run = runQuery.data ?? activeRunId;
+      return fetchRunOutputs(run, signal);
+    },
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1589,10 +1529,13 @@ function RunExtractionDrawerContent({
 
   const telemetryQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.telemetry(activeRunId) : ["run-telemetry", "none"],
-    queryFn: ({ signal }) =>
-      activeRunId
-        ? fetchRunTelemetry(activeRunId, signal)
-        : Promise.reject(new Error("No run selected")),
+    queryFn: ({ signal }) => {
+      if (!activeRunId) {
+        return Promise.reject(new Error("No run selected"));
+      }
+      const run = runQuery.data ?? activeRunId;
+      return fetchRunTelemetry(run, signal);
+    },
     enabled:
       Boolean(activeRunId) &&
       (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
@@ -1631,15 +1574,14 @@ function RunExtractionDrawerContent({
   );
 
   useEffect(() => {
-    if (!selectedConfig || !selectedVersionId) {
+    if (!selectedConfig) {
       return;
     }
     setPreferences({
       configId: selectedConfig.id,
-      configVersionId: selectedVersionId,
       sheetNames: normalizedSheetSelection.length ? normalizedSheetSelection : null,
     });
-  }, [normalizedSheetSelection, selectedConfig, selectedVersionId, setPreferences]);
+  }, [normalizedSheetSelection, selectedConfig, setPreferences]);
 
   const toggleWorksheet = useCallback((name: string) => {
     setSelectedSheets((current) =>
@@ -1650,9 +1592,8 @@ function RunExtractionDrawerContent({
   const currentRun = runQuery.data ?? null;
   const runStatus = currentRun?.status ?? null;
   const runRunning = runStatus === "running" || runStatus === "queued";
-  const downloadBase = activeRunId
-    ? `/api/v1/runs/${encodeURIComponent(activeRunId)}`
-    : null;
+  const outputsBase = currentRun ? runOutputsUrl(currentRun) : null;
+  const logsUrl = currentRun ? runLogsUrl(currentRun) : null;
   const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
   const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
@@ -1706,7 +1647,7 @@ function RunExtractionDrawerContent({
     safeModeLoading ||
     safeModeEnabled ||
     !hasConfigurations ||
-    !selectedVersionId;
+    !selectedConfig;
   const runButtonTitle = safeModeEnabled
     ? safeModeDetail
     : safeModeLoading
@@ -1717,17 +1658,18 @@ function RunExtractionDrawerContent({
     if (safeModeEnabled || safeModeLoading) {
       return;
     }
-    if (!selectedConfig || !selectedVersion || !selectedVersionId) {
+    if (!selectedConfig) {
       setErrorMessage("Select a configuration before running the extractor.");
       return;
     }
     setErrorMessage(null);
     setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
+    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false } as const;
     const runOptions =
       sheetList.length > 0
-        ? { dry_run: false, validate_only: false, input_sheet_names: sheetList }
-        : { dry_run: false, validate_only: false };
+        ? { ...baseRunOptions, input_sheet_names: sheetList }
+        : baseRunOptions;
     submitRun.mutate(
       {
         configId: selectedConfig.id,
@@ -1737,7 +1679,6 @@ function RunExtractionDrawerContent({
         onSuccess: (run) => {
           setPreferences({
             configId: selectedConfig.id,
-            configVersionId: selectedVersionId,
             sheetNames: sheetList.length ? sheetList : null,
           });
           onRunSuccess?.(run);
@@ -1812,7 +1753,6 @@ function RunExtractionDrawerContent({
                   onChange={(event) => {
                     const value = event.target.value;
                     setSelectedConfigId(value);
-                    setSelectedVersionId("");
                   }}
                   disabled={submitRun.isPending}
                 >
@@ -1823,34 +1763,6 @@ function RunExtractionDrawerContent({
                     </option>
                   ))}
                 </Select>
-
-                {selectedConfigId ? (
-                  versionsQuery.isLoading ? (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                      Loading versions…
-                    </div>
-                  ) : versionsQuery.isError ? (
-                    <Alert tone="danger">
-                      Unable to load configuration versions.{" "}
-                      {versionsQuery.error instanceof Error ? versionsQuery.error.message : "Try again later."}
-                    </Alert>
-                  ) : versionOptions.length > 0 ? (
-                    <Select
-                      value={selectedVersionId}
-                      onChange={(event) => setSelectedVersionId(event.target.value)}
-                      disabled={submitRun.isPending}
-                    >
-                      <option value="">Select version</option>
-                      {versionOptions.map((version) => (
-                        <option key={version.configuration_version_id} value={version.configuration_version_id}>
-                          {formatVersionLabel(version)}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Alert tone="info">No versions available for this configuration.</Alert>
-                  )
-                ) : null}
               </div>
             ) : (
               <Alert tone="info">No configurations available. Create one before running extraction.</Alert>
@@ -1957,18 +1869,16 @@ function RunExtractionDrawerContent({
                   {runRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <a
-                    href={downloadBase ? `${downloadBase}/logs` : undefined}
-                    className={clsx(
-                      "inline-flex items-center rounded border px-3 py-1 text-xs font-semibold transition",
-                      downloadBase ? "border-slate-300 text-slate-700 hover:bg-slate-100" : "cursor-not-allowed border-slate-200 text-slate-400",
-                    )}
-                    aria-disabled={!downloadBase}
-                  >
-                    Download telemetry
-                  </a>
-                </div>
+                {logsUrl ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      href={logsUrl}
+                      className="inline-flex items-center rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Download logs
+                    </a>
+                  </div>
+                ) : null}
 
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
                   <p className="text-xs font-semibold text-slate-700">Output files</p>
@@ -1981,21 +1891,21 @@ function RunExtractionDrawerContent({
                         const size = typeof file.byte_size === "number" ? file.byte_size : 0;
                         const href =
                           file.download_url ??
-                          (downloadBase
-                            ? `${downloadBase}/outputs/${path.split("/").map(encodeURIComponent).join("/")}`
+                          (outputsBase
+                            ? `${outputsBase}/${path.split("/").map(encodeURIComponent).join("/")}`
                             : undefined);
                         return (
                           <li
                             key={path}
                             className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
                           >
-                            <a
-                              href={href}
-                              className="text-emerald-700 hover:underline"
-                              aria-disabled={!href}
-                            >
-                              {file.name}
-                            </a>
+                            {href ? (
+                              <a href={href} className="text-emerald-700 hover:underline">
+                                {file.name}
+                              </a>
+                            ) : (
+                              <span className="text-slate-500">{file.name}</span>
+                            )}
                             <span className="text-[11px] text-slate-500">
                               {size.toLocaleString()} bytes
                             </span>

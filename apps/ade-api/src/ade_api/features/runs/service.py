@@ -11,8 +11,8 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from typing import Any
+from uuid import UUID
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -27,11 +27,23 @@ from ade_engine.schemas import (
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.features.builds.models import BuildStatus
+from ade_api.common.encoding import json_dumps
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.logging import log_context
+from ade_api.common.pagination import Page
+from ade_api.common.time import utc_now
+from ade_api.core.models import (
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    Run,
+    RunStatus,
+)
+from ade_api.features.builds.event_dispatcher import BuildEventDispatcher
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildExecutionContext, BuildsService
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
@@ -42,29 +54,23 @@ from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
     SafeModeService,
 )
-from ade_api.settings import Settings
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.pagination import Page
-from ade_api.storage_layout import (
+from ade_api.infra.storage import (
+    build_venv_root,
     workspace_config_root,
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
-from .models import Run, RunLog, RunStatus
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
     RunCreateOptions,
     RunInput,
     RunLinks,
-    RunLogEntry,
-    RunLogsResponse,
     RunOutput,
     RunResource,
-    RunStatusLiteral,
 )
 from .summary_builder import build_run_summary_from_paths
 from .supervisor import RunExecutionSupervisor
@@ -73,7 +79,6 @@ __all__ = [
     "RunExecutionContext",
     "RunInputMissingError",
     "RunDocumentMissingError",
-    "RunEnvironmentNotReadyError",
     "RunLogsFileMissingError",
     "RunNotFoundError",
     "RunOutputMissingError",
@@ -84,7 +89,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 event_logger = logging.getLogger("ade_api.runs.events")
 
-DEFAULT_STREAM_LIMIT = 1000
+DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 # Stream frames are AdeEvents as far as the public API is concerned. Internally
 # we also see StdoutFrame objects from the process runner and RunExecutionResult
@@ -122,29 +127,25 @@ class RunPathsSnapshot:
     processed_files: list[str] = field(default_factory=list)
 
 
-if TYPE_CHECKING:  # pragma: no cover - import guard for circular dependencies
-    from ade_api.features.documents.models import Document
-
-
 @dataclass(slots=True, frozen=True)
 class RunExecutionContext:
     """Minimal data required to execute a run outside the request scope."""
 
-    run_id: str
-    configuration_id: str
-    workspace_id: str
+    run_id: UUID
+    configuration_id: UUID
+    workspace_id: UUID
     venv_path: str
-    build_id: str
+    build_id: UUID
     runs_dir: str | None = None
     build_context: BuildExecutionContext | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "run_id": self.run_id,
-            "configuration_id": self.configuration_id,
-            "workspace_id": self.workspace_id,
+            "run_id": str(self.run_id),
+            "configuration_id": str(self.configuration_id),
+            "workspace_id": str(self.workspace_id),
             "venv_path": self.venv_path,
-            "build_id": self.build_id,
+            "build_id": str(self.build_id),
             "runs_dir": self.runs_dir or "",
             "build_context": self.build_context.as_dict() if self.build_context else None,
         }
@@ -152,11 +153,11 @@ class RunExecutionContext:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> RunExecutionContext:
         return cls(
-            run_id=payload["run_id"],
-            configuration_id=payload["configuration_id"],
-            workspace_id=payload["workspace_id"],
+            run_id=UUID(str(payload["run_id"])),
+            configuration_id=UUID(str(payload["configuration_id"])),
+            workspace_id=UUID(str(payload["workspace_id"])),
             venv_path=payload["venv_path"],
-            build_id=payload["build_id"],
+            build_id=UUID(str(payload["build_id"])),
             runs_dir=payload.get("runs_dir") or None,
             build_context=(
                 BuildExecutionContext.from_dict(payload["build_context"])
@@ -169,10 +170,6 @@ class RunExecutionContext:
 # --------------------------------------------------------------------------- #
 # Error types
 # --------------------------------------------------------------------------- #
-
-
-class RunEnvironmentNotReadyError(RuntimeError):
-    """Raised when a configuration lacks an active build to execute."""
 
 
 class RunNotFoundError(RuntimeError):
@@ -221,6 +218,7 @@ class RunsService:
         storage: ConfigStorage | None = None,
         event_dispatcher: RunEventDispatcher | None = None,
         event_storage: RunEventStorage | None = None,
+        build_event_dispatcher: BuildEventDispatcher | None = None,
     ) -> None:
         self._session = session
         self._settings = settings
@@ -229,15 +227,15 @@ class RunsService:
         self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
         self._safe_mode_service = safe_mode_service
-        module_root = Path(__file__).resolve().parents[2]
         self._storage = storage or ConfigStorage(
-            templates_root=module_root / "templates" / "config_packages",
             settings=settings,
         )
         self._builds_service = BuildsService(
             session=session,
             settings=settings,
             storage=self._storage,
+            event_dispatcher=build_event_dispatcher,
+            event_storage=(build_event_dispatcher.storage if build_event_dispatcher else None),
         )
         if event_dispatcher and event_storage is None:
             event_storage = event_dispatcher.storage
@@ -260,9 +258,8 @@ class RunsService:
     async def prepare_run(
         self,
         *,
-        configuration_id: str,
+        configuration_id: UUID,
         options: RunCreateOptions,
-        stream_build: bool = False,
     ) -> tuple[Run, RunExecutionContext]:
         """Create the queued run row and return its execution context."""
 
@@ -289,36 +286,43 @@ class RunsService:
             )
             document_descriptor = self._document_descriptor(document)
 
-        build_ctx: BuildExecutionContext | None = None
-        if stream_build:
-            build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            build, build_ctx = await self._builds_service.prepare_build(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                options=build_options,
+        run_id = self._generate_run_id()
+
+        build, build_ctx = await self._builds_service.ensure_build_for_run(
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            force_rebuild=options.force_rebuild,
+            run_id=run_id,
+            reason="on_demand",
+        )
+        build_id = build.id
+        venv_root = (
+            Path(build_ctx.venv_root)
+            if build_ctx
+            else build_venv_root(
+                self._settings,
+                configuration.workspace_id,
+                configuration.id,
+                build_id,
             )
-            build_id = build.id
-            venv_path = Path(build_ctx.venv_root) / ".venv"
-        else:
-            venv_path, build_id = await self._ensure_config_env_ready(
-                configuration,
-                force_rebuild=options.force_rebuild,
-            )
+        )
+        venv_path = venv_root / ".venv"
+        run_status = (
+            RunStatus.WAITING_FOR_BUILD
+            if build.status is not BuildStatus.READY
+            else RunStatus.QUEUED
+        )
 
         selected_sheet_name = self._select_input_sheet_name(options)
 
-        run_id = self._generate_run_id()
         run = Run(
             id=run_id,
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            configuration_version_id=str(configuration.configuration_version)
-            if configuration.configuration_version is not None
-            else None,
-            status=RunStatus.QUEUED,
+            status=run_status,
             attempt=1,
             retry_of_run_id=None,
-            trace_id=run_id,
+            trace_id=str(run_id),
             input_document_id=input_document_id,
             input_documents=[document_descriptor] if document_descriptor else [],
             input_sheet_name=selected_sheet_name,
@@ -345,8 +349,29 @@ class RunsService:
             venv_path=str(venv_path),
             build_id=build_id,
             runs_dir=str(runs_root),
-            build_context=build_ctx,
+            build_context=build_ctx if (build.status is not BuildStatus.READY) else None,
         )
+
+        mode_literal = "validate" if options.validate_only else "execute"
+        await self._emit_api_event(
+            run=run,
+            type_="run.queued",
+            payload=RunQueuedPayload(
+                status="queued",
+                mode=mode_literal,
+                options=options.model_dump(),
+            ),
+        )
+        if run.status is RunStatus.WAITING_FOR_BUILD:
+            await self._emit_api_event(
+                run=run,
+                type_="run.waiting_for_build",
+                payload={
+                    "status": "waiting_for_build",
+                    "reason": "build_not_ready",
+                    "build_id": str(build_id),
+                },
+            )
 
         logger.info(
             "run.prepare.success",
@@ -412,45 +437,115 @@ class RunsService:
             ),
         )
 
+        try:
+            async for event in self._stream_run_steps(context=context, options=options):
+                yield event
+        except Exception as exc:  # pragma: no cover - defensive orchestration guard
+            async for event in self._handle_stream_failure(
+                context=context,
+                options=options,
+                error=exc,
+            ):
+                yield event
+
+    async def _stream_run_steps(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+    ) -> AsyncIterator[RunStreamFrame]:
+        """Orchestrate run execution and yield events; raised exceptions are handled upstream."""
+
         run = await self._require_run(context.run_id)
         mode_literal = "validate" if options.validate_only else "execute"
 
-        yield await self._emit_api_event(
+        queued_event = await self._ensure_run_queued_event(
             run=run,
-            type_="run.queued",
-            payload=RunQueuedPayload(
-                status="queued",
-                mode=mode_literal,
-                options=options.model_dump(),
-            ),
+            mode_literal=mode_literal,
+            options=options,
         )
+        if queued_event:
+            yield queued_event
 
         if context.build_context:
             build_context = context.build_context
             build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            async for event in self._builds_service.stream_build(
-                context=build_context,
-                options=build_options,
-            ):
-                forwarded = await self._event_dispatcher.emit(
-                    type=event.type,
-                    source=event.source or "api",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=event.build_id or build_context.build_id,
-                    payload=event.payload,
+            if build_context.should_run:
+                async for event in self._builds_service.stream_build(
+                    context=build_context,
+                    options=build_options,
+                ):
+                    forwarded = await self._event_dispatcher.emit(
+                        type=event.type,
+                        source=event.source or "api",
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=event.build_id or build_context.build_id,
+                        payload=event.payload,
+                    )
+                    yield forwarded
+            else:
+                build = await self._builds_service.get_build_or_raise(
+                    build_context.build_id,
+                    workspace_id=build_context.workspace_id,
                 )
-                yield forwarded
+                reader = self._builds_service.event_log_reader(
+                    workspace_id=build.workspace_id,
+                    configuration_id=build.configuration_id,
+                    build_id=build.id,
+                )
+                last_sequence = 0
+                for event in reader.iter(after_sequence=0):
+                    forwarded = await self._event_dispatcher.emit(
+                        type=event.type,
+                        source=event.source or "api",
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=event.build_id or build_context.build_id,
+                        payload=event.payload,
+                    )
+                    yield forwarded
+                    if event.sequence:
+                        last_sequence = max(last_sequence, event.sequence)
+                async with self._builds_service.subscribe_to_events(build.id) as subscription:
+                    async for live_event in subscription:
+                        if live_event.sequence and live_event.sequence <= last_sequence:
+                            continue
+                        forwarded = await self._event_dispatcher.emit(
+                            type=live_event.type,
+                            source=live_event.source or "api",
+                            workspace_id=run.workspace_id,
+                            configuration_id=run.configuration_id,
+                            run_id=run.id,
+                            build_id=live_event.build_id or build_context.build_id,
+                            payload=live_event.payload,
+                        )
+                        yield forwarded
+                        if live_event.sequence:
+                            last_sequence = live_event.sequence
+                        if live_event.type in {"build.completed", "build.failed"}:
+                            break
+
             build = await self._builds_service.get_build_or_raise(
                 build_context.build_id,
                 workspace_id=build_context.workspace_id,
             )
-            if build.status is not BuildStatus.ACTIVE:
+            if build.status is not BuildStatus.READY:
                 error_message = build.error_message or (
                     f"Configuration {build.configuration_id} build failed"
                 )
-                await self._append_log(run.id, error_message, stream="stderr")
+                yield await self._emit_api_event(
+                    run=run,
+                    type_="console.line",
+                    payload=ConsoleLinePayload(
+                        scope="run",
+                        stream="stderr",
+                        level="error",
+                        message=error_message,
+                    ),
+                )
                 run_dir = self._run_dir_for_run(
                     workspace_id=run.workspace_id,
                     run_id=run.id,
@@ -482,7 +577,6 @@ class RunsService:
 
             venv_path = await self._builds_service.ensure_local_env(build=build)
             build_done_message = "Configuration build completed; starting ADE run."
-            await self._append_log(run.id, build_done_message, stream="stdout")
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
@@ -515,7 +609,6 @@ class RunsService:
         # Emit a one-time console banner describing the mode, if applicable.
         mode_message = self._format_mode_message(options)
         if mode_message:
-            await self._append_log(run.id, mode_message, stream="stdout")
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
@@ -573,11 +666,98 @@ class RunsService:
         ):
             yield event
 
+    async def _handle_stream_failure(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        error: Exception,
+    ) -> AsyncIterator[RunStreamFrame]:
+        """Emit console + completion events when unexpected orchestration errors occur."""
+
+        logger.exception(
+            "run.stream.unhandled_error",
+            extra=log_context(
+                workspace_id=context.workspace_id,
+                configuration_id=context.configuration_id,
+                run_id=context.run_id,
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+            ),
+            exc_info=error,
+        )
+
+        run = await self._runs.get(context.run_id)
+        if run is None:
+            return
+        if run.status in (RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED):
+            return
+
+        message = f"ADE run orchestration failed: {error}"
+        yield await self._emit_api_event(
+            run=run,
+            type_="console.line",
+            payload=ConsoleLinePayload(
+                scope="run",
+                stream="stderr",
+                level="error",
+                message=message,
+            ),
+        )
+
+        placeholder_summary = await self._build_placeholder_summary(
+            run=run,
+            status=RunStatus.FAILED,
+            message=str(error),
+        )
+        summary_json = self._serialize_summary(placeholder_summary)
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+        paths_snapshot = self._finalize_paths(
+            summary=placeholder_summary.model_dump(mode="json"),
+            run_dir=run_dir,
+            default_paths=RunPathsSnapshot(),
+        )
+        completion = await self._complete_run(
+            run,
+            status=RunStatus.FAILED,
+            exit_code=None,
+            summary=summary_json,
+            error_message=str(error),
+        )
+        yield await self._emit_api_event(
+            run=completion,
+            type_="run.completed",
+            payload=self._run_completed_payload(
+                run=completion,
+                summary=placeholder_summary,
+                paths=paths_snapshot,
+                failure_stage="run",
+                failure_code="orchestration_error",
+                failure_message=str(error),
+            ),
+        )
+
+    async def handle_background_failure(
+        self,
+        *,
+        context: RunExecutionContext,
+        options: RunCreateOptions,
+        error: Exception,
+    ) -> AsyncIterator[AdeEvent]:
+        """Surface background task failures via console + completion events."""
+
+        async for event in self._handle_stream_failure(
+            context=context,
+            options=options,
+            error=error,
+        ):
+            yield event
+
     # --------------------------------------------------------------------- #
-    # Public read APIs (runs, summaries, events, logs, outputs)
+    # Public read APIs (runs, summaries, events, outputs)
     # --------------------------------------------------------------------- #
 
-    async def get_run(self, run_id: str) -> Run | None:
+    async def get_run(self, run_id: UUID) -> Run | None:
         """Return the run instance for ``run_id`` if it exists."""
 
         logger.debug(
@@ -602,7 +782,7 @@ class RunsService:
             )
         return run
 
-    async def get_run_summary(self, run_id: str) -> RunSummaryV1 | None:
+    async def get_run_summary(self, run_id: UUID) -> RunSummaryV1 | None:
         """Return a RunSummaryV1 for ``run_id`` if available or derivable."""
 
         logger.debug(
@@ -657,9 +837,9 @@ class RunsService:
     async def get_run_events(
         self,
         *,
-        run_id: str,
+        run_id: UUID,
         after_sequence: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
+        limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
     ) -> tuple[list[AdeEvent], int | None]:
         """Return ADE telemetry events for ``run_id`` with optional paging."""
 
@@ -696,9 +876,10 @@ class RunsService:
     async def list_runs(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID | None = None,
         statuses: Sequence[RunStatus] | None,
-        input_document_id: str | None,
+        input_document_id: UUID | None,
         page: int,
         page_size: int,
         include_total: bool,
@@ -709,6 +890,7 @@ class RunsService:
             "run.list.start",
             extra=log_context(
                 workspace_id=workspace_id,
+                configuration_id=configuration_id,
                 statuses=[s.value for s in statuses] if statuses else None,
                 input_document_id=input_document_id,
                 page=page,
@@ -719,6 +901,7 @@ class RunsService:
 
         page_result = await self._runs.list_by_workspace(
             workspace_id=workspace_id,
+            configuration_id=configuration_id,
             statuses=statuses,
             input_document_id=input_document_id,
             page=page,
@@ -739,6 +922,7 @@ class RunsService:
             "run.list.success",
             extra=log_context(
                 workspace_id=workspace_id,
+                configuration_id=configuration_id,
                 page=response.page,
                 page_size=response.page_size,
                 count=len(response.items),
@@ -746,6 +930,29 @@ class RunsService:
             ),
         )
         return response
+
+    async def list_runs_for_configuration(
+        self,
+        *,
+        configuration_id: UUID,
+        statuses: Sequence[RunStatus] | None,
+        input_document_id: UUID | None,
+        page: int,
+        page_size: int,
+        include_total: bool,
+    ) -> Page[RunResource]:
+        """Return paginated runs for ``configuration_id`` scoped to its workspace."""
+
+        configuration = await self._resolve_configuration(configuration_id)
+        return await self.list_runs(
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            statuses=statuses,
+            input_document_id=input_document_id,
+            page=page,
+            page_size=page_size,
+            include_total=include_total,
+        )
 
     def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
@@ -805,9 +1012,8 @@ class RunsService:
             id=run.id,
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
-            configuration_version=run.configuration_version_id,
             build_id=run.build_id,
-            status=self._status_literal(run.status),
+            status=run.status,
             failure_code=summary_run_dict.get("failure_code"),
             failure_stage=summary_run_dict.get("failure_stage"),
             failure_message=failure_message,
@@ -835,53 +1041,18 @@ class RunsService:
         )
 
     @staticmethod
-    def _links(run_id: str) -> RunLinks:
+    def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
         return RunLinks(
             self=base,
             summary=f"{base}/summary",
             events=f"{base}/events",
+            events_stream=f"{base}/events/stream",
             logs=f"{base}/logs",
-            logfile=f"{base}/logfile",
             outputs=f"{base}/outputs",
         )
 
-    async def get_logs(
-        self,
-        *,
-        run_id: str,
-        after_id: int | None = None,
-        limit: int = DEFAULT_STREAM_LIMIT,
-    ) -> RunLogsResponse:
-        """Return persisted log entries for ``run_id``."""
-
-        logger.debug(
-            "run.logs.list.start",
-            extra=log_context(run_id=run_id, after_id=after_id, limit=limit),
-        )
-        records = await self._runs.list_logs(
-            run_id=run_id,
-            after_id=after_id,
-            limit=limit,
-        )
-        entries = [self._log_to_entry(log) for log in records]
-        next_after = entries[-1].id if entries and len(entries) == limit else None
-        response = RunLogsResponse(
-            run_id=run_id,
-            entries=entries,
-            next_after_id=next_after,
-        )
-        logger.info(
-            "run.logs.list.success",
-            extra=log_context(
-                run_id=run_id,
-                count=len(entries),
-                next_after_id=response.next_after_id,
-            ),
-        )
-        return response
-
-    async def get_logs_file_path(self, *, run_id: str) -> Path:
+    async def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
 
         logger.debug(
@@ -913,7 +1084,7 @@ class RunsService:
         )
         return logs_path
 
-    async def list_output_files(self, *, run_id: str) -> list[tuple[str, int]]:
+    async def list_output_files(self, *, run_id: UUID) -> list[tuple[str, int]]:
         """Return output file tuples for ``run_id``."""
 
         logger.debug(
@@ -958,7 +1129,7 @@ class RunsService:
     async def resolve_output_file(
         self,
         *,
-        run_id: str,
+        run_id: UUID,
         relative_path: str,
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
@@ -1025,7 +1196,7 @@ class RunsService:
         )
         return candidate
 
-    def run_directory(self, *, workspace_id: str, run_id: str) -> Path:
+    def run_directory(self, *, workspace_id: UUID, run_id: UUID) -> Path:
         """Return the canonical run directory for a given ``run_id``."""
 
         path = self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
@@ -1078,7 +1249,7 @@ class RunsService:
     @staticmethod
     def _document_descriptor(document: Document) -> dict[str, Any]:
         return {
-            "document_id": document.id,
+            "document_id": str(document.id),
             "display_name": document.original_filename,
             "name": document.original_filename,
             "original_filename": document.original_filename,
@@ -1177,7 +1348,7 @@ class RunsService:
             }
 
         return RunCompletedPayload(
-            status=self._status_literal(run.status),
+            status=run.status,
             failure=failure,
             execution={
                 "exit_code": run.exit_code,
@@ -1222,10 +1393,16 @@ class RunsService:
             elif summary_status == "succeeded":
                 status = RunStatus.SUCCEEDED
                 error_message = None
+            elif summary_status in {"cancelled", "canceled"}:
+                status = RunStatus.CANCELLED
+                error = summary.get("error")
+                error_message = (
+                    error.get("message") if isinstance(error, dict) else None
+                ) or "Run cancelled"
 
         return status, error_message
 
-    def _manifest_path(self, workspace_id: str, configuration_id: str) -> Path:
+    def _manifest_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
         return (
             workspace_config_root(
                 self._settings,
@@ -1237,7 +1414,7 @@ class RunsService:
             / "manifest.json"
         )
 
-    def _load_manifest(self, workspace_id: str, configuration_id: str) -> ManifestV1 | None:
+    def _load_manifest(self, workspace_id: UUID, configuration_id: UUID) -> ManifestV1 | None:
         path = self._manifest_path(workspace_id, configuration_id)
         if not path.exists():
             return None
@@ -1307,7 +1484,6 @@ class RunsService:
                 manifest_path=manifest_path if manifest_path.exists() else None,
                 workspace_id=run.workspace_id,
                 configuration_id=run.configuration_id,
-                configuration_version=run.configuration_version_id,
                 run_id=run.id,
             )
             logger.info(
@@ -1348,13 +1524,7 @@ class RunsService:
         )
         started = self._ensure_utc(run.started_at) or utc_now()
         completed = self._ensure_utc(run.finished_at) or utc_now()
-        status_literal: RunStatusLiteral = (
-            "succeeded"
-            if status is RunStatus.SUCCEEDED
-            else "canceled"
-            if status is RunStatus.CANCELED
-            else "failed"
-        )
+        status_literal = status.value
         by_field: list[dict[str, Any]] = []
         if manifest:
             for field_name in manifest.columns.order:
@@ -1376,12 +1546,11 @@ class RunsService:
 
         return RunSummaryV1(
             run={
-                "id": run.id,
-                "workspace_id": run.workspace_id,
-                "configuration_id": run.configuration_id,
-                "configuration_version": run.configuration_version_id,
+                "id": str(run.id),
+                "workspace_id": str(run.workspace_id),
+                "configuration_id": str(run.configuration_id),
                 "status": status_literal,
-                "failure_code": "canceled" if status is RunStatus.CANCELED else None,
+                "failure_code": "cancelled" if status is RunStatus.CANCELLED else None,
                 "failure_stage": None,
                 "failure_message": message,
                 "engine_version": getattr(run, "engine_version", None),
@@ -1448,7 +1617,7 @@ class RunsService:
             if context.runs_dir
             else workspace_run_root(self._settings, context.workspace_id)
         )
-        run_dir = runs_root / run.id
+        run_dir = runs_root / str(run.id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
@@ -1627,11 +1796,6 @@ class RunsService:
         )
 
         message = f"Safe mode enabled: {safe_mode.detail}"
-        await self._append_log(
-            run.id,
-            message,
-            stream="stdout",
-        )
         placeholder_summary = await self._build_placeholder_summary(
             run=run,
             status=RunStatus.SUCCEEDED,
@@ -1723,9 +1887,6 @@ class RunsService:
                 run.id,
                 generator=generator,
             ):
-                if isinstance(event, StdoutFrame):
-                    await self._append_log(run.id, event.message, stream=event.stream)
-                    continue
                 if isinstance(event, RunExecutionResult):
                     completion = await self._complete_run(
                         run,
@@ -1767,7 +1928,7 @@ class RunsService:
             )
             placeholder_summary = await self._build_placeholder_summary(
                 run=run,
-                status=RunStatus.CANCELED,
+                status=RunStatus.CANCELLED,
                 message="Run execution cancelled",
             )
             summary_json = self._serialize_summary(placeholder_summary)
@@ -1779,7 +1940,7 @@ class RunsService:
             )
             completion = await self._complete_run(
                 run,
-                status=RunStatus.CANCELED,
+                status=RunStatus.CANCELLED,
                 exit_code=None,
                 summary=summary_json,
                 error_message="Run execution cancelled",
@@ -1805,11 +1966,6 @@ class RunsService:
                     configuration_id=run.configuration_id,
                     run_id=run.id,
                 ),
-            )
-            await self._append_log(
-                run.id,
-                f"ADE run failed: {exc}",
-                stream="stderr",
             )
             placeholder_summary = await self._build_placeholder_summary(
                 run=run,
@@ -1860,7 +2016,7 @@ class RunsService:
     # Internal helpers: DB, storage, builds
     # --------------------------------------------------------------------- #
 
-    async def _require_run(self, run_id: str) -> Run:
+    async def _require_run(self, run_id: UUID) -> Run:
         run = await self._runs.get(run_id)
         if run is None:
             logger.warning(
@@ -1870,7 +2026,7 @@ class RunsService:
             raise RunNotFoundError(run_id)
         return run
 
-    async def _require_document(self, *, workspace_id: str, document_id: str) -> Document:
+    async def _require_document(self, *, workspace_id: UUID, document_id: UUID) -> Document:
         document = await self._documents.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -1886,15 +2042,15 @@ class RunsService:
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
 
-    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
 
     async def _stage_input_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
         run_dir: Path,
     ) -> Path:
         document = await self._require_document(
@@ -1910,7 +2066,7 @@ class RunsService:
             run_dir=run_dir,
         )
 
-    async def _resolve_configuration(self, configuration_id: str) -> Configuration:
+    async def _resolve_configuration(self, configuration_id: UUID) -> Configuration:
         configuration = await self._configs.get_by_id(configuration_id)
         if configuration is None:
             logger.warning(
@@ -1928,36 +2084,6 @@ class RunsService:
                 ),
             )
         return configuration
-
-    async def _ensure_config_env_ready(
-        self,
-        configuration: Configuration,
-        *,
-        force_rebuild: bool = False,
-    ) -> tuple[Path, str]:
-        logger.debug(
-            "run.env.ensure.start",
-            extra=log_context(
-                workspace_id=configuration.workspace_id,
-                configuration_id=configuration.id,
-                force_rebuild=force_rebuild,
-            ),
-        )
-        options = BuildCreateOptions(force=force_rebuild, wait=True)
-        build, context = await self._builds_service.prepare_build(
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            options=options,
-        )
-        await self._builds_service.run_to_completion(context=context, options=options)
-        build = await self._builds_service.get_build_or_raise(
-            build.id, workspace_id=configuration.workspace_id
-        )
-        if build.status is not BuildStatus.ACTIVE:
-            message = build.error_message or f"Configuration {configuration.id} build failed"
-            raise RunEnvironmentNotReadyError(message)
-        venv_path = await self._builds_service.ensure_local_env(build=build)
-        return venv_path, build.id
 
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
@@ -1992,7 +2118,7 @@ class RunsService:
         if error_message is not None:
             run.error_message = error_message
         run.finished_at = utc_now()
-        run.canceled_at = utc_now() if status is RunStatus.CANCELED else None
+        run.canceled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
         await self._session.refresh(run)
 
@@ -2008,21 +2134,6 @@ class RunsService:
             ),
         )
         return run
-
-    async def _append_log(self, run_id: str, message: str, *, stream: str) -> RunLog:
-        log = RunLog(run_id=run_id, message=message, stream=stream)
-        self._session.add(log)
-        await self._session.commit()
-        await self._session.refresh(log)
-        return log
-
-    def _log_to_entry(self, log: RunLog) -> RunLogEntry:
-        return RunLogEntry(
-            id=log.id,
-            created=self._epoch_seconds(log.created_at),
-            stream="stderr" if log.stream == "stderr" else "stdout",
-            message=log.message,
-        )
 
     @staticmethod
     def _resolve_python(venv_path: Path) -> Path:
@@ -2050,17 +2161,17 @@ class RunsService:
         if options.input_sheet_name:
             env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
         if options.input_sheet_names:
-            env["ADE_RUN_INPUT_SHEETS"] = json.dumps(options.input_sheet_names)
+            env["ADE_RUN_INPUT_SHEETS"] = json_dumps(options.input_sheet_names)
             if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
                 env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
         if context.run_id:
-            env["ADE_TELEMETRY_CORRELATION_ID"] = context.run_id
-            env["ADE_RUN_ID"] = context.run_id
+            env["ADE_TELEMETRY_CORRELATION_ID"] = str(context.run_id)
+            env["ADE_RUN_ID"] = str(context.run_id)
         return env
 
-    def _run_dir_for_run(self, *, workspace_id: str, run_id: str) -> Path:
+    def _run_dir_for_run(self, *, workspace_id: UUID, run_id: UUID) -> Path:
         root = workspace_run_root(self._settings, workspace_id).resolve()
-        candidate = (root / run_id).resolve()
+        candidate = (root / str(run_id)).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:  # pragma: no cover - defensive guard
@@ -2072,8 +2183,8 @@ class RunsService:
         return candidate
 
     @staticmethod
-    def _generate_run_id() -> str:
-        return f"run_{uuid4().hex}"
+    def _generate_run_id() -> UUID:
+        return generate_uuid7()
 
     @staticmethod
     def _epoch_seconds(dt: datetime | None) -> int | None:
@@ -2086,10 +2197,6 @@ class RunsService:
         if run.started_at and run.finished_at:
             return int((run.finished_at - run.started_at).total_seconds() * 1000)
         return None
-
-    @staticmethod
-    def _status_literal(status: RunStatus) -> RunStatusLiteral:
-        return status.value  # type: ignore[return-value]
 
     @staticmethod
     def _format_mode_message(options: RunCreateOptions) -> str | None:
@@ -2146,23 +2253,53 @@ class RunsService:
         run: Run,
         type_: str,
         payload: AdeEventPayload | dict[str, Any] | None = None,
-        build_id: str | None = None,
+        build_id: UUID | None = None,
     ) -> AdeEvent:
         """Emit an AdeEvent originating from the API orchestrator."""
 
+        build_identifier = build_id or getattr(run, "build_id", None)
         event = await self._event_dispatcher.emit(
             type=type_,
             source="api",
             workspace_id=run.workspace_id,
             configuration_id=run.configuration_id,
             run_id=run.id,
-            build_id=build_id or getattr(run, "build_id", None),
+            build_id=build_identifier,
             payload=payload,
         )
         self._log_event_debug(event, origin="api")
         return event
 
-    def event_log_reader(self, *, workspace_id: str, run_id: str) -> RunEventLogReader:
+    async def _ensure_run_queued_event(
+        self,
+        *,
+        run: Run,
+        mode_literal: str,
+        options: RunCreateOptions,
+    ) -> AdeEvent | None:
+        """Guarantee a single run.queued event exists for the run."""
+
+        last_sequence = self._event_storage.last_sequence(
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+        )
+        if last_sequence > 0:
+            reader = self.event_log_reader(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
+            return next(iter(reader.iter(after_sequence=0)), None)
+        return await self._emit_api_event(
+            run=run,
+            type_="run.queued",
+            payload=RunQueuedPayload(
+                status="queued",
+                mode=mode_literal,
+                options=options.model_dump(),
+            ),
+        )
+
+    def event_log_reader(self, *, workspace_id: UUID, run_id: UUID) -> RunEventLogReader:
         """Return a reader for persisted run events."""
 
         return RunEventLogReader(
@@ -2171,7 +2308,7 @@ class RunsService:
             run_id=run_id,
         )
 
-    def subscribe_to_events(self, run_id: str):
+    def subscribe_to_events(self, run_id: UUID):
         """Expose dispatcher subscription for live event streaming."""
 
         return self._event_dispatcher.subscribe(run_id)

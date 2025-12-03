@@ -21,9 +21,10 @@ from pathlib import Path, PurePosixPath
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.shared.core.logging import log_context
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.db.mixins import generate_ulid
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.logging import log_context
+from ade_api.common.time import utc_now
+from ade_api.core.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
 from .exceptions import (
@@ -33,15 +34,8 @@ from .exceptions import (
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
 )
-from .models import Configuration, ConfigurationStatus
 from .repository import ConfigurationsRepository
-from .schemas import (
-    ConfigSource,
-    ConfigSourceClone,
-    ConfigSourceTemplate,
-    ConfigValidationIssue,
-    ConfigVersionRecord,
-)
+from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue
 from .storage import ConfigStorage
 
 logger = logging.getLogger(__name__)
@@ -61,25 +55,6 @@ _EXCLUDED_NAMES = {
 _EXCLUDED_SUFFIXES = {".pyc"}
 _MAX_FILE_SIZE = 512 * 1024  # 512 KiB
 _MAX_ASSET_FILE_SIZE = 5 * 1024 * 1024  # 5 MiB
-
-
-def _serialize_configuration_version(configuration: Configuration) -> ConfigVersionRecord:
-    return ConfigVersionRecord(
-        configuration_version_id=configuration.id,
-        configuration_id=configuration.id,
-        workspace_id=configuration.workspace_id,
-        status=configuration.status,
-        semver=(
-            str(configuration.configuration_version)
-            if configuration.configuration_version
-            else None
-        ),
-        content_digest=configuration.content_digest,
-        created_at=configuration.created_at,
-        updated_at=configuration.updated_at,
-        activated_at=configuration.activated_at,
-        deleted_at=None,
-    )
 
 
 @dataclass(slots=True)
@@ -110,31 +85,6 @@ class ConfigurationsService:
             extra=log_context(workspace_id=workspace_id, count=len(configs)),
         )
         return configs
-
-    async def list_configuration_versions(
-        self,
-        *,
-        workspace_id: str,
-        configuration_id: str,
-    ) -> list[ConfigVersionRecord]:
-        logger.debug(
-            "config.versions.list.start",
-            extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
-        )
-        configuration = await self._require_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-        versions = [_serialize_configuration_version(configuration)]
-        logger.debug(
-            "config.versions.list.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                count=len(versions),
-            ),
-        )
-        return versions
 
     async def get_configuration(
         self,
@@ -167,7 +117,7 @@ class ConfigurationsService:
         display_name: str,
         source: ConfigSource,
     ) -> Configuration:
-        configuration_id = generate_ulid()
+        configuration_id = generate_uuid7()
         logger.debug(
             "config.create.start",
             extra=log_context(
@@ -216,7 +166,6 @@ class ConfigurationsService:
             workspace_id=workspace_id,
             display_name=display_name,
             status=ConfigurationStatus.DRAFT,
-            configuration_version=0,
         )
         self._session.add(record)
         await self._session.flush()
@@ -264,6 +213,58 @@ class ConfigurationsService:
             ),
         )
         return config
+
+    async def import_configuration_from_archive(
+        self,
+        *,
+        workspace_id: str,
+        display_name: str,
+        archive: bytes,
+    ) -> Configuration:
+        configuration_id = generate_uuid7()
+        logger.debug(
+            "config.import.start",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                display_name=display_name,
+            ),
+        )
+        try:
+            digest = await self._storage.import_archive(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                archive=archive,
+            )
+        except Exception:
+            await self._storage.delete_config(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                missing_ok=True,
+            )
+            raise
+
+        record = Configuration(
+            id=configuration_id,
+            workspace_id=workspace_id,
+            display_name=display_name,
+            status=ConfigurationStatus.DRAFT,
+            content_digest=digest,
+        )
+        self._session.add(record)
+        await self._session.flush()
+        await self._session.refresh(record)
+
+        logger.info(
+            "config.import.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                display_name=display_name,
+                status=record.status.value,
+            ),
+        )
+        return record
 
     async def validate_configuration(
         self,
@@ -320,27 +321,11 @@ class ConfigurationsService:
             )
             raise ConfigValidationFailedError(issues)
 
-        if configuration.status is ConfigurationStatus.DRAFT:
-            configuration.configuration_version = (
-                max(configuration.configuration_version or 0, 0) + 1
-            )
-            configuration.content_digest = digest
-        elif configuration.status in {
+        if configuration.status not in {
+            ConfigurationStatus.DRAFT,
             ConfigurationStatus.PUBLISHED,
             ConfigurationStatus.INACTIVE,
         }:
-            if configuration.content_digest and configuration.content_digest != digest:
-                logger.warning(
-                    "config.activate.digest_mismatch",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        configuration_id=configuration_id,
-                    ),
-                )
-                raise ConfigStateError("Configuration contents differ from published digest")
-            if configuration.content_digest is None:
-                configuration.content_digest = digest
-        else:
             logger.warning(
                 "config.activate.state_invalid",
                 extra=log_context(
@@ -354,7 +339,7 @@ class ConfigurationsService:
         await self._demote_active(workspace_id=workspace_id, exclude=configuration_id)
 
         configuration.status = ConfigurationStatus.ACTIVE
-        configuration.content_digest = configuration.content_digest or digest
+        configuration.content_digest = digest
         configuration.activated_at = utc_now()
         await self._session.flush()
         await self._session.refresh(configuration)
@@ -365,7 +350,6 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 status=configuration.status.value,
-                configuration_version=configuration.configuration_version,
             ),
         )
         return configuration
@@ -410,7 +394,6 @@ class ConfigurationsService:
             raise ConfigValidationFailedError(issues)
 
         configuration.status = ConfigurationStatus.PUBLISHED
-        configuration.configuration_version = max(configuration.configuration_version or 0, 0) + 1
         configuration.content_digest = digest
         await self._session.flush()
         await self._session.refresh(configuration)
@@ -421,7 +404,6 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 status=configuration.status.value,
-                configuration_version=configuration.configuration_version,
             ),
         )
         return configuration
@@ -457,6 +439,53 @@ class ConfigurationsService:
 
         logger.info(
             "config.deactivate.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+                status=configuration.status.value,
+            ),
+        )
+        return configuration
+
+    async def replace_configuration_from_archive(
+        self,
+        *,
+        workspace_id: str,
+        configuration_id: str,
+        archive: bytes,
+        if_match: str | None,
+    ) -> Configuration:
+        logger.debug(
+            "config.import.replace.start",
+            extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
+        )
+        configuration = await self._require_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        _ensure_editable_status(configuration)
+        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
+        current_fileset_hash = await self._current_fileset_hash(config_path)
+
+        if not if_match:
+            raise PreconditionRequiredError()
+
+        client_token = canonicalize_etag(if_match)
+        if current_fileset_hash and client_token != current_fileset_hash:
+            raise PreconditionFailedError(current_fileset_hash)
+
+        digest = await self._storage.replace_from_archive(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            archive=archive,
+        )
+        configuration.content_digest = digest
+        configuration.updated_at = utc_now()
+        await self._session.flush()
+        await self._session.refresh(configuration)
+
+        logger.info(
+            "config.import.replace.success",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
@@ -726,7 +755,7 @@ class ConfigurationsService:
         workspace_id: str,
         configuration_id: str,
         relative_path: str,
-    ) -> Path:
+    ) -> tuple[Path, bool]:
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
@@ -735,6 +764,7 @@ class ConfigurationsService:
         config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         rel_path = _normalize_editable_path(relative_path)
         dir_path = _ensure_allowed_directory_path(config_path, rel_path)
+        created = not dir_path.exists()
 
         logger.debug(
             "config.directories.create.start",
@@ -745,10 +775,11 @@ class ConfigurationsService:
             ),
         )
 
-        await run_in_threadpool(dir_path.mkdir, 0o755, True)
-        configuration.updated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
+        await run_in_threadpool(dir_path.mkdir, mode=0o755, parents=True, exist_ok=True)
+        if created:
+            configuration.updated_at = utc_now()
+            await self._session.flush()
+            await self._session.refresh(configuration)
 
         logger.info(
             "config.directories.create.success",
@@ -756,9 +787,10 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 path=relative_path,
+                created=created,
             ),
         )
-        return dir_path
+        return dir_path, created
 
     async def delete_directory(
         self,
@@ -1044,6 +1076,10 @@ class ConfigurationsService:
         )
         existing.status = ConfigurationStatus.INACTIVE
         await self._session.flush()
+
+    async def _current_fileset_hash(self, config_path: Path) -> str:
+        index = await run_in_threadpool(_build_file_index, config_path)
+        return _compute_fileset_hash(index["entries"])
 
     async def _require_configuration(
         self,

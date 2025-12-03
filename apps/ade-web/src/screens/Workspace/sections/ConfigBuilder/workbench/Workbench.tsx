@@ -2,30 +2,32 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type MouseEventHandler,
   type ReactNode,
+  type ChangeEvent,
 } from "react";
 import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
-import { BottomPanel, type WorkbenchRunSummary } from "./components/BottomPanel";
+import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
 import { Explorer } from "./components/Explorer";
-import { Inspector } from "./components/Inspector";
 import { PanelResizeHandle } from "./components/PanelResizeHandle";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
 import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
-import type { WorkbenchConsoleLine, WorkbenchDataSeed, WorkbenchValidationState } from "./types";
+import type {
+  WorkbenchDataSeed,
+} from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
-import { createWorkbenchTreeFromListing, findFileNode } from "./utils/tree";
+import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { SplitButton } from "@ui/SplitButton";
@@ -35,16 +37,16 @@ import {
   useConfigurationFilesQuery,
   useSaveConfigurationFileMutation,
   useDeleteConfigurationFileMutation,
+  useCreateConfigurationDirectoryMutation,
+  useDeleteConfigurationDirectoryMutation,
 } from "@shared/configurations/hooks/useConfigurationFiles";
+import { useReplaceConfigurationMutation } from "@shared/configurations/hooks/useConfigurationImport";
 import { configurationKeys } from "@shared/configurations/keys";
-import { readConfigurationFileJson } from "@shared/configurations/api";
+import { exportConfiguration, readConfigurationFileJson } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
-import { useValidateConfigurationMutation } from "@shared/configurations/hooks/useValidateConfiguration";
 import { createScopedStorage } from "@shared/storage";
 import type { ConfigBuilderConsole } from "@app/nav/urlState";
 import { ApiError } from "@shared/api";
-import { fetchRunOutputs, fetchRunSummary, fetchRunTelemetry, streamRun, type RunStreamOptions } from "@shared/runs/api";
-import type { RunStatus, RunStreamEvent } from "@shared/runs/types";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
@@ -53,25 +55,30 @@ import { useNotifications, type NotificationIntent } from "@shared/notifications
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
-import { createRunStreamState, runStreamReducer } from "./state/runStream";
+import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
+import { createLastSelectionStorage, persistLastSelection } from "../storage";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
-const INSPECTOR_LIMITS = { min: 260, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
 const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
+const COLLAPSED_CONSOLE_BAR_HEIGHT = 40;
 const MAX_CONSOLE_LINES = 400;
-const OUTPUT_HANDLE_THICKNESS = 4; // matches h-1 Tailwind utility on PanelResizeHandle
+const OUTPUT_HANDLE_THICKNESS = 10; // matches thicker PanelResizeHandle hit target
 const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
-  "Console closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
+  "Panel closed to keep the editor readable on this screen size. Resize the window or collapse other panes to reopen it.";
 const buildTabStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.tabs`;
 const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
 const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.editor-theme`;
+const buildExplorerExpandedStorageKey = (workspaceId: string, configId: string) =>
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.explorer.expanded`;
+const buildLayoutStorageKey = (workspaceId: string, configId: string) =>
+  `ade.ui.workspace.${workspaceId}.configuration.${configId}.layout`;
 
 const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
   { value: "system", label: "System" },
@@ -102,13 +109,6 @@ type SideBounds = {
 type WorkbenchWindowState = "restored" | "maximized";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
-
-interface RunStreamMetadata {
-  readonly mode: "validation" | "extraction";
-  readonly documentId?: string;
-  readonly documentName?: string;
-  readonly sheetNames?: readonly string[];
-}
 
 interface WorkbenchProps {
   readonly workspaceId: string;
@@ -145,6 +145,7 @@ export function Workbench({
     setPane,
     setConsole,
   } = useWorkbenchUrlState();
+  const [runId, setRunId] = useState<string | null>(null);
 
   const usingSeed = Boolean(seed);
   const filesQuery = useConfigurationFilesQuery({
@@ -155,6 +156,9 @@ export function Workbench({
     order: "asc",
     enabled: !usingSeed,
   });
+  const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
+  const isDraftConfig = filesQuery.data?.status === "draft";
+  const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspaceId), [workspaceId]);
 
   const tree = useMemo(() => {
     if (seed) {
@@ -166,86 +170,45 @@ export function Workbench({
     return createWorkbenchTreeFromListing(filesQuery.data);
   }, [seed, filesQuery.data]);
 
-  const [runStreamState, dispatchRunStream] = useReducer(
-    runStreamReducer,
-    seed?.console?.slice(-MAX_CONSOLE_LINES) ?? [],
-    (initialConsole) =>
-      createRunStreamState(
-        MAX_CONSOLE_LINES,
-        Array.isArray(initialConsole) ? (initialConsole as WorkbenchConsoleLine[]) : undefined,
-      ),
-  );
-  const consoleLines = runStreamState.consoleLines;
-  const runStreamRef = useRef(runStreamState);
   useEffect(() => {
-    runStreamRef.current = runStreamState;
-  }, [runStreamState]);
-
-  const [validationState, setValidationState] = useState<WorkbenchValidationState>(() => ({
-    status: seed?.validation?.length ? "success" : "idle",
-    messages: seed?.validation ?? [],
-    lastRunAt: seed?.validation?.length ? new Date().toISOString() : undefined,
-    error: null,
-    digest: null,
-  }));
-
-  const consoleStreamRef = useRef<AbortController | null>(null);
-  const isMountedRef = useRef(true);
-  type ActiveStream = {
-    readonly kind: "run";
-    readonly startedAt: string;
-    readonly metadata?: RunStreamMetadata;
-  };
-  const [activeStream, setActiveStream] = useState<ActiveStream | null>(null);
-
-  const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
-  const [runDialogOpen, setRunDialogOpen] = useState(false);
-
-  const resetConsole = useCallback(
-    (message: string) => {
-      if (!isMountedRef.current) {
-        return;
-      }
-      const timestamp = formatConsoleTimestamp(new Date());
-      dispatchRunStream({
-        type: "RESET",
-        initialLines: [{ level: "info", message, timestamp, origin: "run" }],
-      });
-    },
-    [dispatchRunStream],
-  );
-
-  const appendConsoleLine = useCallback(
-    (line: WorkbenchConsoleLine) => {
-      if (!isMountedRef.current) {
-        return;
-      }
-      dispatchRunStream({ type: "APPEND_LINE", line });
-    },
-    [dispatchRunStream],
-  );
-
-  useEffect(() => {
-    if (seed?.validation) {
-      setValidationState({
-        status: "success",
-        messages: seed.validation,
-        lastRunAt: new Date().toISOString(),
-        error: null,
-        digest: null,
-      });
+    if (!configId) {
+      return;
     }
-  }, [seed?.validation]);
+    if (usingSeed || filesQuery.isSuccess) {
+      persistLastSelection(lastSelectionStorage, configId);
+    }
+  }, [configId, usingSeed, filesQuery.isSuccess, lastSelectionStorage]);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      consoleStreamRef.current?.abort();
-    };
+  const [pendingCompletion, setPendingCompletion] = useState<RunCompletionInfo | null>(null);
+  const handleRunComplete = useCallback((info: RunCompletionInfo) => {
+    setPendingCompletion(info);
   }, []);
+  const replaceConfig = useReplaceConfigurationMutation(workspaceId, configId);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const [actionsMenu, setActionsMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
-  const validateConfiguration = useValidateConfigurationMutation(workspaceId, configId);
+  const {
+    stream: runStreamState,
+    runStatus: derivedRunStatus,
+    runMode: derivedRunMode,
+    runInProgress,
+    validation: validationState,
+    consoleLines,
+    latestRun,
+    appendConsoleLine,
+    clearConsole,
+    startRun,
+  } = useRunSessionModel({
+    configId,
+    runId,
+    seed,
+    maxConsoleLines: MAX_CONSOLE_LINES,
+    onRunIdChange: setRunId,
+    onRunComplete: handleRunComplete,
+  });
+  const [runDialogOpen, setRunDialogOpen] = useState(false);
 
   const tabPersistence = useMemo(
     () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
@@ -255,19 +218,35 @@ export function Workbench({
     () => (seed ? null : createScopedStorage(buildConsoleStorageKey(workspaceId, configId))),
     [workspaceId, configId, seed],
   );
+  const layoutPersistence = useMemo(
+    () => createScopedStorage(buildLayoutStorageKey(workspaceId, configId)),
+    [workspaceId, configId],
+  );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
-  if (!initialConsolePrefsRef.current && consolePersistence) {
-    initialConsolePrefsRef.current =
-      (consolePersistence.get<unknown>() as ConsolePanelPreferences | Record<string, unknown> | null) ?? null;
-  }
   const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
   const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
-  const [explorer, setExplorer] = useState({ collapsed: false, fraction: 280 / 1200 });
-  const [inspector, setInspector] = useState({ collapsed: false, fraction: 300 / 1200 });
+  const [explorer, setExplorer] = useState(() => {
+    const stored = layoutPersistence.get<{ version?: number; explorer?: { collapsed: boolean; fraction: number } }>();
+    return stored?.explorer
+      ? { collapsed: Boolean(stored.explorer.collapsed), fraction: stored.explorer.fraction ?? 280 / 1200 }
+      : { collapsed: false, fraction: 280 / 1200 };
+  });
   const [consoleFraction, setConsoleFraction] = useState<number | null>(null);
+  const lastConsoleFractionRef = useRef<number | null>(null);
   const [hasHydratedConsoleState, setHasHydratedConsoleState] = useState(false);
+  useEffect(() => {
+    if (!consolePersistence) {
+      initialConsolePrefsRef.current = null;
+    } else {
+      initialConsolePrefsRef.current =
+        (consolePersistence.get<unknown>() as ConsolePanelPreferences | Record<string, unknown> | null) ?? null;
+    }
+    lastConsoleFractionRef.current = null;
+    setConsoleFraction(null);
+    setHasHydratedConsoleState(false);
+  }, [consolePersistence]);
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 });
   const [paneAreaEl, setPaneAreaEl] = useState<HTMLDivElement | null>(null);
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
@@ -276,14 +255,18 @@ export function Workbench({
   const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
   const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
+  const [deletingFolderPath, setDeletingFolderPath] = useState<string | null>(null);
   const { notifyBanner, dismissScope } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
   const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
+  const createConfigDirectory = useCreateConfigurationDirectoryMutation(workspaceId, configId);
+  const deleteConfigDirectory = useDeleteConfigurationDirectoryMutation(workspaceId, configId);
   const showConsoleBanner = useCallback(
     (message: string, options?: { intent?: NotificationIntent; duration?: number | null }) => {
       notifyBanner({
@@ -303,15 +286,68 @@ export function Workbench({
 
   const pushConsoleError = useCallback(
     (error: unknown) => {
-      if (!isMountedRef.current) {
-        return;
-      }
       const message = describeError(error);
       appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()), origin: "run" });
       showConsoleBanner(message, { intent: "danger", duration: null });
     },
     [appendConsoleLine, showConsoleBanner],
   );
+
+  const handleExportConfig = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportConfiguration(workspaceId, configId);
+      const filename = result.filename ?? `${configId}.zip`;
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      showConsoleBanner(`Exported ${filename}`, { intent: "success", duration: 4000 });
+    } catch (error) {
+      pushConsoleError(error);
+      showConsoleBanner("Export failed. Try again in a moment.", { intent: "danger", duration: 6000 });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [workspaceId, configId, showConsoleBanner, pushConsoleError]);
+
+  useEffect(() => {
+    if (!pendingCompletion) {
+      return;
+    }
+    const { runId: completedRunId, status, mode, durationMs, payload, completedAt } = pendingCompletion;
+    const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
+    const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
+    const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
+    const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
+    const isCancelled = status === "cancelled" || status === "canceled";
+    const notice =
+      status === "succeeded"
+        ? "ADE run completed successfully."
+        : isCancelled
+          ? "ADE run canceled."
+          : errorMessage;
+    const intent: NotificationIntent =
+      status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
+    showConsoleBanner(notice, { intent });
+
+    if (mode !== "validation") {
+      const completedTimestamp = completedAt ? new Date(completedAt) : new Date();
+      appendConsoleLine({
+        level: status === "succeeded" ? "success" : isCancelled ? "warning" : "error",
+        message:
+          typeof durationMs === "number" && durationMs > 0
+            ? `Run ${status} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
+            : `Run ${status}. Open Run summary for details.`,
+        timestamp: formatConsoleTimestamp(completedTimestamp),
+        origin: "run",
+      });
+    }
+
+    setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
+  }, [pendingCompletion, appendConsoleLine, showConsoleBanner, setPendingCompletion]);
 
   const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
@@ -404,7 +440,7 @@ export function Workbench({
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event("ade:workbench-layout"));
     });
-  }, [explorer.collapsed, explorer.fraction, inspector.collapsed, inspector.fraction, outputCollapsed, consoleFraction, isMaximized]);
+  }, [explorer.collapsed, explorer.fraction, outputCollapsed, consoleFraction, isMaximized, pane]);
 
   const saveTab = useCallback(
     async (tabId: string): Promise<boolean> => {
@@ -418,13 +454,15 @@ export function Workbench({
       if (tab.content === tab.initialContent || tab.saving) {
         return false;
       }
+      const contentToSave = tab.content;
+      const etagToUse = tab.etag ?? undefined;
       files.beginSavingTab(tabId);
       try {
         const response = await saveConfigFile.mutateAsync({
           path: tab.id,
-          content: tab.content,
-          etag: tab.etag ?? undefined,
-          create: !tab.etag,
+          content: contentToSave,
+          etag: etagToUse,
+          create: !etagToUse,
           parents: true,
         });
         const metadata = {
@@ -436,6 +474,7 @@ export function Workbench({
         files.completeSavingTab(tabId, {
           etag: response.etag ?? tab.etag ?? null,
           metadata,
+          savedContent: contentToSave,
         });
         showConsoleBanner(`Saved ${tab.name}`, { intent: "success", duration: 4000 });
         return true;
@@ -476,6 +515,18 @@ export function Workbench({
     },
     [saveTab],
   );
+
+  const saveDirtyTabsBeforeRun = useCallback(async () => {
+    if (!canSaveFiles || dirtyTabs.length === 0) {
+      return true;
+    }
+    const saved = await saveTabsSequentially(dirtyTabs.map((tab) => tab.id));
+    const allSaved = saved.length === dirtyTabs.length;
+    if (!allSaved) {
+      showConsoleBanner("Save failed. Fix errors before running again.", { intent: "danger", duration: 7000 });
+    }
+    return allSaved;
+  }, [canSaveFiles, dirtyTabs, saveTabsSequentially, showConsoleBanner]);
 
   const handleSaveTabShortcut = useCallback(
     (tabId: string) => {
@@ -576,15 +627,19 @@ export function Workbench({
       if (current !== null) {
         return clamp(current, 0, 1);
       }
+      if (lastConsoleFractionRef.current !== null) {
+        return clamp(lastConsoleFractionRef.current, 0, 1);
+      }
       return resolveInitialConsoleFraction();
     });
     return true;
   }, [consoleLimits, setConsole, showConsoleBanner, clearConsoleBanners, resolveInitialConsoleFraction]);
 
   const closeConsole = useCallback(() => {
+    lastConsoleFractionRef.current = consoleFraction;
     setConsole("closed");
     clearConsoleBanners();
-  }, [setConsole, clearConsoleBanners]);
+  }, [consoleFraction, setConsole, clearConsoleBanners]);
 
   useEffect(() => {
     if (hasHydratedConsoleState) {
@@ -650,10 +705,6 @@ export function Workbench({
 
   const contentWidth = Math.max(0, layoutSize.width - ACTIVITY_BAR_WIDTH);
   const explorerBounds = useMemo(() => deriveSideBounds(contentWidth, EXPLORER_LIMITS), [contentWidth, deriveSideBounds]);
-  const inspectorBounds = useMemo(
-    () => deriveSideBounds(contentWidth, INSPECTOR_LIMITS),
-    [contentWidth, deriveSideBounds],
-  );
 
   const clampSideFraction = useCallback((fraction: number, bounds: SideBounds) => clamp(fraction, bounds.minFrac, bounds.maxFrac), []);
 
@@ -668,53 +719,34 @@ export function Workbench({
       const next = clampSideFraction(prev.fraction, explorerBounds);
       return next === prev.fraction ? prev : { ...prev, fraction: next };
     });
-    setInspector((prev) => {
-      if (prev.collapsed) {
-        return prev;
-      }
-      const next = clampSideFraction(prev.fraction, inspectorBounds);
-      return next === prev.fraction ? prev : { ...prev, fraction: next };
-    });
-  }, [contentWidth, explorerBounds, inspectorBounds, clampSideFraction]);
+  }, [contentWidth, explorerBounds, clampSideFraction]);
 
-  const inspectorVisible = !inspector.collapsed && Boolean(files.activeTab);
+  useEffect(() => {
+    layoutPersistence.set({
+      version: 2,
+      explorer: { collapsed: explorer.collapsed, fraction: explorer.fraction },
+    });
+  }, [layoutPersistence, explorer]);
+
   const rawExplorerWidth = explorer.collapsed
     ? 0
     : clamp(explorer.fraction, explorerBounds.minFrac, explorerBounds.maxFrac) * contentWidth;
-  const rawInspectorWidth = inspectorVisible
-    ? clamp(inspector.fraction, inspectorBounds.minFrac, inspectorBounds.maxFrac) * contentWidth
-    : 0;
-  let explorerWidth = rawExplorerWidth;
-  let inspectorWidth = rawInspectorWidth;
-  if (contentWidth > 0) {
-    const handleBudget =
-      (showExplorerPane ? OUTPUT_HANDLE_THICKNESS : 0) + (inspectorVisible ? OUTPUT_HANDLE_THICKNESS : 0);
-    const occupied = rawExplorerWidth + rawInspectorWidth + handleBudget;
-    if (occupied > contentWidth) {
-      const overflow = occupied - contentWidth;
-      const inspectorShrink = Math.min(overflow, Math.max(0, rawInspectorWidth - inspectorBounds.minPx));
-      inspectorWidth = rawInspectorWidth - inspectorShrink;
-      const remaining = overflow - inspectorShrink;
-      if (remaining > 0) {
-        const explorerShrink = Math.min(remaining, Math.max(0, rawExplorerWidth - explorerBounds.minPx));
-        explorerWidth = rawExplorerWidth - explorerShrink;
-      }
-    }
-  }
+  const explorerWidth = contentWidth > 0 ? Math.min(rawExplorerWidth, contentWidth) : rawExplorerWidth;
   const paneHeight = Math.max(0, consoleLimits.container);
   const defaultFraction = 0.25;
   const desiredFraction =
     consoleFraction ??
     (paneHeight > 0 ? clamp(DEFAULT_CONSOLE_HEIGHT / paneHeight, 0, 1) : defaultFraction);
-  const desiredHeight = outputCollapsed ? 0 : desiredFraction * paneHeight;
-  const consoleHeight = outputCollapsed
-    ? 0
-    : paneHeight > 0
+  const desiredHeight = desiredFraction * paneHeight;
+  const liveConsoleHeight =
+    paneHeight > 0
       ? clampConsoleHeight(desiredHeight)
       : 0;
+  const effectiveHandle = OUTPUT_HANDLE_THICKNESS;
+  const effectiveConsoleHeight = outputCollapsed ? COLLAPSED_CONSOLE_BAR_HEIGHT : liveConsoleHeight;
   const editorHeight =
     paneHeight > 0
-      ? Math.max(editorMinHeight, paneHeight - OUTPUT_HANDLE_THICKNESS - consoleHeight)
+      ? Math.max(editorMinHeight, paneHeight - effectiveHandle - effectiveConsoleHeight)
       : editorMinHeight;
 
   useEffect(() => {
@@ -738,296 +770,51 @@ export function Workbench({
     setPendingOpenFileId(null);
   }, [pendingOpenFileId, tree, files, setFileId]);
 
-  const startRunStream = useCallback(
-    (options: RunStreamOptions, metadata: RunStreamMetadata, forceRebuild = false) => {
-      const effectiveOptions = forceRebuild ? { ...options, force_rebuild: true } : options;
-      if (
-        usingSeed ||
-        !tree ||
-        filesQuery.isLoading ||
-        filesQuery.isError ||
-        activeStream !== null
-      ) {
-        return null;
-      }
-      if (metadata.mode === "validation" && validateConfiguration.isPending) {
-        return null;
-      }
-      if (!openConsole()) {
-        return null;
-      }
+  const prepareRun = useCallback(() => {
+    const opened = openConsole();
+    if (!opened) {
+      return false;
+    }
+    setPane("terminal");
+    return true;
+  }, [openConsole, setPane]);
 
-      const startedAt = new Date();
-      const startedIso = startedAt.toISOString();
-      setPane("terminal");
-      resetConsole(
-        metadata.mode === "validation"
-          ? "Starting ADE run (validate-only)…"
-          : "Starting ADE extraction…",
-      );
-      if (metadata.mode === "validation") {
-        setValidationState((prev) => ({
-          ...prev,
-          status: "running",
-          lastRunAt: startedIso,
-          error: null,
-        }));
-      } else {
-        setLatestRun(null);
-      }
-
-      const controller = new AbortController();
-      consoleStreamRef.current?.abort();
-      consoleStreamRef.current = controller;
-      setActiveStream({ kind: "run", startedAt: startedIso, metadata });
-
-      void (async () => {
-        let currentRunId: string | null = null;
-        try {
-          for await (const event of streamRun(configId, effectiveOptions, controller.signal)) {
-            dispatchRunStream({ type: "EVENT", event });
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            const payload =
-              event && typeof event === "object" && event.payload && typeof event.payload === "object"
-                ? (event.payload as Record<string, unknown>)
-                : {};
-            const type = event.type;
-            const scope = (payload.scope as string | undefined) ?? null;
-            const isBuildEvent =
-              (typeof type === "string" && type.startsWith("build.")) ||
-              (type === "console.line" && scope === "build");
-            if (isBuildEvent) {
-              continue;
-            }
-            const isRunEvent = typeof type === "string" && type.startsWith("run.");
-            if (isRunEvent && !currentRunId) {
-              currentRunId = event.run_id ?? null;
-            }
-            if (!isRunEvent) continue;
-            if (type === "run.queued") {
-              const fallbackId = (event as { id?: string }).id ?? null;
-              currentRunId = event.run_id ?? fallbackId ?? currentRunId;
-            }
-            if (type === "run.completed") {
-              const runPayload = payload;
-              const runStatus = (runPayload.status as RunStatus | undefined) ?? "succeeded";
-              const failure = runPayload.failure as Record<string, unknown> | undefined;
-              const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-              const summaryMessage =
-                typeof runPayload.summary === "string" ? runPayload.summary.trim() : null;
-              const errorMessage =
-                failureMessage ||
-                summaryMessage ||
-                "ADE run failed.";
-              const notice =
-                runStatus === "succeeded"
-                  ? "ADE run completed successfully."
-                  : runStatus === "canceled"
-                    ? "ADE run canceled."
-                    : errorMessage;
-              const intent: NotificationIntent =
-                runStatus === "succeeded"
-                  ? "success"
-                  : runStatus === "canceled"
-                    ? "info"
-                    : "danger";
-              showConsoleBanner(notice, { intent });
-
-              const resolvedRunId =
-                currentRunId ?? event.run_id ?? (event as { id?: string }).id ?? null;
-              if (resolvedRunId) {
-                try {
-                  const telemetry = await fetchRunTelemetry(resolvedRunId);
-                  const lastSeen = runStreamRef.current.lastSequence;
-                  const missing = telemetry.filter(
-                    (item) =>
-                      item &&
-                      typeof item === "object" &&
-                      typeof item.sequence === "number" &&
-                      item.sequence > lastSeen,
-                  );
-                  for (const extraEvent of missing) {
-                    dispatchRunStream({ type: "EVENT", event: extraEvent as RunStreamEvent });
-                  }
-                } catch (error) {
-                  // Best effort hydration; keep streaming path fast.
-                  console.warn("Unable to hydrate run telemetry", error);
-                }
-              }
-              if (metadata.mode === "extraction" && resolvedRunId) {
-                const completedAt = new Date();
-                const completedIso = completedAt.toISOString();
-                const durationMs = Math.max(0, completedAt.getTime() - startedAt.getTime());
-                const downloadBase = `/api/v1/runs/${encodeURIComponent(resolvedRunId)}`;
-                setLatestRun({
-                  runId: resolvedRunId,
-                  status: runStatus,
-                  downloadBase,
-                  documentName: metadata.documentName,
-                  sheetNames: metadata.sheetNames ?? [],
-                  outputs: [],
-                  outputsLoaded: false,
-                  summary: null,
-                  summaryLoaded: false,
-                  summaryError: null,
-                  telemetry: null,
-                  telemetryLoaded: false,
-                  telemetryError: null,
-                  error: null,
-                  startedAt: startedIso,
-                  completedAt: completedIso,
-                  durationMs,
-                });
-                appendConsoleLine({
-                  level: runStatus === "succeeded" ? "success" : runStatus === "canceled" ? "warning" : "error",
-                  message:
-                    durationMs > 0
-                      ? `Run ${runStatus} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
-                      : `Run ${runStatus}. Open Run summary for details.`,
-                  timestamp: formatConsoleTimestamp(completedAt),
-                  origin: "run",
-                });
-                try {
-                  const listing = await fetchRunOutputs(resolvedRunId);
-                  const outputFiles = Array.isArray(listing.files) ? listing.files : [];
-                  const files = outputFiles.map((file) => {
-                    const path = (file as { path?: string }).path;
-                    return {
-                      name: file.name ?? path ?? "output",
-                      path,
-                      byte_size: file.byte_size ?? 0,
-                      download_url: file.download_url ?? undefined,
-                    };
-                  });
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, outputs: files, outputsLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run outputs.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, outputsLoaded: true, error: message }
-                      : prev,
-                  );
-                }
-
-                try {
-                  const summary = await fetchRunSummary(resolvedRunId);
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, summary, summaryLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message = error instanceof Error ? error.message : "Unable to load run summary.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, summaryLoaded: true, summaryError: message }
-                      : prev,
-                  );
-                }
-
-                try {
-                  const telemetry = await fetchRunTelemetry(resolvedRunId);
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, telemetry, telemetryLoaded: true }
-                      : prev,
-                  );
-                } catch (error) {
-                  const message =
-                    error instanceof Error ? error.message : "Unable to load run telemetry.";
-                  setLatestRun((prev) =>
-                    prev && prev.runId === resolvedRunId
-                      ? { ...prev, telemetryLoaded: true, telemetryError: message }
-                      : prev,
-                  );
-                }
-              }
-            }
-          }
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return;
-          }
-          pushConsoleError(error);
-        } finally {
-          if (consoleStreamRef.current === controller) {
-            consoleStreamRef.current = null;
-          }
-          if (isMountedRef.current) {
-            setActiveStream(null);
-          }
-        }
-      })();
-
-      return startedIso;
-    },
-    [
-      usingSeed,
-      tree,
-      filesQuery.isLoading,
-      filesQuery.isError,
-      activeStream,
-      validateConfiguration.isPending,
-      openConsole,
-      setPane,
-      resetConsole,
-      setValidationState,
-      setLatestRun,
-      consoleStreamRef,
-      setActiveStream,
-      configId,
-      appendConsoleLine,
-      showConsoleBanner,
-      pushConsoleError,
-    ],
-  );
-
-  const handleRunValidation = useCallback(() => {
-    const startedIso = startRunStream({ validate_only: true }, { mode: "validation" }, false);
-    if (!startedIso) {
+  const handleRunValidation = useCallback(async () => {
+    if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
       return;
     }
-    validateConfiguration.mutate(undefined, {
-      onSuccess(result) {
-        const issues = result.issues ?? [];
-        const messages = issues.map((issue) => ({
-          level: "error" as const,
-          message: issue.message,
-          path: issue.path,
-        }));
-        setValidationState({
-          status: "success",
-          messages,
-          lastRunAt: startedIso,
-          error: null,
-          digest: result.content_digest ?? null,
-        });
-      },
-      onError(error) {
-        const message = error instanceof Error ? error.message : "Validation failed.";
-        setValidationState({
-          status: "error",
-          messages: [{ level: "error", message }],
-          lastRunAt: startedIso,
-          error: message,
-          digest: null,
-        });
-      },
-    });
-  }, [startRunStream, validateConfiguration, setValidationState]);
+    const ready = await saveDirtyTabsBeforeRun();
+    if (!ready) {
+      return;
+    }
+    await startRun(
+      { validate_only: true },
+      { mode: "validation" },
+      { prepare: prepareRun },
+    );
+  }, [
+    usingSeed,
+    tree,
+    filesQuery.isLoading,
+    filesQuery.isError,
+    saveDirtyTabsBeforeRun,
+    startRun,
+    prepareRun,
+  ]);
 
   const handleRunExtraction = useCallback(
-    (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+      setRunDialogOpen(false);
+      setForceRun(false);
+      if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
+        return;
+      }
+      const ready = await saveDirtyTabsBeforeRun();
+      if (!ready) {
+        return;
+      }
       const worksheetList = Array.from(new Set((selection.sheetNames ?? []).filter(Boolean)));
-      const started = startRunStream(
+      void startRun(
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
@@ -1039,14 +826,19 @@ export function Workbench({
           documentName: selection.documentName,
           sheetNames: worksheetList,
         },
-        forceRun,
+        { forceRebuild: forceRun, prepare: prepareRun },
       );
-      if (started) {
-        setRunDialogOpen(false);
-        setForceRun(false);
-      }
     },
-    [startRunStream, setRunDialogOpen, setForceRun, forceRun],
+    [
+      usingSeed,
+      tree,
+      filesQuery.isLoading,
+      filesQuery.isError,
+      startRun,
+      forceRun,
+      prepareRun,
+      saveDirtyTabsBeforeRun,
+    ],
   );
 
   useEffect(() => {
@@ -1078,29 +870,28 @@ export function Workbench({
     return () => window.removeEventListener("keydown", handler);
   }, [isMacPlatform, canSaveFiles, handleSaveActiveTab]);
 
-  const runStreamMetadata = activeStream?.metadata;
-  const isStreamingRun = activeStream !== null;
-  const isStreamingAny = activeStream !== null;
-
-  const isStreamingExtraction = isStreamingRun && runStreamMetadata?.mode === "extraction";
-  const isStreamingValidationRun = isStreamingRun && runStreamMetadata?.mode !== "extraction";
+  const activeRunMode = derivedRunMode ?? (runInProgress ? "extraction" : undefined);
+  const runBusy = runInProgress;
 
   const isRunningValidation =
-    validationState.status === "running" || validateConfiguration.isPending || isStreamingValidationRun;
+    validationState.status === "running" || (runBusy && activeRunMode === "validation");
   const canRunValidation =
     !usingSeed &&
     Boolean(tree) &&
     !filesQuery.isLoading &&
     !filesQuery.isError &&
-    !isStreamingAny &&
-    !validateConfiguration.isPending &&
+    !runBusy &&
     validationState.status !== "running";
 
-  const isRunningExtraction = isStreamingExtraction;
+  const isRunningExtraction = runBusy && activeRunMode !== "validation";
   const canRunExtraction =
-    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !isStreamingAny;
+    !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
   const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
   const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
+  const canCreateFolders = canCreateFiles && !createConfigDirectory.isPending;
+  const canDeleteFolders = canCreateFiles && !deleteConfigDirectory.isPending;
+  const canReplaceFromArchive =
+    isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -1114,6 +905,9 @@ export function Workbench({
     const rect = event.currentTarget.getBoundingClientRect();
     setSettingsMenu({ x: rect.right + 8, y: rect.top });
   }, []);
+  const handleOpenActionsMenu = useCallback((position: { x: number; y: number }) => {
+    setActionsMenu(position);
+  }, []);
 
   const closeSettingsMenu = useCallback(() => setSettingsMenu(null), []);
 
@@ -1125,9 +919,40 @@ export function Workbench({
     }
   }, [outputCollapsed, openConsole, closeConsole]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handler = (event: KeyboardEvent) => {
+      const usesPrimary = isMacPlatform ? event.metaKey : event.ctrlKey;
+      if (!usesPrimary || event.altKey) {
+        return;
+      }
+      const key = event.key?.toLowerCase();
+      if (key !== "`" && event.code !== "Backquote") {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const insideEditor = typeof target.closest === "function" ? target.closest("[data-editor-area]") : null;
+        if (!insideEditor) {
+          const tag = target.tagName;
+          const role = target.getAttribute("role");
+          if (tag === "INPUT" || tag === "TEXTAREA" || role === "textbox" || target.isContentEditable) {
+            return;
+          }
+        }
+      }
+      event.preventDefault();
+      handleToggleOutput();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isMacPlatform, handleToggleOutput]);
+
   const handleClearConsole = useCallback(() => {
-    dispatchRunStream({ type: "CLEAR_CONSOLE" });
-  }, [dispatchRunStream]);
+    clearConsole();
+  }, [clearConsole]);
 
   const handleShowRunSummary = useCallback(() => {
     if (!latestRun) {
@@ -1143,10 +968,6 @@ export function Workbench({
 
   const handleHideExplorer = useCallback(() => {
     setExplorer((prev) => ({ ...prev, collapsed: true }));
-  }, []);
-
-  const handleToggleInspectorVisibility = useCallback(() => {
-    setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
 
   const handleCreateFile = useCallback(
@@ -1192,6 +1013,43 @@ export function Workbench({
     [canCreateFiles, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
   );
 
+  const handleCreateFolder = useCallback(
+    async (folderPath: string, folderName: string) => {
+      const trimmed = folderName.trim();
+      if (!trimmed) {
+        throw new Error("Enter a folder name.");
+      }
+      if (trimmed.includes("..")) {
+        throw new Error("Folder name cannot include '..'.");
+      }
+      if (!canCreateFolders) {
+        throw new Error("Files are still loading.");
+      }
+      const normalizedParent = folderPath.replace(/\/+$/, "");
+      const sanitizedName = trimmed.replace(/^\/+/, "").replace(/\/+/g, "/");
+      const candidatePath = normalizedParent ? `${normalizedParent}/${sanitizedName}` : sanitizedName;
+      const normalizedPath = candidatePath.replace(/\/+/g, "/").replace(/\/$/, "");
+      if (!normalizedPath) {
+        throw new Error("Enter a valid folder name.");
+      }
+      if (tree && findFileNode(tree, normalizedPath)) {
+        throw new Error("A file or folder with that name already exists.");
+      }
+      setIsCreatingFolder(true);
+      try {
+        await createConfigDirectory.mutateAsync({ path: normalizedPath });
+        await filesQuery.refetch();
+        showConsoleBanner(`Folder ready: ${normalizedPath}`, { intent: "success", duration: 4000 });
+      } catch (error) {
+        pushConsoleError(error);
+        throw error instanceof Error ? error : new Error("Unable to create folder.");
+      } finally {
+        setIsCreatingFolder(false);
+      }
+    },
+    [canCreateFolders, tree, createConfigDirectory, filesQuery, showConsoleBanner, pushConsoleError],
+  );
+
   const handleDeleteFile = useCallback(
     async (filePath: string) => {
       if (!canDeleteFiles) {
@@ -1233,6 +1091,104 @@ export function Workbench({
     [canDeleteFiles, tree, deleteConfigFile, files, filesQuery, showConsoleBanner, pushConsoleError, setDeletingFilePath],
   );
 
+  const handleDeleteFolder = useCallback(
+    async (folderPath: string) => {
+      if (!canDeleteFolders) {
+        throw new Error("Files are still loading.");
+      }
+      const target = tree ? findFileNode(tree, folderPath) : null;
+      if (!tree || !target || target.kind !== "folder") {
+        throw new Error("Folder not found in workspace.");
+      }
+      const confirmDelete =
+        typeof window !== "undefined"
+          ? window.confirm(`Delete folder ${folderPath} and all contents? This cannot be undone.`)
+          : true;
+      if (!confirmDelete) {
+        return;
+      }
+      setDeletingFolderPath(folderPath);
+      try {
+        await deleteConfigDirectory.mutateAsync({ path: folderPath, recursive: true });
+        setPendingOpenFileId((prev) => (prev === folderPath ? null : prev));
+        files.closeTab(folderPath);
+        await filesQuery.refetch();
+        showConsoleBanner(`Deleted folder ${folderPath}`, { intent: "info", duration: 4000 });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to delete folder.";
+        pushConsoleError(message);
+        throw new Error(message);
+      } finally {
+        setDeletingFolderPath((prev) => (prev === folderPath ? null : prev));
+      }
+    },
+    [
+      canDeleteFolders,
+      tree,
+      deleteConfigDirectory,
+      files,
+      filesQuery,
+      showConsoleBanner,
+      pushConsoleError,
+      setDeletingFolderPath,
+    ],
+  );
+
+  const handleReplaceArchiveRequest = useCallback(() => {
+    if (!canReplaceFromArchive) {
+      showConsoleBanner("Replace is only available for draft configurations.", { intent: "warning", duration: 6000 });
+      setActionsMenu(null);
+      return;
+    }
+    setActionsMenu(null);
+    setReplaceConfirmOpen(true);
+  }, [canReplaceFromArchive, showConsoleBanner]);
+
+  const handleReplaceFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+      if (!file) {
+        return;
+      }
+      try {
+        await replaceConfig.mutateAsync({ file, ifMatch: currentFilesetEtag });
+        tabPersistence?.clear?.();
+        files.closeAllTabs();
+        setFileId(undefined);
+        const refreshed = await filesQuery.refetch();
+        const listing = refreshed.data ?? filesQuery.data ?? null;
+        const nextTree = listing ? createWorkbenchTreeFromListing(listing) : null;
+        const firstFile = nextTree ? findFirstFile(nextTree) : null;
+        setPendingOpenFileId(firstFile?.id ?? null);
+        showConsoleBanner("Configuration replaced from archive.", { intent: "success", duration: 6000 });
+      } catch (error) {
+        const message =
+          error instanceof ApiError && error.status === 412
+            ? "Replace blocked: the configuration changed on the server. Reload and try again."
+            : error instanceof ApiError && error.status === 428
+              ? "Replace blocked: refresh the file list and try again."
+            : error instanceof Error
+              ? error.message
+              : "Unable to replace configuration.";
+        pushConsoleError(message);
+        showConsoleBanner(message, { intent: "danger", duration: 6000 });
+      }
+    },
+    [
+      replaceConfig,
+      currentFilesetEtag,
+      tabPersistence,
+      files,
+      filesQuery,
+      setFileId,
+      setPendingOpenFileId,
+      showConsoleBanner,
+      pushConsoleError,
+    ],
+  );
+
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
     const items: ContextMenuItem[] = THEME_MENU_OPTIONS.map((option) => ({
@@ -1250,12 +1206,6 @@ export function Workbench({
         onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
       },
       {
-        id: "toggle-inspector",
-        label: inspector.collapsed ? "Show Inspector" : "Hide Inspector",
-        icon: inspector.collapsed ? blankIcon : <MenuIconCheck />,
-        onSelect: () => setInspector((prev) => ({ ...prev, collapsed: !prev.collapsed })),
-      },
-      {
         id: "toggle-console",
         label: outputCollapsed ? "Show Console" : "Hide Console",
         icon: outputCollapsed ? blankIcon : <MenuIconCheck />,
@@ -1266,10 +1216,28 @@ export function Workbench({
   }, [
     editorTheme,
     explorer.collapsed,
-    inspector.collapsed,
     outputCollapsed,
     handleToggleOutput,
   ]);
+  const actionsMenuItems = useMemo<ContextMenuItem[]>(() => {
+    return [
+      {
+        id: "export",
+        label: isExporting ? "Exporting…" : "Export (.zip)",
+        disabled: isExporting,
+        onSelect: () => {
+          setActionsMenu(null);
+          void handleExportConfig();
+        },
+      },
+      {
+        id: "replace",
+        label: "Import from zip",
+        disabled: !canReplaceFromArchive,
+        onSelect: handleReplaceArchiveRequest,
+      },
+    ];
+  }, [canReplaceFromArchive, handleExportConfig, handleReplaceArchiveRequest, isExporting]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !isMaximized) {
@@ -1284,6 +1252,7 @@ export function Workbench({
 
   const workspaceLabel = formatWorkspaceLabel(workspaceId);
   const saveShortcutLabel = isMacPlatform ? "⌘S" : "Ctrl+S";
+  const toggleConsoleShortcutLabel = isMacPlatform ? "⌘`" : "Ctrl+`";
   const testMenuItems = useMemo<ContextMenuItem[]>(() => {
     const disabled = !canRunExtraction;
     return [
@@ -1357,6 +1326,18 @@ export function Workbench({
         "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
         menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
       );
+  const collapsedConsoleTheme =
+    menuAppearance === "dark"
+      ? {
+          bar: "border-[#1f2431] bg-[#0f111a] text-slate-200",
+          hint: "text-slate-400",
+          button: "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
+        }
+      : {
+          bar: "border-slate-300 bg-white text-slate-700",
+          hint: "text-slate-500",
+          button: "border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-400",
+        };
 
   return (
     <div className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
@@ -1371,6 +1352,7 @@ export function Workbench({
           onSaveFile={handleSaveActiveTab}
           saveShortcutLabel={saveShortcutLabel}
           onOpenTestMenu={(position) => setTestMenu(position)}
+          onOpenActionsMenu={handleOpenActionsMenu}
           canRunValidation={canRunValidation}
           isRunningValidation={isRunningValidation}
           onRunValidation={handleRunValidation}
@@ -1385,13 +1367,12 @@ export function Workbench({
           onToggleExplorer={handleToggleExplorer}
           consoleOpen={!outputCollapsed}
           onToggleConsole={handleToggleOutput}
-          inspectorCollapsed={inspector.collapsed}
-          onToggleInspector={handleToggleInspectorVisibility}
           appearance={menuAppearance}
           windowState={windowState}
           onMinimizeWindow={handleMinimizeWindow}
           onToggleMaximize={handleToggleMaximize}
           onCloseWindow={handleCloseWorkbench}
+          actionsBusy={isExporting || replaceConfig.isPending}
         />
         <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
@@ -1415,19 +1396,25 @@ export function Workbench({
                     }}
                     theme={menuAppearance}
                     canCreateFile={canCreateFiles}
-                    isCreatingFile={isCreatingFile}
+                    canCreateFolder={canCreateFolders}
+                    isCreatingEntry={isCreatingFile || isCreatingFolder}
                     onCreateFile={handleCreateFile}
+                    onCreateFolder={handleCreateFolder}
                     canDeleteFile={canDeleteFiles}
+                    canDeleteFolder={canDeleteFolders}
                     deletingFilePath={deletingFilePath}
+                    deletingFolderPath={deletingFolderPath}
                     onDeleteFile={handleDeleteFile}
-                    onCloseFile={files.closeTab}
-                    onCloseOtherFiles={files.closeOtherTabs}
-                    onCloseTabsToRight={files.closeTabsToRight}
-                    onCloseAllFiles={files.closeAllTabs}
+                    onDeleteFolder={handleDeleteFolder}
+                    expandedStorageKey={buildExplorerExpandedStorageKey(workspaceId, configId)}
                     onHide={handleHideExplorer}
                   />
                 ) : (
-                  <SidePanelPlaceholder width={explorerWidth} view={activityView} />
+                  <SidePanelPlaceholder
+                    width={explorerWidth}
+                    view={activityView}
+                    appearance={menuAppearance}
+                  />
                 )}
               </div>
               <PanelResizeHandle
@@ -1453,7 +1440,16 @@ export function Workbench({
           ) : null}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ backgroundColor: editorSurface, color: editorText }}>
-          {outputCollapsed ? (
+          <div
+            className="grid min-h-0 min-w-0 flex-1"
+            style={{
+              height: paneHeight > 0 ? `${paneHeight}px` : undefined,
+              gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${effectiveHandle}px ${Math.max(
+                0,
+                effectiveConsoleHeight,
+              )}px`,
+            }}
+          >
             <EditorArea
               tabs={files.tabs}
               activeTabId={files.activeTab?.id ?? ""}
@@ -1469,6 +1465,7 @@ export function Workbench({
               onSaveTab={handleSaveTabShortcut}
               onSaveAllTabs={handleSaveAllTabs}
               onMoveTab={files.moveTab}
+              onRetryTabLoad={files.reloadTab}
               onPinTab={files.pinTab}
               onUnpinTab={files.unpinTab}
               onSelectRecentTab={files.selectRecentTab}
@@ -1477,64 +1474,72 @@ export function Workbench({
               canSaveFiles={canSaveFiles}
               minHeight={editorMinHeight}
             />
-          ) : (
-            <div
-                className="grid min-h-0 min-w-0 flex-1"
-                style={{
-                height: paneHeight > 0 ? `${paneHeight}px` : undefined,
-                gridTemplateRows: `${Math.max(editorMinHeight, editorHeight)}px ${OUTPUT_HANDLE_THICKNESS}px ${Math.max(
-                  0,
-                  consoleHeight,
-                )}px`,
+            <PanelResizeHandle
+              orientation="horizontal"
+              onPointerDown={(event) => {
+                setIsResizingConsole(true);
+                const startY = event.clientY;
+                const startHeight = liveConsoleHeight;
+                let didOpen = false;
+                trackPointerDrag(event, {
+                  cursor: "row-resize",
+                  onMove: (move) => {
+                    if (outputCollapsed && !didOpen) {
+                      void openConsole();
+                      didOpen = true;
+                    }
+                    if (consoleLimits.maxPx <= 0 || paneHeight <= 0) {
+                      return;
+                    }
+                    const delta = startY - move.clientY;
+                    const nextHeight = clamp(startHeight + delta, consoleLimits.minPx, consoleLimits.maxPx);
+                    setConsoleFraction(clamp(nextHeight / paneHeight, 0, 1));
+                  },
+                  onEnd: () => {
+                    setIsResizingConsole(false);
+                  },
+                });
               }}
-            >
-              <EditorArea
-                tabs={files.tabs}
-                activeTabId={files.activeTab?.id ?? ""}
-                onSelectTab={(tabId) => {
-                  files.selectTab(tabId);
-                  setFileId(tabId);
-                }}
-                onCloseTab={files.closeTab}
-                onCloseOtherTabs={files.closeOtherTabs}
-                onCloseTabsToRight={files.closeTabsToRight}
-                onCloseAllTabs={files.closeAllTabs}
-                onContentChange={files.updateContent}
-                onSaveTab={handleSaveTabShortcut}
-                onSaveAllTabs={handleSaveAllTabs}
-                onMoveTab={files.moveTab}
-                onPinTab={files.pinTab}
-                onUnpinTab={files.unpinTab}
-                onSelectRecentTab={files.selectRecentTab}
-                editorTheme={editorTheme.resolvedTheme}
-                menuAppearance={menuAppearance}
-                canSaveFiles={canSaveFiles}
-                minHeight={editorMinHeight}
-              />
-              <PanelResizeHandle
-                orientation="horizontal"
-                onPointerDown={(event) => {
-                  setIsResizingConsole(true);
-                  const startY = event.clientY;
-                  const startHeight = consoleHeight;
-                  trackPointerDrag(event, {
-                    cursor: "row-resize",
-                    onMove: (move) => {
-                      if (consoleLimits.maxPx <= 0 || paneHeight <= 0) {
-                        return;
-                      }
-                      const delta = startY - move.clientY;
-                      const nextHeight = clamp(startHeight + delta, consoleLimits.minPx, consoleLimits.maxPx);
-                      setConsoleFraction(clamp(nextHeight / paneHeight, 0, 1));
-                    },
-                    onEnd: () => {
-                      setIsResizingConsole(false);
-                    },
-                  });
-                }}
-              />
+              onDoubleClick={() => {
+                if (outputCollapsed) {
+                  void openConsole();
+                } else {
+                  closeConsole();
+                }
+              }}
+              onToggle={handleToggleOutput}
+              collapsed={outputCollapsed}
+            />
+            {outputCollapsed ? (
+              <div
+                className={clsx(
+                  "flex cursor-pointer items-center justify-between border-t px-4 py-2 text-[12px] shadow-inner",
+                  collapsedConsoleTheme.bar,
+                )}
+                onDoubleClick={handleToggleOutput}
+                title="Double-click to show console"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">Console hidden</span>
+                  <span className={clsx("text-[11px]", collapsedConsoleTheme.hint)}>
+                    (double-click gutter or {toggleConsoleShortcutLabel})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleOutput}
+                  className={clsx(
+                    "rounded px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition",
+                    collapsedConsoleTheme.button,
+                  )}
+                  title="Show console"
+                >
+                  Show console
+                </button>
+              </div>
+            ) : (
               <BottomPanel
-                height={Math.max(0, consoleHeight)}
+                height={Math.max(0, liveConsoleHeight)}
                 consoleLines={consoleLines}
                 validation={validationState}
                 activePane={pane}
@@ -1542,36 +1547,15 @@ export function Workbench({
                 latestRun={latestRun}
                 onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
-                runStatus={runStreamState.status}
+                runStatus={derivedRunStatus}
+                buildPhases={runStreamState.buildPhases}
+                runPhases={runStreamState.runPhases}
+                runMode={derivedRunMode}
+                onToggleCollapse={handleToggleOutput}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
-
-        {inspectorVisible ? (
-          <>
-            <PanelResizeHandle
-              orientation="vertical"
-              onPointerDown={(event) => {
-                const startX = event.clientX;
-                const startWidth = inspectorWidth;
-                trackPointerDrag(event, {
-                  cursor: "col-resize",
-                  onMove: (move) => {
-                    const delta = startX - move.clientX;
-                    const nextWidth = clamp(startWidth + delta, inspectorBounds.minPx, inspectorBounds.maxPx);
-                    setInspector((prev) =>
-                      prev.collapsed || contentWidth <= 0
-                        ? prev
-                        : { ...prev, fraction: clampSideFraction(nextWidth / contentWidth, inspectorBounds) },
-                    );
-                  },
-                });
-              }}
-            />
-                    <Inspector width={inspectorWidth} file={files.activeTab ?? null} />
-          </>
-        ) : null}
       </div>
       </div>
       {runDialogOpen ? (
@@ -1585,6 +1569,65 @@ export function Workbench({
           onRun={handleRunExtraction}
         />
       ) : null}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept=".zip"
+        onChange={handleReplaceFileChange}
+        className="hidden"
+      />
+      {replaceConfirmOpen ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="replace-config-title"
+          >
+            <div className="space-y-2">
+              <h2 id="replace-config-title" className="text-lg font-semibold text-slate-900">
+                Import from zip
+              </h2>
+              <p className="text-sm text-slate-600">
+                Importing will replace this configuration’s current code with the uploaded archive. Unsaved editor changes
+                will be discarded.
+              </p>
+              {!canReplaceFromArchive ? (
+                <p className="text-sm font-medium text-danger-600">Only draft configurations can be replaced.</p>
+              ) : null}
+              {files.isDirty ? (
+                <p className="text-sm font-medium text-amber-700">You have unsaved changes that will be lost.</p>
+              ) : null}
+            </div>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setReplaceConfirmOpen(false)}
+                disabled={replaceConfig.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setReplaceConfirmOpen(false);
+                  replaceInputRef.current?.click();
+                }}
+                disabled={!canReplaceFromArchive || replaceConfig.isPending}
+                isLoading={replaceConfig.isPending}
+              >
+                Continue
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <ContextMenu
+        open={Boolean(actionsMenu)}
+        position={actionsMenu}
+        onClose={() => setActionsMenu(null)}
+        items={actionsMenuItems}
+        appearance={menuAppearance}
+      />
       <ContextMenu
         open={Boolean(testMenu)}
         position={testMenu}
@@ -1606,13 +1649,21 @@ export function Workbench({
 interface SidePanelPlaceholderProps {
   readonly width: number;
   readonly view: ActivityBarView;
+  readonly appearance: "light" | "dark";
 }
 
-function SidePanelPlaceholder({ width, view }: SidePanelPlaceholderProps) {
+function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderProps) {
   const label = ACTIVITY_LABELS[view] || "Coming soon";
+  const surfaceClass =
+    appearance === "dark"
+      ? "border-[#111111] bg-[#1e1e1e] text-slate-300"
+      : "border-slate-200 bg-slate-50 text-slate-600";
   return (
     <div
-      className="flex h-full min-h-0 flex-col items-center justify-center border-r border-[#111111] bg-[#1e1e1e] px-4 text-center text-[11px] uppercase tracking-wide text-slate-400"
+      className={clsx(
+        "flex h-full min-h-0 flex-col items-center justify-center border-r px-4 text-center text-[11px] uppercase tracking-wide",
+        surfaceClass,
+      )}
       style={{ width }}
       aria-live="polite"
     >
@@ -1638,6 +1689,7 @@ function WorkbenchChrome({
   onSaveFile,
   saveShortcutLabel,
   onOpenTestMenu,
+  onOpenActionsMenu,
   canRunValidation,
   isRunningValidation,
   onRunValidation,
@@ -1648,13 +1700,12 @@ function WorkbenchChrome({
   onToggleExplorer,
   consoleOpen,
   onToggleConsole,
-  inspectorCollapsed,
-  onToggleInspector,
   appearance,
   windowState,
   onMinimizeWindow,
   onToggleMaximize,
   onCloseWindow,
+  actionsBusy = false,
 }: {
   readonly configName: string;
   readonly workspaceLabel: string;
@@ -1664,6 +1715,7 @@ function WorkbenchChrome({
   readonly onSaveFile: () => void;
   readonly saveShortcutLabel: string;
   readonly onOpenTestMenu: (position: { x: number; y: number }) => void;
+  readonly onOpenActionsMenu: (position: { x: number; y: number }) => void;
   readonly canRunValidation: boolean;
   readonly isRunningValidation: boolean;
   readonly onRunValidation: () => void;
@@ -1674,13 +1726,12 @@ function WorkbenchChrome({
   readonly onToggleExplorer: () => void;
   readonly consoleOpen: boolean;
   readonly onToggleConsole: () => void;
-  readonly inspectorCollapsed: boolean;
-  readonly onToggleInspector: () => void;
   readonly appearance: "light" | "dark";
   readonly windowState: WorkbenchWindowState;
   readonly onMinimizeWindow: () => void;
   readonly onToggleMaximize: () => void;
   readonly onCloseWindow: () => void;
+  readonly actionsBusy?: boolean;
 }) {
   const dark = appearance === "dark";
   const surfaceClass = dark
@@ -1770,13 +1821,6 @@ function WorkbenchChrome({
             icon={<SidebarIcon active={explorerVisible} />}
           />
           <ChromeIconButton
-            ariaLabel={inspectorCollapsed ? "Show inspector" : "Hide inspector"}
-            onClick={onToggleInspector}
-            appearance={appearance}
-            active={!inspectorCollapsed}
-            icon={<InspectorIcon />}
-          />
-          <ChromeIconButton
             ariaLabel={consoleOpen ? "Hide console" : "Show console"}
             onClick={onToggleConsole}
             appearance={appearance}
@@ -1784,6 +1828,16 @@ function WorkbenchChrome({
             icon={<ConsoleIcon />}
           />
         </div>
+        <ChromeIconButton
+          ariaLabel="Configuration actions"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenActionsMenu({ x: rect.right + 8, y: rect.bottom });
+          }}
+          appearance={appearance}
+          disabled={actionsBusy}
+          icon={<ActionsIcon />}
+        />
         <div
           className={clsx(
             "flex items-center gap-2 border-l pl-3",
@@ -1832,6 +1886,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     queryKey: ["builder-documents", workspaceId],
     queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
     staleTime: 60_000,
+    enabled: open,
   });
   const documents = useMemo(
     () => documentsQuery.data ?? [],
@@ -1839,6 +1894,9 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
   );
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>("");
   useEffect(() => {
+    if (!open) {
+      return;
+    }
     if (!documents.length) {
       setSelectedDocumentId("");
       return;
@@ -1849,13 +1907,13 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
       }
       return documents[0]?.id ?? "";
     });
-  }, [documents]);
+  }, [documents, open]);
 
   const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId) ?? null;
   const sheetQuery = useQuery<DocumentSheet[]>({
     queryKey: ["builder-document-sheets", workspaceId, selectedDocumentId],
     queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, selectedDocumentId, signal),
-    enabled: Boolean(selectedDocumentId),
+    enabled: open && Boolean(selectedDocumentId),
     staleTime: 60_000,
   });
   const sheetOptions = useMemo(
@@ -1864,6 +1922,9 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
   );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   useEffect(() => {
+    if (!open) {
+      return;
+    }
     if (!sheetOptions.length) {
       setSelectedSheets([]);
       return;
@@ -1871,7 +1932,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     setSelectedSheets((current) =>
       current.filter((name) => sheetOptions.some((sheet) => sheet.name === name)),
     );
-  }, [sheetOptions]);
+  }, [open, sheetOptions]);
 
   const normalizedSheetSelection = useMemo(
     () =>
@@ -2072,12 +2133,14 @@ function ChromeIconButton({
   icon,
   appearance,
   active = false,
+  disabled = false,
 }: {
   readonly ariaLabel: string;
-  readonly onClick: () => void;
+  readonly onClick: MouseEventHandler<HTMLButtonElement>;
   readonly icon: ReactNode;
   readonly appearance: "light" | "dark";
   readonly active?: boolean;
+  readonly disabled?: boolean;
 }) {
   const dark = appearance === "dark";
   const baseClass = dark
@@ -2089,10 +2152,12 @@ function ChromeIconButton({
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      disabled={disabled}
       className={clsx(
         "flex h-7 w-7 items-center justify-center rounded-[4px] border border-transparent text-sm transition focus-visible:outline-none focus-visible:ring-2",
         baseClass,
         active && activeClass,
+        disabled && "cursor-not-allowed opacity-50",
       )}
       title={ariaLabel}
     >
@@ -2156,15 +2221,6 @@ function ConsoleIcon() {
   );
 }
 
-function InspectorIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="3" y="3" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M10 3v10" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
 function WindowMaximizeIcon() {
   return (
     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
@@ -2211,6 +2267,16 @@ function RunIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4.5 3.5v9l7-4.5-7-4.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ActionsIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="3" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="13" cy="8" r="1.3" fill="currentColor" />
     </svg>
   );
 }
@@ -2264,12 +2330,29 @@ function formatWorkspaceLabel(workspaceId: string): string {
 
 function decodeFileContent(payload: FileReadJson): string {
   if (payload.encoding === "base64") {
-    if (typeof atob === "function") {
-      return atob(payload.content);
-    }
+    // Preserve UTF-8 characters when decoding base64 payloads from the API.
     const buffer = (globalThis as { Buffer?: { from: (data: string, encoding: string) => { toString: (encoding: string) => string } } }).Buffer;
     if (buffer) {
       return buffer.from(payload.content, "base64").toString("utf-8");
+    }
+    if (typeof atob === "function") {
+      try {
+        const binary = atob(payload.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+        if (typeof TextDecoder !== "undefined") {
+          return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+        }
+        let fallback = "";
+        for (let index = 0; index < bytes.length; index += 1) {
+          fallback += String.fromCharCode(bytes[index]);
+        }
+        return fallback;
+      } catch {
+        // Swallow decode errors and fall through to the raw content.
+      }
     }
   }
   return payload.content;

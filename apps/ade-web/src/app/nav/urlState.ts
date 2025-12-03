@@ -118,6 +118,7 @@ export interface ConfigBuilderSearchState {
   readonly console: ConfigBuilderConsole;
   readonly view: ConfigBuilderView;
   readonly file?: string;
+  readonly runId?: string;
 }
 
 export interface ConfigBuilderSearchSnapshot extends ConfigBuilderSearchState {
@@ -127,6 +128,7 @@ export interface ConfigBuilderSearchSnapshot extends ConfigBuilderSearchState {
     readonly console: boolean;
     readonly view: boolean;
     readonly file: boolean;
+    readonly runId: boolean;
   };
 }
 
@@ -137,23 +139,17 @@ export const DEFAULT_CONFIG_BUILDER_SEARCH: ConfigBuilderSearchState = {
   view: "editor",
 };
 
-const CONFIG_BUILDER_KEYS = ["tab", "pane", "console", "view", "file", "path"] as const;
+const CONFIG_BUILDER_KEYS = ["tab", "pane", "console", "view", "file", "runId"] as const;
 
 function normalizeConsole(value: string | null): ConfigBuilderConsole {
   return value === "open" ? "open" : "closed";
 }
 
 function normalizePane(value: string | null): ConfigBuilderPane {
-  if (value === "runSummary" || value === "run-summary" || value === "summary") {
-    return "runSummary";
-  }
-  if (value === "validation" || value === "problems" || value === "issues") {
-    return "problems";
-  }
-  if (value === "console") {
-    return "terminal";
-  }
-  return "terminal";
+  if (value === "runSummary") return "runSummary";
+  if (value === "problems") return "problems";
+  if (value === "terminal") return "terminal";
+  return DEFAULT_CONFIG_BUILDER_SEARCH.pane;
 }
 
 function normalizeView(value: string | null): ConfigBuilderView {
@@ -168,7 +164,9 @@ export function readConfigBuilderSearch(
   const paneRaw = params.get("pane");
   const consoleRaw = params.get("console");
   const viewRaw = params.get("view");
-  const fileRaw = params.get("file") ?? params.get("path");
+  const fileRaw = params.get("file");
+  const runIdRaw = params.get("runId");
+  const runId = runIdRaw && runIdRaw.length > 0 ? runIdRaw : undefined;
 
   const state: ConfigBuilderSearchState = {
     tab: tabRaw === "editor" ? "editor" : DEFAULT_CONFIG_BUILDER_SEARCH.tab,
@@ -176,6 +174,7 @@ export function readConfigBuilderSearch(
     console: normalizeConsole(consoleRaw),
     view: normalizeView(viewRaw),
     file: fileRaw ?? undefined,
+    runId,
   };
 
   return {
@@ -185,7 +184,8 @@ export function readConfigBuilderSearch(
       pane: params.has("pane"),
       console: params.has("console"),
       view: params.has("view"),
-      file: params.has("file") || params.has("path"),
+      file: params.has("file"),
+      runId: params.has("runId"),
     },
   };
 }
@@ -220,6 +220,9 @@ export function mergeConfigBuilderSearch(
   }
   if (nextState.file && nextState.file.length > 0) {
     next.set("file", nextState.file);
+  }
+  if (nextState.runId && nextState.runId.length > 0) {
+    next.set("runId", nextState.runId);
   }
 
   return next;

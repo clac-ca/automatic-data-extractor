@@ -18,6 +18,8 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 
 ### Users (`apps/ade-api/src/ade_api/features/users/schemas.py`)
 
+> Update: user DTOs have been collapsed into `UserOut`/`UserPage` in the current schema; the rows below are kept for historical context.
+
 | DTO | Base | ID type | Aliases / wire names | Enum fields | Issues / notes | Target |
 | --- | --- | --- | --- | --- | --- | --- |
 | `UserProfile` | `BaseSchema` | `user_id: str` + alias ↔ `id`; `preferred_workspace_id: str` alias ↔ itself | alias on `user_id`; optional alias on preferred workspace | N/A | IDs are raw `str`; alias keeps `id` on wire; rename to `UserOut`. | `UserOut` |
@@ -147,7 +149,7 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 | `GET /permissions` | `roles/router.py:830` | `list[PermissionRead]` | Could remain list if bounded, but spec calls for Page envelope. |
 | `GET /auth/api-keys` | `auth/router.py:412` | `list[APIKeySummary]` | Convert to `Page[APIKeyOut]`, add filters (revoked, owner). |
 | `GET /workspaces` | `workspaces/router.py:106` | `list[WorkspaceProfile]` | Response should be paged for multi-workspace orgs. |
-| `GET /workspaces/{workspace_id}/members` | `workspaces/router.py:165` | `list[WorkspaceMember]` | Need pagination & filtering (role, default). |
+| `GET /workspaces/{workspace_id}/members` | `features/workspaces/members_router.py` | `WorkspaceMemberPage` | Already paginated; add richer filters (role/default) if needed. |
 | `GET /workspaces/{workspace_id}/roles` | `workspaces/router.py:200` | `list[RoleRead]` | Should re-use `Page[RoleOut]`. |
 | `GET /workspaces/{workspace_id}/configurations` | `configs/router.py:141` | `list[ConfigurationRecord]` | Convert to `Page[ConfigurationOut]`. |
 

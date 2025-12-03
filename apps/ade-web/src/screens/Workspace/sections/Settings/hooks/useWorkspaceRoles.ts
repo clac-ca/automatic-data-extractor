@@ -18,11 +18,11 @@ const ROLES_PAGE_SIZE = 200;
 const PERMISSIONS_PAGE_SIZE = 200;
 
 export function useWorkspaceRolesQuery(workspaceId: string) {
-  const roleListParams = { page: 1, pageSize: ROLES_PAGE_SIZE };
+  const roleListParams = { page: 1, pageSize: ROLES_PAGE_SIZE, includeTotal: true };
   return useQuery<RoleListPage>({
     queryKey: workspacesKeys.roles(workspaceId, roleListParams),
     queryFn: ({ signal }) =>
-      listWorkspaceRoles(workspaceId, { signal, pageSize: ROLES_PAGE_SIZE, includeTotal: true }),
+      listWorkspaceRoles({ signal, pageSize: ROLES_PAGE_SIZE, includeTotal: true }),
     enabled: workspaceId.length > 0,
     staleTime: 15_000,
     placeholderData: (previous) => previous,
@@ -30,11 +30,16 @@ export function useWorkspaceRolesQuery(workspaceId: string) {
 }
 
 export function usePermissionsQuery() {
-  const permissionKeyParams = { scope: "global", page: 1, pageSize: PERMISSIONS_PAGE_SIZE };
+  const permissionKeyParams = {
+    scope: "global" as const,
+    page: 1,
+    pageSize: PERMISSIONS_PAGE_SIZE,
+    includeTotal: false,
+  };
   return useQuery<PermissionListPage>({
     queryKey: workspacesKeys.permissions(permissionKeyParams),
     queryFn: ({ signal }) =>
-      listPermissions({ signal, scope: "global", pageSize: PERMISSIONS_PAGE_SIZE }),
+      listPermissions({ signal, scope: "global" as const, pageSize: PERMISSIONS_PAGE_SIZE }),
     staleTime: 60_000,
     placeholderData: (previous) => previous,
   });
@@ -54,11 +59,11 @@ export function useCreateWorkspaceRoleMutation(workspaceId: string) {
         slug: payload.slug ?? payload.name.toLowerCase().replace(/\s+/g, "-"),
         name: payload.name,
         description: payload.description ?? null,
-        scope_type: "workspace",
-        scope_id: workspaceId,
         permissions: Array.from(payload.permissions ?? []),
-        built_in: false,
-        editable: true,
+        is_system: false,
+        is_editable: true,
+        created_at: new Date().toISOString(),
+        updated_at: null,
       };
       queryClient.setQueryData<RoleListPage>(queryKey, (current) =>
         appendRole(current, optimisticRole),
@@ -108,17 +113,17 @@ export function useUpdateWorkspaceRoleMutation(workspaceId: string) {
         if (!current) {
           return current;
         }
-        return {
-          ...current,
-          items: current.items.map((role) =>
-            role.id === roleId
-              ? {
-                  ...role,
-                  name: payload.name,
-                  description: payload.description ?? null,
-                  permissions: Array.from(payload.permissions ?? []),
-                }
-              : role,
+          return {
+            ...current,
+            items: current.items.map((role) =>
+              role.id === roleId
+                ? {
+                    ...role,
+                    name: payload.name ?? role.name,
+                    description: payload.description ?? null,
+                    permissions: Array.from(payload.permissions ?? []),
+                  }
+                : role,
           ),
         };
       });

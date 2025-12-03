@@ -8,19 +8,17 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator
 
-from ade_api.features.runs.models import RunStatus
-from ade_api.shared.core.ids import ULIDStr
-from ade_api.shared.core.schema import BaseSchema
-from ade_api.shared.pagination import Page
-
-from .models import DocumentSource, DocumentStatus
+from ade_api.common.ids import UUIDStr
+from ade_api.common.pagination import Page
+from ade_api.common.schema import BaseSchema
+from ade_api.core.models import DocumentSource, DocumentStatus, RunStatus
 
 
 class UploaderOut(BaseSchema):
     """Minimal representation of the user who uploaded the document."""
 
-    id: ULIDStr = Field(
-        description="Uploader ULID (26-character string).",
+    id: UUIDStr = Field(
+        description="Uploader UUID (RFC 9562 UUIDv7).",
     )
     name: str | None = Field(
         default=None,
@@ -34,8 +32,8 @@ class UploaderOut(BaseSchema):
 class DocumentOut(BaseSchema):
     """Serialised representation of a stored document."""
 
-    id: ULIDStr = Field(description="Document ULID (26-character string).")
-    workspace_id: ULIDStr
+    id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
+    workspace_id: UUIDStr
     name: str = Field(
         alias="original_filename",
         serialization_alias="name",
@@ -55,7 +53,7 @@ class DocumentOut(BaseSchema):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
-    deleted_by: ULIDStr | None = Field(
+    deleted_by: UUIDStr | None = Field(
         default=None,
         alias="deleted_by_user_id",
         serialization_alias="deleted_by",
@@ -89,17 +87,11 @@ class DocumentOut(BaseSchema):
         data.pop("worksheets", None)
         return data
 
-    @property
-    def original_filename(self) -> str:
-        """Retain compatibility with existing callers expecting ``original_filename``."""
-
-        return self.name
-
 
 class DocumentLastRun(BaseSchema):
     """Minimal representation of the last engine execution for a document."""
 
-    run_id: str | None = Field(
+    run_id: UUIDStr | None = Field(
         default=None,
         description="Latest run identifier when the execution was streamed directly.",
     )

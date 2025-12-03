@@ -17,7 +17,7 @@ build-backend = "setuptools.build_meta"
 name = "ade-sandbox-config"
 version = "0.2.0"
 description = "Minimal ADE config template for sandbox runs"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

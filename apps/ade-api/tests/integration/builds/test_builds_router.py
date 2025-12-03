@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from ade_api.common.encoding import json_dumps
 from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
@@ -20,10 +21,11 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
+from ade_api.core.models import Configuration, ConfigurationStatus
 from ade_api.settings import Settings
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.shared.db.session import get_sessionmaker
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.db.session import get_sessionmaker
+from ade_api.infra.storage import workspace_config_root
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -51,6 +53,13 @@ class StubBuilder:
         timeout: float,
         fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
+        json_dumps(
+            {
+                "build_id": build_id,
+                "workspace_id": workspace_id,
+                "configuration_id": configuration_id,
+            }
+        )
         venv_root.mkdir(parents=True, exist_ok=True)
         for event in self._events:
             yield event
@@ -69,19 +78,18 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
 
     session_factory = get_sessionmaker(settings=settings)
     async with session_factory() as session:
-        configuration_id = generate_ulid()
+        configuration_id = generate_uuid7()
         configuration = Configuration(
             id=configuration_id,
             workspace_id=workspace_id,
             display_name="Test Configuration",
             status=ConfigurationStatus.ACTIVE,
-            configuration_version=1,
             content_digest="test-digest",
         )
         session.add(configuration)
         await session.commit()
 
-    config_root = settings.configs_dir / workspace_id / "config_packages" / configuration_id
+    config_root = workspace_config_root(settings, workspace_id, configuration_id)
     (config_root / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
     (config_root / "pyproject.toml").write_text(
         """
@@ -102,10 +110,42 @@ async def _auth_headers(
     password: str,
     settings: Settings,
 ) -> dict[str, str]:
-    await login(client, email=email, password=password)
-    csrf_cookie = client.cookies.get(settings.session_csrf_cookie_name)
-    assert csrf_cookie, "CSRF cookie missing after login"
-    return {"X-CSRF-Token": csrf_cookie}
+    token, _ = await login(client, email=email, password=password)
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _collect_build_events(
+    client: AsyncClient,
+    build_id: str,
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: float = 10.0,
+) -> list[dict[str, Any]]:
+    """Stream build events with an upper bound to avoid hanging."""
+
+    events: list[dict[str, Any]] = []
+    async with client.stream(
+        "GET",
+        f"/api/v1/builds/{build_id}/events/stream",
+        headers=headers,
+        params={"after_sequence": 0},
+    ) as response:
+        assert response.status_code == 200
+
+        async def _consume() -> None:
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                event = json.loads(line.removeprefix("data: "))
+                events.append(event)
+                if event.get("type") in {"build.completed", "build.failed"}:
+                    return
+
+        try:
+            await asyncio.wait_for(_consume(), timeout=timeout)
+        except asyncio.TimeoutError as exc:  # pragma: no cover - defensive guard
+            pytest.fail(f"Timed out waiting for build stream to complete: {exc}")
+    return events
 
 
 async def test_stream_build_emits_events_and_logs(
@@ -126,7 +166,7 @@ async def test_stream_build_emits_events_and_logs(
         BuilderLogEvent(message="install log"),
         BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install engine"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.11.8", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
         ),
     ]
 
@@ -139,30 +179,23 @@ async def test_stream_build_emits_events_and_logs(
     )
 
     workspace_id = seed_identity["workspace_id"]
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "POST",
+    response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
-        json={"stream": True},
-    ) as response:
-        assert response.status_code == 200
-        async for line in response.aiter_lines():
-            if not line:
-                continue
-            if line.startswith("data: "):
-                events.append(json.loads(line.removeprefix("data: ")))
+        json={},
+    )
+    assert response.status_code == 201
+    build_id = response.json()["id"]
+    events = await _collect_build_events(async_client, build_id, headers=headers)
 
     assert events, "expected streaming events"
-    assert events[0]["type"] == "build.created"
+    assert events[0]["type"] == "build.queued"
     assert events[-1]["type"] == "build.completed"
-
-    build_id = events[0]["build_id"]
 
     detail = await async_client.get(f"/api/v1/builds/{build_id}", headers=headers)
     assert detail.status_code == 200
     payload = detail.json()
-    assert payload["status"] == "active"
+    assert payload["status"] == "ready"
     assert payload["exit_code"] == 0
     assert payload["summary"] == "Build succeeded"
 
@@ -179,7 +212,7 @@ async def _wait_for_build_completion(
     for _ in range(attempts):
         response = await client.get(f"/api/v1/builds/{build_id}", headers=headers)
         payload = response.json()
-        if payload.get("status") != "queued":
+        if payload.get("status") not in ("queued", "building"):
             return payload
         await asyncio.sleep(delay)
     return payload
@@ -202,7 +235,7 @@ async def test_background_build_executes_to_completion(
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderLogEvent(message="background log"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.11.8", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
         ),
     ]
 
@@ -218,7 +251,7 @@ async def test_background_build_executes_to_completion(
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
-        json={"stream": False},
+        json={},
     )
     assert response.status_code == 201
     build_id = response.json()["id"]
@@ -228,5 +261,84 @@ async def test_background_build_executes_to_completion(
         build_id,
         headers=headers,
     )
-    assert completed["status"] == "active"
+    assert completed["status"] == "ready"
     assert completed["exit_code"] == 0
+
+
+async def test_list_builds_with_filters_and_limits(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+    override_app_settings,
+) -> None:
+    """Configuration-scoped build listing should support filters and pagination."""
+
+    settings = override_app_settings()
+    configuration_id = await _seed_configuration(
+        settings=settings,
+        workspace_id=seed_identity["workspace_id"],
+    )
+
+    owner = seed_identity["workspace_owner"]
+    headers = await _auth_headers(
+        async_client,
+        email=owner["email"],
+        password=owner["password"],  # type: ignore[index]
+        settings=settings,
+    )
+    workspace_id = seed_identity["workspace_id"]
+
+    StubBuilder.events = [
+        BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
+        BuilderArtifactsEvent(
+            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+        ),
+    ]
+    first_response = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+        headers=headers,
+        json={},
+    )
+    assert first_response.status_code == 201
+    active_build_id = first_response.json()["id"]
+    active_build = await _wait_for_build_completion(
+        async_client,
+        active_build_id,
+        headers=headers,
+    )
+    assert active_build["status"] == "ready"
+
+    StubBuilder.events = [
+        BuilderLogEvent(message="expected failure"),
+    ]
+    second_response = await async_client.post(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+        headers=headers,
+        json={"options": {"force": True}},
+    )
+    assert second_response.status_code == 201
+    failed_build_id = second_response.json()["id"]
+    failed_build = await _wait_for_build_completion(
+        async_client,
+        failed_build_id,
+        headers=headers,
+    )
+    assert failed_build["status"] == "failed"
+
+    failed_only = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+        headers=headers,
+        params={"status": ["failed"], "limit": 1},
+    )
+    assert failed_only.status_code == 200
+    failed_payload = failed_only.json()
+    assert failed_payload["page_size"] == 1
+    assert [item["id"] for item in failed_payload["items"]] == [failed_build_id]
+    assert "total" not in failed_payload
+
+    all_builds = await async_client.get(
+        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
+        headers=headers,
+    )
+    assert all_builds.status_code == 200
+    build_ids = [item["id"] for item in all_builds.json()["items"]]
+    assert build_ids == [failed_build_id, active_build_id]

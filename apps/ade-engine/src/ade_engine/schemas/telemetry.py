@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -141,10 +142,10 @@ class AdeEvent(BaseModel):
     sequence: int | None = None
     source: str | None = None
 
-    workspace_id: str | None = None
-    configuration_id: str | None = None
-    run_id: str | None = None
-    build_id: str | None = None
+    workspace_id: UUID | None = None
+    configuration_id: UUID | None = None
+    run_id: UUID | None = None
+    build_id: UUID | None = None
 
     payload: AdeEventPayload | dict[str, Any] | None = None
 

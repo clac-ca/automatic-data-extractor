@@ -19,7 +19,7 @@ Everything below exists to make those goals explicit.
 
 ### Instant understanding defaults
 
-- **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `ConfigVersion`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `screens/workspace-shell/sections/...`).
+- **Domain‑first naming:** keep the language 1:1 with the product (types such as `Workspace`, `Run`, `Configuration`, `Document`; hooks like `useRunsQuery`, `useStartRunMutation`; sections `/documents`, `/runs`, `/config-builder`, `/settings` mirrored under `screens/workspace-shell/sections/...`).
 - **One canonical home per concept:** routes live in `@shared/nav/routes`; query parameter names stay consistent with `docs/03`, `docs/06`, `docs/07` and their filter helpers (`parseDocumentFilters`, `parseRunFilters`, `build*SearchParams`); permission keys live in `@schema/permissions` with helpers in `@shared/permissions`.
 - **Reuse patterns:** new list/detail flows should copy Documents/Runs; new URL‑backed filters should reuse the existing filter helpers rather than inventing new query names; NDJSON streaming should go through the shared helper and event model.
 - **Respect the layers:** never import “upwards” (e.g. `shared/` → `screens/`); linting enforces the boundaries.
@@ -378,7 +378,7 @@ Typical content:
 * `WorkspaceSummary`, `WorkspaceDetail`.
 * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
 * `RunSummary`, `RunDetail`, `RunStatus`.
-* `Configuration`, `ConfigVersion`.
+* `Configuration`.
 * Permission and role models.
 
 You can also provide mapping helpers:
@@ -538,7 +538,7 @@ Feature hooks wrap these functions into React Query calls.
   * `WorkspaceSummary`, `WorkspaceDetail`.
   * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
   * `RunSummary`, `RunDetail`, `RunStatus`.
-  * `Configuration`, `ConfigVersion`.
+  * `Configuration`.
 
 * If you need to distinguish backend wire types, use a clear prefix/suffix (`ApiRun`, `ApiDocument`) and isolate them in `schema/` or `generated-types/`.
 

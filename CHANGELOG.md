@@ -17,7 +17,7 @@ _No notable changes yet._
 ### Changed
 - Adopted runs as the sole execution concept across backend, engine, and frontend; removed all jobs terminology, APIs, and UI.
 - Renamed storage/env to `ADE_RUNS_DIR` and standardized paths to `data/runs/<run_id>/{input,output,logs}`.
-- Squashed Alembic history into a single initial migration that now creates runs, run_logs, builds, and build_logs tables; drop existing databases or restamp before migrating.
+- Squashed Alembic history into a single initial migration that now creates runs and builds tables; drop existing databases or restamp before migrating.
 - Regenerated OpenAPI/types and documentation to align with the runs-only API surface.
 
 ### Removed

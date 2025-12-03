@@ -1,23 +1,43 @@
-import { post } from "@shared/api";
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummaryV1, components } from "@schema";
+import type { RunSummaryV1, components, paths } from "@schema";
 import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
 export type RunOutputListing = components["schemas"]["RunOutputListing"];
 export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
+type RunCreateRequest = components["schemas"]["RunCreateRequest"];
+type RunCreatePathParams =
+  paths["/api/v1/configurations/{configuration_id}/runs"]["post"]["parameters"]["path"];
 
-export interface RunStreamOptions {
-  readonly dry_run?: boolean;
-  readonly validate_only?: boolean;
-  readonly force_rebuild?: boolean;
-  readonly document_ids?: readonly string[];
-  readonly input_document_id?: string;
-  readonly input_sheet_name?: string;
-  readonly input_sheet_names?: readonly string[];
-  readonly metadata?: Record<string, string>;
+export type RunStreamOptions = Partial<RunCreateOptions>;
+const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
+  dry_run: false,
+  validate_only: false,
+  force_rebuild: false,
+};
+
+export async function createRun(
+  configId: string,
+  options: RunStreamOptions = {},
+  signal?: AbortSignal,
+): Promise<RunResource> {
+  const pathParams: RunCreatePathParams = { configuration_id: configId };
+  const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...options };
+  const body: RunCreateRequest = { options: mergedOptions };
+
+  const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
+    params: { path: pathParams },
+    body,
+    signal,
+  });
+
+  if (!data) {
+    throw new Error("Expected run creation response.");
+  }
+
+  return data as RunResource;
 }
 
 export async function* streamRun(
@@ -25,23 +45,11 @@ export async function* streamRun(
   options: RunStreamOptions = {},
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const run = await post<RunResource>(
-    `/configurations/${encodeURIComponent(configId)}/runs`,
-    {
-      stream: false,
-      options,
-    },
-    { signal },
-  );
-
-  const runId = run.id ?? (run as { run_id?: string | null }).run_id;
-  if (!runId) {
-    throw new Error("Run ID missing from creation response");
+  const runResource = await createRun(configId, options, signal);
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: 0 });
+  if (!eventsUrl) {
+    throw new Error("Run creation response is missing required links.");
   }
-
-  const eventsUrl = resolveApiUrl(
-    `/api/v1/runs/${encodeURIComponent(runId)}/events?stream=true&after_sequence=0`,
-  );
 
   for await (const event of streamRunEvents(eventsUrl, signal)) {
     yield event;
@@ -59,6 +67,22 @@ export async function* streamRunEvents(
   let source: EventSource | null = null;
   let done = false;
   let error: unknown;
+  const eventTypes = [
+    "ade.event",
+    "run.queued",
+    "run.started",
+    "run.completed",
+    "run.failed",
+    "run.canceled",
+    "run.waiting_for_build",
+    "build.queued",
+    "build.started",
+    "build.progress",
+    "build.phase.started",
+    "build.completed",
+    "build.failed",
+    "console.line",
+  ];
 
   const flush = () => {
     while (awaiters.length) {
@@ -74,7 +98,9 @@ export async function* streamRunEvents(
       error = reason;
     }
     if (source) {
-      source.removeEventListener?.("ade.event", handleRunEvent as EventListener);
+      eventTypes.forEach((type) => {
+        source?.removeEventListener?.(type, handleRunEvent as EventListener);
+      });
       source.onmessage = null;
       source.onerror = null;
       source.close();
@@ -97,7 +123,9 @@ export async function* streamRunEvents(
   };
 
   source = new EventSource(url, { withCredentials: true });
-  source.addEventListener("ade.event", handleRunEvent as EventListener);
+  eventTypes.forEach((type) => {
+    source?.addEventListener(type, handleRunEvent as EventListener);
+  });
   source.onmessage = handleRunEvent;
 
   source.onerror = () => {
@@ -144,33 +172,118 @@ export async function* streamRunEvents(
   }
 }
 
+export function runEventsUrl(
+  run: RunResource,
+  options?: { afterSequence?: number; stream?: boolean },
+): string | null {
+  const baseLink = run.links?.events_stream ?? run.links?.events;
+  if (!baseLink) {
+    return null;
+  }
+  const queryParts: string[] = [];
+  const wantsStream = options?.stream ?? true;
+  const alreadyStreaming = baseLink.endsWith("/stream") || baseLink.includes("stream=true");
+  if (wantsStream && !alreadyStreaming) {
+    queryParts.push("stream=true");
+  }
+  if (typeof options?.afterSequence === "number" && Number.isFinite(options.afterSequence)) {
+    const normalized = Math.max(0, Math.floor(options.afterSequence));
+    queryParts.push(`after_sequence=${normalized}`);
+  }
+  const appendQuery = queryParts.length ? queryParts.join("&") : undefined;
+  return resolveRunLink(baseLink, { appendQuery });
+}
+
+export async function* streamRunEventsForRun(
+  run: RunResource | string,
+  options?: { afterSequence?: number; signal?: AbortSignal },
+): AsyncGenerator<RunStreamEvent> {
+  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence });
+  if (!eventsUrl) {
+    throw new Error("Run events link unavailable.");
+  }
+  for await (const event of streamRunEvents(eventsUrl, options?.signal)) {
+    yield event;
+  }
+}
+
+export async function fetchRunEvents(
+  run: RunResource | string,
+  options?: { afterSequence?: number; signal?: AbortSignal },
+): Promise<RunStreamEvent[]> {
+  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
+  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence, stream: false });
+  if (!eventsUrl) {
+    throw new Error("Run events link unavailable.");
+  }
+  const response = await fetch(eventsUrl, {
+    method: "GET",
+    credentials: "include",
+    signal: options?.signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Run events unavailable (${response.status}).`);
+  }
+  const text = await response.text();
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const events: RunStreamEvent[] = [];
+  for (const line of lines) {
+    try {
+      events.push(JSON.parse(line) as RunStreamEvent);
+    } catch (error) {
+      console.warn("Skipping malformed run event line", error, line);
+    }
+  }
+  return events;
+}
+
 export async function fetchRunOutputs(
-  runId: string,
+  run: RunResource | string,
   signal?: AbortSignal,
 ): Promise<RunOutputListing> {
-  const { data } = await client.GET("/api/v1/runs/{run_id}/outputs", {
+  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
+  const outputsLink = runResource.links?.outputs;
+  const runId = runResource.id;
+  if (!outputsLink || !runId) {
+    throw new Error("Run outputs link unavailable.");
+  }
+
+  const { data, error } = await client.GET("/api/v1/runs/{run_id}/outputs", {
     params: { path: { run_id: runId } },
     signal,
   });
 
-  if (!data) throw new Error("Run outputs unavailable");
+  if (error || !data) throw new Error("Run outputs unavailable");
   return data as RunOutputListing;
 }
 
 export async function fetchRunTelemetry(
-  runId: string,
+  run: RunResource | string,
   signal?: AbortSignal,
 ): Promise<RunStreamEvent[]> {
-  const response = await fetch(`/api/v1/runs/${encodeURIComponent(runId)}/logfile`, {
+  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
+  const logsLink = runResource.links?.logs;
+  const runId = runResource.id;
+  if (!logsLink || !runId) {
+    throw new Error("Run logs link unavailable.");
+  }
+
+  const { data, error } = await client.GET("/api/v1/runs/{run_id}/logs", {
+    params: { path: { run_id: runId } },
     headers: { Accept: "application/x-ndjson" },
     signal,
+    parseAs: "text",
   });
 
-  if (!response.ok) {
+  if (error) {
     throw new Error("Run telemetry unavailable");
   }
 
-  const text = await response.text();
+  const text = data ?? "";
   return text
     .split(/\r?\n/)
     .filter(Boolean)
@@ -223,6 +336,24 @@ export async function fetchRunSummary(runId: string, signal?: AbortSignal): Prom
     }
   }
   return summary as RunSummaryV1;
+}
+
+export function runOutputsUrl(run: RunResource): string | null {
+  const link = run.links?.outputs;
+  return link ? resolveApiUrl(link) : null;
+}
+
+export function runLogsUrl(run: RunResource): string | null {
+  const link = run.links?.logs;
+  return link ? resolveApiUrl(link) : null;
+}
+
+function resolveRunLink(link: string, options?: { appendQuery?: string }) {
+  const hasQuery = link.includes("?");
+  const appended = options?.appendQuery
+    ? `${link}${hasQuery ? "&" : "?"}${options.appendQuery}`
+    : link;
+  return resolveApiUrl(appended);
 }
 
 export const runQueryKeys = {

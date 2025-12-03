@@ -6,39 +6,33 @@ workspace responsibilities. Every step relies on the unified RBAC endpoints in
 
 ## Make a site administrator
 
-1. List the global role catalog and locate the `global-administrator` role to
-   confirm its identifier. The API returns the numeric `role_id` alongside the
-   slug and permission set.【F:apps/ade-api/src/ade_api/features/roles/router.py†L76-L173】
-2. Convert the target user into a principal. Supplying `user_id` in the role
-   assignment payload automatically resolves the principal and creates one if it
-   does not already exist.【F:apps/ade-api/src/ade_api/features/roles/router.py†L538-L613】
-3. Assign the global administrator role by posting to
-   `POST /api/v1/role-assignments` with the `role_id` from step 1. The handler is
-   idempotent, so repeated calls simply return the existing binding.【F:apps/ade-api/src/ade_api/features/roles/router.py†L538-L613】
-4. Verify the grant through `GET /api/v1/me/permissions` while authenticated as
+1. List the global role catalog and locate the `global-admin` role to confirm
+   its identifier. The API returns the role UUID alongside the slug and
+   permission set (`GET /api/v1/rbac/roles?scope=global`).
+2. Assign the global administrator role with the user-centric endpoint:
+   `PUT /api/v1/users/{user_id}/roles/{role_id}`. The call is idempotent, so
+   repeating it leaves the binding unchanged.
+3. Verify the grant through `GET /api/v1/me/permissions` while authenticated as
    the user. The response lists the effective global permissions so you can
-   confirm `Roles.ReadWrite.All` and the other administrator keys are present.【F:apps/ade-api/src/ade_api/features/roles/router.py†L200-L291】
+   confirm `roles.read_all` and the other administrator keys are present.
 
 ## Grant an editor role in a workspace
 
-1. Review the permission registry to decide which workspace capabilities the
-   editor should own. The registry enumerates every key, label, and description so
-   you can choose combinations such as `Workspace.Documents.ReadWrite` and
-   `Workspace.Runs.ReadWrite`.【F:apps/ade-api/src/ade_api/features/roles/registry.py†L1-L132】
-2. Create a workspace-scoped role by posting to
-   `POST /api/v1/workspaces/{workspace_id}/roles` with a unique slug (for example
-   `workspace-editor`) and the selected permission keys. The router enforces that
-   only callers with `Workspace.Roles.ReadWrite` can create custom roles and
-   persists the definition for future reuse.【F:apps/ade-api/src/ade_api/features/roles/router.py†L180-L398】
+1. Review the permission registry (`GET /api/v1/rbac/permissions`) to decide
+   which workspace capabilities the editor should own. Choose combinations such
+   as `workspace.documents.manage` and `workspace.runs.manage`.
+2. Create a workspace-scoped role by posting to `POST /api/v1/rbac/roles`
+   with `scope=workspace`, a unique slug (for example `workspace-editor`), and
+   the selected permission keys.
 3. Assign the editor role to a user by calling
-   `POST /api/v1/workspaces/{workspace_id}/role-assignments` with either the
-   `principal_id` or `user_id`. The endpoint verifies workspace membership
-   permissions, ensures the workspace exists, and returns the assignment record in
-   a stable shape for auditing.【F:apps/ade-api/src/ade_api/features/roles/router.py†L651-L760】
-4. Confirm the assignment via the workspace role-assignment list or by querying
+   `POST /api/v1/workspaces/{workspace_id}/members` with the target `user_id`
+   and `role_ids`. The endpoint verifies workspace membership permissions,
+   ensures the workspace exists, and returns the assignment record in a stable
+   shape for auditing.
+4. Confirm the assignment via the workspace member listing or by querying
    the user's effective workspace permissions (`GET /api/v1/me/permissions?workspace_id=...`). The
    workspace-specific response includes the union of all assigned roles so you can
-   validate the editor capabilities.【F:apps/ade-api/src/ade_api/features/roles/router.py†L651-L760】【F:apps/ade-api/src/ade_api/features/roles/router.py†L200-L291】
+   validate the editor capabilities.
 
 Keep these recipes alongside the API docs so administrators can self-serve
 without scanning the implementation. Update the steps whenever role endpoints or

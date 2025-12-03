@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -16,17 +17,15 @@ from ade_api.features.builds.builder import (
     BuildStep,
 )
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
-from ade_api.features.builds.models import Build, BuildStatus
+from ade_api.core.models import Build, BuildStatus, Configuration, ConfigurationStatus, Workspace
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildsService
-from ade_api.features.configs.models import Configuration, ConfigurationStatus
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
-from ade_api.features.workspaces.models import Workspace
 from ade_api.settings import Settings
-from ade_api.shared.core.time import utc_now
-from ade_api.shared.db import Base
-from ade_api.shared.db.mixins import generate_ulid
-from ade_api.storage_layout import build_venv_root
+from ade_api.common.time import utc_now
+from ade_api.infra.db import Base
+from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.infra.storage import build_venv_root
 
 
 @dataclass(slots=True)
@@ -49,6 +48,41 @@ class FakeBuilder:
     ) -> AsyncIterator[BuilderEvent]:
         venv_root.mkdir(parents=True, exist_ok=True)
         for event in self.events:
+            yield event
+
+
+class TrackingBuilder(FakeBuilder):
+    def __init__(self) -> None:
+        super().__init__(events=[])
+        self.invocations = 0
+
+    async def build_stream(
+        self,
+        *,
+        build_id: str,
+        workspace_id: str,
+        configuration_id: str,
+        venv_root: Path,
+        config_path: Path,
+        engine_spec: str,
+        pip_cache_dir: Path | None,
+        python_bin: str | None,
+        timeout: float,
+        fingerprint: str | None = None,
+    ) -> AsyncIterator[BuilderEvent]:
+        self.invocations += 1
+        async for event in super().build_stream(
+            build_id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            venv_root=venv_root,
+            config_path=config_path,
+            engine_spec=engine_spec,
+            pip_cache_dir=pip_cache_dir,
+            python_bin=python_bin,
+            timeout=timeout,
+            fingerprint=fingerprint,
+        ):
             yield event
 
 
@@ -129,16 +163,15 @@ version = "0.2.0"
 async def _create_configuration(
     session: AsyncSession,
 ) -> tuple[Workspace, Configuration]:
-    workspace = Workspace(name="Acme", slug=f"acme-{generate_ulid().lower()}")
+    workspace = Workspace(name="Acme", slug=f"acme-{generate_uuid7().hex[:8]}")
     session.add(workspace)
     await session.flush()
-    configuration_id = generate_ulid()
+    configuration_id = generate_uuid7()
     configuration = Configuration(
         id=configuration_id,
         workspace_id=workspace.id,
         display_name="Config",
         status=ConfigurationStatus.ACTIVE,
-        configuration_version=1,
         content_digest="digest",
     )
     session.add(configuration)
@@ -172,10 +205,10 @@ async def test_prepare_build_reuses_active(
     )
 
     build = Build(
-        id=generate_ulid(),
+        id=generate_uuid7(),
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        status=BuildStatus.ACTIVE,
+        status=BuildStatus.READY,
         created_at=utc_now(),
         started_at=utc_now(),
         finished_at=utc_now(),
@@ -189,20 +222,9 @@ async def test_prepare_build_reuses_active(
     )
     session.add(build)
 
-    configuration.build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.active_build_id = build.id  # type: ignore[attr-defined]
-    configuration.active_build_status = BuildStatus.ACTIVE  # type: ignore[attr-defined]
-    configuration.active_build_fingerprint = fingerprint  # type: ignore[attr-defined]
-    configuration.active_build_started_at = utc_now()  # type: ignore[attr-defined]
-    configuration.active_build_finished_at = utc_now()  # type: ignore[attr-defined]
-    configuration.built_configuration_version = configuration.configuration_version  # type: ignore[attr-defined]
-    configuration.built_content_digest = digest  # type: ignore[attr-defined]
+    configuration.active_build_id = build.id
+    configuration.active_build_fingerprint = fingerprint
     configuration.content_digest = digest
-    configuration.engine_spec = service.settings.engine_spec  # type: ignore[attr-defined]
-    configuration.engine_version = engine_version  # type: ignore[attr-defined]
-    configuration.python_interpreter = service.settings.python_bin  # type: ignore[attr-defined]
-    configuration.python_version = python_version  # type: ignore[attr-defined]
-    configuration.last_build_finished_at = utc_now()  # type: ignore[attr-defined]
     await session.commit()
 
     build, context = await service.prepare_build(
@@ -212,7 +234,7 @@ async def test_prepare_build_reuses_active(
     )
 
     assert context.should_run is False
-    assert build.status is BuildStatus.ACTIVE
+    assert build.status is BuildStatus.READY
     assert build.id == configuration.active_build_id
     assert context.fingerprint == fingerprint
 
@@ -231,7 +253,7 @@ async def test_stream_build_success(
             BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
             BuilderLogEvent(message="log 2"),
             BuilderArtifactsEvent(
-                artifacts=BuildArtifacts(python_version="3.12.1", engine_version="0.2.0")
+                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="0.2.0")
             ),
         ]
     )
@@ -254,7 +276,7 @@ async def test_stream_build_success(
 
     refreshed = await service.get_build(build.id)
     assert refreshed is not None
-    assert refreshed.status is BuildStatus.ACTIVE
+    assert refreshed.status is BuildStatus.READY
     assert refreshed.summary == "Build succeeded"
     console_messages = [
         evt.payload_dict().get("message")
@@ -263,3 +285,43 @@ async def test_stream_build_success(
     ]
     assert console_messages == ["log 1", "log 2"]
     assert any(getattr(evt, "type", "") == "build.completed" for evt in events)
+
+
+@pytest.mark.asyncio()
+async def test_ensure_local_env_uses_marker_when_ids_are_strings(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = TrackingBuilder()
+    service = service_factory(session, builder=builder)
+
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        fingerprint="fp-123",
+        engine_spec="demo",
+        engine_version="0.0.1",
+        python_version="3.11.0",
+    )
+    session.add(build)
+    await session.commit()
+
+    venv_root = build_venv_root(
+        service.settings, workspace.id, configuration.id, build.id
+    )
+    marker_path = venv_root / ".venv" / "ade_build.json"
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_payload = {"build_id": str(build.id), "fingerprint": build.fingerprint}
+    marker_path.write_text(json.dumps(marker_payload), encoding="utf-8")
+
+    resolved = await service.ensure_local_env(build=build)
+
+    assert resolved == marker_path.parent
+    assert builder.invocations == 0

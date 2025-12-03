@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import uuid
 
 import pytest
 
@@ -44,7 +46,7 @@ async def test_builder_installs_dependencies(
         build_id: str,
     ) -> str:
         if "sys.version_info" in command[-1]:
-            return "3.12.1"
+            return "3.14.0"
         return "0.2.0"
 
     async def _write_metadata(target: Path, payload: dict[str, str | None]) -> None:  # noqa: D401
@@ -84,3 +86,27 @@ async def test_builder_installs_dependencies(
 
     assert "--no-deps" not in engine_install
     assert "--no-deps" not in config_install
+
+
+async def test_write_metadata_serializes_uuid(tmp_path: Path) -> None:
+    """Metadata payload should be JSON-serializable even if UUIDs are passed through."""
+
+    builder = VirtualEnvironmentBuilder()
+    payload = {
+        "build_id": uuid.uuid4(),
+        "workspace_id": uuid.uuid4(),
+        "configuration_id": uuid.uuid4(),
+        "python_version": "3.11.8",
+        "engine_version": "0.2.0",
+        "fingerprint": "abc123",
+    }
+
+    await builder._write_metadata(tmp_path, payload)  # type: ignore[arg-type]
+
+    build_json = json.loads((tmp_path / "ade-runtime" / "build.json").read_text())
+    marker_json = json.loads((tmp_path / "ade_build.json").read_text())
+
+    for key, value in payload.items():
+        expected = str(value) if value is not None else None
+        assert build_json[key] == expected
+        assert marker_json[key] == expected

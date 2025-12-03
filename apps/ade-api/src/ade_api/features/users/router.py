@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Security, status
+from fastapi import APIRouter, Body, Depends, Path, Security, status
 
-from ade_api.shared.dependency import (
-    get_users_service,
-    require_authenticated,
-    require_global,
-)
-from ade_api.shared.pagination import PageParams
-from ade_api.shared.sorting import make_sort_dependency
-from ade_api.shared.types import OrderBy
+from ade_api.app.dependencies import get_users_service
+from ade_api.common.pagination import PageParams
+from ade_api.common.sorting import make_sort_dependency
+from ade_api.common.types import OrderBy
+from ade_api.core.http import require_authenticated, require_csrf, require_global
+from ade_api.core.models import User
 
 from .filters import UserFilters
-from .models import User
-from .schemas import UserPage, UserProfile
+from .schemas import UserOut, UserPage, UserUpdate
 from .service import UsersService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
@@ -30,20 +28,16 @@ get_sort_order = make_sort_dependency(
     id_field=ID_FIELD,
 )
 
-
-@router.get(
-    "/users/me",
-    response_model=UserProfile,
-    status_code=status.HTTP_200_OK,
-    response_model_exclude_none=True,
-    summary="Return the authenticated user profile",
+USER_UPDATE_BODY = Body(
+    ...,
+    description="Fields to update on the user record.",
 )
-async def read_me(
-    user: Annotated[User, Security(require_authenticated)],
-    service: Annotated[UsersService, Depends(get_users_service)],
-) -> UserProfile:
-    profile = await service.get_profile(user=user)
-    return profile
+USER_ID_PARAM = Annotated[
+    UUID,
+    Path(
+        description="User identifier.",
+    ),
+]
 
 
 @router.get(
@@ -54,7 +48,7 @@ async def read_me(
     response_model_exclude_none=True,
 )
 async def list_users(
-    _: Annotated[User, Security(require_global("Users.Read.All"))],
+    _: Annotated[User, Security(require_global("users.read_all"))],
     page: Annotated[PageParams, Depends()],
     filters: Annotated[UserFilters, Depends()],
     order_by: Annotated[OrderBy, Depends(get_sort_order)],
@@ -67,6 +61,63 @@ async def list_users(
         order_by=order_by,
         filters=filters,
     )
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=UserOut,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve a user (administrator only)",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to read users.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Global users.read_all permission required.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "User not found.",
+        },
+    },
+)
+async def get_user(
+    _: Annotated[User, Security(require_global("users.read_all"))],
+    user_id: USER_ID_PARAM,
+    service: Annotated[UsersService, Depends(get_users_service)],
+) -> UserOut:
+    return await service.get_user(user_id=user_id)
+
+
+@router.patch(
+    "/users/{user_id}",
+    dependencies=[Security(require_csrf)],
+    response_model=UserOut,
+    status_code=status.HTTP_200_OK,
+    summary="Update a user (administrator only)",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update users.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Global users.manage_all permission required.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "User not found.",
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "No valid fields were provided for update.",
+        },
+    },
+)
+async def update_user(
+    _: Annotated[User, Security(require_global("users.manage_all"))],
+    user_id: USER_ID_PARAM,
+    service: Annotated[UsersService, Depends(get_users_service)],
+    payload: UserUpdate = USER_UPDATE_BODY,
+) -> UserOut:
+    return await service.update_user(user_id=user_id, payload=payload)
 
 
 __all__ = ["router"]

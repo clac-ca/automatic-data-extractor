@@ -26,7 +26,7 @@ Base prefix:
 * `GET    /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — read file (raw bytes; JSON optional)
 * `PUT    /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — create/update file (raw bytes; parents auto‑create; ETag preconditions)
 * `DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/files/{*path}` — delete file (ETag)
-* `POST   /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}` — create **empty** directory
+* `PUT    /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}` — ensure **empty** directory exists (idempotent)
 * `DELETE /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}` — delete directory (`?recursive=1` allowed)
 
 **Workflow helpers**
@@ -191,13 +191,13 @@ If-Match: "sha256:OLD"
 
 Empty directories don’t exist until a file is written. Provide these to support a “New Folder” and “Delete Folder” button:
 
-Create empty dir:
+Create empty dir (idempotent):
 
 ```http
-POST /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}
+PUT /api/v1/workspaces/{ws}/configurations/{cfg}/directories/{*path}
 ```
 
-**201 Created**
+**201 Created** (new) or **200 OK** (already existed)
 
 Delete dir (defaults to empty‑only; allow recursive with `?recursive=1`):
 
@@ -268,7 +268,7 @@ ZIP contains only the **editable set** (same include/exclude rules), preserving 
 
 5. **Folders**
 
-   * “New Folder” → `POST /directories/{path}`
+   * “New Folder” → `PUT /directories/{path}`
    * “Delete Folder” → `DELETE /directories/{path}?recursive=1` (or ensure empty first)
 
 6. **Validate / Export**
@@ -303,4 +303,4 @@ Error body format:
 * **ETag preconditions** are standard and prevent clobbering; no server locks or websockets needed.
 * A single **full‑tree listing** keeps the sidebar instant and avoids paginated recursion.
 
-If you want this even leaner, you can *skip* the directory endpoints and rely on `PUT ?parents=1`—but most editors include a “New Folder” button, so keeping `POST /directories/{path}` is pragmatic and still simple.
+If you want this even leaner, you can *skip* the directory endpoints and rely on `PUT ?parents=1`—but most editors include a “New Folder” button, so keeping `PUT /directories/{path}` is pragmatic and still simple.
