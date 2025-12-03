@@ -84,10 +84,10 @@ class Role(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=true(),
     )
     created_by_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
     updated_by_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
 
     permissions: Mapped[list[RolePermission]] = relationship(
@@ -110,10 +110,10 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
 
     role_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
+        UUIDType(), ForeignKey("roles.id", ondelete="NO ACTION"), primary_key=True
     )
     permission_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True
+        UUIDType(), ForeignKey("permissions.id", ondelete="NO ACTION"), primary_key=True
     )
 
     role: Mapped[Role] = relationship("Role", back_populates="permissions")
@@ -132,17 +132,17 @@ class UserRoleAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_role_assignments"
 
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     role_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+        UUIDType(), ForeignKey("roles.id", ondelete="NO ACTION"), nullable=False
     )
     scope_type: Mapped[ScopeType] = mapped_column(
         assignment_scope_enum,
         nullable=False,
     )
     scope_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True
+        UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=True
     )
 
     user: Mapped[User] = relationship("User")
