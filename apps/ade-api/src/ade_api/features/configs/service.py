@@ -33,7 +33,6 @@ from .exceptions import (
     ConfigStateError,
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
-    ConfigImportError,
 )
 from .repository import ConfigurationsRepository
 from .schemas import ConfigSource, ConfigSourceClone, ConfigSourceTemplate, ConfigValidationIssue

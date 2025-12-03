@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import desc, select
-from sqlalchemy.sql import Select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 
 from ade_api.common.pagination import Page, paginate_sql
 from ade_api.core.models import Build, BuildStatus

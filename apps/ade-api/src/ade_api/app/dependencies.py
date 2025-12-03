@@ -23,8 +23,8 @@ get_db_session = get_session
 get_current_principal = _get_current_principal
 
 if TYPE_CHECKING:
-    from ade_api.features.runs.event_dispatcher import RunEventDispatcher
     from ade_api.features.builds.event_dispatcher import BuildEventDispatcher
+    from ade_api.features.runs.event_dispatcher import RunEventDispatcher
 
 
 def _build_config_storage(settings: Settings):
@@ -88,7 +88,6 @@ def get_configurations_service(session: SessionDep, settings: SettingsDep):
 
 def get_builds_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.builds.service import BuildsService
-    from ade_api.features.builds.event_dispatcher import BuildEventStorage, BuildEventDispatcher
 
     dispatcher = get_build_event_dispatcher(settings=settings)
     storage = _build_config_storage(settings)

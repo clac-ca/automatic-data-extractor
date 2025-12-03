@@ -77,7 +77,9 @@ class BuildEventStorage:
 
     async def append(self, event: AdeEvent) -> AdeEvent:
         if not event.workspace_id or not event.build_id or not event.configuration_id:
-            raise ValueError("workspace_id, configuration_id, and build_id are required to append events")
+            raise ValueError(
+                "workspace_id, configuration_id, and build_id are required to append events"
+            )
 
         path = self.events_path(
             workspace_id=event.workspace_id,

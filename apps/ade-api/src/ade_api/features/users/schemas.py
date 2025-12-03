@@ -56,7 +56,7 @@ class UserUpdate(BaseSchema):
         return cleaned or None
 
     @model_validator(mode="after")
-    def _ensure_changes_present(self) -> "UserUpdate":
+    def _ensure_changes_present(self) -> UserUpdate:
         if not self.model_fields_set:
             msg = "Provide at least one field to update."
             raise ValueError(msg)

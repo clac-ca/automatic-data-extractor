@@ -69,6 +69,10 @@ const sampleRunResource = {
   },
 } satisfies RunResource;
 
+type CreateRunPostResponse = Awaited<
+  ReturnType<typeof client.POST<"/api/v1/configurations/{configuration_id}/runs">>
+>;
+
 describe("streamRunEvents", () => {
   beforeEach(() => {
     MockEventSource.instances = [];
@@ -144,12 +148,12 @@ describe("streamRun", () => {
       run_id: "run-123",
     };
     const events: AdeEvent[] = [];
-    const postResponse = {
+    const postResponse: CreateRunPostResponse = {
       data: sampleRunResource,
       error: undefined,
       response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
-    } as any;
-    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse as any);
+    };
+    const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     const stream = streamRun("config-123", { dry_run: true });
     const consume = (async () => {
@@ -178,12 +182,12 @@ describe("streamRun", () => {
   });
 
   it("throws when run creation does not return data", async () => {
-    const postResponse = {
+    const postResponse: CreateRunPostResponse = {
       data: undefined,
       error: undefined,
       response: new Response(null, { status: 200 }),
-    } as any;
-    vi.spyOn(client, "POST").mockResolvedValue(postResponse as any);
+    };
+    vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     await expect(streamRun("config-123").next()).rejects.toThrow("Expected run creation response.");
   });

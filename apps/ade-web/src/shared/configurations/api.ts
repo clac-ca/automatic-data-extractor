@@ -205,7 +205,7 @@ export async function exportConfiguration(
     throw new Error("Expected configuration archive payload.");
   }
   const disposition = response?.headers?.get("content-disposition") ?? "";
-  const filenameMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch?.[1];
   return { blob: data as Blob, filename: filename ?? undefined };
 }

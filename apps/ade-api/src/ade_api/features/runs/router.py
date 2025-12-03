@@ -28,9 +28,9 @@ from ade_api.app.dependencies import (
     get_run_event_dispatcher,
     get_runs_service,
 )
+from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import PageParams
-from ade_api.common.ids import UUIDStr
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.core.models import RunStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -287,7 +287,10 @@ async def stream_run_events_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
 
-    last_event_id_header = request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+    last_event_id_header = (
+        request.headers.get("last-event-id")
+        or request.headers.get("Last-Event-ID")
+    )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:
         try:

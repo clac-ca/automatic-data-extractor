@@ -65,7 +65,11 @@ def json_dumps(
         options = 0
         if sort_keys:
             options |= getattr(orjson, "OPT_SORT_KEYS", 0)
-        return orjson.dumps(normalized, default=json_default_encoder, option=options).decode("utf-8")
+        return orjson.dumps(
+            normalized,
+            default=json_default_encoder,
+            option=options,
+        ).decode("utf-8")
 
     kwargs: dict[str, Any] = {"default": json_default_encoder}
     if indent is not None:

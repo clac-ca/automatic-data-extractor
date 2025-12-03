@@ -5,24 +5,24 @@ from __future__ import annotations
 import base64
 import io
 from datetime import datetime
-from uuid import UUID
 from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Body,
     Depends,
+    File,
+    Form,
     HTTPException,
     Path,
     Query,
     Request,
     Response,
     Security,
-    status,
-    BackgroundTasks,
-    File,
-    Form,
     UploadFile,
+    status,
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -37,6 +37,7 @@ from ade_api.features.builds.service import BuildsService
 
 from .etag import canonicalize_etag, format_etag, format_weak_etag
 from .exceptions import (
+    ConfigImportError,
     ConfigPublishConflictError,
     ConfigSourceInvalidError,
     ConfigSourceNotFoundError,
@@ -44,7 +45,6 @@ from .exceptions import (
     ConfigStorageNotFoundError,
     ConfigurationNotFoundError,
     ConfigValidationFailedError,
-    ConfigImportError,
 )
 from .schemas import (
     ConfigurationActivateRequest,
@@ -52,12 +52,12 @@ from .schemas import (
     ConfigurationPage,
     ConfigurationRecord,
     ConfigurationValidateResponse,
+    DirectoryWriteResponse,
     FileListing,
     FileReadJson,
     FileRenameRequest,
     FileRenameResponse,
     FileWriteResponse,
-    DirectoryWriteResponse,
 )
 from .service import (
     ConfigurationsService,
@@ -76,6 +76,8 @@ router = APIRouter(
     tags=["configurations"],
     dependencies=[Security(require_authenticated)],
 )
+
+UPLOAD_ARCHIVE_FIELD = File(...)
 
 CONFIG_CREATE_BODY = Body(
     ...,
@@ -377,7 +379,7 @@ async def import_configuration(
     ],
     *,
     display_name: Annotated[str, Form(min_length=1)],
-    file: UploadFile = File(...),
+    file: UploadFile = UPLOAD_ARCHIVE_FIELD,
 ) -> ConfigurationRecord:
     try:
         archive = await file.read()
@@ -799,7 +801,7 @@ async def replace_configuration_from_archive(
             scopes=["{workspace_id}"],
         ),
     ],
-    file: UploadFile = File(...),
+    file: UploadFile = UPLOAD_ARCHIVE_FIELD,
 ) -> ConfigurationRecord:
     archive = await file.read()
     try:
@@ -812,7 +814,10 @@ async def replace_configuration_from_archive(
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     except ConfigStorageNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_storage_missing") from exc
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="configuration_storage_missing",
+        ) from exc
     except ConfigStateError as exc:
         _problem("configuration_not_editable", status.HTTP_409_CONFLICT, detail=str(exc))
     except PreconditionRequiredError:

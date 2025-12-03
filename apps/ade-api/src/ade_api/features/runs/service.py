@@ -27,10 +27,10 @@ from ade_engine.schemas import (
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.encoding import json_dumps
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
-from ade_api.common.encoding import json_dumps
 from ade_api.common.time import utc_now
 from ade_api.core.models import (
     BuildStatus,
@@ -299,7 +299,12 @@ class RunsService:
         venv_root = (
             Path(build_ctx.venv_root)
             if build_ctx
-            else build_venv_root(self._settings, configuration.workspace_id, configuration.id, build_id)
+            else build_venv_root(
+                self._settings,
+                configuration.workspace_id,
+                configuration.id,
+                build_id,
+            )
         )
         venv_path = venv_root / ".venv"
         run_status = (

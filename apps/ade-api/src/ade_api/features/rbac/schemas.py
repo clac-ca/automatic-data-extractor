@@ -88,3 +88,12 @@ class UserRolesEnvelope(BaseSchema):
 
     user_id: UUID
     roles: list[UserRoleSummary]
+
+
+class WorkspaceMemberOut(BaseSchema):
+    """Workspace member representation with assigned roles."""
+
+    user_id: UUID
+    role_ids: list[UUID]
+    role_slugs: list[str]
+    created_at: datetime
