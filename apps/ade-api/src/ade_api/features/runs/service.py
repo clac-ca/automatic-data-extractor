@@ -1393,7 +1393,7 @@ class RunsService:
             elif summary_status == "succeeded":
                 status = RunStatus.SUCCEEDED
                 error_message = None
-            elif summary_status in {"cancelled", "canceled"}:
+            elif summary_status == "cancelled":
                 status = RunStatus.CANCELLED
                 error = summary.get("error")
                 error_message = (
@@ -2118,7 +2118,7 @@ class RunsService:
         if error_message is not None:
             run.error_message = error_message
         run.finished_at = utc_now()
-        run.canceled_at = utc_now() if status is RunStatus.CANCELLED else None
+        run.cancelled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
         await self._session.refresh(run)
 

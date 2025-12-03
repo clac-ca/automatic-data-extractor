@@ -427,6 +427,10 @@ async def list_assignments(
             description="Filter by role id",
         ),
     ] = None,
+    include_inactive: Annotated[
+        bool,
+        Query(description="Include inactive users in the response."),
+    ] = False,
 ) -> RoleAssignmentPage:
     service = RbacService(session=session)
     await _ensure_global_permission(
@@ -451,6 +455,7 @@ async def list_assignments(
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,
+        include_inactive=include_inactive,
     )
     return RoleAssignmentPage(
         items=[_serialize_assignment(item) for item in assignments.items],
@@ -480,6 +485,7 @@ async def _load_user_role_assignments(
         page=1,
         page_size=1000,
         include_total=False,
+        include_inactive=True,
     )
     return assignments_page.items
 

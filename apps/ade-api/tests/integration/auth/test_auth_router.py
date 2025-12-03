@@ -9,6 +9,7 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
+from ade_api.core.models import User
 from ade_api.infra.db.engine import ensure_database_ready, reset_database_state
 from ade_api.infra.db.session import reset_session_state
 from ade_api.settings import get_settings
@@ -254,3 +255,52 @@ async def test_logout_returns_no_content(async_client: AsyncClient) -> None:
 
     response = await async_client.delete("/api/v1/auth/session")
     assert response.status_code == 204
+
+
+async def test_login_rejects_inactive_user(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+    session,
+) -> None:
+    """Inactive accounts should not receive new sessions."""
+
+    member = seed_identity["member"]
+    user = await session.get(User, member["id"])
+    assert user is not None
+    user.is_active = False
+    await session.flush()
+
+    response = await async_client.post(
+        "/api/v1/auth/session",
+        json={"email": member["email"], "password": member["password"]},
+    )
+    assert response.status_code == 403
+    payload = response.json()
+    assert payload["detail"]["error"] == "inactive_user"
+
+
+async def test_access_token_rejected_after_deactivation(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+    session,
+) -> None:
+    """Existing access tokens should be blocked once the user is inactive."""
+
+    member = seed_identity["member"]
+    token, _ = await login(
+        async_client,
+        email=member["email"],
+        password=member["password"],
+    )
+
+    user = await session.get(User, member["id"])
+    assert user is not None
+    user.is_active = False
+    await session.flush()
+
+    response = await async_client.get(
+        "/api/v1/me/bootstrap",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+    assert "inactive" in response.json()["detail"].lower()

@@ -286,8 +286,8 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
       raw: payload,
     };
   }
-  if (status === "canceled" || status === "cancelled") {
-    return { level: "warning", message: "Build was canceled before completion.", timestamp, origin: "build", raw: payload };
+  if (status === "cancelled") {
+    return { level: "warning", message: "Build was cancelled before completion.", timestamp, origin: "build", raw: payload };
   }
   if (status === "failed") {
     const exit = typeof exitCode === "number" ? ` (exit code ${exitCode})` : "";
@@ -327,7 +327,7 @@ function formatRunCompletion(payload: Record<string, unknown>, timestamp: string
     typeof payload.summary === "string"
       ? payload.summary.trim()
       : null;
-  const cancelled = status === "canceled" || status === "cancelled";
+  const cancelled = status === "cancelled";
   const level: WorkbenchConsoleLine["level"] =
     status === "failed"
       ? "error"

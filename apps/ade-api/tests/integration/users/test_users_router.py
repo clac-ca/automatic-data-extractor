@@ -264,3 +264,72 @@ async def test_update_user_rejects_empty_payload(
         json={},
     )
     assert response.status_code == 422
+
+
+async def test_deactivate_user_revokes_api_keys(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Deactivation should set is_active false and revoke all owned API keys."""
+
+    admin = seed_identity["admin"]
+    target = seed_identity["member"]
+    admin_token, _ = await login(
+        async_client, email=admin["email"], password=admin["password"]
+    )
+
+    create_key = await async_client.post(
+        f"/api/v1/users/{target['id']}/api-keys",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"label": "Target key"},
+    )
+    assert create_key.status_code == 201, create_key.text
+    secret = create_key.json()["secret"]
+
+    preflight = await async_client.get(
+        "/api/v1/me/bootstrap",
+        headers={"X-API-Key": secret},
+    )
+    assert preflight.status_code == 200, preflight.text
+
+    deactivate = await async_client.post(
+        f"/api/v1/users/{target['id']}/deactivate",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert deactivate.status_code == 200, deactivate.text
+    payload = deactivate.json()
+    assert payload["is_active"] is False
+
+    key_list = await async_client.get(
+        f"/api/v1/users/{target['id']}/api-keys",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        params={"include_revoked": True},
+    )
+    assert key_list.status_code == 200, key_list.text
+    records = key_list.json()["items"]
+    assert records
+    assert all(record["revoked_at"] is not None for record in records)
+
+    denied = await async_client.get(
+        "/api/v1/me/bootstrap",
+        headers={"X-API-Key": secret},
+    )
+    assert denied.status_code == 401
+
+
+async def test_deactivate_user_blocks_self(
+    async_client: AsyncClient,
+    seed_identity: dict[str, Any],
+) -> None:
+    """Users should not be able to deactivate themselves."""
+
+    admin = seed_identity["admin"]
+    token, _ = await login(
+        async_client, email=admin["email"], password=admin["password"]
+    )
+
+    response = await async_client.post(
+        f"/api/v1/users/{admin['id']}/deactivate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 400

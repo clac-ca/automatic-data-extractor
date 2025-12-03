@@ -515,6 +515,7 @@ class RbacService:
         page: int,
         page_size: int,
         include_total: bool,
+        include_inactive: bool = False,
     ) -> Page[UserRoleAssignment]:
         stmt: Select[UserRoleAssignment] = (
             select(UserRoleAssignment)
@@ -537,6 +538,8 @@ class RbacService:
             stmt = stmt.where(UserRoleAssignment.user_id == user_id)
         if role_id:
             stmt = stmt.where(UserRoleAssignment.role_id == role_id)
+        if not include_inactive:
+            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active.is_(True))
 
         return await paginate_sql(
             self._session,

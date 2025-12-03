@@ -40,7 +40,7 @@ export type RunStatus =
   | "running"
   | "succeeded"
   | "failed"
-  | "canceled";
+  | "cancelled";
 
 type RunJobStoreState = {
   runs: Map<string, RunJobState>;
@@ -84,12 +84,12 @@ function normalizeRunStatus(value: unknown): RunStatus {
   if (value === "running") return "running";
   if (value === "succeeded") return "succeeded";
   if (value === "failed") return "failed";
-  if (value === "canceled" || value === "cancelled") return "canceled";
+  if (value === "cancelled") return "cancelled";
   return "idle";
 }
 
 function isTerminal(status: RunStatus) {
-  return status === "succeeded" || status === "failed" || status === "canceled";
+  return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 function mergeEvents(prevEvents: RunStreamEvent[], nextEvents: RunStreamEvent[]) {

@@ -44,7 +44,7 @@ async def test_run_defaults(session: AsyncSession) -> None:
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None
     assert run.finished_at is None
-    assert run.canceled_at is None
+    assert run.cancelled_at is None
     assert run.artifact_uri is None
     assert run.output_uri is None
     assert run.logs_uri is None

@@ -327,7 +327,7 @@ function phaseStatusLabel(status: PhaseState["status"]) {
 }
 
 function isCancelledStatus(status: WorkbenchRunSummary["status"]) {
-  return status === "cancelled" || status === "canceled";
+  return status === "cancelled";
 }
 
 function prettyPhaseLabel(id: string) {

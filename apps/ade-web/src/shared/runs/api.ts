@@ -73,7 +73,7 @@ export async function* streamRunEvents(
     "run.started",
     "run.completed",
     "run.failed",
-    "run.canceled",
+    "run.cancelled",
     "run.waiting_for_build",
     "build.queued",
     "build.started",

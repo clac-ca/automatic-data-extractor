@@ -112,12 +112,39 @@ async def get_user(
     },
 )
 async def update_user(
-    _: Annotated[User, Security(require_global("users.manage_all"))],
+    actor: Annotated[User, Security(require_global("users.manage_all"))],
     user_id: USER_ID_PARAM,
     service: Annotated[UsersService, Depends(get_users_service)],
     payload: UserUpdate = USER_UPDATE_BODY,
 ) -> UserOut:
-    return await service.update_user(user_id=user_id, payload=payload)
+    return await service.update_user(user_id=user_id, payload=payload, actor=actor)
+
+
+@router.post(
+    "/users/{user_id}/deactivate",
+    dependencies=[Security(require_csrf)],
+    response_model=UserOut,
+    status_code=status.HTTP_200_OK,
+    summary="Deactivate a user and revoke their API keys (administrator only)",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to deactivate users.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Global users.manage_all permission required.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "User not found.",
+        },
+    },
+)
+async def deactivate_user(
+    actor: Annotated[User, Security(require_global("users.manage_all"))],
+    user_id: USER_ID_PARAM,
+    service: Annotated[UsersService, Depends(get_users_service)],
+) -> UserOut:
+    return await service.deactivate_user(user_id=user_id, actor=actor)
 
 
 __all__ = ["router"]

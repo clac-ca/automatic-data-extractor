@@ -86,7 +86,7 @@ class Run(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
