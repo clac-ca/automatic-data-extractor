@@ -166,6 +166,73 @@ def detect_header(*, header, logger, event_emitter, **_):
     assert normalized.output_sheet_name == "Combined"
 
 
+def test_omits_unmapped_columns_when_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
+    manifest_path = _write_manifest(
+        pkg_dir,
+        order=["alpha"],
+        writer={"append_unmapped_columns": False, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+    )
+    _write_column_detector(
+        pkg_dir,
+        "alpha",
+        """
+def detect_header(*, header, logger, event_emitter, **_):
+    return 1.0 if header.lower() == "alpha" else 0.0
+""",
+    )
+
+    runtime = load_config_runtime(manifest_path=manifest_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
+    run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
+
+    raw = ExtractedTable(
+        source_file=tmp_path / "input.csv",
+        source_sheet=None,
+        table_index=0,
+        header_row=["Alpha", "Extra"],
+        data_rows=[["a1", "b1"]],
+        header_row_index=1,
+        first_data_row_index=2,
+        last_data_row_index=2,
+    )
+
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
+    normalized = normalize_table(
+        ctx=run,
+        cfg=runtime,
+        mapped=mapped,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
+
+    output_path = write_workbook(
+        ctx=run,
+        cfg=runtime,
+        tables=[normalized],
+        input_file_name="input.csv",
+        event_emitter=config_emitter,
+        logger=logging.getLogger("test_write"),
+    )
+
+    workbook = load_workbook(output_path)
+    try:
+        sheet = workbook["Normalized"]
+        header = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+        row = [cell.value for cell in next(sheet.iter_rows(min_row=2, max_row=2))]
+        assert header == ["alpha"]
+        assert row == ["a1"]
+    finally:
+        workbook.close()
+
+
 def test_creates_unique_sheets_and_runs_hooks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
     _write_hook(
