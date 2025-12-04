@@ -50,13 +50,6 @@ def _validate_signature(hook: Callable[..., Any], *, stage: HookStage) -> None:
             f"Hook '{hook.__module__}.{getattr(hook, '__name__', '<callable>')}' must accept **_ for forwards compatibility"
         )
 
-    missing = [name for name in ("logger", "event_emitter") if name not in signature.parameters]
-    if missing:
-        raise ConfigError(
-            f"Hook '{hook.__module__}.{getattr(hook, '__name__', '<callable>')}' must accept logger and event_emitter "
-            f"keyword arguments (missing: {', '.join(missing)})"
-        )
-
 
 def _invoke_hook(hook: Callable[..., Any], context: HookContext) -> Any:
     _validate_signature(hook, stage=context.stage)

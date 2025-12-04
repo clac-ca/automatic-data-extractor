@@ -61,7 +61,7 @@ def _write_column_module(
     (detectors / "__init__.py").write_text("")
 
     body = [
-        "def detect_header(*, header, logger, event_emitter, **_):",
+        "def detect_header(*, header, logger=None, event_emitter=None, **_):",
         "    return 1.0 if (header or '').strip().lower() == '%s' else 0.0" % header.lower(),
     ]
 
@@ -69,7 +69,7 @@ def _write_column_module(
         body.extend(
             [
                 "",
-                "def transform(*, value, row, logger, event_emitter, **_):",
+                "def transform(*, value, row, logger=None, event_emitter=None, **_):",
                 "    if value is None:",
                 "        return None",
                 "    row['%s'] = str(value).strip().title()" % field,
@@ -81,7 +81,7 @@ def _write_column_module(
         body.extend(
             [
                 "",
-                "def validate(*, value, logger, event_emitter, **_):",
+                "def validate(*, value, logger=None, event_emitter=None, **_):",
                 "    if value in (None, ''):",
                 "        return [{'code': 'missing_value', 'severity': 'error', 'message': '%s is required'}]" % field,
                 "    return []",

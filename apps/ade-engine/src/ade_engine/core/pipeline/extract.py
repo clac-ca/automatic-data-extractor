@@ -45,12 +45,6 @@ def _validate_keyword_only(func: Callable[..., object], *, label: str) -> None:
     if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
         raise ConfigError(f"{label} must accept **_ for forwards compatibility")
 
-    missing = [name for name in ("logger", "event_emitter") if name not in signature.parameters]
-    if missing:
-        raise ConfigError(
-            f"{label} must accept logger and event_emitter keyword arguments (missing: {', '.join(missing)})"
-        )
-
 
 def _load_row_detectors(package: ModuleType) -> list[RowDetectorFn]:
     try:
