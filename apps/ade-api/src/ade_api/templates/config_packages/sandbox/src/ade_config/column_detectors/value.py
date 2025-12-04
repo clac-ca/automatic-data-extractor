@@ -9,6 +9,8 @@ def detect_value(
     *,
     header: str | None,
     column_values_sample: list[Any],
+    logger=None,
+    event_emitter=None,
     **_: Any,
 ) -> float:
     """Return a confidence score favoring the "value" header name."""
@@ -19,7 +21,7 @@ def detect_value(
     return round(min(1.0, header_score + sample_score), 2)
 
 
-def transform(*, value: Any, **_: Any) -> dict[str, Any]:
+def transform(*, value: Any, logger=None, event_emitter=None, **_: Any) -> dict[str, Any]:
     """Normalize values to stripped strings for workbook output."""
     if value is None:
         return {"value": None}

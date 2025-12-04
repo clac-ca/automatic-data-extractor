@@ -22,9 +22,11 @@ from .features.system_settings.router import router as system_router
 from .features.users.router import router as users_router
 from .features.workspaces.members_router import router as workspace_members_router
 from .features.workspaces.router import router as workspaces_router
+from .meta.router import router as meta_router
 
 api_router = APIRouter(prefix="/v1")
 api_router.include_router(health_router, prefix="/health", tags=["health"])
+api_router.include_router(meta_router)
 api_router.include_router(auth_router, prefix="/auth")
 api_router.include_router(api_keys_router)
 api_router.include_router(users_router)

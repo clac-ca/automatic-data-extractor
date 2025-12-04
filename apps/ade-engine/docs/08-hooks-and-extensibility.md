@@ -43,7 +43,7 @@ At a high level:
   - the current `RunContext`,
   - shared per‑run `state` dict,
   - the manifest,
-  - telemetry logger,
+  - `logger` (standard `logging.Logger`) and `event_emitter` (structured telemetry),
   - and phase‑specific objects (tables, workbook, result).
 
 Hooks are **configuration-owned**:
@@ -160,8 +160,9 @@ from typing import Any
 from ade_engine.config.hook_registry import HookStage
 from ade_engine.core.types import RunResult, RunContext
 from ade_engine.core.pipeline import ExtractedTable, MappedTable, NormalizedTable
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.telemetry import EventEmitter
 from openpyxl import Workbook
+import logging
 
 def run(
     *,
@@ -171,21 +172,24 @@ def run(
     tables: list[ExtractedTable | MappedTable | NormalizedTable] | None = None,
     workbook: Workbook | None = None,
     result: RunResult | None = None,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> None:
-    logger.note("Run started", stage=stage.value)
+    logger.info("Run started stage=%s", stage.value)
+    event_emitter.custom("hook.checkpoint", stage=stage.value)
 ```
 
-The engine still constructs a full `HookContext` internally and provides it via the `context` keyword, so legacy hooks that expect a `HookContext` object continue to work. However, using explicit keyword arguments keeps the experience consistent with detectors/transforms, highlights what is guaranteed to be available at each stage, and helps authors reason about optional fields.
+Hooks must be keyword-only and include both `logger` and `event_emitter`. Include `**_`
+to absorb future keyword arguments added by the engine.
 
 Guidelines:
 
 * Use `state` for mutable per-run data caches; treat `run` as read-only engine metadata.
-* Call `logger` (a `PipelineLogger`) for telemetry notes; use `result`, `tables`, or `workbook` only if the stage provides it.
+* Call `logger` for human-readable diagnostics; use `event_emitter` for structured run events.
 * Expect `tables`, `workbook`, and `result` to be `None` unless the stage promises them.
-* Include `**_` to absorb future keyword arguments added by the engine.
+* Script API v3 removes positional `HookContext` shims; declare keyword-only parameters and keep `**_` for forwards compatibility.
 
 ### 5.2 Return values
 
@@ -295,14 +299,16 @@ def run(
     run: RunContext,
     state: dict[str, Any],
     manifest: ManifestContext,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> None:
     state["start_timestamp"] = run.started_at.isoformat()
     state["config_version"] = manifest.model.version
-    logger.note(
-        "Run started",
+    logger.info("Run started config=%s version=%s", manifest.model.name, manifest.model.version)
+    event_emitter.custom(
+        "hook.checkpoint",
         config_title=manifest.model.name,
         config_version=manifest.model.version,
         stage=stage.value,
@@ -316,27 +322,27 @@ def run(
 def run(
     *,
     tables: list[ExtractedTable] | None = None,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> list[ExtractedTable] | None:
     filtered: list[ExtractedTable] = []
     for t in tables or []:
-        logger.note(
-            "Extracted table",
-            file=str(t.source_file),
-            sheet=t.source_sheet,
-            row_count=len(t.data_rows),
-            header_row_index=t.header_row_index,
-            stage=stage.value,
+        logger.info(
+            "Extracted table file=%s sheet=%s rows=%s header_row=%s",
+            t.source_file,
+            t.source_sheet,
+            len(t.data_rows),
+            t.header_row_index,
         )
 
         if len(t.data_rows) == 0:
-            logger.note(
-                "Empty table detected",
-                level="warning",
+            event_emitter.custom(
+                "hook.empty_table_dropped",
                 file=str(t.source_file),
                 sheet=t.source_sheet,
+                header_row=t.header_row_index,
                 stage=stage.value,
             )
             continue
@@ -353,7 +359,8 @@ def run(
 def run(
     *,
     tables: list[MappedTable] | None = None,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> list[MappedTable] | None:
@@ -362,14 +369,17 @@ def run(
         for m in table.mapping:
             if m.field == "email":
                 if seen_email:
-                    logger.note(
-                        "Dropping duplicate email mapping",
-                        level="warning",
-                        header=m.header,
+                    logger.warning(
+                        "Dropping duplicate email mapping header=%s column=%s",
+                        m.header,
+                        m.source_column_index,
+                    )
+                    m.field = "raw_email_candidate"
+                    event_emitter.custom(
+                        "hook.email_mapping_conflict",
                         column_index=m.source_column_index,
                         stage=stage.value,
                     )
-                    m.field = "raw_email_candidate"
                 else:
                     seen_email = True
 
@@ -385,7 +395,8 @@ def run(
     workbook: Workbook,
     tables: list[NormalizedTable] | None = None,
     manifest: ManifestContext,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> Workbook | None:
@@ -406,7 +417,8 @@ def run(
         summary[f"B{row}"] = len(t.rows)
         row += 1
 
-    logger.note("Added ADE Summary sheet", stage=stage.value)
+    logger.info("Added ADE Summary sheet")
+    event_emitter.custom("hook.summary_sheet_added", stage=stage.value)
     return workbook
 ```
 
@@ -418,20 +430,21 @@ def run(
     *,
     run: RunContext,
     result: RunResult,
-    logger: PipelineLogger,
+    logger: logging.Logger,
+    event_emitter: EventEmitter,
     stage: HookStage,
     **_: Any,
 ) -> None:
     duration_ms = (run.completed_at - run.started_at).total_seconds() * 1000
     status = result.status
-    logger.event(
-        "run_summary",
-        level="info",
+    event_emitter.custom(
+        "hook.run_summary",
         status=status,
         duration_ms=duration_ms,
         processed_files=list(result.processed_files),
         stage=stage.value,
     )
+    logger.info("Run %s completed in %.0fms", run.run_id, duration_ms)
 ```
 
 ---

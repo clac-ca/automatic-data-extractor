@@ -57,6 +57,11 @@ def load_config_runtime(package: str = "ade_config", manifest_path: Path | None 
     """Load manifest and registries for the given config package."""
 
     manifest = _load_manifest(package, manifest_path)
+    if manifest.model.script_api_version != 3:
+        raise ConfigError(
+            f"Config manifest declares script_api_version={manifest.model.script_api_version}; "
+            "this version of ade_engine requires script_api_version=3 with logger and event_emitter callables."
+        )
     pkg = importlib.import_module(package)
 
     columns = ColumnRegistry.from_manifest(package=pkg, fields=manifest.columns.fields)

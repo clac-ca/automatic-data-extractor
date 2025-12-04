@@ -27,7 +27,7 @@ export type UserPage = GeneratedComponents["schemas"]["UserPage"];
 export type RunResource = GeneratedComponents["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
 export type RunCreateOptions = GeneratedComponents["schemas"]["RunCreateOptions"];
-export type { RunSummaryV1 } from "./runSummary";
+export type { RunSummary } from "./runSummary";
 
 // RBAC and workspace types
 export type ScopeType = GeneratedComponents["schemas"]["ScopeType"];

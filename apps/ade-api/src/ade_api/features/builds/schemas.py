@@ -132,7 +132,7 @@ class BuildCreatedEvent(BuildEventBase):
 
 
 class BuildCompletedEvent(BuildEventBase):
-    type: Literal["build.completed"] = "build.completed"
+    type: Literal["build.complete"] = "build.complete"
     status: BuildStatus
     exit_code: int | None = None
     error_message: str | None = None

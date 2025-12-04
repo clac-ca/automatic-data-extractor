@@ -6,6 +6,7 @@ import pytest
 from openpyxl import load_workbook
 
 from ade_engine import Engine, RunRequest, RunStatus, run
+from ade_engine.core.types import RunPhase
 from ade_engine.schemas.telemetry import AdeEvent
 from fixtures.config_factories import clear_config_import, make_minimal_config
 from fixtures.sample_inputs import (
@@ -32,7 +33,7 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
         metadata={"test_case": "end_to_end"},
@@ -52,10 +53,11 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
 
-    assert any(evt.type == "run.completed" and evt.payload_dict().get("status") == "succeeded" for evt in events)
-    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table_event = next(evt for evt in events if evt.type == "engine.table.summary")
     table = table_event.payload_dict()
-    assert table["row_count"] == 2
+    assert table["counts"]["rows"]["total"] == 2
+    summary_event = next(evt for evt in events if evt.type == "engine.run.summary")
+    assert summary_event.payload_dict().get("counts", {}).get("tables", {}).get("total") == 1
 
 
 def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,7 +66,7 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     request = RunRequest(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -74,8 +76,8 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert result.error is not None
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
-    completion = next(evt for evt in events if evt.type == "run.completed")
-    assert completion.payload_dict().get("status") == "failed"
+    completed = next(evt for evt in events if evt.type == "engine.complete")
+    assert completed.payload_dict().get("status") == "failed"
 
 
 def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,21 +86,30 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
 
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
-    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table_event = next(evt for evt in events if evt.type == "engine.table.summary")
     table = table_event.payload_dict()
 
     mapped_fields = [
         {key: field.get(key) for key in ("field", "header", "score", "source_column_index")}
-        for field in table.get("mapped_fields", [])
+        for field in table.get("fields", [])
+        if field.get("mapped")
     ]
-    unmapped_columns = table.get("unmapped_columns") or []
+    unmapped_columns = [
+        {
+            "header": column.get("header"),
+            "source_column_index": column.get("source_column_index"),
+            "output_header": column.get("output_header"),
+        }
+        for column in table.get("columns", [])
+        if not column.get("mapped")
+    ]
 
     assert mapped_fields == [
         {"field": "member_id", "header": "member_id", "score": 1.0, "source_column_index": 0},
@@ -116,10 +127,35 @@ def test_engine_large_input_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
 
     assert result.status is RunStatus.SUCCEEDED
     assert Path(result.output_paths[0]).exists()
+
+
+def test_engine_reports_pipeline_stage_on_mapping_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = make_minimal_config(tmp_path, monkeypatch)
+    failing_detector = config.package_dir / "column_detectors" / "member_id.py"
+    failing_detector.write_text(
+        """
+def detect_header(*, header, **_):
+    raise RuntimeError("boom")
+"""
+    )
+
+    source = sample_csv(tmp_path)
+    request = RunRequest(
+        manifest_path=config.manifest_path,
+        input_file=source,
+        output_dir=tmp_path / "out",
+        logs_dir=tmp_path / "logs",
+    )
+
+    result = Engine().run(request)
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.stage is RunPhase.MAPPING

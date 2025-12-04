@@ -287,7 +287,7 @@ async def stream_build_events_endpoint(
             yield _sse_event_bytes(event)
             if event.sequence:
                 last_sequence = event.sequence
-            if event.type in {"build.completed", "build.failed"}:
+            if event.type in {"build.complete", "build.failed"}:
                 stream_complete = True
                 break
 
@@ -301,7 +301,7 @@ async def stream_build_events_endpoint(
                 yield _sse_event_bytes(live_event)
                 if live_event.sequence:
                     last_sequence = live_event.sequence
-                if live_event.type in {"build.completed", "build.failed"}:
+                if live_event.type in {"build.complete", "build.failed"}:
                     break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

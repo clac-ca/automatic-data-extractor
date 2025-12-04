@@ -60,8 +60,7 @@ class RunRequest:
     config_package: str = "ade_config"
     manifest_path: Path | None = None
 
-    input_files: Sequence[Path] | None = None
-    input_dir: Path | None = None
+    input_file: Path | None = None
 
     input_sheets: Sequence[str] | None = None
 
@@ -75,7 +74,7 @@ class RunRequest:
 class RunPaths:
     """Resolved filesystem layout for a run."""
 
-    input_dir: Path
+    input_file: Path
     output_dir: Path
     logs_dir: Path
 

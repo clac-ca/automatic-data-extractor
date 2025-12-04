@@ -1,5 +1,6 @@
 {
   "name": "ade-web",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "scripts": {

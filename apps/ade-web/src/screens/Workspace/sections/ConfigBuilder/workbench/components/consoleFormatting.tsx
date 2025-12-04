@@ -110,36 +110,51 @@ function formatStructuredEvent(event: Record<string, unknown>) {
     }
     case "run.waiting_for_build":
       return `Waiting for build${reason ? ` (${reason})` : ""}${payload.build_id ? ` · ${payload.build_id}` : ""}`;
-    case "run.started": {
+    case "run.start":
+    case "run.started":
+    case "engine.start": {
       const mode = typeof payload.mode === "string" ? payload.mode : undefined;
       return `Run started${mode ? ` (${mode})` : ""}.`;
     }
+    case "run.complete":
     case "run.completed":
+    case "engine.run.summary":
+    case "engine.complete":
       return `Run ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
     case "build.queued":
       return `Build queued${reason ? ` (${reason})` : ""}.`;
+    case "build.start":
     case "build.started":
       return `Build started${reason ? ` (${reason})` : ""}.`;
+    case "build.complete":
     case "build.completed":
       return `Build ${status ?? "completed"}.`;
+    case "build.phase.start":
+    case "build.phase.started":
+      return `Starting ${typeof payload.phase === "string" ? payload.phase : "build"}${message ? ` · ${message}` : ""}`;
+    case "build.phase.complete":
+    case "build.phase.completed": {
+      const phase = typeof payload.phase === "string" ? payload.phase : "build";
+      return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
+    }
     case "build.progress":
       return message ?? (step ? `Build: ${step}` : "Build progress");
     default:
-      if (type.startsWith("run.phase.")) {
+      if (type.startsWith("run.phase.") || type.startsWith("engine.phase.")) {
         const phase = typeof payload.phase === "string" ? payload.phase : "phase";
-        if (type.endsWith(".completed")) {
+        if (type.endsWith(".completed") || type.endsWith(".complete")) {
           return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
         }
-        if (type.endsWith(".started")) {
+        if (type.endsWith(".started") || type.endsWith(".start")) {
           return `Starting ${phase}${message ? ` · ${message}` : ""}`;
         }
       }
       if (type.startsWith("build.phase.")) {
         const phase = typeof payload.phase === "string" ? payload.phase : "build";
-        if (type.endsWith(".completed")) {
+        if (type.endsWith(".completed") || type.endsWith(".complete")) {
           return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
         }
-        if (type.endsWith(".started")) {
+        if (type.endsWith(".started") || type.endsWith(".start")) {
           return `Starting ${phase}${message ? ` · ${message}` : ""}`;
         }
       }

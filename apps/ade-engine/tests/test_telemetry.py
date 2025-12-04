@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.types import (
@@ -15,20 +16,21 @@ from ade_engine.core.types import (
     RunPaths,
     UnmappedColumn,
 )
-from ade_engine.infra.telemetry import FileEventSink, PipelineLogger
+from ade_engine.infra.event_emitter import EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 from ade_engine.schemas.manifest import ColumnsConfig, FieldConfig, HookCollection, ManifestV1, WriterConfig
 from ade_engine.schemas.telemetry import AdeEvent
 
 
 def build_run_context(tmp_path: Path) -> RunContext:
     paths = RunPaths(
-        input_dir=tmp_path / "input",
+        input_file=tmp_path / "input" / "data.xlsx",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
     )
     paths.logs_dir.mkdir(parents=True, exist_ok=True)
     return RunContext(
-        run_id="run-456",
+        run_id=uuid4(),
         metadata={"run_id": "run-1", "config_id": "cfg-1"},
         manifest=None,
         paths=paths,
@@ -42,7 +44,7 @@ def build_manifest() -> ManifestContext:
         version="1.0.0",
         name="Telemetry Config",
         description="",
-        script_api_version=2,
+        script_api_version=3,
         columns=ColumnsConfig(
             order=["id"],
             fields={"id": FieldConfig(label="ID", module="id", required=True)},
@@ -116,31 +118,31 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     assert len(lines) == 1
 
     first = json.loads(lines[0])
-    assert first["run_id"] == run.run_id
+    assert first["run_id"] == str(run.run_id)
     assert first["payload"]["message"] == "started"
 
 
-def test_pipeline_logger_records_notes_and_tables(tmp_path: Path) -> None:
+def test_event_emitter_records_events(tmp_path: Path) -> None:
     run = build_run_context(tmp_path)
     manifest = build_manifest()
     table = build_table(tmp_path)
 
     event_sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
-    logger = PipelineLogger(run=run, event_sink=event_sink)
+    emitter = EngineEventEmitter(run=run, event_sink=event_sink)
 
-    logger.note("Started run", level="info")
-    logger.pipeline_phase("mapping", file_count=1)
-    logger.record_table(table)
+    emitter.console_line("Started run", level="info")
+    emitter.phase_start("mapping", file_count=1)
+    emitter.table_summary(table)
 
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
 
     assert events[0]["type"] == "console.line"
     assert events[0]["payload"]["message"] == "Started run"
-    assert events[1]["type"] == "run.phase.started"
+    assert events[1]["type"] == "engine.phase.start"
     assert events[1]["payload"]["phase"] == "mapping"
 
     table_event = events[2]
-    assert table_event["type"] == "run.table.summary"
+    assert table_event["type"] == "engine.table.summary"
     assert table_event["payload"]["row_count"] == 2
     assert table_event["payload"]["validation"]["total"] == 0
     assert table_event["payload"]["mapped_fields"][0]["field"] == "id"

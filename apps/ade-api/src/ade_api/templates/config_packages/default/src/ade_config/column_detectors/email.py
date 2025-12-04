@@ -1,140 +1,195 @@
-"""Detect email columns and normalize / validate email addresses."""
+"""
+Email detector and transform.
+
+Patterns demonstrated:
+    • Header-based detector → returns dict so you can boost email and penalize other fields
+    • Value-based detector  → returns float affecting only the email field
+    • Transform function     → normalizes email casing and whitespace
+
+This mirrors the structure of first_name / last_name examples so users can compare and learn.
+"""
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-_FIELD = "email"
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.IGNORECASE)
+# Basic email pattern pieces (kept simple for teaching purposes)
+EMAIL_REQUIRED_CHARS = {"@", "."}
 
+# ---------------------------------------------------------------------------
+# HEADER-BASED DETECTOR
+# ---------------------------------------------------------------------------
 
-def detect_email(
+def detect_email_from_header(
     *,
-    run: dict[str, Any] | None = None,
+    run: Any | None = None,
     state: dict[str, Any] | None = None,
-    field_name: str = _FIELD,
-    field_meta: dict[str, Any] | None = None,
-    header: str | None = None,
-    column_values_sample: list[Any] | None = None,
-    column_values: tuple[Any, ...] | None = None,
-    table: dict[str, Any] | None = None,
+    extracted_table: Any | None = None,
+    input_file_name: str | None = None,
     column_index: int | None = None,
-    manifest: dict[str, Any] | None = None,
-    env: dict[str, Any] | None = None,
+    header: str | None = None,
+    column_values: list[Any] | None = None,
+    column_values_sample: list[Any] | None = None,
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,   # unused but kept for parity
+    **_: Any,
+) -> dict[str, float]:
+    """
+    Score headers that look like email columns.
+
+    Returns a DICT so we can push "email" up and optionally push other fields down.
+    """
+
+    scores = {"email": 0.0}
+
+    if not header:
+        return scores
+
+    h = header.strip().lower()
+    h = h.replace("_", " ").replace("-", " ").replace("/", " ").replace(".", " ")
+    h = " ".join(h.split())     # collapse repeated spaces
+    compact = h.replace(" ", "")
+    padded = f" {h} "
+
+    # Strong email indicators
+    if (
+        "email" in compact
+        or "e-mail" in compact
+        or "mail" in compact    # often "Email Address" → "mail address"
+        or "emailaddress" in compact
+        or "e mail" in padded
+        or padded.strip() in {"email", "e mail", "email address"}
+    ):
+        if logger:
+            logger.debug("Header EMAIL match: %r → %r", header, h)
+        return {"email": 1.0}
+
+    return scores
+
+
+# ---------------------------------------------------------------------------
+# VALUE-BASED DETECTOR
+# ---------------------------------------------------------------------------
+
+def detect_email_from_values(
+    *,
+    run: Any | None = None,
+    state: dict[str, Any] | None = None,
+    extracted_table: Any | None = None,
+    input_file_name: str | None = None,
+    column_index: int | None = None,
+    header: str | None = None,
+    column_values: list[Any] | None = None,
+    column_values_sample: list[Any] | None = None,
+    manifest: Any | None = None,
+    logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> float:
     """
-    Heuristic: header looks like email and/or most sample values look like email addresses.
+    Score values that look like email addresses.
 
-    Args:
-        run: metadata identifying the run, workspace, config, and sheet.
-        state: mutable cache shared across detectors/transforms for this run.
-        field_name: canonical name this detector evaluates (prefilled for convenience).
-        field_meta: manifest metadata describing synonyms, hints, and requirements.
-        header: cleaned header cell text for this column (or None when blank).
-        column_values_sample: stratified slice of the column (head/mid/tail).
-        column_values: full column values (already materialized when needed).
-        table: the materialized table ({'headers': [...], 'rows': [[...], ...]}).
-        column_index: 1-based index for this column in the table.
-        manifest/env: manifest and config env overrides (helpers can read settings).
-        logger: run-scoped logger for emitting notes.
-        **_: future-proof keyword arguments (ignore what you do not need).
+    Returns a FLOAT that influences only the 'email' field.
     """
-    sample_values = column_values_sample or []
-    score = 0.0
 
-    if header:
-        lowered = header.strip().lower()
-        if "email" in lowered:
-            score = 0.85
+    if not column_values_sample:
+        return 0.0
 
-    if sample_values:
-        matches = sum(
-            1
-            for value in sample_values
-            if value and _EMAIL_RE.match(str(value).strip())
+    valid_strings = 0
+    email_like = 0
+    strong_email = 0
+    non_email = 0
+
+    for value in column_values_sample:
+        if not isinstance(value, str):
+            continue
+
+        cleaned = value.strip()
+        if not cleaned:
+            continue
+
+        valid_strings += 1
+
+        # Basic check: must contain '@'
+        if "@" not in cleaned:
+            non_email += 1
+            continue
+
+        # Very lenient email detection:
+        #   - at least one character before '@'
+        #   - at least one dot afterwards
+        #   - no spaces
+        if " " in cleaned:
+            non_email += 1
+            continue
+
+        email_like += 1
+
+        # Stronger check: detect typical username@domain.tld format
+        if "." in cleaned.split("@")[-1]:
+            strong_email += 1
+
+    if logger:
+        logger.debug(
+            "Email value scan: valid=%d, email_like=%d, strong=%d, non=%d",
+            valid_strings, email_like, strong_email, non_email
         )
-        if matches:
-            score = max(score, matches / max(1, len(sample_values)))
 
-    return round(min(score, 1.0), 2)
+    # Strong signal: many valid-looking emails
+    if strong_email >= 3:
+        return 1.0
 
+    # Moderate signal
+    if email_like >= 2:
+        return 0.75
+
+    # Weak evidence: at least one email-like value
+    if email_like == 1:
+        return 0.4
+
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# TRANSFORM FUNCTION
+# ---------------------------------------------------------------------------
 
 def transform(
     *,
-    run: dict[str, Any] | None = None,
+    run: Any | None = None,
     state: dict[str, Any] | None = None,
     row_index: int | None = None,
-    field_name: str = _FIELD,
+    field_name: str | None = None,
     value: Any = None,
     row: dict[str, Any] | None = None,
-    manifest: dict[str, Any] | None = None,
-    env: dict[str, Any] | None = None,
+    field_config: Any | None = None,
+    manifest: Any | None = None,
     logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
-    Normalize email addresses to lower-case strings, or None.
+    Transform emails into a normalized form.
 
-    Args:
-        run: metadata identifying the run, workspace, config, and sheet.
-        state: mutable cache shared across detectors/transforms for this run.
-        row_index: 1-based row number (useful for logging/issues).
-        field_name: canonical field being transformed.
-        value: raw mapped value before normalization.
-        row: dictionary of canonical fields for the current row.
-        manifest/env: manifest/env knobs for context-aware transforms.
-        logger: run-scoped logger for emitting notes.
+    • Lowercase the address
+    • Trim whitespace
+    • Empty / junk → None
+
+    This mirrors the first_name/last_name transform structure.
     """
-    if value in (None, ""):
-        return {field_name: None}
-    return {field_name: str(value).strip().lower()}
-
-
-def validate(
-    *,
-    run: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
-    row_index: int | None = None,
-    field_name: str = _FIELD,
-    value: Any = None,
-    row: dict[str, Any] | None = None,
-    field_meta: dict[str, Any] | None = None,
-    manifest: dict[str, Any] | None = None,
-    env: dict[str, Any] | None = None,
-    logger: Any | None = None,
-    **_: Any,
-) -> list[dict[str, Any]]:
-    """
-    Return issue dicts for missing or invalid email values.
-
-    The engine will add row index and field name; we only supply
-    code / severity / message (and optional details).
-    """
-    issues: list[dict[str, Any]] = []
-
-    required = bool(field_meta and field_meta.get("required"))
 
     if value in (None, ""):
-        if required:
-            issues.append(
-                {
-                    "code": "missing_required",
-                    "severity": "error",
-                    "message": f"{field_name.replace('_', ' ').title()} is required."
-                }
-            )
-        return issues
+        return {"email": None}
 
-    if not _EMAIL_RE.match(str(value).strip()):
-        issues.append(
-            {
-                "code": "invalid_format",
-                "severity": "error",
-                "message": "Email must look like user@example.com."
-            }
-        )
+    text = str(value).strip()
 
-    return issues
+    if not text or "@" not in text:
+        return {"email": None}
+
+    normalized = text.lower()
+
+    if logger and normalized != text:
+        logger.debug("Transform email: %r → %r", text, normalized)
+
+    return {"email": normalized}

@@ -2,12 +2,15 @@ import json
 from datetime import datetime
 from pathlib import Path
 import sys
+from uuid import uuid4
 
 import pytest
 
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_extracted_tables
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -29,7 +32,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str]) -> Path:
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -57,17 +60,23 @@ def _write_column_detector(pkg_dir: Path, field: str, body: str) -> None:
 
 def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunContext:
     paths = RunPaths(
-        input_dir=request.input_dir or tmp_path,
+        input_file=request.input_file or tmp_path / "input.csv",
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
     return RunContext(
-        run_id="run-1",
+        run_id=uuid4(),
         metadata={},
         manifest=manifest,
         paths=paths,
         started_at=datetime.utcnow(),
     )
+
+
+def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmitter]:
+    sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
+    engine_emitter = EngineEventEmitter(run=run, event_sink=sink)
+    return engine_emitter, engine_emitter.config_emitter()
 
 
 def test_maps_columns_to_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +86,7 @@ def test_maps_columns_to_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         pkg_dir,
         "alpha",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "alpha" else 0.0
 """,
     )
@@ -85,14 +94,15 @@ def detect_header(*, header, **_):
         pkg_dir,
         "beta",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "beta" else 0.0
 """,
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -105,25 +115,38 @@ def detect_header(*, header, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     assert [mc.field for mc in mapped.column_map.mapped_columns] == ["alpha", "beta"]
     assert [mc.source_column_index for mc in mapped.column_map.mapped_columns] == [0, 1]
     assert all(mc.is_satisfied for mc in mapped.column_map.mapped_columns)
+    events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().splitlines()]
+    score_events = [event for event in events if event["type"] == "engine.detector.column.score"]
+    assert len(score_events) == 2
+    first = score_events[0]["payload"]
+    assert first["field"] == "alpha"
+    assert first["chosen"]["source_column_index"] == 0
 
 
 def test_tie_breaks_by_manifest_order_and_column_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
     manifest_path = _write_manifest(pkg_dir, order=["first", "second"])
     detector_body = """
-def detect_equal(*, header, **_):
+def detect_equal(*, header, logger, event_emitter, **_):
     return 0.6
 """
     _write_column_detector(pkg_dir, "first", detector_body)
     _write_column_detector(pkg_dir, "second", detector_body)
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -136,7 +159,13 @@ def detect_equal(*, header, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     chosen_columns = {mc.field: mc.source_column_index for mc in mapped.column_map.mapped_columns if mc.is_satisfied}
     assert chosen_columns == {"first": 0, "second": 1}
 
@@ -150,14 +179,15 @@ def test_below_threshold_field_marks_unmapped_and_preserves_unmapped_columns(
         pkg_dir,
         "only_field",
         """
-def detect_low(*, header, **_):
+def detect_low(*, header, logger, event_emitter, **_):
     return 0.2
 """,
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -170,7 +200,13 @@ def detect_low(*, header, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     field_mapping = mapped.column_map.mapped_columns[0]
     assert field_mapping.field == "only_field"
     assert field_mapping.is_satisfied is False
