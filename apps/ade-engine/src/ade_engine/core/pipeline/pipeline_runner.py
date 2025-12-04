@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 from ade_engine.config.hook_registry import HookStage
 from ade_engine.config.loader import ConfigRuntime
@@ -14,7 +14,7 @@ from ade_engine.core.pipeline.mapping import map_extracted_tables
 from ade_engine.core.pipeline.normalize import normalize_table
 from ade_engine.core.pipeline.summary_builder import SummaryAggregator
 from ade_engine.core.pipeline.write import write_workbook
-from ade_engine.core.types import NormalizedTable, RunContext, RunRequest
+from ade_engine.core.types import NormalizedTable, RunContext, RunPhase, RunRequest
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 
 
@@ -33,12 +33,18 @@ def execute_pipeline(
     input_file_name: str | None,
     summary_aggregator: SummaryAggregator | None = None,
     config_event_emitter: ConfigEventEmitter | None = None,
+    on_phase_change: Callable[[RunPhase], None] | None = None,
 ) -> tuple[list[NormalizedTable], tuple[Path, ...], tuple[str, ...]]:
     """Run all pipeline stages and return normalized tables and outputs."""
 
     config_emitter = config_event_emitter or event_emitter.config_emitter()
 
-    event_emitter.phase_start("extracting")
+    def _enter_phase(phase: RunPhase) -> None:
+        if on_phase_change:
+            on_phase_change(phase)
+        event_emitter.phase_start(phase.value)
+
+    _enter_phase(RunPhase.EXTRACTING)
     raw_tables = extract_raw_tables(
         request=request,
         run=run,
@@ -61,7 +67,7 @@ def execute_pipeline(
     )
     raw_tables = extract_context.tables or []
 
-    event_emitter.phase_start("mapping")
+    _enter_phase(RunPhase.MAPPING)
     mapped_tables = map_extracted_tables(
         tables=raw_tables,
         runtime=runtime,
@@ -84,7 +90,7 @@ def execute_pipeline(
     )
     mapped_tables = mapping_context.tables or []
 
-    event_emitter.phase_start("normalizing")
+    _enter_phase(RunPhase.NORMALIZING)
     normalized_tables = [
         normalize_table(
             ctx=run,
@@ -105,7 +111,7 @@ def execute_pipeline(
     all_issues = [issue for table in normalized_tables for issue in table.validation_issues]
     event_emitter.validation_summary(all_issues)
 
-    event_emitter.phase_start("writing_output")
+    _enter_phase(RunPhase.WRITING_OUTPUT)
     processed_files = _collect_processed_files(normalized_tables)
     output_path = write_workbook(
         ctx=run,

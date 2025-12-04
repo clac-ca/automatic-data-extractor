@@ -135,6 +135,10 @@ class Engine:
                 config_version=runtime.manifest.model.version,
             )
 
+            def mark_phase(new_phase: RunPhase) -> None:
+                nonlocal phase
+                phase = new_phase
+
             phase = RunPhase.EXTRACTING
             normalized_tables, output_paths, processed_files = execute_pipeline(
                 request=normalized_request,
@@ -145,6 +149,7 @@ class Engine:
                 input_file_name=input_file_name,
                 summary_aggregator=summary_aggregator,
                 config_event_emitter=config_event_emitter,
+                on_phase_change=mark_phase,
             )
 
             phase = RunPhase.COMPLETED
@@ -261,9 +266,9 @@ class Engine:
                     ),
                 )
                 .run_id,
-                output_paths=(),
+                output_paths=output_paths,
                 logs_dir=logs_dir if "logs_dir" in locals() else Path("logs"),
-                processed_files=(),
+                processed_files=processed_files,
             )
 
 

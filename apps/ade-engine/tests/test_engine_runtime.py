@@ -6,6 +6,7 @@ import pytest
 from openpyxl import load_workbook
 
 from ade_engine import Engine, RunRequest, RunStatus, run
+from ade_engine.core.types import RunPhase
 from ade_engine.schemas.telemetry import AdeEvent
 from fixtures.config_factories import clear_config_import, make_minimal_config
 from fixtures.sample_inputs import (
@@ -133,3 +134,28 @@ def test_engine_large_input_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     assert result.status is RunStatus.SUCCEEDED
     assert Path(result.output_paths[0]).exists()
+
+
+def test_engine_reports_pipeline_stage_on_mapping_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = make_minimal_config(tmp_path, monkeypatch)
+    failing_detector = config.package_dir / "column_detectors" / "member_id.py"
+    failing_detector.write_text(
+        """
+def detect_header(*, header, **_):
+    raise RuntimeError("boom")
+"""
+    )
+
+    source = sample_csv(tmp_path)
+    request = RunRequest(
+        manifest_path=config.manifest_path,
+        input_file=source,
+        output_dir=tmp_path / "out",
+        logs_dir=tmp_path / "logs",
+    )
+
+    result = Engine().run(request)
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.stage is RunPhase.MAPPING

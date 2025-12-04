@@ -112,7 +112,8 @@ def write_workbook(
             sheet.append(header)
 
         for row in table.rows:
-            sheet.append(row)
+            row_values = row if append_unmapped else row[: len(header)]
+            sheet.append(row_values)
 
     before_save_context = run_hooks(
         HookStage.ON_BEFORE_SAVE,
