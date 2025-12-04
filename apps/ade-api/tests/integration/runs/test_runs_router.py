@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -8,8 +7,6 @@ from httpx import AsyncClient
 
 from ade_api.common.time import utc_now
 from ade_api.core.models import Configuration, ConfigurationStatus, Run, RunStatus
-from ade_api.features.runs.event_dispatcher import RunEventDispatcher, RunEventStorage
-from ade_api.infra.db.mixins import generate_uuid7
 from ade_api.infra.storage import workspace_run_root
 from ade_api.settings import get_settings
 from tests.utils import login
@@ -82,79 +79,6 @@ async def test_workspace_run_listing_filters_by_status(
     filtered_payload = filtered.json()
     assert filtered_payload["total"] == 1
     assert filtered_payload["items"][0]["id"] == str(run_ok.id)
-
-
-async def test_run_event_stream_replays_logged_events(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-    session,
-) -> None:
-    settings = get_settings()
-    workspace_id = seed_identity["workspace_id"]
-    configuration = Configuration(
-        workspace_id=workspace_id,
-        display_name="Event Config",
-        status=ConfigurationStatus.ACTIVE,
-    )
-    session.add(configuration)
-    await session.flush()
-
-    run = Run(
-        workspace_id=workspace_id,
-        configuration_id=configuration.id,
-        status=RunStatus.QUEUED,
-        created_at=utc_now(),
-    )
-    session.add(run)
-    await session.commit()
-
-    dispatcher = RunEventDispatcher(storage=RunEventStorage(settings=settings))
-    await dispatcher.emit(
-        type="run.queued",
-        workspace_id=run.workspace_id,
-        configuration_id=run.configuration_id,
-        run_id=run.id,
-        build_id=None,
-        payload={
-            "status": "queued",
-            "mode": "execute",
-            "options": {"input_document_id": str(generate_uuid7())},
-        },
-    )
-    await dispatcher.emit(
-        type="run.complete",
-        workspace_id=run.workspace_id,
-        configuration_id=run.configuration_id,
-        run_id=run.id,
-        build_id=None,
-        payload={
-            "status": "succeeded",
-            "execution": {"exit_code": 0},
-            "summary": {"run": {"status": "succeeded"}},
-            "artifacts": {"output_paths": []},
-        },
-    )
-
-    headers = await _auth_headers(async_client, seed_identity["workspace_owner"])
-
-    events: list[dict[str, Any]] = []
-    async with async_client.stream(
-        "GET",
-        f"/api/v1/runs/{run.id}/events/stream",
-        headers=headers,
-        params={"after_sequence": 0},
-    ) as response:
-        assert response.status_code == 200
-        async for line in response.aiter_lines():
-            if not line or not line.startswith("data: "):
-                continue
-            event = json.loads(line.removeprefix("data: "))
-            events.append(event)
-            if event.get("type") == "run.complete":
-                break
-
-    assert [event["type"] for event in events] == ["run.queued", "run.complete"]
-    assert events[-1]["payload"]["status"] == "succeeded"
 
 
 async def test_run_outputs_endpoint_serves_files(

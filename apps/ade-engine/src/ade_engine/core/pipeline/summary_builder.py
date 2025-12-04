@@ -126,17 +126,8 @@ class SummaryAggregator:
         self.engine_version = engine_version
         self.config_version = config_version or (self.manifest.version if self.manifest else None)
 
-        metadata = run.metadata or {}
-        self.workspace_id = _coerce_uuid(metadata.get("workspace_id"))
-        self.configuration_id = _coerce_uuid(metadata.get("configuration_id"))
-        self.run_id = _coerce_uuid(metadata.get("run_id")) or run.run_id
-        self.build_id = _coerce_uuid(metadata.get("build_id"))
-        self.env_reason = metadata.get("env_reason")
-        env_reused = metadata.get("env_reused")
-        if isinstance(env_reused, str):
-            self.env_reused = env_reused.lower() in {"1", "true", "yes", "y"}
-        else:
-            self.env_reused = env_reused
+        self.workspace_id, self.configuration_id, self.run_id, self.build_id = self._hydrate_ids(run)
+        self.env_reason, self.env_reused = self._resolve_environment_metadata(run)
 
         self._field_catalog: dict[str, _FieldInfo] = {}
         self._field_order: list[str] = []
@@ -147,37 +138,10 @@ class SummaryAggregator:
 
         self._file_states: dict[str, _ScopeState] = {}
         self._sheet_states: dict[tuple[str, str | None], _ScopeState] = {}
-        self._run_state = _ScopeState(
-            id="run",
-            parent_ids={"run_id": str(self.run_id)},
-            source={
-                "run_id": str(self.run_id),
-                "workspace_id": str(self.workspace_id) if self.workspace_id else None,
-                "configuration_id": str(self.configuration_id) if self.configuration_id else None,
-                "build_id": str(self.build_id) if self.build_id else None,
-                "engine_version": engine_version,
-                "config_version": self.config_version,
-                "started_at": run.started_at,
-                "env_reason": self.env_reason,
-                "env_reused": self.env_reused,
-            },
-            field_states={},
-        )
+        self._run_state = self._build_run_scope(run)
 
-        if self.manifest:
-            for field_name in self.manifest.columns.order:
-                field_model = self.manifest.columns.fields[field_name]
-                self._register_field(field_name, field_model.label, bool(field_model.required))
-        # Make sure the run scope has all catalog fields
-        for name in list(self._field_catalog.keys()):
-            self._run_state.field_states.setdefault(
-                name,
-                _FieldAggState(
-                    field=name,
-                    label=self._field_catalog[name].label,
-                    required=self._field_catalog[name].required,
-                ),
-            )
+        self._register_manifest_fields()
+        self._ensure_run_scope_has_catalog_fields()
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -188,19 +152,8 @@ class SummaryAggregator:
 
         file_path = str(table.mapped.extracted.source_file)
         sheet_name = table.mapped.extracted.source_sheet
-
-        file_state = self._file_states.get(file_path)
-        if file_state is None:
-            file_state = self._create_file_state(file_path)
-            self._file_states[file_path] = file_state
-        sheet_key = (file_path, sheet_name)
-        sheet_state = self._sheet_states.get(sheet_key)
-        if sheet_state is None:
-            sheet_state = self._create_sheet_state(sheet_key, file_state.id, file_path, sheet_name)
-            self._sheet_states[sheet_key] = sheet_state
-            file_state.sheet_ids.append(sheet_state.id)
-            if sheet_state.id not in self._run_state.sheet_ids:
-                self._run_state.sheet_ids.append(sheet_state.id)
+        file_state = self._get_or_create_file_state(file_path)
+        sheet_state = self._get_or_create_sheet_state(file_path, sheet_name, file_state)
 
         table_id = f"tbl_{self._table_counter}"
         self._table_counter += 1
@@ -224,6 +177,88 @@ class SummaryAggregator:
             self._run_state.file_ids.append(file_state.id)
 
         return table_summary
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers
+    # ------------------------------------------------------------------ #
+
+    def _hydrate_ids(self, run: RunContext) -> tuple[UUID | None, UUID | None, UUID, UUID | None]:
+        metadata = run.metadata or {}
+        workspace_id = _coerce_uuid(metadata.get("workspace_id"))
+        configuration_id = _coerce_uuid(metadata.get("configuration_id"))
+        run_id = _coerce_uuid(metadata.get("run_id")) or run.run_id
+        build_id = _coerce_uuid(metadata.get("build_id"))
+        return workspace_id, configuration_id, run_id, build_id
+
+    def _resolve_environment_metadata(self, run: RunContext) -> tuple[str | None, bool | None]:
+        metadata = run.metadata or {}
+        env_reason = metadata.get("env_reason")
+        env_reused = metadata.get("env_reused")
+        if isinstance(env_reused, str):
+            env_reused = env_reused.lower() in {"1", "true", "yes", "y"}
+        return env_reason, env_reused
+
+    def _build_run_scope(self, run: RunContext) -> _ScopeState:
+        return _ScopeState(
+            id="run",
+            parent_ids={"run_id": str(self.run_id)},
+            source={
+                "run_id": str(self.run_id),
+                "workspace_id": str(self.workspace_id) if self.workspace_id else None,
+                "configuration_id": str(self.configuration_id) if self.configuration_id else None,
+                "build_id": str(self.build_id) if self.build_id else None,
+                "engine_version": self.engine_version,
+                "config_version": self.config_version,
+                "started_at": run.started_at,
+                "env_reason": self.env_reason,
+                "env_reused": self.env_reused,
+            },
+            field_states={},
+        )
+
+    def _register_manifest_fields(self) -> None:
+        if not self.manifest:
+            return
+        for field_name in self.manifest.columns.order:
+            field_model = self.manifest.columns.fields[field_name]
+            self._register_field(field_name, field_model.label, bool(field_model.required))
+
+    def _ensure_run_scope_has_catalog_fields(self) -> None:
+        for name, info in self._field_catalog.items():
+            self._run_state.field_states.setdefault(
+                name,
+                _FieldAggState(
+                    field=name,
+                    label=info.label,
+                    required=info.required,
+                ),
+            )
+
+    def _get_or_create_file_state(self, file_path: str) -> _ScopeState:
+        file_state = self._file_states.get(file_path)
+        if file_state is not None:
+            return file_state
+        created = self._create_file_state(file_path)
+        self._file_states[file_path] = created
+        return created
+
+    def _get_or_create_sheet_state(
+        self,
+        file_path: str,
+        sheet_name: str | None,
+        file_state: _ScopeState,
+    ) -> _ScopeState:
+        sheet_key = (file_path, sheet_name)
+        sheet_state = self._sheet_states.get(sheet_key)
+        if sheet_state is not None:
+            return sheet_state
+
+        created = self._create_sheet_state(sheet_key, file_state.id, file_path, sheet_name)
+        self._sheet_states[sheet_key] = created
+        file_state.sheet_ids.append(created.id)
+        if created.id not in self._run_state.sheet_ids:
+            self._run_state.sheet_ids.append(created.id)
+        return created
 
     def finalize(
         self,

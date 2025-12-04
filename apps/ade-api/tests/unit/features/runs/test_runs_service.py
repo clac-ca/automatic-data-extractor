@@ -366,8 +366,15 @@ async def test_validate_only_short_circuits_and_persists_summary(
     assert event_types[0] == "run.queued"
     assert event_types[-1] == "run.complete"
     completed_payload = events[-1].payload
-    summary = completed_payload.summary if completed_payload else None  # type: ignore[attr-defined]
-    assert summary and summary.get("run", {}).get("failure_message") == "Validation-only execution"
+    assert completed_payload is not None
+    payload_dict = (
+        completed_payload.model_dump()
+        if hasattr(completed_payload, "model_dump")
+        else dict(completed_payload)
+    )
+    assert payload_dict.get("summary") is None
+    failure = payload_dict.get("failure")
+    assert failure and failure.get("message") == "Validation-only execution"
 
     refreshed = await service.get_run(run.id)
     assert refreshed is not None
