@@ -1,84 +1,151 @@
-"""Detect simple first-name columns and normalize casing."""
+"""
+Example: Readable first-name detector showing BOTH return styles.
+
+Detectors may return:
+    • A float → applies only to the field being detected (e.g., 0.8 for first_name)
+    • A dict → lets you influence multiple fields (e.g., {"first_name": 1.0, "last_name": -0.5})
+
+This example demonstrates both patterns.
+"""
 
 from __future__ import annotations
-
 from typing import Any
 
-_FIELD = "first_name"
+# A small demo list of common first names. Real detectors often use much larger sets.
+COMMON_FIRST_NAMES = {
+    "james", "mary", "john", "patricia", "robert", "jennifer",
+    "michael", "linda", "william", "elizabeth", "david", "barbara",
+    "richard", "susan", "joseph", "karen",
+}
 
+# ---------------------------------------------------------------------------
+# HEADER-BASED DETECTOR
+# ---------------------------------------------------------------------------
 
-def detect_first_name(
+def detect_first_name_from_header(
     *,
-    run: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
-    raw_table: Any | None = None,
-    column_index: int,
     header: str | None,
+    logger=None,
+    event_emitter=None,
+    **_: Any,
+) -> dict[str, float]:
+    """
+    Score headers that look like first-name columns.
+
+    This detector returns a DICT so it can boost first_name *and* optionally
+    penalize last_name (or vice-versa). This is useful when one header
+    definition implies the other.
+    """
+
+    if not header:
+        return {"first_name": 0.0, "last_name": 0.0}
+
+    lowered = header.strip().lower()
+
+    # Strong indicators of first name
+    if any(word in lowered for word in ("first", "given", "fname")):
+        logger and logger.debug("Detected first-name header: %r", header)
+        return {"first_name": 1.0, "last_name": -0.5}
+
+    # Strong indicators of last name — push that field up instead
+    if any(word in lowered for word in ("last", "surname", "family", "lname")):
+        return {"first_name": -0.5, "last_name": 1.0}
+
+    # Generic "name" columns: treat as ambiguous
+    if "name" in lowered:
+        return {"first_name": 0.25, "last_name": 0.25}
+
+    return {"first_name": 0.0, "last_name": 0.0}
+
+# ---------------------------------------------------------------------------
+# VALUE-BASED DETECTOR
+# ---------------------------------------------------------------------------
+
+def detect_first_name_from_values(
+    *,
     column_values_sample: list[Any],
-    column_values: list[Any],
-    manifest: dict[str, Any] | None = None,
-    logger,
-    event_emitter,
+    logger=None,
+    event_emitter=None,
     **_: Any,
 ) -> float:
     """
-    Heuristic: header mentions 'first name' or 'fname', or values look like short names.
+    Score column values that *look* like first names.
 
-    Args:
-        run/state: run metadata and shared cache available for scoring.
-        header: cleaned header text for this column (if present).
-        column_values_sample: stratified sample of column values.
-        column_index: full table context and column position.
-        logger/event_emitter: logger for diagnostics; event_emitter for structured run events.
-        **_: extra future-proof keywords.
+    This detector returns a FLOAT, affecting only 'first_name'.
+
+    Heuristics demonstrated:
+      • Simple one-token strings → likely first names
+      • Matching common first names → strong signal
+      • Values with comma or multi-word names → penalized (likely full names)
     """
-    sample_values = column_values_sample or []
-    score = 0.0
-    if header:
-        lowered = header.strip().lower()
-        if "first" in lowered and "name" in lowered:
-            score = 0.9
-        elif lowered.startswith("fname"):
-            score = 0.7
 
-    if score == 0.0 and sample_values:
-        total_length = sum(
-            len(str(value).strip()) for value in sample_values if value
-        )
-        non_empty = max(1, sum(1 for value in sample_values if value))
-        avg_length = total_length / non_empty
-        if 2 <= avg_length <= 12:
-            score = 0.4
+    if not column_values_sample:
+        return 0.0
 
-    return round(score, 2)
+    simple_firsts = 0
+    common_hits = 0
+    full_names = 0
 
+    for value in column_values_sample:
+        if not isinstance(value, str):
+            continue
+
+        cleaned = value.strip()
+        if not cleaned or "@" in cleaned:  # ignore empty and emails
+            continue
+
+        # “Last, First” or multi-token → treat as full names
+        if "," in cleaned:
+            full_names += 1
+            continue
+
+        tokens = cleaned.split()
+
+        # One-word candidates → likely first names
+        if len(tokens) == 1 and 2 <= len(tokens[0]) <= 14:
+            simple_firsts += 1
+            if tokens[0].lower() in COMMON_FIRST_NAMES:
+                common_hits += 1
+
+        # More than one token → full name
+        elif len(tokens) >= 2:
+            full_names += 1
+
+    # Strongest signals
+    if common_hits >= 3:
+        return 1.0
+
+    if simple_firsts >= 3 and simple_firsts > full_names:
+        return 0.75
+
+    # Column looks more like full names
+    if full_names > simple_firsts:
+        return -0.3
+
+    # At least some plausible first names
+    if simple_firsts:
+        return 0.4
+
+    return 0.0
+
+# ---------------------------------------------------------------------------
+# TRANSFORM FUNCTION
+# ---------------------------------------------------------------------------
 
 def transform(
     *,
-    run: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
-    row_index: int,
-    field_name: str,
     value: Any,
-    row: dict[str, Any],
-    field_config: dict[str, Any] | None = None,
-    manifest: dict[str, Any] | None = None,
-    logger,
-    event_emitter,
+    logger=None,
+    event_emitter=None,
     **_: Any,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
-    Strip whitespace and title-case first names.
+    Example transform: standardize first names.
 
-    Args:
-        run/state: run metadata and shared cache available during transforms.
-        row_index: 1-based row index for diagnostics.
-        field_name: canonical field being updated.
-        value: raw canonical value before normalization.
-        row: full canonical row dict for cross-field work.
-        manifest/env: manifest/env overrides if you need extra hints.
-        logger: logger for diagnostics.
+    Return format must always be a dict keyed by the field.
     """
+
     if value in (None, ""):
-        return {field_name: None}
-    return {field_name: str(value).strip().title()}
+        return {"first_name": None}
+
+    return {"first_name": str(value).strip().title() or None}

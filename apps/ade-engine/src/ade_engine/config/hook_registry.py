@@ -61,10 +61,6 @@ class HookRegistry(dict[HookStage, list[Callable[..., Any]]]):
         if not any(param.kind is inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
             raise ConfigError(f"{label} must accept **_ for forwards compatibility")
 
-        missing = [name for name in ("logger", "event_emitter") if name not in signature.parameters]
-        if missing:
-            raise ConfigError(f"{label} must accept logger and event_emitter (missing: {', '.join(missing)})")
-
     @classmethod
     def from_manifest(cls, *, package: ModuleType, manifest: ManifestContext) -> "HookRegistry":
         registry = cls()

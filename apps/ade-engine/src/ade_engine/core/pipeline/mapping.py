@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from ade_engine.config.loader import ConfigRuntime
 from ade_engine.infra.telemetry import EventEmitter
@@ -84,7 +84,16 @@ def _score_field(
                 logger=logger,
                 event_emitter=event_emitter,
             )
-            delta = float(result) if result is not None else 0.0
+
+            delta = 0.0
+            if isinstance(result, Mapping):
+                scores_map = result.get("scores", result)
+                if isinstance(scores_map, Mapping):
+                    delta = float(scores_map.get(field, 0.0) or 0.0)
+                else:  # fallback to numeric-like payload
+                    delta = float(scores_map) if scores_map is not None else 0.0
+            else:
+                delta = float(result) if result is not None else 0.0
             contributions.append(
                 ScoreContribution(field=field, detector=f"{module.module.__name__}.{detector.__name__}", delta=delta)
             )

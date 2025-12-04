@@ -73,15 +73,15 @@ def test_load_config_runtime_happy_path(tmp_path: Path, monkeypatch: pytest.Monk
     (detectors_dir / "__init__.py").write_text("")
     (detectors_dir / "email.py").write_text(
         """
-def detect_header(*, column_index, header, logger, event_emitter, **_):
+def detect_header(*, column_index, header, logger=None, event_emitter=None, **_):
     return 0.75
 
 
-def transform(*, value, logger, event_emitter, **_):
+def transform(*, value, logger=None, event_emitter=None, **_):
     return value
 
 
-def validate(*, value, logger, event_emitter, **_):
+def validate(*, value, logger=None, event_emitter=None, **_):
     return None
 """
     )
