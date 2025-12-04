@@ -30,7 +30,7 @@ def run(
     tables: list[Any] | None = None,   # typically List[MappedTable]
     run: Any | None = None,
     state: dict[str, Any] | None = None,
-    file_names: tuple[str, ...] | None = None,
+    input_file_name: str | None = None,
     manifest: Any | None = None,
     logger=None,
     event_emitter=None,

@@ -33,7 +33,7 @@ def run(
     workbook: Any | None = None,        # openpyxl Workbook
     tables: list[Any] | None = None,    # NormalizedTable[]
     run: Any | None = None,
-    file_names: tuple[str, ...] | None = None,
+    input_file_name: str | None = None,
     manifest: Any | None = None,
     state: dict[str, Any] | None = None,
     logger=None,

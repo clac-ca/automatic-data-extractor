@@ -253,7 +253,7 @@ from ade_engine import Engine, run, RunRequest
 
 result = run(
     RunRequest(
-        input_files=[Path("input.xlsx")],
+        input_file=Path("input.xlsx"),
         output_dir=Path("output"),
         logs_dir=Path("logs"),
     )

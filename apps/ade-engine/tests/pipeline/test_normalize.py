@@ -64,7 +64,7 @@ def _write_column_detector(pkg_dir: Path, field: str, body: str) -> None:
 
 def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunContext:
     paths = RunPaths(
-        input_dir=request.input_dir or tmp_path,
+        input_file=request.input_file or tmp_path / "input.csv",
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -118,7 +118,7 @@ def transform(*, value, logger, event_emitter, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
     engine_emitter, config_emitter = _event_emitters(run)
 
@@ -175,7 +175,7 @@ def validate(*, value, row_index, logger, event_emitter, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
     engine_emitter, config_emitter = _event_emitters(run)
 
@@ -227,7 +227,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
     engine_emitter, config_emitter = _event_emitters(run)
 

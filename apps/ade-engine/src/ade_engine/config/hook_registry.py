@@ -34,7 +34,7 @@ class HookContext:
 
     run: RunContext
     state: dict[str, Any]
-    file_names: tuple[str, ...] | None
+    input_file_name: str | None
     manifest: ManifestContext
     tables: list[ExtractedTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None

@@ -193,7 +193,7 @@ def detect_*(
     state,
     row_index: int,
     row_values: list,
-    file_name: str | None,
+    input_file_name: str | None,
     logger,
     **_,
 ) -> dict:
@@ -204,7 +204,7 @@ def detect_*(
 - `state` — mutable dict that all detectors/transforms/validators share; great for caching derived info.
 - `row_index` — 1-based row number as streamed from the sheet.
 - `row_values` — raw cell values from that spreadsheet row.
-- `file_name` — basename of the current source file.
+- `input_file_name` — basename of the current source file.
 - `logger` — run-scoped `logging.Logger`.
 - Return `{"scores": {"header": float}}` or `{"scores": {"data": float}}` depending on what you are voting for.
 
@@ -216,7 +216,7 @@ def detect_*(
     run,
     state,
     extracted_table,
-    file_name: str | None,
+    input_file_name: str | None,
     column_index: int,
     header: str | None,
     column_values: list,
@@ -229,7 +229,7 @@ def detect_*(
 ```
 
 - `extracted_table` — `ExtractedTable` for context (header + rows + source metadata). Also provided as `raw_table`/`unmapped_table` for backward compatibility.
-- `file_name` — basename of the source file (also available via `extracted_table.source_file`).
+- `input_file_name` — basename of the source file (also available via `extracted_table.source_file.name`).
 - `column_index` — 1-based index into `extracted_table.header_row`.
 - `header` — cleaned header text or `None`.
 - `column_values_sample` — stratified slice of the column (size chosen in the manifest); use this first for quick scoring.
@@ -290,7 +290,7 @@ def run(
     *,
     run,
     state,
-    file_names: tuple[str, ...] | None,
+    input_file_name: str | None,
     manifest,
     tables=None,
     workbook=None,
@@ -302,7 +302,7 @@ def run(
     ...
 ```
 
-- `file_names` — basenames of the files being processed (if known).
+- `input_file_name` — basename of the file being processed.
 - `tables` — varies by stage (`ExtractedTable`, `MappedTable`, or `NormalizedTable`).
 - `workbook` — provided during `on_before_save`.
 - `result` — provided during `on_run_end`.

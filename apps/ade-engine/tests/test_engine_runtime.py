@@ -32,7 +32,7 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
         metadata={"test_case": "end_to_end"},
@@ -65,7 +65,7 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     request = RunRequest(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -85,7 +85,7 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -126,7 +126,7 @@ def test_engine_large_input_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
     result = run(
         manifest_path=config.manifest_path,
-        input_files=[source],
+        input_file=source,
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )

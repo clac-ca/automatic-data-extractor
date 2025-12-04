@@ -6,7 +6,7 @@ from __future__ import annotations
 def detect_header(
     *,
     row_index: int,
-    file_name: str | None = None,
+    input_file_name: str | None = None,
     manifest=None,
     logger=None,
     event_emitter=None,
@@ -19,7 +19,7 @@ def detect_header(
 def detect_data(
     *,
     row_index: int,
-    file_name: str | None = None,
+    input_file_name: str | None = None,
     manifest=None,
     logger=None,
     event_emitter=None,

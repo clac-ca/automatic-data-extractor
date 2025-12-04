@@ -183,12 +183,10 @@ Key tests:
 
 * `RunRequest` validation:
 
-  * Error if both `input_files` and `input_dir` are provided.
-  * Error if neither is provided.
+  * Error if `input_file` is missing.
 * `RunPaths` resolution:
 
-  * Correct derivation of `input_dir`, `output_dir`, and `logs_dir` from
-    `RunRequest`.
+  * Correct derivation of `input_file`, `output_dir`, and `logs_dir` from `RunRequest`.
   * Directories are created if missing.
 * `Engine.run` happy path:
 
@@ -233,10 +231,6 @@ Key tests:
 
 Key tests:
 
-* `list_input_files`:
-
-  * Discovers only supported extensions.
-  * Returns a predictable sort order.
 * CSV reading:
 
   * Proper handling of UTF‑8 with/without BOM.
@@ -339,7 +333,7 @@ Typical flow in `test_engine_runtime.py`:
 
    result = run(
        config_package="ade_config",
-       input_files=[input_path],
+       input_file=input_path,
        output_dir=tmp_path / "output",
        logs_dir=tmp_path / "logs",
        metadata={"test_case": "basic_e2e"},

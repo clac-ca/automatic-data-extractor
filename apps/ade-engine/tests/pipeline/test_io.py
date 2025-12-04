@@ -5,32 +5,7 @@ import pytest
 from openpyxl import Workbook
 
 from ade_engine.core.errors import InputError
-from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows, list_input_files
-
-
-def test_list_input_files_filters_hidden_and_sorts(tmp_path: Path) -> None:
-    csv_path = tmp_path / "b.csv"
-    csv_path.write_text("1,2\n", encoding="utf-8")
-
-    xlsx_path = tmp_path / "a.xlsx"
-    xlsx_path.write_text("", encoding="utf-8")
-
-    (tmp_path / ".ignore.csv").write_text("", encoding="utf-8")
-    nested_dir = tmp_path / "nested"
-    nested_dir.mkdir()
-    (nested_dir / "inner.csv").write_text("", encoding="utf-8")
-
-    discovered = list_input_files(tmp_path)
-
-    assert discovered == sorted([xlsx_path.resolve(), csv_path.resolve()])
-
-
-def test_list_input_files_raises_on_unsupported_extension(tmp_path: Path) -> None:
-    (tmp_path / "valid.csv").write_text("", encoding="utf-8")
-    (tmp_path / "bad.xls").write_text("", encoding="utf-8")
-
-    with pytest.raises(InputError):
-        list_input_files(tmp_path)
+from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows
 
 
 def test_iter_csv_rows_handles_bom_and_row_indices(tmp_path: Path) -> None:

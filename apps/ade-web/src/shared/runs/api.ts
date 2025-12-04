@@ -89,6 +89,7 @@ export async function* streamRunEvents(
     reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let shouldClose = false;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -103,9 +104,13 @@ export async function* streamRunEvents(
           continue;
         }
         yield event;
+        if (event.type === "run.complete") {
+          shouldClose = true;
+          break;
+        }
       }
 
-      if (done) {
+      if (done || shouldClose) {
         const finalEvent = parseSseEvent(buffer);
         if (finalEvent) {
           yield finalEvent;

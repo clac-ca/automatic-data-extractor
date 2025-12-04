@@ -16,26 +16,6 @@ def _ensure_supported(path: Path) -> None:
         raise InputError(f"File `{path}` has unsupported extension `{path.suffix}`")
 
 
-def list_input_files(input_dir: Path) -> list[Path]:
-    """Return a deterministic list of supported source files under ``input_dir``."""
-
-    if not input_dir.exists():
-        raise InputError(f"Input directory does not exist: {input_dir}")
-    if not input_dir.is_dir():
-        raise InputError(f"Input path is not a directory: {input_dir}")
-
-    discovered: list[Path] = []
-    for child in input_dir.iterdir():
-        if child.name.startswith("."):
-            continue
-        if not child.is_file():
-            continue
-        _ensure_supported(child)
-        discovered.append(child.resolve())
-
-    return sorted(discovered)
-
-
 def iter_csv_rows(path: Path) -> Iterator[tuple[int, list]]:
     """Stream 1-based row index and values from a CSV file."""
 

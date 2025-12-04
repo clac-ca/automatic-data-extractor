@@ -21,31 +21,28 @@ from ade_engine.core.pipeline.summary_builder import SummaryAggregator
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
 from ade_engine.infra.logging import build_run_logger
 from ade_engine.infra.event_emitter import EngineEventEmitter
-from ade_engine.infra.io import list_input_files
 from ade_engine.infra.telemetry import TelemetryConfig
 
 
-def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path, Path]:
-    if bool(request.input_files) == bool(request.input_dir):
-        msg = "RunRequest must include exactly one of input_files or input_dir"
+def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path]:
+    if request.input_file is None:
+        msg = "RunRequest must include input_file"
         raise InputError(msg)
 
-    input_files = tuple(Path(path).resolve() for path in request.input_files or [])
-    input_dir = Path(request.input_dir).resolve() if request.input_dir else input_files[0].parent
-    output_dir = Path(request.output_dir).resolve() if request.output_dir else input_dir / "output"
-    logs_dir = Path(request.logs_dir).resolve() if request.logs_dir else input_dir / "logs"
+    input_file = Path(request.input_file).resolve()
+    output_dir = Path(request.output_dir).resolve() if request.output_dir else input_file.parent / "output"
+    logs_dir = Path(request.logs_dir).resolve() if request.logs_dir else input_file.parent / "logs"
 
     normalized = RunRequest(
         config_package=request.config_package,
         manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
-        input_files=input_files if input_files else None,
-        input_dir=input_dir,
+        input_file=input_file,
         input_sheets=request.input_sheets,
         output_dir=output_dir,
         logs_dir=logs_dir,
         metadata=dict(request.metadata) if request.metadata else {},
     )
-    return normalized, input_dir, output_dir, logs_dir
+    return normalized, output_dir, logs_dir
 
 
 def _ensure_dirs(output_dir: Path, logs_dir: Path) -> None:
@@ -53,12 +50,8 @@ def _ensure_dirs(output_dir: Path, logs_dir: Path) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _input_file_names(request: RunRequest) -> tuple[str, ...] | None:
-    if request.input_files:
-        return tuple(sorted({path.name for path in request.input_files}))
-    if request.input_dir:
-        return tuple(sorted({path.name for path in list_input_files(request.input_dir)}))
-    return None
+def _input_file_name(request: RunRequest) -> str:
+    return Path(request.input_file).name if request.input_file else ""
 
 
 class Engine:
@@ -79,17 +72,22 @@ class Engine:
         event_emitter: EngineEventEmitter | None = None
         summary_aggregator: SummaryAggregator | None = None
         config_event_emitter = None
+        input_file_path: Path | None = None
+        input_file_name: str | None = None
 
         try:
-            normalized_request, input_dir, output_dir, logs_dir = _resolve_paths(req)
+            normalized_request, output_dir, logs_dir = _resolve_paths(req)
             _ensure_dirs(output_dir, logs_dir)
+            assert normalized_request.input_file is not None
+            input_file_path = normalized_request.input_file
+            input_file_name = _input_file_name(normalized_request)
 
             run_ctx = RunContext(
                 run_id=uuid7(),
                 metadata=dict(normalized_request.metadata) if normalized_request.metadata else {},
                 manifest=None,
                 paths=RunPaths(
-                    input_dir=input_dir,
+                    input_file=input_file_path,
                     output_dir=output_dir,
                     logs_dir=logs_dir,
                 ),
@@ -105,8 +103,6 @@ class Engine:
                     "this engine requires script_api_version=3. Update ade_config call signatures to accept "
                     "logger and event_emitter."
                 )
-            input_file_names = _input_file_names(normalized_request)
-
             event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
             event_emitter = EngineEventEmitter(run=run_ctx, event_sink=event_sink, source="engine")
             config_event_emitter = event_emitter.config_emitter()
@@ -123,7 +119,7 @@ class Engine:
                 HookStage.ON_RUN_START,
                 runtime.hooks,
                 run=run_ctx,
-                file_names=input_file_names,
+                input_file_name=input_file_name,
                 manifest=runtime.manifest,
                 tables=None,
                 workbook=None,
@@ -146,7 +142,7 @@ class Engine:
                 runtime=runtime,
                 logger=run_logger,
                 event_emitter=event_emitter,
-                input_file_names=input_file_names,
+                input_file_name=input_file_name,
                 summary_aggregator=summary_aggregator,
                 config_event_emitter=config_event_emitter,
             )
@@ -167,7 +163,7 @@ class Engine:
                 HookStage.ON_RUN_END,
                 runtime.hooks,
                 run=run_ctx,
-                file_names=processed_files or input_file_names,
+                input_file_name=input_file_name,
                 manifest=runtime.manifest,
                 tables=normalized_tables,
                 workbook=None,

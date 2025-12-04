@@ -81,6 +81,7 @@ def _score_field(
                 extracted_table=raw,
                 unmapped_table=raw,
                 raw_table=raw,
+                input_file_name=raw.source_file.name,
                 file_name=raw.source_file.name,
                 column_index=candidate.index + 1,  # script API is 1-based
                 header=candidate.header,
