@@ -19,7 +19,7 @@ from ade_api.core.models import (
     RunStatus,
     Workspace,
 )
-from ade_api.features.builds.service import BuildExecutionContext
+from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.service import (
     RunExecutionContext,
@@ -95,7 +95,7 @@ async def _build_service(
     *,
     safe_mode: bool = False,
     build_status: BuildStatus = BuildStatus.READY,
-    build_should_run: bool = False,
+    build_decision: BuildDecision = BuildDecision.START_NEW,
     build_events: list[AdeEvent] | None = None,
 ) -> tuple[RunsService, Configuration, Document, FakeBuildsService, Settings]:
     data_root = tmp_path / "data"
@@ -146,8 +146,11 @@ async def _build_service(
         engine_version_hint=None,
         pip_cache_dir=None,
         timeout_seconds=30.0,
-        should_run=build_should_run,
+        decision=build_decision,
         fingerprint="fp",
+        run_id=None,
+        reuse_summary=None,
+        reason=None,
     )
     if build_status is BuildStatus.READY:
         build_ctx = None
@@ -237,7 +240,7 @@ async def test_stream_run_waits_for_build_and_forwards_events(
         session,
         tmp_path,
         build_status=BuildStatus.QUEUED,
-        build_should_run=True,
+        build_decision=BuildDecision.START_NEW,
         build_events=[build_event],
     )
 
