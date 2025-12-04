@@ -200,7 +200,7 @@ Key tests:
 
     * `RunResult.status == "failed"`,
     * `error` is set,
-    * telemetry still records a `run.completed` with `status:"failed"` and error context.
+    * telemetry still records an `engine.complete` with `status:"failed"` and error context.
 
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
@@ -313,7 +313,7 @@ Key tests:
 
   * `FileEventSink` writes well‑formed NDJSON.
   * Run logger and `EventEmitter` respect `min_*_level` thresholds on the configured sinks.
-  * `run.started`, `run.table.summary`, `run.completed` payloads validate against schema.
+  * `engine.start`, `engine.table.summary`, `engine.complete` payloads validate against schema.
 
 ---
 
@@ -350,8 +350,8 @@ Typical flow in `test_engine_runtime.py`:
 
    * `result.status == "succeeded"`.
    * Workbook exists at each `output_paths` entry and is a valid XLSX.
-   * `events.ndjson` exists and contains at least `run.started` and
-     `run.completed` events.
+   * `events.ndjson` exists and contains at least `engine.start` and
+     `engine.complete` events.
 
 ### 5.2 CLI integration
 
@@ -418,7 +418,7 @@ Tests should:
 
   * Every telemetry event envelope has `type`, `created_at`, and payload.
   * `run.table.summary` includes mapping + validation fields.
-  * `run.completed` carries status, outputs, and optional error context.
+  * `engine.complete` carries status, outputs, and optional error context.
 
 If a breaking change to telemetry shapes is necessary, tests should make the
 breakage explicit and force a deliberate version bump.
@@ -481,7 +481,7 @@ Debugging steps:
 2. Check error details in:
 
    * `RunResult.error`,
-   * `events.ndjson` (`run.error` / `run.completed` with failure payload).
+   * `events.ndjson` (`console.line` / `engine.complete` with failure payload).
 3. Add a minimal repro to `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.

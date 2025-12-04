@@ -127,20 +127,20 @@ Note: callers can derive `events.ndjson` as `logs_dir / "events.ndjson"`.
 4. **Run hooks (ON_RUN_START)**: give hooks access to `run`, `manifest`, `logger`, and mutable `state`.
 5. **Extract**: discover and slice tables into `ExtractedTable` objects.
 6. **Map**: score headers and build `MappedTable` objects.
-7. **Normalize**: apply transforms/validators to produce `NormalizedTable` objects; emit `run.table.summary` events that include row counts, mapped/unmapped columns, and validation breakdowns.
+7. **Normalize**: apply transforms/validators to produce `NormalizedTable` objects; emit `engine.table.summary` events that include row counts, mapped/unmapped columns, and validation breakdowns.
 8. **Write outputs**: sort tables, write `normalized.xlsx` to `output_dir`.
-9. **Emit completion**: emit `run.completed` with status, output paths, processed files, and any error payload.
+9. **Emit completion**: emit `engine.table.summary` events as tables finish, aggregate into `engine.sheet.summary`/`engine.file.summary`, emit the final `engine.run.summary`, then emit `engine.complete` with status, output paths, processed files, and any error payload.
 10. **Run hooks (ON_RUN_END)**: allow post-processing with access to `result`, `tables`, `logger`.
 
 Failures are mapped to `RunError` with a consistent `code`/`message`/`stage`
-and surfaced via telemetry and `RunResult.error`. `run.completed` is emitted
+and surfaced via telemetry and `RunResult.error`. `engine.complete` is emitted
 even on failures when a sink is available.
 
 ## 5. Telemetry and run summaries
 
 - The **only engine-owned schema** is `ade.event/v1`, written as NDJSON to `logs_dir/events.ndjson`.
 - Each event includes `workspace_id`/`configuration_id` when present in `RunRequest.metadata`.
-- Downstream services (e.g., `ade-api`) build **run summaries** (`ade.run_summary/v1`) by replaying events and optionally reading outputs. The engine itself does not write run summaries or artifacts.
+- The engine emits the authoritative `RunSummary` as `engine.run.summary` before `engine.complete`; downstream services should persist this payload instead of recomputing from logs.
 
 ## 6. Hooks and extensibility
 
@@ -151,8 +151,9 @@ exposes:
 - `run`, `state`, `manifest`
 - Optional `tables`, `workbook`, `result`
 - `logger` (use `logger.note`, `logger.pipeline_phase`, `logger.record_table`)
+- `event_emitter` (`config.*` namespace) for sparse custom telemetry
 
-Hooks no longer receive artifact or raw event sink objects; telemetry is emitted through the logger only.
+Hooks no longer receive artifact or raw event sink objects; telemetry is emitted through the logger or `event_emitter.custom(...)`.
 
 ## 7. Error handling
 
@@ -160,7 +161,7 @@ Exceptions are mapped to `RunError` using `error_to_run_error` with the
 current `RunPhase`. On failure:
 
 - `RunResult.status` is `failed` and `error` is populated.
-- A `run.completed` event with `status: "failed"` and structured error is emitted when telemetry is available.
+- A `engine.complete` event with `status: "failed"` and structured error is emitted when telemetry is available.
 - `logs_dir` is still returned so callers can inspect partial logs.
 
 ---

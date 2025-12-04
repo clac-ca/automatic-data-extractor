@@ -79,6 +79,7 @@ def detect_something(
     state: dict,
     row_index: int,
     row_values: list,
+    file_name: str | None,
     manifest,
     logger=None,
     event_emitter=None,
@@ -86,6 +87,8 @@ def detect_something(
 ) -> dict:
     return {"scores": {"header": <float_delta>, "data": <float_delta>}}
 ```
+
+`file_name` is the basename of the current source file (useful when heuristics differ by feed/source).
 
 **Return:** a dict with a `scores` mapping (label → delta). The engine sums deltas per label across detectors, then applies thresholds. Keep row detectors cheap—they run for every row.
 
@@ -104,7 +107,8 @@ def detect_something(
     *,
     run,
     state: dict,
-    raw_table,
+    extracted_table,
+    file_name: str | None,
     column_index: int,            # 1-based
     header: str | None,
     column_values: list,
@@ -116,6 +120,9 @@ def detect_something(
 ) -> float | dict:
     ...
 ```
+
+`extracted_table` is the `ExtractedTable` being scored (also exposed as `raw_table`/`unmapped_table` for backward compatibility).  
+`file_name` is the current source file’s basename (also available via `extracted_table.source_file`). Use it for heuristics that depend on the input file without needing to parse the full path.
 
 **Return:** either a float delta **or** a direct dict of deltas keyed by fields (no `"scores"` wrapper):
 
@@ -199,6 +206,7 @@ def run(
     *,
     run,
     state: dict,
+    file_names: tuple[str, ...] | None,
     manifest,
     tables=None,
     workbook=None,
@@ -216,6 +224,8 @@ def run(
 - `on_after_extract` / `on_after_mapping`: new list of tables or `None`
 - `on_before_save`: a `Workbook` or `None`
 - `on_run_start` / `on_run_end`: `None`
+
+`file_names` contains the basenames of the files the run is working with (if known).
 
 Use `logger` for human-readable notes; `event_emitter.custom(...)` for rare, structured milestones.
 

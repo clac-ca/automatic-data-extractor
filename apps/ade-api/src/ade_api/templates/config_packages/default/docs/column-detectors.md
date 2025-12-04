@@ -70,9 +70,10 @@ The engine:
 
 1. Sums all deltas per field
 2. Chooses the best-scoring column above threshold
-3. Emits telemetry (`run.column_detector.score`) automatically
+3. Emits telemetry (`engine.detector.column.score`) automatically
 
-You never need to emit scoring-related events manually.
+You never need to emit scoring-related events manually—`event_emitter` is available for your own
+`config.*` checkpoints when you want them (`event_emitter.custom("checkpoint", {...})`).
 
 ---
 

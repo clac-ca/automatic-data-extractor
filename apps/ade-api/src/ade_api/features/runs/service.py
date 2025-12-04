@@ -17,12 +17,17 @@ from uuid import UUID
 from ade_engine.schemas import (
     AdeEvent,
     AdeEventPayload,
+    ColumnCounts,
     ConsoleLinePayload,
+    Counts,
+    FieldCounts,
+    FieldSummaryAggregate,
     ManifestV1,
+    RowCounts,
     RunCompletedPayload,
     RunQueuedPayload,
-    RunStartedPayload,
-    RunSummaryV1,
+    RunSummary,
+    ValidationSummary,
 )
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +54,7 @@ from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.runs.emitters import RunEventEmitter
 from ade_api.features.system_settings.schemas import SafeModeStatus
 from ade_api.features.system_settings.service import (
     SAFE_MODE_DEFAULT_DETAIL,
@@ -72,7 +78,6 @@ from .schemas import (
     RunOutput,
     RunResource,
 )
-from .summary_builder import build_run_summary_from_paths
 from .supervisor import RunExecutionSupervisor
 
 __all__ = [
@@ -100,8 +105,8 @@ class RunExecutionResult:
 
     status: RunStatus
     return_code: int | None
-    summary_model: RunSummaryV1
-    summary_json: str
+    summary_model: RunSummary | None
+    summary_json: str | None
     paths_snapshot: RunPathsSnapshot
     error_message: str | None = None
 
@@ -525,7 +530,7 @@ class RunsService:
                         yield forwarded
                         if live_event.sequence:
                             last_sequence = live_event.sequence
-                        if live_event.type in {"build.completed", "build.failed"}:
+                        if live_event.type in {"build.complete", "build.failed"}:
                             break
 
             build = await self._builds_service.get_build_or_raise(
@@ -563,10 +568,9 @@ class RunsService:
                 )
                 yield await self._emit_api_event(
                     run=completion,
-                    type_="run.completed",
+                    type_="run.complete",
                     payload=self._run_completed_payload(
                         run=completion,
-                        summary=None,
                         paths=paths_snapshot,
                         failure_stage="build",
                         failure_code="build_failed",
@@ -598,13 +602,9 @@ class RunsService:
             )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
+        run_emitter = self._run_event_emitter(run)
+        yield await run_emitter.start(mode=mode_literal)
         safe_mode = await self._safe_mode_status()
-        if options.validate_only or safe_mode.enabled:
-            yield await self._emit_api_event(
-                run=run,
-                type_="run.started",
-                payload=RunStartedPayload(status="in_progress", mode=mode_literal),
-            )
 
         # Emit a one-time console banner describing the mode, if applicable.
         mode_message = self._format_mode_message(options)
@@ -726,10 +726,9 @@ class RunsService:
         )
         yield await self._emit_api_event(
             run=completion,
-            type_="run.completed",
+            type_="run.complete",
             payload=self._run_completed_payload(
                 run=completion,
-                summary=placeholder_summary,
                 paths=paths_snapshot,
                 failure_stage="run",
                 failure_code="orchestration_error",
@@ -782,8 +781,8 @@ class RunsService:
             )
         return run
 
-    async def get_run_summary(self, run_id: UUID) -> RunSummaryV1 | None:
-        """Return a RunSummaryV1 for ``run_id`` if available or derivable."""
+    async def get_run_summary(self, run_id: UUID) -> RunSummary | None:
+        """Return a RunSummary for ``run_id`` if available or derivable."""
 
         logger.debug(
             "run.summary.get.start",
@@ -793,7 +792,7 @@ class RunsService:
         summary_payload = self._deserialize_run_summary(run.summary)
         if isinstance(summary_payload, dict):
             try:
-                summary = RunSummaryV1.model_validate(summary_payload)
+                summary = RunSummary.model_validate(summary_payload)
                 logger.info(
                     "run.summary.get.cached",
                     extra=log_context(
@@ -804,7 +803,6 @@ class RunsService:
                 )
                 return summary
             except ValidationError:
-                # Fallback to recomputing from events and manifest below.
                 logger.warning(
                     "run.summary.get.cached_invalid",
                     extra=log_context(
@@ -813,26 +811,7 @@ class RunsService:
                         run_id=run.id,
                     ),
                 )
-
-        paths = self._finalize_paths(
-            summary=None,
-            run_dir=self._run_dir_for_run(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-            ),
-            default_paths=RunPathsSnapshot(),
-        )
-        summary = await self._build_run_summary_for_completion(run=run, paths=paths)
-        logger.info(
-            "run.summary.get.recomputed",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                has_summary=bool(summary),
-            ),
-        )
-        return summary
+        return None
 
     async def get_run_events(
         self,
@@ -962,13 +941,30 @@ class RunsService:
             run_id=run.id,
         )
         summary_payload = self._deserialize_run_summary(run.summary)
-        summary_run = summary_payload.get("run") if isinstance(summary_payload, dict) else {}
-        summary_core = summary_payload.get("core") if isinstance(summary_payload, dict) else {}
-        summary_run_dict = summary_run if isinstance(summary_run, dict) else {}
-        summary_core_dict = summary_core if isinstance(summary_core, dict) else {}
+        summary_source = (
+            summary_payload.get("source")
+            if isinstance(summary_payload, dict)
+            else {}
+        )
+        summary_counts = (
+            summary_payload.get("counts")
+            if isinstance(summary_payload, dict)
+            else {}
+        )
+        summary_details = (
+            summary_payload.get("details")
+            if isinstance(summary_payload, dict)
+            else {}
+        )
+
+        summary_for_paths: dict[str, Any] | None = None
+        if isinstance(summary_details, dict) and summary_details:
+            summary_for_paths = summary_details
+        elif isinstance(summary_payload, dict):
+            summary_for_paths = summary_payload
 
         paths = self._finalize_paths(
-            summary=summary_payload if isinstance(summary_payload, dict) else None,
+            summary=summary_for_paths,
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
@@ -990,23 +986,37 @@ class RunsService:
         # Outputs and processed files
         output_files = paths.output_paths or self._relative_output_paths(run_dir / "output")
         processed_files = list(paths.processed_files or [])
-        if not processed_files and isinstance(summary_payload, dict):
+        if not processed_files and isinstance(summary_details, dict):
             processed_files = [
-                str(item) for item in summary_payload.get("processed_files", []) or []
+                str(item) for item in summary_details.get("processed_files", []) or []
             ]
 
         # Timing and failure info
-        started_at = self._ensure_utc(run.started_at)
-        finished_at = self._ensure_utc(run.finished_at)
+        started_at = self._ensure_utc(run.started_at) or self._coerce_datetime(
+            summary_source.get("started_at")
+        )
+        finished_at = self._ensure_utc(run.finished_at) or self._coerce_datetime(
+            summary_source.get("completed_at")
+        )
         duration_seconds = (
             (finished_at - started_at).total_seconds()
             if started_at and finished_at
-            else summary_run_dict.get("duration_seconds")
+            else None
         )
 
-        failure_message = summary_run_dict.get("failure_message")
-        if run.error_message:
-            failure_message = run.error_message
+        failure_info = summary_source.get("failure", {})
+        failure_code = failure_info.get("code")
+        failure_stage = failure_info.get("stage")
+        failure_message = run.error_message or failure_info.get("message")
+
+        files_counts = summary_counts.get("files") if isinstance(summary_counts, dict) else {}
+        sheets_counts = summary_counts.get("sheets") if isinstance(summary_counts, dict) else {}
+
+        # Defensive: ensure we always have dict-like counts so .get calls below are safe
+        if not isinstance(files_counts, dict):
+            files_counts = {}
+        if not isinstance(sheets_counts, dict):
+            sheets_counts = {}
 
         return RunResource(
             id=run.id,
@@ -1014,13 +1024,13 @@ class RunsService:
             configuration_id=run.configuration_id,
             build_id=run.build_id,
             status=run.status,
-            failure_code=summary_run_dict.get("failure_code"),
-            failure_stage=summary_run_dict.get("failure_stage"),
+            failure_code=failure_code,
+            failure_stage=failure_stage,
             failure_message=failure_message,
-            engine_version=summary_run_dict.get("engine_version"),
-            config_version=summary_run_dict.get("config_version"),
-            env_reason=summary_run_dict.get("env_reason"),
-            env_reused=summary_run_dict.get("env_reused"),
+            engine_version=summary_source.get("engine_version"),
+            config_version=summary_source.get("config_version"),
+            env_reason=summary_source.get("env_reason"),
+            env_reused=summary_source.get("env_reused"),
             created_at=self._ensure_utc(run.created_at) or utc_now(),
             started_at=started_at,
             completed_at=finished_at,
@@ -1029,8 +1039,8 @@ class RunsService:
             input=RunInput(
                 document_ids=document_ids,
                 input_sheet_names=sheet_names,
-                input_file_count=summary_core_dict.get("input_file_count"),
-                input_sheet_count=summary_core_dict.get("input_sheet_count"),
+                input_file_count=files_counts.get("total"),
+                input_sheet_count=sheets_counts.get("total"),
             ),
             output=RunOutput(
                 has_outputs=bool(output_files),
@@ -1271,12 +1281,15 @@ class RunsService:
             output_paths=list(default_paths.output_paths),
             processed_files=list(default_paths.processed_files),
         )
+        details = summary.get("details") if isinstance(summary, dict) else None
+        if not isinstance(details, dict):
+            details = summary if isinstance(summary, dict) else {}
 
         # Events path: summary beats defaults, then fall back to logs/events.ndjson.
         logs_dir = run_dir / "logs"
         event_candidates: list[str | Path | None] = [
             logs_dir / "events.ndjson",
-            summary.get("events_path") if summary else None,
+            details.get("events_path") if isinstance(details, dict) else None,
         ]
         for candidate in event_candidates:
             snapshot.events_path = self._relative_if_exists(candidate)
@@ -1284,7 +1297,7 @@ class RunsService:
                 break
 
         # Output paths: summary-specified relative paths first, then scan output dir.
-        output_candidates = summary.get("output_paths") if summary else None
+        output_candidates = details.get("output_paths") if isinstance(details, dict) else None
         if isinstance(output_candidates, list):
             snapshot.output_paths = [
                 p
@@ -1296,7 +1309,7 @@ class RunsService:
             snapshot.output_paths = self._relative_output_paths(run_dir / "output")
 
         # Processed files: summary value if present, otherwise leave as-is.
-        processed_candidates = summary.get("processed_files") if summary else None
+        processed_candidates = details.get("processed_files") if isinstance(details, dict) else None
         if isinstance(processed_candidates, list):
             snapshot.processed_files = [str(path) for path in processed_candidates]
 
@@ -1326,14 +1339,13 @@ class RunsService:
         return candidate if isinstance(candidate, dict) else None
 
     @staticmethod
-    def _serialize_summary(summary: RunSummaryV1 | None) -> str | None:
+    def _serialize_summary(summary: RunSummary | None) -> str | None:
         return summary.model_dump_json() if summary else None
 
     def _run_completed_payload(
         self,
         *,
         run: Run,
-        summary: RunSummaryV1 | None,
         paths: RunPathsSnapshot,
         failure_stage: str | None = None,
         failure_code: str | None = None,
@@ -1360,7 +1372,7 @@ class RunsService:
                 "output_paths": paths.output_paths,
                 "events_path": paths.events_path,
             },
-            summary=summary.model_dump(mode="json") if summary else None,
+            summary=None,
         )
 
     @staticmethod
@@ -1370,6 +1382,18 @@ class RunsService:
         if dt.tzinfo is None:
             return dt.replace(tzinfo=UTC)
         return dt
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> datetime | None:
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.replace(tzinfo=UTC)
+        if isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(value)
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        return None
 
     @staticmethod
     def _resolve_completion(
@@ -1431,82 +1455,21 @@ class RunsService:
             )
             return None
 
-    async def _build_run_summary_for_completion(
-        self,
-        *,
-        run: Run,
-        paths: RunPathsSnapshot,
-    ) -> RunSummaryV1 | None:
-        """Build a RunSummaryV1 from the events and manifest when possible."""
+    async def _persist_run_summary(self, *, run: Run, summary_json: str | None) -> None:
+        if summary_json is None:
+            return
 
-        events_path: Path | None
-        if paths.events_path:
-            events_path = (self._runs_dir / paths.events_path).resolve()
-        else:
-            events_path = (
-                self._run_dir_for_run(
-                    workspace_id=run.workspace_id,
-                    run_id=run.id,
-                )
-                / "logs"
-                / "events.ndjson"
-            )
-
-        if events_path is None or not events_path.exists():
-            logger.info(
-                "run.summary.build.events_missing",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    events_path=str(events_path),
-                ),
-            )
-            return None
-
-        manifest_path = self._manifest_path(run.workspace_id, run.configuration_id)
-
-        logger.debug(
-            "run.summary.build.start",
+        run.summary = summary_json
+        await self._session.commit()
+        await self._session.refresh(run)
+        logger.info(
+            "run.summary.persisted",
             extra=log_context(
                 workspace_id=run.workspace_id,
                 configuration_id=run.configuration_id,
                 run_id=run.id,
-                events_path=str(events_path),
-                manifest_path=str(manifest_path),
             ),
         )
-
-        try:
-            summary = await asyncio.to_thread(
-                build_run_summary_from_paths,
-                events_path=events_path if events_path.exists() else None,
-                manifest_path=manifest_path if manifest_path.exists() else None,
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-            )
-            logger.info(
-                "run.summary.build.success",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                ),
-            )
-            return summary
-        except Exception:
-            logger.warning(
-                "run.summary.build.failed",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    events_path=str(events_path),
-                ),
-                exc_info=True,
-            )
-            return None
 
     async def _build_placeholder_summary(
         self,
@@ -1514,8 +1477,10 @@ class RunsService:
         run: Run,
         status: RunStatus,
         message: str | None = None,
-    ) -> RunSummaryV1:
-        """Synthesize a minimal RunSummaryV1 when engine execution is skipped."""
+        failure_code: str | None = None,
+        failure_stage: str | None = None,
+    ) -> RunSummary:
+        """Synthesize a minimal RunSummary when engine execution is skipped."""
 
         manifest = await asyncio.to_thread(
             self._load_manifest,
@@ -1525,63 +1490,85 @@ class RunsService:
         started = self._ensure_utc(run.started_at) or utc_now()
         completed = self._ensure_utc(run.finished_at) or utc_now()
         status_literal = status.value
-        by_field: list[dict[str, Any]] = []
+        field_total = len(manifest.columns.fields) if manifest else 0  # type: ignore[union-attr]
+        required_total = (
+            len([f for f in manifest.columns.fields.values() if f.required]) if manifest else 0  # type: ignore[union-attr]
+        )
+
+        field_summaries: list[FieldSummaryAggregate] = []
         if manifest:
             for field_name in manifest.columns.order:
                 field_cfg = manifest.columns.fields.get(field_name)
                 if field_cfg is None:
                     continue
-                by_field.append(
-                    {
-                        "field": field_name,
-                        "label": field_cfg.label,
-                        "required": field_cfg.required,
-                        "mapped": False,
-                        "max_score": None,
-                        "validation_issue_count_total": 0,
-                        "issue_counts_by_severity": {},
-                        "issue_counts_by_code": {},
-                    }
+                field_summaries.append(
+                    FieldSummaryAggregate(
+                        field=field_name,
+                        label=field_cfg.label,
+                        required=bool(field_cfg.required),
+                        mapped=False,
+                        max_score=None,
+                        tables_mapped=0,
+                        sheets_mapped=0,
+                        files_mapped=0,
+                    )
                 )
 
-        return RunSummaryV1(
-            run={
-                "id": str(run.id),
+        failure = {
+            "code": failure_code or ("cancelled" if status is RunStatus.CANCELLED else None),
+            "stage": failure_stage,
+            "message": message,
+        }
+        failure = {k: v for k, v in failure.items() if v is not None}
+
+        counts = Counts(
+            files={"total": 0},
+            sheets={"total": 0},
+            tables={"total": 0},
+            rows=RowCounts(total=0, empty=0, non_empty=0),
+            columns=ColumnCounts(
+                physical_total=0,
+                physical_empty=0,
+                physical_non_empty=0,
+                distinct_headers=0,
+                distinct_headers_mapped=0,
+                distinct_headers_unmapped=0,
+            ),
+            fields=FieldCounts(
+                total=field_total,
+                required=required_total,
+                mapped=0,
+                unmapped=field_total,
+                required_mapped=0,
+                required_unmapped=required_total,
+            ),
+        )
+
+        details: dict[str, Any] = {}
+        if message:
+            details["message"] = message
+
+        return RunSummary(
+            scope="run",
+            id="run",
+            parent_ids={"run_id": str(run.id)},
+            source={
+                "run_id": str(run.id),
                 "workspace_id": str(run.workspace_id),
                 "configuration_id": str(run.configuration_id),
-                "status": status_literal,
-                "failure_code": "cancelled" if status is RunStatus.CANCELLED else None,
-                "failure_stage": None,
-                "failure_message": message,
+                "build_id": str(run.build_id) if run.build_id else None,
                 "engine_version": getattr(run, "engine_version", None),
                 "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
-                "env_reason": None,
-                "env_reused": None,
                 "started_at": started,
                 "completed_at": completed,
-                "duration_seconds": (completed - started).total_seconds() if completed else None,
+                "status": status_literal,
+                "failure": failure,
             },
-            core={
-                "input_file_count": 0,
-                "input_sheet_count": 0,
-                "table_count": 0,
-                "row_count": 0,
-                "canonical_field_count": len(manifest.columns.fields) if manifest else 0,  # type: ignore[union-attr]
-                "required_field_count": (
-                    len([f for f in manifest.columns.fields.values() if f.required])
-                    if manifest
-                    else 0  # type: ignore[union-attr]
-                ),
-                "mapped_field_count": 0,
-                "unmapped_column_count": 0,
-                "validation_issue_count_total": 0,
-                "issue_counts_by_severity": {},
-                "issue_counts_by_code": {},
-            },
-            breakdowns={
-                "by_file": [],
-                "by_field": by_field,
-            },
+            counts=counts,
+            fields=field_summaries,
+            columns=[],
+            validation=ValidationSummary(),
+            details=details,
         )
 
     # --------------------------------------------------------------------- #
@@ -1672,13 +1659,11 @@ class RunsService:
             env=env,
         )
 
-        summary: dict[str, Any] | None = None
         paths_snapshot = RunPathsSnapshot()
 
         # Stream frames from the engine process: either StdoutFrame or AdeEvent.
         async for frame in runner.stream():
             if isinstance(frame, StdoutFrame):
-                summary = self._parse_summary(frame.message, default=summary)
                 continue
 
             # Engine AdeEvents flow through unchanged, mirrored to logs in debug mode.
@@ -1687,21 +1672,15 @@ class RunsService:
 
         # Process completion and summarize.
         return_code = runner.returncode if runner.returncode is not None else 1
-        status, error_message = self._resolve_completion(summary, return_code)
+        status, error_message = self._resolve_completion(None, return_code)
 
         paths_snapshot = self._finalize_paths(
-            summary=summary,
+            summary=None,
             run_dir=run_dir,
             default_paths=paths_snapshot,
         )
-        if summary and summary.get("processed_files"):
-            paths_snapshot.processed_files = list(summary.get("processed_files", []))
-
-        summary_model = await self._build_run_summary_for_completion(
-            run=run,
-            paths=paths_snapshot,
-        )
-        summary_json = self._serialize_summary(summary_model)
+        summary_model = None
+        summary_json = None
 
         logger.info(
             "run.engine.execute.completed",
@@ -1759,10 +1738,9 @@ class RunsService:
         )
         yield await self._emit_api_event(
             run=completion,
-            type_="run.completed",
+            type_="run.complete",
             payload=self._run_completed_payload(
                 run=completion,
-                summary=placeholder_summary,
                 paths=paths_snapshot,
             ),
         )
@@ -1830,10 +1808,9 @@ class RunsService:
         # Completion event
         yield await self._emit_api_event(
             run=completion,
-            type_="run.completed",
+            type_="run.complete",
             payload=self._run_completed_payload(
                 run=completion,
-                summary=placeholder_summary,
                 paths=paths_snapshot,
             ),
         )
@@ -1882,39 +1859,116 @@ class RunsService:
             ),
         )
 
+        engine_summary: RunSummary | None = None
+        engine_summary_json: str | None = None
+        latest_paths_snapshot = RunPathsSnapshot()
+
         try:
             async for event in self._supervisor.stream(
                 run.id,
                 generator=generator,
             ):
                 if isinstance(event, RunExecutionResult):
+                    summary_model = engine_summary or event.summary_model
+                    summary_json = engine_summary_json or event.summary_json
+                    if summary_model and not summary_json:
+                        summary_json = self._serialize_summary(summary_model)
+                    if summary_model is None:
+                        summary_model = await self._build_placeholder_summary(
+                            run=run,
+                            status=event.status,
+                            message=event.error_message or "Engine summary missing",
+                            failure_code="engine_summary_missing",
+                            failure_stage="engine",
+                        )
+                        summary_json = self._serialize_summary(summary_model)
+
+                    paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
+                    if latest_paths_snapshot.processed_files and not paths_snapshot.processed_files:
+                        paths_snapshot.processed_files = list(latest_paths_snapshot.processed_files)
+                    if latest_paths_snapshot.output_paths and not paths_snapshot.output_paths:
+                        paths_snapshot.output_paths = list(latest_paths_snapshot.output_paths)
+
                     completion = await self._complete_run(
                         run,
                         status=event.status,
                         exit_code=event.return_code,
-                        summary=event.summary_json,
+                        summary=summary_json,
                         error_message=event.error_message,
                     )
                     yield await self._emit_api_event(
                         run=completion,
-                        type_="run.completed",
+                        type_="run.complete",
                         payload=self._run_completed_payload(
                             run=completion,
-                            summary=event.summary_model,
-                            paths=event.paths_snapshot,
-                            failure_stage="run" if event.status is RunStatus.FAILED else None,
+                            paths=paths_snapshot,
+                            failure_stage=(
+                                "run"
+                                if event.status is RunStatus.FAILED
+                                else None
+                            ),
+                            failure_code=(
+                                "engine_summary_missing"
+                                if engine_summary is None
+                                else None
+                            ),
                             failure_message=event.error_message,
                         ),
                     )
                     continue
+                if isinstance(event, AdeEvent):
+                    payload_dict = event.payload_dict()
+                    if event.type == "engine.run.summary":
+                        summary_payload = payload_dict
+                        try:
+                            engine_summary = RunSummary.model_validate(summary_payload)
+                            engine_summary_json = self._serialize_summary(engine_summary)
+                            await self._persist_run_summary(
+                                run=run,
+                                summary_json=engine_summary_json,
+                            )
+                            details = engine_summary.details or {}
+                            if (
+                                not latest_paths_snapshot.processed_files
+                                and isinstance(details, dict)
+                            ):
+                                processed = details.get("processed_files")
+                                if processed:
+                                    latest_paths_snapshot.processed_files = [
+                                        str(path)
+                                        for path in processed
+                                    ]
+                            if not latest_paths_snapshot.output_paths and isinstance(details, dict):
+                                outputs = details.get("output_paths")
+                                if outputs:
+                                    latest_paths_snapshot.output_paths = [
+                                        str(path)
+                                        for path in outputs
+                                    ]
+                        except ValidationError:
+                            engine_summary = None
+                    elif event.type == "engine.complete" and isinstance(payload_dict, dict):
+                        processed_files = payload_dict.get("processed_files")
+                        if processed_files:
+                            latest_paths_snapshot.processed_files = [
+                                str(path)
+                                for path in processed_files
+                            ]
+                        output_paths = payload_dict.get("output_paths")
+                        if output_paths:
+                            latest_paths_snapshot.output_paths = [
+                                str(path)
+                                for path in output_paths
+                            ]
+
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
                     source=event.source or "engine",
                     workspace_id=run.workspace_id,
                     configuration_id=run.configuration_id,
                     run_id=run.id,
-                    build_id=event.build_id or getattr(run, "build_id", None),
-                    payload=event.payload,
+                    build_id=getattr(event, "build_id", None) or getattr(run, "build_id", None),
+                    payload=getattr(event, "payload", None),
                 )
                 yield forwarded
         except asyncio.CancelledError:
@@ -1947,10 +2001,9 @@ class RunsService:
             )
             yield await self._emit_api_event(
                 run=completion,
-                type_="run.completed",
+                type_="run.complete",
                 payload=self._run_completed_payload(
                     run=completion,
-                    summary=placeholder_summary,
                     paths=paths_snapshot,
                     failure_stage="run",
                     failure_code="run_cancelled",
@@ -2000,10 +2053,9 @@ class RunsService:
             # Run completion frame
             yield await self._emit_api_event(
                 run=completion,
-                type_="run.completed",
+                type_="run.complete",
                 payload=self._run_completed_payload(
                     run=completion,
-                    summary=placeholder_summary,
                     paths=paths_snapshot,
                     failure_stage="run",
                     failure_code="engine_error",
@@ -2247,6 +2299,16 @@ class RunsService:
             event.model_dump_json(),
         )
 
+    def _run_event_emitter(self, run: Run) -> RunEventEmitter:
+        return RunEventEmitter(
+            self._event_dispatcher,
+            workspace_id=run.workspace_id,
+            configuration_id=run.configuration_id,
+            run_id=run.id,
+            build_id=getattr(run, "build_id", None),
+            source="api",
+        )
+
     async def _emit_api_event(
         self,
         *,
@@ -2257,15 +2319,12 @@ class RunsService:
     ) -> AdeEvent:
         """Emit an AdeEvent originating from the API orchestrator."""
 
+        emitter = self._run_event_emitter(run)
         build_identifier = build_id or getattr(run, "build_id", None)
-        event = await self._event_dispatcher.emit(
+        event = await emitter.emit(
             type=type_,
-            source="api",
-            workspace_id=run.workspace_id,
-            configuration_id=run.configuration_id,
-            run_id=run.id,
-            build_id=build_identifier,
             payload=payload,
+            extra_ids={"build_id": build_identifier},
         )
         self._log_event_debug(event, origin="api")
         return event

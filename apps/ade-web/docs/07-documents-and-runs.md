@@ -494,10 +494,14 @@ Data hooks:
   * Parses `AdeEvent` envelopes emitted over SSE, such as:
 
     * `run.queued`
-    * `run.phase.started`
+    * `run.start`
+    * `engine.phase.start`
     * `console.line` (payload carries `scope`, `stream`, `message`)
-    * `run.table.summary`
-    * `run.completed`
+    * `engine.table.summary`
+    * `engine.sheet.summary`
+    * `engine.file.summary`
+    * `engine.run.summary`
+    * `run.complete`
   * Updates console output incrementally as events arrive.
   * For schema details, see:
 

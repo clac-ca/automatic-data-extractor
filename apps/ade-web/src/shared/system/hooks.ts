@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_SAFE_MODE_MESSAGE,
   fetchSafeModeStatus,
+  fetchSystemVersions,
   updateSafeModeStatus,
   type SafeModeStatus,
   type SafeModeUpdateRequest,
+  type SystemVersions,
 } from "./api";
 
 export const SAFE_MODE_QUERY_KEY = ["system", "safe-mode"] as const;
+export const SYSTEM_VERSIONS_QUERY_KEY = ["system", "versions"] as const;
 
 export function useSafeModeStatus() {
   const queryClient = useQueryClient();
@@ -32,4 +35,22 @@ export function useUpdateSafeModeStatus() {
   });
 }
 
-export { DEFAULT_SAFE_MODE_MESSAGE, type SafeModeStatus, type SafeModeUpdateRequest };
+export function useSystemVersions(options: { enabled?: boolean } = {}) {
+  const queryClient = useQueryClient();
+  const initialData = queryClient.getQueryData<SystemVersions>(SYSTEM_VERSIONS_QUERY_KEY);
+
+  return useQuery<SystemVersions>({
+    queryKey: SYSTEM_VERSIONS_QUERY_KEY,
+    queryFn: ({ signal }) => fetchSystemVersions({ signal }),
+    initialData,
+    staleTime: 5 * 60 * 1000,
+    enabled: options.enabled ?? true,
+  });
+}
+
+export {
+  DEFAULT_SAFE_MODE_MESSAGE,
+  type SafeModeStatus,
+  type SafeModeUpdateRequest,
+  type SystemVersions,
+};

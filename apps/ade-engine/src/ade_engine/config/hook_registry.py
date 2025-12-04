@@ -15,7 +15,7 @@ from openpyxl import Workbook
 from ade_engine.core.errors import ConfigError
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.types import MappedTable, NormalizedTable, ExtractedTable, RunContext, RunResult
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter
 
 
 class HookStage(str, Enum):
@@ -34,12 +34,13 @@ class HookContext:
 
     run: RunContext
     state: dict[str, Any]
+    file_names: tuple[str, ...] | None
     manifest: ManifestContext
     tables: list[ExtractedTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None
     logger: logging.Logger
-    event_emitter: EventEmitter
+    event_emitter: ConfigEventEmitter
     stage: HookStage
 
 

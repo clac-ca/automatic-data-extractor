@@ -18,6 +18,7 @@ Whatever Workbook you return here is what the engine will save.
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 from openpyxl.utils import get_column_letter
@@ -32,6 +33,7 @@ def run(
     workbook: Any | None = None,        # openpyxl Workbook
     tables: list[Any] | None = None,    # NormalizedTable[]
     run: Any | None = None,
+    file_names: tuple[str, ...] | None = None,
     manifest: Any | None = None,
     state: dict[str, Any] | None = None,
     logger=None,
@@ -79,11 +81,6 @@ def run(
 
     # Logging + event hooks
     logger and logger.info("on_before_save: applied basic styling to workbook")
-    if event_emitter is not None:
-        event_emitter.custom(
-            "hook.workbook_styled",
-            stage=getattr(stage, "value", stage),
-        )
 
     # Returning the workbook means: "save this one"
     return workbook

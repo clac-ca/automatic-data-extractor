@@ -80,9 +80,10 @@ You may include additional labels if your custom pipeline uses them, but `"heade
    * Where data starts
    * When tables end
 4. After ADE identifies each table boundary, it automatically emits
-   `run.row_detector.score` events for debugging and telemetry.
+   `engine.detector.row.score` events for debugging and telemetry.
 
-You do not need to emit scoring events manually.
+You do not need to emit scoring events manually. Use the provided `event_emitter` only for your own
+low-volume `config.*` checkpoints (`event_emitter.custom("checkpoint", {...})`).
 
 ---
 

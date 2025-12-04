@@ -23,7 +23,7 @@ from ade_engine.config.loader import ConfigRuntime
 from ade_engine.core.errors import ConfigError, InputError
 from ade_engine.core.types import ExtractedTable, RunContext, RunRequest
 from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows, list_input_files
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 
 RowDetectorFn = Callable[..., Mapping[str, Any]]
 
@@ -96,12 +96,15 @@ def _score_rows(
     rows: Iterator[tuple[int, list[Any]]],
     detectors: list[RowDetectorFn],
     run: RunContext,
+    file_name: str | None,
     manifest: Any,
     logger: logging.Logger,
     state: dict[str, Any],
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
+    config_event_emitter: ConfigEventEmitter | None,
 ) -> list[_RowScore]:
     scored: list[_RowScore] = []
+    detector_emitter = config_event_emitter or event_emitter.config_emitter()
     for row_index, values in rows:
         label_totals: dict[str, float] = {}
         contributions: dict[str, dict[str, float]] = {}
@@ -111,9 +114,10 @@ def _score_rows(
                 state=state,
                 row_index=row_index,
                 row_values=values,
+                file_name=file_name,
                 manifest=manifest,
                 logger=logger,
-                event_emitter=event_emitter,
+                event_emitter=detector_emitter,
             )
             scores = result.get("scores", {}) if isinstance(result, Mapping) else {}
             for label, delta in scores.items():
@@ -142,7 +146,7 @@ def _detect_tables_for_sheet(
     source_sheet: str | None,
     header_threshold: float = HEADER_SCORE_THRESHOLD,
     data_threshold: float = DATA_SCORE_THRESHOLD,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
 ) -> list[ExtractedTable]:
     tables: list[ExtractedTable] = []
     table_index = 0
@@ -191,7 +195,7 @@ def _serialize_row_contributions(contributions: dict[str, dict[str, float]]) -> 
 
 def _emit_row_detector_score(
     *,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
     table: ExtractedTable,
     header_threshold: float,
     data_threshold: float,
@@ -199,7 +203,7 @@ def _emit_row_detector_score(
     data_rows: list[_RowScore],
 ) -> None:
     event_emitter.custom(
-        "row_detector.score",
+        "detector.row.score",
         source_file=str(table.source_file),
         source_sheet=table.source_sheet,
         table_index=table.table_index,
@@ -223,7 +227,8 @@ def extract_raw_tables(
     run: RunContext,
     runtime: ConfigRuntime,
     logger: logging.Logger | None = None,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
+    config_event_emitter: ConfigEventEmitter | None,
 ) -> list[ExtractedTable]:
     """Detect tables across CSV/XLSX inputs using config row detectors."""
 
@@ -246,10 +251,12 @@ def extract_raw_tables(
                 rows=iter_csv_rows(source_file),
                 detectors=detectors,
                 run=run,
+                file_name=source_file.name,
                 manifest=runtime.manifest,
                 logger=logger,
                 state=state,
                 event_emitter=event_emitter,
+                config_event_emitter=config_event_emitter,
             )
             detected.extend(
                 _detect_tables_for_sheet(
@@ -267,10 +274,12 @@ def extract_raw_tables(
                 rows=iter_sheet_rows(source_file, sheet_name),
                 detectors=detectors,
                 run=run,
+                file_name=source_file.name,
                 manifest=runtime.manifest,
                 logger=logger,
                 state=state,
                 event_emitter=event_emitter,
+                config_event_emitter=config_event_emitter,
             )
             detected.extend(
                 _detect_tables_for_sheet(

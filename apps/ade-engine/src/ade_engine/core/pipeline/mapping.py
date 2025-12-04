@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 from ade_engine.config.loader import ConfigRuntime
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 from ade_engine.core.types import (
     ColumnMap,
     MappedColumn,
@@ -62,11 +62,13 @@ def _score_field(
     run: Any,
     logger: logging.Logger,
     state: dict[str, Any],
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
+    config_event_emitter: ConfigEventEmitter | None,
 ) -> tuple[MappedColumn | None, list[_CandidateScore]]:
     module = runtime.columns[field]
     winning: MappedColumn | None = None
     candidate_scores: list[_CandidateScore] = []
+    detector_emitter = config_event_emitter or event_emitter.config_emitter()
 
     for candidate in candidates:
         contributions: list[ScoreContribution] = []
@@ -75,14 +77,18 @@ def _score_field(
             result = detector(
                 run=run,
                 state=state,
+                # Pass canonical + legacy names for detector compatibility.
+                extracted_table=raw,
+                unmapped_table=raw,
                 raw_table=raw,
+                file_name=raw.source_file.name,
                 column_index=candidate.index + 1,  # script API is 1-based
                 header=candidate.header,
                 column_values=candidate.values,
                 column_values_sample=candidate.values[:COLUMN_SAMPLE_SIZE],
                 manifest=runtime.manifest,
                 logger=logger,
-                event_emitter=event_emitter,
+                event_emitter=detector_emitter,
             )
 
             delta = 0.0
@@ -150,7 +156,7 @@ def _emit_column_score_event(
     field: str,
     candidate_scores: list[_CandidateScore],
     winning: MappedColumn | None,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
     top_n: int = 3,
 ) -> None:
     winning_candidate = None
@@ -170,7 +176,7 @@ def _emit_column_score_event(
             top_candidates.append(candidate)
 
     event_emitter.custom(
-        "column_detector.score",
+        "detector.column.score",
         source_file=str(raw.source_file),
         source_sheet=raw.source_sheet,
         table_index=raw.table_index,
@@ -187,13 +193,15 @@ def map_extracted_tables(
     runtime: ConfigRuntime,
     run: Any,
     logger: logging.Logger | None = None,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
+    config_event_emitter: ConfigEventEmitter | None,
 ) -> list[MappedTable]:
     """Map physical columns in :class:`ExtractedTable` objects to manifest fields."""
 
     logger = logger or logging.getLogger(__name__)
     mapped_tables: list[MappedTable] = []
     state: dict[str, Any] = {}
+    config_emitter = config_event_emitter or event_emitter.config_emitter()
 
     for raw in tables:
         candidates = _collect_columns(raw)
@@ -210,6 +218,7 @@ def map_extracted_tables(
                 logger=logger,
                 state=state,
                 event_emitter=event_emitter,
+                config_event_emitter=config_emitter,
             )
             if mapped:
                 mapped_columns.append(mapped)

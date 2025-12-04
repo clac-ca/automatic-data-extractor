@@ -222,7 +222,7 @@ async def test_stream_run_waits_for_build_and_forwards_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     build_event = AdeEvent(
-        type="build.started",
+        type="build.start",
         event_id="evt_1",
         created_at=utc_now(),
         sequence=1,
@@ -274,14 +274,14 @@ async def test_stream_run_waits_for_build_and_forwards_events(
     events = [event async for event in service.stream_run(context=context, options=options)]
     event_types = [event.type for event in events]
 
-    assert "build.started" in event_types
+    assert "build.start" in event_types
     assert any(
         evt.type == "console.line"
         and hasattr(evt, "payload")
         and getattr(evt.payload, "message", "").startswith("Configuration build completed")
         for evt in events
     )
-    assert event_types[-1] == "run.completed"
+    assert event_types[-1] == "run.complete"
 
     refreshed = await service.get_run(run.id)
     assert refreshed is not None
@@ -341,7 +341,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     events = [event async for event in service.stream_run(context=context, options=options)]
 
     assert observed_flags == [False]
-    assert events[-1].type == "run.completed"
+    assert events[-1].type == "run.complete"
     completed = await service.get_run(run.id)
     assert completed is not None
     assert completed.status is RunStatus.SUCCEEDED
@@ -364,7 +364,7 @@ async def test_validate_only_short_circuits_and_persists_summary(
     event_types = [event.type for event in events]
 
     assert event_types[0] == "run.queued"
-    assert event_types[-1] == "run.completed"
+    assert event_types[-1] == "run.complete"
     completed_payload = events[-1].payload
     summary = completed_payload.summary if completed_payload else None  # type: ignore[attr-defined]
     assert summary and summary.get("run", {}).get("failure_message") == "Validation-only execution"

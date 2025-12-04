@@ -19,6 +19,7 @@ Return options:
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ def run(
     tables: list[Any] | None = None,  # typically List[ExtractedTable]
     run: Any | None = None,
     state: dict[str, Any] | None = None,
+    file_names: tuple[str, ...] | None = None,
     manifest: Any | None = None,
     logger=None,
     event_emitter=None,

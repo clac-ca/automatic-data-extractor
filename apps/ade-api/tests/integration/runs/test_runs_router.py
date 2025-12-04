@@ -122,7 +122,7 @@ async def test_run_event_stream_replays_logged_events(
         },
     )
     await dispatcher.emit(
-        type="run.completed",
+        type="run.complete",
         workspace_id=run.workspace_id,
         configuration_id=run.configuration_id,
         run_id=run.id,
@@ -150,10 +150,10 @@ async def test_run_event_stream_replays_logged_events(
                 continue
             event = json.loads(line.removeprefix("data: "))
             events.append(event)
-            if event.get("type") == "run.completed":
+            if event.get("type") == "run.complete":
                 break
 
-    assert [event["type"] for event in events] == ["run.queued", "run.completed"]
+    assert [event["type"] for event in events] == ["run.queued", "run.complete"]
     assert events[-1]["payload"]["status"] == "succeeded"
 
 

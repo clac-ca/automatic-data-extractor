@@ -267,7 +267,7 @@ class Settings(BaseSettings):
 
     # Core
     app_name: str = "Automatic Data Extractor API"
-    app_version: str = "0.2.0"
+    app_version: str = "1.6.0"
     api_docs_enabled: bool = False
     docs_url: str = "/docs"
     redoc_url: str = "/redoc"

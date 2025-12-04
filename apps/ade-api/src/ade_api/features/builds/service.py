@@ -42,6 +42,7 @@ from .builder import (
     BuilderStepEvent,
     VirtualEnvironmentBuilder,
 )
+from .emitters import BuildEventEmitter
 from .event_dispatcher import BuildEventDispatcher, BuildEventLogReader, BuildEventStorage
 from .exceptions import (
     BuildAlreadyInProgressError,
@@ -414,7 +415,7 @@ class BuildsService:
             summary = build.summary or context.reuse_summary
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload={
                     "status": build.status,
                     "summary": summary,
@@ -441,7 +442,7 @@ class BuildsService:
         )
         yield await self._emit_event(
             build=build,
-            type_="build.started",
+            type_="build.start",
             payload=BuildStartedPayload(status="building", reason=reason),
             run_id=context.run_id,
         )
@@ -465,9 +466,9 @@ class BuildsService:
                 if isinstance(event, BuilderStepEvent):
                     yield await self._emit_event(
                         build=build,
-                        type_="build.progress",
+                        type_="build.phase.start",
                         payload={
-                            "step": event.step.value,
+                            "phase": event.step.value,
                             "message": event.message,
                         },
                         run_id=context.run_id,
@@ -504,7 +505,7 @@ class BuildsService:
             build = await self._require_build(build.id)
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload=BuildCompletedPayload(
                     status=build.status,
                     exit_code=build.exit_code,
@@ -532,7 +533,7 @@ class BuildsService:
             build = await self._require_build(build.id)
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload=BuildCompletedPayload(
                     status=build.status,
                     exit_code=build.exit_code,
@@ -566,7 +567,7 @@ class BuildsService:
 
         yield await self._emit_event(
             build=build,
-            type_="build.completed",
+            type_="build.complete",
             payload={
                 "status": build.status,
                 "exit_code": build.exit_code,
@@ -830,15 +831,14 @@ class BuildsService:
         payload: AdeEventPayload | dict[str, Any] | None = None,
         run_id: UUID | None = None,
     ) -> AdeEvent:
-        return await self._event_dispatcher.emit(
-            type=type_,
-            source="api",
+        emitter = BuildEventEmitter(
+            self._event_dispatcher,
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
-            run_id=run_id,
             build_id=build.id,
-            payload=payload or {},
+            run_id=run_id,
         )
+        return await emitter.emit(type=type_, payload=payload or {})
 
     async def _ensure_build_queued_event(
         self,

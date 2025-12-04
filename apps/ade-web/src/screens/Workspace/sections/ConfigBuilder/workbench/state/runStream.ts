@@ -126,12 +126,12 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
   );
 
   const buildPhases: Record<string, PhaseState> =
-    type === "build.phase.started"
+    type === "build.phase.started" || type === "build.phase.start"
       ? {
           ...state.buildPhases,
           [payload.phase as string]: { status: "running", message: payload.message as string | undefined },
         }
-      : type === "build.phase.completed"
+      : type === "build.phase.completed" || type === "build.phase.complete"
         ? {
             ...state.buildPhases,
             [payload.phase as string]: {
@@ -143,12 +143,12 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
         : state.buildPhases;
 
   const runPhases: Record<string, PhaseState> =
-    type === "run.phase.started"
+    type === "run.phase.started" || type === "run.phase.start" || type === "engine.phase.start"
       ? {
           ...state.runPhases,
           [payload.phase as string]: { status: "running", message: payload.message as string | undefined },
         }
-      : type === "run.phase.completed"
+      : type === "run.phase.completed" || type === "run.phase.complete" || type === "engine.phase.complete"
         ? {
             ...state.runPhases,
             [payload.phase as string]: {
@@ -160,19 +160,23 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
         : state.runPhases;
 
   let validationSummary: ValidationSummary | null = state.validationSummary;
-  if (type === "run.validation.issue") {
+  if (type === "run.validation.issue" || type === "engine.validation.issue") {
     const issue = toValidationIssue(payload);
     const existingIssues = validationSummary?.issues ?? [];
     validationSummary = {
       ...validationSummary,
       issues: issue ? [...existingIssues, issue] : existingIssues,
     };
-  } else if (type === "run.validation.summary") {
+  } else if (type === "run.validation.summary" || type === "engine.validation.summary") {
     validationSummary = normalizeValidationSummary(payload, validationSummary);
   }
 
   const completedPayload =
-    type === "run.completed" ? (payload as Record<string, unknown>) : state.completedPayload;
+    type === "run.complete"
+      ? (payload as Record<string, unknown>)
+      : type === "engine.run.summary"
+        ? (payload as Record<string, unknown>)
+        : state.completedPayload;
 
   const status = resolveStatus(state.status, type, payload);
   const runId = state.runId ?? (typeof event.run_id === "string" ? event.run_id : null);
@@ -203,12 +207,22 @@ function resolveStatus(current: RunStreamStatus, type: string, payload: Record<s
     case "run.waiting_for_build":
       return "waiting_for_build";
     case "build.started":
+    case "build.start":
       return "building";
+    case "run.start":
     case "run.started":
+    case "engine.start":
       return "running";
     case "run.error":
       return current === "failed" ? current : "failed";
-    case "run.completed":
+    case "engine.run.summary": {
+      const source = (payload.source as Record<string, unknown> | undefined) ?? {};
+      const sourceStatus = typeof source.status === "string" ? source.status : undefined;
+      return normalizeRunStatusFromPayload(sourceStatus);
+    }
+    case "engine.complete":
+      return normalizeRunStatusFromPayload((payload.status as string | undefined) ?? (payload.engine_status as string));
+    case "run.complete":
       return normalizeRunStatusFromPayload(payload.status);
     default:
       return current;

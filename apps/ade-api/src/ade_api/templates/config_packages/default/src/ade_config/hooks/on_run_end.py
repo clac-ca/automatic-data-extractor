@@ -20,6 +20,7 @@ This hook does *not* modify tables, workbook, or result.
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ def run(
     logger=None,
     event_emitter=None,
     state: dict[str, Any] | None = None,
+    file_names: tuple[str, ...] | None = None,
     manifest: Any | None = None,
     tables: list[Any] | None = None,
     workbook: Any | None = None,
@@ -59,19 +61,20 @@ def run(
     # EXAMPLE: Log final run status
     # -----------------------------------------------------------------------
     logger.info(
-        "on_run_end: run finished status=%s outputs=%s",
+        "on_run_end: run_id=%s finished status=%s outputs=%s",
+        run_id,
         status,
         [str(p) for p in output_paths],
     )
 
     # -----------------------------------------------------------------------
-    # EXAMPLE: Emit structured completion event
+    # EXAMPLE: Emit a custom event to the frontend/monitoring system
     # -----------------------------------------------------------------------
-    if event_emitter is not None:
-        event_emitter.custom(
-            "hook.run_completed",
-            stage=getattr(stage, "value", stage),
-            run_id=str(run_id),
-            status=str(status),
-            outputs=[str(p) for p in output_paths],
-        )
+    # if event_emitter is not None:
+    #     event_emitter.custom(
+    #         "hook.run_completed",
+    #         stage=getattr(stage, "value", stage),
+    #         run_id=str(run_id),
+    #         status=str(status),
+    #         outputs=[str(p) for p in output_paths],
+    #     )

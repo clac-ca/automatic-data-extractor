@@ -9,7 +9,8 @@ import pytest
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_extracted_tables
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
-from ade_engine.infra.telemetry import EventEmitter, FileEventSink
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -72,9 +73,10 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
     )
 
 
-def _event_emitter(run: RunContext) -> EventEmitter:
+def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmitter]:
     sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
-    return EventEmitter(run=run, event_sink=sink)
+    engine_emitter = EngineEventEmitter(run=run, event_sink=sink)
+    return engine_emitter, engine_emitter.config_emitter()
 
 
 def test_maps_columns_to_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,7 +102,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -113,12 +115,18 @@ def detect_header(*, header, logger, event_emitter, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run, event_emitter=event_emitter)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     assert [mc.field for mc in mapped.column_map.mapped_columns] == ["alpha", "beta"]
     assert [mc.source_column_index for mc in mapped.column_map.mapped_columns] == [0, 1]
     assert all(mc.is_satisfied for mc in mapped.column_map.mapped_columns)
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().splitlines()]
-    score_events = [event for event in events if event["type"] == "run.column_detector.score"]
+    score_events = [event for event in events if event["type"] == "engine.detector.column.score"]
     assert len(score_events) == 2
     first = score_events[0]["payload"]
     assert first["field"] == "alpha"
@@ -138,7 +146,7 @@ def detect_equal(*, header, logger, event_emitter, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -151,7 +159,13 @@ def detect_equal(*, header, logger, event_emitter, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run, event_emitter=event_emitter)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     chosen_columns = {mc.field: mc.source_column_index for mc in mapped.column_map.mapped_columns if mc.is_satisfied}
     assert chosen_columns == {"first": 0, "second": 1}
 
@@ -173,7 +187,7 @@ def detect_low(*, header, logger, event_emitter, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -186,7 +200,13 @@ def detect_low(*, header, logger, event_emitter, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run, event_emitter=event_emitter)[0]
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
     field_mapping = mapped.column_map.mapped_columns[0]
     assert field_mapping.field == "only_field"
     assert field_mapping.is_satisfied is False

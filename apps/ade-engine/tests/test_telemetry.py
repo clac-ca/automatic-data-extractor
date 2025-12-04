@@ -16,7 +16,8 @@ from ade_engine.core.types import (
     RunPaths,
     UnmappedColumn,
 )
-from ade_engine.infra.telemetry import EventEmitter, FileEventSink
+from ade_engine.infra.event_emitter import EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 from ade_engine.schemas.manifest import ColumnsConfig, FieldConfig, HookCollection, ManifestV1, WriterConfig
 from ade_engine.schemas.telemetry import AdeEvent
 
@@ -127,21 +128,21 @@ def test_event_emitter_records_events(tmp_path: Path) -> None:
     table = build_table(tmp_path)
 
     event_sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
-    emitter = EventEmitter(run=run, event_sink=event_sink)
+    emitter = EngineEventEmitter(run=run, event_sink=event_sink)
 
     emitter.console_line("Started run", level="info")
-    emitter.phase_started("mapping", file_count=1)
+    emitter.phase_start("mapping", file_count=1)
     emitter.table_summary(table)
 
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
 
     assert events[0]["type"] == "console.line"
     assert events[0]["payload"]["message"] == "Started run"
-    assert events[1]["type"] == "run.phase.started"
+    assert events[1]["type"] == "engine.phase.start"
     assert events[1]["payload"]["phase"] == "mapping"
 
     table_event = events[2]
-    assert table_event["type"] == "run.table.summary"
+    assert table_event["type"] == "engine.table.summary"
     assert table_event["payload"]["row_count"] == 2
     assert table_event["payload"]["validation"]["total"] == 0
     assert table_event["payload"]["mapped_fields"][0]["field"] == "id"

@@ -12,6 +12,11 @@ ADE exposes a JSON REST API under a versioned base path:
 
 Future versions will follow the same resource model. When breaking changes are required, a new version path (for example `/api/v2`) will be introduced.
 
+## Version discovery
+
+- `GET /api/v1/meta/versions` returns the installed backend package versions (`ade-api` and `ade-engine`).
+- In the web UI, open the profile menu and pick **About / Versions** to see the built `ade-web` version alongside the backend versions.
+
 ## Authentication and RBAC
 
 - **Session + bearer tokens**: `POST /api/v1/auth/session` (and `/session/refresh`) return a `SessionEnvelope` with tokens and

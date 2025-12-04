@@ -95,7 +95,7 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
         """
 [project]
 name = "ade-config"
-version = "0.2.0"
+version = "1.6.0"
 """.strip(),
         encoding="utf-8",
     )
@@ -138,7 +138,7 @@ async def _collect_build_events(
                     continue
                 event = json.loads(line.removeprefix("data: "))
                 events.append(event)
-                if event.get("type") in {"build.completed", "build.failed"}:
+                if event.get("type") in {"build.complete", "build.failed"}:
                     return
 
         try:
@@ -190,7 +190,7 @@ async def test_stream_build_emits_events_and_logs(
 
     assert events, "expected streaming events"
     assert events[0]["type"] == "build.queued"
-    assert events[-1]["type"] == "build.completed"
+    assert events[-1]["type"] == "build.complete"
 
     detail = await async_client.get(f"/api/v1/builds/{build_id}", headers=headers)
     assert detail.status_code == 200

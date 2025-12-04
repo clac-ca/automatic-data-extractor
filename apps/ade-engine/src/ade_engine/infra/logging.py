@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import EngineEventEmitter
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class RunLogContext:
 class TelemetryLogHandler(logging.Handler):
     """Bridge Python logging into run console telemetry events."""
 
-    def __init__(self, *, event_emitter: EventEmitter, scope: str = "run") -> None:
+    def __init__(self, *, event_emitter: EngineEventEmitter, scope: str = "run") -> None:
         super().__init__()
         self._event_emitter = event_emitter
         self._scope = scope
@@ -40,7 +40,7 @@ class TelemetryLogHandler(logging.Handler):
 
 
 def build_run_logger(
-    *, base_name: str, event_emitter: EventEmitter, bridge_to_telemetry: bool = True
+    *, base_name: str, event_emitter: EngineEventEmitter, bridge_to_telemetry: bool = True
 ) -> logging.Logger:
     """Construct a run-scoped logger optionally bridged to telemetry."""
 

@@ -193,6 +193,7 @@ def detect_*(
     state,
     row_index: int,
     row_values: list,
+    file_name: str | None,
     logger,
     **_,
 ) -> dict:
@@ -203,6 +204,7 @@ def detect_*(
 - `state` — mutable dict that all detectors/transforms/validators share; great for caching derived info.
 - `row_index` — 1-based row number as streamed from the sheet.
 - `row_values` — raw cell values from that spreadsheet row.
+- `file_name` — basename of the current source file.
 - `logger` — run-scoped `logging.Logger`.
 - Return `{"scores": {"header": float}}` or `{"scores": {"data": float}}` depending on what you are voting for.
 
@@ -213,28 +215,27 @@ def detect_*(
     *,
     run,
     state,
-    field_name: str,
-    field_meta: dict,
-    header: str | None,
-    column_values_sample: list,
-    column_values: tuple,
-    table: dict,
+    extracted_table,
+    file_name: str | None,
     column_index: int,
+    header: str | None,
+    column_values: list,
+    column_values_sample: list,
+    manifest,
     logger,
     **_,
-) -> dict:
+) -> float | dict:
     ...
 ```
 
-- `field_name` — canonical field served by this file (e.g., `"email"`).
-- `field_meta` — manifest entry for that field (synonyms, required flag, default value, hints).
+- `extracted_table` — `ExtractedTable` for context (header + rows + source metadata). Also provided as `raw_table`/`unmapped_table` for backward compatibility.
+- `file_name` — basename of the source file (also available via `extracted_table.source_file`).
+- `column_index` — 1-based index into `extracted_table.header_row`.
 - `header` — cleaned header text or `None`.
 - `column_values_sample` — stratified slice of the column (size chosen in the manifest); use this first for quick scoring.
-- `column_values` — tuple containing the entire column; only touch if absolutely needed (already materialized once).
-- `table` — detected table object (`{"headers": [...], "rows": [[...], ...]}`) for contextual rules.
-- `column_index` — 1-based index into `table["headers"]`.
-- `run`, `state`, `logger` — same as above.
-- Return `{"scores": {field_name: float}}`.
+- `column_values` — list containing the entire column; only touch if absolutely needed (already materialized once).
+- `manifest`, `run`, `state`, `logger` — same as above.
+- Return either a float (applies to this field) or a dict of deltas (can influence multiple fields).
 
 ### Column transforms (`transform()` inside `column_detectors/<field>.py`)
 
@@ -281,6 +282,31 @@ def validate(
 - `row` — the full canonical row (fields → values) so you can make cross-field checks.
 - Return a list of issue dicts (e.g., `{"row_index": row_index, "code": "required_missing", ...}`) or an empty list if the value is fine.
 - `run`, `state`, `row_index`, `value`, `row`, `logger` — same meanings as above.
+
+### Hooks (`hooks/*.py`)
+
+```python
+def run(
+    *,
+    run,
+    state,
+    file_names: tuple[str, ...] | None,
+    manifest,
+    tables=None,
+    workbook=None,
+    result=None,
+    stage,
+    logger,
+    **_,
+) -> object | None:
+    ...
+```
+
+- `file_names` — basenames of the files being processed (if known).
+- `tables` — varies by stage (`ExtractedTable`, `MappedTable`, or `NormalizedTable`).
+- `workbook` — provided during `on_before_save`.
+- `result` — provided during `on_run_end`.
+- Return a modified object where applicable (see Script API docs) or `None` to leave things unchanged.
 
 [Back to top](#top)
 

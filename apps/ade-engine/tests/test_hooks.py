@@ -18,7 +18,8 @@ from ade_engine.core.errors import HookError
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunResult, RunStatus
 from ade_engine.infra.logging import build_run_logger
-from ade_engine.infra.telemetry import EventEmitter, FileEventSink
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 BASE_MANIFEST = {
     "schema": "ade.manifest/v1",
@@ -75,7 +76,7 @@ def _write_hook(pkg_root: Path, name: str, body: str) -> None:
     (hooks_dir / f"{name}.py").write_text(textwrap.dedent(body), encoding="utf-8")
 
 
-def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, logging.Logger, EventEmitter]:
+def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, logging.Logger, ConfigEventEmitter]:
     paths = RunPaths(
         input_dir=tmp_path / "input",
         output_dir=tmp_path / "output",
@@ -91,9 +92,14 @@ def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, loggi
         paths=paths,
         started_at=datetime.now(timezone.utc),
     )
-    event_emitter = EventEmitter(run=run, event_sink=FileEventSink(path=run.paths.logs_dir / "events.ndjson"))
-    logger = build_run_logger(base_name=f"test_hooks.{uuid4()}", event_emitter=event_emitter, bridge_to_telemetry=True)
-    return run, logger, event_emitter
+    engine_emitter = EngineEventEmitter(run=run, event_sink=FileEventSink(path=run.paths.logs_dir / "events.ndjson"))
+    config_emitter = engine_emitter.config_emitter()
+    logger = build_run_logger(
+        base_name=f"test_hooks.{uuid4()}",
+        event_emitter=engine_emitter,
+        bridge_to_telemetry=True,
+    )
+    return run, logger, config_emitter
 
 
 def test_after_extract_hooks_apply_in_order_and_propagate_tables(

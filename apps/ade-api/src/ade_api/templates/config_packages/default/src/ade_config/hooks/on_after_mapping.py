@@ -18,6 +18,7 @@ The engine passes a list of MappedTable objects as `tables`. You may:
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ def run(
     tables: list[Any] | None = None,   # typically List[MappedTable]
     run: Any | None = None,
     state: dict[str, Any] | None = None,
+    file_names: tuple[str, ...] | None = None,
     manifest: Any | None = None,
     logger=None,
     event_emitter=None,
@@ -78,16 +80,7 @@ def run(
             len(mapping),
             len(extras),
         )
-
-        # Optional: structured event for monitoring or debugging visualization
-        if event_emitter is not None:
-            event_emitter.custom(
-                "hook.after_mapping_checked",
-                table_index=getattr(extracted, "table_index", None),
-                mapped_columns=len(mapping),
-                extra_columns=len(extras),
-            )
-
+        
     # -----------------------------------------------------------------------
     # EXAMPLE: No structural changes — return original tables
     # -----------------------------------------------------------------------

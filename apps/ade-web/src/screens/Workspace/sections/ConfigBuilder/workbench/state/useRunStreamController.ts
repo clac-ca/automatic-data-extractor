@@ -156,7 +156,7 @@ export function useRunStreamController({
       streamControllerRef.current = controller;
       try {
         for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
-          if (event?.type === "run.started") {
+          if (event?.type === "run.start" || event?.type === "run.started" || event?.type === "engine.start") {
             const payload = (event?.payload ?? {}) as Record<string, unknown>;
             const startedAt = typeof payload.started_at === "string" ? payload.started_at : eventTimestamp(event);
             runStartedAtRef.current = startedAt;

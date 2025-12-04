@@ -11,7 +11,8 @@ from openpyxl import load_workbook
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_extracted_tables, normalize_table, write_workbook
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
-from ade_engine.infra.telemetry import EventEmitter, FileEventSink
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -83,9 +84,10 @@ def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunCo
     )
 
 
-def _event_emitter(run: RunContext) -> EventEmitter:
+def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmitter]:
     sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
-    return EventEmitter(run=run, event_sink=sink)
+    engine_emitter = EngineEventEmitter(run=run, event_sink=sink)
+    return engine_emitter, engine_emitter.config_emitter()
 
 
 def test_writes_combined_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -115,7 +117,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
     logger = logging.getLogger("test_write")
 
     raw = ExtractedTable(
@@ -129,14 +131,27 @@ def detect_header(*, header, logger, event_emitter, **_):
         last_data_row_index=2,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run, event_emitter=event_emitter)[0]
-    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, event_emitter=event_emitter)
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
+    normalized = normalize_table(
+        ctx=run,
+        cfg=runtime,
+        mapped=mapped,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     output_path = write_workbook(
         ctx=run,
         cfg=runtime,
         tables=[normalized],
-        event_emitter=event_emitter,
+        file_names=("sample.csv",),
+        event_emitter=config_emitter,
         logger=logger,
     )
 
@@ -186,7 +201,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_dir=tmp_path)
     run = _run_context(tmp_path, runtime.manifest, request)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
     logger = logging.getLogger("test_write")
 
     raw_one = ExtractedTable(
@@ -211,17 +226,29 @@ def detect_header(*, header, logger, event_emitter, **_):
     )
 
     mapped_tables = map_extracted_tables(
-        tables=[raw_one, raw_two], runtime=runtime, run=run, event_emitter=event_emitter
+        tables=[raw_one, raw_two],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
     )
     normalized_tables = [
-        normalize_table(ctx=run, cfg=runtime, mapped=mapped, event_emitter=event_emitter) for mapped in mapped_tables
+        normalize_table(
+            ctx=run,
+            cfg=runtime,
+            mapped=mapped,
+            event_emitter=engine_emitter,
+            config_event_emitter=config_emitter,
+        )
+        for mapped in mapped_tables
     ]
 
     output_path = write_workbook(
         ctx=run,
         cfg=runtime,
         tables=normalized_tables,
-        event_emitter=event_emitter,
+        file_names=tuple(sorted({t.mapped.extracted.source_file.name for t in normalized_tables})),
+        event_emitter=config_emitter,
         logger=logger,
     )
 

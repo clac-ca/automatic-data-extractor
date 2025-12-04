@@ -380,7 +380,7 @@ workbook(s). Events use the `AdeEvent` envelope defined in
 
 ```jsonc
 {
-  "type": "run.table.summary",
+  "type": "engine.table.summary",
   "created_at": "2025-11-26T12:34:56Z",
   "sequence": 7,                // optional in engine output; added by API when replayed
   "workspace_id": "ws_123",     // from RunRequest.metadata when provided
@@ -402,26 +402,30 @@ workbook(s). Events use the `AdeEvent` envelope defined in
 Key events the engine emits:
 
 - `console.line` — via the run logger bridged by `TelemetryLogHandler`; payload has `scope:"run"`, `stream`, `level`, `message`.
-- `run.started` — emitted at the start of `Engine.run` with `status:"in_progress"` and `engine_version`.
-- `run.row_detector.score` / `run.column_detector.score` — engine-emitted scoring summaries for extraction/mapping.
-- `run.table.summary` — one per normalized table with mapping + validation breakdowns.
-- `run.validation.summary` — aggregated validation counts (optional, emitted when there are issues).
-- `run.validation.issue` — optional per-issue events.
-- `run.error` — structured error context when an exception is mapped to `RunError`.
-- `run.completed` — terminal status with `status`, `output_paths`, `processed_files`, and optional `error`.
+- `engine.start` — emitted at the start of `Engine.run` with `status:"running"`, `engine_version`, and optional `config_version`.
+- `engine.detector.row.score` / `engine.detector.column.score` — engine-emitted scoring summaries for extraction/mapping.
+- `engine.table.summary` — one per normalized table with mapping + validation breakdowns.
+- `engine.sheet.summary` / `engine.file.summary` — aggregated summaries for each sheet and file.
+- `engine.run.summary` — authoritative hierarchical summary built from in-memory artifacts.
+- `engine.validation.summary` — aggregated validation counts (optional, emitted when there are issues).
+- `engine.validation.issue` — optional per-issue events.
+- `engine.complete` — terminal status with `status`, `output_paths`, `processed_files`, and optional failure/error payloads.
 
 How it’s written:
 
 - Default sink: `FileEventSink` created by `TelemetryConfig.build_sink` (writes to `<logs_dir>/events.ndjson`).
 - Sequence/event_id: not set by the engine; the ADE API re-envelops engine events, assigns `event_id`/`sequence`, and persists them to dispatcher-backed logs for streaming.
 
-Engine-side API surface (`EventEmitter` + run `logger`):
+Engine-side API surface (`EngineEventEmitter` + run `logger`):
 
 - `logger.debug/info/warning/error(...)` → bridged to `console.line` telemetry.
-- `custom(type_suffix, **payload)` → emits `run.<type_suffix>`.
-- `phase_started(phase, **payload)` → emits `run.phase.started` (only “started” is emitted today).
-- `table_summary(table)` → emits `run.table.summary`.
+- `custom(type_suffix, **payload)` → emits `engine.<type_suffix>`.
+- `phase_start(phase, **payload)` / `phase_complete(phase, status=..., ...)` → coarse progress markers.
+- `table_summary(table_summary)` → emits `engine.table.summary`.
+- `sheet_summary(summary)` / `file_summary(summary)` → emit sheet/file summaries.
+- `run_summary(summary)` → emits `engine.run.summary`.
 - `validation_issue(**payload)` / `validation_summary(issues)` → emit validation events.
+- `complete(status=..., **payload)` → emits `engine.complete`.
 
 For the detailed taxonomy and payloads used by ADE, see
 `apps/ade-engine/docs/07-telemetry-events.md` and
