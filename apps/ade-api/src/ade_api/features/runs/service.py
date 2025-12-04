@@ -475,63 +475,20 @@ class RunsService:
         if context.build_context:
             build_context = context.build_context
             build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            if build_context.should_run:
-                async for event in self._builds_service.stream_build(
-                    context=build_context,
-                    options=build_options,
-                ):
-                    forwarded = await self._event_dispatcher.emit(
-                        type=event.type,
-                        source=event.source or "api",
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        build_id=event.build_id or build_context.build_id,
-                        payload=event.payload,
-                    )
-                    yield forwarded
-            else:
-                build = await self._builds_service.get_build_or_raise(
-                    build_context.build_id,
-                    workspace_id=build_context.workspace_id,
+            async for event in self._builds_service.stream_build(
+                context=build_context,
+                options=build_options,
+            ):
+                forwarded = await self._event_dispatcher.emit(
+                    type=event.type,
+                    source=event.source or "api",
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    build_id=event.build_id or build_context.build_id,
+                    payload=event.payload,
                 )
-                reader = self._builds_service.event_log_reader(
-                    workspace_id=build.workspace_id,
-                    configuration_id=build.configuration_id,
-                    build_id=build.id,
-                )
-                last_sequence = 0
-                for event in reader.iter(after_sequence=0):
-                    forwarded = await self._event_dispatcher.emit(
-                        type=event.type,
-                        source=event.source or "api",
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        build_id=event.build_id or build_context.build_id,
-                        payload=event.payload,
-                    )
-                    yield forwarded
-                    if event.sequence:
-                        last_sequence = max(last_sequence, event.sequence)
-                async with self._builds_service.subscribe_to_events(build.id) as subscription:
-                    async for live_event in subscription:
-                        if live_event.sequence and live_event.sequence <= last_sequence:
-                            continue
-                        forwarded = await self._event_dispatcher.emit(
-                            type=live_event.type,
-                            source=live_event.source or "api",
-                            workspace_id=run.workspace_id,
-                            configuration_id=run.configuration_id,
-                            run_id=run.id,
-                            build_id=live_event.build_id or build_context.build_id,
-                            payload=live_event.payload,
-                        )
-                        yield forwarded
-                        if live_event.sequence:
-                            last_sequence = live_event.sequence
-                        if live_event.type in {"build.complete", "build.failed"}:
-                            break
+                yield forwarded
 
             build = await self._builds_service.get_build_or_raise(
                 build_context.build_id,
