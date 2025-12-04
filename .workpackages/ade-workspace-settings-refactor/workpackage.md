@@ -1,9 +1,8 @@
----
-
 > **Agent instruction (read first):**
 >
 > * Treat this workpackage as the **single source of truth** for this task.
-> * Keep the checklist below up to date: change `[ ]` -> `[x]` as you complete tasks, and add new items when you discover more work.
+> * Keep the checklist below up to date: change `[ ]` → `[x]` as you complete tasks, and add new items when you discover more work.
+> * Update placeholders (`{{LIKE_THIS}}`) with concrete details as you learn them.
 > * Prefer small, incremental commits aligned to checklist items.
 > * If you must change the plan, **update this document first**, then the code.
 
@@ -11,78 +10,209 @@
 
 ## Work Package Checklist
 
-* [x] Add `GET /meta/versions` to ade-api that returns installed `ade-api` + `ade-engine` versions
-* [x] Add a simple "About / Versions" UI in ade-web that shows ade-web version + fetched api/engine versions
-* [x] Wire ade-web build version into the UI (single constant from build env / package.json)
-* [x] Add minimal tests (API endpoint) + docs snippet ("Where to find versions")
+* [ ] Replace the legacy Workspace Settings route + views with a **new settings shell** (no query-param “view” routing)
+* [ ] Implement **General** settings v2 (workspace identity + environment label + default workspace)
+* [ ] Implement **Members** v2 (list/add/remove + role assignment) wired to `/workspaces/{id}/members`
+* [ ] Implement **Roles** v2 (tenant role definitions + permission editor) wired to `/rbac/roles` + `/rbac/permissions`
+* [ ] Implement **Danger Zone** v2 (delete workspace) wired to `DELETE /workspaces/{id}`
+* [ ] Add shared UI primitives: permission gating, skeleton states, error boundary, save bar, confirm modals
+* [ ] Update global workspace UI to display `environment_label` consistently (workspace switcher + header)
+* [ ] Delete old settings code paths and update all internal links + docs + tests
 
 > **Agent note:**
-> Keep commits small: (1) API endpoint, (2) web UI modal, (3) wiring build version, (4) tests/docs.
+> Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
+> `- [x] Implement General v2 — commit 3a9c1e2`
 
 ---
 
-# Workpackage: Show Installed Versions in ade-web (ade-web + ade-api + ade-engine)
+# ADE Web — Workspace Settings Complete Refactor (No Backwards Compatibility)
 
 ## 1. Objective
 
 **Goal:**
-Show the currently installed versions of:
+Rebuild Workspace Settings from scratch so it’s:
 
-* `ade-web` (the frontend build)
-* `ade-api` (installed python distribution)
-* `ade-engine` (installed python distribution)
+* **obvious**: clear information architecture, consistent UX patterns
+* **correct**: matches ADE API routes + permission semantics
+* **scalable**: new workspace-level settings can be added without rewriting the page
+* **separated by scope**: Workspace settings vs System settings are not mixed
 
-**You will:**
+You will:
 
-* Add a tiny API endpoint that returns installed package versions.
-* Add a visible UI location in ade-web to display them.
+* Replace the existing settings route/view system with a new nested settings router.
+* Define a new “Workspace Settings” surface composed of:
 
-**The result should:**
+  * General (workspace identity + preferences)
+  * Members (workspace access)
+  * Roles (tenant role definitions and permissions)
+  * Danger Zone (delete workspace)
+* Use workspace `settings` as the extensible store for workspace-specific preferences (e.g. `environment_label`).
+* Ensure all actions map cleanly to the backend routes listed (workspaces + members + RBAC + system safe mode).
+* Remove any legacy UI patterns entirely (no compatibility layer; update navigational links across the app).
 
-* Be obvious to users/devs where to find versions (one click).
-* Always show versions without needing run telemetry or complex event logic.
+The result should:
+
+* Let a developer read the page components and instantly understand:
+
+  * which backend endpoints each section uses
+  * which permissions gate each action
+  * what data is stored on the workspace vs globally
+* Provide reliable behavior: loading states, optimistic updates when safe, strong confirmation flows for destructive actions.
 
 ---
 
 ## 2. Context (What you are starting from)
 
-* `ade-api` and `ade-engine` are installed in the same instance/runtime (so the API can report both installed versions).
-* `ade-web` is a separate build artifact (so it can report its own version locally).
-* No "deployment metadata" required -- only installed `x.y.z` version strings.
+You provided the definitive list of ADE API routes. Workspace Settings primarily depends on:
 
-**Constraints:**
+### Workspace routes
 
-* Keep it simple.
-* Prefer a single endpoint and a single UI page/modal.
+* `GET /api/v1/workspaces/{workspace_id}` — load workspace context
+* `PATCH /api/v1/workspaces/{workspace_id}` — update workspace metadata (name/slug/settings)
+* `DELETE /api/v1/workspaces/{workspace_id}` — delete workspace
+* `PUT /api/v1/workspaces/{workspace_id}/default` — set default workspace
+* `GET /api/v1/workspaces` — list workspaces for workspace switcher
+
+### Members routes
+
+* `GET /api/v1/workspaces/{workspace_id}/members` — list members
+* `POST /api/v1/workspaces/{workspace_id}/members` — add member (+ roles)
+* `PUT /api/v1/workspaces/{workspace_id}/members/{user_id}` — replace member roles
+* `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}` — remove member
+
+### RBAC routes (tenant-wide)
+
+* `GET /api/v1/rbac/roles` — list role definitions
+* `POST /api/v1/rbac/roles` — create role
+* `GET /api/v1/rbac/roles/{role_id}` — read role
+* `PATCH /api/v1/rbac/roles/{role_id}` — update role
+* `DELETE /api/v1/rbac/roles/{role_id}` — delete role
+* `GET /api/v1/rbac/permissions` — list permissions (to build role permission editor)
+
+### Session/bootstrap routes used for permissions and workspace nav
+
+* `GET /api/v1/me/bootstrap` — profile + roles + permissions + workspaces
+* `GET /api/v1/me/permissions` — effective permissions
+* `POST /api/v1/me/permissions/check` — permission checks (optional)
+
+### System safe mode (global; not workspace scoped)
+
+* `GET /api/v1/system/safe-mode`
+* `PUT /api/v1/system/safe-mode`
+
+**Known pain to resolve with a hard refactor**
+
+* Settings often becomes a dumping ground. We must explicitly define what “Workspace Settings” contains and what it does not.
+* RBAC role definitions are tenant-level, but role assignment for workspace members is workspace-level. The UI must make that distinction crystal clear.
 
 ---
 
 ## 3. Target architecture / structure (ideal)
 
-**Summary:**
+**IA / UX target:**
 
-* `ade-api`: exposes `/meta/versions` -> `{ ade_api: "x.y.z", ade_engine: "x.y.z" }`
-* `ade-web`: shows `ade-web` version from a local constant and fetches `/meta/versions` for the backend.
+**Workspace Settings** (scoped to current workspace)
+
+* General
+
+  * Name / Slug
+  * Environment label (workspace.settings)
+  * Default workspace (per-user preference)
+* Members
+
+  * Add user
+  * Assign roles
+  * Remove user
+* Roles (Tenant-wide)
+
+  * Create/edit/delete role definitions
+  * Select permissions per role
+  * Clear messaging: “Changing a role affects all workspaces.”
+* Danger Zone
+
+  * Delete workspace (with typed confirmation)
+
+**System Settings** (global, separate route, not “inside workspace settings”)
+
+* Safe mode toggle
+* Other future global toggles
+
+> ✅ This is a deliberate separation. Workspace settings should not include global system toggles. If you *want* a status banner in workspace settings, it can be informational and link to System Settings.
+
+### Proposed route structure (breaking, by design)
 
 ```text
-apps/
-  ade-api/
-    src/ade_api/
-      meta/
-        routes.py                # NEW: GET /meta/versions
-      infra/
-        versions.py              # NEW: helper to read installed versions
-  ade-web/
-    src/
-      shared/version.ts          # NEW: WEB_VERSION constant
-      api/meta.ts                # NEW: fetchVersions()
-      components/VersionsModal.tsx  # NEW: displays all versions
-      components/AppMenu.tsx     # add "About / Versions" entry
-tests/
-  apps/ade-api/tests/
-    test_meta_versions.py        # NEW
-docs/
-  versions.md (or existing docs) # NEW or updated section
+/workspaces/:workspaceId/settings
+  /general
+  /members
+  /roles
+  /danger
+/system/settings
+  /safe-mode
+```
+
+### Proposed file tree (frontend)
+
+```text
+apps/ade-web/
+  src/
+    app/
+      routes/
+        workspaceSettingsRoutes.tsx      # route definitions (RR v6)
+        systemSettingsRoutes.tsx
+    features/
+      workspaces/
+        api/
+          workspaces.ts                 # GET/PATCH/DELETE, list, default
+          members.ts                    # members CRUD
+        hooks/
+          useWorkspace.ts
+          useUpdateWorkspace.ts
+          useDeleteWorkspace.ts
+          useSetDefaultWorkspace.ts
+          useWorkspaceMembers.ts
+          useAddWorkspaceMember.ts
+          useUpdateWorkspaceMember.ts
+          useRemoveWorkspaceMember.ts
+        model/
+          workspaceSettings.ts          # typed settings keys + helpers
+      rbac/
+        api/
+          roles.ts                      # role defs CRUD
+          permissions.ts                # list permissions
+        hooks/
+          useRoles.ts
+          useRole.ts
+          useCreateRole.ts
+          useUpdateRole.ts
+          useDeleteRole.ts
+          usePermissions.ts
+      settings/
+        workspace/
+          WorkspaceSettingsShell.tsx     # left nav + header + outlet
+          nav.ts                         # view registry + labels
+          views/
+            GeneralSettingsView.tsx
+            MembersSettingsView.tsx
+            RolesSettingsView.tsx
+            DangerZoneSettingsView.tsx
+          components/
+            SettingsHeader.tsx
+            SettingsNav.tsx
+            SettingsCard.tsx
+            SaveBar.tsx
+            ConfirmModal.tsx
+            PermissionGate.tsx
+        system/
+          SystemSettingsShell.tsx
+          views/
+            SafeModeView.tsx
+    shared/
+      ui/
+        Toast.tsx
+        Skeleton.tsx
+        EmptyState.tsx
+        ErrorState.tsx
 ```
 
 ---
@@ -91,200 +221,361 @@ docs/
 
 ### 4.1 Design goals
 
-* **Dead simple:** only installed versions.
-* **Discoverable:** one obvious place in the UI (menu -> "About / Versions").
-* **Stable contract:** endpoint response is tiny and unlikely to change.
+* **Zero backwards compatibility:** remove old views and old route wiring entirely.
+* **Single obvious route:** settings are nested routes, not query params.
+* **Hard scope separation:** workspace vs system.
+* **Permission-first UI:** no “press button then get 403.” Buttons are disabled/hidden appropriately, and read-only states are explicit.
+* **Developer clarity:** every page indicates (in code and in UI text) which endpoint it talks to.
 
 ### 4.2 Key components / modules
 
-* **ade-api** `GET /meta/versions`
-* **ade-web** versions modal/page + a small fetcher
+* `WorkspaceSettingsShell`
+
+  * Loads workspace + permissions once
+  * Provides consistent header/nav layout
+  * Hosts nested route `<Outlet />`
+* `GeneralSettingsView`
+
+  * Workspace metadata form (PATCH workspace)
+  * Environment label field stored in `workspace.settings`
+  * Default workspace action (PUT /default)
+* `MembersSettingsView`
+
+  * Member list (GET members)
+  * Add member (POST members)
+  * Update roles (PUT member)
+  * Remove member (DELETE member)
+* `RolesSettingsView` (Tenant-wide)
+
+  * Manage role definitions (RBAC endpoints)
+  * Permission checklist (GET permissions)
+  * Clear UI copy about tenant-wide effects
+* `DangerZoneSettingsView`
+
+  * Delete workspace flow (DELETE workspace)
+* Shared UI primitives:
+
+  * `PermissionGate` (show/lock sections by required perms)
+  * `SaveBar` (dirty state + save/cancel)
+  * `ConfirmModal` (typed confirmation)
 
 ### 4.3 Key flows / pipelines
 
-* ade-web loads -> user opens "About / Versions"
-* ade-web immediately shows `ade-web` version (local), and fetches `/meta/versions`
-* render `ade-api` and `ade-engine` versions once loaded
+#### Flow A — Enter Workspace Settings
 
-### 4.4 Open questions / decisions
+1. Route loads `workspaceId`
+2. Fetch:
 
-* **Decision:** only show installed versions (`x.y.z`), no git sha/build timestamp.
-* **Decision:** UI location = app menu item "About / Versions" that opens a modal.
+   * `GET /api/v1/workspaces/{workspaceId}`
+   * `GET /api/v1/me/permissions` (or use cached bootstrap)
+3. Render settings shell with nav items filtered by permissions
+4. Default to `/general`
+
+#### Flow B — Update workspace metadata (name/slug/settings)
+
+1. User edits fields
+2. SaveBar appears
+3. Submit triggers `PATCH /api/v1/workspaces/{workspaceId}` payload:
+
+   * `{ name, slug, settings }`
+4. On success:
+
+   * toast “Saved”
+   * update workspace cache
+   * update header/workspace switcher immediately
+
+#### Flow C — Default workspace
+
+1. Click “Make default”
+2. `PUT /api/v1/workspaces/{workspaceId}/default`
+3. Refresh bootstrap/workspaces list so “default” marker updates
+
+#### Flow D — Manage members
+
+1. List via `GET /api/v1/workspaces/{workspaceId}/members`
+2. Add member modal collects:
+
+   * identifier (email or user selection; see Open Question)
+   * roles
+3. Submit `POST /members`
+4. Update roles with `PUT /members/{userId}`
+5. Remove with `DELETE /members/{userId}`
+
+#### Flow E — Manage role definitions (tenant-wide)
+
+1. List roles `GET /api/v1/rbac/roles`
+2. Create role `POST /api/v1/rbac/roles`
+3. Edit role permissions:
+
+   * fetch permissions `GET /api/v1/rbac/permissions`
+   * update role `PATCH /api/v1/rbac/roles/{roleId}`
+4. Delete role `DELETE /api/v1/rbac/roles/{roleId}`
+
+#### Flow F — Delete workspace
+
+1. “Delete workspace” card warns clearly
+2. Typed confirm requires entering workspace slug
+3. Submit `DELETE /api/v1/workspaces/{workspaceId}`
+4. On success:
+
+   * navigate to first available workspace (or workspace list)
+   * refresh bootstrap
+
+---
+
+## 4.4 Open questions / decisions
+
+* **Decision: `environment_label` lives in `workspace.settings.environment_label`.**
+
+  * Rationale: future-proof; no new columns needed; consistent with “settings dict” approach.
+
+* **Decision: Roles view is tenant-wide and is labeled that way.**
+
+  * Rationale: RBAC endpoints are tenant-level; role definition changes impact all workspaces. The UI must say this.
+
+* **Open question: Add member payload**
+
+  * The endpoint is `POST /workspaces/{id}/members`. Confirm whether it accepts:
+
+    * `email` (preferred UX)
+    * `user_id`
+    * both
+  * **Frontend implementation will adapt once request schema is confirmed**, but UX will be “type email/user and assign roles.”
+
+* **Open question: Permissions representation**
+
+  * Confirm how workspace permissions are represented in `GET /me/permissions` vs bootstrap; choose one source of truth.
+  * Recommendation: prefer bootstrap cache and only refetch permissions if stale.
 
 ---
 
 ## 5. Implementation & notes for agents
 
-### 5.1 ade-api: `/meta/versions`
+### 5.1 API mapping table (for dev clarity)
 
-**Helper: `infra/versions.py`**
-
-```py
-# apps/ade-api/src/ade_api/infra/versions.py
-from importlib.metadata import version as dist_version, PackageNotFoundError
-
-def installed_version(*dist_names: str) -> str:
-    """
-    Return the first installed version that matches any provided distribution name.
-    Keeps things robust across naming differences.
-    """
-    for name in dist_names:
-        try:
-            return dist_version(name)
-        except PackageNotFoundError:
-            continue
-    return "unknown"
-```
-
-**Route:**
-
-```py
-# apps/ade-api/src/ade_api/meta/routes.py
-from fastapi import APIRouter
-from ade_api.infra.versions import installed_version
-
-router = APIRouter(tags=["meta"])
-
-@router.get("/meta/versions")
-def get_versions():
-    return {
-        "ade_api": installed_version("ade-api", "ade_api"),
-        "ade_engine": installed_version("ade-engine", "ade_engine"),
-    }
-```
-
-**Plumbing**
-
-* Register `router` in the main FastAPI app (where other routers are included).
-
-**Minimal API test**
-
-```py
-# apps/ade-api/tests/test_meta_versions.py
-def test_meta_versions(client):
-    resp = client.get("/meta/versions")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "ade_api" in data
-    assert "ade_engine" in data
-    assert isinstance(data["ade_api"], str)
-    assert isinstance(data["ade_engine"], str)
-```
+| Settings area                | Primary endpoints                                                                     | Notes                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| General (workspace identity) | `GET /workspaces/{id}`, `PATCH /workspaces/{id}`                                      | Patch includes `{name, slug, settings}`             |
+| Environment label            | `PATCH /workspaces/{id}`                                                              | Stored under `workspace.settings.environment_label` |
+| Default workspace            | `PUT /workspaces/{id}/default`                                                        | Per-user preference                                 |
+| Members                      | `GET/POST /workspaces/{id}/members`, `PUT/DELETE /workspaces/{id}/members/{user_id}`  | Roles assigned per membership                       |
+| Roles (tenant-wide)          | `GET/POST /rbac/roles`, `PATCH/DELETE /rbac/roles/{role_id}`, `GET /rbac/permissions` | Must warn about tenant-wide impact                  |
+| Danger zone                  | `DELETE /workspaces/{id}`                                                             | Typed confirmation required                         |
+| System safe mode (global)    | `GET/PUT /system/safe-mode`                                                           | Goes on `/system/settings`, not workspace settings  |
 
 ---
 
-### 5.2 ade-web: show versions
+### 5.2 Data model and helpers
 
-#### A) Define web version constant
-
-If you are using Vite, simplest is to inject `VITE_APP_VERSION` at build time (from `package.json`).
+Create a typed helper module for workspace.settings keys:
 
 ```ts
-# apps/ade-web/src/shared/version.ts
-export const ADE_WEB_VERSION = import.meta.env.VITE_APP_VERSION ?? "unknown";
-```
+// features/workspaces/model/workspaceSettings.ts
+export const WORKSPACE_SETTINGS_KEYS = {
+  environmentLabel: "environment_label",
+} as const;
 
-**Build step (simple):**
+export type WorkspaceSettings = Record<string, unknown>;
 
-* Set `VITE_APP_VERSION` in your build pipeline to `package.json` version.
+export function readEnvironmentLabel(settings: WorkspaceSettings | null | undefined): string {
+  const v = settings?.[WORKSPACE_SETTINGS_KEYS.environmentLabel];
+  return typeof v === "string" ? v.trim() : "";
+}
 
-  * Example: `VITE_APP_VERSION=$(node -p "require('./package.json').version")`
-
-#### B) Fetch backend versions
-
-```ts
-# apps/ade-web/src/api/meta.ts
-export type VersionsResponse = {
-  ade_api: string;
-  ade_engine: string;
-};
-
-export async function fetchVersions(): Promise<VersionsResponse> {
-  const res = await fetch("/meta/versions", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to fetch versions");
-  return await res.json();
+export function writeEnvironmentLabel(
+  settings: WorkspaceSettings | null | undefined,
+  label: string
+): WorkspaceSettings {
+  const next = { ...(settings ?? {}) };
+  const trimmed = label.trim();
+  if (!trimmed) delete next[WORKSPACE_SETTINGS_KEYS.environmentLabel];
+  else next[WORKSPACE_SETTINGS_KEYS.environmentLabel] = trimmed;
+  return next;
 }
 ```
 
-#### C) Versions Modal
+Key rule: **never clobber unknown settings keys**.
+
+---
+
+### 5.3 UX spec (what the new page should feel like)
+
+**WorkspaceSettingsShell**
+
+* Left nav, sticky
+* Right content area with consistent max-width
+* Header:
+
+  * “Workspace Settings”
+  * Workspace name + environment label badge
+  * Quick link to “System Settings” for admins
+
+**General**
+
+* Card: “Workspace identity”
+
+  * Name (text)
+  * Slug (text)
+  * Workspace ID (read-only)
+* Card: “Workspace preferences”
+
+  * Environment label
+  * “Make default workspace” plus status (“This is your default”)
+* SaveBar appears when identity/preferences changed
+
+**Members**
+
+* Table list: Name, Email, Roles, Actions
+* “Add member” modal:
+
+  * email/user
+  * role multi-select (from roles list)
+* Inline role editing per row + Save
+* Remove member confirm
+
+**Roles**
+
+* Warning banner: “Roles are tenant-wide. Changes affect all workspaces.”
+* Role list with “Create role”
+* Role editor:
+
+  * Name, description
+  * Permissions checklist grouped by domain (workspace.*, runs.*, configs.*, system.*)
+  * Save, Delete
+
+**Danger Zone**
+
+* Card: “Delete workspace”
+* Typed confirm requires workspace slug
+* explicit warning about loss of configurations, documents, runs, etc.
+
+---
+
+### 5.4 Permission gating strategy (no 403-driven UX)
+
+Implement a single `PermissionGate` component:
 
 ```tsx
-# apps/ade-web/src/components/VersionsModal.tsx
-import React from "react";
-import { ADE_WEB_VERSION } from "../shared/version";
-import { fetchVersions, VersionsResponse } from "../api/meta";
+type PermissionGateProps = {
+  require: { workspace?: string[]; global?: string[] };
+  fallback?: React.ReactNode; // read-only message or null
+  children: React.ReactNode;
+};
 
-export function VersionsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [data, setData] = React.useState<VersionsResponse | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!open) return;
-    setData(null);
-    setError(null);
-    fetchVersions().then(setData).catch((e) => setError(e.message ?? "Error"));
-  }, [open]);
-
-  if (!open) return null;
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal">
-        <div className="modal-header">
-          <h2>About / Versions</h2>
-          <button onClick={onClose}>Close</button>
-        </div>
-
-        <div className="section">
-          <div className="row">
-            <span className="label">ade-web</span>
-            <span className="value">{ADE_WEB_VERSION}</span>
-          </div>
-
-          <div className="row">
-            <span className="label">ade-api</span>
-            <span className="value">{data?.ade_api ?? (error ? "unavailable" : "loading...")}</span>
-          </div>
-
-          <div className="row">
-            <span className="label">ade-engine</span>
-            <span className="value">{data?.ade_engine ?? (error ? "unavailable" : "loading...")}</span>
-          </div>
-        </div>
-
-        {error && <div className="error">Could not load backend versions: {error}</div>}
-      </div>
-    </div>
-  );
-}
+function PermissionGate(...) { ... }
 ```
 
-#### D) Entry point in UI (menu)
+Rules:
 
-* Add "About / Versions" to your existing app menu / user menu / help menu.
-* Clicking opens the modal.
+* If user lacks read access for a view, hide it from nav and redirect.
+* If user can read but cannot manage, show view in read-only mode and disable actions with tooltip.
 
-This is the only UX choice you need to make.
+Source of truth:
 
----
-
-### 5.3 Documentation
-
-Add a short doc section (or README snippet):
-
-* "To see installed versions: open **About / Versions** in the UI"
-* "For API automation: call `GET /meta/versions`"
+* `GET /api/v1/me/bootstrap` and/or `GET /api/v1/me/permissions`
 
 ---
 
-### 5.4 Done criteria
+### 5.5 Networking / state management
 
-* UI shows **ade-web** version instantly.
-* UI displays **ade-api** and **ade-engine** installed versions from `/meta/versions`.
-* Endpoint works in local + deployed.
-* One minimal API test added.
-* Docs updated.
+Standardize API files per feature domain:
+
+* `features/workspaces/api/workspaces.ts`
+* `features/workspaces/api/members.ts`
+* `features/rbac/api/roles.ts`
+* `features/rbac/api/permissions.ts`
+
+And expose hooks that wrap them (React Query recommended):
+
+* `useWorkspace(workspaceId)`
+* `useUpdateWorkspace(workspaceId)`
+* `useWorkspaceMembers(workspaceId)`
+* `useAddWorkspaceMember(workspaceId)`
+* `useUpdateWorkspaceMember(workspaceId)`
+* `useRemoveWorkspaceMember(workspaceId)`
+* `useRoles()`, `usePermissions()`, `useCreateRole()`, etc.
+
+Key: one “mutation style” across the app:
+
+* show toasts on success/failure
+* map backend validation errors to fields
+* invalidate relevant queries
 
 ---
 
-If you tell me what frontend stack you are using (Vite vs Next vs something else), I can tailor the exact "web version" injection to match, but the workpackage above will work as-is for most React/Vite setups.
+### 5.6 Delete the old system completely
+
+Since you want no compatibility:
+
+* Remove the old workspace settings components and routing logic.
+* Remove any query-param `view=` navigation.
+* Update all internal links that pointed to old syntax.
+
+Deliverable: a single new entry route:
+
+* `/workspaces/:workspaceId/settings/*`
+
+And a new system settings route:
+
+* `/system/settings/*`
+
+---
+
+### 5.7 Tests (required)
+
+Add/Update tests:
+
+1. **Routing**
+
+* entering `/workspaces/:id/settings` redirects to `/general`
+* permission missing redirects to first available section
+
+2. **General**
+
+* PATCH payload includes merged settings
+* default workspace button calls correct endpoint and updates UI
+
+3. **Members**
+
+* add member calls POST and refreshes list
+* role update calls PUT and refreshes list
+* remove calls DELETE and refreshes list
+
+4. **Roles**
+
+* create role calls POST
+* edit role calls PATCH
+* delete role calls DELETE
+* permissions list is fetched and rendered
+
+5. **Danger zone**
+
+* delete button disabled until slug matches
+* on success navigates away and workspace disappears
+
+---
+
+### 5.8 Documentation + developer friendliness (DoD)
+
+* Update frontend docs (where workspace layout/settings are described) to match the new route structure and section breakdown.
+* Add a short README near `features/settings/workspace` explaining:
+
+  * the scope separation
+  * the endpoints used per section
+  * how settings keys are stored in workspace.settings
+
+---
+
+## Summary: What the new Workspace Settings contains
+
+**Workspace Settings**
+
+* Identity (name/slug)
+* Preferences (environment label, default workspace)
+* Members (access control)
+* Roles (tenant-wide definitions)
+* Danger zone (delete workspace)
+
+**NOT in Workspace Settings**
+
+* System safe mode toggle (global) → goes to System Settings route
