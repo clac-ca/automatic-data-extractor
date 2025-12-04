@@ -27,7 +27,7 @@ def run(
     *,
     run: Any | None = None,            # RunContext: run_id, metadata, etc.
     state: dict[str, Any] | None = None,  # shared dict for all hooks
-    file_names: tuple[str, ...] | None = None,  # source files (if known)
+    input_file_name: str | None = None,  # source file (if known)
     manifest: Any | None = None,       # manifest context for this run
     logger=None,                       # logging.Logger instance
     event_emitter=None,                # EventEmitter instance

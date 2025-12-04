@@ -302,11 +302,23 @@ async def stream_run_events_endpoint(
     async def event_stream() -> AsyncIterator[bytes]:
         reader = service.event_log_reader(workspace_id=run.workspace_id, run_id=run.id)
         last_sequence = start_sequence
+        stream_complete = False
 
         for event in reader.iter(after_sequence=start_sequence):
             yield _sse_event_bytes(event)
             if event.sequence:
                 last_sequence = event.sequence
+            if event.type == "run.complete":
+                stream_complete = True
+                break
+
+        run_finished = run.status in {
+            RunStatus.SUCCEEDED,
+            RunStatus.FAILED,
+            RunStatus.CANCELLED,
+        }
+        if stream_complete or run_finished:
+            return
 
         async with service.subscribe_to_events(run.id) as subscription:
             async for live_event in subscription:

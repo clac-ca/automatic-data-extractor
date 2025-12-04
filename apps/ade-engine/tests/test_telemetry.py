@@ -24,7 +24,7 @@ from ade_engine.schemas.telemetry import AdeEvent
 
 def build_run_context(tmp_path: Path) -> RunContext:
     paths = RunPaths(
-        input_dir=tmp_path / "input",
+        input_file=tmp_path / "input" / "data.xlsx",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
     )

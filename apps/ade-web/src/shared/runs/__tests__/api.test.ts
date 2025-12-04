@@ -8,6 +8,7 @@ import type { AdeEvent } from "@shared/runs/types";
 const encoder = new TextEncoder();
 
 function createSseStream() {
+  let closed = false;
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   const stream = new ReadableStream<Uint8Array>({
     start(ctrl) {
@@ -17,11 +18,18 @@ function createSseStream() {
   return {
     stream,
     emit(event: AdeEvent) {
+      if (closed) return;
       const payload = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
       controller?.enqueue(encoder.encode(payload));
     },
     close() {
-      controller?.close();
+      if (closed) return;
+      closed = true;
+      try {
+        controller?.close();
+      } catch {
+        // stream already closed
+      }
     },
   };
 }
@@ -130,6 +138,7 @@ describe("streamRun", () => {
       }
     })();
 
+    await Promise.resolve();
     await Promise.resolve();
     expect(fetchMock).toHaveBeenCalled();
     const [url] = fetchMock.mock.calls[0] ?? [];

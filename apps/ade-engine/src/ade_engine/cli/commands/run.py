@@ -22,8 +22,7 @@ def _parse_metadata(values: list[str]) -> dict[str, str]:
 
 
 def run_command(
-    input: Optional[Path] = typer.Option(None, "--input", exists=True, file_okay=True, dir_okay=False),
-    input_dir: Optional[Path] = typer.Option(None, "--input-dir", exists=True, file_okay=False, dir_okay=True),
+    input: Optional[Path] = typer.Option(None, "--input", exists=True, file_okay=True, dir_okay=False, help="Source file to process"),
     input_sheet: list[str] = typer.Option([], "--input-sheet"),
     output_dir: Optional[Path] = typer.Option(None, "--output-dir", file_okay=False, dir_okay=True),
     logs_dir: Optional[Path] = typer.Option(None, "--logs-dir", file_okay=False, dir_okay=True),
@@ -33,11 +32,13 @@ def run_command(
 ) -> None:
     """Execute the engine once and print a JSON summary."""
 
+    if input is None:
+        raise typer.BadParameter("--input is required")
+
     request = RunRequest(
         config_package=config_package,
         manifest_path=manifest_path,
-        input_files=[input] if input else None,
-        input_dir=input_dir,
+        input_file=input,
         input_sheets=input_sheet or None,
         output_dir=output_dir,
         logs_dir=logs_dir,

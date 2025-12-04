@@ -71,31 +71,18 @@ ade-engine run \
   [METADATA]
 ```
 
-### 3.1 Source selection (mutually exclusive)
+### 3.1 Source selection
 
-Exactly one of these must be provided:
+Exactly one source file must be provided:
 
-* `--input PATH` (repeatable)
-  One or more explicit source files:
+* `--input PATH`
+  Single explicit source file:
 
   ```bash
   --input /data/runs/123/input/input.xlsx
-  --input /data/runs/123/input/other.xlsx
   ```
 
-  → `RunRequest.input_files = [Path(...), Path(...)]`
-
-* `--input-dir DIR`
-  Directory to scan for source spreadsheets (`.csv`, `.xlsx`):
-
-  ```bash
-  --input-dir /data/runs/123/input
-  ```
-
-  → `RunRequest.input_dir = Path(...)`
-
-If both `--input` and `--input-dir` are provided, the CLI fails fast with a
-usage error (mirroring the `RunRequest` invariant).
+  → `RunRequest.input_file = Path(...)`
 
 ### 3.2 Sheet filtering (XLSX only)
 
@@ -287,11 +274,11 @@ A typical end‑to‑end flow:
 
      result = run(
          config_package="ade_config",
-        input_files=[Path(f"/data/runs/{run_id}/input/input.xlsx")],
-        output_dir=Path(f"/data/runs/{run_id}/output"),
-        logs_dir=Path(f"/data/runs/{run_id}/logs"),
-        metadata={"run_id": run_id, "config_id": config_id},
-    )
+         input_file=Path(f"/data/runs/{run_id}/input/input.xlsx"),
+         output_dir=Path(f"/data/runs/{run_id}/output"),
+         logs_dir=Path(f"/data/runs/{run_id}/logs"),
+         metadata={"run_id": run_id, "config_id": config_id},
+     )
      ```
 
 5. **Worker updates backend state**:
@@ -355,7 +342,7 @@ from pathlib import Path
 from ade_engine import run
 
 result = run(
-    input_files=[Path("examples/input.xlsx")],
+    input_file=Path("examples/input.xlsx"),
     output_dir=Path("examples/output"),
     logs_dir=Path("examples/logs"),
     metadata={"debug": True},

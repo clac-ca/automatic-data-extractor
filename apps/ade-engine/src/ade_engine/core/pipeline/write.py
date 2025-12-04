@@ -52,7 +52,7 @@ def write_workbook(
     ctx: RunContext,
     cfg: ConfigRuntime,
     tables: list[NormalizedTable],
-    file_names: tuple[str, ...] | None,
+    input_file_name: str | None,
     event_emitter: ConfigEventEmitter,
     logger: logging.Logger | None = None,
 ) -> Path:
@@ -118,7 +118,7 @@ def write_workbook(
         HookStage.ON_BEFORE_SAVE,
         cfg.hooks,
         run=ctx,
-        file_names=file_names,
+        input_file_name=input_file_name,
         manifest=cfg.manifest,
         tables=sorted_tables,
         workbook=workbook,

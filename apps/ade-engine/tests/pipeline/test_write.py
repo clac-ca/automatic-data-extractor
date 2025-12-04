@@ -71,7 +71,7 @@ def _write_hook(pkg_dir: Path, name: str, body: str) -> None:
 
 def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunContext:
     paths = RunPaths(
-        input_dir=request.input_dir or tmp_path,
+        input_file=request.input_file or tmp_path / "input.csv",
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -115,7 +115,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
     engine_emitter, config_emitter = _event_emitters(run)
     logger = logging.getLogger("test_write")
@@ -150,7 +150,7 @@ def detect_header(*, header, logger, event_emitter, **_):
         ctx=run,
         cfg=runtime,
         tables=[normalized],
-        file_names=("sample.csv",),
+        input_file_name="sample.csv",
         event_emitter=config_emitter,
         logger=logger,
     )
@@ -199,7 +199,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
     engine_emitter, config_emitter = _event_emitters(run)
     logger = logging.getLogger("test_write")
@@ -247,7 +247,7 @@ def detect_header(*, header, logger, event_emitter, **_):
         ctx=run,
         cfg=runtime,
         tables=normalized_tables,
-        file_names=tuple(sorted({t.mapped.extracted.source_file.name for t in normalized_tables})),
+        input_file_name=normalized_tables[0].mapped.extracted.source_file.name,
         event_emitter=config_emitter,
         logger=logger,
     )

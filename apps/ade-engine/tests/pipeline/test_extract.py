@@ -69,7 +69,7 @@ def detect_labels(*, row_values, logger, event_emitter, **_):
 
 def _make_run_context(tmp_path: Path, run_request: RunRequest, manifest: object) -> RunContext:
     paths = RunPaths(
-        input_dir=run_request.input_dir or tmp_path,
+        input_file=run_request.input_file or tmp_path / "input.csv",
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
@@ -97,7 +97,7 @@ def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.Monke
     source_file.write_text("Header A,Header B\nvalue-1,1\nvalue-2,2\n")
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_files=[source_file])
+    request = RunRequest(input_file=source_file)
     run = _make_run_context(tmp_path, request, runtime.manifest)
     engine_emitter, config_emitter = _event_emitters(run)
 
@@ -146,7 +146,7 @@ def test_detects_multiple_tables_per_sheet(tmp_path: Path, monkeypatch: pytest.M
     workbook.save(source_file)
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_files=[source_file])
+    request = RunRequest(input_file=source_file)
     run = _make_run_context(tmp_path, request, runtime.manifest)
     engine_emitter, config_emitter = _event_emitters(run)
 
@@ -176,7 +176,7 @@ def test_missing_requested_sheet_raises(tmp_path: Path, monkeypatch: pytest.Monk
     workbook.save(tmp_path / "input.xlsx")
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_files=[tmp_path / "input.xlsx"], input_sheets=["Missing"])
+    request = RunRequest(input_file=tmp_path / "input.xlsx", input_sheets=["Missing"])
     run = _make_run_context(tmp_path, request, runtime.manifest)
     engine_emitter, config_emitter = _event_emitters(run)
 

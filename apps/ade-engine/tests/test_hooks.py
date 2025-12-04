@@ -77,12 +77,14 @@ def _write_hook(pkg_root: Path, name: str, body: str) -> None:
 
 
 def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, logging.Logger, ConfigEventEmitter]:
+    input_root = tmp_path / "input"
+    input_root.mkdir()
     paths = RunPaths(
-        input_dir=tmp_path / "input",
+        input_file=input_root / "data.csv",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
     )
-    for path in (paths.input_dir, paths.output_dir, paths.logs_dir):
+    for path in (paths.output_dir, paths.logs_dir):
         path.mkdir()
 
     run = RunContext(
@@ -138,7 +140,7 @@ def run(*, tables, run, logger, event_emitter, **_):
 
     tables = [
         ExtractedTable(
-            source_file=run.paths.input_dir / "data.csv",
+            source_file=run.paths.input_file.parent / "data.csv",
             source_sheet=None,
             table_index=1,
             header_row=["col1"],
@@ -148,7 +150,7 @@ def run(*, tables, run, logger, event_emitter, **_):
             last_data_row_index=3,
         ),
         ExtractedTable(
-            source_file=run.paths.input_dir / "other.csv",
+            source_file=run.paths.input_file.parent / "other.csv",
             source_sheet=None,
             table_index=2,
             header_row=["ignored"],
@@ -163,6 +165,7 @@ def run(*, tables, run, logger, event_emitter, **_):
         stage=HookStage.ON_AFTER_EXTRACT,
         registry=runtime.hooks,
         run=run,
+        input_file_name=run.paths.input_file.name,
         manifest=runtime.manifest,
         logger=logger,
         event_emitter=event_emitter,

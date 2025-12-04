@@ -733,6 +733,7 @@ class RunsService:
                 failure_stage="run",
                 failure_code="orchestration_error",
                 failure_message=str(error),
+                summary=placeholder_summary.model_dump(mode="json"),
             ),
         )
 
@@ -1350,6 +1351,7 @@ class RunsService:
         failure_stage: str | None = None,
         failure_code: str | None = None,
         failure_message: str | None = None,
+        summary: dict[str, Any] | None = None,
     ) -> RunCompletedPayload:
         failure: dict[str, Any] | None = None
         if any([failure_stage, failure_code, failure_message]):
@@ -1358,6 +1360,38 @@ class RunsService:
                 "code": failure_code,
                 "message": failure_message,
             }
+
+        summary_payload = (
+            summary
+            if isinstance(summary, dict)
+            else self._deserialize_run_summary(run.summary)
+        )
+        if not isinstance(summary_payload, dict):
+            summary_payload = {}
+
+        run_block = summary_payload.get("run")
+        if not isinstance(run_block, dict):
+            run_block = {}
+
+        run_block.setdefault("id", str(run.id))
+        run_block.setdefault(
+            "status",
+            run.status.value if hasattr(run.status, "value") else str(run.status),
+        )
+        if run.started_at:
+            run_block.setdefault("started_at", self._ensure_utc(run.started_at))
+        if run.finished_at:
+            run_block.setdefault("completed_at", self._ensure_utc(run.finished_at))
+        if paths.output_paths:
+            run_block.setdefault("outputs", list(paths.output_paths))
+
+        failure_hint = failure_message or run.error_message
+        if isinstance(failure, dict):
+            failure_hint = failure_hint or failure.get("message")
+        if failure_hint:
+            run_block.setdefault("failure_message", failure_hint)
+
+        summary_payload["run"] = run_block
 
         return RunCompletedPayload(
             status=run.status,
@@ -1372,7 +1406,7 @@ class RunsService:
                 "output_paths": paths.output_paths,
                 "events_path": paths.events_path,
             },
-            summary=None,
+            summary=summary_payload or {},
         )
 
     @staticmethod
@@ -1742,6 +1776,8 @@ class RunsService:
             payload=self._run_completed_payload(
                 run=completion,
                 paths=paths_snapshot,
+                summary=placeholder_summary.model_dump(mode="json"),
+                failure_message="Validation-only execution",
             ),
         )
         logger.info(
@@ -1812,6 +1848,8 @@ class RunsService:
             payload=self._run_completed_payload(
                 run=completion,
                 paths=paths_snapshot,
+                summary=placeholder_summary.model_dump(mode="json"),
+                failure_message=message,
             ),
         )
 
@@ -1900,22 +1938,25 @@ class RunsService:
                         run=completion,
                         type_="run.complete",
                         payload=self._run_completed_payload(
-                            run=completion,
-                            paths=paths_snapshot,
-                            failure_stage=(
-                                "run"
-                                if event.status is RunStatus.FAILED
-                                else None
-                            ),
-                            failure_code=(
-                                "engine_summary_missing"
-                                if engine_summary is None
-                                else None
-                            ),
-                            failure_message=event.error_message,
+                        run=completion,
+                        paths=paths_snapshot,
+                        failure_stage=(
+                            "run"
+                            if event.status is RunStatus.FAILED
+                            else None
                         ),
-                    )
-                    continue
+                        failure_code=(
+                            "engine_summary_missing"
+                            if engine_summary is None
+                            else None
+                        ),
+                        failure_message=event.error_message,
+                        summary=summary_model.model_dump(mode="json")
+                        if summary_model
+                        else None,
+                    ),
+                )
+                continue
                 if isinstance(event, AdeEvent):
                     payload_dict = event.payload_dict()
                     if event.type == "engine.run.summary":
@@ -2008,6 +2049,7 @@ class RunsService:
                     failure_stage="run",
                     failure_code="run_cancelled",
                     failure_message=completion.error_message,
+                    summary=placeholder_summary.model_dump(mode="json"),
                 ),
             )
             raise
@@ -2060,6 +2102,7 @@ class RunsService:
                     failure_stage="run",
                     failure_code="engine_error",
                     failure_message=completion.error_message,
+                    summary=placeholder_summary.model_dump(mode="json"),
                 ),
             )
             return

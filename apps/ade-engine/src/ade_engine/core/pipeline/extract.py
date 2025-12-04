@@ -22,7 +22,7 @@ from openpyxl import load_workbook
 from ade_engine.config.loader import ConfigRuntime
 from ade_engine.core.errors import ConfigError, InputError
 from ade_engine.core.types import ExtractedTable, RunContext, RunRequest
-from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows, list_input_files
+from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 
 RowDetectorFn = Callable[..., Mapping[str, Any]]
@@ -96,7 +96,7 @@ def _score_rows(
     rows: Iterator[tuple[int, list[Any]]],
     detectors: list[RowDetectorFn],
     run: RunContext,
-    file_name: str | None,
+    input_file_name: str | None,
     manifest: Any,
     logger: logging.Logger,
     state: dict[str, Any],
@@ -114,7 +114,8 @@ def _score_rows(
                 state=state,
                 row_index=row_index,
                 row_values=values,
-                file_name=file_name,
+                input_file_name=input_file_name,
+                file_name=input_file_name,
                 manifest=manifest,
                 logger=logger,
                 event_emitter=detector_emitter,
@@ -236,12 +237,10 @@ def extract_raw_tables(
     detectors = _load_row_detectors(runtime.package)
     state: dict[str, Any] = {}
 
-    if request.input_files:
-        source_files = [Path(path).resolve() for path in request.input_files]
-    elif request.input_dir:
-        source_files = list_input_files(request.input_dir)
-    else:
-        raise InputError("RunRequest must include either input_files or input_dir")
+    if not request.input_file:
+        raise InputError("RunRequest must include input_file")
+
+    source_files = [Path(request.input_file).resolve()]
 
     detected: list[ExtractedTable] = []
     for source_file in source_files:
@@ -251,7 +250,7 @@ def extract_raw_tables(
                 rows=iter_csv_rows(source_file),
                 detectors=detectors,
                 run=run,
-                file_name=source_file.name,
+                input_file_name=source_file.name,
                 manifest=runtime.manifest,
                 logger=logger,
                 state=state,
@@ -274,7 +273,7 @@ def extract_raw_tables(
                 rows=iter_sheet_rows(source_file, sheet_name),
                 detectors=detectors,
                 run=run,
-                file_name=source_file.name,
+                input_file_name=source_file.name,
                 manifest=runtime.manifest,
                 logger=logger,
                 state=state,

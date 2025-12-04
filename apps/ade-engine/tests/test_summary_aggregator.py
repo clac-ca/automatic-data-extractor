@@ -29,7 +29,7 @@ def _run_context() -> RunContext:
         },
         manifest=None,
         paths=RunPaths(
-            input_dir=Path("input"),
+            input_file=Path("input.csv"),
             output_dir=Path("output"),
             logs_dir=Path("logs"),
         ),

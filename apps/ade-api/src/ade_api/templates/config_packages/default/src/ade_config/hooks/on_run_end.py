@@ -34,7 +34,7 @@ def run(
     logger=None,
     event_emitter=None,
     state: dict[str, Any] | None = None,
-    file_names: tuple[str, ...] | None = None,
+    input_file_name: str | None = None,
     manifest: Any | None = None,
     tables: list[Any] | None = None,
     workbook: Any | None = None,
