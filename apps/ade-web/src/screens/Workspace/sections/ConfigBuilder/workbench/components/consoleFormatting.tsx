@@ -117,7 +117,6 @@ function formatStructuredEvent(event: Record<string, unknown>) {
       return `Run started${mode ? ` (${mode})` : ""}.`;
     }
     case "run.complete":
-    case "run.completed":
     case "engine.run.summary":
     case "engine.complete":
       return `Run ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;

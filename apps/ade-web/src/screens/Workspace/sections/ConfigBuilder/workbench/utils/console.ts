@@ -257,7 +257,6 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.completed":
     case "run.complete":
     case "engine.complete":
     case "engine.run.summary":
