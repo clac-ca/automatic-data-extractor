@@ -21,7 +21,11 @@ def _validate_keyword_only(func: Callable[..., object], *, label: str) -> None:
     """Ensure a callable uses keyword-only parameters and allows future kwargs."""
 
     signature = inspect.signature(func)
-    invalid_params = [p for p in signature.parameters.values() if p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD]
+    invalid_params = [
+        p
+        for p in signature.parameters.values()
+        if p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.POSITIONAL_ONLY)
+    ]
     if invalid_params:
         names = ", ".join(p.name for p in invalid_params)
         raise ConfigError(f"{label} must declare keyword-only parameters (invalid: {names})")

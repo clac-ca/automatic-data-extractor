@@ -23,10 +23,10 @@ describe("runStreamReducer", () => {
   it("moves through build and run lifecycle and clamps console lines", () => {
     const state = createRunStreamState(2);
     const events: AdeEvent[] = [
-      { type: "build.started", created_at: "2024-01-01T00:00:01Z", payload: {} },
-      { type: "run.started", created_at: "2024-01-01T00:00:02Z", payload: {} },
+      { type: "build.start", created_at: "2024-01-01T00:00:01Z", payload: {} },
+      { type: "run.start", created_at: "2024-01-01T00:00:02Z", payload: {} },
       {
-        type: "run.completed",
+        type: "run.complete",
         created_at: "2024-01-01T00:00:03Z",
         payload: { status: "succeeded" },
       },
@@ -56,7 +56,7 @@ describe("runStreamReducer", () => {
   it("captures run mode hints from events", () => {
     const state = createRunStreamState(4);
     const event: AdeEvent = {
-      type: "run.started",
+      type: "run.start",
       created_at: "2024-01-01T00:00:04Z",
       payload: { mode: "validation" },
     };

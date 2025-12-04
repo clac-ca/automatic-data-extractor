@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import sys
 import textwrap
 from datetime import datetime, timezone
@@ -16,14 +17,16 @@ from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.errors import HookError
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunResult, RunStatus
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.logging import build_run_logger
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 BASE_MANIFEST = {
     "schema": "ade.manifest/v1",
     "version": "1.0.0",
     "name": "Hook Config",
     "description": None,
-    "script_api_version": 2,
+    "script_api_version": 3,
     "columns": {"order": [], "fields": {}},
     "hooks": {
         "on_run_start": [],
@@ -73,13 +76,15 @@ def _write_hook(pkg_root: Path, name: str, body: str) -> None:
     (hooks_dir / f"{name}.py").write_text(textwrap.dedent(body), encoding="utf-8")
 
 
-def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, PipelineLogger]:
+def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, logging.Logger, ConfigEventEmitter]:
+    input_root = tmp_path / "input"
+    input_root.mkdir()
     paths = RunPaths(
-        input_dir=tmp_path / "input",
+        input_file=input_root / "data.csv",
         output_dir=tmp_path / "output",
         logs_dir=tmp_path / "logs",
     )
-    for path in (paths.input_dir, paths.output_dir, paths.logs_dir):
+    for path in (paths.output_dir, paths.logs_dir):
         path.mkdir()
 
     run = RunContext(
@@ -89,7 +94,14 @@ def _run_and_logger(manifest_context, tmp_path: Path) -> tuple[RunContext, Pipel
         paths=paths,
         started_at=datetime.now(timezone.utc),
     )
-    return run, PipelineLogger(run=run)
+    engine_emitter = EngineEventEmitter(run=run, event_sink=FileEventSink(path=run.paths.logs_dir / "events.ndjson"))
+    config_emitter = engine_emitter.config_emitter()
+    logger = build_run_logger(
+        base_name=f"test_hooks.{uuid4()}",
+        event_emitter=engine_emitter,
+        bridge_to_telemetry=True,
+    )
+    return run, logger, config_emitter
 
 
 def test_after_extract_hooks_apply_in_order_and_propagate_tables(
@@ -105,9 +117,9 @@ def test_after_extract_hooks_apply_in_order_and_propagate_tables(
 from typing import Sequence
 from ade_engine.core.types import ExtractedTable
 
-def run(*, tables: Sequence[ExtractedTable] | None, run, logger, **_):
+def run(*, tables: Sequence[ExtractedTable] | None, run, logger, event_emitter, **_):
     run.state.setdefault("order", []).append("first")
-    logger.note("first hook")
+    logger.info("first hook")
     return list(tables or [])[:1]
 """,
     )
@@ -115,7 +127,7 @@ def run(*, tables: Sequence[ExtractedTable] | None, run, logger, **_):
         config_package,
         "second",
         """
-def run(*, tables, run, **_):
+def run(*, tables, run, logger, event_emitter, **_):
     run.state.setdefault("order", []).append("second")
     if tables:
         tables[0].header_row.append("extra")
@@ -124,11 +136,11 @@ def run(*, tables, run, **_):
     )
 
     runtime = load_config_runtime(package="ade_config", manifest_path=manifest_path)
-    run, logger = _run_and_logger(runtime.manifest, tmp_path)
+    run, logger, event_emitter = _run_and_logger(runtime.manifest, tmp_path)
 
     tables = [
         ExtractedTable(
-            source_file=run.paths.input_dir / "data.csv",
+            source_file=run.paths.input_file.parent / "data.csv",
             source_sheet=None,
             table_index=1,
             header_row=["col1"],
@@ -138,7 +150,7 @@ def run(*, tables, run, **_):
             last_data_row_index=3,
         ),
         ExtractedTable(
-            source_file=run.paths.input_dir / "other.csv",
+            source_file=run.paths.input_file.parent / "other.csv",
             source_sheet=None,
             table_index=2,
             header_row=["ignored"],
@@ -153,8 +165,10 @@ def run(*, tables, run, **_):
         stage=HookStage.ON_AFTER_EXTRACT,
         registry=runtime.hooks,
         run=run,
+        input_file_name=run.paths.input_file.name,
         manifest=runtime.manifest,
         logger=logger,
+        event_emitter=event_emitter,
         tables=tables,
     )
 
@@ -171,8 +185,8 @@ def test_on_before_save_prefers_workbook_returned_by_hook(config_package: Path, 
         """
 from openpyxl import Workbook
 
-def run(*, workbook, logger, **_):
-    logger.note("replacing workbook")
+def run(*, workbook, logger, event_emitter, **_):
+    logger.info("replacing workbook")
     wb = Workbook()
     sheet = wb.active
     sheet.title = "custom"
@@ -182,7 +196,7 @@ def run(*, workbook, logger, **_):
     )
 
     runtime = load_config_runtime(package="ade_config", manifest_path=manifest_path)
-    run, logger = _run_and_logger(runtime.manifest, tmp_path)
+    run, logger, event_emitter = _run_and_logger(runtime.manifest, tmp_path)
 
     original = Workbook()
     original.active.title = "original"
@@ -193,6 +207,7 @@ def run(*, workbook, logger, **_):
         run=run,
         manifest=runtime.manifest,
         logger=logger,
+        event_emitter=event_emitter,
         workbook=original,
     )
 
@@ -208,13 +223,13 @@ def test_hook_error_includes_stage_and_module_path(config_package: Path, tmp_pat
         config_package,
         "fail",
         """
-def run(*_, **__):
+def run(*, logger, event_emitter, **__):
     raise RuntimeError("boom")
 """,
     )
 
     runtime = load_config_runtime(package="ade_config", manifest_path=manifest_path)
-    run, logger = _run_and_logger(runtime.manifest, tmp_path)
+    run, logger, event_emitter = _run_and_logger(runtime.manifest, tmp_path)
     result = RunResult(
         status=RunStatus.SUCCEEDED,
         error=None,
@@ -229,10 +244,11 @@ def run(*_, **__):
             stage=HookStage.ON_RUN_END,
             registry=runtime.hooks,
             run=run,
-            manifest=runtime.manifest,
-            logger=logger,
-            result=result,
-        )
+        manifest=runtime.manifest,
+        logger=logger,
+        event_emitter=event_emitter,
+        result=result,
+    )
 
     message = str(excinfo.value)
     assert "on_run_end" in message

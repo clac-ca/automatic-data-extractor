@@ -3,7 +3,7 @@
   "version": "1.2.3",
   "name": "Demo Config",
   "description": null,
-  "script_api_version": 2,
+  "script_api_version": 3,
   "columns": {
     "order": [
       "member_id",

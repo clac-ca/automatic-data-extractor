@@ -42,6 +42,7 @@ from .builder import (
     BuilderStepEvent,
     VirtualEnvironmentBuilder,
 )
+from .emitters import BuildEventEmitter
 from .event_dispatcher import BuildEventDispatcher, BuildEventLogReader, BuildEventStorage
 from .exceptions import (
     BuildAlreadyInProgressError,
@@ -216,21 +217,12 @@ class BuildsService:
         )
 
         ready_build: Build | None = None
-        if configuration.active_build_id:
-            existing = await self._builds.get(configuration.active_build_id)
-            if (
-                existing
-                and existing.status is BuildStatus.READY
-                and existing.fingerprint == fingerprint
-            ):
-                ready_build = existing
-        if ready_build is None and not options.force:
-            ready_build = await self._builds.get_ready_by_fingerprint(
-                configuration_id=configuration.id,
+        if not options.force:
+            ready_build = await self._find_ready_build_match(
+                configuration=configuration,
                 fingerprint=fingerprint,
             )
-
-        if ready_build and not options.force:
+        if ready_build:
             await self._sync_active_pointer(configuration, ready_build, fingerprint)
             context = self._reuse_context(
                 build=ready_build,
@@ -414,7 +406,7 @@ class BuildsService:
             summary = build.summary or context.reuse_summary
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload={
                     "status": build.status,
                     "summary": summary,
@@ -441,7 +433,7 @@ class BuildsService:
         )
         yield await self._emit_event(
             build=build,
-            type_="build.started",
+            type_="build.start",
             payload=BuildStartedPayload(status="building", reason=reason),
             run_id=context.run_id,
         )
@@ -465,9 +457,9 @@ class BuildsService:
                 if isinstance(event, BuilderStepEvent):
                     yield await self._emit_event(
                         build=build,
-                        type_="build.progress",
+                        type_="build.phase.start",
                         payload={
-                            "step": event.step.value,
+                            "phase": event.step.value,
                             "message": event.message,
                         },
                         run_id=context.run_id,
@@ -504,7 +496,7 @@ class BuildsService:
             build = await self._require_build(build.id)
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload=BuildCompletedPayload(
                     status=build.status,
                     exit_code=build.exit_code,
@@ -532,7 +524,7 @@ class BuildsService:
             build = await self._require_build(build.id)
             yield await self._emit_event(
                 build=build,
-                type_="build.completed",
+                type_="build.complete",
                 payload=BuildCompletedPayload(
                     status=build.status,
                     exit_code=build.exit_code,
@@ -566,7 +558,7 @@ class BuildsService:
 
         yield await self._emit_event(
             build=build,
-            type_="build.completed",
+            type_="build.complete",
             payload={
                 "status": build.status,
                 "exit_code": build.exit_code,
@@ -830,15 +822,14 @@ class BuildsService:
         payload: AdeEventPayload | dict[str, Any] | None = None,
         run_id: UUID | None = None,
     ) -> AdeEvent:
-        return await self._event_dispatcher.emit(
-            type=type_,
-            source="api",
+        emitter = BuildEventEmitter(
+            self._event_dispatcher,
             workspace_id=build.workspace_id,
             configuration_id=build.configuration_id,
-            run_id=run_id,
             build_id=build.id,
-            payload=payload or {},
+            run_id=run_id,
         )
+        return await emitter.emit(type=type_, payload=payload or {})
 
     async def _ensure_build_queued_event(
         self,
@@ -1131,6 +1122,27 @@ class BuildsService:
             return spec.split("==", 1)[1]
         return None
 
+    async def _find_ready_build_match(
+        self,
+        *,
+        configuration: Configuration,
+        fingerprint: str,
+    ) -> Build | None:
+        """Return an existing ready build whose fingerprint matches ``fingerprint``."""
+
+        if configuration.active_build_id:
+            existing = await self._builds.get(configuration.active_build_id)
+            if (
+                existing
+                and existing.status is BuildStatus.READY
+                and existing.fingerprint == fingerprint
+            ):
+                return existing
+        return await self._builds.get_ready_by_fingerprint(
+            configuration_id=configuration.id,
+            fingerprint=fingerprint,
+        )
+
     async def _sync_active_pointer(
         self,
         configuration: Configuration,
@@ -1156,6 +1168,7 @@ class BuildsService:
         should_run: bool = False,
         reason: str | None = None,
         run_id: UUID | None = None,
+        reuse_summary: str | None = None,
     ) -> BuildExecutionContext:
         venv_root = build_venv_root(
             self._settings,
@@ -1180,7 +1193,9 @@ class BuildsService:
             fingerprint=fingerprint,
             reason=reason,
             run_id=run_id,
-            reuse_summary="Reused existing build" if not should_run else None,
+            reuse_summary=(
+                reuse_summary or ("Reused existing build" if not should_run else None)
+            ),
         )
 
     async def _complete_build(

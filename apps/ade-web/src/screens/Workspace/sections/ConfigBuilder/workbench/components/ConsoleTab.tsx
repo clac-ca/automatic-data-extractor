@@ -275,10 +275,10 @@ export function ConsoleTab({
               >
                 <div className="flex min-w-0 flex-1 items-baseline gap-2">
                   {renderTimestamp(line.timestamp)}
-                  <span className="shrink-0 font-mono text-[11px] leading-snug text-[#606674]">
+                  <span className="shrink-0 w-12 text-right font-mono text-[11px] leading-snug text-[#606674]">
                     {originLabel(line.origin)}
                   </span>
-                  <span className={clsx("shrink-0 font-mono text-[11px] leading-snug", prefixTone(line.level))}>
+                  <span className={clsx("shrink-0 w-14 text-right font-mono text-[11px] leading-snug", prefixTone(line.level))}>
                     {levelBadge(line.level)}
                   </span>
                   <div

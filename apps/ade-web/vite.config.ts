@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +10,9 @@ import monacoEditorPlugin from "vite-plugin-monaco-editor";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
+const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url));
+const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
+const appVersion = packageJson.version ?? "unknown";
 
 const frontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
 const backendPort = process.env.DEV_BACKEND_PORT ?? "8000";
@@ -28,6 +32,9 @@ export default defineConfig({
       "@generated-types": resolveSrc("generated-types"),
       "@test": resolveSrc("test"),
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   server: {
     port: Number.isNaN(frontendPort) ? 8000 : frontendPort,

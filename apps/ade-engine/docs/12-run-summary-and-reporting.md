@@ -1,148 +1,104 @@
-# Run Summary and Reporting (`ade.run_summary/v1`)
+# Run Summary and Reporting (`ade.summary`)
 
-The engine now emits **telemetry events only**. Run summaries are **projections**
-built by downstream services (e.g., `ade-api`) from the event log and, if
-needed, the normalized outputs. This document explains the `RunSummaryV1`
-schema and how to derive it from events.
+The engine now owns the **authoritative hierarchical summaries** for runs. During
+each pipeline execution it builds table, sheet, file, and run summaries and
+emits them as telemetry events. Downstream services (e.g., `ade-api`) should
+persist the `engine.run.summary` payload instead of recomputing from the event
+log.
 
 ## 1. Inputs and outputs
 
-- Input: `events.ndjson` written by the engine (events use `ade.event/v1`).
-- Optional input: `manifest.json` for label/required metadata.
-- Optional input: normalized workbook(s) for row counts when events are missing counts.
-- Output: `RunSummaryV1` (Pydantic model in `ade_engine.schemas.run_summary`).
+- Inputs:
+  - Normalized tables (`NormalizedTable` objects) produced during the run.
+  - Optional: `manifest.json` for field labels/required flags.
+  - Run context metadata (workspace/config/run IDs, engine/config versions, environment reuse markers).
+- Outputs:
+  - `TableSummary`, `SheetSummary`, `FileSummary`, `RunSummary` models (see `schemas/summaries.py`).
+  - Events: `engine.table.summary` (per table), `engine.sheet.summary` / `engine.file.summary` (aggregates), and `engine.run.summary` (final).
 
-The engine does **not** write `run_summary.json` or `artifact.json`.
+## 2. Schema highlights
 
-## 2. Schema overview
+All summaries share the same shape (`BaseSummary`):
 
-`RunSummaryV1` fields (see `schemas/run_summary.py` for the authoritative model):
+- `schema_id` / `schema_version` — defaults to `ade.summary` / `1.0.0`.
+- `scope` — `"table" | "sheet" | "file" | "run"`.
+- `id` and `parent_ids` — simple identifiers (e.g., `"tbl_0"`, `"file_0"`) plus references to parents.
+- `source` — scope-specific metadata (run/file/sheet ids, versions, timestamps, failure info, etc.).
+- `counts` — `rows`, `columns`, `fields`, plus optional `files`/`sheets`/`tables` totals.
+  - Rows: `total`, `empty`, `non_empty`.
+  - Columns: physical totals + distinct header counts (mapped vs unmapped).
+  - Fields: canonical/required counts + mapped/unmapped breakdowns.
+- `fields` — table uses `FieldSummaryTable` (mapped column, score, header); aggregate scopes use `FieldSummaryAggregate` (mapped flag + counts of tables/sheets/files mapped).
+- `columns` — table uses `ColumnSummaryTable` (physical column, emptiness, mapped field/score/output_header); aggregate scopes use `ColumnSummaryDistinct` (normalized header, occurrences, mapped fields).
+- `validation` — `rows_evaluated`, `issues_total`, `issues_by_severity/code/field`, `max_severity`.
+- `details` — free-form scope metadata (table ids, sheet ids, output paths, processed files, etc.).
 
-- `run` — identity and lifecycle (id, workspace/config ids, status, failure details, engine/config versions, timestamps).
-- `core` — top-level metrics (input file/sheet counts, table count, row count, mapped/required/canonical field counts, unmapped column count, validation issue tallies).
-- `breakdowns.by_file` — per-source-file table counts, row counts, issue breakdowns.
-- `breakdowns.by_field` — per-field mapping/score/validation breakdowns.
+Percentages are intentionally omitted; derive them from counts in BI/analytics.
 
-## 3. Building a summary from events
+## 3. Aggregation in the engine
 
-Event types used:
+`SummaryAggregator` (`core/pipeline/summary_builder.py`) builds summaries from the
+in-memory pipeline artifacts:
 
-- `run.started` — provides start timestamp and engine version (optional).
-- `run.table.summary` — provides per-table row counts, mapped field scores, unmapped column counts, and validation breakdowns.
-- `run.completed` — provides completion timestamp, status, and structured error payload.
+1. Capture run identity/version metadata from `RunContext`.
+2. For each normalized table, build a `TableSummary`, emit `engine.table.summary`, and update aggregate state.
+3. After tables finish, finalize sheet/file/run aggregates and emit `engine.sheet.summary`, `engine.file.summary`, and `engine.run.summary`, then emit `engine.complete`.
 
-Algorithm outline:
+## 4. Guidance for consumers
 
-1. Parse all events for the run into memory (ordering by `created_at` when available).
-2. Capture `started_at`/`engine_version` from the first `run.started` event.
-3. For each `run.table.summary` event, extract:
-   - `source_file`, `source_sheet`, `table_index`
-   - `row_count`
-   - `mapped_fields` (field + score + required/satisfied flags)
-   - `unmapped_column_count`
-   - `validation` (totals, by severity/code/field)
-4. Aggregate counts:
-   - File-level: table count, row count (only if every table for a file reported a row_count), issue counts.
-   - Field-level: mapped flag, max score, issue counts by severity/code.
-   - Core metrics: totals across files/fields, unmapped column total, canonical/required field counts (from manifest when provided).
-5. Capture completion status/error/timestamps from the last `run.completed` event.
-6. Compute `duration_seconds` when both start and completion timestamps are present.
+- Treat `events.ndjson` as the **source of truth**; persist `engine.run.summary`
+  to a DB column for API/UI access.
+- Use sheet/file summaries for drill-down analytics; leverage distinct headers,
+  mapped/unmapped field counts, and validation tallies for reporting.
+- When adding new mapping/validation dimensions, extend the summary models first
+  (counts/fields/columns/validation) and keep percentages in downstream tools.
 
-If some tables omit `row_count`, propagate `row_count: null` in core and by-file
-breakdowns to avoid guessing.
-
-## 4. Guidelines for consumers
-
-- Treat `events.ndjson` as the **source of truth**. Do not expect artifact files.
-- Store summaries in your service (DB column or JSON file) so UIs can fetch a lightweight projection.
-- Version independently: `RunSummaryV1` is owned by `ade-engine` but evolves separately from events. If you add new fields to `run.table.summary` events, update the summary builder and bump the summary version.
-- When adding new validation/mapping dimensions, extend the `run.table.summary` payload first; then update the builder to aggregate it.
-
-## 5. Example `run.table.summary` event payload (engine-emitted)
+## 5. Example `engine.run.summary` (abridged)
 
 ```json
 {
-  "type": "run.table.summary",
-  "created_at": "2024-01-01T00:00:02Z",
-  "run_id": "run_123",
-  "payload": {
-    "table_id": "tbl_0",
-    "source_file": "input.xlsx",
-    "source_sheet": "Sheet1",
-    "table_index": 0,
-    "row_count": 10,
-    "column_count": 5,
-    "mapped_fields": [
-      {"field": "member_id", "score": 1.0, "is_required": true, "is_satisfied": true}
-    ],
-    "mapping": {
-      "mapped_columns": [
-        {"field": "member_id", "header": "Member ID", "source_column_index": 0, "score": 1.0, "is_required": true, "is_satisfied": true}
-      ],
-      "unmapped_columns": [
-        {"header": "Extra", "source_column_index": 4, "output_header": "raw_1"}
-      ]
-    },
-    "unmapped_column_count": 1,
-    "validation": {
-      "total": 3,
-      "by_severity": {"error": 2, "warning": 1},
-      "by_code": {"missing": 1, "invalid": 1, "empty": 1},
-      "by_field": {
-        "email": {"total": 2, "by_severity": {"error": 2}, "by_code": {"missing": 1, "invalid": 1}}
-      }
-    },
-    "details": {
-      "header_row": 1,
-      "first_data_row": 2,
-      "last_data_row": 11
-    }
-  }
-}
-```
-
-## 6. Example `RunSummaryV1` (abridged)
-
-```json
-{
-  "schema": "ade.run_summary/v1",
-  "version": "1.0.0",
-  "run": {
-    "id": "run_123",
-    "status": "succeeded",
-    "engine_version": "0.2.0",
+  "schema_id": "ade.summary",
+  "schema_version": "1.0.0",
+  "scope": "run",
+  "id": "run",
+  "parent_ids": { "run_id": "c5..." },
+  "source": {
+    "run_id": "c5...",
+    "workspace_id": "c1...",
+    "configuration_id": "c2...",
+    "engine_version": "1.6.0",
+    "config_version": "0.1.0",
     "started_at": "2024-01-01T00:00:00Z",
     "completed_at": "2024-01-01T00:00:03Z",
-    "duration_seconds": 3.0
+    "status": "succeeded"
   },
-  "core": {
-    "input_file_count": 1,
-    "input_sheet_count": 1,
-    "table_count": 2,
-    "row_count": 15,
-    "canonical_field_count": 3,
-    "required_field_count": 2,
-    "mapped_field_count": 2,
-    "unmapped_column_count": 1,
-    "validation_issue_count_total": 3,
-    "issue_counts_by_severity": {"error": 2, "warning": 1},
-    "issue_counts_by_code": {"missing": 1, "invalid": 1, "empty": 1}
+  "counts": {
+    "files": { "total": 1 },
+    "sheets": { "total": 1 },
+    "tables": { "total": 2 },
+    "rows": { "total": 15, "empty": 1, "non_empty": 14 },
+    "columns": { "physical_total": 6, "physical_empty": 0, "physical_non_empty": 6, "distinct_headers": 6, "distinct_headers_mapped": 4, "distinct_headers_unmapped": 2 },
+    "fields": { "total": 5, "required": 3, "mapped": 4, "unmapped": 1, "required_mapped": 3, "required_unmapped": 0 }
   },
-  "breakdowns": {
-    "by_file": [
-      {
-        "source_file": "input.xlsx",
-        "table_count": 2,
-        "row_count": 15,
-        "validation_issue_count_total": 3,
-        "issue_counts_by_severity": {"error": 2, "warning": 1},
-        "issue_counts_by_code": {"missing": 1, "invalid": 1, "empty": 1}
-      }
-    ],
-    "by_field": [
-      {"field": "member_id", "label": "Member ID", "required": true, "mapped": true, "max_score": 1.0, "validation_issue_count_total": 0},
-      {"field": "email", "label": "Email", "required": true, "mapped": true, "max_score": 0.82, "validation_issue_count_total": 2}
-    ]
+  "fields": [
+    { "field": "member_id", "label": "Member ID", "required": true, "mapped": true, "max_score": 0.98, "tables_mapped": 2, "sheets_mapped": 1, "files_mapped": 1 }
+  ],
+  "columns": [
+    { "header": "member_id", "header_normalized": "member_id", "occurrences": { "tables_seen": 2, "physical_columns_seen": 2, "physical_columns_non_empty": 2, "physical_columns_mapped": 2 }, "mapped": true, "mapped_fields": ["member_id"], "mapped_fields_counts": { "member_id": 2 } }
+  ],
+  "validation": {
+    "rows_evaluated": 15,
+    "issues_total": 3,
+    "issues_by_severity": { "error": 2, "warning": 1 },
+    "issues_by_code": { "missing": 1, "invalid": 1, "empty": 1 },
+    "issues_by_field": { "email": 2 }
+  },
+  "details": {
+    "file_ids": ["file_0"],
+    "sheet_ids": ["sheet_0"],
+    "table_ids": ["tbl_0", "tbl_1"],
+    "processed_files": ["input.xlsx"],
+    "output_paths": ["output/normalized.xlsx"]
   }
 }
 ```

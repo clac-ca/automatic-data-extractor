@@ -1,6 +1,6 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummaryV1, components, paths } from "@schema";
+import type { RunSummary, components, paths } from "@schema";
 import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
@@ -60,115 +60,106 @@ export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const abortError = new DOMException("Aborted", "AbortError");
-  const queue: Array<RunStreamEvent | null> = [];
-  const awaiters: Array<() => void> = [];
+  const abortError =
+    typeof DOMException !== "undefined"
+      ? new DOMException("Aborted", "AbortError")
+      : Object.assign(new Error("Aborted"), { name: "AbortError" });
+  const controller = new AbortController();
+  const abortHandler = () => controller.abort();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-  let source: EventSource | null = null;
-  let done = false;
-  let error: unknown;
-  const eventTypes = [
-    "ade.event",
-    "run.queued",
-    "run.started",
-    "run.completed",
-    "run.failed",
-    "run.cancelled",
-    "run.waiting_for_build",
-    "build.queued",
-    "build.started",
-    "build.progress",
-    "build.phase.started",
-    "build.completed",
-    "build.failed",
-    "console.line",
-  ];
-
-  const flush = () => {
-    while (awaiters.length) {
-      const resolve = awaiters.shift();
-      resolve?.();
-    }
-  };
-
-  const close = (reason?: unknown) => {
-    if (done) return;
-    done = true;
-    if (reason) {
-      error = reason;
-    }
-    if (source) {
-      eventTypes.forEach((type) => {
-        source?.removeEventListener?.(type, handleRunEvent as EventListener);
-      });
-      source.onmessage = null;
-      source.onerror = null;
-      source.close();
-    }
-    queue.push(null);
-    flush();
-  };
-
-  const handleRunEvent = (msg: MessageEvent<string>) => {
-    try {
-      const event = JSON.parse(msg.data) as RunStreamEvent;
-      queue.push(event);
-      flush();
-      if (event.type === "run.completed") {
-        close();
-      }
-    } catch (err) {
-      console.warn("Skipping malformed run event", err, msg.data);
-    }
-  };
-
-  source = new EventSource(url, { withCredentials: true });
-  eventTypes.forEach((type) => {
-    source?.addEventListener(type, handleRunEvent as EventListener);
-  });
-  source.onmessage = handleRunEvent;
-
-  source.onerror = () => {
-    if (signal?.aborted) {
-      close(abortError);
-      return;
-    }
-    if (!done) {
-      close(new Error("Run event stream interrupted"));
-    }
-  };
-
-  if (signal) {
-    if (signal.aborted) {
-      close(abortError);
-    } else {
-      signal.addEventListener("abort", () => close(abortError));
-    }
+  if (signal?.aborted) {
+    controller.abort();
+  } else if (signal) {
+    signal.addEventListener("abort", abortHandler);
   }
 
   try {
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "text/event-stream" },
+      signal: controller.signal,
+    });
+
+    if (!response.body || !response.ok) {
+      throw new Error("Run event stream unavailable.");
+    }
+
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let shouldClose = false;
+
     while (true) {
-      if (!queue.length) {
-        await new Promise<void>((resolve) => awaiters.push(resolve));
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const event = parseSseEvent(part);
+        if (!event) {
+          continue;
+        }
+        yield event;
+        if (event.type === "run.complete") {
+          shouldClose = true;
+          break;
+        }
       }
 
-      const next = queue.shift();
-      if (next === null) {
-        if (error) {
-          throw error;
+      if (done || shouldClose) {
+        const finalEvent = parseSseEvent(buffer);
+        if (finalEvent) {
+          yield finalEvent;
         }
-        break;
+        return;
       }
-      if (!next) {
-        continue;
-      }
-      if (error) {
-        throw error;
-      }
-      yield next;
     }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw abortError;
+    }
+    throw error;
   } finally {
-    close();
+    if (signal) {
+      signal.removeEventListener("abort", abortHandler);
+    }
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore cancellation failures
+      }
+    }
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  }
+}
+
+function parseSseEvent(rawEvent: string): RunStreamEvent | null {
+  const dataLines: string[] = [];
+  for (const line of rawEvent.split(/\n/)) {
+    if (line.startsWith("data:")) {
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+    }
+  }
+  if (!dataLines.length) {
+    return null;
+  }
+  const payload = dataLines.join("\n");
+  if (!payload.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(payload) as RunStreamEvent;
+  } catch (error) {
+    console.warn("Skipping malformed run event", error, payload);
+    return null;
   }
 }
 
@@ -311,31 +302,31 @@ export async function fetchRun(
   return data as RunResource;
 }
 
-export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummaryV1 | null> {
+export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummary | null> {
   // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
   try {
     const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
       params: { path: { run_id: runId } },
       signal,
     });
-    if (data) return data as RunSummaryV1;
+    if (data) return data as RunSummary;
   } catch (error) {
     // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
     console.warn("Falling back to embedded run summary", error);
   }
 
   const run = await fetchRun(runId, signal);
-  const summary = (run as { summary?: RunSummaryV1 | string | null })?.summary;
+  const summary = (run as { summary?: RunSummary | string | null })?.summary;
   if (!summary) return null;
   if (typeof summary === "string") {
     try {
-      return JSON.parse(summary) as RunSummaryV1;
+      return JSON.parse(summary) as RunSummary;
     } catch (error) {
       console.warn("Unable to parse run summary", { error });
       return null;
     }
   }
-  return summary as RunSummaryV1;
+  return summary as RunSummary;
 }
 
 export function runOutputsUrl(run: RunResource): string | null {

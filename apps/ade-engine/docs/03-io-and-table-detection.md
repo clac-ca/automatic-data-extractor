@@ -63,45 +63,19 @@ each detected table, including header row, data rows, and location metadata.
 
 ## 2. From RunRequest to source files
 
-### 2.1 Sources: `input_files` vs `input_dir`
+### 2.1 Single-source input
 
-`RunRequest` offers two ways to specify inputs:
-
-- `input_files: Sequence[Path]`  
-  Explicit list of source files to process.
-
-- `input_dir: Path`  
-  A directory to scan for source files.
+`RunRequest` now carries a single `input_file: Path`. The engine no longer scans
+directories or accepts multiple inputs in one run; upstream orchestration is
+expected to spawn one process per file.
 
 Invariants enforced upstream (in `Engine.run`):
 
-- Exactly **one** of `input_files` or `input_dir` must be set.
+- `input_file` **must** be provided.
 - Paths are normalized to absolute paths before use.
 
-### 2.2 File discovery
-
-When `input_dir` is provided, `io.list_input_files` is used to discover files:
-
-```python
-def list_input_files(input_dir: Path) -> list[Path]:
-    """
-    Return a sorted list of CSV/XLSX files under input_dir.
-
-    - Ignores hidden files and directories (implementation detail).
-    - Filters by extension (.csv, .xlsx).
-    - Returns absolute Paths in a deterministic order.
-    """
-````
-
-Characteristics:
-
-* **Deterministic order** — ensures reproducible results and telemetry.
-* **Simple filter** — engine currently supports `.csv` and `.xlsx` only.
-* Discovery is **shallow vs recursive** based on implementation; whatever we
-  choose should be documented and stable.
-
-When `input_files` is provided, `list_input_files` is skipped; the engine uses
-the given list as‑is (after normalization).
+`output_dir` and `logs_dir` default to siblings of `input_file` (e.g.,
+`<input_file>/../output`), keeping all run artifacts alongside the source.
 
 ### 2.3 File type classification
 
@@ -370,7 +344,7 @@ Details:
 
 ## 7. Integration with telemetry
 
-`PipelineLogger` is available during extraction and may emit events like:
+The run `event_emitter` is available during extraction and may emit events like:
 
 * `run.phase.started` with phase `"extracting"`.
 * `console.line` breadcrumbs for human-readable progress.

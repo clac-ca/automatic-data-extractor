@@ -183,12 +183,10 @@ Key tests:
 
 * `RunRequest` validation:
 
-  * Error if both `input_files` and `input_dir` are provided.
-  * Error if neither is provided.
+  * Error if `input_file` is missing.
 * `RunPaths` resolution:
 
-  * Correct derivation of `input_dir`, `output_dir`, and `logs_dir` from
-    `RunRequest`.
+  * Correct derivation of `input_file`, `output_dir`, and `logs_dir` from `RunRequest`.
   * Directories are created if missing.
 * `Engine.run` happy path:
 
@@ -200,7 +198,7 @@ Key tests:
 
     * `RunResult.status == "failed"`,
     * `error` is set,
-    * telemetry still records a `run.completed` with `status:"failed"` and error context.
+    * telemetry still records an `engine.complete` with `status:"failed"` and error context.
 
 Tests here should not depend on real `ade_config` packages; use mocks or
 minimal in‑memory stubs.
@@ -233,10 +231,6 @@ Key tests:
 
 Key tests:
 
-* `list_input_files`:
-
-  * Discovers only supported extensions.
-  * Returns a predictable sort order.
 * CSV reading:
 
   * Proper handling of UTF‑8 with/without BOM.
@@ -312,8 +306,8 @@ Key tests:
 * Telemetry events:
 
   * `FileEventSink` writes well‑formed NDJSON.
-  * `PipelineLogger.note` and `.event` respect `min_*_level` thresholds.
-  * `run.started`, `run.table.summary`, `run.completed` payloads validate against schema.
+  * Run logger and `EventEmitter` respect `min_*_level` thresholds on the configured sinks.
+  * `engine.start`, `engine.table.summary`, `engine.complete` payloads validate against schema.
 
 ---
 
@@ -339,7 +333,7 @@ Typical flow in `test_engine_runtime.py`:
 
    result = run(
        config_package="ade_config",
-       input_files=[input_path],
+       input_file=input_path,
        output_dir=tmp_path / "output",
        logs_dir=tmp_path / "logs",
        metadata={"test_case": "basic_e2e"},
@@ -350,8 +344,8 @@ Typical flow in `test_engine_runtime.py`:
 
    * `result.status == "succeeded"`.
    * Workbook exists at each `output_paths` entry and is a valid XLSX.
-   * `events.ndjson` exists and contains at least `run.started` and
-     `run.completed` events.
+   * `events.ndjson` exists and contains at least `engine.start` and
+     `engine.complete` events.
 
 ### 5.2 CLI integration
 
@@ -418,7 +412,7 @@ Tests should:
 
   * Every telemetry event envelope has `type`, `created_at`, and payload.
   * `run.table.summary` includes mapping + validation fields.
-  * `run.completed` carries status, outputs, and optional error context.
+  * `engine.complete` carries status, outputs, and optional error context.
 
 If a breaking change to telemetry shapes is necessary, tests should make the
 breakage explicit and force a deliberate version bump.
@@ -465,7 +459,7 @@ When tests fail, a few patterns help quickly identify where the problem lives.
 
   * Check `mapped_columns` / `unmapped_columns` for unexpected field/header matches.
   * Check validation aggregates for surprising issue counts.
-* Add temporary assertions or `PipelineLogger.note` calls in the failing area,
+* Add temporary assertions or `logger.debug` / `event_emitter.custom` calls in the failing area,
   then re‑run the specific test.
 
 ### 8.2 Script errors
@@ -481,7 +475,7 @@ Debugging steps:
 2. Check error details in:
 
    * `RunResult.error`,
-   * `events.ndjson` (`run.error` / `run.completed` with failure payload).
+   * `events.ndjson` (`console.line` / `engine.complete` with failure payload).
 3. Add a minimal repro to `tests/test_config_loader.py` (legacy: `test_config_runtime_loader.py`) or
    `tests/test_engine_runtime.py` if the error indicates a gap in engine
    validation.

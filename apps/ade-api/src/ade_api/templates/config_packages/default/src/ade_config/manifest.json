@@ -1,19 +1,12 @@
 {
   "schema": "ade.manifest/v1",
-  "version": "0.2.0",
+  "version": "1.6.0",
   "name": "Default ADE Workspace Config",
   "description": "Starter config that detects a simple person/member schema.",
-  "script_api_version": 2,
+  "script_api_version": 3,
   "columns": {
-    "order": ["member_id", "email", "first_name", "last_name"],
+    "order": ["first_name", "last_name", "email"],
     "fields": {
-      "member_id": {
-        "label": "Member ID",
-        "module": "column_detectors.member_id",
-        "required": true,
-        "synonyms": ["member id", "member#", "member no", "member number"],
-        "type": "string"
-      },
       "email": {
         "label": "Email",
         "module": "column_detectors.email",

@@ -122,12 +122,21 @@ function reduceStatus(current: RunStatus, event: RunStreamEvent): RunStatus {
       return "queued";
     case "run.waiting_for_build":
       return "waiting_for_build";
+    case "build.start":
     case "build.started":
       return "building";
+    case "run.start":
     case "run.started":
+    case "engine.start":
       return "running";
+    case "run.complete":
     case "run.completed":
-      return normalizeRunStatus(payload.status);
+    case "engine.complete": {
+      const statusValue =
+        (payload.status as string | undefined) ??
+        (payload.engine_status as string | undefined);
+      return normalizeRunStatus(statusValue);
+    }
     case "run.error":
       return current === "failed" ? current : "failed";
     default:

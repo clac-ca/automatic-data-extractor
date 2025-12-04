@@ -98,7 +98,7 @@ The manifest has a small number of top-level sections:
   "version": "1.2.3",
   "name": "My Config",
   "description": "Optional description",
-  "script_api_version": 2,
+  "script_api_version": 3,
 
   "columns": {
     "order": ["member_id", "email", "..."],
@@ -136,6 +136,7 @@ The manifest has a small number of top-level sections:
 Key ideas:
 
 - **Top-level fields** describe the config itself and the script API version.
+- **Script API version** is **always 3** in this release; all scripts must accept `logger` and `event_emitter` keyword arguments.
 - **Fields vs columns**: use **field** for manifest entries; **column** refers to physical spreadsheet columns. `columns.order` lists field IDs; `columns.fields` maps those IDs to `FieldConfig` objects.
 - **Module paths** are relative to `ade_config` and start with `column_detectors.<field_name>` or `hooks.<hook_name>`.
 - **Script API version** lives at `script_api_version`; do not shorten it to “API version” in prose.

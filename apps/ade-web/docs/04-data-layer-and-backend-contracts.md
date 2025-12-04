@@ -707,7 +707,7 @@ All events share a common envelope; only the tail `payload` varies per `type`:
 
 ```jsonc
 {
-  "type": "console.line",                // e.g. run.started, build.completed, console.line
+  "type": "console.line",                // e.g. run.start, build.complete, console.line
   "event_id": "evt_01JK3J0YRKJ...",
   "created_at": "2025-11-26T12:00:00Z",
   "sequence": 42,                        // monotonic within one run/build stream
@@ -735,15 +735,14 @@ Key families:
 
 * **Run lifecycle (`run.*`)**
 
-  * `run.queued`, `run.started`
-  * `run.phase.started` / `run.phase.completed`
-  * `run.completed` (carries `run_summary` used for summary stats)
+  * `run.queued`, `run.start`, `run.complete`
+  * Engine telemetry is forwarded: `engine.start`, `engine.phase.start` / `engine.phase.complete`, `engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`, `engine.complete`
 
 * **Table & validation**
 
-  * `run.table.summary` – per-table metrics
-  * `run.validation.issue` – fine-grained issues (optional)
-  * `run.validation.summary` – aggregated counts
+  * `engine.table.summary` – per-table metrics
+  * `engine.validation.issue` – fine-grained issues (optional)
+  * `engine.validation.summary` – aggregated counts
 
 * **Console**
 
@@ -751,9 +750,9 @@ Key families:
 
 * **Build lifecycle (`build.*`)**
 
-  * `build.created`, `build.started`
-  * `build.phase.started` / `build.phase.completed`
-  * `build.completed` (environment status/version)
+  * `build.queued`, `build.start`, `build.complete`
+  * `build.phase.start` / `build.phase.complete`
+  * Environment reuse events also surface as `build.complete`
 
 * **Errors**
 
@@ -763,7 +762,7 @@ UI rules:
 
 * Use `sequence` for ordering when transport may deliver events slightly out of order.
 * Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/logs`) for offline replay.
-* Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.completed`.
+* Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.complete`/`engine.run.summary`.
 
 ### 6.3 Streaming helper
 
@@ -781,7 +780,7 @@ es.onerror = () => es.close();
 Characteristics:
 
 * Close the stream on unmount or when the user hides the console.
-* Treat `run.completed` as terminal; callers can close the stream after it arrives.
+* Treat `run.complete` as terminal; callers can close the stream after it arrives (after receiving `engine.run.summary` if present).
 * For post-run analysis, `events.ndjson` is still available via `/runs/{run_id}/logs`.
 
 ### 6.4 Run & build streams in practice

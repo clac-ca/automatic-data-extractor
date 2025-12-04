@@ -10,7 +10,7 @@ from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.config.hook_registry import HookStage
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.types import NormalizedTable, RunContext
-from ade_engine.infra.telemetry import PipelineLogger
+from ade_engine.infra.event_emitter import ConfigEventEmitter
 
 
 def _generate_sheet_name(table: NormalizedTable) -> str:
@@ -52,7 +52,8 @@ def write_workbook(
     ctx: RunContext,
     cfg: ConfigRuntime,
     tables: list[NormalizedTable],
-    pipeline_logger: PipelineLogger,
+    input_file_name: str | None,
+    event_emitter: ConfigEventEmitter,
     logger: logging.Logger | None = None,
 ) -> Path:
     """Write normalized tables to an Excel workbook.
@@ -111,17 +112,20 @@ def write_workbook(
             sheet.append(header)
 
         for row in table.rows:
-            sheet.append(row)
+            row_values = row if append_unmapped else row[: len(header)]
+            sheet.append(row_values)
 
     before_save_context = run_hooks(
         HookStage.ON_BEFORE_SAVE,
         cfg.hooks,
         run=ctx,
+        input_file_name=input_file_name,
         manifest=cfg.manifest,
         tables=sorted_tables,
         workbook=workbook,
         result=None,
-        logger=pipeline_logger,
+        logger=logger,
+        event_emitter=event_emitter,
     )
     workbook = before_save_context.workbook or workbook
 

@@ -9,7 +9,7 @@ This chapter describes the **actual** ADE event model as implemented in
 
 Class: `AdeEvent` (`apps/ade-engine/src/ade_engine/schemas/telemetry.py`)
 
-- `type`: string (e.g., `console.line`, `run.started`, `run.table.summary`, `run.completed`)
+- `type`: string (e.g., `console.line`, `engine.start`, `engine.table.summary`, `engine.complete`)
 - `event_id`: optional string; **set by ade-api**, not by the engine
 - `created_at`: timestamp (UTC)
 - `sequence`: optional int; **set by ade-api** for run-scoped streams
@@ -24,16 +24,18 @@ and stamps those fields before persisting/streaming to clients.
 
 ## 2. Event catalog (engine-origin)
 
-- **`console.line`** — emitted via `PipelineLogger.note`
+- **`console.line`** — emitted via the run logger bridged by `TelemetryLogHandler`.
   - Payload: `scope:"run"`, `stream:"stdout"|"stderr"`, `level` (default `info`), `message`, optional `logger`, `engine_timestamp`.
-- **`run.started`** — emitted once per engine invocation with `status:"in_progress"` and `engine_version`.
-- **`run.phase.started`** — optional progress markers (`extracting`, `mapping`, `normalizing`, `writing_output`, etc.) emitted via `PipelineLogger.pipeline_phase`.
-  - The engine **does not emit `run.phase.completed`** today.
-- **`run.table.summary`** — one per normalized table; includes source file/sheet, table_index, row/column counts, mapping (`mapped_columns` + `unmapped_columns`), `mapped_fields` summary, `unmapped_column_count`, validation breakdowns (`total`, `by_severity`, `by_code`, `by_field`), and header/data row indices.
-- **`run.validation.summary`** — aggregated validation counts (emitted when issues exist).
-- **`run.validation.issue`** — optional per-issue events for debugging.
-- **`run.error`** — structured error context (`stage`, `code`, `message`, optional `phase`/`details`) when exceptions are mapped to `RunError`.
-- **`run.completed`** — terminal status with `status`, `output_paths`, `processed_files`, `events_path`, and optional `error` info.
+- **`engine.start`** — emitted once per engine invocation with `status:"running"`, `engine_version`, and optional `config_version`.
+- **`engine.phase.start` / `engine.phase.complete`** — optional progress markers (`extracting`, `mapping`, `normalizing`, `writing_output`, etc.) emitted via `EngineEventEmitter`.
+- **`engine.detector.row.score`** — emitted per extracted table with header/data thresholds, trigger row scores/contributions, and data row ranges.
+- **`engine.detector.column.score`** — emitted per manifest field per table with threshold, chosen column (or unmapped), and top-N candidate scores + contribution breakdown.
+- **`engine.table.summary`** — one per normalized table; includes source file/sheet, table_index, row/column counts, mapping (`mapped_columns` + `unmapped_columns`), `mapped_fields` summary, `unmapped_column_count`, validation breakdowns (`total`, `by_severity`, `by_code`, `by_field`), and header/data row indices.
+- **`engine.validation.summary`** — aggregated validation counts (emitted when issues exist).
+- **`engine.validation.issue`** — optional per-issue events for debugging.
+- **`engine.run.summary`** — authoritative run summary emitted before completion (paired with `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary`).
+- **`engine.complete`** — terminal status with `status`, `output_paths`, `processed_files`, and optional `failure`/`error` info.
+- **`config.*`** — optional custom events emitted by config code via `ConfigEventEmitter`.
 
 Build events are produced by ade-api (not the engine) and re-enveloped through
 the ade-api dispatcher; see the backend docs for build streaming.

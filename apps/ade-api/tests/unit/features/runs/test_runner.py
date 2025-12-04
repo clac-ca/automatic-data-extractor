@@ -25,7 +25,7 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
         "payload = {\n"
         f"    'run_id': '{RUN_ID}',\n"
         "    'created_at': '2024-01-01T00:00:00Z',\n"
-        "    'type': 'run.phase.started',\n"
+        "    'type': 'engine.phase.start',\n"
         "    'payload': {'phase': 'mapping'},\n"
         "}\n"
         "time.sleep(0.05)\n"
@@ -46,5 +46,5 @@ async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
     assert stdout_frames, "expected stdout frames"
     telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
     assert isinstance(telemetry, AdeEvent)
-    assert telemetry.type == "run.phase.started"
+    assert telemetry.type == "engine.phase.start"
     assert telemetry.payload_dict()["phase"] == "mapping"

@@ -1,9 +1,9 @@
 {
   "schema": "ade.manifest/v1",
-  "version": "0.2.0",
+  "version": "1.6.0",
   "name": "Sandbox Minimal Config",
   "description": "Sample config mirroring the ade_engine end-to-end fixtures.",
-  "script_api_version": 2,
+  "script_api_version": 3,
   "columns": {
     "order": ["member_id", "value"],
     "fields": {

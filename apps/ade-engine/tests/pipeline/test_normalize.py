@@ -2,12 +2,15 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import map_extracted_tables, normalize_table
 from ade_engine.core.types import ExtractedTable, RunContext, RunPaths, RunRequest
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -29,7 +32,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], append_unmapped: bool = 
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {
             "order": order,
             "fields": {field: {"label": field, "module": f"column_detectors.{field}", "required": False} for field in order},
@@ -61,17 +64,23 @@ def _write_column_detector(pkg_dir: Path, field: str, body: str) -> None:
 
 def _run_context(tmp_path: Path, manifest: object, request: RunRequest) -> RunContext:
     paths = RunPaths(
-        input_dir=request.input_dir or tmp_path,
+        input_file=request.input_file or tmp_path / "input.csv",
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
     return RunContext(
-        run_id="run-1",
+        run_id=uuid4(),
         metadata={},
         manifest=manifest,
         paths=paths,
         started_at=datetime.utcnow(),
     )
+
+
+def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmitter]:
+    sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
+    engine_emitter = EngineEventEmitter(run=run, event_sink=sink)
+    return engine_emitter, engine_emitter.config_emitter()
 
 
 class _DummyLogger:
@@ -89,10 +98,10 @@ def test_transform_applied_and_rows_preserve_order(tmp_path: Path, monkeypatch: 
         pkg_dir,
         "name",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "name" else 0.0
 
-def transform(*, value, row, **_):
+def transform(*, value, row, logger, event_emitter, **_):
     row["name"] = value.upper()
 """,
     )
@@ -100,17 +109,18 @@ def transform(*, value, row, **_):
         pkg_dir,
         "age",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "age" else 0.0
 
-def transform(*, value, **_):
+def transform(*, value, logger, event_emitter, **_):
     return {"age": value + 1}
 """,
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -123,8 +133,21 @@ def transform(*, value, **_):
         last_data_row_index=3,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
-    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
+    normalized = normalize_table(
+        ctx=run,
+        cfg=runtime,
+        mapped=mapped,
+        logger=_DummyLogger(),
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     assert normalized.rows == [["ALICE", 31, "x"], ["BOB", 41, "y"]]
     assert normalized.validation_issues == []
@@ -138,10 +161,10 @@ def test_validator_collects_issues_with_row_index(tmp_path: Path, monkeypatch: p
         pkg_dir,
         "email",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "email" else 0.0
 
-def validate(*, value, row_index, **_):
+def validate(*, value, row_index, logger, event_emitter, **_):
     if "@" not in value:
         return [
             {"code": "invalid_email", "severity": "error", "message": "missing @"},
@@ -152,8 +175,9 @@ def validate(*, value, row_index, **_):
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -166,8 +190,21 @@ def validate(*, value, row_index, **_):
         last_data_row_index=7,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
-    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
+    normalized = normalize_table(
+        ctx=run,
+        cfg=runtime,
+        mapped=mapped,
+        logger=_DummyLogger(),
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     assert normalized.rows[0][0] == "invalid"
     assert normalized.rows[1][0] == "valid@example.com"
@@ -184,14 +221,15 @@ def test_normalizes_empty_table(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         pkg_dir,
         "field",
         """
-def detect_header(*, header, **_):
+def detect_header(*, header, logger, event_emitter, **_):
     return 1.0 if header.lower() == "field" else 0.0
 """,
     )
 
     runtime = load_config_runtime(manifest_path=manifest_path)
-    request = RunRequest(input_dir=tmp_path)
+    request = RunRequest(input_file=tmp_path / "input.csv")
     run = _run_context(tmp_path, runtime.manifest, request)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     raw = ExtractedTable(
         source_file=tmp_path / "input.csv",
@@ -204,8 +242,21 @@ def detect_header(*, header, **_):
         last_data_row_index=1,
     )
 
-    mapped = map_extracted_tables(tables=[raw], runtime=runtime, run=run)[0]
-    normalized = normalize_table(ctx=run, cfg=runtime, mapped=mapped, logger=_DummyLogger())
+    mapped = map_extracted_tables(
+        tables=[raw],
+        runtime=runtime,
+        run=run,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )[0]
+    normalized = normalize_table(
+        ctx=run,
+        cfg=runtime,
+        mapped=mapped,
+        logger=_DummyLogger(),
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     assert normalized.rows == []
     assert normalized.validation_issues == []

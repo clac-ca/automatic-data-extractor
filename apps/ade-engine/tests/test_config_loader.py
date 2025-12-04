@@ -39,7 +39,7 @@ def test_load_config_runtime_happy_path(tmp_path: Path, monkeypatch: pytest.Monk
         "version": "1.0.0",
         "name": "Test Config",
         "description": None,
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {
             "order": ["email"],
             "fields": {
@@ -73,15 +73,15 @@ def test_load_config_runtime_happy_path(tmp_path: Path, monkeypatch: pytest.Monk
     (detectors_dir / "__init__.py").write_text("")
     (detectors_dir / "email.py").write_text(
         """
-def detect_header(*, column_index, header, **_):
+def detect_header(*, column_index, header, logger=None, event_emitter=None, **_):
     return 0.75
 
 
-def transform(*, value, **_):
+def transform(*, value, logger=None, event_emitter=None, **_):
     return value
 
 
-def validate(*, value, **_):
+def validate(*, value, logger=None, event_emitter=None, **_):
     return None
 """
     )
@@ -91,7 +91,7 @@ def validate(*, value, **_):
     (hooks_dir / "__init__.py").write_text("")
     (hooks_dir / "on_run_start.py").write_text(
         """
-def run(*, context, **_):
+def run(*, context, logger, event_emitter, **_):
     return None
 """
     )
@@ -125,12 +125,30 @@ def test_load_config_runtime_invalid_manifest(tmp_path: Path, monkeypatch: pytes
     assert "Manifest validation failed" in str(excinfo.value)
 
 
-def test_column_module_missing_module_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_manifest_requires_script_api_version_three(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
         "script_api_version": 2,
+        "columns": {"order": [], "fields": {}},
+        "hooks": {"on_run_start": [], "on_after_extract": [], "on_after_mapping": [], "on_before_save": [], "on_run_end": []},
+        "writer": {"append_unmapped_columns": True, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+    }
+    manifest_path = _write_manifest(pkg_dir, manifest)
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_config_runtime(package="ade_config", manifest_path=manifest_path)
+
+    assert "script_api_version" in str(excinfo.value)
+
+
+def test_column_module_missing_module_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
+    manifest = {
+        "schema": "ade.manifest/v1",
+        "version": "1.0.0",
+        "script_api_version": 3,
         "columns": {
             "order": ["foo"],
             "fields": {
@@ -158,7 +176,7 @@ def test_detector_signature_must_be_keyword_only(tmp_path: Path, monkeypatch: py
     manifest = {
         "schema": "ade.manifest/v1",
         "version": "1.0.0",
-        "script_api_version": 2,
+        "script_api_version": 3,
         "columns": {
             "order": ["foo"],
             "fields": {

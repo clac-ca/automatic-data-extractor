@@ -9,7 +9,7 @@ from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, RunSummaryV1
+from ade_engine.schemas import AdeEvent, RunSummary
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -225,13 +225,13 @@ async def get_run_endpoint(
 
 @router.get(
     "/runs/{run_id}/summary",
-    response_model=RunSummaryV1,
+    response_model=RunSummary,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Run summary not found"}},
 )
 async def get_run_summary_endpoint(
     run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
-) -> RunSummaryV1:
+) -> RunSummary:
     try:
         summary = await service.get_run_summary(run_id)
     except RunNotFoundError as exc:
@@ -302,18 +302,11 @@ async def stream_run_events_endpoint(
     async def event_stream() -> AsyncIterator[bytes]:
         reader = service.event_log_reader(workspace_id=run.workspace_id, run_id=run.id)
         last_sequence = start_sequence
-        stream_complete = False
 
         for event in reader.iter(after_sequence=start_sequence):
             yield _sse_event_bytes(event)
             if event.sequence:
                 last_sequence = event.sequence
-            if event.type == "run.completed":
-                stream_complete = True
-                break
-
-        if stream_complete:
-            return
 
         async with service.subscribe_to_events(run.id) as subscription:
             async for live_event in subscription:
@@ -322,7 +315,7 @@ async def stream_run_events_endpoint(
                 yield _sse_event_bytes(live_event)
                 if live_event.sequence:
                     last_sequence = live_event.sequence
-                if live_event.type == "run.completed":
+                if live_event.type == "run.complete" and live_event.source != "engine":
                     break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
