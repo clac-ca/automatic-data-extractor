@@ -10,209 +10,122 @@
 
 ## Work Package Checklist
 
-* [ ] Replace the legacy Workspace Settings route + views with a **new settings shell** (no query-param “view” routing)
-* [ ] Implement **General** settings v2 (workspace identity + environment label + default workspace)
-* [ ] Implement **Members** v2 (list/add/remove + role assignment) wired to `/workspaces/{id}/members`
-* [ ] Implement **Roles** v2 (tenant role definitions + permission editor) wired to `/rbac/roles` + `/rbac/permissions`
-* [ ] Implement **Danger Zone** v2 (delete workspace) wired to `DELETE /workspaces/{id}`
-* [ ] Add shared UI primitives: permission gating, skeleton states, error boundary, save bar, confirm modals
-* [ ] Update global workspace UI to display `environment_label` consistently (workspace switcher + header)
-* [ ] Delete old settings code paths and update all internal links + docs + tests
+* [ ] Replace the current tabbed workspace settings route with a “standard settings” layout (sidebar + subpages)
+* [ ] Fix **all** settings-related API calls to respect backend pagination limits (page_size ≤ 100) and correct scope usage
+* [ ] Refactor the Members settings UX (loaders/errors, user directory handling, role assignment flow) and verify end-to-end functionality
+* [ ] Refactor the Roles settings UX (permissions scope, create/edit/delete role flows) and verify end-to-end functionality
+* [ ] Add/adjust tests, remove old settings code paths, and run a full manual QA pass for Workspace Settings
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
-> `- [x] Implement General v2 — commit 3a9c1e2`
+> `- [x] Fix page_size limit — <commit_sha>`
 
 ---
 
-# ADE Web — Workspace Settings Complete Refactor (No Backwards Compatibility)
+# Workspace Settings Refactor (Standard Settings Page + API Call Fixes)
 
 ## 1. Objective
 
 **Goal:**
-Rebuild Workspace Settings from scratch so it’s:
-
-* **obvious**: clear information architecture, consistent UX patterns
-* **correct**: matches ADE API routes + permission semantics
-* **scalable**: new workspace-level settings can be added without rewriting the page
-* **separated by scope**: Workspace settings vs System settings are not mixed
+Refactor the **Workspace Settings** experience in `ade-web` into a standard, intuitive settings UI (sidebar navigation + focused subpages), while fixing all settings-related API calls to match the ADE API constraints and eliminating current runtime errors in Members/Roles.
 
 You will:
 
-* Replace the existing settings route/view system with a new nested settings router.
-* Define a new “Workspace Settings” surface composed of:
-
-  * General (workspace identity + preferences)
-  * Members (workspace access)
-  * Roles (tenant role definitions and permissions)
-  * Danger Zone (delete workspace)
-* Use workspace `settings` as the extensible store for workspace-specific preferences (e.g. `environment_label`).
-* Ensure all actions map cleanly to the backend routes listed (workspaces + members + RBAC + system safe mode).
-* Remove any legacy UI patterns entirely (no compatibility layer; update navigational links across the app).
+* Replace the current “tabs + `view` query param” settings UI with a **standard settings layout**.
+* Fix Members/Roles (and any other settings page queries) to respect backend pagination limits and correct API contract usage.
+* Ensure membership & roles management is functional end-to-end.
+* Remove old settings page code paths (no backwards compatibility).
 
 The result should:
 
-* Let a developer read the page components and instantly understand:
-
-  * which backend endpoints each section uses
-  * which permissions gate each action
-  * what data is stored on the workspace vs globally
-* Provide reliable behavior: loading states, optimistic updates when safe, strong confirmation flows for destructive actions.
+* Feel like a conventional settings page: consistent nav, clear section boundaries, “danger zone” patterns, etc.
+* Have **zero 422s** from invalid `page_size` and correct permission scoping for permissions/roles.
+* Be easy to extend with future settings sections.
 
 ---
 
 ## 2. Context (What you are starting from)
 
-You provided the definitive list of ADE API routes. Workspace Settings primarily depends on:
+### Current UI shape
 
-### Workspace routes
+Workspace settings currently render as a route under workspace sections with a **tabbed UI controlled by `view` query param**. 
+The workspace section router maps `"settings"` to `WorkspaceSettingsRoute` via `resolveWorkspaceSection`. 
 
-* `GET /api/v1/workspaces/{workspace_id}` — load workspace context
-* `PATCH /api/v1/workspaces/{workspace_id}` — update workspace metadata (name/slug/settings)
-* `DELETE /api/v1/workspaces/{workspace_id}` — delete workspace
-* `PUT /api/v1/workspaces/{workspace_id}/default` — set default workspace
-* `GET /api/v1/workspaces` — list workspaces for workspace switcher
+### Known issues / pain points
 
-### Members routes
+#### 1) Members list endpoint errors (422)
 
-* `GET /api/v1/workspaces/{workspace_id}/members` — list members
-* `POST /api/v1/workspaces/{workspace_id}/members` — add member (+ roles)
-* `PUT /api/v1/workspaces/{workspace_id}/members/{user_id}` — replace member roles
-* `DELETE /api/v1/workspaces/{workspace_id}/members/{user_id}` — remove member
+Frontend requests `page_size=200` but backend enforces `page_size ≤ 100`.
 
-### RBAC routes (tenant-wide)
+* Backend pagination is capped at 100 (FastAPI validation uses `le=MAX_PAGE_SIZE`). 
+* Frontend Members hook hardcodes 200.
 
-* `GET /api/v1/rbac/roles` — list role definitions
-* `POST /api/v1/rbac/roles` — create role
-* `GET /api/v1/rbac/roles/{role_id}` — read role
-* `PATCH /api/v1/rbac/roles/{role_id}` — update role
-* `DELETE /api/v1/rbac/roles/{role_id}` — delete role
-* `GET /api/v1/rbac/permissions` — list permissions (to build role permission editor)
+#### 2) Roles list endpoint errors (422)
 
-### Session/bootstrap routes used for permissions and workspace nav
+Same pagination cap issue:
 
-* `GET /api/v1/me/bootstrap` — profile + roles + permissions + workspaces
-* `GET /api/v1/me/permissions` — effective permissions
-* `POST /api/v1/me/permissions/check` — permission checks (optional)
+* Frontend Roles hook hardcodes 200.
+* Permissions query also hardcodes 200 and requests `scope="global"` while later filtering for workspace permissions. 
 
-### System safe mode (global; not workspace scoped)
+#### 3) Permissions scope mismatch in Roles UI
 
-* `GET /api/v1/system/safe-mode`
-* `PUT /api/v1/system/safe-mode`
+Roles UI *filters for workspace permissions* but query requests `scope="global"`, which will not return workspace-scoped permissions when the API filters by scope. The backend endpoint accepts a scope and applies it. 
 
-**Known pain to resolve with a hard refactor**
+#### 4) “Standard settings page” expectation
 
-* Settings often becomes a dumping ground. We must explicitly define what “Workspace Settings” contains and what it does not.
-* RBAC role definitions are tenant-level, but role assignment for workspace members is workspace-level. The UI must make that distinction crystal clear.
+Tabs feel “inside an app page”, not like standard settings. We want:
+
+* left sidebar, nested routes/subpages
+* clear separation of General / Members / Roles / Danger Zone
+* consistent patterns for save actions, destructive actions, confirmations, permissions gating
+
+### Hard constraints
+
+* Pagination: `page_size` must be ≤ 100 across paginated endpoints. 
+* Members endpoints are under `/api/v1/workspaces/{workspace_id}/members` (list/add/update/remove). 
+* Roles/Permissions endpoints are under `/api/v1/rbac/roles` and `/api/v1/rbac/permissions`. 
 
 ---
 
 ## 3. Target architecture / structure (ideal)
 
-**IA / UX target:**
+**Summary:**
+Implement `Workspace Settings v2` as a settings layout with:
 
-**Workspace Settings** (scoped to current workspace)
-
-* General
-
-  * Name / Slug
-  * Environment label (workspace.settings)
-  * Default workspace (per-user preference)
-* Members
-
-  * Add user
-  * Assign roles
-  * Remove user
-* Roles (Tenant-wide)
-
-  * Create/edit/delete role definitions
-  * Select permissions per role
-  * Clear messaging: “Changing a role affects all workspaces.”
-* Danger Zone
-
-  * Delete workspace (with typed confirmation)
-
-**System Settings** (global, separate route, not “inside workspace settings”)
-
-* Safe mode toggle
-* Other future global toggles
-
-> ✅ This is a deliberate separation. Workspace settings should not include global system toggles. If you *want* a status banner in workspace settings, it can be informational and link to System Settings.
-
-### Proposed route structure (breaking, by design)
-
-```text
-/workspaces/:workspaceId/settings
-  /general
-  /members
-  /roles
-  /danger
-/system/settings
-  /safe-mode
-```
-
-### Proposed file tree (frontend)
+* **Left sidebar navigation**
+* **Subpages** (General, Members, Roles, Danger Zone)
+* Strong API contract alignment (pagination + scope correctness)
+* No query-param tab switching
 
 ```text
 apps/ade-web/
   src/
-    app/
-      routes/
-        workspaceSettingsRoutes.tsx      # route definitions (RR v6)
-        systemSettingsRoutes.tsx
-    features/
-      workspaces/
-        api/
-          workspaces.ts                 # GET/PATCH/DELETE, list, default
-          members.ts                    # members CRUD
-        hooks/
-          useWorkspace.ts
-          useUpdateWorkspace.ts
-          useDeleteWorkspace.ts
-          useSetDefaultWorkspace.ts
-          useWorkspaceMembers.ts
-          useAddWorkspaceMember.ts
-          useUpdateWorkspaceMember.ts
-          useRemoveWorkspaceMember.ts
-        model/
-          workspaceSettings.ts          # typed settings keys + helpers
-      rbac/
-        api/
-          roles.ts                      # role defs CRUD
-          permissions.ts                # list permissions
-        hooks/
-          useRoles.ts
-          useRole.ts
-          useCreateRole.ts
-          useUpdateRole.ts
-          useDeleteRole.ts
-          usePermissions.ts
-      settings/
-        workspace/
-          WorkspaceSettingsShell.tsx     # left nav + header + outlet
-          nav.ts                         # view registry + labels
-          views/
-            GeneralSettingsView.tsx
-            MembersSettingsView.tsx
-            RolesSettingsView.tsx
-            DangerZoneSettingsView.tsx
-          components/
-            SettingsHeader.tsx
-            SettingsNav.tsx
-            SettingsCard.tsx
-            SaveBar.tsx
-            ConfirmModal.tsx
-            PermissionGate.tsx
-        system/
-          SystemSettingsShell.tsx
-          views/
-            SafeModeView.tsx
-    shared/
-      ui/
-        Toast.tsx
-        Skeleton.tsx
-        EmptyState.tsx
-        ErrorState.tsx
+    screens/
+      Workspace/
+        sections/
+          Settings/
+            WorkspaceSettingsRoute.tsx          # NEW: layout + section routing
+            settingsNav.ts                      # NEW: canonical sections + permission gates
+            pages/
+              GeneralSettingsPage.tsx
+              MembersSettingsPage.tsx
+              RolesSettingsPage.tsx
+              DangerSettingsPage.tsx
+            components/
+              SettingsLayout.tsx                # left nav + content shell
+              SettingsSectionHeader.tsx
+              SaveBar.tsx
+              ConfirmDangerActionModal.tsx
+            hooks/
+              useWorkspaceMembers.ts            # FIX: page_size + pagination strategy
+              useWorkspaceRoles.ts              # FIX: page_size
+              usePermissions.ts                 # FIX: scope + page_size
+  src/
+    api/
+      pagination.ts                             # NEW: MAX_PAGE_SIZE + helpers
+      workspaces-api.ts                         # FIX: default page sizes (permissions)
+  tests/
+    screens/Workspace/settings.test.tsx         # update/add tests for new route behavior
 ```
 
 ---
@@ -221,361 +134,210 @@ apps/ade-web/
 
 ### 4.1 Design goals
 
-* **Zero backwards compatibility:** remove old views and old route wiring entirely.
-* **Single obvious route:** settings are nested routes, not query params.
-* **Hard scope separation:** workspace vs system.
-* **Permission-first UI:** no “press button then get 403.” Buttons are disabled/hidden appropriately, and read-only states are explicit.
-* **Developer clarity:** every page indicates (in code and in UI text) which endpoint it talks to.
+* **Clarity / intuition:** Settings should look and behave like settings (sidebar, subpages, “danger zone”).
+* **Correctness:** No invalid API calls; pagination and scope must match backend constraints.
+* **Maintainability:** One obvious place to add future settings sections; centralized nav/route config.
 
 ### 4.2 Key components / modules
 
-* `WorkspaceSettingsShell`
-
-  * Loads workspace + permissions once
-  * Provides consistent header/nav layout
-  * Hosts nested route `<Outlet />`
-* `GeneralSettingsView`
-
-  * Workspace metadata form (PATCH workspace)
-  * Environment label field stored in `workspace.settings`
-  * Default workspace action (PUT /default)
-* `MembersSettingsView`
-
-  * Member list (GET members)
-  * Add member (POST members)
-  * Update roles (PUT member)
-  * Remove member (DELETE member)
-* `RolesSettingsView` (Tenant-wide)
-
-  * Manage role definitions (RBAC endpoints)
-  * Permission checklist (GET permissions)
-  * Clear UI copy about tenant-wide effects
-* `DangerZoneSettingsView`
-
-  * Delete workspace flow (DELETE workspace)
-* Shared UI primitives:
-
-  * `PermissionGate` (show/lock sections by required perms)
-  * `SaveBar` (dirty state + save/cancel)
-  * `ConfirmModal` (typed confirmation)
+* **`SettingsLayout`** — Standard two-column layout (left nav + content), mobile-friendly.
+* **`WorkspaceSettingsRoute`** — Owns which settings “section” is active based on path segments.
+* **API hooks (`useWorkspaceMembers`, `useWorkspaceRoles`, `usePermissions`)** — Source of truth for data loading, pagination strategy, caching, invalidations.
 
 ### 4.3 Key flows / pipelines
 
 #### Flow A — Enter Workspace Settings
 
-1. Route loads `workspaceId`
-2. Fetch:
+1. `resolveWorkspaceSection(workspaceId, ["settings", ...])` routes into settings.
+2. `WorkspaceSettingsRoute` parses the “section” segment: `general | members | roles | danger`.
+3. Render `SettingsLayout` with sidebar items gated by permissions; render the selected page.
 
-   * `GET /api/v1/workspaces/{workspaceId}`
-   * `GET /api/v1/me/permissions` (or use cached bootstrap)
-3. Render settings shell with nav items filtered by permissions
-4. Default to `/general`
+#### Flow B — Members management
 
-#### Flow B — Update workspace metadata (name/slug/settings)
+1. Load members (paginated correctly).
+2. Load available roles (paginated correctly).
+3. Optional: load user directory for “Add member” (if the caller can access it; currently `/users` is “administrator only” per OpenAPI docs). 
+4. Add/update/remove member triggers mutations; invalidate member list + toast feedback.
 
-1. User edits fields
-2. SaveBar appears
-3. Submit triggers `PATCH /api/v1/workspaces/{workspaceId}` payload:
+#### Flow C — Roles management
 
-   * `{ name, slug, settings }`
-4. On success:
+1. Load roles for workspace scope.
+2. Load workspace-scoped permissions (scope must be `"workspace"`).
+3. Create/update/delete role triggers invalidations; show errors cleanly.
 
-   * toast “Saved”
-   * update workspace cache
-   * update header/workspace switcher immediately
+### 4.4 Open questions / decisions
 
-#### Flow C — Default workspace
+* **Decision: environment_label**
 
-1. Click “Make default”
-2. `PUT /api/v1/workspaces/{workspaceId}/default`
-3. Refresh bootstrap/workspaces list so “default” marker updates
+  * **Default**: do not add a first-class field; if needed, store it as `workspace.settings.environment_label` and treat it as UI-only metadata. 
+  * **Rationale**: reduces domain complexity; workspace name/slug already solve most use cases.
 
-#### Flow D — Manage members
+* **Decision: pagination UX**
 
-1. List via `GET /api/v1/workspaces/{workspaceId}/members`
-2. Add member modal collects:
-
-   * identifier (email or user selection; see Open Question)
-   * roles
-3. Submit `POST /members`
-4. Update roles with `PUT /members/{userId}`
-5. Remove with `DELETE /members/{userId}`
-
-#### Flow E — Manage role definitions (tenant-wide)
-
-1. List roles `GET /api/v1/rbac/roles`
-2. Create role `POST /api/v1/rbac/roles`
-3. Edit role permissions:
-
-   * fetch permissions `GET /api/v1/rbac/permissions`
-   * update role `PATCH /api/v1/rbac/roles/{roleId}`
-4. Delete role `DELETE /api/v1/rbac/roles/{roleId}`
-
-#### Flow F — Delete workspace
-
-1. “Delete workspace” card warns clearly
-2. Typed confirm requires entering workspace slug
-3. Submit `DELETE /api/v1/workspaces/{workspaceId}`
-4. On success:
-
-   * navigate to first available workspace (or workspace list)
-   * refresh bootstrap
-
----
-
-## 4.4 Open questions / decisions
-
-* **Decision: `environment_label` lives in `workspace.settings.environment_label`.**
-
-  * Rationale: future-proof; no new columns needed; consistent with “settings dict” approach.
-
-* **Decision: Roles view is tenant-wide and is labeled that way.**
-
-  * Rationale: RBAC endpoints are tenant-level; role definition changes impact all workspaces. The UI must say this.
-
-* **Open question: Add member payload**
-
-  * The endpoint is `POST /workspaces/{id}/members`. Confirm whether it accepts:
-
-    * `email` (preferred UX)
-    * `user_id`
-    * both
-  * **Frontend implementation will adapt once request schema is confirmed**, but UX will be “type email/user and assign roles.”
-
-* **Open question: Permissions representation**
-
-  * Confirm how workspace permissions are represented in `GET /me/permissions` vs bootstrap; choose one source of truth.
-  * Recommendation: prefer bootstrap cache and only refetch permissions if stale.
+  * **Preferred**: implement `useInfiniteQuery` (or “Load more” button) for members/roles/permissions when `total > loaded`.
+  * **Rationale**: avoids hardcoding large page sizes and stays within limits.
 
 ---
 
 ## 5. Implementation & notes for agents
 
-### 5.1 API mapping table (for dev clarity)
+### 5.1 Fix the API contract errors first (stop 422s)
 
-| Settings area                | Primary endpoints                                                                     | Notes                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| General (workspace identity) | `GET /workspaces/{id}`, `PATCH /workspaces/{id}`                                      | Patch includes `{name, slug, settings}`             |
-| Environment label            | `PATCH /workspaces/{id}`                                                              | Stored under `workspace.settings.environment_label` |
-| Default workspace            | `PUT /workspaces/{id}/default`                                                        | Per-user preference                                 |
-| Members                      | `GET/POST /workspaces/{id}/members`, `PUT/DELETE /workspaces/{id}/members/{user_id}`  | Roles assigned per membership                       |
-| Roles (tenant-wide)          | `GET/POST /rbac/roles`, `PATCH/DELETE /rbac/roles/{role_id}`, `GET /rbac/permissions` | Must warn about tenant-wide impact                  |
-| Danger zone                  | `DELETE /workspaces/{id}`                                                             | Typed confirmation required                         |
-| System safe mode (global)    | `GET/PUT /system/safe-mode`                                                           | Goes on `/system/settings`, not workspace settings  |
+Backend enforces `page_size ≤ 100`. 
+Frontend currently violates this in multiple places:
 
----
+* Members hook uses `MEMBERS_PAGE_SIZE = 200`.
+* Roles hook uses `ROLES_PAGE_SIZE = 200`.
+* Permissions query uses `PAGE_SIZE = 200` and `scope="global"`. 
 
-### 5.2 Data model and helpers
+**Implementation steps:**
 
-Create a typed helper module for workspace.settings keys:
+1. Add `apps/ade-web/src/api/pagination.ts`:
+
+   ```ts
+   export const MAX_PAGE_SIZE = 100; // mirrors ade-api validation
+   export const DEFAULT_PAGE_SIZE = 50;
+
+   export function clampPageSize(size?: number): number | undefined {
+     if (size == null) return undefined;
+     return Math.min(size, MAX_PAGE_SIZE);
+   }
+   ```
+2. Update:
+
+   * `useWorkspaceMembers.ts`: set page size to `MAX_PAGE_SIZE` or `DEFAULT_PAGE_SIZE` (≤ 100), implement pagination.
+   * `useWorkspaceRoles.ts`: same.
+   * `usePermissions.ts`: page size ≤ 100 **and** request `scope: "workspace"` for workspace role editing.
+
+**Minimum fix** (unblocks UI immediately): change the 200 constants to 100.
+**Better fix**: add simple pagination aggregation:
 
 ```ts
-// features/workspaces/model/workspaceSettings.ts
-export const WORKSPACE_SETTINGS_KEYS = {
-  environmentLabel: "environment_label",
-} as const;
-
-export type WorkspaceSettings = Record<string, unknown>;
-
-export function readEnvironmentLabel(settings: WorkspaceSettings | null | undefined): string {
-  const v = settings?.[WORKSPACE_SETTINGS_KEYS.environmentLabel];
-  return typeof v === "string" ? v.trim() : "";
-}
-
-export function writeEnvironmentLabel(
-  settings: WorkspaceSettings | null | undefined,
-  label: string
-): WorkspaceSettings {
-  const next = { ...(settings ?? {}) };
-  const trimmed = label.trim();
-  if (!trimmed) delete next[WORKSPACE_SETTINGS_KEYS.environmentLabel];
-  else next[WORKSPACE_SETTINGS_KEYS.environmentLabel] = trimmed;
-  return next;
+// Example: pull all pages up to total (simple, safe for small datasets)
+async function listAllPages<T>(fetchPage: (page: number) => Promise<{ items: T[]; total?: number }>) {
+  const results: T[] = [];
+  for (let page = 1; page <= 1000; page += 1) {
+    const { items, total } = await fetchPage(page);
+    results.push(...items);
+    if (!items.length) break;
+    if (total != null && results.length >= total) break;
+    if (items.length < 100) break; // heuristic
+  }
+  return results;
 }
 ```
 
-Key rule: **never clobber unknown settings keys**.
+### 5.2 Refactor the settings UI into a standard layout (no tab query params)
 
----
+Current settings route uses a `view` query param and tabs. 
+We will replace it with path-segment routing:
 
-### 5.3 UX spec (what the new page should feel like)
+**New URLs**
 
-**WorkspaceSettingsShell**
+* `/workspaces/:id/settings/general`
+* `/workspaces/:id/settings/members`
+* `/workspaces/:id/settings/roles`
+* `/workspaces/:id/settings/danger`
 
-* Left nav, sticky
-* Right content area with consistent max-width
-* Header:
+**Implementation steps**
 
-  * “Workspace Settings”
-  * Workspace name + environment label badge
-  * Quick link to “System Settings” for admins
+1. Update `resolveWorkspaceSection` so `"settings"` passes the remaining segments to settings:
 
-**General**
+   * from `settings.tsx` 
+   * Accept: `segments: string[]` and determine active section.
+2. Rebuild `WorkspaceSettingsRoute`:
 
-* Card: “Workspace identity”
+   * Owns parsing: second segment defaulting to `general`.
+   * Renders `<SettingsLayout active="members" ... />`.
+3. Remove:
 
-  * Name (text)
-  * Slug (text)
-  * Workspace ID (read-only)
-* Card: “Workspace preferences”
+   * old `TabsRoot` usage
+   * old `view` query-param logic
+   * old section components if they no longer fit
 
-  * Environment label
-  * “Make default workspace” plus status (“This is your default”)
-* SaveBar appears when identity/preferences changed
+**Sidebar behavior**
 
-**Members**
+* Show all sections, but disable/hide sections based on permission where appropriate.
+* If the user lands on a section they cannot access, show a friendly “You don’t have access” state.
 
-* Table list: Name, Email, Roles, Actions
-* “Add member” modal:
+### 5.3 Redesign the content pages (standard sections)
 
-  * email/user
-  * role multi-select (from roles list)
-* Inline role editing per row + Save
-* Remove member confirm
+#### General
 
-**Roles**
+* Workspace name + slug (existing)
+* “Default workspace” toggle (calls `PUT /workspaces/{id}/default`) 
+* Optional: “Labels” (store in `workspace.settings`) — include `environment_label` only if you want it
 
-* Warning banner: “Roles are tenant-wide. Changes affect all workspaces.”
-* Role list with “Create role”
-* Role editor:
+#### Members
 
-  * Name, description
-  * Permissions checklist grouped by domain (workspace.*, runs.*, configs.*, system.*)
-  * Save, Delete
+* Table with: user, roles, status, actions
+* Add member modal (integrate existing `useUsersQuery` but handle non-admin failures gracefully)
+* Edit roles inline via role multi-select
+* Remove member (confirm modal)
 
-**Danger Zone**
+#### Roles
 
-* Card: “Delete workspace”
-* Typed confirm requires workspace slug
-* explicit warning about loss of configurations, documents, runs, etc.
+* Table of roles (name, slug, system/custom, permission count, actions)
+* Role editor drawer/modal:
 
----
+  * name/slug/description
+  * permissions multi-select (workspace scope)
+* **Critical fix**: load permissions with `scope="workspace"`; backend filters by scope. 
 
-### 5.4 Permission gating strategy (no 403-driven UX)
+#### Danger Zone
 
-Implement a single `PermissionGate` component:
+* Delete workspace (confirm modal + typed warning)
+* Optional: “Leave workspace” if supported later
 
-```tsx
-type PermissionGateProps = {
-  require: { workspace?: string[]; global?: string[] };
-  fallback?: React.ReactNode; // read-only message or null
-  children: React.ReactNode;
-};
+### 5.4 Review “all API calls” used by workspace settings
 
-function PermissionGate(...) { ... }
-```
+At minimum, verify these requests and ensure they match the backend contract:
 
-Rules:
+* Workspace:
 
-* If user lacks read access for a view, hide it from nav and redirect.
-* If user can read but cannot manage, show view in read-only mode and disable actions with tooltip.
+  * `GET /workspaces/{workspace_id}`
+  * `PATCH /workspaces/{workspace_id}`
+  * `PUT /workspaces/{workspace_id}/default` 
+  * `DELETE /workspaces/{workspace_id}` 
 
-Source of truth:
+* Members:
 
-* `GET /api/v1/me/bootstrap` and/or `GET /api/v1/me/permissions`
+  * `GET /workspaces/{workspace_id}/members` (page_size ≤ 100, include_total optional) 
+  * `POST /workspaces/{workspace_id}/members`
+  * `PUT /workspaces/{workspace_id}/members/{user_id}`
+  * `DELETE /workspaces/{workspace_id}/members/{user_id}` 
 
----
+* Roles/Permissions:
 
-### 5.5 Networking / state management
+  * `GET /rbac/roles?scope=workspace` (page_size ≤ 100)
+  * `POST /rbac/roles`, `PATCH /rbac/roles/{role_id}`, `DELETE /rbac/roles/{role_id}` 
+  * `GET /rbac/permissions?scope=workspace` (page_size ≤ 100) 
 
-Standardize API files per feature domain:
+**Known current mismatches (must fix)**
 
-* `features/workspaces/api/workspaces.ts`
-* `features/workspaces/api/members.ts`
-* `features/rbac/api/roles.ts`
-* `features/rbac/api/permissions.ts`
+* Members fetch uses `page_size=200` in frontend.
+* Roles fetch uses `page_size=200` in frontend.
+* Permissions fetch uses `page_size=200` and requests `scope="global"` while UI wants workspace. 
 
-And expose hooks that wrap them (React Query recommended):
+### 5.5 Testing requirements
 
-* `useWorkspace(workspaceId)`
-* `useUpdateWorkspace(workspaceId)`
-* `useWorkspaceMembers(workspaceId)`
-* `useAddWorkspaceMember(workspaceId)`
-* `useUpdateWorkspaceMember(workspaceId)`
-* `useRemoveWorkspaceMember(workspaceId)`
-* `useRoles()`, `usePermissions()`, `useCreateRole()`, etc.
+* Update/replace unit tests for workspace route section parsing (settings subroutes).
+* Add a small integration-style test for:
 
-Key: one “mutation style” across the app:
+  * Members page loads with page_size 100 (or default) and does not throw
+  * Roles page loads permissions with `scope=workspace`
+* Manual QA checklist:
 
-* show toasts on success/failure
-* map backend validation errors to fields
-* invalidate relevant queries
-
----
-
-### 5.6 Delete the old system completely
-
-Since you want no compatibility:
-
-* Remove the old workspace settings components and routing logic.
-* Remove any query-param `view=` navigation.
-* Update all internal links that pointed to old syntax.
-
-Deliverable: a single new entry route:
-
-* `/workspaces/:workspaceId/settings/*`
-
-And a new system settings route:
-
-* `/system/settings/*`
-
----
-
-### 5.7 Tests (required)
-
-Add/Update tests:
-
-1. **Routing**
-
-* entering `/workspaces/:id/settings` redirects to `/general`
-* permission missing redirects to first available section
-
-2. **General**
-
-* PATCH payload includes merged settings
-* default workspace button calls correct endpoint and updates UI
-
-3. **Members**
-
-* add member calls POST and refreshes list
-* role update calls PUT and refreshes list
-* remove calls DELETE and refreshes list
-
-4. **Roles**
-
-* create role calls POST
-* edit role calls PATCH
-* delete role calls DELETE
-* permissions list is fetched and rendered
-
-5. **Danger zone**
-
-* delete button disabled until slug matches
-* on success navigates away and workspace disappears
-
----
-
-### 5.8 Documentation + developer friendliness (DoD)
-
-* Update frontend docs (where workspace layout/settings are described) to match the new route structure and section breakdown.
-* Add a short README near `features/settings/workspace` explaining:
-
-  * the scope separation
-  * the endpoints used per section
-  * how settings keys are stored in workspace.settings
-
----
-
-## Summary: What the new Workspace Settings contains
-
-**Workspace Settings**
-
-* Identity (name/slug)
-* Preferences (environment label, default workspace)
-* Members (access control)
-* Roles (tenant-wide definitions)
-* Danger zone (delete workspace)
-
-**NOT in Workspace Settings**
-
-* System safe mode toggle (global) → goes to System Settings route
+  * Visit each settings subroute directly (deep links).
+  * Members list loads (no 422).
+  * Roles list loads (no 422).
+  * Create role → appears in list.
+  * Add member → shows in list.
+  * Update member roles → persists.
+  * Delete workspace confirmation behaves correctly.
+
+### 5.6 Performance / security notes
+
+* Do not attempt to “fetch everything” with huge `page_size`; backend caps at 100. 
+* Mutations (members add/update/remove) are CSRF-protected on the API side; ensure the existing client/middleware continues to include CSRF headers/cookies.
+* If user directory loading (`/users`) fails for non-admins, the Members page should still function for viewing members; only “Add member” should be blocked with a clear explanation.

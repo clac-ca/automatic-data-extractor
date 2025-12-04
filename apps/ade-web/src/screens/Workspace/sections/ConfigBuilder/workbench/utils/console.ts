@@ -27,8 +27,7 @@ export function formatConsoleTimestamp(value: string | Date): string {
 }
 
 export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
-  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine =>
-    line.raw ? line : { ...line, raw: event };
+  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine => ({ ...line, raw: event });
 
   if (!isAdeEvent(event)) {
     return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
@@ -112,8 +111,7 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
 }
 
 export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
-  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine =>
-    line.raw ? line : { ...line, raw: event };
+  const attachRaw = (line: WorkbenchConsoleLine): WorkbenchConsoleLine => ({ ...line, raw: event });
 
   if (!isAdeEvent(event)) {
     return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
