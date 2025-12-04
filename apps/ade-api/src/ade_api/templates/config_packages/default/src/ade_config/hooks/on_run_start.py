@@ -16,6 +16,7 @@ No data has been extracted yet — this is a purely administrative checkpoint.
 """
 
 from __future__ import annotations
+
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -26,6 +27,7 @@ def run(
     *,
     run: Any | None = None,            # RunContext: run_id, metadata, etc.
     state: dict[str, Any] | None = None,  # shared dict for all hooks
+    file_names: tuple[str, ...] | None = None,  # source files (if known)
     manifest: Any | None = None,       # manifest context for this run
     logger=None,                       # logging.Logger instance
     event_emitter=None,                # EventEmitter instance
@@ -68,13 +70,14 @@ def run(
         run_id,
         getattr(stage, "value", stage),
     )
+    logger.debug("on_run_start: metadata=%s", metadata)
 
     # -----------------------------------------------------------------------
-    # EXAMPLE: Structured event for telemetry/monitoring dashboards
+    # EXAMPLE: Emit a custom event to the frontend/monitoring system
     # -----------------------------------------------------------------------
-    event_emitter.custom(
-        "hook.run_started",
-        stage=getattr(stage, "value", stage),
-        run_id=str(run_id),
-        metadata=metadata,
-    )
+    # event_emitter.custom(
+    #     "hook.run_started",
+    #     stage=getattr(stage, "value", stage),
+    #     run_id=str(run_id),
+    #     metadata=metadata,
+    # )

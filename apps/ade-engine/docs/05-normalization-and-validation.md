@@ -462,17 +462,18 @@ writer in the current runtime.
 Key events:
 
 - `console.line` — progress/errors emitted via the run logger (`TelemetryLogHandler` → EventEmitter).
-- `run.phase.started` — phase transitions (e.g., `"normalizing"`, `"writing_output"`).
-- `run.row_detector.score` / `run.column_detector.score` — engine-emitted scoring summaries for extraction/mapping.
-- `run.table.summary` — per-table summary including mapped/unmapped columns and validation aggregates.
-- `run.validation.summary` — optional aggregate when issues exist.
-- `run.validation.issue` — optional per-issue events for deep debugging.
-- `run.error` — structured error context when failures occur.
-- `run.completed` — terminal status with outputs/errors.
+- `engine.phase.start` — phase transitions (e.g., `"normalizing"`, `"writing_output"`).
+- `engine.detector.row.score` / `engine.detector.column.score` — engine-emitted scoring summaries for extraction/mapping.
+- `engine.table.summary` — per-table summary including mapped/unmapped columns and validation aggregates.
+- `engine.sheet.summary` / `engine.file.summary` — aggregates over tables per sheet/file.
+- `engine.run.summary` — final run-level summary (see `schemas/summaries.py`).
+- `engine.validation.summary` — optional aggregate when issues exist.
+- `engine.validation.issue` — optional per-issue events for deep debugging.
+- `engine.complete` — terminal status with outputs/errors.
 
 These events are written to `logs/events.ndjson` and later stamped/streamed by
-ade-api. They are the source of truth for normalization observability and for
-building `RunSummaryV1`.
+ade-api. They are the source of truth for normalization observability and power
+the hierarchical summaries emitted by the engine.
 
 ---
 

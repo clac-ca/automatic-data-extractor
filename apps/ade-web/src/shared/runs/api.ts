@@ -1,6 +1,6 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummaryV1, components, paths } from "@schema";
+import type { RunSummary, components, paths } from "@schema";
 import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
@@ -297,31 +297,31 @@ export async function fetchRun(
   return data as RunResource;
 }
 
-export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummaryV1 | null> {
+export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummary | null> {
   // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
   try {
     const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
       params: { path: { run_id: runId } },
       signal,
     });
-    if (data) return data as RunSummaryV1;
+    if (data) return data as RunSummary;
   } catch (error) {
     // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
     console.warn("Falling back to embedded run summary", error);
   }
 
   const run = await fetchRun(runId, signal);
-  const summary = (run as { summary?: RunSummaryV1 | string | null })?.summary;
+  const summary = (run as { summary?: RunSummary | string | null })?.summary;
   if (!summary) return null;
   if (typeof summary === "string") {
     try {
-      return JSON.parse(summary) as RunSummaryV1;
+      return JSON.parse(summary) as RunSummary;
     } catch (error) {
       console.warn("Unable to parse run summary", { error });
       return null;
     }
   }
-  return summary as RunSummaryV1;
+  return summary as RunSummary;
 }
 
 export function runOutputsUrl(run: RunResource): string | null {

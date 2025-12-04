@@ -2,12 +2,15 @@
 
 from .io import iter_csv_rows, iter_sheet_rows, list_input_files
 from .logging import RunLogContext, TelemetryLogHandler, build_run_logger
-from .telemetry import DispatchEventSink, EventEmitter, EventSink, FileEventSink, TelemetryConfig
+from .event_emitter import BaseNdjsonEmitter, ConfigEventEmitter, EngineEventEmitter
+from .telemetry import DispatchEventSink, EventSink, FileEventSink, TelemetryConfig
 
 __all__ = [
+    "BaseNdjsonEmitter",
+    "ConfigEventEmitter",
     "DispatchEventSink",
-    "EventEmitter",
     "EventSink",
+    "EngineEventEmitter",
     "FileEventSink",
     "RunLogContext",
     "TelemetryConfig",

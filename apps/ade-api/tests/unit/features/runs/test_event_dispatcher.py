@@ -82,7 +82,7 @@ async def test_sequences_increment_per_run(dispatcher: RunEventDispatcher) -> No
         payload={"status": "queued", "mode": "execute", "options": {}},
     )
     second = await dispatcher.emit(
-        type="run.started",
+        type="run.start",
         workspace_id=workspace_a,
         configuration_id=configuration_a,
         run_id=run_a,
@@ -119,7 +119,7 @@ async def test_sequences_resume_from_disk(
     await storage.append(existing)
 
     resumed = await dispatcher.emit(
-        type="run.started",
+        type="run.start",
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         run_id=run_id,
@@ -165,7 +165,7 @@ async def test_log_reader_filters_by_sequence(storage: RunEventStorage) -> None:
     )
     await storage.append(
         AdeEvent(
-            type="run.started",
+            type="run.start",
             event_id="evt_second",
             created_at=utc_now(),
             sequence=2,

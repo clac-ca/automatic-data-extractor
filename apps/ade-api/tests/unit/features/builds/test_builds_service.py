@@ -128,7 +128,7 @@ def service_factory(
             """
 [project]
 name = "ade-engine"
-version = "0.2.0"
+version = "1.6.0"
 """.strip(),
             encoding="utf-8",
         )
@@ -253,7 +253,7 @@ async def test_stream_build_success(
             BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
             BuilderLogEvent(message="log 2"),
             BuilderArtifactsEvent(
-                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="0.2.0")
+                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.6.0")
             ),
         ]
     )
@@ -284,7 +284,7 @@ async def test_stream_build_success(
         if getattr(evt, "type", "") == "console.line"
     ]
     assert console_messages == ["log 1", "log 2"]
-    assert any(getattr(evt, "type", "") == "build.completed" for evt in events)
+    assert any(getattr(evt, "type", "") == "build.complete" for evt in events)
 
 
 @pytest.mark.asyncio()

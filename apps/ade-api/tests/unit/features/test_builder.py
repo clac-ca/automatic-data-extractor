@@ -47,7 +47,7 @@ async def test_builder_installs_dependencies(
     ) -> str:
         if "sys.version_info" in command[-1]:
             return "3.14.0"
-        return "0.2.0"
+        return "1.6.0"
 
     async def _write_metadata(target: Path, payload: dict[str, str | None]) -> None:  # noqa: D401
         return None
@@ -97,7 +97,7 @@ async def test_write_metadata_serializes_uuid(tmp_path: Path) -> None:
         "workspace_id": uuid.uuid4(),
         "configuration_id": uuid.uuid4(),
         "python_version": "3.11.8",
-        "engine_version": "0.2.0",
+        "engine_version": "1.6.0",
         "fingerprint": "abc123",
     }
 

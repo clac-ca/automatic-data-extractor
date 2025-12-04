@@ -22,7 +22,7 @@ flags, and rollback considerations.
 - `ADE_VENVS_DIR` – ensure the directory exists on local storage and
   matches the path used by the builder
   (`${ADE_VENVS_DIR}/<workspace>/<config>/<build_id>/.venv`). Without the
-  venv the runner will emit `run.completed` with `exit_code=2` and an error
+  venv the runner will emit `run.complete` with `exit_code=2` and an error
   message (hydration will recreate it if DB metadata is intact).
 
 ## 3. Release sequence

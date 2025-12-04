@@ -13,7 +13,8 @@ from ade_engine.config.loader import load_config_runtime
 from ade_engine.core.pipeline import extract_raw_tables
 from ade_engine.core.types import RunContext, RunPaths, RunRequest
 from ade_engine.core.errors import InputError
-from ade_engine.infra.telemetry import EventEmitter, FileEventSink
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
+from ade_engine.infra.telemetry import FileEventSink
 
 
 def _clear_import_cache(prefix: str = "ade_config") -> None:
@@ -81,9 +82,10 @@ def _make_run_context(tmp_path: Path, run_request: RunRequest, manifest: object)
     )
 
 
-def _event_emitter(run: RunContext) -> EventEmitter:
+def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmitter]:
     sink = FileEventSink(path=run.paths.logs_dir / "events.ndjson")
-    return EventEmitter(run=run, event_sink=sink)
+    engine_emitter = EngineEventEmitter(run=run, event_sink=sink)
+    return engine_emitter, engine_emitter.config_emitter()
 
 
 def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -97,9 +99,15 @@ def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.Monke
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[source_file])
     run = _make_run_context(tmp_path, request, runtime.manifest)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
-    tables = extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
+    tables = extract_raw_tables(
+        request=request,
+        run=run,
+        runtime=runtime,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     assert len(tables) == 1
     table = tables[0]
@@ -111,7 +119,7 @@ def test_detects_single_table_from_csv(tmp_path: Path, monkeypatch: pytest.Monke
     assert table.last_data_row_index == 3
     assert table.data_rows == [["value-1", "1"], ["value-2", "2"]]
     events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().splitlines()]
-    score_events = [event for event in events if event["type"] == "run.row_detector.score"]
+    score_events = [event for event in events if event["type"] == "engine.detector.row.score"]
     assert len(score_events) == 1
     payload = score_events[0]["payload"]
     assert payload["header_row_index"] == 1
@@ -140,9 +148,15 @@ def test_detects_multiple_tables_per_sheet(tmp_path: Path, monkeypatch: pytest.M
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[source_file])
     run = _make_run_context(tmp_path, request, runtime.manifest)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
-    tables = extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
+    tables = extract_raw_tables(
+        request=request,
+        run=run,
+        runtime=runtime,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
 
     assert [(t.table_index, t.source_sheet) for t in tables] == [(0, "Data"), (1, "Data")]
     assert tables[0].header_row_index == 1
@@ -164,9 +178,15 @@ def test_missing_requested_sheet_raises(tmp_path: Path, monkeypatch: pytest.Monk
     runtime = load_config_runtime(manifest_path=manifest_path)
     request = RunRequest(input_files=[tmp_path / "input.xlsx"], input_sheets=["Missing"])
     run = _make_run_context(tmp_path, request, runtime.manifest)
-    event_emitter = _event_emitter(run)
+    engine_emitter, config_emitter = _event_emitters(run)
 
     with pytest.raises(InputError) as excinfo:
-        extract_raw_tables(request=request, run=run, runtime=runtime, event_emitter=event_emitter)
+        extract_raw_tables(
+            request=request,
+            run=run,
+            runtime=runtime,
+            event_emitter=engine_emitter,
+            config_event_emitter=config_emitter,
+        )
 
     assert "Worksheet(s) Missing not found" in str(excinfo.value)

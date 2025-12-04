@@ -1,10 +1,10 @@
 ## Work Package Checklist
 
-* [ ] Define and land the **new event namespace spec** (`engine.*` vs `run.*`/`build.*`) + update shared event schemas and type reference docs
-* [ ] Implement **ade-engine engine_emitter** (NDJSON) + refactor all engine emissions to `engine.*` + add `engine.summary`
-* [ ] Implement **ade-api emitters** (`RunEventEmitter`, `BuildEventEmitter`) using `event_emitter.custom()` + refactor run/build orchestration to use them
-* [ ] Move **run summary generation into ade-engine** (engine-owned calculation) and have ade-api **persist on `engine.summary`**
-* [ ] Update **ade-web + ADE docs + config templates** to reflect new event types and recommended logger/event_emitter usage; remove old summary builder wiring
+* [x] Define and land the **new event namespace spec** (`engine.*` vs `run.*`/`build.*`) + update shared event schemas and type reference docs — engine/api/web docs updated to new prefixes
+* [x] Implement **ade-engine engine_emitter** (NDJSON) + refactor all engine emissions to `engine.*` + add `engine.summary`
+* [x] Implement **ade-api emitters** (`RunEventEmitter`, `BuildEventEmitter`) using `event_emitter.custom()` + refactor run/build orchestration to use them
+* [x] Move **run summary generation into ade-engine** (engine-owned calculation) and have ade-api **persist on `engine.summary`**
+* [x] Update **ade-web + ADE docs + config templates** to reflect new event types and recommended logger/event_emitter usage; remove old summary builder wiring
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:

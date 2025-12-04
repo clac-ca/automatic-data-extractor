@@ -52,9 +52,11 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
 
-    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table_event = next(evt for evt in events if evt.type == "engine.table.summary")
     table = table_event.payload_dict()
-    assert table["row_count"] == 2
+    assert table["counts"]["rows"]["total"] == 2
+    summary_event = next(evt for evt in events if evt.type == "engine.run.summary")
+    assert summary_event.payload_dict().get("counts", {}).get("tables", {}).get("total") == 1
 
 
 def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,7 +75,7 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert result.error is not None
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
-    completed = next(evt for evt in events if evt.type == "run.completed")
+    completed = next(evt for evt in events if evt.type == "engine.complete")
     assert completed.payload_dict().get("status") == "failed"
 
 
@@ -90,14 +92,23 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
     events_path = Path(result.logs_dir) / "events.ndjson"
     events = _parse_events(events_path)
-    table_event = next(evt for evt in events if evt.type == "run.table.summary")
+    table_event = next(evt for evt in events if evt.type == "engine.table.summary")
     table = table_event.payload_dict()
 
     mapped_fields = [
         {key: field.get(key) for key in ("field", "header", "score", "source_column_index")}
-        for field in table.get("mapped_fields", [])
+        for field in table.get("fields", [])
+        if field.get("mapped")
     ]
-    unmapped_columns = table.get("unmapped_columns") or []
+    unmapped_columns = [
+        {
+            "header": column.get("header"),
+            "source_column_index": column.get("source_column_index"),
+            "output_header": column.get("output_header"),
+        }
+        for column in table.get("columns", [])
+        if not column.get("mapped")
+    ]
 
     assert mapped_fields == [
         {"field": "member_id", "header": "member_id", "score": 1.0, "source_column_index": 0},

@@ -69,7 +69,8 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
         origin: "build",
       });
     }
-    case "build.started": {
+    case "build.started":
+    case "build.start": {
       const reason = (payload.reason as string | undefined) ?? undefined;
       return attachRaw({
         level: "info",
@@ -78,7 +79,8 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
         origin: "build",
       });
     }
-    case "build.phase.started": {
+    case "build.phase.started":
+    case "build.phase.start": {
       const phase = (payload.phase as string | undefined) ?? "building";
       const message = (payload.message as string | undefined) ?? `Starting ${phase}`;
       return attachRaw({ level: "info", message, timestamp: ts, origin: "build" });
@@ -89,7 +91,8 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
         ((payload.step as string | undefined) ? `Build: ${payload.step as string}` : "Build progress");
       return attachRaw({ level: "info", message, timestamp: ts, origin: "build" });
     }
-    case "build.phase.completed": {
+    case "build.phase.completed":
+    case "build.phase.complete": {
       const phase = (payload.phase as string | undefined) ?? "build";
       const status = (payload.status as string | undefined) ?? "completed";
       const duration = formatDurationMs(payload.duration_ms);
@@ -101,6 +104,7 @@ export function describeBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine 
       return attachRaw({ level, message, timestamp: ts, origin: "build" });
     }
     case "build.completed":
+    case "build.complete":
       return attachRaw(formatBuildCompletion(payload, ts));
     default:
       return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" });
@@ -124,7 +128,7 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
     );
   }
 
-  if (!type?.startsWith("run.")) {
+  if (!type?.startsWith("run.") && !type?.startsWith("engine.") && !type?.startsWith("config.")) {
     return attachRaw({ level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
   }
 
@@ -152,7 +156,9 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.started": {
+    case "run.started":
+    case "run.start":
+    case "engine.start": {
       const mode = (payload.mode as string | undefined) ?? undefined;
       const env = (payload.env as { reused?: boolean; reason?: string } | undefined) ?? undefined;
       const envNote = env?.reused ? " (reused environment)" : env?.reason ? ` (${env.reason})` : "";
@@ -163,7 +169,9 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.phase.started": {
+    case "run.phase.started":
+    case "run.phase.start":
+    case "engine.phase.start": {
       const phase = (payload.phase as string | undefined) ?? "progress";
       const message = (payload.message as string | undefined) ?? `Phase: ${phase}`;
       const level = normalizeLevel((payload.level as string | undefined) ?? "info");
@@ -174,7 +182,9 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.phase.completed": {
+    case "run.phase.completed":
+    case "run.phase.complete":
+    case "engine.phase.complete": {
       const phase = (payload.phase as string | undefined) ?? "phase";
       const status = (payload.status as string | undefined) ?? "completed";
       const duration = formatDurationMs(payload.duration_ms);
@@ -190,68 +200,29 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.table.summary": {
-      const name =
-        (payload.source_sheet as string | undefined) ??
-        (payload.source_file as string | undefined) ??
-        (payload.table_id as string | undefined) ??
-        "table";
-      const mappedColumns = asNumber(payload.mapped_column_count);
-      const columnCount = asNumber(payload.column_count);
-      const rowCount = asNumber(payload.row_count);
-      const coveragePct =
-        columnCount && mappedColumns !== undefined && columnCount > 0
-          ? (mappedColumns / columnCount) * 100
-          : null;
-      const mappedSummary =
-        columnCount && mappedColumns !== undefined
-          ? `mapped ${mappedColumns}/${columnCount} (${formatPercent(coveragePct)})`
-          : mappedColumns !== undefined
-            ? `mapped ${mappedColumns} column${mappedColumns === 1 ? "" : "s"}`
-            : null;
-
-      const missingRequired = collectMissingRequired(payload);
-      const unmappedHeaders = collectUnmappedHeaders(payload);
-
-      const line1Parts = [
-        `Table ${name}:`,
-        rowCount !== undefined ? `${rowCount} row${rowCount === 1 ? "" : "s"}` : null,
-        columnCount !== undefined ? `${columnCount} col${columnCount === 1 ? "" : "s"}` : null,
-        mappedSummary,
-      ].filter(Boolean);
-
-      const line2Parts = [
-        missingRequired.length ? `Missing required: ${formatList(missingRequired, 3)}` : null,
-        unmappedHeaders.length ? `Unmapped: ${formatList(unmappedHeaders, 100)}` : null,
-      ].filter(Boolean);
-
-      const detailParts = formatTableDetails(payload.details, payload.source_file as string | undefined);
-      const messageLines = [
-        line1Parts.join(" · "),
-        line2Parts.find((line) => line?.startsWith("Missing required")) ?? null,
-        line2Parts.find((line) => line?.startsWith("Unmapped")) ?? null,
-        detailParts ? `(${detailParts})` : null,
-      ].filter(Boolean);
-
-      const level: WorkbenchConsoleLine["level"] =
-        missingRequired.length > 0 ? "warning" : coveragePct !== null && coveragePct >= 85 ? "success" : "info";
-
-      return attachRaw({
-        level,
-        message: messageLines.join("\n"),
-        timestamp: ts,
-        origin: "run",
-      });
+    case "run.table.summary":
+    case "engine.table.summary": {
+      if (isAdeSummary(payload, "table")) {
+        return attachRaw(formatTableSummary(payload, ts));
+      }
+      return attachRaw(formatLegacyTableSummary(payload, ts));
     }
     case "run.column_detector.score":
+    case "engine.detector.column.score":
       return attachRaw(formatColumnDetectorScore(payload, ts));
     case "run.row_detector.score":
+    case "engine.detector.row.score":
       return attachRaw(formatRowDetectorScore(payload, ts));
     case "run.hook.checkpoint":
       return attachRaw(formatHookCheckpoint(payload, ts));
     case "run.hook.mapping_checked":
       return attachRaw(formatMappingChecked(payload, ts));
-    case "run.validation.issue": {
+    case "engine.file.summary":
+      return attachRaw(formatFileSummary(payload, ts));
+    case "engine.sheet.summary":
+      return attachRaw(formatSheetSummary(payload, ts));
+    case "run.validation.issue":
+    case "engine.validation.issue": {
       const sev = (payload.severity as string | undefined) ?? "info";
       return attachRaw({
         level: sev === "error" ? "error" : sev === "warning" ? "warning" : "info",
@@ -260,7 +231,8 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
         origin: "run",
       });
     }
-    case "run.validation.summary": {
+    case "run.validation.summary":
+    case "engine.validation.summary": {
       const total = (payload.issues_total as number | undefined) ?? 0;
       const maxSeverity = (payload.max_severity as string | undefined) ?? undefined;
       const level: WorkbenchConsoleLine["level"] =
@@ -286,8 +258,17 @@ export function describeRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
       });
     }
     case "run.completed":
+    case "run.complete":
+    case "engine.complete":
+    case "engine.run.summary":
+      if (isAdeSummary(payload, "run")) {
+        return attachRaw(formatRunSummary(payload, ts));
+      }
       return attachRaw(formatRunCompletion(payload, ts));
     default:
+      if (type.startsWith("config.")) {
+        return attachRaw(formatConfigEvent(type, payload, ts));
+      }
       if (type.startsWith("run.transform.")) {
         return attachRaw(formatTransformEvent(type, payload, ts));
       }
@@ -369,10 +350,14 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
 }
 
 function formatRunCompletion(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
-  const status = (payload.status as string | undefined) ?? "completed";
-  const execution = (payload.execution as Record<string, unknown> | undefined) ?? {};
+  const isRunSummary = payload.scope === "run" && typeof payload.source === "object";
+  const source = (payload.source as Record<string, unknown> | undefined) ?? {};
+  const status = isRunSummary
+    ? ((source.status as string | undefined) ?? "completed")
+    : (payload.status as string | undefined) ?? "completed";
+  const execution = isRunSummary ? {} : (payload.execution as Record<string, unknown> | undefined) ?? {};
   const exit = typeof execution.exit_code === "number" ? execution.exit_code : undefined;
-  const failure = payload.failure as Record<string, unknown> | undefined;
+  const failure = (isRunSummary ? source.failure : payload.failure) as Record<string, unknown> | undefined;
   const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
   const summaryMessage =
     typeof payload.summary === "string"
@@ -647,6 +632,396 @@ function formatMappingChecked(
   };
 }
 
+function formatRunSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const source = (payload.source as Record<string, unknown> | undefined) ?? {};
+  const status = (source.status as string | undefined) ?? "completed";
+  const failure = (source.failure as Record<string, unknown> | undefined) ?? undefined;
+  const failureCode = (failure?.code as string | undefined) ?? undefined;
+  const failureMessage = (failure?.message as string | undefined) ?? undefined;
+  const failureStage = (failure?.stage as string | undefined) ?? undefined;
+  const counts = (payload.counts as Record<string, unknown> | undefined) ?? {};
+  const tables = asNumber((counts.tables as Record<string, unknown> | undefined)?.total);
+  const files = asNumber((counts.files as Record<string, unknown> | undefined)?.total);
+  const sheets = asNumber((counts.sheets as Record<string, unknown> | undefined)?.total);
+  const rows = asNumber((counts.rows as Record<string, unknown> | undefined)?.total);
+  const cols = asNumber((counts.columns as Record<string, unknown> | undefined)?.physical_total);
+  const fieldsCounts = (counts.fields as Record<string, unknown> | undefined) ?? {};
+  const mappedFields = asNumber(fieldsCounts.mapped);
+  const totalFields = asNumber(fieldsCounts.total);
+  const required = asNumber(fieldsCounts.required);
+  const requiredUnmapped = asNumber(fieldsCounts.required_unmapped) ?? 0;
+
+  const fieldsList = Array.isArray(payload.fields) ? (payload.fields as Array<Record<string, unknown>>) : [];
+  const unmappedFields = fieldsList
+    .filter((f) => f && typeof f === "object" && f.mapped === false)
+    .map((f) => (f.field as string | undefined) || (f.label as string | undefined))
+    .filter(Boolean) as string[];
+
+  const outputs = Array.isArray((payload.details as Record<string, unknown> | undefined)?.output_paths)
+    ? ((payload.details as Record<string, unknown>).output_paths as string[])
+    : [];
+
+  const headlineParts = [
+    `Run summary: ${status}`,
+    failureStage ? `stage ${failureStage}` : null,
+    failureCode ? `code ${failureCode}` : null,
+  ].filter(Boolean);
+
+  const countLine = [
+    files !== undefined ? `files ${files}` : null,
+    sheets !== undefined ? `sheets ${sheets}` : null,
+    tables !== undefined ? `tables ${tables}` : null,
+    rows !== undefined ? `rows ${rows}` : null,
+    cols !== undefined ? `cols ${cols}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const fieldLine =
+    totalFields !== undefined && mappedFields !== undefined
+      ? `mapped fields ${mappedFields}/${totalFields}${required !== undefined ? ` · required missing ${requiredUnmapped}/${required}` : ""}`
+      : required !== undefined
+        ? `required missing ${requiredUnmapped}/${required}`
+        : null;
+
+  const details: string[] = [];
+  if (failureMessage) {
+    details.push(`Failure: ${failureMessage}`);
+  }
+  if (unmappedFields.length) {
+    details.push(`Unmapped fields: ${unmappedFields.join(", ")}`);
+  }
+  if (outputs.length) {
+    details.push(`Outputs: ${outputs.join(", ")}`);
+  }
+
+  const messageLines = [
+    headlineParts.join(" · "),
+    countLine,
+    fieldLine,
+    details.join(" · "),
+  ].filter((line) => line && line.length > 0);
+
+  const level: WorkbenchConsoleLine["level"] =
+    status === "failed" || !!failureMessage
+      ? "error"
+      : requiredUnmapped > 0
+        ? "warning"
+        : status === "succeeded"
+          ? "success"
+          : "info";
+
+  return {
+    level,
+    message: messageLines.join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatLegacyTableSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const name =
+    (payload.source_sheet as string | undefined) ??
+    (payload.source_file as string | undefined) ??
+    (payload.table_id as string | undefined) ??
+    "table";
+  const mappedColumns = asNumber(payload.mapped_column_count);
+  const columnCount = asNumber(payload.column_count);
+  const rowCount = asNumber(payload.row_count);
+  const coveragePct =
+    columnCount && mappedColumns !== undefined && columnCount > 0
+      ? (mappedColumns / columnCount) * 100
+      : null;
+  const mappedSummary =
+    columnCount && mappedColumns !== undefined
+      ? `mapped ${mappedColumns}/${columnCount} (${formatPercent(coveragePct)})`
+      : mappedColumns !== undefined
+        ? `mapped ${mappedColumns} column${mappedColumns === 1 ? "" : "s"}`
+        : null;
+
+  const missingRequired = collectMissingRequired(payload);
+  const unmappedHeaders = collectUnmappedHeaders(payload);
+
+  const line1Parts = [
+    `Table ${name}:`,
+    rowCount !== undefined ? `${rowCount} row${rowCount === 1 ? "" : "s"}` : null,
+    columnCount !== undefined ? `${columnCount} col${columnCount === 1 ? "" : "s"}` : null,
+    mappedSummary,
+  ].filter(Boolean);
+
+  const line2Parts = [
+    missingRequired.length ? `Missing required: ${formatList(missingRequired, 3)}` : null,
+    unmappedHeaders.length ? `Unmapped: ${formatList(unmappedHeaders, 100)}` : null,
+  ].filter(Boolean);
+
+  const detailParts = formatTableDetails(payload.details, payload.source_file as string | undefined);
+  const messageLines = [
+    line1Parts.join(" · "),
+    line2Parts.find((line) => line?.startsWith("Missing required")) ?? null,
+    line2Parts.find((line) => line?.startsWith("Unmapped")) ?? null,
+    detailParts ? `(${detailParts})` : null,
+  ].filter(Boolean);
+
+  const level: WorkbenchConsoleLine["level"] =
+    missingRequired.length > 0 ? "warning" : coveragePct !== null && coveragePct >= 85 ? "success" : "info";
+
+  return {
+    level,
+    message: messageLines.join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatFileSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const sourcePath = typeof payload.source === "object" && payload.source
+    ? (payload.source as Record<string, unknown>).file_path as string | undefined
+    : undefined;
+  const fileName = sourcePath ? basename(sourcePath) : "file";
+  const counts = (payload.counts as Record<string, unknown> | undefined) ?? {};
+  const rows = asNumber((counts.rows as Record<string, unknown> | undefined)?.total);
+  const cols = asNumber((counts.columns as Record<string, unknown> | undefined)?.physical_total);
+  const tables = asNumber((counts.tables as Record<string, unknown> | undefined)?.total);
+  const sheets = asNumber((counts.sheets as Record<string, unknown> | undefined)?.total);
+  const fields = (counts.fields as Record<string, unknown> | undefined) ?? {};
+  const required = asNumber(fields.required);
+  const requiredUnmapped = asNumber(fields.required_unmapped) ?? 0;
+  const mappedFields = asNumber(fields.mapped);
+  const totalFields = asNumber(fields.total);
+
+  const headerCounts = (counts.columns as Record<string, unknown> | undefined) ?? {};
+  const mappedHeaders = asNumber(headerCounts.distinct_headers_mapped);
+  const totalHeaders = asNumber(headerCounts.distinct_headers);
+
+  const fieldsList = Array.isArray(payload.fields) ? (payload.fields as Array<Record<string, unknown>>) : [];
+  const unmappedRequiredFields = fieldsList
+    .filter((f) => f && typeof f === "object" && f.required === true && f.mapped === false)
+    .map((f) => (f.field as string | undefined) || (f.label as string | undefined))
+    .filter(Boolean) as string[];
+  const unmappedFields = fieldsList
+    .filter((f) => f && typeof f === "object" && f.mapped === false)
+    .map((f) => (f.field as string | undefined) || (f.label as string | undefined))
+    .filter(Boolean) as string[];
+
+  const columns = Array.isArray(payload.columns) ? (payload.columns as Array<Record<string, unknown>>) : [];
+  const unmappedHeaders = columns
+    .filter((c) => c && typeof c === "object" && c.mapped === false)
+    .map((c) => (c.header as string | undefined) ?? "")
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0);
+  const headerPreview = unmappedHeaders.length ? unmappedHeaders.join(", ") : "";
+  const unmappedFieldPreview = unmappedFields.length ? unmappedFields.join(", ") : "";
+
+  const headlineParts = [
+    `File summary: ${fileName}`,
+    sheets !== undefined ? `sheets ${sheets}` : null,
+    tables !== undefined ? `tables ${tables}` : null,
+    rows !== undefined ? `rows ${rows}` : null,
+    cols !== undefined ? `cols ${cols}` : null,
+    totalFields !== undefined && mappedFields !== undefined ? `mapped fields ${mappedFields}/${totalFields}` : null,
+    required !== undefined && requiredUnmapped !== undefined ? `required missing ${requiredUnmapped}/${required}` : null,
+  ].filter(Boolean);
+
+  const details: string[] = [];
+  if (mappedHeaders !== undefined && totalHeaders !== undefined) {
+    details.push(`headers mapped ${mappedHeaders}/${totalHeaders}`);
+  }
+  if (headerPreview) {
+    details.push(`Unmapped headers: ${headerPreview}`);
+  }
+  if (unmappedFieldPreview) {
+    details.push(`Unmapped fields: ${unmappedFieldPreview}`);
+  }
+  if (unmappedRequiredFields.length) {
+    details.push(`Required fields unmapped: ${unmappedRequiredFields.join(", ")}`);
+  }
+
+  const ids = (payload.details as Record<string, unknown> | undefined) ?? {};
+  const sheetIds = Array.isArray(ids.sheet_ids) ? ids.sheet_ids.join(", ") : undefined;
+  const tableIds = Array.isArray(ids.table_ids) ? ids.table_ids.join(", ") : undefined;
+  const idLine = [payload.id ? `id ${payload.id}` : null, sheetIds ? `sheets ${sheetIds}` : null, tableIds ? `tables ${tableIds}` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  const messageLines = [headlineParts.join(" · "), details.join(" · "), idLine ? `(${idLine})` : null]
+    .filter((line) => line && line.length > 0);
+
+  const level: WorkbenchConsoleLine["level"] =
+    requiredUnmapped > 0 ? "error" : unmappedHeaders.length > 0 || unmappedFields.length > 0 ? "warning" : "success";
+
+  return {
+    level,
+    message: messageLines.join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatTableSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const source = (payload.source as Record<string, unknown> | undefined) ?? {};
+  const sheetName = (source.sheet_name as string | undefined) ?? "table";
+  const tableIndex = asNumber(source.table_index);
+  const fileName = source.file_path ? basename(source.file_path as string) : undefined;
+  const outputSheet = (source.output_sheet as string | undefined) ?? undefined;
+  const counts = (payload.counts as Record<string, unknown> | undefined) ?? {};
+  const rows = asNumber((counts.rows as Record<string, unknown> | undefined)?.total);
+  const cols = asNumber((counts.columns as Record<string, unknown> | undefined)?.physical_total);
+  const fields = (counts.fields as Record<string, unknown> | undefined) ?? {};
+  const required = asNumber(fields.required);
+  const requiredUnmapped = asNumber(fields.required_unmapped) ?? 0;
+  const mappedFields = asNumber(fields.mapped);
+  const totalFields = asNumber(fields.total);
+
+  const headerCounts = (counts.columns as Record<string, unknown> | undefined) ?? {};
+  const mappedHeaders = asNumber(headerCounts.distinct_headers_mapped);
+  const totalHeaders = asNumber(headerCounts.distinct_headers);
+
+  const fieldsList = Array.isArray(payload.fields) ? (payload.fields as Array<Record<string, unknown>>) : [];
+  const unmappedFields = fieldsList
+    .filter((f) => f && typeof f === "object" && f.mapped === false)
+    .map((f) => (f.field as string | undefined) || (f.label as string | undefined))
+    .filter(Boolean) as string[];
+
+  const columns = Array.isArray(payload.columns) ? (payload.columns as Array<Record<string, unknown>>) : [];
+  const unmappedHeaders = columns
+    .filter((c) => c && typeof c === "object" && c.mapped === false)
+    .map((c) => (c.header as string | undefined) ?? "")
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0);
+  const headerPreview = unmappedHeaders.length ? unmappedHeaders.join(", ") : "";
+  const unmappedFieldPreview = unmappedFields.length ? unmappedFields.join(", ") : "";
+
+  const headlineParts = [
+    `Table summary: ${sheetName}${tableIndex !== undefined ? ` (table ${tableIndex})` : ""}`,
+    fileName ? `file ${fileName}` : null,
+    rows !== undefined ? `rows ${rows}` : null,
+    cols !== undefined ? `cols ${cols}` : null,
+    totalFields !== undefined && mappedFields !== undefined ? `mapped fields ${mappedFields}/${totalFields}` : null,
+    required !== undefined && requiredUnmapped !== undefined ? `required missing ${requiredUnmapped}/${required}` : null,
+  ].filter(Boolean);
+
+  const details: string[] = [];
+  if (mappedHeaders !== undefined && totalHeaders !== undefined) {
+    details.push(`headers mapped ${mappedHeaders}/${totalHeaders}`);
+  }
+  if (outputSheet) {
+    details.push(`output sheet ${outputSheet}`);
+  }
+  if (headerPreview) {
+    details.push(`Unmapped headers: ${headerPreview}`);
+  }
+  if (unmappedFieldPreview) {
+    details.push(`Unmapped fields: ${unmappedFieldPreview}`);
+  }
+
+  const metaDetails = (payload.details as Record<string, unknown> | undefined) ?? {};
+  const headerRow = asNumber(metaDetails.header_row_index ?? metaDetails.header_row);
+  const dataStart = asNumber(metaDetails.first_data_row_index ?? metaDetails.first_data_row);
+  const dataEnd = asNumber(metaDetails.last_data_row_index ?? metaDetails.last_data_row);
+  const position =
+    headerRow !== undefined || dataStart !== undefined || dataEnd !== undefined
+      ? `header row ${headerRow ?? "?"}${dataStart !== undefined || dataEnd !== undefined ? ` · data ${dataStart ?? "?"}-${dataEnd ?? "?"}` : ""}`
+      : null;
+  const idLine = [
+    payload.id ? `id ${payload.id}` : null,
+    position,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const messageLines = [headlineParts.join(" · "), details.join(" · "), idLine ? `(${idLine})` : null]
+    .filter((line) => line && line.length > 0);
+
+  const level: WorkbenchConsoleLine["level"] =
+    requiredUnmapped > 0 ? "error" : unmappedHeaders.length > 0 || unmappedFields.length > 0 ? "warning" : "success";
+
+  return {
+    level,
+    message: messageLines.join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatSheetSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const source = (payload.source as Record<string, unknown> | undefined) ?? {};
+  const sheetName = (source.sheet_name as string | undefined) ?? "sheet";
+  const fileName = source.file_path ? basename(source.file_path as string) : undefined;
+  const counts = (payload.counts as Record<string, unknown> | undefined) ?? {};
+  const rows = asNumber((counts.rows as Record<string, unknown> | undefined)?.total);
+  const cols = asNumber((counts.columns as Record<string, unknown> | undefined)?.physical_total);
+  const tables = asNumber((counts.tables as Record<string, unknown> | undefined)?.total);
+  const fields = (counts.fields as Record<string, unknown> | undefined) ?? {};
+  const required = asNumber(fields.required);
+  const requiredUnmapped = asNumber(fields.required_unmapped) ?? 0;
+  const mappedFields = asNumber(fields.mapped);
+  const totalFields = asNumber(fields.total);
+
+  const headerCounts = (counts.columns as Record<string, unknown> | undefined) ?? {};
+  const mappedHeaders = asNumber(headerCounts.distinct_headers_mapped);
+  const totalHeaders = asNumber(headerCounts.distinct_headers);
+
+  const fieldsList = Array.isArray(payload.fields) ? (payload.fields as Array<Record<string, unknown>>) : [];
+  const unmappedFields = fieldsList
+    .filter((f) => f && typeof f === "object" && f.mapped === false)
+    .map((f) => (f.field as string | undefined) || (f.label as string | undefined))
+    .filter(Boolean) as string[];
+
+  const columns = Array.isArray(payload.columns) ? (payload.columns as Array<Record<string, unknown>>) : [];
+  const unmappedHeaders = columns
+    .filter((c) => c && typeof c === "object" && c.mapped === false)
+    .map((c) => (c.header as string | undefined) ?? "")
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0);
+  const headerPreview = unmappedHeaders.length ? unmappedHeaders.join(", ") : "";
+  const unmappedFieldPreview = unmappedFields.length ? unmappedFields.join(", ") : "";
+
+  const headlineParts = [
+    `Sheet summary: ${sheetName}`,
+    fileName ? `file ${fileName}` : null,
+    tables !== undefined ? `tables ${tables}` : null,
+    rows !== undefined ? `rows ${rows}` : null,
+    cols !== undefined ? `cols ${cols}` : null,
+    totalFields !== undefined && mappedFields !== undefined ? `mapped fields ${mappedFields}/${totalFields}` : null,
+    required !== undefined && requiredUnmapped !== undefined ? `required missing ${requiredUnmapped}/${required}` : null,
+  ].filter(Boolean);
+
+  const details: string[] = [];
+  if (mappedHeaders !== undefined && totalHeaders !== undefined) {
+    details.push(`headers mapped ${mappedHeaders}/${totalHeaders}`);
+  }
+  if (headerPreview) {
+    details.push(`Unmapped headers: ${headerPreview}`);
+  }
+  if (unmappedFieldPreview) {
+    details.push(`Unmapped fields: ${unmappedFieldPreview}`);
+  }
+
+  const ids = (payload.details as Record<string, unknown> | undefined) ?? {};
+  const tableIds = Array.isArray(ids.table_ids) ? ids.table_ids.join(", ") : undefined;
+  const idLine = [payload.id ? `id ${payload.id}` : null, tableIds ? `tables ${tableIds}` : null]
+    .filter(Boolean)
+    .join(" · ");
+
+  const messageLines = [headlineParts.join(" · "), details.join(" · "), idLine ? `(${idLine})` : null]
+    .filter((line) => line && line.length > 0);
+
+  const level: WorkbenchConsoleLine["level"] =
+    requiredUnmapped > 0 ? "error" : unmappedHeaders.length > 0 || unmappedFields.length > 0 ? "warning" : "success";
+
+  return {
+    level,
+    message: messageLines.join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
 function formatScore(value: number | undefined): string {
   if (value === undefined || Number.isNaN(value)) return "?";
   return value.toFixed(2);
@@ -656,6 +1031,13 @@ function shortName(name?: string): string {
   if (!name) return "";
   const parts = name.split("."); // e.g., module.fn
   return parts[parts.length - 1] || name;
+}
+
+function isAdeSummary(payload: Record<string, unknown>, scope: "table" | "sheet" | "file"): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const schemaId = (payload.schema_id as string | undefined) ?? (payload.schema as string | undefined);
+  const scopeValue = payload.scope as string | undefined;
+  return schemaId === "ade.summary" && scopeValue === scope;
 }
 
 function formatTransformEvent(
@@ -674,4 +1056,31 @@ function formatTransformEvent(
     origin: "run",
     raw: payload,
   };
+}
+
+function formatConfigEvent(
+  type: string,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const name = type.replace(/^config\./, "");
+  const headline = `Config event: ${name}`;
+  const payloadText = formatConfigPayload(payload);
+  const message = payloadText ? `${headline}\n${payloadText}` : headline;
+
+  return {
+    level: "info",
+    message,
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatConfigPayload(payload: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(payload ?? {}, null, 2);
+  } catch {
+    return String(payload ?? "");
+  }
 }

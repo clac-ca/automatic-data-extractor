@@ -24,6 +24,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meta/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Installed ADE versions
+         * @description Return installed ade-api and ade-engine versions.
+         */
+        get: operations["read_versions_api_v1_meta_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/providers": {
         parameters: {
             query?: never;
@@ -268,6 +288,23 @@ export type paths = {
         head?: never;
         /** Update a user (administrator only) */
         patch: operations["update_user_api_v1_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a user and revoke their API keys (administrator only) */
+        post: operations["deactivate_user_api_v1_users__user_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/rbac/permissions": {
@@ -1553,6 +1590,67 @@ export type components = {
          */
         BuildStatus: "queued" | "building" | "ready" | "failed" | "cancelled";
         /**
+         * ColumnCounts
+         * @description Column-level counts.
+         */
+        ColumnCounts: {
+            /**
+             * Physical Total
+             * @default 0
+             */
+            physical_total: number;
+            /**
+             * Physical Empty
+             * @default 0
+             */
+            physical_empty: number;
+            /**
+             * Physical Non Empty
+             * @default 0
+             */
+            physical_non_empty: number;
+            /**
+             * Distinct Headers
+             * @default 0
+             */
+            distinct_headers: number;
+            /**
+             * Distinct Headers Mapped
+             * @default 0
+             */
+            distinct_headers_mapped: number;
+            /**
+             * Distinct Headers Unmapped
+             * @default 0
+             */
+            distinct_headers_unmapped: number;
+        };
+        /**
+         * ColumnSummaryDistinct
+         * @description Distinct header summary for aggregate scopes.
+         */
+        ColumnSummaryDistinct: {
+            /** Header */
+            header: string;
+            /** Header Normalized */
+            header_normalized: string;
+            /** Occurrences */
+            occurrences?: {
+                [key: string]: number;
+            };
+            /**
+             * Mapped
+             * @default false
+             */
+            mapped: boolean;
+            /** Mapped Fields */
+            mapped_fields?: string[];
+            /** Mapped Fields Counts */
+            mapped_fields_counts?: {
+                [key: string]: number;
+            };
+        };
+        /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
          */
@@ -1694,6 +1792,27 @@ export type components = {
             content_digest?: string | null;
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
+        };
+        /**
+         * Counts
+         * @description Aggregate counts for a summary scope.
+         */
+        Counts: {
+            /** Files */
+            files?: {
+                [key: string]: number;
+            } | null;
+            /** Sheets */
+            sheets?: {
+                [key: string]: number;
+            } | null;
+            /** Tables */
+            tables?: {
+                [key: string]: number;
+            } | null;
+            rows?: components["schemas"]["RowCounts"];
+            columns?: components["schemas"]["ColumnCounts"];
+            fields?: components["schemas"]["FieldCounts"];
         };
         /** DirectoryWriteResponse */
         DirectoryWriteResponse: {
@@ -1855,6 +1974,70 @@ export type components = {
             workspaces?: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * FieldCounts
+         * @description Canonical field counts.
+         */
+        FieldCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Required
+             * @default 0
+             */
+            required: number;
+            /**
+             * Mapped
+             * @default 0
+             */
+            mapped: number;
+            /**
+             * Unmapped
+             * @default 0
+             */
+            unmapped: number;
+            /**
+             * Required Mapped
+             * @default 0
+             */
+            required_mapped: number;
+            /**
+             * Required Unmapped
+             * @default 0
+             */
+            required_unmapped: number;
+        };
+        /**
+         * FieldSummaryAggregate
+         * @description Field status at aggregate scopes (sheet/file/run).
+         */
+        FieldSummaryAggregate: {
+            /** Field */
+            field: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /**
+             * Mapped
+             * @default false
+             */
+            mapped: boolean;
+            /** Max Score */
+            max_score?: number | null;
+            /** Tables Mapped */
+            tables_mapped?: number | null;
+            /** Sheets Mapped */
+            sheets_mapped?: number | null;
+            /** Files Mapped */
+            files_mapped?: number | null;
         };
         /** FileCapabilities */
         FileCapabilities: {
@@ -2386,6 +2569,27 @@ export type components = {
             permissions?: string[] | null;
         };
         /**
+         * RowCounts
+         * @description Row-level counts.
+         */
+        RowCounts: {
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Empty
+             * @default 0
+             */
+            empty: number;
+            /**
+             * Non Empty
+             * @default 0
+             */
+            non_empty: number;
+        };
+        /**
          * RunCreateOptions
          * @description Optional execution toggles for ADE runs.
          */
@@ -2613,190 +2817,46 @@ export type components = {
          */
         RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
         /**
-         * RunSummaryBreakdowns
-         * @description Nested breakdowns for files and fields.
+         * RunSummary
+         * @description Run-level summary aggregated across files within a run.
          */
-        RunSummaryBreakdowns: {
-            /** By File */
-            by_file?: components["schemas"]["RunSummaryByFile"][];
-            /** By Field */
-            by_field?: components["schemas"]["RunSummaryByField"][];
-        };
-        /**
-         * RunSummaryByField
-         * @description Breakdown metrics scoped to a canonical field.
-         */
-        RunSummaryByField: {
-            /** Field */
-            field: string;
-            /** Label */
-            label?: string | null;
+        RunSummary: {
             /**
-             * Required
-             * @default false
+             * Schema Id
+             * @default ade.summary
              */
-            required: boolean;
+            schema_id: string;
             /**
-             * Mapped
-             * @default false
-             */
-            mapped: boolean;
-            /** Max Score */
-            max_score?: number | null;
-            /**
-             * Validation Issue Count Total
-             * @default 0
-             */
-            validation_issue_count_total: number;
-            /** Issue Counts By Severity */
-            issue_counts_by_severity?: {
-                [key: string]: number;
-            };
-            /** Issue Counts By Code */
-            issue_counts_by_code?: {
-                [key: string]: number;
-            };
-        };
-        /**
-         * RunSummaryByFile
-         * @description Breakdown metrics scoped to a single source file.
-         */
-        RunSummaryByFile: {
-            /** Source File */
-            source_file: string;
-            /** Table Count */
-            table_count: number;
-            /** Row Count */
-            row_count?: number | null;
-            /** Validation Issue Count Total */
-            validation_issue_count_total: number;
-            /** Issue Counts By Severity */
-            issue_counts_by_severity?: {
-                [key: string]: number;
-            };
-            /** Issue Counts By Code */
-            issue_counts_by_code?: {
-                [key: string]: number;
-            };
-        };
-        /**
-         * RunSummaryCore
-         * @description Flat, aggregate run metrics.
-         */
-        RunSummaryCore: {
-            /**
-             * Input File Count
-             * @default 0
-             */
-            input_file_count: number;
-            /**
-             * Input Sheet Count
-             * @default 0
-             */
-            input_sheet_count: number;
-            /**
-             * Table Count
-             * @default 0
-             */
-            table_count: number;
-            /** Row Count */
-            row_count?: number | null;
-            /**
-             * Canonical Field Count
-             * @default 0
-             */
-            canonical_field_count: number;
-            /**
-             * Required Field Count
-             * @default 0
-             */
-            required_field_count: number;
-            /**
-             * Mapped Field Count
-             * @default 0
-             */
-            mapped_field_count: number;
-            /**
-             * Unmapped Column Count
-             * @default 0
-             */
-            unmapped_column_count: number;
-            /**
-             * Validation Issue Count Total
-             * @default 0
-             */
-            validation_issue_count_total: number;
-            /** Issue Counts By Severity */
-            issue_counts_by_severity?: {
-                [key: string]: number;
-            };
-            /** Issue Counts By Code */
-            issue_counts_by_code?: {
-                [key: string]: number;
-            };
-        };
-        /**
-         * RunSummaryRun
-         * @description Identity and lifecycle info for a run summary.
-         */
-        RunSummaryRun: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Workspace Id */
-            workspace_id?: string | null;
-            /** Configuration Id */
-            configuration_id?: string | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "succeeded" | "failed" | "cancelled";
-            /** Failure Code */
-            failure_code?: string | null;
-            /** Failure Stage */
-            failure_stage?: string | null;
-            /** Failure Message */
-            failure_message?: string | null;
-            /** Engine Version */
-            engine_version?: string | null;
-            /** Config Version */
-            config_version?: string | null;
-            /** Env Reason */
-            env_reason?: string | null;
-            /** Env Reused */
-            env_reused?: boolean | null;
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Completed At */
-            completed_at?: string | null;
-            /** Duration Seconds */
-            duration_seconds?: number | null;
-        };
-        /**
-         * RunSummaryV1
-         * @description Top-level run summary schema (v1).
-         */
-        RunSummaryV1: {
-            /**
-             * Schema
-             * @default ade.run_summary/v1
-             * @constant
-             */
-            schema: "ade.run_summary/v1";
-            /**
-             * Version
+             * Schema Version
              * @default 1.0.0
              */
-            version: string;
-            run: components["schemas"]["RunSummaryRun"];
-            core: components["schemas"]["RunSummaryCore"];
-            breakdowns: components["schemas"]["RunSummaryBreakdowns"];
+            schema_version: string;
+            /**
+             * Scope
+             * @default run
+             * @constant
+             */
+            scope: "run";
+            /** Id */
+            id: string;
+            /** Parent Ids */
+            parent_ids?: {
+                [key: string]: string;
+            };
+            /** Source */
+            source?: {
+                [key: string]: unknown;
+            };
+            counts: components["schemas"]["Counts"];
+            /** Fields */
+            fields?: components["schemas"]["FieldSummaryAggregate"][];
+            /** Columns */
+            columns?: components["schemas"]["ColumnSummaryDistinct"][];
+            validation?: components["schemas"]["ValidationSummary"];
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * SafeModeStatus
@@ -3062,6 +3122,52 @@ export type components = {
             type: string;
         };
         /**
+         * ValidationSummary
+         * @description Validation counts for a summary scope.
+         */
+        ValidationSummary: {
+            /**
+             * Rows Evaluated
+             * @default 0
+             */
+            rows_evaluated: number;
+            /**
+             * Issues Total
+             * @default 0
+             */
+            issues_total: number;
+            /** Issues By Severity */
+            issues_by_severity?: {
+                [key: string]: number;
+            };
+            /** Issues By Code */
+            issues_by_code?: {
+                [key: string]: number;
+            };
+            /** Issues By Field */
+            issues_by_field?: {
+                [key: string]: number;
+            };
+            /** Max Severity */
+            max_severity?: string | null;
+        };
+        /**
+         * VersionsResponse
+         * @description Installed ADE package versions.
+         */
+        VersionsResponse: {
+            /**
+             * Ade Api
+             * @description Installed ade-api version.
+             */
+            ade_api: string;
+            /**
+             * Ade Engine
+             * @description Installed ade-engine version.
+             */
+            ade_engine: string;
+        };
+        /**
          * WorkspaceCreate
          * @description Payload for creating a workspace.
          */
@@ -3217,6 +3323,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthCheckResponse"];
+                };
+            };
+        };
+    };
+    read_versions_api_v1_meta_versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionsResponse"];
                 };
             };
         };
@@ -4136,6 +4262,59 @@ export interface operations {
             };
         };
     };
+    deactivate_user_api_v1_users__user_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User identifier. */
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Authentication required to deactivate users. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global users.manage_all permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_permissions_api_v1_rbac_permissions_get: {
         parameters: {
             query?: {
@@ -4348,6 +4527,8 @@ export interface operations {
                 user_id?: string | null;
                 /** @description Filter by role id */
                 role_id?: string | null;
+                /** @description Include inactive users in the response. */
+                include_inactive?: boolean;
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
@@ -4960,6 +5141,8 @@ export interface operations {
             query?: {
                 /** @description Optional filter by user id */
                 user_id?: string | null;
+                /** @description Include inactive users in the response. */
+                include_inactive?: boolean;
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
@@ -6458,7 +6641,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunSummaryV1"];
+                    "application/json": components["schemas"]["RunSummary"];
                 };
             };
             /** @description Run summary not found */

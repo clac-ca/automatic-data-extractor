@@ -9,7 +9,7 @@ from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, RunSummaryV1
+from ade_engine.schemas import AdeEvent, RunSummary
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -225,13 +225,13 @@ async def get_run_endpoint(
 
 @router.get(
     "/runs/{run_id}/summary",
-    response_model=RunSummaryV1,
+    response_model=RunSummary,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Run summary not found"}},
 )
 async def get_run_summary_endpoint(
     run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
-) -> RunSummaryV1:
+) -> RunSummary:
     try:
         summary = await service.get_run_summary(run_id)
     except RunNotFoundError as exc:
@@ -315,7 +315,7 @@ async def stream_run_events_endpoint(
                 yield _sse_event_bytes(live_event)
                 if live_event.sequence:
                     last_sequence = live_event.sequence
-                if live_event.type == "run.completed" and live_event.source != "engine":
+                if live_event.type == "run.complete" and live_event.source != "engine":
                     break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

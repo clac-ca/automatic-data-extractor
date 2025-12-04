@@ -9,7 +9,7 @@ run summaries and status from this stream.
 
 Envelope class: `AdeEvent` in `schemas/telemetry.py`.
 
-- `type`: string, e.g., `console.line`, `run.started`, `run.table.summary`, `run.completed`.
+- `type`: string, e.g., `console.line`, `engine.start`, `engine.table.summary`, `engine.complete`.
 - `created_at`: timestamp (UTC).
 - `sequence`: optional, monotonic per run **when assigned by the ADE API**; engine leaves unset.
 - `workspace_id`, `configuration_id`, `run_id`: propagated from `RunRequest.metadata` when provided.
@@ -30,16 +30,17 @@ You can add additional sinks (IPC/HTTP/etc.) via `TelemetryConfig.event_sink_fac
 ## 3. Event types emitted by the engine
 
 - `console.line` — produced by the run logger via `TelemetryLogHandler`; payload has `scope:"run"`, `stream`, `level`, `message`, optional `logger`/`engine_timestamp`.
-- `run.started` — emitted at the beginning of `Engine.run` with `status:"in_progress"` and `engine_version`.
-- `run.phase.started` — progress markers emitted via `EventEmitter.phase_started("extracting" | "mapping" | "normalizing" | "writing_output" | ...)`.
-  - **The engine does not emit `run.phase.completed` today.**
-- `run.row_detector.score` — summary per extracted table: header row index, data row range, thresholds, trigger row scores/contributions, and a small value sample.
-- `run.column_detector.score` — summary per manifest field per table: chosen column (or unmapped), threshold, and top-N candidate scores with contribution breakdowns.
-- `run.table.summary` — one per normalized table; payload includes source file/sheet, table_index, row_count/column_count, mapping (mapped + unmapped columns), validation breakdowns (totals/by_severity/by_code/by_field), unmapped_column_count, header/data row indices.
-- `run.validation.summary` — aggregated validation counts when issues exist.
-- `run.validation.issue` — optional per-issue events for fine-grained debugging.
-- `run.error` — structured error context (`stage`, `code`, `message`, optional `phase`/`details`) when exceptions are mapped to `RunError`.
-- `run.completed` — terminal status; payload includes `status`, `output_paths`, `processed_files`, `events_path`, and optional `error` info.
+- `engine.start` — emitted at the beginning of `Engine.run` with `status:"running"`, `engine_version`, and optional `config_version`.
+- `engine.phase.start` / `engine.phase.complete` — coarse progress markers when pipeline stages begin/end (used for “extracting”, “mapping”, “normalizing”, “writing_output”, etc.).
+- `engine.detector.row.score` — summary per extracted table: header row index, data row range, thresholds, trigger row scores/contributions, and a small value sample.
+- `engine.detector.column.score` — summary per manifest field per table: chosen column (or unmapped), threshold, and top-N candidate scores with contribution breakdowns.
+- `engine.table.summary` — one per normalized table; payload uses the `TableSummary` schema (counts, fields, columns, validation, details) defined in `schemas/summaries.py`.
+- `engine.sheet.summary` / `engine.file.summary` — aggregated summaries across tables within a sheet or file.
+- `engine.run.summary` — authoritative run summary emitted before completion (payload = `RunSummary`).
+- `engine.validation.summary` — aggregated validation counts when issues exist.
+- `engine.validation.issue` — optional per-issue events for fine-grained debugging.
+- `engine.complete` — terminal status; payload includes `status`, optional `failure` block, `output_paths`, and `processed_files`.
+- `config.*` — optional custom events emitted by config code via the provided `ConfigEventEmitter`.
 
 ## 4. Correlation and metadata
 
@@ -50,18 +51,16 @@ fields on events. Additional payload data can be passed through
 ## 5. Consuming events
 
 - Treat `events.ndjson` as the single source of truth for run telemetry.
-- Build `RunSummaryV1` by replaying events; see `12-run-summary-and-reporting.md`.
+- The engine now emits hierarchical summaries (`engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`); consumers should persist/use the run-level payload instead of recomputing from the log.
 - In streaming scenarios, tail `events.ndjson` while the engine runs, or plug
   in a custom sink; the ADE API replays these events, stamps `event_id`/`sequence`, and streams them via SSE.
 
 ## 6. Emitting custom telemetry from hooks
 
-Hooks receive `logger: logging.Logger` and `event_emitter: EventEmitter`. Use:
+Hooks receive `logger: logging.Logger` and a `ConfigEventEmitter`. Use:
 
 - `logger.debug/info/warning/error(...)` for human-friendly console lines (bridged to `console.line`).
-- `event_emitter.custom("type_suffix", **payload)` for structured run events.
-- `event_emitter.phase_started("phase", **details)` for coarse progress markers.
-- `event_emitter.table_summary(table)` to emit standardized table summaries.
-- `event_emitter.validation_issue(**payload)` / `event_emitter.validation_summary(issues)` for validation telemetry.
+- `event_emitter.custom("type_suffix", **payload)` for structured **config.*** events when you need your own checkpoints.
+- `event_emitter.phase_started("phase", **details)` for coarse config progress markers if desired.
 
-Hooks do not access sinks directly; these two primitives are the supported surface.
+The engine already emits `engine.*` events for phases, detector scores, validation, summaries, and completion. Custom config events should be sparse and domain-specific.

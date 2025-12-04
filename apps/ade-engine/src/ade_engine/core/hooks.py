@@ -12,7 +12,7 @@ from ade_engine.config.hook_registry import HookContext, HookRegistry, HookStage
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.errors import ConfigError, HookError
 from ade_engine.core.types import MappedTable, NormalizedTable, ExtractedTable, RunContext, RunResult
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter
 
 HookTables = list[ExtractedTable | MappedTable | NormalizedTable] | None
 
@@ -22,6 +22,7 @@ def _build_kwargs(context: HookContext) -> dict[str, Any]:
         "context": context,
         "run": context.run,
         "state": context.state,
+        "file_names": context.file_names,
         "manifest": context.manifest,
         "tables": context.tables,
         "workbook": context.workbook,
@@ -66,9 +67,10 @@ def run_hooks(
     registry: HookRegistry,
     *,
     run: RunContext,
+    file_names: tuple[str, ...] | None = None,
     manifest: ManifestContext,
     logger: logging.Logger,
-    event_emitter: EventEmitter,
+    event_emitter: ConfigEventEmitter,
     tables: HookTables = None,
     workbook: Workbook | None = None,
     result: RunResult | None = None,
@@ -78,6 +80,7 @@ def run_hooks(
     context = HookContext(
         run=run,
         state=run.state,
+        file_names=file_names,
         manifest=manifest,
         tables=tables,
         workbook=workbook,

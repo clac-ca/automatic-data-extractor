@@ -106,6 +106,8 @@ event_emitter.custom("hook.my_custom_event", ...)
 ```
 
 Useful for monitoring dashboards, debugging, audit trails, or integration with external systems.
+The emitter automatically prefixes events with `config.` so they stay separate from the engine-owned
+`engine.*` telemetry (phases, validation summaries, detector scores, and the final run summary).
 
 ### ✔ Reshaping the table list
 

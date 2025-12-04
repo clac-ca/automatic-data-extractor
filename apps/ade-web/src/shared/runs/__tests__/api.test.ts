@@ -69,7 +69,7 @@ describe("streamRunEvents", () => {
     const pending = iterator.next();
     await Promise.resolve();
 
-    const runEvent: AdeEvent = { type: "run.phase.started", created_at: "2025-01-01T00:00:00Z" };
+    const runEvent: AdeEvent = { type: "engine.phase.start", created_at: "2025-01-01T00:00:00Z" };
     sse.emit(runEvent);
 
     const result = await pending;
@@ -87,9 +87,9 @@ describe("streamRunEvents", () => {
     const first = iterator.next();
     await Promise.resolve();
 
-    const startEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
+    const startEvent: AdeEvent = { type: "run.start", created_at: "2025-01-01T00:00:00Z" };
     const completedEvent: AdeEvent = {
-      type: "run.completed",
+      type: "run.complete",
       created_at: "2025-01-01T00:05:00Z",
       payload: { status: "succeeded" },
     };
@@ -111,7 +111,7 @@ describe("streamRun", () => {
   it("creates a run via the typed client and streams events", async () => {
     const { sse, fetchMock } = mockSseFetch();
     const runEvent: AdeEvent = {
-      type: "run.completed",
+      type: "run.complete",
       created_at: "2025-01-01T00:05:00Z",
       run_id: "run-123",
     };
@@ -184,7 +184,7 @@ describe("runEventsUrl helpers", () => {
     expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
     expect(String(url)).toContain("after_sequence=3");
 
-    const runEvent: AdeEvent = { type: "run.started", created_at: "2025-01-01T00:00:00Z" };
+    const runEvent: AdeEvent = { type: "run.start", created_at: "2025-01-01T00:00:00Z" };
     sse.emit(runEvent);
     const result = await pending;
     expect(result.value).toEqual(runEvent);

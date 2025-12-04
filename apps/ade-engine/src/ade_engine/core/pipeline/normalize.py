@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from ade_engine.config.loader import ConfigRuntime
-from ade_engine.infra.telemetry import EventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 from ade_engine.core.types import MappedTable, NormalizedTable, RunContext, ValidationIssue
 
 
@@ -14,7 +14,8 @@ def normalize_table(
     cfg: ConfigRuntime,
     mapped: MappedTable,
     logger: logging.Logger | None = None,
-    event_emitter: EventEmitter,
+    event_emitter: EngineEventEmitter,
+    config_event_emitter: ConfigEventEmitter | None,
 ) -> NormalizedTable:
     """Run transforms and validators to produce a normalized table.
 
@@ -24,6 +25,7 @@ def normalize_table(
     logger = logger or logging.getLogger(__name__)
     manifest = cfg.manifest
     mapped_lookup = {mc.field: mc for mc in mapped.column_map.mapped_columns}
+    emitter = config_event_emitter or event_emitter.config_emitter()
 
     normalized_rows: list[list[Any]] = []
     validation_issues: list[ValidationIssue] = []
@@ -53,7 +55,7 @@ def normalize_table(
                     field_config=manifest.columns.fields.get(field),
                     manifest=manifest,
                     logger=logger,
-                    event_emitter=event_emitter,
+                    event_emitter=emitter,
                 )
                 if updates:
                     row.update(updates)
@@ -71,7 +73,7 @@ def normalize_table(
                     field_config=manifest.columns.fields.get(field),
                     manifest=manifest,
                     logger=logger,
-                    event_emitter=event_emitter,
+                    event_emitter=emitter,
                 )
                 for issue in results or []:
                     validation_issues.append(

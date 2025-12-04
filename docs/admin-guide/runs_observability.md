@@ -9,8 +9,8 @@ engine successfully.
 
 The runs API mirrors the OpenAI streaming pattern and exposes
 newline-delimited JSON events. When the caller enables `stream: true`, the API
-emits lifecycle notifications (`run.created`, `run.started`, `run.log`,
-`run.completed`).
+emits lifecycle notifications (`run.queued`, `run.start`, `console.line`,
+`run.complete`) and forwards all `engine.*` telemetry.
 
 ```bash
 http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
@@ -19,12 +19,12 @@ http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
 
 Key things to watch while streaming:
 
-- `run.created` confirms the database row exists and provides the final
+- The first `run.queued`/`run.start` events confirm the database row exists and provide the final
   `run_id` for follow-up queries.
-- `run.log` events include the ADE engine stdout; store the NDJSON output
+- `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
-- `run.completed` includes the exit code and error message if the engine
-  failed. Capture the payload in the incident record.
+- `engine.run.summary` carries the authoritative run summary (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
+  failed. Capture those payloads in the incident record.
 
 ## 2. Polling run status without streaming
 
@@ -70,8 +70,8 @@ troubleshooting workflow you use for runs:
 
 1. Trigger a build (or run with `stream: true`) using
    `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
-   or the run creation endpoint. Watch for `build.created`,
-   `build.started`, `build.phase.*`, `build.completed`, and `console.line`
+   or the run creation endpoint. Watch for `build.queued`,
+   `build.start`, `build.phase.start`, `build.complete`, and `console.line`
    events (`payload.scope: "build"`).
 2. For status snapshots, hit `/api/v1/builds/{build_id}`. For history,
    use `GET /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`

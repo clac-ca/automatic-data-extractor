@@ -1,57 +1,69 @@
-import type { RunSummaryV1 } from "@schema";
+import type { RunSummary } from "@schema";
 import type { AdeEvent } from "@shared/runs/types";
 
-export function RunSummaryView({ summary }: { summary: RunSummaryV1 }) {
-  const totalIssues = summary.core.validation_issue_count_total;
+export function RunSummaryView({ summary }: { summary: RunSummary }) {
+  const counts = summary.counts;
+  const totalIssues = summary.validation.issues_total;
+  const fields = summary.fields ?? [];
+  const columns = summary.columns ?? [];
+  const topFields = fields.slice(0, 6);
+  const topColumns = columns.slice(0, 5);
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Metric label="Tables" value={summary.core.table_count} />
-        <Metric label="Rows" value={summary.core.row_count ?? "—"} />
-        <Metric label="Mapped fields" value={summary.core.mapped_field_count} />
+        <Metric label="Tables" value={counts.tables?.total ?? "—"} />
+        <Metric label="Rows" value={counts.rows.total ?? "—"} />
+        <Metric label="Mapped fields" value={counts.fields.mapped} />
         <Metric label="Issues" value={totalIssues} intent={totalIssues > 0 ? "warn" : "ok"} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded border border-slate-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Files</p>
-          {summary.breakdowns.by_file.length === 0 ? (
-            <p className="text-xs text-slate-500">No files recorded.</p>
-          ) : (
-            <ul className="mt-2 space-y-1 text-xs text-slate-700">
-              {summary.breakdowns.by_file.map((file) => (
-                <li key={file.source_file} className="flex items-center justify-between gap-3">
-                  <span className="truncate font-semibold text-slate-800">{file.source_file}</span>
-                  <span className="text-[11px] text-slate-500">
-                    {file.table_count} tables · {file.row_count ?? "?"} rows · {file.validation_issue_count_total} issues
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="rounded border border-slate-200 bg-white px-3 py-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Fields</p>
-          {summary.breakdowns.by_field.length === 0 ? (
-            <p className="text-xs text-slate-500">No field mappings recorded.</p>
-          ) : (
+          {fields.length === 0 ? <p className="text-xs text-slate-500">No field mappings recorded.</p> : (
             <ul className="mt-2 space-y-1 text-xs text-slate-700">
-              {summary.breakdowns.by_field.slice(0, 6).map((field) => (
+              {topFields.map((field) => (
                 <li key={field.field} className="flex items-center justify-between gap-3">
                   <span className="truncate font-semibold text-slate-800">
                     {field.label || field.field} {field.required ? "• required" : ""}
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    {field.mapped ? "mapped" : "unmapped"} · {field.validation_issue_count_total} issues
+                    {field.mapped ? "mapped" : "unmapped"}
+                    {typeof field.tables_mapped === "number" ? ` · ${field.tables_mapped} tables` : ""}
                   </span>
                 </li>
               ))}
-              {summary.breakdowns.by_field.length > 6 ? (
+              {fields.length > topFields.length ? (
                 <li className="text-[11px] text-slate-500">
-                  +{summary.breakdowns.by_field.length - 6} more fields
+                  +{fields.length - topFields.length} more fields
                 </li>
               ) : null}
             </ul>
           )}
+        </div>
+        <div className="rounded border border-slate-200 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Columns</p>
+          {columns.length === 0 ? (
+            <p className="text-xs text-slate-500">No column details recorded.</p>
+          ) : (
+            <ul className="mt-2 space-y-1 text-xs text-slate-700">
+              {topColumns.map((column) => (
+                <li key={column.header_normalized} className="flex items-center justify-between gap-3">
+                  <span className="truncate font-semibold text-slate-800">{column.header}</span>
+                  <span className="text-[11px] text-slate-500">
+                    {column.mapped ? "mapped" : "unmapped"} · {column.occurrences?.tables_seen ?? "—"} tables
+                  </span>
+                </li>
+              ))}
+              {columns.length > topColumns.length ? (
+                <li className="text-[11px] text-slate-500">
+                  +{columns.length - topColumns.length} more headers
+                </li>
+              ) : null}
+            </ul>
+          )}
+          <div className="mt-2 text-[11px] text-slate-600">
+            Distinct headers mapped: {counts.columns.distinct_headers_mapped} / {counts.columns.distinct_headers}
+          </div>
         </div>
       </div>
     </div>
