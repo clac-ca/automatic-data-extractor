@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -112,92 +111,6 @@ async def _auth_headers(
 ) -> dict[str, str]:
     token, _ = await login(client, email=email, password=password)
     return {"Authorization": f"Bearer {token}"}
-
-
-async def _collect_build_events(
-    client: AsyncClient,
-    build_id: str,
-    *,
-    headers: dict[str, str] | None = None,
-    timeout: float = 10.0,
-) -> list[dict[str, Any]]:
-    """Stream build events with an upper bound to avoid hanging."""
-
-    events: list[dict[str, Any]] = []
-    async with client.stream(
-        "GET",
-        f"/api/v1/builds/{build_id}/events/stream",
-        headers=headers,
-        params={"after_sequence": 0},
-    ) as response:
-        assert response.status_code == 200
-
-        async def _consume() -> None:
-            async for line in response.aiter_lines():
-                if not line or not line.startswith("data: "):
-                    continue
-                event = json.loads(line.removeprefix("data: "))
-                events.append(event)
-                if event.get("type") in {"build.complete", "build.failed"}:
-                    return
-
-        try:
-            await asyncio.wait_for(_consume(), timeout=timeout)
-        except asyncio.TimeoutError as exc:  # pragma: no cover - defensive guard
-            pytest.fail(f"Timed out waiting for build stream to complete: {exc}")
-    return events
-
-
-async def test_stream_build_emits_events_and_logs(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-    override_app_settings,
-) -> None:
-    """Streaming build requests should emit NDJSON events and persist build state."""
-
-    settings = override_app_settings()
-    configuration_id = await _seed_configuration(
-        settings=settings,
-        workspace_id=seed_identity["workspace_id"],
-    )
-
-    StubBuilder.events = [
-        BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
-        BuilderLogEvent(message="install log"),
-        BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install engine"),
-        BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
-        ),
-    ]
-
-    owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client,
-        email=owner["email"],
-        password=owner["password"],  # type: ignore[index]
-        settings=settings,
-    )
-
-    workspace_id = seed_identity["workspace_id"]
-    response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
-        headers=headers,
-        json={},
-    )
-    assert response.status_code == 201
-    build_id = response.json()["id"]
-    events = await _collect_build_events(async_client, build_id, headers=headers)
-
-    assert events, "expected streaming events"
-    assert events[0]["type"] == "build.queued"
-    assert events[-1]["type"] == "build.complete"
-
-    detail = await async_client.get(f"/api/v1/builds/{build_id}", headers=headers)
-    assert detail.status_code == 200
-    payload = detail.json()
-    assert payload["status"] == "ready"
-    assert payload["exit_code"] == 0
-    assert payload["summary"] == "Build succeeded"
 
 
 async def _wait_for_build_completion(

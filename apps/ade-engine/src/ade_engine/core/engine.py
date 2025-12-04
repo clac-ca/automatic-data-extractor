@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ from ade_engine.core.pipeline.pipeline_runner import execute_pipeline
 from ade_engine.core.pipeline.summary_builder import SummaryAggregator
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
 from ade_engine.infra.logging import build_run_logger
-from ade_engine.infra.event_emitter import EngineEventEmitter
+from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 from ade_engine.infra.telemetry import TelemetryConfig
 
 
@@ -54,6 +55,62 @@ def _input_file_name(request: RunRequest) -> str:
     return Path(request.input_file).name if request.input_file else ""
 
 
+@dataclass(slots=True)
+class _EngineExecutionState:
+    """Container for a single engine run's mutable state."""
+
+    normalized_request: RunRequest
+    output_dir: Path
+    logs_dir: Path
+    run_ctx: RunContext
+    runtime: ConfigRuntime
+    event_emitter: EngineEventEmitter
+    config_event_emitter: ConfigEventEmitter
+    run_logger: logging.Logger
+    summary_aggregator: SummaryAggregator | None
+    input_file_name: str
+
+
+def _finalize_and_emit_summaries(
+    summary_aggregator: SummaryAggregator | None,
+    *,
+    status: RunStatus,
+    failure: RunError | None,
+    completed_at: datetime | None,
+    output_paths: list[str],
+    processed_files: list[str],
+    event_emitter: EngineEventEmitter | None,
+    logger: logging.Logger | None,
+) -> RunSummary | None:
+    """Run ``SummaryAggregator.finalize`` and emit the resulting events."""
+
+    if summary_aggregator is None:
+        return None
+
+    try:
+        sheet_summaries, file_summaries, run_summary = summary_aggregator.finalize(
+            status=status,
+            failure=failure,
+            completed_at=completed_at,
+            output_paths=output_paths,
+            processed_files=processed_files,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        if logger:
+            logger.exception("Failed to finalize run summaries", exc_info=exc)
+        return None
+
+    if event_emitter:
+        for sheet_summary in sheet_summaries:
+            event_emitter.sheet_summary(sheet_summary)
+        for file_summary in file_summaries:
+            event_emitter.file_summary(file_summary)
+        if run_summary:
+            event_emitter.run_summary(run_summary)
+
+    return run_summary
+
+
 class Engine:
     """Primary runtime entrypoint."""
 
@@ -68,71 +125,30 @@ class Engine:
         normalized_tables: list[Any] = []
         output_paths: tuple[Path, ...] = ()
         processed_files: tuple[str, ...] = ()
-        runtime: ConfigRuntime | None = None
-        event_emitter: EngineEventEmitter | None = None
-        summary_aggregator: SummaryAggregator | None = None
-        config_event_emitter = None
-        input_file_path: Path | None = None
-        input_file_name: str | None = None
+        state: _EngineExecutionState | None = None
 
         try:
-            normalized_request, output_dir, logs_dir = _resolve_paths(req)
-            _ensure_dirs(output_dir, logs_dir)
-            assert normalized_request.input_file is not None
-            input_file_path = normalized_request.input_file
-            input_file_name = _input_file_name(normalized_request)
-
-            run_ctx = RunContext(
-                run_id=uuid7(),
-                metadata=dict(normalized_request.metadata) if normalized_request.metadata else {},
-                manifest=None,
-                paths=RunPaths(
-                    input_file=input_file_path,
-                    output_dir=output_dir,
-                    logs_dir=logs_dir,
-                ),
-                started_at=datetime.now(timezone.utc),
-            )
-
             phase = RunPhase.LOAD_CONFIG
-            runtime = load_config_runtime(package=normalized_request.config_package, manifest_path=normalized_request.manifest_path)
-            run_ctx.manifest = runtime.manifest
-            if runtime.manifest.model.script_api_version != 3:
-                raise ConfigError(
-                    f"Config manifest declares script_api_version={runtime.manifest.model.script_api_version}; "
-                    "this engine requires script_api_version=3. Update ade_config call signatures to accept "
-                    "logger and event_emitter."
-                )
-            event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
-            event_emitter = EngineEventEmitter(run=run_ctx, event_sink=event_sink, source="engine")
-            config_event_emitter = event_emitter.config_emitter()
-            run_logger = build_run_logger(base_name="ade_engine.run", event_emitter=event_emitter, bridge_to_telemetry=True)
+            state = self._prepare_execution(req)
 
             # Engine-level start event (API may later wrap with additional context).
-            event_emitter.start(
+            state.event_emitter.start(
                 engine_version=self.engine_info.version,
-                config_version=runtime.manifest.model.version,
+                config_version=state.runtime.manifest.model.version,
             )
 
             phase = RunPhase.HOOKS
             run_hooks(
                 HookStage.ON_RUN_START,
-                runtime.hooks,
-                run=run_ctx,
-                input_file_name=input_file_name,
-                manifest=runtime.manifest,
+                state.runtime.hooks,
+                run=state.run_ctx,
+                input_file_name=state.input_file_name,
+                manifest=state.runtime.manifest,
                 tables=None,
                 workbook=None,
                 result=None,
-                logger=run_logger,
-                event_emitter=config_event_emitter,
-            )
-
-            summary_aggregator = SummaryAggregator(
-                run=run_ctx,
-                manifest=runtime.manifest,
-                engine_version=self.engine_info.version,
-                config_version=runtime.manifest.model.version,
+                logger=state.run_logger,
+                event_emitter=state.config_event_emitter,
             )
 
             def mark_phase(new_phase: RunPhase) -> None:
@@ -141,59 +157,58 @@ class Engine:
 
             phase = RunPhase.EXTRACTING
             normalized_tables, output_paths, processed_files = execute_pipeline(
-                request=normalized_request,
-                run=run_ctx,
-                runtime=runtime,
-                logger=run_logger,
-                event_emitter=event_emitter,
-                input_file_name=input_file_name,
-                summary_aggregator=summary_aggregator,
-                config_event_emitter=config_event_emitter,
+                request=state.normalized_request,
+                run=state.run_ctx,
+                runtime=state.runtime,
+                logger=state.run_logger,
+                event_emitter=state.event_emitter,
+                input_file_name=state.input_file_name,
+                summary_aggregator=state.summary_aggregator,
+                config_event_emitter=state.config_event_emitter,
                 on_phase_change=mark_phase,
             )
 
             phase = RunPhase.COMPLETED
-            run_ctx.completed_at = datetime.now(timezone.utc)
+            state.run_ctx.completed_at = datetime.now(timezone.utc)
+            output_paths_list = [str(path) for path in output_paths]
+            processed_files_list = list(processed_files)
             provisional = RunResult(
                 status=RunStatus.SUCCEEDED,
                 error=None,
-                run_id=run_ctx.run_id,
+                run_id=state.run_ctx.run_id,
                 output_paths=output_paths,
-                logs_dir=logs_dir,
+                logs_dir=state.logs_dir,
                 processed_files=processed_files,
             )
 
             phase = RunPhase.HOOKS
             run_hooks(
                 HookStage.ON_RUN_END,
-                runtime.hooks,
-                run=run_ctx,
-                input_file_name=input_file_name,
-                manifest=runtime.manifest,
+                state.runtime.hooks,
+                run=state.run_ctx,
+                input_file_name=state.input_file_name,
+                manifest=state.runtime.manifest,
                 tables=normalized_tables,
                 workbook=None,
                 result=provisional,
-                logger=run_logger,
-                event_emitter=config_event_emitter,
+                logger=state.run_logger,
+                event_emitter=state.config_event_emitter,
             )
 
-            sheet_summaries, file_summaries, run_summary = (summary_aggregator.finalize(
+            _finalize_and_emit_summaries(
+                state.summary_aggregator,
                 status=RunStatus.SUCCEEDED,
                 failure=None,
-                completed_at=run_ctx.completed_at,
-                output_paths=[str(path) for path in output_paths],
-                processed_files=list(processed_files),
-            ) if summary_aggregator else ([], [], None))
-            for sheet_summary in sheet_summaries:
-                event_emitter.sheet_summary(sheet_summary)
-            for file_summary in file_summaries:
-                event_emitter.file_summary(file_summary)
-            if run_summary:
-                event_emitter.run_summary(run_summary)
-            event_emitter.complete(
+                completed_at=state.run_ctx.completed_at,
+                output_paths=output_paths_list,
+                processed_files=processed_files_list,
+                event_emitter=state.event_emitter,
+                logger=self.logger,
+            )
+            state.event_emitter.complete(
                 status="succeeded",
-                output_paths=[str(path) for path in output_paths],
-                processed_files=list(processed_files),
+                output_paths=output_paths_list,
+                processed_files=processed_files_list,
             )
 
             return provisional
@@ -201,75 +216,127 @@ class Engine:
         except Exception as exc:  # pragma: no cover - exercised via tests
             error: RunError = error_to_run_error(exc, stage=phase)
             self.logger.exception("Run failed", exc_info=exc)
+            return self._handle_failure(
+                state=state,
+                error=error,
+                output_paths=output_paths,
+                processed_files=processed_files,
+                exc=exc,
+            )
 
-            try:
-                failure_summary = None
-                if "run_ctx" in locals():
-                    run_ctx.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
-                    try:
-                        if summary_aggregator is None:
-                            summary_aggregator = SummaryAggregator(
-                                run=run_ctx,
-                                manifest=runtime.manifest if runtime else None,
-                                engine_version=self.engine_info.version,
-                                config_version=runtime.manifest.model.version if runtime else None,
-                            )
-                        if summary_aggregator:
-                            sheet_summaries, file_summaries, failure_summary = summary_aggregator.finalize(
-                                status=RunStatus.FAILED,
-                                failure=error,
-                                completed_at=run_ctx.completed_at,
-                                output_paths=[str(path) for path in output_paths],
-                                processed_files=list(processed_files),
-                            )
-                            if event_emitter:
-                                for sheet_summary in sheet_summaries:
-                                    event_emitter.sheet_summary(sheet_summary)
-                                for file_summary in file_summaries:
-                                    event_emitter.file_summary(file_summary)
-                    except Exception:
-                        failure_summary = None
+    def _prepare_execution(self, request: RunRequest) -> _EngineExecutionState:
+        normalized_request, output_dir, logs_dir = _resolve_paths(request)
+        _ensure_dirs(output_dir, logs_dir)
+        assert normalized_request.input_file is not None
+        input_file_name = _input_file_name(normalized_request)
 
-                if event_emitter:
-                    if failure_summary:
-                        event_emitter.run_summary(failure_summary)
+        run_ctx = RunContext(
+            run_id=uuid7(),
+            metadata=dict(normalized_request.metadata) if normalized_request.metadata else {},
+            manifest=None,
+            paths=RunPaths(
+                input_file=normalized_request.input_file,
+                output_dir=output_dir,
+                logs_dir=logs_dir,
+            ),
+            started_at=datetime.now(timezone.utc),
+        )
+
+        runtime = load_config_runtime(package=normalized_request.config_package, manifest_path=normalized_request.manifest_path)
+        run_ctx.manifest = runtime.manifest
+        if runtime.manifest.model.script_api_version != 3:
+            raise ConfigError(
+                f"Config manifest declares script_api_version={runtime.manifest.model.script_api_version}; "
+                "this engine requires script_api_version=3. Update ade_config call signatures to accept "
+                "logger and event_emitter."
+            )
+
+        event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
+        event_emitter = EngineEventEmitter(run=run_ctx, event_sink=event_sink, source="engine")
+        config_event_emitter = event_emitter.config_emitter()
+        run_logger = build_run_logger(base_name="ade_engine.run", event_emitter=event_emitter, bridge_to_telemetry=True)
+        summary_aggregator = SummaryAggregator(
+            run=run_ctx,
+            manifest=runtime.manifest,
+            engine_version=self.engine_info.version,
+            config_version=runtime.manifest.model.version,
+        )
+
+        return _EngineExecutionState(
+            normalized_request=normalized_request,
+            output_dir=output_dir,
+            logs_dir=logs_dir,
+            run_ctx=run_ctx,
+            runtime=runtime,
+            event_emitter=event_emitter,
+            config_event_emitter=config_event_emitter,
+            run_logger=run_logger,
+            summary_aggregator=summary_aggregator,
+            input_file_name=input_file_name,
+        )
+
+    def _handle_failure(
+        self,
+        *,
+        state: _EngineExecutionState | None,
+        error: RunError,
+        output_paths: tuple[Path, ...],
+        processed_files: tuple[str, ...],
+        exc: Exception,
+    ) -> RunResult:
+        output_paths_list = [str(path) for path in output_paths] if output_paths else []
+        processed_files_list = list(processed_files) if processed_files else []
+
+        try:
+            if state:
+                state.run_ctx.completed_at = datetime.now(timezone.utc)
+                summary_aggregator = state.summary_aggregator
+                if summary_aggregator is None:
+                    summary_aggregator = SummaryAggregator(
+                        run=state.run_ctx,
+                        manifest=state.runtime.manifest if state.runtime else None,
+                        engine_version=self.engine_info.version,
+                        config_version=state.runtime.manifest.model.version if state.runtime else None,
+                    )
+
+                _finalize_and_emit_summaries(
+                    summary_aggregator,
+                    status=RunStatus.FAILED,
+                    failure=error,
+                    completed_at=state.run_ctx.completed_at,
+                    output_paths=output_paths_list,
+                    processed_files=processed_files_list,
+                    event_emitter=state.event_emitter,
+                    logger=self.logger,
+                )
+
+                if state.event_emitter:
                     failure_payload = {
                         "code": error.code.value if hasattr(error, "code") else None,
                         "stage": error.stage.value if hasattr(error, "stage") and error.stage else None,
                         "message": getattr(error, "message", str(exc)),
                     }
-                    event_emitter.complete(
+                    state.event_emitter.complete(
                         status="failed",
                         failure=failure_payload,
-                        output_paths=[str(path) for path in output_paths] if output_paths else None,
-                        processed_files=list(processed_files) if processed_files else None,
+                        output_paths=output_paths_list or None,
+                        processed_files=processed_files_list or None,
                     )
-            except Exception:
-                # Telemetry failures should never mask the underlying error.
-                pass
+        except Exception:
+            # Telemetry failures should never mask the underlying error.
+            pass
 
-            if "run_ctx" in locals():
-                run_ctx.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+        run_id = state.run_ctx.run_id if state else uuid7()
+        logs_dir = state.logs_dir if state else Path("logs")
 
-            return RunResult(
-                status=RunStatus.FAILED,
-                error=error,
-                run_id=locals()
-                .get(
-                    "run_ctx",
-                    RunContext(
-                        run_id=uuid7(),
-                        metadata={},
-                        manifest=None,
-                        paths=None,  # type: ignore[arg-type]
-                        started_at=datetime.now(timezone.utc),
-                    ),
-                )
-                .run_id,
-                output_paths=output_paths,
-                logs_dir=logs_dir if "logs_dir" in locals() else Path("logs"),
-                processed_files=processed_files,
-            )
+        return RunResult(
+            status=RunStatus.FAILED,
+            error=error,
+            run_id=run_id,
+            output_paths=output_paths,
+            logs_dir=logs_dir,
+            processed_files=processed_files,
+        )
 
 
 __all__ = ["Engine"]

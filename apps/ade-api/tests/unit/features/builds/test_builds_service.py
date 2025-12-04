@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ade_api.features.builds.builder import (
@@ -237,6 +238,129 @@ async def test_prepare_build_reuses_active(
     assert build.status is BuildStatus.READY
     assert build.id == configuration.active_build_id
     assert context.fingerprint == fingerprint
+
+
+@pytest.mark.asyncio()
+async def test_prepare_build_reuses_active(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = FakeBuilder(events=[])
+    service = service_factory(session, builder=builder)
+
+    config_path = service.storage.config_path(workspace.id, configuration.id)
+    (config_path / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
+    (config_path / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n")
+    digest = compute_config_digest(config_path)
+    python_version = await service._python_version(service._resolve_python_interpreter())
+    engine_version = service._resolve_engine_version(service.settings.engine_spec)
+    fingerprint = compute_build_fingerprint(
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_bin=service._resolve_python_interpreter(),
+        extra={},
+    )
+
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        exit_code=0,
+        fingerprint=fingerprint,
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_interpreter=service._resolve_python_interpreter(),
+    )
+    session.add(build)
+
+    configuration.active_build_id = build.id
+    configuration.active_build_fingerprint = fingerprint
+    configuration.content_digest = digest
+    await session.commit()
+
+    reused_build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        options=BuildCreateOptions(force=False, wait=False),
+    )
+
+    assert context.should_run is False
+    assert reused_build.status is BuildStatus.READY
+    assert reused_build.id == configuration.active_build_id
+    assert context.fingerprint == fingerprint
+
+
+@pytest.mark.asyncio()
+async def test_prepare_build_force_rebuild_creates_new_row(
+    session: AsyncSession,
+    tmp_path: Path,
+    service_factory,
+) -> None:
+    workspace, configuration = await _create_configuration(session)
+    builder = FakeBuilder(events=[])
+    service = service_factory(session, builder=builder)
+
+    config_path = service.storage.config_path(workspace.id, configuration.id)
+    (config_path / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
+    (config_path / "pyproject.toml").write_text("[project]\nname='demo'\nversion='0.0.1'\n")
+    digest = compute_config_digest(config_path)
+    python_version = await service._python_version(service._resolve_python_interpreter())
+    engine_version = service._resolve_engine_version(service.settings.engine_spec)
+    fingerprint = compute_build_fingerprint(
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_bin=service._resolve_python_interpreter(),
+        extra={},
+    )
+
+    existing = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+        started_at=utc_now(),
+        finished_at=utc_now(),
+        exit_code=0,
+        fingerprint=fingerprint,
+        config_digest=digest,
+        engine_spec=service.settings.engine_spec,
+        engine_version=engine_version,
+        python_version=python_version,
+        python_interpreter=service._resolve_python_interpreter(),
+    )
+    session.add(existing)
+    configuration.active_build_id = existing.id
+    configuration.active_build_fingerprint = fingerprint
+    configuration.content_digest = digest
+    await session.commit()
+
+    new_build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        options=BuildCreateOptions(force=True, wait=False),
+    )
+
+    total_builds = (
+        await session.execute(select(func.count()).select_from(Build))
+    ).scalar_one()
+
+    assert new_build.id != existing.id
+    assert new_build.status is BuildStatus.QUEUED
+    assert context.should_run is True
+    assert total_builds == 2
 
 
 @pytest.mark.asyncio()

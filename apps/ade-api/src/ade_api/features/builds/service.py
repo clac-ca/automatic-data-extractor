@@ -217,21 +217,12 @@ class BuildsService:
         )
 
         ready_build: Build | None = None
-        if configuration.active_build_id:
-            existing = await self._builds.get(configuration.active_build_id)
-            if (
-                existing
-                and existing.status is BuildStatus.READY
-                and existing.fingerprint == fingerprint
-            ):
-                ready_build = existing
-        if ready_build is None and not options.force:
-            ready_build = await self._builds.get_ready_by_fingerprint(
-                configuration_id=configuration.id,
+        if not options.force:
+            ready_build = await self._find_ready_build_match(
+                configuration=configuration,
                 fingerprint=fingerprint,
             )
-
-        if ready_build and not options.force:
+        if ready_build:
             await self._sync_active_pointer(configuration, ready_build, fingerprint)
             context = self._reuse_context(
                 build=ready_build,
@@ -1131,6 +1122,27 @@ class BuildsService:
             return spec.split("==", 1)[1]
         return None
 
+    async def _find_ready_build_match(
+        self,
+        *,
+        configuration: Configuration,
+        fingerprint: str,
+    ) -> Build | None:
+        """Return an existing ready build whose fingerprint matches ``fingerprint``."""
+
+        if configuration.active_build_id:
+            existing = await self._builds.get(configuration.active_build_id)
+            if (
+                existing
+                and existing.status is BuildStatus.READY
+                and existing.fingerprint == fingerprint
+            ):
+                return existing
+        return await self._builds.get_ready_by_fingerprint(
+            configuration_id=configuration.id,
+            fingerprint=fingerprint,
+        )
+
     async def _sync_active_pointer(
         self,
         configuration: Configuration,
@@ -1156,6 +1168,7 @@ class BuildsService:
         should_run: bool = False,
         reason: str | None = None,
         run_id: UUID | None = None,
+        reuse_summary: str | None = None,
     ) -> BuildExecutionContext:
         venv_root = build_venv_root(
             self._settings,
@@ -1180,7 +1193,9 @@ class BuildsService:
             fingerprint=fingerprint,
             reason=reason,
             run_id=run_id,
-            reuse_summary="Reused existing build" if not should_run else None,
+            reuse_summary=(
+                reuse_summary or ("Reused existing build" if not should_run else None)
+            ),
         )
 
     async def _complete_build(
