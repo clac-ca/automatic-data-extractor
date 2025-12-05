@@ -69,7 +69,7 @@ const tree: WorkbenchFileNode = {
 const content: Record<string, string> = {
   "ade_config/manifest.json": `{
   "name": "membership-normalization",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Normalize membership exports into ADE schema",
   "entry": {
     "module": "ade_config.detectors.membership",

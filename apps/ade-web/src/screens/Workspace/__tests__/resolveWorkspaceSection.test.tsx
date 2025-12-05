@@ -67,4 +67,20 @@ describe("resolveWorkspaceSection", () => {
     const result = resolveWorkspaceSection(workspaceId, ["runs"], "", "");
     expect(result).toMatchObject({ kind: "content", key: "runs" });
   });
+
+  it("returns the settings section with trailing segments in the key", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["settings", "access", "roles"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "settings:access:roles" });
+    if (result?.kind === "content") {
+      expect(result.element.props.sectionSegments).toEqual(["access", "roles"]);
+    }
+  });
+
+  it("defaults to general settings when no trailing segment is provided", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["settings"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "settings:general" });
+    if (result?.kind === "content") {
+      expect(result.element.props.sectionSegments).toEqual([]);
+    }
+  });
 });

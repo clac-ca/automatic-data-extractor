@@ -239,12 +239,12 @@ def detect_header_or_data(
     row_values: list,    # raw cell values for this row
     manifest,            # ManifestContext
     logger,
-) -> dict:
+) -> float | dict:
     """
-    Return a dict with per-label scores.
+    Return a per-label score.
 
     Example:
-        {"scores": {"header": 0.7, "data": 0.1}}
+        {"header": 0.7, "data": 0.1}
     """
 ```
 
@@ -258,18 +258,16 @@ Conventions:
 
 Return contract:
 
-* A dict containing a `"scores"` key:
-
-  * `"scores"` is a map from labels to floats.
-  * Typical labels are `"header"` and `"data"`, but detectors may emit more
-    specialized labels as long as the engine knows how to interpret them.
+* Return a float to adjust the detector’s default label (`DEFAULT_LABEL`/`DEFAULT_ROW_LABEL` or inferred from module name `header.py`/`data.py`), or
+* Return a dict mapping labels to floats if you want to influence multiple labels explicitly.
+* The legacy `"scores"` wrapper is no longer accepted.
 
 ### 5.3 Aggregation and scoring
 
 For each row of each sheet:
 
 1. Engine calls all row detectors with that row.
-2. Each detector returns a `"scores"` map.
+2. Each detector returns either a float (applied to its default label) or a dict of label → delta.
 3. Engine aggregates scores by label (e.g., `"header"`, `"data"`) by
    **summing contributions**.
 

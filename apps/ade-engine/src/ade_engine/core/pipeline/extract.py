@@ -25,10 +25,17 @@ from ade_engine.core.types import ExtractedTable, RunContext, RunRequest
 from ade_engine.infra.io import iter_csv_rows, iter_sheet_rows
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 
-RowDetectorFn = Callable[..., Mapping[str, Any]]
+RowDetectorFn = Callable[..., Any]
 
 HEADER_SCORE_THRESHOLD = 0.6
 DATA_SCORE_THRESHOLD = 0.5
+
+
+@dataclass(frozen=True)
+class _RowDetector:
+    func: RowDetectorFn
+    default_label: str | None
+    qualified_name: str
 
 
 def _validate_keyword_only(func: Callable[..., object], *, label: str) -> None:
@@ -46,13 +53,35 @@ def _validate_keyword_only(func: Callable[..., object], *, label: str) -> None:
         raise ConfigError(f"{label} must accept **_ for forwards compatibility")
 
 
-def _load_row_detectors(package: ModuleType) -> list[RowDetectorFn]:
+def _infer_default_label(detector: Callable[..., object]) -> str | None:
+    explicit = (
+        getattr(detector, "__row_label__", None)
+        or getattr(detector, "row_label", None)
+        or getattr(detector, "default_label", None)
+    )
+    if explicit:
+        return str(explicit)
+
+    module = inspect.getmodule(detector)
+    if module:
+        module_label = getattr(module, "DEFAULT_ROW_LABEL", None) or getattr(module, "DEFAULT_LABEL", None)
+        if module_label:
+            return str(module_label)
+
+        module_name = module.__name__.rsplit(".", 1)[-1]
+        if module_name in {"header", "data"}:
+            return module_name
+
+    return None
+
+
+def _load_row_detectors(package: ModuleType) -> list[_RowDetector]:
     try:
         detector_pkg = importlib.import_module(f"{package.__name__}.row_detectors")
     except ModuleNotFoundError:
         return []
 
-    detectors: list[RowDetectorFn] = []
+    detectors: list[_RowDetector] = []
     for entry in resources.files(detector_pkg).iterdir():
         if entry.name.startswith("_") or entry.suffix != ".py":
             continue
@@ -62,9 +91,50 @@ def _load_row_detectors(package: ModuleType) -> list[RowDetectorFn]:
             if not name.startswith("detect_"):
                 continue
             _validate_keyword_only(attr, label=f"Row detector '{module.__name__}.{name}'")
-            detectors.append(attr)
+            detectors.append(
+                _RowDetector(
+                    func=attr,
+                    default_label=_infer_default_label(attr),
+                    qualified_name=f"{module.__name__}.{name}",
+                )
+            )
 
     return detectors
+
+
+def _normalize_row_detector_scores(result: Any, *, detector: _RowDetector) -> dict[str, float]:
+    if isinstance(result, Mapping):
+        if "scores" in result:
+            raise ConfigError(
+                f"{detector.qualified_name} must return a float or dict of label deltas (no 'scores' wrapper)"
+            )
+        scores = result
+    else:
+        if result is None:
+            return {}
+        try:
+            delta = float(result)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"{detector.qualified_name} returned a non-numeric score: {result!r}"
+            ) from exc
+
+        if detector.default_label is None:
+            raise ConfigError(
+                f"{detector.qualified_name} returned a bare score but no default label could be inferred; "
+                "return a dict like {'header': score} or set a default label on the detector."
+            )
+        scores = {detector.default_label: delta}
+
+    normalized: dict[str, float] = {}
+    for label, delta in scores.items():
+        try:
+            normalized[str(label)] = float(delta)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"{detector.qualified_name} returned a non-numeric score for label {label!r}: {delta!r}"
+            ) from exc
+    return normalized
 
 
 @dataclass(frozen=True)
@@ -82,11 +152,14 @@ def _resolve_sheet_names(path: Path, requested: Iterable[str] | None) -> list[st
         available = [name for name in workbook.sheetnames if workbook[name].sheet_state == "visible"]
         if requested is None:
             return available
-
-        missing = [name for name in requested if name not in available]
+        requested_list = [name.strip() for name in requested if isinstance(name, str) and name.strip()]
+        ordered_unique = list(dict.fromkeys(requested_list))
+        missing = [name for name in ordered_unique if name not in available]
         if missing:
-            raise InputError(f"Worksheet(s) {', '.join(missing)} not found in `{path}`")
-        return list(requested)
+            missing_list = ", ".join(missing)
+            raise InputError(f"Worksheet(s) {missing_list} not found in `{path}`")
+
+        return ordered_unique
     finally:
         workbook.close()
 
@@ -94,7 +167,7 @@ def _resolve_sheet_names(path: Path, requested: Iterable[str] | None) -> list[st
 def _score_rows(
     *,
     rows: Iterator[tuple[int, list[Any]]],
-    detectors: list[RowDetectorFn],
+    detectors: list[_RowDetector],
     run: RunContext,
     input_file_name: str | None,
     manifest: Any,
@@ -109,7 +182,7 @@ def _score_rows(
         label_totals: dict[str, float] = {}
         contributions: dict[str, dict[str, float]] = {}
         for detector in detectors:
-            result = detector(
+            result = detector.func(
                 run=run,
                 state=state,
                 row_index=row_index,
@@ -120,12 +193,11 @@ def _score_rows(
                 logger=logger,
                 event_emitter=detector_emitter,
             )
-            scores = result.get("scores", {}) if isinstance(result, Mapping) else {}
+            scores = _normalize_row_detector_scores(result, detector=detector)
             for label, delta in scores.items():
-                label_totals[label] = label_totals.get(label, 0.0) + float(delta)
-                detector_name = f"{detector.__module__}.{detector.__name__}"
-                bucket = contributions.setdefault(detector_name, {})
-                bucket[label] = float(delta)
+                label_totals[label] = label_totals.get(label, 0.0) + delta
+                bucket = contributions.setdefault(detector.qualified_name, {})
+                bucket[label] = delta
 
         scored.append(
             _RowScore(

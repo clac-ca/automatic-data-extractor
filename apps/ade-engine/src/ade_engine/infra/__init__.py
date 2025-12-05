@@ -3,7 +3,7 @@
 from .io import iter_csv_rows, iter_sheet_rows
 from .logging import RunLogContext, TelemetryLogHandler, build_run_logger
 from .event_emitter import BaseNdjsonEmitter, ConfigEventEmitter, EngineEventEmitter
-from .telemetry import DispatchEventSink, EventSink, FileEventSink, TelemetryConfig
+from .telemetry import DispatchEventSink, EventSink, FileEventSink, StdoutFrameSink, TelemetryConfig
 
 __all__ = [
     "BaseNdjsonEmitter",
@@ -12,6 +12,7 @@ __all__ = [
     "EventSink",
     "EngineEventEmitter",
     "FileEventSink",
+    "StdoutFrameSink",
     "RunLogContext",
     "TelemetryConfig",
     "TelemetryLogHandler",

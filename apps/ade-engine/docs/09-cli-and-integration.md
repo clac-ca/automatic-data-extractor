@@ -34,7 +34,7 @@ The CLI is a thin, stable wrapper around `Engine.run()` that:
 - Accepts **file system paths and options** as flags.
 - Construct a `RunRequest`.
 - Executes a single pipeline run.
-- Emits a **machine‑readable JSON summary** to stdout.
+- Emits an **NDJSON stream of engine events** to stdout (parse the final `engine.complete` frame for status).
 - Returns a **meaningful exit code**.
 
 It is primarily used by:
@@ -73,16 +73,18 @@ ade-engine run \
 
 ### 3.1 Source selection
 
-Exactly one source file must be provided:
+At least one source file must be provided:
 
-* `--input PATH`
-  Single explicit source file:
+* `--input PATH` (repeatable)
+  Explicit source file(s):
 
   ```bash
-  --input /data/runs/123/input/input.xlsx
+  --input /data/runs/123/input/input.xlsx \
+  --input /data/runs/456/input/input.xlsx
   ```
 
-  → `RunRequest.input_file = Path(...)`
+  → Each `--input` triggers a separate run. Outputs/events are written to the
+    specified paths (or per-input subdirectories when you pass multiple inputs with a shared `--output-dir`/`--events-dir`).
 
 ### 3.2 Sheet filtering (XLSX only)
 
@@ -101,42 +103,40 @@ Optional flags to restrict which sheets are processed:
 These set `RunRequest.input_sheets` to the provided list. CSV inputs ignore
 sheet filters (they’re treated as a single implicit sheet).
 
-### 3.3 Output and logs
+### 3.3 Output and events
 
-Where to write normalized workbooks and logs:
+Where to write normalized workbooks and optional engine events:
+
+* `--output-file FILE`
+  → Write the normalized workbook to an explicit path.
 
 * `--output-dir DIR`
-  → `RunRequest.output_dir = Path(DIR)`
+  → If no `--output-file` is provided, default to `DIR/normalized.xlsx`.
+    If omitted, defaults to `<input_dir>/output/normalized.xlsx`.
 
-* `--logs-dir DIR`
-  → `RunRequest.logs_dir = Path(DIR)`
+* `--events-file FILE`
+  → Write engine NDJSON events to this path. No file sink is created unless this is set (or `--events-dir` is provided).
 
-If omitted, the engine may infer sensible defaults from the input location
-(e.g. sibling `output/` and `logs/` directories), but backend workers should
-**explicitly pass both** to keep backend layout predictable.
+* `--events-dir DIR` (alias: `--logs-dir`)
+  → If no `--events-file` is provided, default to `DIR/engine_events.ndjson`.
+    If omitted, the engine only emits events to stdout.
 
 ### 3.4 Config selection
 
-Config package and manifest:
+Config package:
 
-* `--config-package NAME` (optional; default: `ade_config`)
-
-  ```bash
-  --config-package ade_config
-  ```
-
-  → `RunRequest.config_package = "ade_config"`
-
-* `--manifest-path PATH` (optional)
+* `--config-package NAME_OR_PATH` (optional; default: `ade_config`)
 
   ```bash
-  --manifest-path /data/config_packages/my-config/manifest.json
+  --config-package ade_config           # use installed package
+  --config-package ./config-dir         # load config from a local directory containing ade_config/manifest.json
   ```
 
-  → `RunRequest.manifest_path = Path(PATH)`
-
-If `--manifest-path` is not provided, the engine resolves `manifest.json`
-from the `config_package` using `importlib.resources`.
+  → `RunRequest.config_package = "ade_config"` by default, or the provided module/path.
+    When a path is provided, the engine will prepend the appropriate `sys.path`
+    entry so `ade_config` can be imported and its `manifest.json` discovered.
+    If no config is installed or the path does not contain `ade_config/manifest.json`,
+    the CLI raises a config error.
 
 ### 3.5 Metadata (optional)
 
@@ -158,46 +158,27 @@ from the `config_package` using `importlib.resources`.
 
 The CLI also supports simple non‑run queries:
 
-* `--version`
+* `version`
   Print engine version (and optionally config manifest version if discoverable)
   and exit with code `0`. No pipeline is executed.
-
-* `--manifest-path PATH` without any `--input`/`--input-dir`
-  Validate/inspect the manifest at `PATH` and exit. Implementation details
-  (e.g., printing schema or summary) are intentionally light and can evolve,
-  but **no files are processed**.
+  You may pass `--manifest-path` to print a specific manifest version.
 
 ---
 
 ## 5. Output format and exit codes
 
-### 5.1 JSON summary
+### 5.1 NDJSON events
 
-For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
+For a normal run, the CLI prints **one JSON object per line** (NDJSON) to stdout. Key frames:
 
-```jsonc
-{
-  "engine_version": "0.0.0",
-  "run": {
-    "id": "run-uuid",
-    "status": "succeeded",
-    "output_paths": ["/data/runs/123/output/normalized.xlsx"],
-    "logs_dir": "/data/runs/123/logs",
-    "events_path": "/data/runs/123/logs/events.ndjson",
-    "processed_files": ["input.xlsx"],
-    "error": null
-  }
-}
-```
+* `engine.start` — indicates config version and engine version.
+* `engine.complete` — final status and artifacts (output path, processed file).
 
-Fields mirror `RunResult`:
+Parse the final `engine.complete` frame to determine success/failure and locate outputs.
 
-* `status`: `"succeeded"` or `"failed"`.
-* `output_paths`: list of output workbook paths (usually 1).
-* `logs_dir`: path to the logs directory for the run.
-* `events_path`: convenience path to `events.ndjson` (within `logs_dir`).
-* `processed_files`: basenames of source files the engine actually read.
-* `error`: `null` on success, or a human‑readable error summary on failure.
+When `--events-file`/`--events-dir` is explicitly provided, the engine also writes a local copy
+(`engine_events.ndjson`) so you can inspect events without scraping stdout. Normalized workbooks
+are written to the configured output path (`--output-file` or `--output-dir/normalized.xlsx`).
 
 The ADE backend should **not parse internal error messages** for control flow;
 it should rely on `status` and the presence of the event log. Error messages
@@ -348,7 +329,7 @@ result = run(
     metadata={"debug": True},
 )
 
-print(result.status, result.output_paths)
+print(result.status, result.output_path)
 ```
 
 Both workflows use the same engine and produce the same outputs/telemetry; only

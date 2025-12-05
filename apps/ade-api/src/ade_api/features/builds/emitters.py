@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.schemas import AdeEvent, AdeEventPayload, ConsoleLinePayload
-
 from ade_api.infra.events.base import BaseEventEmitter
+from ade_api.schemas.events import AdeEvent, AdeEventPayload, ConsoleLinePayload
 
 
 class BuildEventEmitter(BaseEventEmitter):

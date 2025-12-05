@@ -5,8 +5,9 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
-from ade_engine import Engine, RunRequest, RunStatus, run
+from ade_engine import Engine, RunRequest, RunStatus
 from ade_engine.core.types import RunPhase
+from ade_engine.infra.telemetry import FileEventSink, TelemetryConfig
 from ade_engine.schemas.telemetry import AdeEvent
 from fixtures.config_factories import clear_config_import, make_minimal_config
 from fixtures.sample_inputs import (
@@ -27,11 +28,16 @@ def _parse_events(path: Path) -> list[AdeEvent]:
     return [AdeEvent.model_validate_json(line) for line in path.read_text().splitlines() if line]
 
 
+def _telemetry_with_file_sink() -> TelemetryConfig:
+    return TelemetryConfig(event_sink_factories=[lambda run_ctx: FileEventSink(path=run_ctx.paths.logs_dir / "events.ndjson")])
+
+
 def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config = make_minimal_config(tmp_path, monkeypatch, include_transform=True, include_validator=True)
     source = sample_xlsx_single_sheet(tmp_path)
 
-    result = run(
+    engine = Engine(telemetry=_telemetry_with_file_sink())
+    result = engine.run(
         manifest_path=config.manifest_path,
         input_file=source,
         output_dir=tmp_path / "out",
@@ -40,7 +46,8 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert result.status is RunStatus.SUCCEEDED
-    workbook_path = Path(result.output_paths[0])
+    assert result.output_path is not None
+    workbook_path = Path(result.output_path)
     assert workbook_path.exists()
 
     workbook = load_workbook(workbook_path)
@@ -70,7 +77,8 @@ def test_engine_run_hook_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         output_dir=tmp_path / "out",
         logs_dir=tmp_path / "logs",
     )
-    result = Engine().run(request)
+    engine = Engine(telemetry=_telemetry_with_file_sink())
+    result = engine.run(request)
 
     assert result.status is RunStatus.FAILED
     assert result.error is not None
@@ -84,7 +92,8 @@ def test_engine_mapping_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     config = make_minimal_config(tmp_path, monkeypatch, include_transform=False, include_validator=False)
     source = sample_xlsx_multi_sheet(tmp_path)
 
-    result = run(
+    engine = Engine(telemetry=_telemetry_with_file_sink())
+    result = engine.run(
         manifest_path=config.manifest_path,
         input_file=source,
         output_dir=tmp_path / "out",
@@ -133,7 +142,8 @@ def test_engine_large_input_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     )
 
     assert result.status is RunStatus.SUCCEEDED
-    assert Path(result.output_paths[0]).exists()
+    assert result.output_path is not None
+    assert Path(result.output_path).exists()
 
 
 def test_engine_reports_pipeline_stage_on_mapping_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

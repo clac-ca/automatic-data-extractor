@@ -49,7 +49,7 @@ At runtime, inside a **pre‑built virtual environment**:
    **normalizes** values row‑by‑row using the config code.
 4. It emits:
    - a normalized **`output.xlsx`** workbook
-   - an **`events.ndjson`** telemetry stream (ADE events using `ade.event/v1`)
+  - an **`events.ndjson`** telemetry stream (ADE events using `ade.events.v1`)
    - a `RunResult` object describing status, outputs, and logs (no artifact file)
 
 The engine itself is **business‑logic free**: all domain rules live in
@@ -63,9 +63,9 @@ In production, the ADE API:
 
 From the engine’s perspective, it just runs synchronously inside an isolated
 environment with `ade_config` installed; **it is run‑scoped only—run IDs and
-workspace concepts belong to the backend**. The ADE API later replays
-`events.ndjson`, assigns `event_id`/`sequence`, and streams the events to
-clients.
+workspace concepts belong to the backend**. The ADE API consumes **stdout NDJSON
+frames** from the engine, stamps `event_id`/`sequence`, and streams the events
+to clients (it owns the canonical `events.ndjson` log).
 
 ---
 
@@ -111,8 +111,10 @@ The deployment model is:
     - reads the source file(s) (e.g., `input.xlsx`),
     - imports `ade_config` and reads its `manifest.json`,
     - runs the pipeline once for that call,
-    - writes the normalized workbook (e.g., `normalized.xlsx`) and
-      `events.ndjson` to the given output/logs dirs.
+    - writes the normalized workbook (e.g., `normalized.xlsx`),
+    - emits NDJSON frames to stdout (the API persists the canonical
+      `events.ndjson`; the engine can write one via a FileEventSink only when
+      explicitly configured).
 
 The **engine does not know or care about backend run IDs**. It only needs:
 
@@ -168,7 +170,7 @@ ade_engine/
   schemas/                   # Python-first schemas (Pydantic)
     __init__.py
     manifest.py
-    telemetry.py             # ade.event/v1 envelope + run/build/run-summary models as needed
+    telemetry.py             # ade.events.v1 envelope + run/build/run-summary models as needed
 
   cli/                       # Typer-based CLI (`ade-engine`) with subcommands
     __init__.py
@@ -375,17 +377,15 @@ Detailed docs for each stage are in:
 ## 7. Telemetry (`events.ndjson`)
 
 Telemetry is the engine’s only structured output besides the normalized
-workbook(s). Events use the `AdeEvent` envelope defined in
-`ade_engine/schemas/telemetry.py`:
+workbook(s). Engine runs emit **EngineEventFrameV1** NDJSON lines to stdout
+(`ade_engine/schemas/events/v1/frame.py`):
 
 ```jsonc
 {
+  "schema_id": "ade.engine.events.v1",
   "type": "engine.table.summary",
+  "event_id": "6fef1351-7a66-4221-88e8-3f83d3f5e9b3",
   "created_at": "2025-11-26T12:34:56Z",
-  "sequence": 7,                // optional in engine output; added by API when replayed
-  "workspace_id": "ws_123",     // from RunRequest.metadata when provided
-  "configuration_id": "cfg_123",
-  "run_id": "run_123",
   "payload": {
     "table_id": "tbl_0",
     "source_file": "input.xlsx",
@@ -409,12 +409,12 @@ Key events the engine emits:
 - `engine.run.summary` — authoritative hierarchical summary built from in-memory artifacts.
 - `engine.validation.summary` — aggregated validation counts (optional, emitted when there are issues).
 - `engine.validation.issue` — optional per-issue events.
-- `engine.complete` — terminal status with `status`, `output_paths`, `processed_files`, and optional failure/error payloads.
+- `engine.complete` — terminal status with `status`, `output_path`, `processed_file`, and optional failure/error payloads.
 
 How it’s written:
 
-- Default sink: `FileEventSink` created by `TelemetryConfig.build_sink` (writes to `<logs_dir>/events.ndjson`).
-- Sequence/event_id: not set by the engine; the ADE API re-envelops engine events, assigns `event_id`/`sequence`, and persists them to dispatcher-backed logs for streaming.
+- Default sink: `StdoutFrameSink` created by `TelemetryConfig.build_sink` (writes NDJSON to stdout). Use `FileEventSink` in tests or custom telemetry to persist a local `events.ndjson`.
+- Sequence/event_id: the engine stamps only `event_id`; the ADE API re-envelops engine frames, assigns `event_id`/`sequence`, and persists them to dispatcher-backed logs for streaming.
 
 Engine-side API surface (`EngineEventEmitter` + run `logger`):
 

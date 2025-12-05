@@ -5,46 +5,44 @@ import sys
 from pathlib import Path
 
 import pytest
-from ade_engine.schemas import AdeEvent
+from ade_api.schemas.events import EngineEventFrame
 
 from ade_api.features.runs.runner import EngineSubprocessRunner, StdoutFrame
 
 pytestmark = pytest.mark.asyncio()
 
-RUN_ID = "00000000-0000-0000-0000-000000000001"
 
-
-async def test_runner_streams_stdout_and_telemetry(tmp_path: Path) -> None:
+async def test_runner_streams_stdout_frames_and_stderr_lines(tmp_path: Path) -> None:
     script = tmp_path / "writer.py"
-    events_path = tmp_path / "engine-logs" / "events.ndjson"
     script.write_text(
-        "import json, sys, time, pathlib\n"
-        "events = pathlib.Path(sys.argv[1])\n"
-        "events.parent.mkdir(parents=True, exist_ok=True)\n"
-        "print('engine ready', flush=True)\n"
-        "payload = {\n"
-        f"    'run_id': '{RUN_ID}',\n"
+        "import json, sys, time\n"
+        "frame = {\n"
+        "    'schema_id': 'ade.engine.events.v1',\n"
+        "    'event_id': '00000000-0000-0000-0000-000000000000',\n"
         "    'created_at': '2024-01-01T00:00:00Z',\n"
         "    'type': 'engine.phase.start',\n"
         "    'payload': {'phase': 'mapping'},\n"
         "}\n"
+        "print(json.dumps(frame), flush=True)\n"
+        "print('not-json', flush=True)\n"
         "time.sleep(0.05)\n"
-        "events.write_text(json.dumps(payload) + '\\n', encoding='utf-8')\n",
+        "sys.stderr.write('stderr-line\\n')\n"
+        "sys.stderr.flush()\n",
         encoding="utf-8",
     )
 
-    command = [sys.executable, str(script), str(events_path)]
-    runner = EngineSubprocessRunner(
-        command=command, logs_dir=events_path.parent, env=os.environ.copy()
-    )
+    command = [sys.executable, str(script)]
+    runner = EngineSubprocessRunner(command=command, env=os.environ.copy())
 
     frames = []
     async for frame in runner.stream():
         frames.append(frame)
 
+    engine_frames = [frame for frame in frames if isinstance(frame, EngineEventFrame)]
+    assert engine_frames, "expected engine event frames from stdout"
+    assert engine_frames[0].type == "engine.phase.start"
+    assert engine_frames[0].payload["phase"] == "mapping"
+
     stdout_frames = [frame for frame in frames if isinstance(frame, StdoutFrame)]
-    assert stdout_frames, "expected stdout frames"
-    telemetry = next(frame for frame in frames if not isinstance(frame, StdoutFrame))
-    assert isinstance(telemetry, AdeEvent)
-    assert telemetry.type == "engine.phase.start"
-    assert telemetry.payload_dict()["phase"] == "mapping"
+    assert any(frame.stream == "stdout" for frame in stdout_frames)
+    assert any(frame.stream == "stderr" for frame in stdout_frames)

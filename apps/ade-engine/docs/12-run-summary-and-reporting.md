@@ -62,15 +62,15 @@ in-memory pipeline artifacts:
   "scope": "run",
   "id": "run",
   "parent_ids": { "run_id": "c5..." },
-  "source": {
-    "run_id": "c5...",
-    "workspace_id": "c1...",
-    "configuration_id": "c2...",
-    "engine_version": "1.6.0",
-    "config_version": "0.1.0",
-    "started_at": "2024-01-01T00:00:00Z",
-    "completed_at": "2024-01-01T00:00:03Z",
-    "status": "succeeded"
+    "source": {
+        "run_id": "c5...",
+        "workspace_id": "c1...",
+        "configuration_id": "c2...",
+        "engine_version": "1.6.1",
+        "config_version": "0.1.0",
+        "started_at": "2024-01-01T00:00:00Z",
+        "completed_at": "2024-01-01T00:00:03Z",
+        "status": "succeeded"
   },
   "counts": {
     "files": { "total": 1 },
@@ -97,8 +97,8 @@ in-memory pipeline artifacts:
     "file_ids": ["file_0"],
     "sheet_ids": ["sheet_0"],
     "table_ids": ["tbl_0", "tbl_1"],
-    "processed_files": ["input.xlsx"],
-    "output_paths": ["output/normalized.xlsx"]
+    "processed_file": "input.xlsx",
+    "output_path": "output/normalized.xlsx"
   }
 }
 ```

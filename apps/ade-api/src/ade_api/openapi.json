@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Automatic Data Extractor API",
-    "version": "1.6.0"
+    "version": "1.6.1"
   },
   "paths": {
     "/api/v1/health": {
@@ -5210,6 +5210,42 @@
         ]
       }
     },
+    "/api/v1/config-templates": {
+      "get": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "List configuration templates",
+        "operationId": "list_config_templates_api_v1_config_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConfigTemplate"
+                  },
+                  "type": "array",
+                  "title": "Response List Config Templates Api V1 Config Templates Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
       "get": {
         "tags": [
@@ -6033,6 +6069,116 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/input": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get run input metadata",
+        "operationId": "get_run_input_endpoint_api_v1_runs__run_id__input_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunInput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/input/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run input file",
+        "operationId": "download_run_input_endpoint_api_v1_runs__run_id__input_download_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/summary": {
       "get": {
         "tags": [
@@ -6262,6 +6408,58 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/events/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run events (NDJSON log)",
+        "operationId": "download_run_events_file_endpoint_api_v1_runs__run_id__events_download_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Events unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/logs": {
       "get": {
         "tags": [
@@ -6269,6 +6467,7 @@
         ],
         "summary": "Download Run Logs File Endpoint",
         "operationId": "download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get",
+        "deprecated": true,
         "parameters": [
           {
             "name": "run_id",
@@ -6314,13 +6513,13 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/outputs": {
+    "/api/v1/runs/{run_id}/output": {
       "get": {
         "tags": [
           "runs"
         ],
-        "summary": "List Run Outputs Endpoint",
-        "operationId": "list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get",
+        "summary": "Get run output metadata",
+        "operationId": "get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get",
         "parameters": [
           {
             "name": "run_id",
@@ -6341,13 +6540,129 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RunOutputListing"
+                  "$ref": "#/components/schemas/RunOutput"
                 }
               }
             }
           },
           "404": {
-            "description": "Outputs unavailable"
+            "description": "Run or output not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/output/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run output file",
+        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__output_download_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Output not found"
+          },
+          "409": {
+            "description": "Output not ready"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/outputs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Outputs Legacy",
+        "operationId": "list_run_outputs_legacy_api_v1_runs__run_id__outputs_get",
+        "deprecated": true,
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunOutputFile"
+                  },
+                  "title": "Response List Run Outputs Legacy Api V1 Runs  Run Id  Outputs Get"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6378,8 +6693,9 @@
         "tags": [
           "runs"
         ],
-        "summary": "Download Run Output Endpoint",
-        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get",
+        "summary": "Download Run Output Legacy Endpoint",
+        "operationId": "download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get",
+        "deprecated": true,
         "parameters": [
           {
             "name": "run_id",
@@ -6399,16 +6715,15 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "Legacy output path",
               "title": "Output Path"
-            }
+            },
+            "description": "Legacy output path"
           }
         ],
         "responses": {
           "200": {
             "description": "Successful Response"
-          },
-          "404": {
-            "description": "Output not found"
           },
           "422": {
             "description": "Validation Error",
@@ -6514,79 +6829,57 @@
   },
   "components": {
     "schemas": {
-      "AdeEvent": {
+      "AdeEventV1": {
         "properties": {
+          "schema_id": {
+            "type": "string",
+            "const": "ade.events.v1",
+            "title": "Schema Id",
+            "default": "ade.events.v1"
+          },
           "type": {
             "type": "string",
             "title": "Type"
           },
           "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Event Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
           },
-          "sequence": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sequence"
-          },
           "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": "string",
+            "enum": [
+              "api",
+              "engine"
             ],
             "title": "Source"
           },
           "workspace_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Workspace Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "configuration_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Configuration Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Configuration Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "run_id": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "uuid"
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
               },
               {
                 "type": "null"
@@ -6598,7 +6891,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "uuid"
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
               },
               {
                 "type": "null"
@@ -6606,36 +6900,36 @@
             ],
             "title": "Build Id"
           },
-          "payload": {
+          "origin_event_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AdeEventPayload"
-              },
-              {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Origin Event Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
             "title": "Payload"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "type",
-          "created_at"
+          "event_id",
+          "sequence",
+          "created_at",
+          "source",
+          "workspace_id",
+          "configuration_id"
         ],
-        "title": "AdeEvent",
-        "description": "Canonical ADE event envelope for build + run streaming."
-      },
-      "AdeEventPayload": {
-        "properties": {},
-        "additionalProperties": true,
-        "type": "object",
-        "title": "AdeEventPayload",
-        "description": "Base class for structured AdeEvent payloads."
+        "title": "AdeEventV1",
+        "description": "API-owned canonical ADE event envelope."
       },
       "ApiKeyCreateRequest": {
         "properties": {
@@ -7319,7 +7613,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEvent"
+              "$ref": "#/components/schemas/AdeEventV1"
             },
             "type": "array",
             "title": "Items"
@@ -7667,6 +7961,48 @@
         ],
         "title": "ConfigSourceTemplate",
         "description": "Reference to a bundled template."
+      },
+      "ConfigTemplate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ConfigTemplate",
+        "description": "Metadata for an available configuration template."
       },
       "ConfigValidationIssue": {
         "properties": {
@@ -9609,23 +9945,6 @@
             "description": "If true, rebuild the configuration environment before running.",
             "default": false
           },
-          "document_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Document Ids",
-            "description": "Preferred document identifiers to stage as inputs (first is used today)."
-          },
           "input_document_id": {
             "anyOf": [
               {
@@ -9638,20 +9957,7 @@
               }
             ],
             "title": "Input Document Id",
-            "description": "Deprecated: single document identifier to ingest."
-          },
-          "input_sheet_name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Sheet Name",
-            "description": "Preferred worksheet to ingest when processing XLSX files."
+            "description": "Document identifier to ingest."
           },
           "input_sheet_names": {
             "anyOf": [
@@ -9666,7 +9972,7 @@
               }
             ],
             "title": "Input Sheet Names",
-            "description": "Explicit worksheets to ingest; defaults to all when omitted."
+            "description": "Optional worksheet names to ingest when processing XLSX files."
           },
           "metadata": {
             "anyOf": [
@@ -9704,7 +10010,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEvent"
+              "$ref": "#/components/schemas/AdeEventV1"
             },
             "type": "array",
             "title": "Items"
@@ -9731,20 +10037,75 @@
       },
       "RunInput": {
         "properties": {
-          "document_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "description": "UUIDv7 (RFC 9562) generated in the application layer."
-            },
-            "type": "array",
-            "title": "Document Ids"
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
           },
           "input_sheet_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Input Sheet Names"
           },
           "input_file_count": {
@@ -9793,13 +10154,33 @@
             "type": "string",
             "title": "Events Stream"
           },
+          "events_download": {
+            "type": "string",
+            "title": "Events Download"
+          },
           "logs": {
             "type": "string",
             "title": "Logs"
           },
-          "outputs": {
+          "input": {
             "type": "string",
-            "title": "Outputs"
+            "title": "Input"
+          },
+          "input_download": {
+            "type": "string",
+            "title": "Input Download"
+          },
+          "output": {
+            "type": "string",
+            "title": "Output"
+          },
+          "output_download": {
+            "type": "string",
+            "title": "Output Download"
+          },
+          "output_metadata": {
+            "type": "string",
+            "title": "Output Metadata"
           }
         },
         "additionalProperties": false,
@@ -9809,44 +10190,25 @@
           "summary",
           "events",
           "events_stream",
+          "events_download",
           "logs",
-          "outputs"
+          "input",
+          "input_download",
+          "output",
+          "output_download",
+          "output_metadata"
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
       },
       "RunOutput": {
         "properties": {
-          "has_outputs": {
+          "ready": {
             "type": "boolean",
-            "title": "Has Outputs",
+            "title": "Ready",
             "default": false
           },
-          "output_count": {
-            "type": "integer",
-            "title": "Output Count",
-            "default": 0
-          },
-          "processed_files": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Processed Files"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunOutput",
-        "description": "Output metadata captured for a run."
-      },
-      "RunOutputFile": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "kind": {
+          "download_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -9855,7 +10217,18 @@
                 "type": "null"
               }
             ],
-            "title": "Kind"
+            "title": "Download Url"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
           },
           "content_type": {
             "anyOf": [
@@ -9868,9 +10241,95 @@
             ],
             "title": "Content Type"
           },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "has_output": {
+            "type": "boolean",
+            "title": "Has Output",
+            "default": false
+          },
+          "output_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Path"
+          },
+          "processed_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed File"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunOutput",
+        "description": "Output metadata captured for a run."
+      },
+      "RunOutputFile": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
           "byte_size": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Byte Size"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
           },
           "download_url": {
             "anyOf": [
@@ -9886,27 +10345,8 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "name",
-          "byte_size"
-        ],
         "title": "RunOutputFile",
-        "description": "Single file emitted by a streaming run output directory."
-      },
-      "RunOutputListing": {
-        "properties": {
-          "files": {
-            "items": {
-              "$ref": "#/components/schemas/RunOutputFile"
-            },
-            "type": "array",
-            "title": "Files"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunOutputListing",
-        "description": "Collection of files produced by a streaming run."
+        "description": "Deprecated collection wrapper for legacy output listings."
       },
       "RunPage": {
         "properties": {
@@ -10135,6 +10575,39 @@
           },
           "links": {
             "$ref": "#/components/schemas/RunLinks"
+          },
+          "events_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Url"
+          },
+          "events_stream_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Stream Url"
+          },
+          "events_download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Download Url"
           }
         },
         "additionalProperties": false,

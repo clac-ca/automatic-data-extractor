@@ -130,7 +130,6 @@ function reduceStatus(current: RunStatus, event: RunStreamEvent): RunStatus {
     case "engine.start":
       return "running";
     case "run.complete":
-    case "run.completed":
     case "engine.complete": {
       const statusValue =
         (payload.status as string | undefined) ??

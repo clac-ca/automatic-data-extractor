@@ -65,7 +65,9 @@ class RunRequest:
     input_sheets: Sequence[str] | None = None
 
     output_dir: Path | None = None
-    logs_dir: Path | None = None
+    output_file: Path | None = None
+    events_dir: Path | None = None
+    events_file: Path | None = None
 
     metadata: Mapping[str, Any] | None = None
 
@@ -76,7 +78,9 @@ class RunPaths:
 
     input_file: Path
     output_dir: Path
-    logs_dir: Path
+    output_file: Path
+    events_dir: Path | None
+    events_file: Path | None
 
 
 @dataclass
@@ -108,9 +112,9 @@ class RunResult:
     status: RunStatus
     error: RunError | None
     run_id: UUID
-    output_paths: tuple[Path, ...]
+    output_path: Path | None
     logs_dir: Path
-    processed_files: tuple[str, ...]
+    processed_file: str | None
 
 
 @dataclass

@@ -534,7 +534,7 @@ URL query parameters encode **shareable view state**—the bits we want to survi
 
 ```ts
 export type ConfigBuilderTab = "editor";
-export type ConfigBuilderPane = "terminal" | "problems" | "runSummary";
+export type ConfigBuilderPane = "terminal" | "problems";
 export type ConfigBuilderConsole = "open" | "closed";
 export type ConfigBuilderView = "editor" | "split" | "zen";
 
@@ -906,7 +906,7 @@ def detect_*(
     row_values: list,
     logger,
     **_,
-) -> dict:
+) -> float | dict:
     ...
 ```
 
@@ -914,10 +914,12 @@ Key parameters (documented via helpers):
 
 * `run` — run context (ids, environment, manifest).
 * `state` — mutable state shared across the run.
-* `row_index` — current row index (0‑based or documented accordingly).
+* `row_index` — current row index (1‑based).
 * `row_values` — raw values for the current row.
 * `logger` — run‑scoped logger.
 * `**_` — catch‑all for unused keyword arguments.
+
+Return a float for the detector’s default label (module `DEFAULT_LABEL`/`DEFAULT_ROW_LABEL` or inferred from module name), or a dict mapping labels to deltas if you need to influence multiple labels. The legacy `"scores"` wrapper is not used.
 
 Helpers:
 

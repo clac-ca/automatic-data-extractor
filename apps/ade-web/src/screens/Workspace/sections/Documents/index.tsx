@@ -28,13 +28,11 @@ import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 import {
   fetchRun,
-  fetchRunOutputs,
   fetchRunSummary,
   fetchRunTelemetry,
   runLogsUrl,
-  runOutputsUrl,
+  runOutputUrl,
   runQueryKeys,
-  type RunOutputListing,
   type RunResource,
   type RunStatus,
 } from "@shared/runs/api";
@@ -1502,21 +1500,6 @@ function RunExtractionDrawerContent({
     },
   });
 
-  const outputsQuery = useQuery({
-    queryKey: activeRunId ? runQueryKeys.outputs(activeRunId) : ["run-outputs", "none"],
-    queryFn: ({ signal }) => {
-      if (!activeRunId) {
-        return Promise.reject(new Error("No run selected"));
-      }
-      const run = runQuery.data ?? activeRunId;
-      return fetchRunOutputs(run, signal);
-    },
-    enabled:
-      Boolean(activeRunId) &&
-      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
-    staleTime: 5_000,
-  });
-
   const summaryQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.summary(activeRunId) : ["run-summary", "none"],
     queryFn: ({ signal }) =>
@@ -1592,9 +1575,9 @@ function RunExtractionDrawerContent({
   const currentRun = runQuery.data ?? null;
   const runStatus = currentRun?.status ?? null;
   const runRunning = runStatus === "running" || runStatus === "queued";
-  const outputsBase = currentRun ? runOutputsUrl(currentRun) : null;
+  const outputUrl = currentRun ? runOutputUrl(currentRun) : null;
+  const outputPath = currentRun?.output?.output_path ?? null;
   const logsUrl = currentRun ? runLogsUrl(currentRun) : null;
-  const outputFiles: RunOutputListing["files"] = outputsQuery.data?.files ?? [];
   const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
 
@@ -1881,40 +1864,18 @@ function RunExtractionDrawerContent({
                 ) : null}
 
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Output files</p>
-                  {outputsQuery.isLoading ? (
-                    <p className="text-xs text-slate-500">Loading outputs…</p>
-                  ) : outputFiles.length > 0 ? (
-                    <ul className="mt-1 space-y-1 text-xs text-slate-700">
-                      {outputFiles.map((file) => {
-                        const path = (file as { path?: string }).path ?? file.name;
-                        const size = typeof file.byte_size === "number" ? file.byte_size : 0;
-                        const href =
-                          file.download_url ??
-                          (outputsBase
-                            ? `${outputsBase}/${path.split("/").map(encodeURIComponent).join("/")}`
-                            : undefined);
-                        return (
-                          <li
-                            key={path}
-                            className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
-                          >
-                            {href ? (
-                              <a href={href} className="text-emerald-700 hover:underline">
-                                {file.name}
-                              </a>
-                            ) : (
-                              <span className="text-slate-500">{file.name}</span>
-                            )}
-                            <span className="text-[11px] text-slate-500">
-                              {size.toLocaleString()} bytes
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                  <p className="text-xs font-semibold text-slate-700">Output</p>
+                  {runQuery.isFetching && !outputUrl ? (
+                    <p className="text-xs text-slate-500">Loading output…</p>
+                  ) : outputUrl ? (
+                    <div className="mt-1 flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1 text-xs text-slate-700">
+                      <a href={outputUrl} className="text-emerald-700 hover:underline">
+                        {outputPath?.split("/").pop() ?? "Download output"}
+                      </a>
+                      {outputPath ? <span className="text-[11px] text-slate-500">{outputPath}</span> : null}
+                    </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Outputs will appear here after the run completes.</p>
+                    <p className="text-xs text-slate-500">Output will appear here after the run completes.</p>
                   )}
                 </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
+
+from ade_api.schemas.events import AdeEvent, AdeEventPayload
 
 
 class BaseEventEmitter:
@@ -37,7 +38,7 @@ class BaseEventEmitter:
         extra_ids: dict[str, Any] | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
-            payload = payload.model_dump()
+            payload = payload.model_dump(exclude_none=True)
 
         ids = dict(self._ids)
         if extra_ids:

@@ -18,9 +18,11 @@ from ade_engine.core.types import NormalizedTable, RunContext, RunPhase, RunRequ
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
 
 
-def _collect_processed_files(tables: Iterable[NormalizedTable]) -> tuple[str, ...]:
+def _collect_processed_file(tables: Iterable[NormalizedTable]) -> str | None:
     names = {table.mapped.extracted.source_file.name for table in tables}
-    return tuple(sorted(names))
+    if not names:
+        return None
+    return sorted(names)[0]
 
 
 def execute_pipeline(
@@ -34,7 +36,7 @@ def execute_pipeline(
     summary_aggregator: SummaryAggregator | None = None,
     config_event_emitter: ConfigEventEmitter | None = None,
     on_phase_change: Callable[[RunPhase], None] | None = None,
-) -> tuple[list[NormalizedTable], tuple[Path, ...], tuple[str, ...]]:
+) -> tuple[list[NormalizedTable], Path | None, str | None]:
     """Run all pipeline stages and return normalized tables and outputs."""
 
     config_emitter = config_event_emitter or event_emitter.config_emitter()
@@ -112,7 +114,7 @@ def execute_pipeline(
     event_emitter.validation_summary(all_issues)
 
     _enter_phase(RunPhase.WRITING_OUTPUT)
-    processed_files = _collect_processed_files(normalized_tables)
+    processed_file = _collect_processed_file(normalized_tables)
     output_path = write_workbook(
         ctx=run,
         cfg=runtime,
@@ -122,7 +124,7 @@ def execute_pipeline(
         event_emitter=config_emitter,
     )
 
-    return normalized_tables, (output_path,), processed_files
+    return normalized_tables, output_path, processed_file
 
 
 __all__ = ["execute_pipeline"]

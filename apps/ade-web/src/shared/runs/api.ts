@@ -5,7 +5,6 @@ import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
-export type RunOutputListing = components["schemas"]["RunOutputListing"];
 export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 type RunCreateRequest = components["schemas"]["RunCreateRequest"];
 type RunCreatePathParams =
@@ -167,7 +166,11 @@ export function runEventsUrl(
   run: RunResource,
   options?: { afterSequence?: number; stream?: boolean },
 ): string | null {
-  const baseLink = run.links?.events_stream ?? run.links?.events;
+  const baseLink =
+    run.events_stream_url ??
+    run.links?.events_stream ??
+    run.events_url ??
+    run.links?.events;
   if (!baseLink) {
     return null;
   }
@@ -232,47 +235,29 @@ export async function fetchRunEvents(
   return events;
 }
 
-export async function fetchRunOutputs(
-  run: RunResource | string,
-  signal?: AbortSignal,
-): Promise<RunOutputListing> {
-  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const outputsLink = runResource.links?.outputs;
-  const runId = runResource.id;
-  if (!outputsLink || !runId) {
-    throw new Error("Run outputs link unavailable.");
-  }
-
-  const { data, error } = await client.GET("/api/v1/runs/{run_id}/outputs", {
-    params: { path: { run_id: runId } },
-    signal,
-  });
-
-  if (error || !data) throw new Error("Run outputs unavailable");
-  return data as RunOutputListing;
-}
-
 export async function fetchRunTelemetry(
   run: RunResource | string,
   signal?: AbortSignal,
 ): Promise<RunStreamEvent[]> {
   const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const logsLink = runResource.links?.logs;
-  const runId = runResource.id;
-  if (!logsLink || !runId) {
+  const downloadLink =
+    runResource.events_download_url ??
+    runResource.links?.events_download ??
+    runResource.links?.logs;
+  if (!downloadLink) {
     throw new Error("Run logs link unavailable.");
   }
 
-  const { data, error } = await client.GET("/api/v1/runs/{run_id}/logs", {
-    params: { path: { run_id: runId } },
+  const response = await fetch(resolveApiUrl(downloadLink), {
+    method: "GET",
+    credentials: "include",
     headers: { Accept: "application/x-ndjson" },
     signal,
-    parseAs: "text",
   });
-
-  if (error) {
-    throw new Error("Run telemetry unavailable");
+  if (!response.ok) {
+    throw new Error(`Run telemetry unavailable (${response.status}).`);
   }
+  const data = await response.text();
 
   const text = data ?? "";
   return text
@@ -329,13 +314,18 @@ export async function fetchRunSummary(runId: string, signal?: AbortSignal): Prom
   return summary as RunSummary;
 }
 
-export function runOutputsUrl(run: RunResource): string | null {
-  const link = run.links?.outputs;
-  return link ? resolveApiUrl(link) : null;
+export function runOutputUrl(run: RunResource): string | null {
+  const output = run.output;
+  const ready = output?.ready;
+  const link = output?.download_url ?? run.links?.output_download ?? run.links?.output;
+  if (ready === false || !link) {
+    return null;
+  }
+  return resolveApiUrl(link);
 }
 
 export function runLogsUrl(run: RunResource): string | null {
-  const link = run.links?.logs;
+  const link = run.events_download_url ?? run.links?.events_download ?? run.links?.logs;
   return link ? resolveApiUrl(link) : null;
 }
 
@@ -349,7 +339,6 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
 
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
-  outputs: (runId: string) => ["run-outputs", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
   summary: (runId: string) => ["run-summary", runId] as const,
 };

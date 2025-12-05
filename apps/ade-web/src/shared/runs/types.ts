@@ -1,7 +1,9 @@
 import type { components } from "@schema";
 
-export type AdeEvent = components["schemas"]["AdeEvent"];
-export type AdeEventPayload = components["schemas"]["AdeEventPayload"];
+type EventSchema = components["schemas"]["AdeEventV1"];
+
+export type AdeEvent = EventSchema;
+export type AdeEventPayload = NonNullable<EventSchema["payload"]>;
 export type RunStreamEvent = AdeEvent;
 
 export function isAdeEvent(event: unknown): event is AdeEvent {

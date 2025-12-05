@@ -77,6 +77,25 @@ class BuildsRepository:
         result = await self._session.execute(stmt)
         return result.scalars().first()
 
+    async def get_inflight_by_fingerprint(
+        self,
+        *,
+        configuration_id: UUID,
+        fingerprint: str,
+    ) -> Build | None:
+        stmt = (
+            select(Build)
+            .where(
+                Build.configuration_id == configuration_id,
+                Build.status.in_([BuildStatus.QUEUED, BuildStatus.BUILDING]),
+                Build.fingerprint == fingerprint,
+            )
+            .order_by(Build.created_at.desc())
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().first()
+
     async def get_latest_inflight(self, *, configuration_id: UUID) -> Build | None:
         stmt = (
             select(Build)

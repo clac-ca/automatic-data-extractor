@@ -376,7 +376,7 @@ export interface RunOptions {
 A more detailed `RunDetail` type extends this with:
 
 * Full list of input documents.
-* Links to outputs (files) and telemetry.
+* Links to input/output downloads and telemetry (events).
 * Optional telemetry summary.
 * Log / console linkage.
 
@@ -416,7 +416,7 @@ The **Runs** section is the workspace‑wide ledger of engine activity.
 
 1. Show all runs in a workspace.
 2. Allow filtering/sorting by status, configuration, initiator, and time.
-3. Provide access to logs, telemetry, and outputs.
+3. Provide access to logs, telemetry, and the normalized output.
 
 ### 6.1 Data and filters
 
@@ -482,13 +482,13 @@ The Run detail view composes several sections:
 
 * **Outputs**
 
-  * Link to telemetry download.
-  * Table of individual output files.
+  * Link to telemetry download (NDJSON events).
+  * Single normalized output file with download URL and readiness flag.
 
 Data hooks:
 
 * `useRunQuery(runId)` → `GET /api/v1/runs/{run_id}` (global; `runId` is unique).
-* `useRunOutputsQuery(runId)` → `/api/v1/runs/{run_id}/outputs`.
+* `useRunOutputQuery(runId)` → `/api/v1/runs/{run_id}/output`.
 * `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/events?stream=true`:
 
   * Parses `AdeEvent` envelopes emitted over SSE, such as:
@@ -601,7 +601,7 @@ Flows:
   GET /api/v1/runs/{run_id}/events?stream=true
   ```
 
-Responses include `run_id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, outputs) are identical regardless of surface.
+Responses include `run_id`; follow-up fetches/streams use the global run endpoints. Semantics (status transitions, options, output) are identical regardless of surface.
 
 ---
 
@@ -720,17 +720,22 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 * `GET /api/v1/runs/{run_id}`
   Global run detail.
 
-* `GET /api/v1/runs/{run_id}/logs`
-  Download telemetry log.
-
-* `GET /api/v1/runs/{run_id}/outputs`
-  List individual output files for a run.
-
-* `GET /api/v1/runs/{run_id}/outputs/{output_path}`
-  Download a single output file.
-
 * `GET /api/v1/runs/{run_id}/events?stream=true`
-  Run event stream (NDJSON SSE; log file is acceptable fallback).
+  Run event stream (NDJSON SSE); `GET /runs/{run_id}/events/download` downloads the NDJSON log (legacy `/logs` alias).
+
+* `GET /api/v1/runs/{run_id}/input`
+  Input metadata (document, content type, byte size).
+
+* `GET /api/v1/runs/{run_id}/input/download`
+  Download the original input file.
+
+* `GET /api/v1/runs/{run_id}/output`
+  Output metadata (ready flag, size, content type, download URL).
+
+* `GET /api/v1/runs/{run_id}/output/download`
+  Download the normalized output (returns 409 until ready).
+
+* Legacy `/runs/{run_id}/outputs*` endpoints map to the single output file for compatibility.
 
 ### 9.4 Run creation (configuration-scoped)
 
@@ -757,7 +762,7 @@ When **Safe mode is enabled**:
 
   * Listing documents and runs.
   * Viewing run details.
-* Downloading outputs and logs.
+* Downloading outputs and event logs.
 
 UI behaviour:
 

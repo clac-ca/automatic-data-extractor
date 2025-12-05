@@ -50,7 +50,6 @@ import { ApiError } from "@shared/api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
@@ -190,14 +189,12 @@ export function Workbench({
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
   const {
-    stream: runStreamState,
     runStatus: derivedRunStatus,
     runMode: derivedRunMode,
     runInProgress,
     validation: validationState,
     consoleLines,
     latestRun,
-    appendConsoleLine,
     clearConsole,
     startRun,
   } = useRunSessionModel({
@@ -287,10 +284,9 @@ export function Workbench({
   const pushConsoleError = useCallback(
     (error: unknown) => {
       const message = describeError(error);
-      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()), origin: "run" });
       showConsoleBanner(message, { intent: "danger", duration: null });
     },
-    [appendConsoleLine, showConsoleBanner],
+    [showConsoleBanner],
   );
 
   const handleExportConfig = useCallback(async () => {
@@ -317,7 +313,7 @@ export function Workbench({
     if (!pendingCompletion) {
       return;
     }
-    const { runId: completedRunId, status, mode, durationMs, payload, completedAt } = pendingCompletion;
+    const { runId: completedRunId, status, payload } = pendingCompletion;
     const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
@@ -333,21 +329,8 @@ export function Workbench({
       status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
     showConsoleBanner(notice, { intent });
 
-    if (mode !== "validation") {
-      const completedTimestamp = completedAt ? new Date(completedAt) : new Date();
-      appendConsoleLine({
-        level: status === "succeeded" ? "success" : isCancelled ? "warning" : "error",
-        message:
-          typeof durationMs === "number" && durationMs > 0
-            ? `Run ${status} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
-            : `Run ${status}. Open Run summary for details.`,
-        timestamp: formatConsoleTimestamp(completedTimestamp),
-        origin: "run",
-      });
-    }
-
     setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
-  }, [pendingCompletion, appendConsoleLine, showConsoleBanner, setPendingCompletion]);
+  }, [pendingCompletion, showConsoleBanner, setPendingCompletion]);
 
   const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;
@@ -818,7 +801,6 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
-          input_sheet_name: worksheetList.length === 1 ? worksheetList[0] : undefined,
         },
         {
           mode: "extraction",
@@ -953,14 +935,6 @@ export function Workbench({
   const handleClearConsole = useCallback(() => {
     clearConsole();
   }, [clearConsole]);
-
-  const handleShowRunSummary = useCallback(() => {
-    if (!latestRun) {
-      return;
-    }
-    openConsole();
-    setPane("runSummary");
-  }, [latestRun, openConsole, setPane]);
 
   const handleToggleExplorer = useCallback(() => {
     setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }));
@@ -1545,12 +1519,8 @@ export function Workbench({
                 activePane={pane}
                 onPaneChange={setPane}
                 latestRun={latestRun}
-                onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
                 runStatus={derivedRunStatus}
-                buildPhases={runStreamState.buildPhases}
-                runPhases={runStreamState.runPhases}
-                runMode={derivedRunMode}
                 onToggleCollapse={handleToggleOutput}
               />
             )}
@@ -2164,21 +2134,6 @@ function ChromeIconButton({
       {icon}
     </button>
   );
-}
-
-function formatRunDurationLabel(durationMs?: number | null): string | null {
-  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) {
-    return null;
-  }
-  if (durationMs < 1000) {
-    return `${Math.round(durationMs)} ms`;
-  }
-  if (durationMs < 60_000) {
-    return `${(durationMs / 1000).toFixed(1)} s`;
-  }
-  const minutes = Math.floor(durationMs / 60_000);
-  const seconds = Math.round((durationMs % 60_000) / 1000);
-  return `${minutes}m ${seconds}s`;
 }
 
 function WorkbenchBadgeIcon() {

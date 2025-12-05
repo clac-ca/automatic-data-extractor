@@ -18,6 +18,15 @@ KNOWN_HEADER_WORDS: set[str] = {
     "country", "address", "zip", "postal", "notes", "description"
 }
 
+# Quick shape of inputs (Script API v3):
+#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
+#   row_index → 5  (1-based)
+#   row_values → ["Header A", "Header B", "Header C"]
+#   input_file_name → "input.xlsx"
+#   manifest.columns.order → ["first_name", "last_name", "email"]
+#   state → dict shared across detectors/transforms (cache and reuse hints)
+#   logger/event_emitter → standard logger + optional config telemetry
+
 
 def _iter_strings(values: Iterable[Any]) -> list[str]:
     return [
@@ -38,7 +47,7 @@ def detect_known_header_words(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float | dict[str, float]:
     """
     Strongest signal: does this row contain known header words?
 
@@ -58,13 +67,10 @@ def detect_known_header_words(
                 break
 
     if hits >= 2:
-        score = 0.60
-    elif hits == 1:
-        score = 0.35
-    else:
-        score = 0.0
-
-    return {"scores": {"header": score}}
+        return 0.60
+    if hits == 1:
+        return 0.35
+    return 0.0
 
 
 def detect_mostly_text(
@@ -78,7 +84,7 @@ def detect_mostly_text(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float | dict[str, float]:
     """
     Medium signal: header rows are usually text-heavy.
 
@@ -91,19 +97,16 @@ def detect_mostly_text(
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:
-        return {"scores": {"header": 0.0}}
+        return 0.0
 
     string_count = sum(isinstance(v, str) for v in non_blank)
     ratio = string_count / len(non_blank)
 
     if ratio >= 0.75:
-        score = 0.40
-    elif ratio >= 0.55:
-        score = 0.20
-    else:
-        score = 0.0
-
-    return {"scores": {"header": score}}
+        return 0.40
+    if ratio >= 0.55:
+        return 0.20
+    return 0.0
 
 
 def detect_early_row_bias(
@@ -117,7 +120,7 @@ def detect_early_row_bias(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float | dict[str, float]:
     """
     Small nudge: earlier rows are more likely to be headers.
 
@@ -129,9 +132,7 @@ def detect_early_row_bias(
         logger: run-scoped logger for diagnostics
     """
     if row_index <= 2:
-        score = 0.20
-    elif row_index <= 6:
-        score = 0.10
-    else:
-        score = 0.0
-    return {"scores": {"header": score}}
+        return 0.20
+    if row_index <= 6:
+        return 0.10
+    return 0.0
