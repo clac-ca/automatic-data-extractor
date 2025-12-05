@@ -6314,72 +6314,13 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/outputs": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "List Run Outputs Endpoint",
-        "operationId": "list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunOutputListing"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Outputs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+    "/api/v1/runs/{run_id}/output": {
       "get": {
         "tags": [
           "runs"
         ],
         "summary": "Download Run Output Endpoint",
-        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get",
+        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__output_get",
         "parameters": [
           {
             "name": "run_id",
@@ -6392,15 +6333,6 @@
               "title": "Run Id"
             },
             "description": "Run identifier"
-          },
-          {
-            "name": "output_path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Output Path"
-            }
           }
         ],
         "responses": {
@@ -9609,23 +9541,6 @@
             "description": "If true, rebuild the configuration environment before running.",
             "default": false
           },
-          "document_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Document Ids",
-            "description": "Preferred document identifiers to stage as inputs (first is used today)."
-          },
           "input_document_id": {
             "anyOf": [
               {
@@ -9638,7 +9553,7 @@
               }
             ],
             "title": "Input Document Id",
-            "description": "Deprecated: single document identifier to ingest."
+            "description": "Document identifier to ingest."
           },
           "input_sheet_name": {
             "anyOf": [
@@ -9652,21 +9567,6 @@
             ],
             "title": "Input Sheet Name",
             "description": "Preferred worksheet to ingest when processing XLSX files."
-          },
-          "input_sheet_names": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Input Sheet Names",
-            "description": "Explicit worksheets to ingest; defaults to all when omitted."
           },
           "metadata": {
             "anyOf": [
@@ -9731,21 +9631,29 @@
       },
       "RunInput": {
         "properties": {
-          "document_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "description": "UUIDv7 (RFC 9562) generated in the application layer."
-            },
-            "type": "array",
-            "title": "Document Ids"
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
           },
-          "input_sheet_names": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Input Sheet Names"
+          "input_sheet_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Name"
           },
           "input_file_count": {
             "anyOf": [
@@ -9797,9 +9705,9 @@
             "type": "string",
             "title": "Logs"
           },
-          "outputs": {
+          "output": {
             "type": "string",
-            "title": "Outputs"
+            "title": "Output"
           }
         },
         "additionalProperties": false,
@@ -9810,103 +9718,45 @@
           "events",
           "events_stream",
           "logs",
-          "outputs"
+          "output"
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
       },
       "RunOutput": {
         "properties": {
-          "has_outputs": {
+          "has_output": {
             "type": "boolean",
-            "title": "Has Outputs",
+            "title": "Has Output",
             "default": false
           },
-          "output_count": {
-            "type": "integer",
-            "title": "Output Count",
-            "default": 0
+          "output_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Path"
           },
-          "processed_files": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Processed Files"
+          "processed_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed File"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
-      },
-      "RunOutputFile": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
-          },
-          "content_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Type"
-          },
-          "byte_size": {
-            "type": "integer",
-            "title": "Byte Size"
-          },
-          "download_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Download Url"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "name",
-          "byte_size"
-        ],
-        "title": "RunOutputFile",
-        "description": "Single file emitted by a streaming run output directory."
-      },
-      "RunOutputListing": {
-        "properties": {
-          "files": {
-            "items": {
-              "$ref": "#/components/schemas/RunOutputFile"
-            },
-            "type": "array",
-            "title": "Files"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunOutputListing",
-        "description": "Collection of files produced by a streaming run."
       },
       "RunPage": {
         "properties": {

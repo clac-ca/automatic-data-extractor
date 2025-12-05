@@ -38,7 +38,7 @@ def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path]:
         config_package=request.config_package,
         manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
         input_file=input_file,
-        input_sheets=request.input_sheets,
+        input_sheet=request.input_sheet,
         output_dir=output_dir,
         logs_dir=logs_dir,
         metadata=dict(request.metadata) if request.metadata else {},
@@ -77,8 +77,8 @@ def _finalize_and_emit_summaries(
     status: RunStatus,
     failure: RunError | None,
     completed_at: datetime | None,
-    output_paths: list[str],
-    processed_files: list[str],
+    output_path: str | None,
+    processed_file: str | None,
     event_emitter: EngineEventEmitter | None,
     logger: logging.Logger | None,
 ) -> RunSummary | None:
@@ -92,8 +92,8 @@ def _finalize_and_emit_summaries(
             status=status,
             failure=failure,
             completed_at=completed_at,
-            output_paths=output_paths,
-            processed_files=processed_files,
+            output_path=output_path,
+            processed_file=processed_file,
         )
     except Exception as exc:  # pragma: no cover - defensive
         if logger:
@@ -123,8 +123,8 @@ class Engine:
         req = request or RunRequest(**kwargs)
         phase: RunPhase | None = RunPhase.INITIALIZATION
         normalized_tables: list[Any] = []
-        output_paths: tuple[Path, ...] = ()
-        processed_files: tuple[str, ...] = ()
+        output_path: Path | None = None
+        processed_file: str | None = None
         state: _EngineExecutionState | None = None
 
         try:
@@ -156,7 +156,7 @@ class Engine:
                 phase = new_phase
 
             phase = RunPhase.EXTRACTING
-            normalized_tables, output_paths, processed_files = execute_pipeline(
+            normalized_tables, output_path, processed_file = execute_pipeline(
                 request=state.normalized_request,
                 run=state.run_ctx,
                 runtime=state.runtime,
@@ -170,15 +170,14 @@ class Engine:
 
             phase = RunPhase.COMPLETED
             state.run_ctx.completed_at = datetime.now(timezone.utc)
-            output_paths_list = [str(path) for path in output_paths]
-            processed_files_list = list(processed_files)
+            output_path_str = str(output_path) if output_path else None
             provisional = RunResult(
                 status=RunStatus.SUCCEEDED,
                 error=None,
                 run_id=state.run_ctx.run_id,
-                output_paths=output_paths,
+                output_path=output_path,
                 logs_dir=state.logs_dir,
-                processed_files=processed_files,
+                processed_file=processed_file,
             )
 
             phase = RunPhase.HOOKS
@@ -200,15 +199,15 @@ class Engine:
                 status=RunStatus.SUCCEEDED,
                 failure=None,
                 completed_at=state.run_ctx.completed_at,
-                output_paths=output_paths_list,
-                processed_files=processed_files_list,
+                output_path=output_path_str,
+                processed_file=processed_file,
                 event_emitter=state.event_emitter,
                 logger=self.logger,
             )
             state.event_emitter.complete(
                 status="succeeded",
-                output_paths=output_paths_list,
-                processed_files=processed_files_list,
+                output_path=output_path_str,
+                processed_file=processed_file,
             )
 
             return provisional
@@ -219,8 +218,8 @@ class Engine:
             return self._handle_failure(
                 state=state,
                 error=error,
-                output_paths=output_paths,
-                processed_files=processed_files,
+                output_path=output_path,
+                processed_file=processed_file,
                 exc=exc,
             )
 
@@ -280,12 +279,11 @@ class Engine:
         *,
         state: _EngineExecutionState | None,
         error: RunError,
-        output_paths: tuple[Path, ...],
-        processed_files: tuple[str, ...],
+        output_path: Path | None,
+        processed_file: str | None,
         exc: Exception,
     ) -> RunResult:
-        output_paths_list = [str(path) for path in output_paths] if output_paths else []
-        processed_files_list = list(processed_files) if processed_files else []
+        output_path_str = str(output_path) if output_path else None
 
         try:
             if state:
@@ -304,8 +302,8 @@ class Engine:
                     status=RunStatus.FAILED,
                     failure=error,
                     completed_at=state.run_ctx.completed_at,
-                    output_paths=output_paths_list,
-                    processed_files=processed_files_list,
+                    output_path=output_path_str,
+                    processed_file=processed_file,
                     event_emitter=state.event_emitter,
                     logger=self.logger,
                 )
@@ -319,8 +317,8 @@ class Engine:
                     state.event_emitter.complete(
                         status="failed",
                         failure=failure_payload,
-                        output_paths=output_paths_list or None,
-                        processed_files=processed_files_list or None,
+                        output_path=output_path_str,
+                        processed_file=processed_file,
                     )
         except Exception:
             # Telemetry failures should never mask the underlying error.
@@ -333,9 +331,9 @@ class Engine:
             status=RunStatus.FAILED,
             error=error,
             run_id=run_id,
-            output_paths=output_paths,
+            output_path=output_path,
             logs_dir=logs_dir,
-            processed_files=processed_files,
+            processed_file=processed_file,
         )
 
 

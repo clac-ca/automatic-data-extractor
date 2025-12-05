@@ -53,7 +53,8 @@ export interface ArtifactRunMetadata {
   readonly status: string;
   readonly started_at: string;
   readonly completed_at?: string | null;
-  readonly outputs: string[];
+  readonly output_path?: string | null;
+  readonly processed_file?: string | null;
   readonly engine_version: string;
   readonly error?: {
     readonly code: string;

@@ -55,16 +55,16 @@ def run(
     # Extract run metadata safely
     run_id = getattr(run, "run_id", None)
     status = getattr(result, "status", None)
-    output_paths = getattr(result, "output_paths", ()) or ()
+    output_path = getattr(result, "output_path", None)
 
     # -----------------------------------------------------------------------
     # EXAMPLE: Log final run status
     # -----------------------------------------------------------------------
     logger.info(
-        "on_run_end: run_id=%s finished status=%s outputs=%s",
+        "on_run_end: run_id=%s finished status=%s output=%s",
         run_id,
         status,
-        [str(p) for p in output_paths],
+        str(output_path) if output_path is not None else None,
     )
 
     # -----------------------------------------------------------------------
@@ -76,5 +76,5 @@ def run(
     #         stage=getattr(stage, "value", stage),
     #         run_id=str(run_id),
     #         status=str(status),
-    #         outputs=[str(p) for p in output_paths],
+    #         output=str(output_path) if output_path is not None else None,
     #     )

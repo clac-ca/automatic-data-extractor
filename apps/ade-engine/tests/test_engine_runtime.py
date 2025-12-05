@@ -40,7 +40,8 @@ def test_engine_run_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert result.status is RunStatus.SUCCEEDED
-    workbook_path = Path(result.output_paths[0])
+    assert result.output_path is not None
+    workbook_path = Path(result.output_path)
     assert workbook_path.exists()
 
     workbook = load_workbook(workbook_path)
@@ -133,7 +134,8 @@ def test_engine_large_input_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     )
 
     assert result.status is RunStatus.SUCCEEDED
-    assert Path(result.output_paths[0]).exists()
+    assert result.output_path is not None
+    assert Path(result.output_path).exists()
 
 
 def test_engine_reports_pipeline_stage_on_mapping_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

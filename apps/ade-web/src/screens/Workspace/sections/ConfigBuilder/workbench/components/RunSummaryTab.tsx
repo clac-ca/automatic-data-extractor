@@ -151,53 +151,31 @@ function RunSummaryHeader({ summary }: { readonly summary: WorkbenchRunSummary }
 }
 
 function RunOutputsCard({ summary }: { readonly summary: WorkbenchRunSummary }) {
+  const outputLabel =
+    summary.outputPath?.split("/").pop() ||
+    (summary.processedFile ? `${summary.processedFile.split("/").pop() ?? summary.processedFile}-normalized.xlsx` : "normalized.xlsx");
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Output files</p>
-        {!summary.outputsLoaded ? (
-          <span className="text-[12px] text-slate-400">Loading…</span>
-        ) : null}
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Output file</p>
+        {!summary.outputLoaded ? <span className="text-[12px] text-slate-400">Loading…</span> : null}
       </div>
       {summary.error ? (
         <p className="mt-2 text-sm text-rose-600">{summary.error}</p>
-      ) : !summary.outputsLoaded ? (
-        <p className="mt-2 text-sm text-slate-500">Loading outputs…</p>
-      ) : summary.outputs.length > 0 ? (
-        <ul className="mt-2 space-y-1 text-sm text-slate-800">
-          {summary.outputs.map((file) => {
-            const encodedPath =
-              file.path?.split("/").map(encodeURIComponent).join("/") ??
-              file.name.split("/").map(encodeURIComponent).join("/");
-            const href = file.download_url
-              ? file.download_url
-              : summary.outputsBase
-                ? `${summary.outputsBase}/${encodedPath}`
-                : undefined;
-            const content = (
-              <span className="text-brand-600">
-                {file.name || file.path}
-              </span>
-            );
-            return (
-              <li
-                key={file.path ?? file.name}
-                className="flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1"
-              >
-                {href ? (
-                  <a href={href} className="text-brand-600 hover:underline">
-                    {file.name || file.path}
-                  </a>
-                ) : (
-                  content
-                )}
-                <span className="text-[11px] text-slate-500">{file.byte_size.toLocaleString()} bytes</span>
-              </li>
-            );
-          })}
-        </ul>
+      ) : !summary.outputLoaded ? (
+        <p className="mt-2 text-sm text-slate-500">Loading output…</p>
+      ) : summary.outputUrl ? (
+        <div className="mt-2 flex items-center justify-between rounded border border-slate-100 px-2 py-1 text-sm text-slate-800">
+          <a href={summary.outputUrl} className="text-brand-600 hover:underline">
+            {outputLabel}
+          </a>
+          {summary.outputPath ? (
+            <span className="text-[11px] text-slate-500">{summary.outputPath}</span>
+          ) : null}
+        </div>
       ) : (
-        <p className="mt-2 text-sm text-slate-500">No output files were generated.</p>
+        <p className="mt-2 text-sm text-slate-500">No output file was generated.</p>
       )}
     </section>
   );

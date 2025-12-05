@@ -11,8 +11,6 @@ from ade_api.features.runs.schemas import (
     RunCreateRequest,
     RunEventsPage,
     RunLinks,
-    RunOutputFile,
-    RunOutputListing,
     RunResource,
 )
 
@@ -39,7 +37,7 @@ def _links_for(run_id: UUID) -> RunLinks:
         events=f"/api/v1/runs/{run_str}/events",
         events_stream=f"/api/v1/runs/{run_str}/events/stream",
         logs=f"/api/v1/runs/{run_str}/logs",
-        outputs=f"/api/v1/runs/{run_str}/outputs",
+        output=f"/api/v1/runs/{run_str}/output",
     )
 
 
@@ -59,34 +57,22 @@ def test_run_resource_dump_uses_aliases_and_defaults(
 
     assert payload["object"] == "ade.run"
     assert payload["status"] == RunStatus.QUEUED.value
-    assert payload["input"] == {"document_ids": [], "input_sheet_names": []}
-    assert payload["output"] == {
-        "has_outputs": False,
-        "output_count": 0,
-        "processed_files": [],
-    }
+    assert payload["input"]["document_id"] is None
+    assert payload["input"]["input_sheet_name"] is None
+    assert payload["output"]["has_output"] is False
+    assert payload["output"]["output_path"] is None
+    assert payload["output"]["processed_file"] is None
     assert payload["links"]["self"].endswith(str(run_identifiers["run_id"]))
     assert {"failure_code", "failure_stage", "failure_message"}.isdisjoint(payload)
 
 
-def test_run_create_options_normalizes_document_references() -> None:
+def test_run_create_options_captures_input_document() -> None:
     primary = uuid4()
-    secondary = uuid4()
+    options = RunCreateOptions(input_document_id=primary, input_sheet_name="Sheet1")
 
-    cases = [
-        ({"document_ids": [primary]}, [primary], primary),
-        ({"input_document_id": primary}, [primary], primary),
-        (
-            {"document_ids": [primary, secondary], "input_document_id": secondary},
-            [primary, secondary],
-            secondary,
-        ),
-    ]
-
-    for options_kwargs, expected_ids, expected_primary in cases:
-        options = RunCreateOptions(**options_kwargs)
-        assert options.document_ids == expected_ids
-        assert options.input_document_id == expected_primary
+    assert options.input_document_id == primary
+    assert options.input_sheet_name == "Sheet1"
+    assert options.metadata is None
 
 
 def test_run_create_request_serializes_minimal_options() -> None:
@@ -98,6 +84,9 @@ def test_run_create_request_serializes_minimal_options() -> None:
             "dry_run": False,
             "validate_only": False,
             "force_rebuild": False,
+            "input_document_id": None,
+            "input_sheet_name": None,
+            "metadata": None,
         }
     }
 
@@ -109,34 +98,3 @@ def test_run_events_page_serialization_handles_cursor(cursor: int | None) -> Non
     assert ("next_after_sequence" in payload) is (cursor is not None)
     if cursor is not None:
         assert payload["next_after_sequence"] == cursor
-
-
-def test_run_output_listing_serializes_files_and_strips_empty_fields() -> None:
-    listing = RunOutputListing(
-        files=[
-            RunOutputFile(
-                name="normalized.xlsx",
-                kind="normalized_workbook",
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                byte_size=512,
-                download_url="/api/v1/runs/run_123/outputs/normalized.xlsx",
-            ),
-            RunOutputFile(
-                name="raw.csv",
-                byte_size=128,
-            ),
-        ]
-    )
-
-    payload = listing.model_dump()
-    first, second = payload["files"]
-
-    assert first["kind"] == "normalized_workbook"
-    assert first["download_url"].endswith("normalized.xlsx")
-    assert first["byte_size"] == 512
-
-    assert second["name"] == "raw.csv"
-    assert second["byte_size"] == 128
-    assert "download_url" not in second
-    assert "kind" not in second
-    assert "content_type" not in second

@@ -266,8 +266,8 @@ class SummaryAggregator:
         status: RunStatus,
         failure: RunError | None = None,
         completed_at: datetime | None = None,
-        output_paths: Iterable[str] | None = None,
-        processed_files: Iterable[str] | None = None,
+        output_path: str | None = None,
+        processed_file: str | None = None,
     ) -> tuple[list[SheetSummary], list[FileSummary], RunSummary]:
         """Return aggregate sheet/file/run summaries."""
 
@@ -284,8 +284,8 @@ class SummaryAggregator:
         sheet_summaries = [self._build_sheet_summary(state) for state in self._sheet_states.values()]
         file_summaries = [self._build_file_summary(state) for state in self._file_states.values()]
         run_summary = self._build_run_summary(
-            output_paths=output_paths,
-            processed_files=processed_files,
+            output_path=output_path,
+            processed_file=processed_file,
         )
         return sheet_summaries, file_summaries, run_summary
 
@@ -639,8 +639,8 @@ class SummaryAggregator:
     def _build_run_summary(
         self,
         *,
-        output_paths: Iterable[str] | None,
-        processed_files: Iterable[str] | None,
+        output_path: str | None,
+        processed_file: str | None,
     ) -> RunSummary:
         state = self._run_state
         self._ensure_field_states(state)
@@ -653,10 +653,10 @@ class SummaryAggregator:
             "sheet_ids": list(state.sheet_ids),
             "table_ids": list(state.table_ids),
         }
-        if output_paths is not None:
-            details["output_paths"] = list(output_paths)
-        if processed_files is not None:
-            details["processed_files"] = list(processed_files)
+        if output_path is not None:
+            details["output_path"] = output_path
+        if processed_file is not None:
+            details["processed_file"] = processed_file
         return RunSummary(
             id=state.id,
             parent_ids=state.parent_ids,

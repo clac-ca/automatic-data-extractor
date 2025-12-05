@@ -39,7 +39,7 @@ You can add additional sinks (IPC/HTTP/etc.) via `TelemetryConfig.event_sink_fac
 - `engine.run.summary` — authoritative run summary emitted before completion (payload = `RunSummary`).
 - `engine.validation.summary` — aggregated validation counts when issues exist.
 - `engine.validation.issue` — optional per-issue events for fine-grained debugging.
-- `engine.complete` — terminal status; payload includes `status`, optional `failure` block, `output_paths`, and `processed_files`.
+- `engine.complete` — terminal status; payload includes `status`, optional `failure` block, `output_path`, and `processed_file`.
 - `config.*` — optional custom events emitted by config code via the provided `ConfigEventEmitter`.
 
 ## 4. Correlation and metadata

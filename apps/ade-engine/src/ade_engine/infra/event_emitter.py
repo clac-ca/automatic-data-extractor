@@ -178,18 +178,18 @@ class EngineEventEmitter(BaseNdjsonEmitter):
         *,
         status: str,
         failure: dict[str, Any] | None = None,
-        output_paths: Iterable[str] | None = None,
-        processed_files: Iterable[str] | None = None,
+        output_path: str | None = None,
+        processed_file: str | None = None,
         error: dict[str, Any] | None = None,
         **payload: Any,
     ):
         data: dict[str, Any] = {"status": status}
         if failure:
             data["failure"] = failure
-        if output_paths is not None:
-            data["output_paths"] = list(output_paths)
-        if processed_files is not None:
-            data["processed_files"] = list(processed_files)
+        if output_path is not None:
+            data["output_path"] = output_path
+        if processed_file is not None:
+            data["processed_file"] = processed_file
         if error:
             data["error"] = error
         if payload:

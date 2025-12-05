@@ -13,7 +13,6 @@ import type {
   WorkbenchValidationMessage,
   WorkbenchValidationState,
 } from "../types";
-import { formatConsoleTimestamp } from "../utils/console";
 
 import {
   createRun,
@@ -129,16 +128,9 @@ export function useRunStreamController({
     (error: unknown) => {
       if (onError) {
         onError(error);
-        return;
       }
-      appendConsoleLine({
-        level: "error",
-        message: describeError(error),
-        timestamp: formatConsoleTimestamp(new Date()),
-        origin: "run",
-      });
     },
-    [appendConsoleLine, onError],
+    [onError],
   );
 
   const connectToRun = useCallback(
@@ -198,21 +190,7 @@ export function useRunStreamController({
       }
 
       const startedAt = new Date();
-      dispatch({
-        type: "RESET",
-        runId: null,
-        initialLines: [
-          {
-            level: "info",
-            message:
-              metadata.mode === "validation"
-                ? "Starting ADE run (validate-only)…"
-                : "Starting ADE extraction…",
-            timestamp: formatConsoleTimestamp(startedAt),
-            origin: "run",
-          },
-        ],
-      });
+      dispatch({ type: "RESET", runId: null, initialLines: [] });
 
       startInFlightRef.current = true;
       try {
@@ -252,11 +230,4 @@ export function useRunStreamController({
     clearConsole,
     startRun,
   };
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return typeof error === "string" ? error : "Unexpected error";
 }

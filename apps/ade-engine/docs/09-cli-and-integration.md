@@ -181,10 +181,10 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
   "run": {
     "id": "run-uuid",
     "status": "succeeded",
-    "output_paths": ["/data/runs/123/output/normalized.xlsx"],
+    "output_path": "/data/runs/123/output/normalized.xlsx",
     "logs_dir": "/data/runs/123/logs",
     "events_path": "/data/runs/123/logs/events.ndjson",
-    "processed_files": ["input.xlsx"],
+    "processed_file": "input.xlsx",
     "error": null
   }
 }
@@ -193,10 +193,10 @@ For a normal run, the CLI prints a single JSON object to stdout. Conceptually:
 Fields mirror `RunResult`:
 
 * `status`: `"succeeded"` or `"failed"`.
-* `output_paths`: list of output workbook paths (usually 1).
+* `output_path`: path to the normalized workbook.
 * `logs_dir`: path to the logs directory for the run.
 * `events_path`: convenience path to `events.ndjson` (within `logs_dir`).
-* `processed_files`: basenames of source files the engine actually read.
+* `processed_file`: basename of the source file the engine read.
 * `error`: `null` on success, or a human‑readable error summary on failure.
 
 The ADE backend should **not parse internal error messages** for control flow;
@@ -348,7 +348,7 @@ result = run(
     metadata={"debug": True},
 )
 
-print(result.status, result.output_paths)
+print(result.status, result.output_path)
 ```
 
 Both workflows use the same engine and produce the same outputs/telemetry; only

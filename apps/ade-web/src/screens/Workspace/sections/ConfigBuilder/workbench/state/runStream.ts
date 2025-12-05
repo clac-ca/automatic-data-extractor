@@ -1,4 +1,4 @@
-import { describeBuildEvent, describeRunEvent } from "../utils/console";
+import { formatConsoleEvent } from "../events/format";
 import type {
   WorkbenchConsoleLine,
   WorkbenchValidationMessage,
@@ -119,7 +119,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
   const isBuildEvent =
     type.startsWith("build.") || (type === "console.line" && (payload.scope as string | undefined) === "build");
 
-  const line = isBuildEvent ? describeBuildEvent(event) : describeRunEvent(event);
+  const line = formatConsoleEvent(event);
   const consoleLines = clampConsoleLines(
     [...state.consoleLines, withLineId(line, state.consoleLines.length)],
     state.maxConsoleLines,
