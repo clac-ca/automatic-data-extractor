@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,30 +21,77 @@ from ade_engine.core.hooks import run_hooks
 from ade_engine.core.pipeline.pipeline_runner import execute_pipeline
 from ade_engine.core.pipeline.summary_builder import SummaryAggregator
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
-from ade_engine.infra.logging import build_run_logger
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
-from ade_engine.infra.telemetry import TelemetryConfig, _coerce_uuid
+from ade_engine.infra.logging import build_run_logger
+from ade_engine.infra.telemetry import FileEventSink, TelemetryConfig, _coerce_uuid
 
 
-def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path]:
+def _normalize_config_source(config_package: str | None) -> tuple[str, Path | None]:
+    """
+    Accept either a module name or a filesystem path to a config package.
+
+    Returns:
+        (import_name, sys_path_entry) where sys_path_entry should be inserted
+        ahead of imports when provided.
+    """
+
+    package_value = config_package or "ade_config"
+    candidate_path = Path(package_value)
+    if not candidate_path.exists():
+        return package_value, None
+
+    if candidate_path.is_file():
+        msg = f"Config package path must be a directory, got file '{candidate_path}'"
+        raise ConfigError(msg)
+
+    package_dirs = [
+        candidate_path if candidate_path.name == "ade_config" else None,
+        candidate_path / "ade_config",
+        candidate_path / "src" / "ade_config",
+    ]
+
+    for pkg_dir in package_dirs:
+        if pkg_dir is None:
+            continue
+        manifest = pkg_dir / "manifest.json"
+        if manifest.exists():
+            return pkg_dir.name, pkg_dir.parent
+
+    raise ConfigError(
+        "Unable to locate manifest.json under config path "
+        f"'{candidate_path}'. Expected it in 'ade_config/manifest.json' or 'src/ade_config/manifest.json'."
+    )
+
+
+def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path | None, Path | None, Path | None]:
+    config_package, config_sys_path = _normalize_config_source(request.config_package)
+
     if request.input_file is None:
         msg = "RunRequest must include input_file"
         raise InputError(msg)
 
     input_file = Path(request.input_file).resolve()
     output_dir = Path(request.output_dir).resolve() if request.output_dir else input_file.parent / "output"
-    logs_dir = Path(request.logs_dir).resolve() if request.logs_dir else input_file.parent / "logs"
+    output_file = Path(request.output_file).resolve() if request.output_file else output_dir / "normalized.xlsx"
+
+    events_dir = request.events_dir or getattr(request, "logs_dir", None)
+    events_dir_resolved = Path(events_dir).resolve() if events_dir else None
+    events_file = Path(request.events_file).resolve() if request.events_file else (
+        events_dir_resolved / "engine_events.ndjson" if events_dir_resolved else None
+    )
 
     normalized = RunRequest(
-        config_package=request.config_package,
+        config_package=config_package,
         manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
         input_file=input_file,
         input_sheets=list(request.input_sheets) if request.input_sheets else None,
         output_dir=output_dir,
-        logs_dir=logs_dir,
+        output_file=output_file,
+        events_dir=events_dir_resolved,
+        events_file=events_file,
         metadata=dict(request.metadata) if request.metadata else {},
     )
-    return normalized, output_dir, logs_dir
+    return normalized, output_dir, output_file, events_dir_resolved, events_file, config_sys_path
 
 
 def _ensure_dirs(output_dir: Path, logs_dir: Path) -> None:
@@ -224,14 +272,19 @@ class Engine:
             )
 
     def _prepare_execution(self, request: RunRequest) -> _EngineExecutionState:
-        normalized_request, output_dir, logs_dir = _resolve_paths(request)
-        _ensure_dirs(output_dir, logs_dir)
+        normalized_request, output_dir, output_file, events_dir, events_file, config_sys_path = _resolve_paths(request)
+
+        metadata = dict(normalized_request.metadata) if normalized_request.metadata else {}
+        run_id = _coerce_uuid(metadata.get("run_id")) or uuid7()
+
+        _ensure_dirs(output_file.parent, events_dir or output_file.parent)
         assert normalized_request.input_file is not None
         input_file_name = _input_file_name(normalized_request)
 
-        # Prefer the orchestrator-provided run_id when present to keep telemetry aligned.
-        metadata = dict(normalized_request.metadata) if normalized_request.metadata else {}
-        run_id = _coerce_uuid(metadata.get("run_id")) or uuid7()
+        if config_sys_path:
+            sys_path_entry = str(config_sys_path)
+            if sys_path_entry not in sys.path:
+                sys.path.insert(0, sys_path_entry)
 
         run_ctx = RunContext(
             run_id=run_id,
@@ -240,10 +293,17 @@ class Engine:
             paths=RunPaths(
                 input_file=normalized_request.input_file,
                 output_dir=output_dir,
-                logs_dir=logs_dir,
+                output_file=output_file,
+                events_dir=events_dir,
+                events_file=events_file,
             ),
             started_at=datetime.now(timezone.utc),
         )
+
+        normalized_request.output_dir = output_dir
+        normalized_request.output_file = output_file
+        normalized_request.events_dir = events_dir
+        normalized_request.events_file = events_file
 
         runtime = load_config_runtime(package=normalized_request.config_package, manifest_path=normalized_request.manifest_path)
         run_ctx.manifest = runtime.manifest
@@ -254,7 +314,25 @@ class Engine:
                 "logger and event_emitter."
             )
 
-        event_sink = self.telemetry.build_sink(run_ctx) if self.telemetry else None
+        base_telemetry = self.telemetry or TelemetryConfig()
+        sink_factories = list(base_telemetry.event_sink_factories)
+
+        if events_file:
+            def _file_sink(run: RunContext) -> FileEventSink:
+                assert run.paths.events_file is not None
+                run.paths.events_file.parent.mkdir(parents=True, exist_ok=True)
+                return FileEventSink(path=run.paths.events_file, min_level=base_telemetry.min_event_level)
+
+            sink_factories.append(_file_sink)
+
+        telemetry_config = TelemetryConfig(
+            correlation_id=base_telemetry.correlation_id,
+            min_event_level=base_telemetry.min_event_level,
+            event_sink_factories=sink_factories,
+            stdout_sink_factory=base_telemetry.stdout_sink_factory,
+        )
+
+        event_sink = telemetry_config.build_sink(run_ctx) if telemetry_config else None
         event_emitter = EngineEventEmitter(run=run_ctx, event_sink=event_sink, source="engine")
         config_event_emitter = event_emitter.config_emitter()
         run_logger = build_run_logger(base_name="ade_engine.run", event_emitter=event_emitter, bridge_to_telemetry=True)
@@ -268,7 +346,7 @@ class Engine:
         return _EngineExecutionState(
             normalized_request=normalized_request,
             output_dir=output_dir,
-            logs_dir=logs_dir,
+            logs_dir=events_dir or output_dir,
             run_ctx=run_ctx,
             runtime=runtime,
             event_emitter=event_emitter,

@@ -863,6 +863,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configuration templates */
+        get: operations["list_config_templates_api_v1_config_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
         parameters: {
             query?: never;
@@ -1785,6 +1802,20 @@ export type components = {
             type: "template";
             /** Template Id */
             template_id: string;
+        };
+        /**
+         * ConfigTemplate
+         * @description Metadata for an available configuration template.
+         */
+        ConfigTemplate: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Version */
+            version?: string | null;
         };
         /**
          * ConfigValidationIssue
@@ -6415,6 +6446,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_config_templates_api_v1_config_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigTemplate"][];
                 };
             };
         };

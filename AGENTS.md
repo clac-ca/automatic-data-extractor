@@ -1,147 +1,93 @@
 # AGENTS.md
 ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-## Monorepo overview
+## Monorepo cheat sheet
 
-* **Frontend** — React (Vite) SPA to author config packages and trigger builds/runs.
-* **Backend** — FastAPI service that stores metadata, builds isolated Python environments, and orchestrates runs.
-* **Engine** — Installable `ade_engine` package that executes detectors/hooks and writes outputs.
-* **Config packages** — Installable `ade_config` projects you author; versioned and built per workspace.
+```
+automatic-data-extractor/
+├─ apps/
+│  ├─ ade-api/      # FastAPI backend (serves /api + built SPA)
+│  │  ├─ src/ade_api/             # core app code
+│  │  ├─ migrations/              # Alembic migrations
+│  │  └─ templates/config_packages# starter config packages
+│  ├─ ade-web/      # React/Vite SPA
+│  │  ├─ src/                    # app/, screens/, ui/, schema/, generated-types/
+│  │  └─ docs/                   # frontend architecture guides
+│  ├─ ade-engine/   # Engine runtime (Python package)
+│  │  ├─ src/ade_engine/         # engine code
+│  │  └─ docs/                   # engine runtime/CLI docs
+│  └─ ade-cli/      # Orchestration CLI (console script: ade)
+│     └─ src/ade_tools/          # CLI commands
+├─ data/            # Workspaces, runs, docs
+├─ docs/            # Guides, HOWTOs, runbooks
+└─ scripts/         # Repo-level helper scripts
+```
 
-## ⚡ Available Tools
+Config templates live under `apps/ade-api/src/ade_api/templates/config_packages`.
+Workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs)
 
-> The Python `ade` CLI (from `apps/ade-cli`) is the canonical entrypoint.
+Docs:
+- Top-level `docs/` (guides, admin, templates, events).
+- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI).
+- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing).
+
+## ⚡ CLI (ade) quickstart
+
+Run `ade --help` for the full list; `ade <command> --help` for flags. Key commands:
+
+- `ade setup` — initial repo setup (env, hooks).
+- `ade dev` — backend/frontend dev servers (`--backend-only/--frontend-only`).
+- `ade start` — serve API + built SPA.
+- `ade build` — build frontend assets into `apps/ade-api/src/ade_api/web/static`.
+- `ade tests` — run Python/JS test suites.
+- `ade lint` — lint/format helpers.
+- `ade bundle` — bundle files/dirs into Markdown for LLM/code review (filters, include/exclude, `--out`, `--no-clip`).
+- `ade types` — generate frontend types from OpenAPI.
+- `ade migrate` — run DB migrations.
+- `ade routes` — list FastAPI routes.
+- `ade users` — manage users/roles (see subcommands).
+- `ade docker` — local Docker helpers.
+- `ade lint` — lint/format helpers (`--fix` to auto-fix issues; start here before manual fixes).
+- `ade clean` / `ade reset` — remove build artifacts/venvs/cache.
+- `ade ci` — full pipeline (lint, test, build).
+- `ade engine ...` — full `ade_engine` CLI (mirrors `python -m ade_engine`).
+
+### Engine CLI (via `ade engine`)
+
+Use `ade engine run --help` to see all flags. Highlights:
 
 ```bash
-ade dev                   # FastAPI + React dev servers (--backend/--frontend to scope)
-ade test                  # Run all tests
-ade bundle                # Bundle files/dirs into LLM-ready Markdown; copies to clipboard
-ade build                 # Build SPA → apps/ade-api/src/ade_api/web/static
-ade start                 # Serve API + SPA
-ade openapi-types         # Generate TS types from OpenAPI
-ade routes                # List FastAPI routes
-ade clean --yes           # Delete build/.venv/node_modules
-ade reset --yes           # Clean + storage reset + setup
-ade ci                    # Full pipeline (lint, test, build)
+ade engine run \
+  --input data/samples/example.xlsx \
+  --config-package "data/templates/config_packages/DaRT Remittance" \
+  --output-dir /tmp/out \            # or --output-file /tmp/out/normalized.xlsx
+  --events-dir /tmp/out/logs         # or --events-file /tmp/out/logs/engine_events.ndjson
 ```
 
-- `ade bundle` is the copy/paste helper for agents: like the old copy-code script, but richer. Point it at files/dirs, filter with `--ext/--include/--exclude`, and use `--out`/`--no-clip`/`--head`/`--tail` to control the bundle.
+- Multiple inputs: repeat `--input` to run each file separately.
+- If `--events-*` is omitted, events stream to stdout only (no file sink).
+- Defaults: output → `<output-dir>/normalized.xlsx` (or `<input_dir>/output/normalized.xlsx` if no dir given).
 
-### Frontend API types
+### Bundle examples
 
-- Generated TypeScript types live in `apps/ade-web/src/generated-types/openapi.d.ts`. If that file is missing (or clearly stale), run `ade openapi-types` to regenerate it before touching frontend API code.
-- Import API shapes from the curated schema module (`import type { SessionEnvelope } from "@schema";`). Avoid importing from `@generated-types/*` directly—add re-exports in `src/schema/` when new stable types are needed.
-- Treat manual types as view-model helpers only; when adding params or schemas, update the OpenAPI spec and rerun the generator instead of editing the generated file.
+```bash
+# Bundle docs as Markdown
+ade bundle --ext md --out /tmp/bundle.md docs/
 
-```text
-automatic-data-extractor/
-├─ apps/                                   # Deployable applications + tooling
-│  ├─ ade-api/                             # FastAPI service (serves /api + static SPA)
-│  │  ├─ pyproject.toml
-│  │  ├─ src/ade_api/                      # Settings, routers, features, shared modules, templates, web assets
-│  │  ├─ migrations/                       # Alembic migrations
-│  │  └─ tests/                            # Unit + integration tests
-│  ├─ ade-cli/                             # Python orchestration CLI (console script: ade)
-│  │  ├─ pyproject.toml
-│  │  └─ src/ade_tools/
-│  ├─ ade-engine/                          # installable package: ade_engine
-│  │  ├─ pyproject.toml
-│  │  ├─ src/ade_engine/                   # Engine runtime (I/O, pipeline, hooks)
-│  │  └─ tests/                            # Engine unit tests
-│  └─ ade-web/                             # React SPA (Vite)
-│     ├─ src/                              # app/, screens/, shared/, ui/, schema/, generated-types/, test/
-│     ├─ public/                           # Static public assets
-│     ├─ package.json
-│     └─ vite.config.ts
-│
-├─ packages/                               # Reusable Python libraries
-│  └─ ade-engine/                          # installable package: ade_engine
-│     ├─ pyproject.toml
-│     └─ src/ade_engine/
-│
-├─ specs/                                   # JSON Schemas & formal definitions
-│  ├─ config-manifest.v1.json
-│  └─ template-manifest.v1.json
-│
-├─ examples/                                # Sample inputs/outputs
-├─ docs/                                    # Developer guides, HOWTOs, runbooks
-├─ scripts/                                 # Repo-level helper scripts
-│
-│
-├─ .env.example                             # Example env vars
-├─ .editorconfig
-├─ .pre-commit-config.yaml
-├─ .gitignore
-└─ .github/workflows/                       # CI (lint, test, build, publish)
+# Bundle with filters, no clipboard
+ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
+           --exclude "**/__pycache__/**" --out /tmp/bundle.md --no-clip
+
+# Bundle specific files quickly
+ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 ```
 
-### Frontend screen-first (routerless) layout
+## Frontend API types
 
-The React SPA at `apps/ade-web/` uses a history-based navigation helper instead of React Router. Screen code lives under `src/screens/<ScreenName>/`, and everything a screen needs (components, hooks, sections) is co-located beneath that folder. The `src/ui/` directory holds presentational primitives such as `Tabs`, `Button`, and `Input`. Use the path aliases configured in `tsconfig.json`/`vite.config.ts` (`@app/*`, `@screens/*`, `@ui/*`, `@shared/*`, `@schema/*`, `@generated-types/*`, `@test/*`) for imports instead of deep relative paths.
+- Generated types: `apps/ade-web/src/generated-types/openapi.d.ts`.
+- If missing/stale, run `ade types` before touching frontend API code.
+- Import shapes via curated schema module (`@schema`) instead of `@generated-types/*`.
 
-Navigation helpers live in `@app/nav` (`history.tsx`, `Link.tsx`, `urlState.ts`). Consume `useNavigate`/`useLocation` from there, and render links with `Link`/`NavLink` from the same module.
+## 🤖 Agent rules
 
-Everything ADE produces (config_packages, venvs, runs, logs, cache, etc..) is persisted under `./data/workspaces/<workspace_id>/...` by default. Set `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, or `ADE_RUNS_DIR` to relocate a specific storage type—ADE always nests the workspace ID under the override.
-
-```text
-./data/
-├─ workspaces/
-│  └─ <workspace_id>/
-│     ├─ config_packages/           # Source-of-truth configs (GUI-managed)
-│     │  └─ <config_id>/
-│     │     ├─ pyproject.toml       # Config distribution metadata
-│     │     ├─ requirements.txt     # Optional dependency overlay
-│     │     └─ src/ade_config/
-│     │        ├─ column_detectors/
-│     │        ├─ row_detectors/
-│     │        ├─ hooks/
-│     │        ├─ manifest.json
-│     │        └─ config.env
-│     ├─ .venv/                     # One Python venv per configuration
-│     │  └─ <config_id>/
-│     │     ├─ bin/python
-│     │     ├─ ade-runtime/
-│     │     │  ├─ packages.txt
-│     │     │  └─ build.json
-│     │     └─ <site-packages>/
-│     │        ├─ ade_engine/
-│     │        └─ ade_config/
-│     ├─ runs/
-│     │  └─ <run_id>/
-│     │     ├─ input/               # Uploaded files
-│     │     ├─ output/              # Generated files
-│     │     └─ logs/
-│     │        ├─ artifact.json     # Human-readable narrative
-│     │        └─ events.ndjson     # Append-only event log
-│     └─ documents/
-│        └─ <document_id>.<ext>     # Optional shared store
-│
-├─ db/app.sqlite                     # SQLite (dev) or DSN (prod)
-├─ cache/pip/                        # pip cache (safe to delete)
-└─ logs/                             # Central service logs
-```
-
----
-
-### Debug a Failing Build
-
-1. Run `ade ci`.
-2. Read JSON output (stdout).
-3. Fix first error.
-4. Re-run until `"ok": true`.
-
----
-
-## 🔧 TODO IN FUTURE WHEN POSSIBLE
-
-* Add linting/formatting: `ruff`/`black` (Python), `eslint`/`prettier` (JS).
-
----
-
-## 🤖 Agent Rules
-
-1. Always run `ade test` before committing and `ade ci` before pushing or opening a PR.
-
----
-
-**End of AGENTS.md**
+1. Always run `ade tests` before committing and `ade ci` before pushing or opening a PR.
