@@ -45,6 +45,7 @@ def _configure_database(
 
     data_dir = tmp_path_factory.mktemp("api-app-data")
     workspaces_dir = data_dir / "workspaces"
+    templates_dir = data_dir / "templates" / "config_packages"
     venvs_dir = data_dir / "venvs"
     pip_cache_dir = data_dir / "cache" / "pip"
 
@@ -52,6 +53,7 @@ def _configure_database(
     os.environ["ADE_WORKSPACES_DIR"] = str(workspaces_dir)
     os.environ["ADE_DOCUMENTS_DIR"] = str(workspaces_dir)
     os.environ["ADE_CONFIGS_DIR"] = str(workspaces_dir)
+    os.environ["ADE_CONFIG_TEMPLATES_DIR"] = str(templates_dir)
     os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
     os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
@@ -88,6 +90,8 @@ def _configure_database(
         "ADE_WORKSPACES_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
+        "ADE_CONFIG_TEMPLATES_DIR",
+        "ADE_CONFIG_TEMPLATES_SOURCE_DIR",
         "ADE_VENVS_DIR",
         "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",

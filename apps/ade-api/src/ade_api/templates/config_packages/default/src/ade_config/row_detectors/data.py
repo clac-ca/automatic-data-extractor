@@ -14,8 +14,15 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
 PHONE_RE = re.compile(r"^\s*(\+?\d[\d\-\s().]{7,}\d)\s*$")  # loose NA/E.164-ish
 AGG_WORDS = {"total", "subtotal", "grand total", "summary", "average", "avg"}
 
-DEFAULT_LABEL = "data"
 
+# Quick shape of inputs (Script API v3):
+#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
+#   row_index → 6  (1-based)
+#   row_values → ["Alice", "Smith", "alice@example.com"]
+#   input_file_name → "input.xlsx"
+#   manifest.columns.order → ["first_name", "last_name", "email"]
+#   state → dict shared across detectors/transforms (cache and reuse hints)
+#   logger/event_emitter → standard logger + optional config telemetry
 
 def detect_mixed_text_and_numbers(
     *,
@@ -28,7 +35,7 @@ def detect_mixed_text_and_numbers(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """
     Data rows often contain both text and numbers.
 
@@ -41,7 +48,7 @@ def detect_mixed_text_and_numbers(
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:
-        return {"scores": {"data": 0.0}}
+        return 0.0
 
     def looks_number_like(x: Any) -> bool:
         if isinstance(x, (int, float)):
@@ -61,15 +68,12 @@ def detect_mixed_text_and_numbers(
     has_number = any(looks_number_like(v) for v in non_blank)
 
     if has_text and has_number:
-        score = 0.40
-    elif has_number:
-        score = 0.20
-    elif has_text:
-        score = 0.10
-    else:
-        score = 0.0
-
-    return score
+        return 0.40
+    if has_number:
+        return 0.20
+    if has_text:
+        return 0.10
+    return 0.0
 
 
 def detect_value_patterns(
@@ -83,7 +87,7 @@ def detect_value_patterns(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """
     Look for concrete value shapes common in data rows:
       - email addresses
@@ -99,7 +103,7 @@ def detect_value_patterns(
     """
     non_blank = [v for v in row_values if v not in (None, "")]
     if not non_blank:
-        return {"scores": {"data": 0.0}}
+        return 0.0
 
     has_email = any(isinstance(v, str) and EMAIL_RE.match(v.strip()) for v in non_blank)
     has_phone = any(isinstance(v, str) and PHONE_RE.match(v) for v in non_blank)
@@ -122,12 +126,9 @@ def detect_value_patterns(
 
     hits = sum([has_email, has_phone, has_sin])
     if hits == 0:
-        score = 0.0
-    elif hits == 1:
-        score = 0.35
-    elif hits == 2:
-        score = 0.45
-    else:
-        score = 0.55
-
-    return score
+        return 0.0
+    if hits == 1:
+        return 0.35
+    if hits == 2:
+        return 0.45
+    return 0.55

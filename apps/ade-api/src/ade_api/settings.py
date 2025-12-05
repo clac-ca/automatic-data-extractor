@@ -57,10 +57,11 @@ def _detect_api_root() -> Path:
 
 DEFAULT_API_ROOT = _detect_api_root()
 DEFAULT_WEB_DIR = MODULE_DIR / "web"
-DEFAULT_CONFIG_TEMPLATES_DIR = MODULE_DIR / "templates" / "config_packages"
+DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
+DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR = MODULE_DIR / "templates" / "config_packages"
+DEFAULT_CONFIG_TEMPLATES_DIR = DEFAULT_STORAGE_ROOT / "templates" / "config_packages"
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
-DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
 DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
 DEFAULT_DB_FILENAME = "ade.sqlite"
 DEFAULT_ALEMBIC_INI = DEFAULT_API_ROOT / "alembic.ini"
@@ -283,6 +284,7 @@ class Settings(BaseSettings):
     # Paths
     api_root: Path = Field(default=DEFAULT_API_ROOT)
     web_dir: Path = Field(default=DEFAULT_WEB_DIR)
+    config_templates_source_dir: Path = Field(default=DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR)
     config_templates_dir: Path = Field(default=DEFAULT_CONFIG_TEMPLATES_DIR)
     alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
@@ -495,6 +497,9 @@ class Settings(BaseSettings):
     def _finalize(self) -> Settings:
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
         self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
+        self.config_templates_source_dir = _resolve_path(
+            self.config_templates_source_dir, default=DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR
+        )
         self.config_templates_dir = _resolve_path(
             self.config_templates_dir, default=DEFAULT_CONFIG_TEMPLATES_DIR
         )
