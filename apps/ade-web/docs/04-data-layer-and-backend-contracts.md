@@ -148,7 +148,7 @@ Example patterns:
     (canonical detail via `/runs/{run_id}`)
   * `['workspace', workspaceId, 'run', runId]`
     (optional workspace-scoped variant)
-  * `['run', runId, 'outputs']`
+  * `['run', runId, 'output']`
 
 * Configurations
 
@@ -441,7 +441,7 @@ Mutations:
 **Responsibilities**
 
 * Workspace run ledger (all runs in a workspace).
-* Per-run outputs and log files.
+* Per-run input/output downloads and event logs.
 * Config-triggered runs (e.g. from the Configuration Builder).
 * Run NDJSON event streams.
 * A **run-centric** API once you have a `runId`.
@@ -452,7 +452,7 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 
 1. Run creation is **configuration-scoped**: `POST /configurations/{id}/runs`.
 2. Use workspace-scoped `/workspaces/{id}/runs` for **listing** runs.
-3. Use global `/runs/{run_id}` for **detail, events, outputs, and logs** once you know `runId`.
+3. Use global `/runs/{run_id}` for **detail, events, output, and logs** once you know `runId`.
 
 #### Workspace run ledger (list only)
 
@@ -461,9 +461,10 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 - `GET  /api/v1/runs/{run_id}` – canonical run detail.
-- `GET  /api/v1/runs/{run_id}/logs` – download telemetry log.
-- `GET  /api/v1/runs/{run_id}/outputs` – list outputs.
-- `GET  /api/v1/runs/{run_id}/outputs/{output_path}` – download specific output.
+- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON (legacy `/logs` alias).
+- `GET  /api/v1/runs/{run_id}/input` – input metadata; `GET /runs/{run_id}/input/download` downloads the source file.
+- `GET  /api/v1/runs/{run_id}/output` – output metadata; `GET /runs/{run_id}/output/download` downloads once ready (returns 409 if not).
+- Legacy outputs endpoints (`/runs/{run_id}/outputs*`) remain for compatibility and map to the singular output.
 
 #### Configuration-scoped triggers
 
@@ -761,7 +762,7 @@ Key families:
 UI rules:
 
 * Use `sequence` for ordering when transport may deliver events slightly out of order.
-* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/logs`) for offline replay.
+* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/events/download`, legacy `/runs/{id}/logs`) for offline replay.
 * Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.complete`/`engine.run.summary`.
 
 ### 6.3 Streaming helper
@@ -781,7 +782,7 @@ Characteristics:
 
 * Close the stream on unmount or when the user hides the console.
 * Treat `run.complete` as terminal; callers can close the stream after it arrives (after receiving `engine.run.summary` if present).
-* For post-run analysis, `events.ndjson` is still available via `/runs/{run_id}/logs`.
+* For post-run analysis, `events.ndjson` is available via `/runs/{run_id}/events/download` (alias: `/runs/{run_id}/logs`).
 
 ### 6.4 Run & build streams in practice
 
@@ -894,7 +895,7 @@ To keep the data layer predictable:
 * **Run-centric language**
 
   * Everything that executes is a **run** in UI types and hooks.
-  * Once you have a `runId`, favour global `/runs/{run_id}` endpoints for detail/logs/outputs.
+  * Once you have a `runId`, favour global `/runs/{run_id}` endpoints for detail/events/output downloads.
   * Workspace IDs are primarily for listing/creating runs, not reading them.
 
 * **Backend-agnostic**

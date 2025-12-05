@@ -20,6 +20,7 @@ __all__ = [
     "RunCreateRequest",
     "RunFilters",
     "RunInput",
+    "RunOutputFile",
     "RunLinks",
     "RunOutput",
     "RunPage",
@@ -62,14 +63,23 @@ class RunLinks(BaseSchema):
     summary: str
     events: str
     events_stream: str
+    events_download: str
     logs: str
+    input: str
+    input_download: str
     output: str
+    output_download: str
+    output_metadata: str
 
 
 class RunInput(BaseSchema):
     """Input metadata captured for a run."""
 
     document_id: UUIDStr | None = None
+    filename: str | None = None
+    content_type: str | None = None
+    size_bytes: int | None = None
+    download_url: str | None = None
     input_sheet_name: str | None = None
     input_file_count: int | None = None
     input_sheet_count: int | None = None
@@ -78,9 +88,24 @@ class RunInput(BaseSchema):
 class RunOutput(BaseSchema):
     """Output metadata captured for a run."""
 
+    ready: bool = False
+    download_url: str | None = None
+    filename: str | None = None
+    content_type: str | None = None
+    size_bytes: int | None = None
     has_output: bool = False
     output_path: str | None = None
     processed_file: str | None = None
+
+
+class RunOutputFile(BaseSchema):
+    """Deprecated collection wrapper for legacy output listings."""
+
+    name: str | None = None
+    path: str | None = None
+    byte_size: int | None = None
+    content_type: str | None = None
+    download_url: str | None = None
 
 
 class RunResource(BaseSchema):
@@ -111,6 +136,9 @@ class RunResource(BaseSchema):
     input: RunInput = Field(default_factory=RunInput)
     output: RunOutput = Field(default_factory=RunOutput)
     links: RunLinks
+    events_url: str | None = None
+    events_stream_url: str | None = None
+    events_download_url: str | None = None
 
 
 class RunFilters(BaseSchema):

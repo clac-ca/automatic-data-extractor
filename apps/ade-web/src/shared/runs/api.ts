@@ -166,7 +166,11 @@ export function runEventsUrl(
   run: RunResource,
   options?: { afterSequence?: number; stream?: boolean },
 ): string | null {
-  const baseLink = run.links?.events_stream ?? run.links?.events;
+  const baseLink =
+    run.events_stream_url ??
+    run.links?.events_stream ??
+    run.events_url ??
+    run.links?.events;
   if (!baseLink) {
     return null;
   }
@@ -236,22 +240,24 @@ export async function fetchRunTelemetry(
   signal?: AbortSignal,
 ): Promise<RunStreamEvent[]> {
   const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const logsLink = runResource.links?.logs;
-  const runId = runResource.id;
-  if (!logsLink || !runId) {
+  const downloadLink =
+    runResource.events_download_url ??
+    runResource.links?.events_download ??
+    runResource.links?.logs;
+  if (!downloadLink) {
     throw new Error("Run logs link unavailable.");
   }
 
-  const { data, error } = await client.GET("/api/v1/runs/{run_id}/logs", {
-    params: { path: { run_id: runId } },
+  const response = await fetch(resolveApiUrl(downloadLink), {
+    method: "GET",
+    credentials: "include",
     headers: { Accept: "application/x-ndjson" },
     signal,
-    parseAs: "text",
   });
-
-  if (error) {
-    throw new Error("Run telemetry unavailable");
+  if (!response.ok) {
+    throw new Error(`Run telemetry unavailable (${response.status}).`);
   }
+  const data = await response.text();
 
   const text = data ?? "";
   return text
@@ -309,12 +315,17 @@ export async function fetchRunSummary(runId: string, signal?: AbortSignal): Prom
 }
 
 export function runOutputUrl(run: RunResource): string | null {
-  const link = (run as { links?: { output?: string } })?.links?.output;
-  return link ? resolveApiUrl(link) : null;
+  const output = run.output;
+  const ready = output?.ready;
+  const link = output?.download_url ?? run.links?.output_download ?? run.links?.output;
+  if (ready === false || !link) {
+    return null;
+  }
+  return resolveApiUrl(link);
 }
 
 export function runLogsUrl(run: RunResource): string | null {
-  const link = run.links?.logs;
+  const link = run.events_download_url ?? run.links?.events_download ?? run.links?.logs;
   return link ? resolveApiUrl(link) : null;
 }
 

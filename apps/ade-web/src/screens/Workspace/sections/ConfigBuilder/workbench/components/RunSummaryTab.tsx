@@ -152,8 +152,10 @@ function RunSummaryHeader({ summary }: { readonly summary: WorkbenchRunSummary }
 
 function RunOutputsCard({ summary }: { readonly summary: WorkbenchRunSummary }) {
   const outputLabel =
+    summary.outputFilename ||
     summary.outputPath?.split("/").pop() ||
     (summary.processedFile ? `${summary.processedFile.split("/").pop() ?? summary.processedFile}-normalized.xlsx` : "normalized.xlsx");
+  const outputReady = summary.outputReady ?? true;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -165,6 +167,8 @@ function RunOutputsCard({ summary }: { readonly summary: WorkbenchRunSummary }) 
         <p className="mt-2 text-sm text-rose-600">{summary.error}</p>
       ) : !summary.outputLoaded ? (
         <p className="mt-2 text-sm text-slate-500">Loading output…</p>
+      ) : !outputReady ? (
+        <p className="mt-2 text-sm text-slate-500">Output is not available yet.</p>
       ) : summary.outputUrl ? (
         <div className="mt-2 flex items-center justify-between rounded border border-slate-100 px-2 py-1 text-sm text-slate-800">
           <a href={summary.outputUrl} className="text-brand-600 hover:underline">

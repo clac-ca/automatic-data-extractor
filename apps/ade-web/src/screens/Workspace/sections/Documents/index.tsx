@@ -1576,8 +1576,7 @@ function RunExtractionDrawerContent({
   const runStatus = currentRun?.status ?? null;
   const runRunning = runStatus === "running" || runStatus === "queued";
   const outputUrl = currentRun ? runOutputUrl(currentRun) : null;
-  const outputPath =
-    (currentRun?.output as { output_path?: string | null } | undefined)?.output_path ?? null;
+  const outputPath = currentRun?.output?.output_path ?? null;
   const logsUrl = currentRun ? runLogsUrl(currentRun) : null;
   const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];

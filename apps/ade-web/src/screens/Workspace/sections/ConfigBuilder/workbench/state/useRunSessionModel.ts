@@ -10,6 +10,7 @@ import {
   fetchRunTelemetry,
   runLogsUrl,
   runOutputUrl,
+  type RunResource,
   type RunStreamOptions,
 } from "@shared/runs/api";
 import type { RunStatus } from "@shared/runs/types";
@@ -80,6 +81,12 @@ export function useRunSessionModel({
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof completedPayload.summary === "string" ? completedPayload.summary.trim() : null;
     const payloadStartedAt = typeof completedPayload.started_at === "string" ? completedPayload.started_at : undefined;
+    const artifacts =
+      completedPayload.artifacts && typeof completedPayload.artifacts === "object"
+        ? (completedPayload.artifacts as Record<string, unknown>)
+        : null;
+    const artifactOutputPath = extractOutputPath(artifacts);
+    const artifactProcessedFile = extractProcessedFile(artifacts);
 
     const normalizedStatus = normalizeRunStatusValue(
       (completedPayload.status as RunStatus | undefined) ?? runStatus,
@@ -108,23 +115,20 @@ export function useRunSessionModel({
     }
 
     setLatestRun((previous) => {
-      const outputUrl = runResource ? runOutputUrl(runResource) ?? undefined : previous?.outputUrl;
-      const outputPath =
-        (completedPayload.artifacts as { output_path?: string | null } | undefined)?.output_path ??
-        (runResource?.output as { output_path?: string | null } | undefined)?.output_path ??
-        previous?.outputPath ??
-        null;
-      const processedFile =
-        (completedPayload.artifacts as { processed_file?: string | null } | undefined)?.processed_file ??
-        (runResource?.output as { processed_file?: string | null } | undefined)?.processed_file ??
-        previous?.processedFile;
+      const outputMeta = deriveOutputMetadata({
+        runResource,
+        fallbackPath: artifactOutputPath ?? previous?.outputPath ?? null,
+        fallbackProcessedFile: artifactProcessedFile ?? previous?.processedFile ?? null,
+      });
       const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : previous?.logsUrl;
       return {
         runId,
         status: completionStatus,
-        outputUrl,
-        outputPath,
-        processedFile,
+        outputUrl: outputMeta.outputUrl ?? previous?.outputUrl,
+        outputPath: outputMeta.outputPath,
+        outputFilename: outputMeta.outputFilename ?? previous?.outputFilename,
+        outputReady: outputMeta.outputReady ?? previous?.outputReady,
+        processedFile: outputMeta.processedFile,
         outputLoaded: true,
         logsUrl,
         documentName: runMetadata?.documentName,
@@ -157,21 +161,21 @@ export function useRunSessionModel({
       }
 
       if (currentResource) {
-        const outputUrl = runOutputUrl(currentResource) ?? undefined;
-        const outputPath =
-          (currentResource.output as { output_path?: string | null } | undefined)?.output_path ??
-          null;
-        const processedFile =
-          (currentResource.output as { processed_file?: string | null } | undefined)?.processed_file ??
-          null;
+        const outputMeta = deriveOutputMetadata({
+          runResource: currentResource,
+          fallbackPath: artifactOutputPath ?? null,
+          fallbackProcessedFile: artifactProcessedFile ?? null,
+        });
         const logsUrl = runLogsUrl(currentResource) ?? undefined;
         setLatestRun((previous) =>
           previous && previous.runId === runId
             ? {
                 ...previous,
-                outputUrl,
-                outputPath: outputPath ?? previous.outputPath ?? null,
-                processedFile: processedFile ?? previous.processedFile,
+                outputUrl: outputMeta.outputUrl ?? previous.outputUrl,
+                outputPath: outputMeta.outputPath ?? previous.outputPath ?? null,
+                outputFilename: outputMeta.outputFilename ?? previous.outputFilename,
+                outputReady: outputMeta.outputReady ?? previous.outputReady,
+                processedFile: outputMeta.processedFile ?? previous.processedFile,
                 outputLoaded: true,
                 logsUrl,
               }
@@ -255,4 +259,71 @@ function describeError(error: unknown): string {
     return error.message;
   }
   return typeof error === "string" ? error : "Unexpected error";
+}
+
+function deriveOutputMetadata({
+  runResource,
+  fallbackPath,
+  fallbackProcessedFile,
+}: {
+  readonly runResource?: RunResource | null;
+  readonly fallbackPath?: string | null;
+  readonly fallbackProcessedFile?: string | null;
+}): {
+  readonly outputUrl?: string;
+  readonly outputPath: string | null;
+  readonly outputFilename: string | null;
+  readonly outputReady: boolean | undefined;
+  readonly processedFile: string | null;
+} {
+  const output = runResource?.output;
+  const outputPath = (output?.output_path as string | null | undefined) ?? fallbackPath ?? null;
+  const processedFile =
+    (output?.processed_file as string | null | undefined) ??
+    fallbackProcessedFile ??
+    null;
+  const outputUrl = runResource ? runOutputUrl(runResource) ?? undefined : undefined;
+  const outputReady = output?.ready ?? (outputUrl ? true : undefined);
+  const outputFilename =
+    (output?.filename as string | null | undefined) ??
+    (outputPath ? basename(outputPath) : null);
+
+  return {
+    outputUrl,
+    outputPath,
+    outputFilename,
+    outputReady,
+    processedFile,
+  };
+}
+
+function extractOutputPath(artifacts: Record<string, unknown> | null): string | null {
+  if (!artifacts) return null;
+  if (typeof artifacts.output_path === "string") {
+    return artifacts.output_path;
+  }
+  if (Array.isArray(artifacts.output_paths) && artifacts.output_paths.length) {
+    const first = artifacts.output_paths[0];
+    if (typeof first === "string") return first;
+  }
+  return null;
+}
+
+function extractProcessedFile(artifacts: Record<string, unknown> | null): string | null {
+  if (!artifacts) return null;
+  if (typeof artifacts.processed_file === "string") {
+    return artifacts.processed_file;
+  }
+  if (Array.isArray(artifacts.processed_files) && artifacts.processed_files.length) {
+    const first = artifacts.processed_files[0];
+    if (typeof first === "string") return first;
+  }
+  return null;
+}
+
+function basename(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split("/");
+  return parts[parts.length - 1] || trimmed;
 }

@@ -987,6 +987,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get run input metadata */
+        get: operations["get_run_input_endpoint_api_v1_runs__run_id__input_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/input/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download run input file */
+        get: operations["download_run_input_endpoint_api_v1_runs__run_id__input_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/summary": {
         parameters: {
             query?: never;
@@ -1038,6 +1072,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/events/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download run events (NDJSON log) */
+        get: operations["download_run_events_file_endpoint_api_v1_runs__run_id__events_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/logs": {
         parameters: {
             query?: never;
@@ -1045,7 +1096,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download Run Logs File Endpoint */
+        /**
+         * Download Run Logs File Endpoint
+         * @deprecated
+         */
         get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get"];
         put?: never;
         post?: never;
@@ -1062,8 +1116,65 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Download Run Output Endpoint */
-        get: operations["download_run_output_endpoint_api_v1_runs__run_id__output_get"];
+        /** Get run output metadata */
+        get: operations["get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/output/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download run output file */
+        get: operations["download_run_output_endpoint_api_v1_runs__run_id__output_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/outputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Run Outputs Legacy
+         * @deprecated
+         */
+        get: operations["list_run_outputs_legacy_api_v1_runs__run_id__outputs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Run Output Legacy Endpoint
+         * @deprecated
+         */
+        get: operations["download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2635,6 +2746,14 @@ export type components = {
         RunInput: {
             /** Document Id */
             document_id?: string | null;
+            /** Filename */
+            filename?: string | null;
+            /** Content Type */
+            content_type?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            /** Download Url */
+            download_url?: string | null;
             /** Input Sheet Name */
             input_sheet_name?: string | null;
             /** Input File Count */
@@ -2655,16 +2774,39 @@ export type components = {
             events: string;
             /** Events Stream */
             events_stream: string;
+            /** Events Download */
+            events_download: string;
             /** Logs */
             logs: string;
+            /** Input */
+            input: string;
+            /** Input Download */
+            input_download: string;
             /** Output */
             output: string;
+            /** Output Download */
+            output_download: string;
+            /** Output Metadata */
+            output_metadata: string;
         };
         /**
          * RunOutput
          * @description Output metadata captured for a run.
          */
         RunOutput: {
+            /**
+             * Ready
+             * @default false
+             */
+            ready: boolean;
+            /** Download Url */
+            download_url?: string | null;
+            /** Filename */
+            filename?: string | null;
+            /** Content Type */
+            content_type?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
             /**
              * Has Output
              * @default false
@@ -2674,6 +2816,22 @@ export type components = {
             output_path?: string | null;
             /** Processed File */
             processed_file?: string | null;
+        };
+        /**
+         * RunOutputFile
+         * @description Deprecated collection wrapper for legacy output listings.
+         */
+        RunOutputFile: {
+            /** Name */
+            name?: string | null;
+            /** Path */
+            path?: string | null;
+            /** Byte Size */
+            byte_size?: number | null;
+            /** Content Type */
+            content_type?: string | null;
+            /** Download Url */
+            download_url?: string | null;
         };
         /**
          * RunPage
@@ -2755,6 +2913,12 @@ export type components = {
             input?: components["schemas"]["RunInput"];
             output?: components["schemas"]["RunOutput"];
             links: components["schemas"]["RunLinks"];
+            /** Events Url */
+            events_url?: string | null;
+            /** Events Stream Url */
+            events_stream_url?: string | null;
+            /** Events Download Url */
+            events_download_url?: string | null;
         };
         /**
          * RunStatus
@@ -6569,6 +6733,70 @@ export interface operations {
             };
         };
     };
+    get_run_input_endpoint_api_v1_runs__run_id__input_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunInput"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_run_input_endpoint_api_v1_runs__run_id__input_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_run_summary_endpoint_api_v1_runs__run_id__summary_get: {
         parameters: {
             query?: never;
@@ -6678,6 +6906,43 @@ export interface operations {
             };
         };
     };
+    download_run_events_file_endpoint_api_v1_runs__run_id__events_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Events unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get: {
         parameters: {
             query?: never;
@@ -6715,7 +6980,46 @@ export interface operations {
             };
         };
     };
-    download_run_output_endpoint_api_v1_runs__run_id__output_get: {
+    get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutput"];
+                };
+            };
+            /** @description Run or output not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_run_output_endpoint_api_v1_runs__run_id__output_download_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6736,6 +7040,77 @@ export interface operations {
             };
             /** @description Output not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Output not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_outputs_legacy_api_v1_runs__run_id__outputs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOutputFile"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+                /** @description Legacy output path */
+                output_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

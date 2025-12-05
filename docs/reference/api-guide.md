@@ -70,9 +70,11 @@ Trigger and monitor extraction runs. Creation is configuration-scoped; reads are
 - `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
 - `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).
 - `GET /runs/{run_id}/summary` – retrieve the run summary payload when available.
-- `GET /runs/{run_id}/logs` – download the NDJSON log file captured during the run.
-- `GET /runs/{run_id}/outputs` – list available output files with download URLs.
-- `GET /runs/{run_id}/outputs/{output_path}` – download a specific output artifact.
+- `GET /runs/{run_id}/input` – fetch input metadata; `GET /runs/{run_id}/input/download` downloads the original file.
+- `GET /runs/{run_id}/output` – fetch output metadata (`ready`, size, content type, download URL).
+- `GET /runs/{run_id}/output/download` – download the normalized output; returns `409` when not ready.
+- `GET /runs/{run_id}/events/download` – download the NDJSON event log (legacy `/runs/{run_id}/logs` remains as an alias).
+- Legacy: `/runs/{run_id}/outputs*` endpoints are deprecated and alias the singular output file.
 
 ### Configurations
 
