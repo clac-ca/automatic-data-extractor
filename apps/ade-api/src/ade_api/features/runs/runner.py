@@ -7,13 +7,12 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
-from ade_engine.schemas import AdeEvent
 from pydantic import ValidationError
 
 from ade_api.common.logging import log_context
+from ade_api.schemas.events import EngineEventFrame
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class StdoutFrame:
     stream: Literal["stdout", "stderr"] = "stdout"
 
 
-RunnerFrame = StdoutFrame | AdeEvent
+RunnerFrame = StdoutFrame | EngineEventFrame
 
 
 class EngineSubprocessRunner:
@@ -36,14 +35,10 @@ class EngineSubprocessRunner:
         self,
         *,
         command: list[str],
-        logs_dir: Path,
         env: dict[str, str],
-        poll_interval: float = 0.2,
     ) -> None:
         self._command = command
-        self._logs_dir = logs_dir
         self._env = env
-        self._poll_interval = poll_interval
         self._queue: asyncio.Queue[RunnerFrame | None] = asyncio.Queue()
         self.returncode: int | None = None
 
@@ -53,13 +48,13 @@ class EngineSubprocessRunner:
         process = await asyncio.create_subprocess_exec(
             *self._command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+            stderr=asyncio.subprocess.PIPE,
             env=self._env,
         )
         assert process.stdout is not None
 
         stdout_task = asyncio.create_task(self._capture_stdout(process))
-        telemetry_task = asyncio.create_task(self._capture_telemetry(process))
+        stderr_task = asyncio.create_task(self._capture_stderr(process))
 
         completed = 0
         try:
@@ -71,11 +66,11 @@ class EngineSubprocessRunner:
                 yield item
         finally:
             stdout_task.cancel()
-            telemetry_task.cancel()
+            stderr_task.cancel()
             with contextlib.suppress(Exception):
                 await stdout_task
             with contextlib.suppress(Exception):
-                await telemetry_task
+                await stderr_task
 
         self.returncode = await process.wait()
 
@@ -86,51 +81,34 @@ class EngineSubprocessRunner:
                 text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
                 if not text:
                     continue
-                await self._queue.put(StdoutFrame(message=text))
+                await self._queue.put(self._parse_frame(text))
         finally:
             await self._queue.put(None)
 
-    async def _capture_telemetry(self, process: asyncio.subprocess.Process) -> None:
-        events_path = self._logs_dir / "events.ndjson"
-        position = 0
+    async def _capture_stderr(self, process: asyncio.subprocess.Process) -> None:
+        assert process.stderr is not None
         try:
-            while True:
-                position, lines = await asyncio.to_thread(
-                    _read_new_event_lines,
-                    events_path,
-                    position,
-                )
-                for line in lines:
-                    if not line:
-                        continue
-                    try:
-                        envelope = AdeEvent.model_validate_json(line)
-                    except ValidationError as exc:
-                        logger.warning(
-                            "run.telemetry.invalid",
-                            extra=log_context(
-                                logs_dir=str(self._logs_dir),
-                                line=line,
-                                error=str(exc),
-                            ),
-                        )
-                        continue
-                    await self._queue.put(envelope)
-                if process.returncode is not None and not lines:
-                    break
-                await asyncio.sleep(self._poll_interval)
+            async for raw_line in process.stderr:  # type: ignore[attr-defined]
+                text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
+                if not text:
+                    continue
+                await self._queue.put(StdoutFrame(message=text, stream="stderr"))
         finally:
             await self._queue.put(None)
 
-
-def _read_new_event_lines(path: Path, position: int) -> tuple[int, list[str]]:
-    if not path.exists():
-        return position, []
-    with path.open("r", encoding="utf-8") as handle:
-        handle.seek(position)
-        data = handle.readlines()
-        position = handle.tell()
-    return position, [line.rstrip("\n") for line in data]
+    def _parse_frame(self, text: str) -> RunnerFrame:
+        try:
+            return EngineEventFrame.model_validate_json(text)
+        except ValidationError as exc:
+            logger.warning(
+                "run.engine.frame.invalid",
+                extra=log_context(
+                    command=" ".join(self._command),
+                    line=text,
+                    error=str(exc),
+                ),
+            )
+            return StdoutFrame(message=text, stream="stdout")
 
 
 __all__ = ["EngineSubprocessRunner", "RunnerFrame", "StdoutFrame"]

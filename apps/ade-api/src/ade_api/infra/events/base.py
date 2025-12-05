@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
+
+from ade_api.schemas.events import AdeEvent, AdeEventPayload
 
 
 class BaseEventEmitter:

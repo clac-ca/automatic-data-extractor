@@ -162,7 +162,7 @@ def detect_value_shape(
     column_values: tuple,
     table: dict,
     **_
-) -> dict:
+) -> float | dict:
     # Fast path: decide from column_values_sample
     hits = sum(1 for v in column_values_sample if v and EMAIL.match(str(v)))
     ratio = hits / max(1, len(column_values_sample))
@@ -173,7 +173,7 @@ def detect_value_shape(
         hits_full = sum(1 for v in column_values if v and EMAIL.match(str(v)))
         score = max(score, 0.8 * (hits_full / max(1, len(column_values))))
 
-    return {"scores": {field_name: round(score, 2)}}
+    return {field_name: round(score, 2)}
 ```
 
 [Back to top](#top)
@@ -196,7 +196,7 @@ def detect_*(
     input_file_name: str | None,
     logger,
     **_,
-) -> dict:
+) -> float | dict:
     ...
 ```
 
@@ -206,7 +206,7 @@ def detect_*(
 - `row_values` — raw cell values from that spreadsheet row.
 - `input_file_name` — basename of the current source file.
 - `logger` — run-scoped `logging.Logger`.
-- Return `{"scores": {"header": float}}` or `{"scores": {"data": float}}` depending on what you are voting for.
+- Return a float for the detector’s default label (set `DEFAULT_LABEL`/`DEFAULT_ROW_LABEL` or inferred from the module name), or a dict mapping labels to deltas when influencing multiple labels. The legacy `"scores"` wrapper is no longer accepted.
 
 ### Column detectors (`column_detectors/<field>.py`)
 
@@ -537,22 +537,24 @@ Return tiny score deltas; the engine sums and labels rows as header/data.
 """
 from __future__ import annotations
 
-def detect_text_density(*, row_values: list, **_) -> dict:
+DEFAULT_LABEL = "header"
+
+def detect_text_density(*, row_values: list, **_) -> float:
     """
     Rows with mostly strings are good header candidates.
     """
     cells = [c for c in row_values if c not in (None, "")]
     if not cells:
-        return {"scores": {"header": 0.0}}
+        return 0.0
     strings = sum(isinstance(c, str) for c in cells)
     ratio = strings / len(cells)
-    return {"scores": {"header": 0.7 if ratio >= 0.7 else (0.3 if ratio >= 0.5 else 0.0)}}
+    return 0.7 if ratio >= 0.7 else (0.3 if ratio >= 0.5 else 0.0)
 
-def detect_position_bias(*, row_index: int, **_) -> dict:
+def detect_position_bias(*, row_index: int, **_) -> float:
     """
     Early rows are more likely to be the header (soft boost).
     """
-    return {"scores": {"header": 0.4 if row_index <= 3 else (0.2 if row_index <= 6 else 0.0)}}
+    return 0.4 if row_index <= 3 else (0.2 if row_index <= 6 else 0.0)
 ```
 
 [Back to top](#top)
@@ -564,22 +566,25 @@ def detect_position_bias(*, row_index: int, **_) -> dict:
 ```python
 from __future__ import annotations
 
-def detect_numeric_presence(*, row_values: list, **_) -> dict:
+DEFAULT_LABEL = "data"
+
+def detect_numeric_presence(*, row_values: list, **_) -> float:
     """
     Data rows often contain at least one numeric cell.
     """
     nums = sum(str(v).replace(".", "", 1).isdigit() for v in row_values if v not in (None, ""))
-    return {"scores": {"data": +0.4 if nums >= 1 else 0.0}}
+    return +0.4 if nums >= 1 else 0.0
 
-def detect_not_header_like(*, row_values: list, **_) -> dict:
+def detect_not_header_like(*, row_values: list, **_) -> float:
     """
     Penalize rows that look header-like (mostly strings).
     """
     non_blank = [v for v in row_values if v not in (None, "")]
-    if not non_blank: return {"scores": {"data": 0.0}}
+    if not non_blank:
+        return 0.0
     strings = sum(isinstance(v, str) for v in non_blank)
     ratio = strings / len(non_blank)
-    return {"scores": {"data": -0.2 if ratio >= 0.8 else 0.0}}
+    return -0.2 if ratio >= 0.8 else 0.0
 ```
 
 [Back to top](#top)
@@ -602,7 +607,7 @@ def detect_not_header_like(*, row_values: list, **_) -> dict:
 * `table_data: dict` — the whole table (`{"headers": [...], "rows": [[...], ...]}`).
 * Plus `manifest`, `env`, `logger`, `column_index` (1‑based), etc.
 
-**Return shape:** `{"scores": {field_name: float}}`
+**Return shape:** a float for this field or a dict of deltas (no `"scores"` wrapper).
 
 ---
 
@@ -630,7 +635,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, field_meta: d
         h = header.strip().lower()
         hits = sum(1 for syn in (field_meta.get("synonyms") or []) if syn in h)
         score = min(0.9, 0.6 * hits)
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def detect_value_shape(
     *,
@@ -643,7 +648,7 @@ def detect_value_shape(
     Prefer column_values_sample; escalate to full column only if borderline and available.
     """
     if not column_values_sample:
-        return {"scores": {field_name: 0.0}}
+        return {field_name: 0.0}
     sample_hits = sum(bool(ID.match(_normalize(v) or "")) for v in column_values_sample)
     ratio = sample_hits / max(1, len(column_values_sample))
     score = round(0.6 * ratio, 2)
@@ -653,7 +658,7 @@ def detect_value_shape(
         ratio = hits / max(1, len(column_values))
         score = max(score, round(0.7 * ratio, 2))
 
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 # --- After mapping (row-by-row) ---
 
@@ -696,12 +701,12 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
     if header:
         h = header.strip().lower()
         score = min(0.9, 0.6 * sum(1 for s in HINTS if s in h))
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def detect_value_shape(*, column_values_sample: list, field_name: str, **_) -> dict:
     hits = sum(1 for v in column_values_sample if v not in (None, "") and NAMEISH.match(str(v).strip()))
     ratio = hits / max(1, len(column_values_sample))
-    return {"scores": {field_name: round(0.6 * ratio, 2)}}
+    return {field_name: round(0.6 * ratio, 2)}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
     """Split full_name into first_name / last_name while also normalizing full_name."""
@@ -735,7 +740,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
     if header:
         h = header.strip().lower()
         score = min(0.9, 0.6 * sum(1 for s in HINTS if s in h))
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
     return {"first_name": title_name(value)} if value not in (None, "") else None
@@ -764,7 +769,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
     if header:
         h = header.strip().lower()
         score = min(0.9, 0.6 * sum(1 for s in HINTS if s in h))
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
     return {"last_name": title_name(value)} if value not in (None, "") else None
@@ -795,7 +800,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
     if header:
         h = header.strip().lower()
         if any(s in h for s in HINTS): score = 0.85
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def detect_value_shape(
     *,
@@ -815,7 +820,7 @@ def detect_value_shape(
         ratio = hits / max(1, len(column_values))
         score = max(score, round(0.8 * ratio, 2))
 
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, **_) -> dict | None:
     if value in (None, ""): return None
@@ -859,7 +864,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
         h = header.strip().lower()
         if any(s in h for s in ("dept","department","division","team","org")):
             score = 0.7
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, manifest: dict, env: dict | None = None, **_) -> dict | None:
     if value in (None, ""): return None
@@ -893,7 +898,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
         h = header.strip().lower()
         if any(s in h for s in ("join date","start date","hire date","onboarded")):
             score = 0.7
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, env: dict | None = None, **_) -> dict | None:
     iso = parse_date_to_iso(value, preferred_fmt=(env or {}).get("DATE_FMT"))
@@ -922,7 +927,7 @@ def detect_header_synonyms(*, header: str | None, field_name: str, **_) -> dict:
         h = header.strip().lower()
         if any(s in h for s in ("amount","total","payment","fee","charge")):
             score = 0.7
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 
 def transform(*, row_index: int, field_name: str, value, row: dict, env: dict | None = None, **_) -> dict | None:
     d = to_decimal(value)

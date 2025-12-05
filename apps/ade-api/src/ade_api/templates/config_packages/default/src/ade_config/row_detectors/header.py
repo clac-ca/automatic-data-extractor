@@ -18,6 +18,8 @@ KNOWN_HEADER_WORDS: set[str] = {
     "country", "address", "zip", "postal", "notes", "description"
 }
 
+DEFAULT_LABEL = "header"
+
 
 def _iter_strings(values: Iterable[Any]) -> list[str]:
     return [
@@ -38,7 +40,7 @@ def detect_known_header_words(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Strongest signal: does this row contain known header words?
 
@@ -64,7 +66,7 @@ def detect_known_header_words(
     else:
         score = 0.0
 
-    return {"scores": {"header": score}}
+    return score
 
 
 def detect_mostly_text(
@@ -78,7 +80,7 @@ def detect_mostly_text(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Medium signal: header rows are usually text-heavy.
 
@@ -103,7 +105,7 @@ def detect_mostly_text(
     else:
         score = 0.0
 
-    return {"scores": {"header": score}}
+    return score
 
 
 def detect_early_row_bias(
@@ -117,7 +119,7 @@ def detect_early_row_bias(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Small nudge: earlier rows are more likely to be headers.
 
@@ -134,4 +136,4 @@ def detect_early_row_bias(
         score = 0.10
     else:
         score = 0.0
-    return {"scores": {"header": score}}
+    return score

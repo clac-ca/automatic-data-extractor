@@ -15,13 +15,6 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from ade_engine.schemas import (
-    AdeEvent,
-    AdeEventPayload,
-    BuildCompletedPayload,
-    BuildStartedPayload,
-    ConsoleLinePayload,
-)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
@@ -34,6 +27,13 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.infra.storage import build_venv_root
+from ade_api.schemas.events import (
+    AdeEvent,
+    AdeEventPayload,
+    BuildCompletedPayload,
+    BuildStartedPayload,
+    ConsoleLinePayload,
+)
 from ade_api.settings import Settings
 
 from .builder import (

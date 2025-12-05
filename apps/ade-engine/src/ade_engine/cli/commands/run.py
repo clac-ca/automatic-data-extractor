@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Optional
 
@@ -51,22 +50,6 @@ def run_command(
     )
 
     result = Engine().run(request)
-    payload = {
-        "status": result.status.value,
-        "run_id": str(result.run_id),
-        "output_path": str(result.output_path) if result.output_path else None,
-        "logs_dir": str(result.logs_dir),
-        "events_path": str(Path(result.logs_dir) / "events.ndjson"),
-        "processed_file": result.processed_file,
-    }
-    if result.error:
-        payload["error"] = {
-            "code": result.error.code,
-            "stage": result.error.stage.value if result.error.stage else None,
-            "message": result.error.message,
-        }
-
-    typer.echo(json.dumps(payload))
     raise typer.Exit(code=0 if result.status is result.status.SUCCEEDED else 1)
 
 

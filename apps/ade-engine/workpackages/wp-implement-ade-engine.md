@@ -122,7 +122,7 @@ Keep short inline status notes as you go.
 - [x] Implement row‑detector integration + table detection (`core/pipeline/extract.py`) per `03-io-and-table-detection.md` §5–§6:
   - Integrate `ade_config.row_detectors.*`:
     - Call all `detect_*` functions per row
-    - Aggregate `"scores"` into header/data scores
+    - Aggregate detector outputs into header/data scores
   - Implement heuristics to construct one or more `ExtractedTable` per sheet:
     - Detect header row
     - Identify contiguous data rows

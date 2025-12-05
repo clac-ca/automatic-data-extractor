@@ -14,7 +14,7 @@ Below is the template manifest used in this example workspace.
 ```json
 {
   "schema": "ade.manifest/v1",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "name": "Default ADE Workspace Config",
   "description": "Starter config",
   "script_api_version": 3,

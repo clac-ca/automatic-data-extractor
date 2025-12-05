@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
+from ade_api.infra.events.utils import ensure_event_defaults
 from ade_api.infra.storage import workspace_run_root
+from ade_api.schemas.events import AdeEvent, AdeEventPayload, EngineEventFrame
 from ade_api.settings import Settings
 
 __all__ = [
@@ -67,6 +68,7 @@ class RunEventStorage:
         if not event.workspace_id or not event.run_id:
             raise ValueError("workspace_id and run_id are required to append events")
 
+        ensure_event_defaults(event)
         path = self.events_path(workspace_id=event.workspace_id, run_id=event.run_id)
         serialized = event.model_dump_json()
         await asyncio.to_thread(self._append_line, path, serialized)
@@ -92,7 +94,7 @@ class RunEventStorage:
                 for raw in handle:
                     if not raw.strip():
                         continue
-                    event = AdeEvent.model_validate_json(raw)
+                    event = ensure_event_defaults(AdeEvent.model_validate_json(raw))
                     if after_sequence is not None and event.sequence is not None:
                         if event.sequence <= after_sequence:
                             continue
@@ -140,9 +142,11 @@ class RunEventDispatcher:
         payload: AdeEventPayload | dict[str, Any] | None = None,
         source: str = "api",
         build_id: UUID | None = None,
+        origin_event_id: str | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
             payload = payload.model_dump(exclude_none=True)
+        payload = payload or {}
         sequence = await self._next_sequence(workspace_id=workspace_id, run_id=run_id)
         event = AdeEvent(
             type=type,
@@ -154,11 +158,32 @@ class RunEventDispatcher:
             configuration_id=configuration_id,
             run_id=run_id,
             build_id=build_id,
+            origin_event_id=origin_event_id,
             payload=payload,
         )
         await self.storage.append(event)
         await self._publish(event)
         return event
+
+    async def emit_from_engine_frame(
+        self,
+        *,
+        frame: EngineEventFrame,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        run_id: UUID,
+        build_id: UUID | None = None,
+    ) -> AdeEvent:
+        return await self.emit(
+            type=frame.type,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            run_id=run_id,
+            build_id=build_id,
+            payload=frame.payload,
+            source="engine",
+            origin_event_id=str(frame.event_id),
+        )
 
     @asynccontextmanager
     async def subscribe(self, run_id: UUID) -> AsyncIterator[RunEventSubscription]:

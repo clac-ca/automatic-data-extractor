@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.schemas import (
+from ade_api.infra.events.base import BaseEventEmitter
+from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
     ConsoleLinePayload,
     RunQueuedPayload,
     RunStartedPayload,
 )
-
-from ade_api.infra.events.base import BaseEventEmitter
 
 
 class RunEventEmitter(BaseEventEmitter):
@@ -39,7 +38,11 @@ class RunEventEmitter(BaseEventEmitter):
         return await self.emit(type="console.line", payload=payload)
 
     async def queued(self, *, mode: str, options: dict[str, Any]) -> AdeEvent:
-        payload = RunQueuedPayload(status="queued", mode=mode, options=options).model_dump(exclude_none=True)
+        payload = RunQueuedPayload(
+            status="queued",
+            mode=mode,
+            options=options,
+        ).model_dump(exclude_none=True)
         return await self.emit_prefixed(prefix="run", suffix="queued", payload=payload)
 
     async def start(

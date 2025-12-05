@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from ade_engine.schemas import AdeEvent
 from pydantic import Field
 
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
 from ade_api.core.models import RunStatus
+from ade_api.schemas.events import AdeEvent
 
 RunObjectType = Literal["ade.run"]
 
@@ -38,7 +38,10 @@ class RunCreateOptions(BaseSchema):
         default=False,
         description="If true, rebuild the configuration environment before running.",
     )
-    input_document_id: UUIDStr | None = Field(default=None, description="Document identifier to ingest.")
+    input_document_id: UUIDStr | None = Field(
+        default=None,
+        description="Document identifier to ingest.",
+    )
     input_sheet_names: list[str] | None = Field(
         default=None,
         description="Optional worksheet names to ingest when processing XLSX files.",
