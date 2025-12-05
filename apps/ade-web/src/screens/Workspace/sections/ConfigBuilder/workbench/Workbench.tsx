@@ -802,7 +802,6 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
-          input_sheet_name: worksheetList.length === 1 ? worksheetList[0] : undefined,
         },
         {
           mode: "extraction",

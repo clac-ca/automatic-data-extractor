@@ -23,10 +23,11 @@ def _parse_metadata(values: list[str]) -> dict[str, str]:
 
 def run_command(
     input: Optional[Path] = typer.Option(None, "--input", exists=True, file_okay=True, dir_okay=False, help="Source file to process"),
-    input_sheet: Optional[str] = typer.Option(
-        None,
+    input_sheet: list[str] = typer.Option(
+        [],
         "--input-sheet",
-        help="Optional worksheet to ingest; defaults to all visible sheets.",
+        "-s",
+        help="Optional worksheet(s) to ingest; defaults to all visible sheets.",
     ),
     output_dir: Optional[Path] = typer.Option(None, "--output-dir", file_okay=False, dir_okay=True),
     logs_dir: Optional[Path] = typer.Option(None, "--logs-dir", file_okay=False, dir_okay=True),
@@ -43,7 +44,7 @@ def run_command(
         config_package=config_package,
         manifest_path=manifest_path,
         input_file=input,
-        input_sheet=input_sheet,
+        input_sheets=list(input_sheet) if input_sheet else None,
         output_dir=output_dir,
         logs_dir=logs_dir,
         metadata=_parse_metadata(metadata) if metadata else None,

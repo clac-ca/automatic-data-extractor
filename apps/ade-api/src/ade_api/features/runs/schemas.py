@@ -39,10 +39,9 @@ class RunCreateOptions(BaseSchema):
         description="If true, rebuild the configuration environment before running.",
     )
     input_document_id: UUIDStr | None = Field(default=None, description="Document identifier to ingest.")
-    input_sheet_name: str | None = Field(
+    input_sheet_names: list[str] | None = Field(
         default=None,
-        description="Preferred worksheet to ingest when processing XLSX files.",
-        max_length=64,
+        description="Optional worksheet names to ingest when processing XLSX files.",
     )
     metadata: dict[str, str] | None = Field(
         default=None,
@@ -80,7 +79,7 @@ class RunInput(BaseSchema):
     content_type: str | None = None
     size_bytes: int | None = None
     download_url: str | None = None
-    input_sheet_name: str | None = None
+    input_sheet_names: list[str] | None = None
     input_file_count: int | None = None
     input_sheet_count: int | None = None
 

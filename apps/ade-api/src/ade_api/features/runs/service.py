@@ -355,7 +355,7 @@ class RunsService:
             else RunStatus.QUEUED
         )
 
-        selected_sheet_name = self._select_input_sheet_name(options)
+        selected_sheet_names = self._select_input_sheet_names(options)
 
         run = Run(
             id=run_id,
@@ -366,7 +366,7 @@ class RunsService:
             retry_of_run_id=None,
             trace_id=str(run_id),
             input_document_id=input_document_id,
-            input_sheet_name=selected_sheet_name,
+            input_sheet_names=selected_sheet_names or None,
             build_id=build_id,
         )
         self._session.add(run)
@@ -1088,7 +1088,7 @@ class RunsService:
             content_type=content_type,
             size_bytes=size_bytes,
             download_url=download_url,
-            input_sheet_name=run.input_sheet_name,
+            input_sheet_names=run.input_sheet_names,
             input_file_count=files_counts.get("total"),
             input_sheet_count=sheets_counts.get("total"),
         )
@@ -1795,7 +1795,15 @@ class RunsService:
         )
 
         python = self._resolve_python(Path(context.venv_path))
-        env = self._build_env(Path(context.venv_path), options, context)
+        selected_sheet_names = self._select_input_sheet_names(options)
+        if not selected_sheet_names and run.input_sheet_names:
+            selected_sheet_names = list(run.input_sheet_names)
+        env = self._build_env(
+            Path(context.venv_path),
+            options,
+            context,
+            input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
+        )
         runs_root = (
             Path(context.runs_dir)
             if context.runs_dir
@@ -1829,8 +1837,8 @@ class RunsService:
         command.extend(["--output-dir", str(run_dir / "output")])
         command.extend(["--logs-dir", str(engine_logs_dir)])
 
-        if options.input_sheet_name:
-            command.extend(["--input-sheet", options.input_sheet_name])
+        for sheet_name in selected_sheet_names:
+            command.extend(["--input-sheet", sheet_name])
 
         metadata: dict[str, str] = {
             "run_id": run.id,
@@ -2397,6 +2405,8 @@ class RunsService:
         venv_path: Path,
         options: RunCreateOptions,
         context: RunExecutionContext,
+        *,
+        input_sheet_name: str | None = None,
     ) -> dict[str, str]:
         env = os.environ.copy()
         bin_dir = "Scripts" if os.name == "nt" else "bin"
@@ -2407,8 +2417,9 @@ class RunsService:
             env["ADE_RUN_DRY_RUN"] = "1"
         if options.validate_only:
             env["ADE_RUN_VALIDATE_ONLY"] = "1"
-        if options.input_sheet_name:
-            env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
+        sheet_name = input_sheet_name
+        if sheet_name:
+            env["ADE_RUN_INPUT_SHEET"] = sheet_name
         if context.run_id:
             env["ADE_TELEMETRY_CORRELATION_ID"] = str(context.run_id)
             env["ADE_RUN_ID"] = str(context.run_id)
@@ -2465,10 +2476,24 @@ class RunsService:
         )
 
     @staticmethod
-    def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
-        """Resolve a single selected sheet name from the run options, if any."""
+    def _select_input_sheet_names(options: RunCreateOptions) -> list[str]:
+        """Normalize requested sheet names into a unique, ordered list."""
 
-        return options.input_sheet_name
+        names: list[str] = []
+        for name in getattr(options, "input_sheet_names", None) or []:
+            if not isinstance(name, str):
+                continue
+            cleaned = name.strip()
+            if cleaned and cleaned not in names:
+                names.append(cleaned)
+        return names
+
+    @staticmethod
+    def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
+        """Resolve the first selected sheet name from the run options, if any."""
+
+        normalized = RunsService._select_input_sheet_names(options)
+        return normalized[0] if normalized else None
 
     # ------------------------------------------------------------------ #
     # Internal helpers: event logging

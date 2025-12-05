@@ -38,7 +38,7 @@ def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path]:
         config_package=request.config_package,
         manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
         input_file=input_file,
-        input_sheet=request.input_sheet,
+        input_sheets=list(request.input_sheets) if request.input_sheets else None,
         output_dir=output_dir,
         logs_dir=logs_dir,
         metadata=dict(request.metadata) if request.metadata else {},

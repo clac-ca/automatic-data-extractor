@@ -190,3 +190,36 @@ def test_missing_requested_sheet_raises(tmp_path: Path, monkeypatch: pytest.Monk
         )
 
     assert "Worksheet(s) Missing not found" in str(excinfo.value)
+
+
+def test_filters_to_requested_sheets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
+    manifest_path = _write_manifest(pkg_dir)
+    _write_row_detector(pkg_dir)
+
+    workbook = openpyxl.Workbook()
+    first = workbook.active
+    first.title = "First"
+    first.append(["Header One", "Value"])
+    first.append(["row-a", 1])
+    second = workbook.create_sheet(title="Second")
+    second.append(["Header Two", "Value"])
+    second.append(["row-b", 2])
+    source_file = tmp_path / "input.xlsx"
+    workbook.save(source_file)
+
+    runtime = load_config_runtime(manifest_path=manifest_path)
+    request = RunRequest(input_file=source_file, input_sheets=["Second"])
+    run = _make_run_context(tmp_path, request, runtime.manifest)
+    engine_emitter, config_emitter = _event_emitters(run)
+
+    tables = extract_raw_tables(
+        request=request,
+        run=run,
+        runtime=runtime,
+        event_emitter=engine_emitter,
+        config_event_emitter=config_emitter,
+    )
+
+    assert {t.source_sheet for t in tables} == {"Second"}
+    assert len(tables) == 1

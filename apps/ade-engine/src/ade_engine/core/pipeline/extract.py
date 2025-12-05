@@ -76,16 +76,20 @@ class _RowScore:
     contributions: dict[str, dict[str, float]]
 
 
-def _resolve_sheet_names(path: Path, requested: str | None) -> list[str]:
+def _resolve_sheet_names(path: Path, requested: Iterable[str] | None) -> list[str]:
     workbook = load_workbook(filename=path, read_only=True, data_only=True)
     try:
         available = [name for name in workbook.sheetnames if workbook[name].sheet_state == "visible"]
         if requested is None:
             return available
+        requested_list = [name.strip() for name in requested if isinstance(name, str) and name.strip()]
+        ordered_unique = list(dict.fromkeys(requested_list))
+        missing = [name for name in ordered_unique if name not in available]
+        if missing:
+            missing_list = ", ".join(missing)
+            raise InputError(f"Worksheet(s) {missing_list} not found in `{path}`")
 
-        if requested not in available:
-            raise InputError(f"Worksheet(s) {requested} not found in `{path}`")
-        return [requested]
+        return ordered_unique
     finally:
         workbook.close()
 
@@ -266,7 +270,7 @@ def extract_raw_tables(
             )
             continue
 
-        sheet_names = _resolve_sheet_names(source_file, request.input_sheet)
+        sheet_names = _resolve_sheet_names(source_file, request.input_sheets)
         for sheet_name in sheet_names:
             scored_rows = _score_rows(
                 rows=iter_sheet_rows(source_file, sheet_name),
