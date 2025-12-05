@@ -1,14 +1,13 @@
 import clsx from "clsx";
 
 import type { ConfigBuilderPane } from "@app/nav/urlState";
-import type { PhaseState, RunStreamStatus } from "../state/runStream";
+import type { RunStreamStatus } from "../state/runStream";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
 import { ConsoleTab } from "./ConsoleTab";
 import { ProblemsTab } from "./ProblemsTab";
-import { RunSummaryTab } from "./RunSummaryTab";
 
 interface BottomPanelProps {
   readonly height: number;
@@ -17,12 +16,8 @@ interface BottomPanelProps {
   readonly activePane: ConfigBuilderPane;
   readonly onPaneChange: (pane: ConfigBuilderPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
-  readonly onShowRunDetails?: () => void;
   readonly onClearConsole?: () => void;
   readonly runStatus?: RunStreamStatus;
-  readonly buildPhases: Record<string, PhaseState>;
-  readonly runPhases: Record<string, PhaseState>;
-  readonly runMode?: "validation" | "extraction";
   readonly onToggleCollapse?: () => void;
   readonly appearance?: "light" | "dark";
 }
@@ -34,17 +29,12 @@ export function BottomPanel({
   activePane,
   onPaneChange,
   latestRun,
-  onShowRunDetails,
   onClearConsole,
   runStatus,
-  buildPhases,
-  runPhases,
-  runMode,
   onToggleCollapse,
   appearance = "light",
 }: BottomPanelProps) {
   const hasProblems = validation.messages.length > 0;
-  const hasRun = Boolean(latestRun);
   const theme =
     appearance === "dark"
       ? {
@@ -58,7 +48,6 @@ export function BottomPanel({
           header: "border-slate-200 bg-slate-50",
           hideButton: "border-slate-300 bg-white text-slate-700 hover:border-slate-400",
         };
-  const runStatusTone = appearance === "dark" ? "text-slate-300" : "text-slate-500";
 
   return (
     <section
@@ -80,17 +69,6 @@ export function BottomPanel({
               className="rounded px-2 py-1 uppercase tracking-[0.16em]"
             >
               Terminal
-            </TabsTrigger>
-            <TabsTrigger
-              value="runSummary"
-              className="rounded px-2 py-1 uppercase tracking-[0.16em]"
-            >
-              Run
-              {hasRun ? (
-                <span className={clsx("ml-1 text-[10px] lowercase", runStatusTone)}>
-                  {latestRun?.status}
-                </span>
-              ) : null}
             </TabsTrigger>
             <TabsTrigger
               value="problems"
@@ -124,7 +102,6 @@ export function BottomPanel({
             consoleLines={consoleLines}
             latestRun={latestRun}
             onClearConsole={onClearConsole}
-            onShowRunDetails={onShowRunDetails}
             runStatus={runStatus}
           />
         </TabsContent>
@@ -134,13 +111,6 @@ export function BottomPanel({
           className="flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2 text-sm"
         >
           <ProblemsTab validation={validation} />
-        </TabsContent>
-
-        <TabsContent
-          value="runSummary"
-          className="flex min-h-0 flex-1 flex-col overflow-auto px-3 py-2 text-sm"
-        >
-          <RunSummaryTab latestRun={latestRun} buildPhases={buildPhases} runPhases={runPhases} runStatus={runStatus} runMode={runMode} />
         </TabsContent>
       </TabsRoot>
     </section>

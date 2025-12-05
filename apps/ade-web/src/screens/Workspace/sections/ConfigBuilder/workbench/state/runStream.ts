@@ -116,9 +116,6 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
   const payload = extractPayload(event);
   const type = typeof event.type === "string" ? event.type : "";
 
-  const isBuildEvent =
-    type.startsWith("build.") || (type === "console.line" && (payload.scope as string | undefined) === "build");
-
   const line = formatConsoleEvent(event);
   const consoleLines = clampConsoleLines(
     [...state.consoleLines, withLineId(line, state.consoleLines.length)],

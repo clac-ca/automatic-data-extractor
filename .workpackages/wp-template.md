@@ -10,11 +10,9 @@
 
 ## Work Package Checklist
 
-* [ ] {{CHECK_TASK_1_SUMMARY}}
-* [ ] {{CHECK_TASK_2_SUMMARY}}
-* [ ] {{CHECK_TASK_3_SUMMARY}}
-* [ ] {{CHECK_TASK_4_SUMMARY}}
-* [ ] {{CHECK_TASK_5_SUMMARY}}
+* [x] Remove the Run tab from the workbench bottom panel UI.
+* [x] Strip run-summary-specific state/fetching logic (stream snapshot, summary/telemetry fetches).
+* [x] Update navigation pane types/docs to only allow Terminal/Problems panes.
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
@@ -22,42 +20,35 @@
 
 ---
 
-# {{WORKPACKAGE_TITLE}}
+# Remove run summary tab
 
 ## 1. Objective
 
 **Goal:**
-{{OBJECTIVE_GOAL}}
+Remove the unstable Run summary tab and its supporting logic so the workbench only shows Terminal and Problems panes without flashing content.
 
 You will:
 
-* {{OBJECTIVE_SUBTASK_1}}
-* {{OBJECTIVE_SUBTASK_2}}
-* {{OBJECTIVE_SUBTASK_3}}
+* Remove Run tab UI and pane wiring.
+* Drop run-summary/telemetry fetching and live summary storage tied to the tab.
+* Keep run status/output handling for console banner/download links.
 
 The result should:
 
-* {{RESULT_CRITERION_1}}
-* {{RESULT_CRITERION_2}}
+* Only Terminal and Problems panes remain selectable.
+* No summary tab flashes or summary fetch side effects; console still reflects run status/output.
 
 ---
 
 ## 2. Context (What you are starting from)
 
-{{CONTEXT_CURRENT_STATE}}
-
-Examples of what to capture here (replace with actual content):
-
-* Existing structure: {{CONTEXT_EXISTING_STRUCTURE}}
-* Current behavior / expectations: {{CONTEXT_BEHAVIOR}}
-* Known issues / pain points: {{CONTEXT_PAIN_POINTS}}
-* Hard constraints (APIs, platforms, consumers): {{CONTEXT_CONSTRAINTS}}
+Workbench bottom panel had three panes (Terminal, Run summary, Problems). Live `engine.run.summary` events were stored and fetched again to populate the Run tab, but the tab briefly flashed then disappeared. We need to simplify to Terminal + Problems while keeping run status/outputs intact.
 
 ---
 
 ## 3. Target architecture / structure (ideal)
 
-{{TARGET_ARCHITECTURE_SUMMARY}}
+Bottom panel exposes only Terminal and Problems tabs; URL pane param normalizes to those two values. Run stream remains for console/status but does not store or fetch run summaries/telemetry for UI.
 
 > **Agent instruction:**
 >
@@ -65,15 +56,12 @@ Examples of what to capture here (replace with actual content):
 > * If the design changes while coding, update this section and the file tree below.
 
 ```text
-{{PROJECT_ROOT}}/
-  {{SRC_ROOT}}/
-    {{LAYER_OR_MODULE_1}}/
-    {{LAYER_OR_MODULE_2}}/
-    {{LAYER_OR_MODULE_3}}/
-  {{TEST_ROOT}}/
-    {{TEST_STRUCTURE}}
-  {{SCRIPTS_OR_TOOLS}}/
-    {{SCRIPT_FILES}}
+apps/ade-web/
+  src/app/nav/urlState.ts              # pane enum now terminal|problems
+  src/screens/.../workbench/components/BottomPanel.tsx
+  src/screens/.../workbench/components/ConsoleTab.tsx
+  src/screens/.../workbench/state/runStream.ts
+  src/screens/.../workbench/state/useRunSessionModel.ts
 ```
 
 ---
@@ -82,25 +70,24 @@ Examples of what to capture here (replace with actual content):
 
 ### 4.1 Design goals
 
-* {{DESIGN_GOAL_CLARITY}}
-* {{DESIGN_GOAL_MAINTAINABILITY}}
-* {{DESIGN_GOAL_SCALABILITY}}
+* Keep UI minimal and stable (no flashing/missing Run tab).
+* Reduce state surface by removing unused summary/telemetry plumbing.
+* Preserve run status/output info for console context.
 
 ### 4.2 Key components / modules
 
-* {{COMPONENT_1_NAME}} — {{COMPONENT_1_ROLE}}
-* {{COMPONENT_2_NAME}} — {{COMPONENT_2_ROLE}}
-* {{COMPONENT_3_NAME}} — {{COMPONENT_3_ROLE}}
+* BottomPanel — hosts tabs; now only Terminal/Problems.
+* ConsoleTab — shows console lines and run status badge (no summary CTA).
+* runStream/useRunSessionModel — manage stream state and latest run metadata without run summary storage/fetching.
 
 ### 4.3 Key flows / pipelines
 
-* {{FLOW_1_NAME}} — {{FLOW_1_STEPS}}
-* {{FLOW_2_NAME}} — {{FLOW_2_STEPS}}
+* Stream handling — ingest events for status/console, but ignore run summary payloads beyond status/artifact data.
+* Run completion — update latestRun for console/output download without summary/telemetry fetches.
 
 ### 4.4 Open questions / decisions
 
-* {{OPEN_QUESTION_1}}
-* {{OPEN_QUESTION_2}}
+* Future redesign will determine new run insights surface and data needs.
 
 > **Agent instruction:**
 > If you answer a question or make a design decision, replace the placeholder with the final decision and (optionally) a brief rationale.
@@ -109,10 +96,6 @@ Examples of what to capture here (replace with actual content):
 
 ## 5. Implementation & notes for agents
 
-{{IMPLEMENTATION_NOTES}}
-
-Example things to put here (as placeholders to fill):
-
-* {{CODING_STANDARDS_OR_STYLE}}
-* {{TESTING_REQUIREMENTS}}
-* {{PERFORMANCE_OR_SECURITY_NOTES}}
+* URL pane param normalizes unknown/legacy values to `terminal`.
+* Run summary/telemetry fetching removed; output/log links still fetched via run resource.
+* Tests not run here (pnpm unavailable); focus on runStream reducer/unit coverage if adding new tests.

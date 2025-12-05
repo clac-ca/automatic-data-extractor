@@ -937,14 +937,6 @@ export function Workbench({
     clearConsole();
   }, [clearConsole]);
 
-  const handleShowRunSummary = useCallback(() => {
-    if (!latestRun) {
-      return;
-    }
-    openConsole();
-    setPane("runSummary");
-  }, [latestRun, openConsole, setPane]);
-
   const handleToggleExplorer = useCallback(() => {
     setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed }));
   }, []);
@@ -1528,12 +1520,8 @@ export function Workbench({
                 activePane={pane}
                 onPaneChange={setPane}
                 latestRun={latestRun}
-                onShowRunDetails={handleShowRunSummary}
                 onClearConsole={handleClearConsole}
                 runStatus={derivedRunStatus}
-                buildPhases={runStreamState.buildPhases}
-                runPhases={runStreamState.runPhases}
-                runMode={derivedRunMode}
                 onToggleCollapse={handleToggleOutput}
               />
             )}

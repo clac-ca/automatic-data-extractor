@@ -108,7 +108,7 @@ export function useSearchParams(): [URLSearchParams, (init: SetSearchParamsInit,
 }
 
 export type ConfigBuilderTab = "editor";
-export type ConfigBuilderPane = "terminal" | "problems" | "runSummary";
+export type ConfigBuilderPane = "terminal" | "problems";
 export type ConfigBuilderConsole = "open" | "closed";
 export type ConfigBuilderView = "editor" | "split" | "zen";
 
@@ -146,10 +146,8 @@ function normalizeConsole(value: string | null): ConfigBuilderConsole {
 }
 
 function normalizePane(value: string | null): ConfigBuilderPane {
-  if (value === "runSummary") return "runSummary";
   if (value === "problems") return "problems";
-  if (value === "terminal") return "terminal";
-  return DEFAULT_CONFIG_BUILDER_SEARCH.pane;
+  return "terminal";
 }
 
 function normalizeView(value: string | null): ConfigBuilderView {

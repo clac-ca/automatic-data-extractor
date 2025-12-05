@@ -6,8 +6,6 @@ import type { WorkbenchDataSeed, WorkbenchRunSummary } from "../types";
 
 import {
   fetchRun,
-  fetchRunSummary,
-  fetchRunTelemetry,
   runLogsUrl,
   runOutputUrl,
   type RunResource,
@@ -81,31 +79,44 @@ export function useRunSessionModel({
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof completedPayload.summary === "string" ? completedPayload.summary.trim() : null;
     const payloadStartedAt = typeof completedPayload.started_at === "string" ? completedPayload.started_at : undefined;
+    const payloadSource = completedPayload.source as Record<string, unknown> | undefined;
+    const payloadSourceStartedAt = typeof payloadSource?.started_at === "string" ? payloadSource.started_at : undefined;
+    const payloadCompletedAt = typeof completedPayload.completed_at === "string" ? completedPayload.completed_at : undefined;
+    const payloadSourceCompletedAt =
+      typeof payloadSource?.completed_at === "string" ? payloadSource.completed_at : undefined;
+    const payloadStatus =
+      (completedPayload.status as RunStatus | undefined) ??
+      (payloadSource?.status as RunStatus | undefined) ??
+      runStatus;
+    const completedDetails =
+      completedPayload.details && typeof completedPayload.details === "object"
+        ? (completedPayload.details as Record<string, unknown>)
+        : null;
     const artifacts =
       completedPayload.artifacts && typeof completedPayload.artifacts === "object"
         ? (completedPayload.artifacts as Record<string, unknown>)
         : null;
-    const artifactOutputPath = extractOutputPath(artifacts);
-    const artifactProcessedFile = extractProcessedFile(artifacts);
+    const artifactOutputPath = extractOutputPath(artifacts) ?? extractOutputPath(completedDetails);
+    const artifactProcessedFile = extractProcessedFile(artifacts) ?? extractProcessedFile(completedDetails);
 
-    const normalizedStatus = normalizeRunStatusValue(
-      (completedPayload.status as RunStatus | undefined) ?? runStatus,
-    );
+    const normalizedStatus = normalizeRunStatusValue(payloadStatus);
     const completionStatus: RunStatus = normalizedStatus;
     const resolvedMode: "validation" | "extraction" = runMode ?? runMetadata?.mode ?? "extraction";
-    const startedAtIso = payloadStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;
-    const completedIso = (completedPayload.completed_at as string | undefined) ?? runResource?.completed_at ?? new Date().toISOString();
-    const startedAt = startedAtIso ? new Date(startedAtIso) : null;
-    const completedAt = completedIso ? new Date(completedIso) : new Date();
-    const durationMs =
-      startedAt && completedAt ? Math.max(0, completedAt.getTime() - startedAt.getTime()) : undefined;
+    const startedAtIso =
+      payloadStartedAt ?? payloadSourceStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;
+    const completedIso =
+      payloadCompletedAt ??
+      payloadSourceCompletedAt ??
+      runResource?.completed_at ??
+      new Date().toISOString();
+    const durationMs = calculateDurationMs(startedAtIso ?? null, completedIso ?? null);
 
     onRunComplete?.({
       runId,
       status: completionStatus,
       mode: resolvedMode,
       startedAt: startedAtIso ?? null,
-      completedAt: completedAt.toISOString(),
+      completedAt: completedIso ?? new Date().toISOString(),
       durationMs,
       payload: stream.completedPayload,
     });
@@ -127,21 +138,21 @@ export function useRunSessionModel({
         outputUrl: outputMeta.outputUrl ?? previous?.outputUrl,
         outputPath: outputMeta.outputPath,
         outputFilename: outputMeta.outputFilename ?? previous?.outputFilename,
-        outputReady: outputMeta.outputReady ?? previous?.outputReady,
-        processedFile: outputMeta.processedFile,
+        outputReady: outputMeta.outputReady ?? previous?.outputReady ?? (outputMeta.outputPath ? true : undefined),
+        processedFile: outputMeta.processedFile ?? previous?.processedFile ?? null,
         outputLoaded: true,
         logsUrl,
-        documentName: runMetadata?.documentName,
-        sheetNames: runMetadata?.sheetNames ?? [],
+        documentName: runMetadata?.documentName ?? previous?.documentName,
+        sheetNames: runMetadata?.sheetNames ?? previous?.sheetNames ?? [],
         summary: null,
-        summaryLoaded: false,
+        summaryLoaded: true,
         summaryError: null,
         telemetry: null,
-        telemetryLoaded: false,
+        telemetryLoaded: true,
         telemetryError: null,
-        error: failureMessage ?? summaryMessage ?? null,
-        startedAt: startedAtIso ?? null,
-        completedAt: completedAt.toISOString(),
+        error: failureMessage ?? summaryMessage ?? previous?.error ?? null,
+        startedAt: startedAtIso ?? previous?.startedAt ?? null,
+        completedAt: completedIso ?? previous?.completedAt ?? null,
         durationMs,
       };
     });
@@ -179,32 +190,6 @@ export function useRunSessionModel({
                 outputLoaded: true,
                 logsUrl,
               }
-            : previous,
-        );
-      }
-
-      try {
-        const summary = await fetchRunSummary(runId);
-        setLatestRun((previous) =>
-          previous && previous.runId === runId ? { ...previous, summary, summaryLoaded: true } : previous,
-        );
-      } catch (error) {
-        setLatestRun((previous) =>
-          previous && previous.runId === runId
-            ? { ...previous, summaryLoaded: true, summaryError: describeError(error) }
-            : previous,
-        );
-      }
-
-      try {
-        const telemetry = await fetchRunTelemetry(runId);
-        setLatestRun((previous) =>
-          previous && previous.runId === runId ? { ...previous, telemetry, telemetryLoaded: true } : previous,
-        );
-      } catch (error) {
-        setLatestRun((previous) =>
-          previous && previous.runId === runId
-            ? { ...previous, telemetryLoaded: true, telemetryError: describeError(error) }
             : previous,
         );
       }
@@ -261,6 +246,18 @@ function describeError(error: unknown): string {
   return typeof error === "string" ? error : "Unexpected error";
 }
 
+function calculateDurationMs(startedAt?: string | null, completedAt?: string | null): number | undefined {
+  if (!startedAt || !completedAt) {
+    return undefined;
+  }
+  const startDate = new Date(startedAt);
+  const completedDate = new Date(completedAt);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(completedDate.getTime())) {
+    return undefined;
+  }
+  return Math.max(0, completedDate.getTime() - startDate.getTime());
+}
+
 function deriveOutputMetadata({
   runResource,
   fallbackPath,
@@ -283,7 +280,7 @@ function deriveOutputMetadata({
     fallbackProcessedFile ??
     null;
   const outputUrl = runResource ? runOutputUrl(runResource) ?? undefined : undefined;
-  const outputReady = output?.ready ?? (outputUrl ? true : undefined);
+  const outputReady = output?.ready ?? (outputUrl ? true : undefined) ?? (fallbackPath ? true : undefined);
   const outputFilename =
     (output?.filename as string | null | undefined) ??
     (outputPath ? basename(outputPath) : null);
