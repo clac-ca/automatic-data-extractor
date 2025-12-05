@@ -19,45 +19,26 @@ type PrefixHandler = { prefix: string; formatter: PrefixFormatter };
 
 const BUILD_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "build.queued": (_event, payload, timestamp) => formatBuildQueued(payload, timestamp),
-  "build.created": (_event, payload, timestamp) => formatBuildCreated(payload, timestamp),
-  "build.started": (_event, payload, timestamp) => formatBuildStarted(payload, timestamp),
   "build.start": (_event, payload, timestamp) => formatBuildStarted(payload, timestamp),
-  "build.phase.started": (_event, payload, timestamp) => formatBuildPhaseStarted(payload, timestamp),
   "build.phase.start": (_event, payload, timestamp) => formatBuildPhaseStarted(payload, timestamp),
-  "build.progress": (_event, payload, timestamp) => formatBuildProgress(payload, timestamp),
-  "build.phase.completed": (_event, payload, timestamp) => formatBuildPhaseCompleted(payload, timestamp),
   "build.phase.complete": (_event, payload, timestamp) => formatBuildPhaseCompleted(payload, timestamp),
-  "build.completed": (_event, payload, timestamp) => formatBuildCompletion(payload, timestamp),
   "build.complete": (_event, payload, timestamp) => formatBuildCompletion(payload, timestamp),
 };
 
 const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "run.queued": (event, payload, timestamp) => formatRunQueued(event, payload, timestamp),
   "run.waiting_for_build": (_event, payload, timestamp) => formatRunWaitingForBuild(payload, timestamp),
-  "run.started": (_event, payload, timestamp) => formatRunStarted(payload, timestamp),
   "run.start": (_event, payload, timestamp) => formatRunStarted(payload, timestamp),
   "engine.start": (_event, payload, timestamp) => formatRunStarted(payload, timestamp),
-  "run.phase.started": (_event, payload, timestamp) => formatRunPhaseStarted(payload, timestamp),
-  "run.phase.start": (_event, payload, timestamp) => formatRunPhaseStarted(payload, timestamp),
   "engine.phase.start": (_event, payload, timestamp) => formatRunPhaseStarted(payload, timestamp),
-  "run.phase.completed": (_event, payload, timestamp) => formatRunPhaseCompleted(payload, timestamp),
-  "run.phase.complete": (_event, payload, timestamp) => formatRunPhaseCompleted(payload, timestamp),
   "engine.phase.complete": (_event, payload, timestamp) => formatRunPhaseCompleted(payload, timestamp),
-  "run.table.summary": (_event, payload, timestamp) => formatRunTableSummary(payload, timestamp),
   "engine.table.summary": (_event, payload, timestamp) => formatRunTableSummary(payload, timestamp),
-  "run.column_detector.score": (_event, payload, timestamp) => formatColumnDetectorScore(payload, timestamp),
   "engine.detector.column.score": (_event, payload, timestamp) => formatColumnDetectorScore(payload, timestamp),
-  "run.row_detector.score": (_event, payload, timestamp) => formatRowDetectorScore(payload, timestamp),
   "engine.detector.row.score": (_event, payload, timestamp) => formatRowDetectorScore(payload, timestamp),
-  "run.hook.checkpoint": (_event, payload, timestamp) => formatHookCheckpoint(payload, timestamp),
-  "run.hook.mapping_checked": (_event, payload, timestamp) => formatMappingChecked(payload, timestamp),
   "engine.file.summary": (_event, payload, timestamp) => formatFileSummary(payload, timestamp),
   "engine.sheet.summary": (_event, payload, timestamp) => formatSheetSummary(payload, timestamp),
-  "run.validation.issue": (_event, payload, timestamp) => formatValidationIssue(payload, timestamp),
   "engine.validation.issue": (_event, payload, timestamp) => formatValidationIssue(payload, timestamp),
-  "run.validation.summary": (_event, payload, timestamp) => formatValidationSummary(payload, timestamp),
   "engine.validation.summary": (_event, payload, timestamp) => formatValidationSummary(payload, timestamp),
-  "run.error": (_event, payload, timestamp) => formatRunError(payload, timestamp),
   "run.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.run.summary": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
@@ -108,15 +89,15 @@ export function formatBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
 }
 
 function formatBuildCompletion(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
-  const status = (payload.status as string | undefined) ?? "completed";
+  const statusRaw = (payload.status as string | undefined) ?? "completed";
+  const status = statusRaw === "ready" ? "succeeded" : statusRaw;
   const summary = (payload.summary as string | undefined)?.trim();
-  const exitCode = typeof payload.exit_code === "number" ? payload.exit_code : undefined;
-  const errorMessage =
-    typeof payload.error === "object" && payload.error !== null
-      ? ((payload.error as Record<string, unknown>).message as string | undefined)
-      : undefined;
+  const execution = (payload.execution as Record<string, unknown> | undefined) ?? {};
+  const exitCode = typeof execution.exit_code === "number" ? execution.exit_code : undefined;
+  const failure = (payload.failure as Record<string, unknown> | undefined) ?? undefined;
+  const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : undefined;
 
-  if (status === "succeeded" || status === "reused") {
+  if (status === "succeeded" || status === "reused" || status === "ready") {
     return {
       level: "success",
       message: summary || `Build ${status}.`,
@@ -132,7 +113,7 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
     const exit = typeof exitCode === "number" ? ` (exit code ${exitCode})` : "";
     return {
       level: "error",
-      message: (errorMessage || summary || "Build failed.") + exit,
+      message: (failureMessage || summary || "Build failed.") + exit,
       timestamp,
       origin: "build",
       raw: payload,

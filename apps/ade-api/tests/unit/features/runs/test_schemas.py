@@ -31,13 +31,19 @@ def timestamp() -> datetime:
 
 def _links_for(run_id: UUID) -> RunLinks:
     run_str = str(run_id)
+    base = f"/api/v1/runs/{run_str}"
     return RunLinks(
-        self=f"/api/v1/runs/{run_str}",
-        summary=f"/api/v1/runs/{run_str}/summary",
-        events=f"/api/v1/runs/{run_str}/events",
-        events_stream=f"/api/v1/runs/{run_str}/events/stream",
-        logs=f"/api/v1/runs/{run_str}/logs",
-        output=f"/api/v1/runs/{run_str}/output",
+        self=base,
+        summary=f"{base}/summary",
+        events=f"{base}/events",
+        events_stream=f"{base}/events/stream",
+        events_download=f"{base}/events/download",
+        logs=f"{base}/logs",
+        input=f"{base}/input",
+        input_download=f"{base}/input/download",
+        output=f"{base}/output/download",
+        output_download=f"{base}/output/download",
+        output_metadata=f"{base}/output",
     )
 
 
@@ -57,11 +63,8 @@ def test_run_resource_dump_uses_aliases_and_defaults(
 
     assert payload["object"] == "ade.run"
     assert payload["status"] == RunStatus.QUEUED.value
-    assert payload["input"]["document_id"] is None
-    assert payload["input"]["input_sheet_name"] is None
-    assert payload["output"]["has_output"] is False
-    assert payload["output"]["output_path"] is None
-    assert payload["output"]["processed_file"] is None
+    assert payload["input"] == {}
+    assert payload["output"] == {"ready": False, "has_output": False}
     assert payload["links"]["self"].endswith(str(run_identifiers["run_id"]))
     assert {"failure_code", "failure_stage", "failure_message"}.isdisjoint(payload)
 
@@ -79,16 +82,7 @@ def test_run_create_request_serializes_minimal_options() -> None:
     request = RunCreateRequest()
     payload = request.model_dump()
 
-    assert payload == {
-        "options": {
-            "dry_run": False,
-            "validate_only": False,
-            "force_rebuild": False,
-            "input_document_id": None,
-            "input_sheet_name": None,
-            "metadata": None,
-        }
-    }
+    assert payload == {"options": {"dry_run": False, "validate_only": False, "force_rebuild": False}}
 
 
 @pytest.mark.parametrize("cursor", [9, None])

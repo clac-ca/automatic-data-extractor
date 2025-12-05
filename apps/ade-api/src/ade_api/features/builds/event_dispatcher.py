@@ -166,7 +166,7 @@ class BuildEventDispatcher:
         run_id: UUID | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
-            payload = payload.model_dump()
+            payload = payload.model_dump(exclude_none=True)
         sequence = await self._next_sequence(
             workspace_id=workspace_id,
             configuration_id=configuration_id,

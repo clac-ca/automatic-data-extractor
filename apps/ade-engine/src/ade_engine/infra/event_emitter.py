@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable
 
 from ade_engine.core.types import RunContext
-from ade_engine.schemas import FileSummary, RunSummary, SheetSummary, TableSummary
+from ade_engine.schemas import (
+    FileSummary,
+    RunCompletedPayload,
+    RunSummary,
+    SheetSummary,
+    TableSummary,
+)
 
 from .telemetry import EventSink, _aggregate_validation, _make_event
 
@@ -35,6 +42,67 @@ class BaseNdjsonEmitter:
         self.event_sink = event_sink
         self.source = source
         self._sequence = sequence or _SequenceCounter()
+        self._run_root = self._resolve_run_root()
+
+    def _resolve_run_root(self) -> Path | None:
+        try:
+            paths = getattr(self.run, "paths", None)
+            candidates = [
+                getattr(paths, "logs_dir", None) if paths else None,
+                getattr(paths, "output_dir", None) if paths else None,
+            ]
+            for candidate in candidates:
+                if candidate:
+                    try:
+                        return Path(candidate).absolute().parent
+                    except Exception:
+                        continue
+        except Exception:
+            return None
+        return None
+
+    def _relativize(self, value: Any) -> str | Any:
+        if value is None:
+            return None
+        if self._run_root is None:
+            return str(value)
+        try:
+            path = Path(value)
+        except Exception:
+            return str(value)
+
+        try:
+            if path.is_absolute():
+                return str(path.relative_to(self._run_root))
+            return str(path)
+        except Exception:
+            return str(value)
+
+    def _normalize_payload(self, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+        if payload is None:
+            return None
+
+        def normalize(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                normalized: dict[str, Any] = {}
+                for key, value in obj.items():
+                    if value is None:
+                        continue
+                    if key in {"output_path", "processed_file", "events_path", "source_file", "file_path"}:
+                        normalized[key] = self._relativize(value)
+                        continue
+                    if isinstance(value, dict) or isinstance(value, list):
+                        nested = normalize(value)
+                        if nested not in (None, {}, []):
+                            normalized[key] = nested
+                        continue
+                    normalized[key] = value
+                return normalized
+            if isinstance(obj, list):
+                return [item for item in (normalize(item) for item in obj) if item not in (None, {}, [])]
+            return obj
+
+        return normalize(payload)
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -44,10 +112,11 @@ class BaseNdjsonEmitter:
         if not self.event_sink:
             return None
 
+        normalized_payload = self._normalize_payload(payload) if isinstance(payload, dict) else payload
         event = _make_event(
             run=self.run,
             type_=type_,
-            payload=payload or None,
+            payload=normalized_payload or None,
             sequence=self._sequence.next(),
             source=self.source,
         )
@@ -106,11 +175,11 @@ class EngineEventEmitter(BaseNdjsonEmitter):
         env: dict[str, Any] | None = None,
         **payload: Any,
     ):
-        data: dict[str, Any] = {
-            "status": "running",
-            "engine_version": engine_version,
-            "config_version": config_version,
-        }
+        data: dict[str, Any] = {"status": "running"}
+        if engine_version:
+            data["engine_version"] = engine_version
+        if config_version:
+            data["config_version"] = config_version
         if env:
             data["env"] = env
         if payload:
@@ -180,21 +249,28 @@ class EngineEventEmitter(BaseNdjsonEmitter):
         failure: dict[str, Any] | None = None,
         output_path: str | None = None,
         processed_file: str | None = None,
+        events_path: str | None = None,
         error: dict[str, Any] | None = None,
         **payload: Any,
     ):
-        data: dict[str, Any] = {"status": status}
-        if failure:
-            data["failure"] = failure
+        artifacts: dict[str, Any] = {}
         if output_path is not None:
-            data["output_path"] = output_path
+            artifacts["output_path"] = output_path
         if processed_file is not None:
-            data["processed_file"] = processed_file
-        if error:
-            data["error"] = error
+            artifacts["processed_file"] = processed_file
+        if events_path is not None:
+            artifacts["events_path"] = events_path
+
+        completion = RunCompletedPayload(
+            status=status,
+            failure=failure or error,
+            execution=None,
+            artifacts=artifacts or None,
+            summary=None,
+        ).model_dump(exclude_none=True)
         if payload:
-            data.update(payload)
-        return self._emit(f"{self.prefix}.complete", payload=data)
+            completion.update({k: v for k, v in payload.items() if v is not None})
+        return self._emit(f"{self.prefix}.complete", payload=completion)
 
     # ------------------------------------------------------------------ #
     # Scopes

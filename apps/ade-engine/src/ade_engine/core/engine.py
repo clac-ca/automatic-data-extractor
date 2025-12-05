@@ -22,7 +22,7 @@ from ade_engine.core.pipeline.summary_builder import SummaryAggregator
 from ade_engine.core.types import EngineInfo, RunContext, RunError, RunPaths, RunPhase, RunRequest, RunResult, RunStatus
 from ade_engine.infra.logging import build_run_logger
 from ade_engine.infra.event_emitter import ConfigEventEmitter, EngineEventEmitter
-from ade_engine.infra.telemetry import TelemetryConfig
+from ade_engine.infra.telemetry import TelemetryConfig, _coerce_uuid
 
 
 def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path]:
@@ -229,9 +229,13 @@ class Engine:
         assert normalized_request.input_file is not None
         input_file_name = _input_file_name(normalized_request)
 
+        # Prefer the orchestrator-provided run_id when present to keep telemetry aligned.
+        metadata = dict(normalized_request.metadata) if normalized_request.metadata else {}
+        run_id = _coerce_uuid(metadata.get("run_id")) or uuid7()
+
         run_ctx = RunContext(
-            run_id=uuid7(),
-            metadata=dict(normalized_request.metadata) if normalized_request.metadata else {},
+            run_id=run_id,
+            metadata=metadata,
             manifest=None,
             paths=RunPaths(
                 input_file=normalized_request.input_file,

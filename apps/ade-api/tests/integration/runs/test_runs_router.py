@@ -114,6 +114,14 @@ async def test_run_output_endpoint_serves_file(
 
     headers = await _auth_headers(async_client, seed_identity["workspace_owner"])
 
-    download = await async_client.get(f"/api/v1/runs/{run.id}/output", headers=headers)
+    metadata = await async_client.get(f"/api/v1/runs/{run.id}/output", headers=headers)
+    assert metadata.status_code == 200
+    payload = metadata.json()
+    assert payload["has_output"] is True
+    assert payload["ready"] is True
+    assert payload["output_path"] == "output/normalized.xlsx"
+    assert payload["download_url"].endswith(f"/api/v1/runs/{run.id}/output/download")
+
+    download = await async_client.get(payload["download_url"], headers=headers)
     assert download.status_code == 200
     assert download.text == "demo-output"
