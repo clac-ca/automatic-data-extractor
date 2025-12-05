@@ -6,11 +6,10 @@ import type { WorkbenchDataSeed, WorkbenchRunSummary } from "../types";
 
 import {
   fetchRun,
-  fetchRunOutputs,
   fetchRunSummary,
   fetchRunTelemetry,
   runLogsUrl,
-  runOutputsUrl,
+  runOutputUrl,
   type RunStreamOptions,
 } from "@shared/runs/api";
 import type { RunStatus } from "@shared/runs/types";
@@ -66,7 +65,7 @@ export function useRunSessionModel({
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
   const lastCompletedRunRef = useRef<string | null>(null);
 
-  // Fetch outputs/telemetry/summary exactly once when a run finishes.
+  // Fetch output/telemetry/summary exactly once when a run finishes.
   useEffect(() => {
     if (!runId || !isRunStatusTerminal(runStatus)) {
       return;
@@ -109,17 +108,27 @@ export function useRunSessionModel({
     }
 
     setLatestRun((previous) => {
-      const outputsBase = runResource ? runOutputsUrl(runResource) ?? undefined : previous?.outputsBase;
+      const outputUrl = runResource ? runOutputUrl(runResource) ?? undefined : previous?.outputUrl;
+      const outputPath =
+        (completedPayload.artifacts as { output_path?: string | null } | undefined)?.output_path ??
+        (runResource?.output as { output_path?: string | null } | undefined)?.output_path ??
+        previous?.outputPath ??
+        null;
+      const processedFile =
+        (completedPayload.artifacts as { processed_file?: string | null } | undefined)?.processed_file ??
+        (runResource?.output as { processed_file?: string | null } | undefined)?.processed_file ??
+        previous?.processedFile;
       const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : previous?.logsUrl;
       return {
         runId,
         status: completionStatus,
-        outputsBase,
+        outputUrl,
+        outputPath,
+        processedFile,
+        outputLoaded: true,
         logsUrl,
         documentName: runMetadata?.documentName,
         sheetNames: runMetadata?.sheetNames ?? [],
-        outputs: [],
-        outputsLoaded: false,
         summary: null,
         summaryLoaded: false,
         summaryError: null,
@@ -141,40 +150,33 @@ export function useRunSessionModel({
         } catch (error) {
           setLatestRun((previous) =>
             previous && previous.runId === runId
-              ? { ...previous, outputsLoaded: true, summaryLoaded: true, telemetryLoaded: true, error: describeError(error) }
+              ? { ...previous, outputLoaded: true, summaryLoaded: true, telemetryLoaded: true, error: describeError(error) }
               : previous,
           );
         }
       }
 
       if (currentResource) {
-        const outputsBase = runOutputsUrl(currentResource) ?? undefined;
+        const outputUrl = runOutputUrl(currentResource) ?? undefined;
+        const outputPath =
+          (currentResource.output as { output_path?: string | null } | undefined)?.output_path ??
+          null;
+        const processedFile =
+          (currentResource.output as { processed_file?: string | null } | undefined)?.processed_file ??
+          null;
         const logsUrl = runLogsUrl(currentResource) ?? undefined;
         setLatestRun((previous) =>
-          previous && previous.runId === runId ? { ...previous, outputsBase, logsUrl } : previous,
+          previous && previous.runId === runId
+            ? {
+                ...previous,
+                outputUrl,
+                outputPath: outputPath ?? previous.outputPath ?? null,
+                processedFile: processedFile ?? previous.processedFile,
+                outputLoaded: true,
+                logsUrl,
+              }
+            : previous,
         );
-        try {
-          const listing = await fetchRunOutputs(currentResource ?? runId);
-          const outputFiles = Array.isArray(listing.files) ? listing.files : [];
-          const files = outputFiles.map((file) => {
-            const path = (file as { path?: string }).path;
-            return {
-              name: file.name ?? path ?? "output",
-              path,
-              byte_size: file.byte_size ?? 0,
-              download_url: file.download_url ?? undefined,
-            };
-          });
-          setLatestRun((previous) =>
-            previous && previous.runId === runId ? { ...previous, outputs: files, outputsLoaded: true } : previous,
-          );
-        } catch (error) {
-          setLatestRun((previous) =>
-            previous && previous.runId === runId
-              ? { ...previous, outputsLoaded: true, error: describeError(error) }
-              : previous,
-          );
-        }
       }
 
       try {

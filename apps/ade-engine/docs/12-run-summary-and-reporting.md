@@ -97,8 +97,8 @@ in-memory pipeline artifacts:
     "file_ids": ["file_0"],
     "sheet_ids": ["sheet_0"],
     "table_ids": ["tbl_0", "tbl_1"],
-    "processed_files": ["input.xlsx"],
-    "output_paths": ["output/normalized.xlsx"]
+    "processed_file": "input.xlsx",
+    "output_path": "output/normalized.xlsx"
   }
 }
 ```

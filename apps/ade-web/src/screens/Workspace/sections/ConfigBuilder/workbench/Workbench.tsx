@@ -50,7 +50,6 @@ import { ApiError } from "@shared/api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { client } from "@shared/api/client";
-import { formatConsoleTimestamp } from "./utils/console";
 import { useNotifications, type NotificationIntent } from "@shared/notifications";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
@@ -197,7 +196,6 @@ export function Workbench({
     validation: validationState,
     consoleLines,
     latestRun,
-    appendConsoleLine,
     clearConsole,
     startRun,
   } = useRunSessionModel({
@@ -287,10 +285,9 @@ export function Workbench({
   const pushConsoleError = useCallback(
     (error: unknown) => {
       const message = describeError(error);
-      appendConsoleLine({ level: "error", message, timestamp: formatConsoleTimestamp(new Date()), origin: "run" });
       showConsoleBanner(message, { intent: "danger", duration: null });
     },
-    [appendConsoleLine, showConsoleBanner],
+    [showConsoleBanner],
   );
 
   const handleExportConfig = useCallback(async () => {
@@ -333,21 +330,8 @@ export function Workbench({
       status === "succeeded" ? "success" : isCancelled ? "info" : "danger";
     showConsoleBanner(notice, { intent });
 
-    if (mode !== "validation") {
-      const completedTimestamp = completedAt ? new Date(completedAt) : new Date();
-      appendConsoleLine({
-        level: status === "succeeded" ? "success" : isCancelled ? "warning" : "error",
-        message:
-          typeof durationMs === "number" && durationMs > 0
-            ? `Run ${status} in ${formatRunDurationLabel(durationMs)}. Open Run summary for details.`
-            : `Run ${status}. Open Run summary for details.`,
-        timestamp: formatConsoleTimestamp(completedTimestamp),
-        origin: "run",
-      });
-    }
-
     setPendingCompletion((current) => (current && current.runId === completedRunId ? null : current));
-  }, [pendingCompletion, appendConsoleLine, showConsoleBanner, setPendingCompletion]);
+  }, [pendingCompletion, showConsoleBanner, setPendingCompletion]);
 
   const isMaximized = windowState === "maximized";
   const isMacPlatform = typeof navigator !== "undefined" ? /mac/i.test(navigator.platform) : false;

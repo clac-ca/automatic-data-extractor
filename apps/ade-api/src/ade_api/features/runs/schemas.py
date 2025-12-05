@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 
 from ade_engine.schemas import AdeEvent
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
@@ -23,8 +23,6 @@ __all__ = [
     "RunLinks",
     "RunOutput",
     "RunPage",
-    "RunOutputFile",
-    "RunOutputListing",
     "RunResource",
     "RunEventsPage",
 ]
@@ -39,35 +37,16 @@ class RunCreateOptions(BaseSchema):
         default=False,
         description="If true, rebuild the configuration environment before running.",
     )
-    document_ids: list[UUIDStr] | None = Field(
-        default=None,
-        description="Preferred document identifiers to stage as inputs (first is used today).",
-    )
-    input_document_id: UUIDStr | None = Field(
-        default=None,
-        description="Deprecated: single document identifier to ingest.",
-    )
+    input_document_id: UUIDStr | None = Field(default=None, description="Document identifier to ingest.")
     input_sheet_name: str | None = Field(
         default=None,
         description="Preferred worksheet to ingest when processing XLSX files.",
         max_length=64,
     )
-    input_sheet_names: list[str] | None = Field(
-        default=None,
-        description="Explicit worksheets to ingest; defaults to all when omitted.",
-    )
     metadata: dict[str, str] | None = Field(
         default=None,
         description="Opaque metadata to propagate with run telemetry.",
     )
-
-    @model_validator(mode="after")
-    def _normalize_document_ids(self) -> RunCreateOptions:
-        if self.document_ids and not self.input_document_id:
-            self.input_document_id = self.document_ids[0]
-        elif self.input_document_id and not self.document_ids:
-            self.document_ids = [self.input_document_id]
-        return self
 
 
 class RunCreateRequest(BaseSchema):
@@ -84,14 +63,14 @@ class RunLinks(BaseSchema):
     events: str
     events_stream: str
     logs: str
-    outputs: str
+    output: str
 
 
 class RunInput(BaseSchema):
     """Input metadata captured for a run."""
 
-    document_ids: list[UUIDStr] = Field(default_factory=list)
-    input_sheet_names: list[str] = Field(default_factory=list)
+    document_id: UUIDStr | None = None
+    input_sheet_name: str | None = None
     input_file_count: int | None = None
     input_sheet_count: int | None = None
 
@@ -99,9 +78,9 @@ class RunInput(BaseSchema):
 class RunOutput(BaseSchema):
     """Output metadata captured for a run."""
 
-    has_outputs: bool = False
-    output_count: int = 0
-    processed_files: list[str] = Field(default_factory=list)
+    has_output: bool = False
+    output_path: str | None = None
+    processed_file: str | None = None
 
 
 class RunResource(BaseSchema):
@@ -151,22 +130,6 @@ class RunPage(Page[RunResource]):
     """Paginated collection of ``RunResource`` items."""
 
     items: list[RunResource]
-
-
-class RunOutputFile(BaseSchema):
-    """Single file emitted by a streaming run output directory."""
-
-    name: str
-    kind: str | None = None
-    content_type: str | None = None
-    byte_size: int
-    download_url: str | None = None
-
-
-class RunOutputListing(BaseSchema):
-    """Collection of files produced by a streaming run."""
-
-    files: list[RunOutputFile] = Field(default_factory=list)
 
 
 class RunEventsPage(BaseSchema):

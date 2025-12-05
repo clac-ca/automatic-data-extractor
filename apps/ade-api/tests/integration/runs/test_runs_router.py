@@ -81,7 +81,7 @@ async def test_workspace_run_listing_filters_by_status(
     assert filtered_payload["items"][0]["id"] == str(run_ok.id)
 
 
-async def test_run_outputs_endpoint_serves_files(
+async def test_run_output_endpoint_serves_file(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
     session,
@@ -114,12 +114,6 @@ async def test_run_outputs_endpoint_serves_files(
 
     headers = await _auth_headers(async_client, seed_identity["workspace_owner"])
 
-    listing = await async_client.get(f"/api/v1/runs/{run.id}/outputs", headers=headers)
-    assert listing.status_code == 200
-    listing_payload = listing.json()
-    assert listing_payload["files"]
-    assert listing_payload["files"][0]["name"] == "normalized.xlsx"
-
-    download = await async_client.get(listing_payload["files"][0]["download_url"], headers=headers)
+    download = await async_client.get(f"/api/v1/runs/{run.id}/output", headers=headers)
     assert download.status_code == 200
     assert download.text == "demo-output"

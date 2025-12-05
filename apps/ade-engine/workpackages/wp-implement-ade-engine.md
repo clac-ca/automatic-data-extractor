@@ -291,7 +291,7 @@ Keep short inline status notes as you go.
   - `ade-engine run`:
     - Flags → `RunRequest` (`--input`, `--input-dir`, `--input-sheet`, `--output-dir`, `--logs-dir`, `--config-package`, `--manifest-path`, optional `--metadata key=value`)
     - Run engine once
-    - Print JSON summary mirroring `RunResult` (`status`, `output_paths`, `artifact_path`, `events_path`, `processed_files`, `error`)
+    - Print JSON summary mirroring `RunResult` (`status`, `output_path`, `artifact_path`, `events_path`, `processed_file`, `error`)
     - Set exit code 0 on success, non‑zero on failure / usage error
   - `ade-engine version`:
     - Print engine `__version__`

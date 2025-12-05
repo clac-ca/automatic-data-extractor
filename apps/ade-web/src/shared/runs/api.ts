@@ -5,7 +5,6 @@ import type { AdeEvent as RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
-export type RunOutputListing = components["schemas"]["RunOutputListing"];
 export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
 type RunCreateRequest = components["schemas"]["RunCreateRequest"];
 type RunCreatePathParams =
@@ -232,26 +231,6 @@ export async function fetchRunEvents(
   return events;
 }
 
-export async function fetchRunOutputs(
-  run: RunResource | string,
-  signal?: AbortSignal,
-): Promise<RunOutputListing> {
-  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const outputsLink = runResource.links?.outputs;
-  const runId = runResource.id;
-  if (!outputsLink || !runId) {
-    throw new Error("Run outputs link unavailable.");
-  }
-
-  const { data, error } = await client.GET("/api/v1/runs/{run_id}/outputs", {
-    params: { path: { run_id: runId } },
-    signal,
-  });
-
-  if (error || !data) throw new Error("Run outputs unavailable");
-  return data as RunOutputListing;
-}
-
 export async function fetchRunTelemetry(
   run: RunResource | string,
   signal?: AbortSignal,
@@ -329,8 +308,8 @@ export async function fetchRunSummary(runId: string, signal?: AbortSignal): Prom
   return summary as RunSummary;
 }
 
-export function runOutputsUrl(run: RunResource): string | null {
-  const link = run.links?.outputs;
+export function runOutputUrl(run: RunResource): string | null {
+  const link = (run as { links?: { output?: string } })?.links?.output;
   return link ? resolveApiUrl(link) : null;
 }
 
@@ -349,7 +328,6 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
 
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
-  outputs: (runId: string) => ["run-outputs", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
   summary: (runId: string) => ["run-summary", runId] as const,
 };

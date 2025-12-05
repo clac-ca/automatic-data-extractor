@@ -1055,24 +1055,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/outputs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Run Outputs Endpoint */
-        get: operations["list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+    "/api/v1/runs/{run_id}/output": {
         parameters: {
             query?: never;
             header?: never;
@@ -1080,7 +1063,7 @@ export type paths = {
             cookie?: never;
         };
         /** Download Run Output Endpoint */
-        get: operations["download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get"];
+        get: operations["download_run_output_endpoint_api_v1_runs__run_id__output_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2611,13 +2594,8 @@ export type components = {
              */
             force_rebuild: boolean;
             /**
-             * Document Ids
-             * @description Preferred document identifiers to stage as inputs (first is used today).
-             */
-            document_ids?: string[] | null;
-            /**
              * Input Document Id
-             * @description Deprecated: single document identifier to ingest.
+             * @description Document identifier to ingest.
              */
             input_document_id?: string | null;
             /**
@@ -2625,11 +2603,6 @@ export type components = {
              * @description Preferred worksheet to ingest when processing XLSX files.
              */
             input_sheet_name?: string | null;
-            /**
-             * Input Sheet Names
-             * @description Explicit worksheets to ingest; defaults to all when omitted.
-             */
-            input_sheet_names?: string[] | null;
             /**
              * Metadata
              * @description Opaque metadata to propagate with run telemetry.
@@ -2660,10 +2633,10 @@ export type components = {
          * @description Input metadata captured for a run.
          */
         RunInput: {
-            /** Document Ids */
-            document_ids?: string[];
-            /** Input Sheet Names */
-            input_sheet_names?: string[];
+            /** Document Id */
+            document_id?: string | null;
+            /** Input Sheet Name */
+            input_sheet_name?: string | null;
             /** Input File Count */
             input_file_count?: number | null;
             /** Input Sheet Count */
@@ -2684,8 +2657,8 @@ export type components = {
             events_stream: string;
             /** Logs */
             logs: string;
-            /** Outputs */
-            outputs: string;
+            /** Output */
+            output: string;
         };
         /**
          * RunOutput
@@ -2693,41 +2666,14 @@ export type components = {
          */
         RunOutput: {
             /**
-             * Has Outputs
+             * Has Output
              * @default false
              */
-            has_outputs: boolean;
-            /**
-             * Output Count
-             * @default 0
-             */
-            output_count: number;
-            /** Processed Files */
-            processed_files?: string[];
-        };
-        /**
-         * RunOutputFile
-         * @description Single file emitted by a streaming run output directory.
-         */
-        RunOutputFile: {
-            /** Name */
-            name: string;
-            /** Kind */
-            kind?: string | null;
-            /** Content Type */
-            content_type?: string | null;
-            /** Byte Size */
-            byte_size: number;
-            /** Download Url */
-            download_url?: string | null;
-        };
-        /**
-         * RunOutputListing
-         * @description Collection of files produced by a streaming run.
-         */
-        RunOutputListing: {
-            /** Files */
-            files?: components["schemas"]["RunOutputFile"][];
+            has_output: boolean;
+            /** Output Path */
+            output_path?: string | null;
+            /** Processed File */
+            processed_file?: string | null;
         };
         /**
          * RunPage
@@ -6769,53 +6715,13 @@ export interface operations {
             };
         };
     };
-    list_run_outputs_endpoint_api_v1_runs__run_id__outputs_get: {
+    download_run_output_endpoint_api_v1_runs__run_id__output_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Run identifier */
                 run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOutputListing"];
-                };
-            };
-            /** @description Outputs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_run_output_endpoint_api_v1_runs__run_id__outputs__output_path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-                output_path: string;
             };
             cookie?: never;
         };

@@ -555,8 +555,12 @@ export function resolveWorkspaceSection(
         to: `${legacyTarget}${suffix}`,
       };
     }
-    case "settings":
-      return { kind: "content", key: "settings", element: <WorkspaceSettingsRoute /> };
+    case "settings": {
+      const remaining = segments.slice(1);
+      const normalized = remaining.length > 0 ? remaining : [];
+      const key = `settings:${normalized.length > 0 ? normalized.join(":") : "general"}`;
+      return { kind: "content", key, element: <WorkspaceSettingsRoute sectionSegments={normalized} /> };
+    }
     default:
       return {
         kind: "content",

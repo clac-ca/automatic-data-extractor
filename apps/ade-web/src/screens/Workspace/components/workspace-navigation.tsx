@@ -54,6 +54,7 @@ interface WorkspaceSectionDescriptor {
   readonly path: string;
   readonly label: string;
   readonly icon: ComponentType<SVGProps<SVGSVGElement>>;
+  readonly matchPrefix?: boolean;
 }
 
 const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
@@ -80,6 +81,7 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     path: "settings",
     label: "Workspace Settings",
     icon: SettingsIcon,
+    matchPrefix: true,
   },
 ] as const;
 
@@ -90,6 +92,7 @@ export interface WorkspaceNavigationItem {
   readonly label: string;
   readonly href: string;
   readonly icon: ComponentType<SVGProps<SVGSVGElement>>;
+  readonly matchPrefix?: boolean;
 }
 
 export function getWorkspacePrimaryNavigation(workspace: WorkspaceProfile): WorkspaceNavigationItem[] {
@@ -98,5 +101,6 @@ export function getWorkspacePrimaryNavigation(workspace: WorkspaceProfile): Work
     label: section.label,
     href: `/workspaces/${workspace.id}/${section.path}`,
     icon: section.icon,
+    matchPrefix: section.matchPrefix,
   }));
 }

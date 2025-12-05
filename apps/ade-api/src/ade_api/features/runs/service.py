@@ -128,8 +128,8 @@ class RunPathsSnapshot:
     """
 
     events_path: str | None = None
-    output_paths: list[str] = field(default_factory=list)
-    processed_files: list[str] = field(default_factory=list)
+    output_path: str | None = None
+    processed_file: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -283,13 +283,11 @@ class RunsService:
 
         # Optional primary input document descriptor
         input_document_id = options.input_document_id or None
-        document_descriptor: dict[str, Any] | None = None
         if input_document_id:
-            document = await self._require_document(
+            await self._require_document(
                 workspace_id=configuration.workspace_id,
                 document_id=input_document_id,
             )
-            document_descriptor = self._document_descriptor(document)
 
         run_id = self._generate_run_id()
 
@@ -329,12 +327,7 @@ class RunsService:
             retry_of_run_id=None,
             trace_id=str(run_id),
             input_document_id=input_document_id,
-            input_documents=[document_descriptor] if document_descriptor else [],
             input_sheet_name=selected_sheet_name,
-            input_sheet_names=(
-                options.input_sheet_names
-                or ([selected_sheet_name] if selected_sheet_name else None)
-            ),
             build_id=build_id,
         )
         self._session.add(run)
@@ -926,27 +919,19 @@ class RunsService:
             default_paths=RunPathsSnapshot(),
         )
 
-        # Input documents
-        document_ids = [
-            str(doc["document_id"])
-            for doc in (run.input_documents or [])
-            if isinstance(doc, dict) and doc.get("document_id")
-        ]
-        if run.input_document_id and run.input_document_id not in document_ids:
-            document_ids.append(run.input_document_id)
-
-        # Input sheets
-        sheet_names = run.input_sheet_names or []
-        if run.input_sheet_name and run.input_sheet_name not in sheet_names:
-            sheet_names.append(run.input_sheet_name)
+        # Input document + sheet metadata
+        document_id = str(run.input_document_id) if run.input_document_id else None
+        sheet_name = run.input_sheet_name
 
         # Outputs and processed files
-        output_files = paths.output_paths or self._relative_output_paths(run_dir / "output")
-        processed_files = list(paths.processed_files or [])
-        if not processed_files and isinstance(summary_details, dict):
-            processed_files = [
-                str(item) for item in summary_details.get("processed_files", []) or []
-            ]
+        output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
+        processed_file = paths.processed_file
+        if not processed_file and isinstance(summary_details, dict):
+            processed_file = summary_details.get("processed_file")
+            if not processed_file:
+                processed = summary_details.get("processed_files", [])
+                if isinstance(processed, list) and processed:
+                    processed_file = str(processed[0])
 
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at) or self._coerce_datetime(
@@ -994,15 +979,15 @@ class RunsService:
             duration_seconds=duration_seconds,
             exit_code=run.exit_code,
             input=RunInput(
-                document_ids=document_ids,
-                input_sheet_names=sheet_names,
+                document_id=document_id,
+                input_sheet_name=sheet_name,
                 input_file_count=files_counts.get("total"),
                 input_sheet_count=sheets_counts.get("total"),
             ),
             output=RunOutput(
-                has_outputs=bool(output_files),
-                output_count=len(output_files),
-                processed_files=processed_files,
+                has_output=bool(output_path),
+                output_path=output_path,
+                processed_file=str(processed_file) if processed_file else None,
             ),
             links=self._links(run.id),
         )
@@ -1016,7 +1001,7 @@ class RunsService:
             events=f"{base}/events",
             events_stream=f"{base}/events/stream",
             logs=f"{base}/logs",
-            outputs=f"{base}/outputs",
+            output=f"{base}/output",
         )
 
     async def get_logs_file_path(self, *, run_id: UUID) -> Path:
@@ -1051,83 +1036,50 @@ class RunsService:
         )
         return logs_path
 
-    async def list_output_files(self, *, run_id: UUID) -> list[tuple[str, int]]:
-        """Return output file tuples for ``run_id``."""
-
-        logger.debug(
-            "run.outputs.list.start",
-            extra=log_context(run_id=run_id),
-        )
-        run = await self._require_run(run_id)
-        output_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "output"
-        if not output_dir.exists() or not output_dir.is_dir():
-            logger.warning(
-                "run.outputs.list.missing",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(output_dir),
-                ),
-            )
-            raise RunOutputMissingError("Run output is unavailable")
-
-        files: list[tuple[str, int]] = []
-        for path in output_dir.rglob("*"):
-            if not path.is_file():
-                continue
-            try:
-                relative = path.relative_to(output_dir)
-            except ValueError:
-                continue
-            files.append((str(relative), path.stat().st_size))
-
-        logger.info(
-            "run.outputs.list.success",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                count=len(files),
-            ),
-        )
-        return files
-
     async def resolve_output_file(
         self,
         *,
         run_id: UUID,
-        relative_path: str,
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
 
         logger.debug(
             "run.outputs.resolve.start",
-            extra=log_context(run_id=run_id, path=relative_path),
+            extra=log_context(run_id=run_id),
         )
         run = await self._require_run(run_id)
-        output_dir = (
-            self._run_dir_for_run(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-            )
-            / "output"
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+
+        summary_payload = self._deserialize_run_summary(run.summary)
+        summary_details = (
+            summary_payload.get("details")
+            if isinstance(summary_payload, dict)
+            else summary_payload
         )
-        if not output_dir.exists() or not output_dir.is_dir():
+        paths_snapshot = self._finalize_paths(
+            summary=summary_details if isinstance(summary_details, dict) else None,
+            run_dir=run_dir,
+            default_paths=RunPathsSnapshot(),
+        )
+        output_relative = (
+            paths_snapshot.output_path
+            or self._relative_output_path(run_dir / "output", run_dir)
+        )
+        if not output_relative:
             logger.warning(
                 "run.outputs.resolve.missing_root",
                 extra=log_context(
                     workspace_id=run.workspace_id,
                     configuration_id=run.configuration_id,
                     run_id=run.id,
-                    path=str(output_dir),
+                    path=str(run_dir / "output"),
                 ),
             )
             raise RunOutputMissingError("Run output is unavailable")
 
-        candidate = (output_dir / relative_path).resolve()
+        candidate = (self._runs_dir / output_relative).resolve()
         try:
-            candidate.relative_to(output_dir)
+            candidate.relative_to(run_dir)
         except ValueError:
             logger.warning(
                 "run.outputs.resolve.outside_directory",
@@ -1192,26 +1144,37 @@ class RunsService:
     # Internal helpers: paths, summaries, manifests
     # --------------------------------------------------------------------- #
 
-    def _relative_if_exists(self, path: str | Path | None) -> str | None:
+    def _relative_if_exists(self, path: str | Path | None, *, run_dir: Path | None = None) -> str | None:
         if path is None:
             return None
-        candidate = Path(path)
-        if not candidate.exists():
-            return None
-        try:
-            return self.run_relative_path(candidate)
-        except RunOutputMissingError:
-            return None
 
-    def _relative_output_paths(self, output_dir: Path) -> list[str]:
+        candidates: list[Path] = []
+        candidate = Path(path)
+        candidates.append(candidate)
+        if run_dir is not None and not candidate.is_absolute():
+            candidates.append(run_dir / candidate)
+
+        for option in candidates:
+            if not option.exists():
+                continue
+            try:
+                return self.run_relative_path(option)
+            except RunOutputMissingError:
+                continue
+        return None
+
+    def _relative_output_path(self, output_dir: Path, run_dir: Path) -> str | None:
         if not output_dir.exists() or not output_dir.is_dir():
-            return []
-        paths: list[str] = []
+            return None
+        normalized = output_dir / "normalized.xlsx"
+        relative = self._relative_if_exists(normalized, run_dir=run_dir)
+        if relative:
+            return relative
         for path in sorted(p for p in output_dir.rglob("*") if p.is_file()):
-            relative = self._relative_if_exists(path)
+            relative = self._relative_if_exists(path, run_dir=run_dir)
             if relative is not None:
-                paths.append(relative)
-        return paths
+                return relative
+        return None
 
     @staticmethod
     def _document_descriptor(document: Document) -> dict[str, Any]:
@@ -1235,8 +1198,8 @@ class RunsService:
 
         snapshot = RunPathsSnapshot(
             events_path=default_paths.events_path,
-            output_paths=list(default_paths.output_paths),
-            processed_files=list(default_paths.processed_files),
+            output_path=default_paths.output_path,
+            processed_file=default_paths.processed_file,
         )
         details = summary.get("details") if isinstance(summary, dict) else None
         if not isinstance(details, dict):
@@ -1245,30 +1208,45 @@ class RunsService:
         # Events path: summary beats defaults, then fall back to logs/events.ndjson.
         logs_dir = run_dir / "logs"
         event_candidates: list[str | Path | None] = [
-            logs_dir / "events.ndjson",
             details.get("events_path") if isinstance(details, dict) else None,
+            logs_dir / "events.ndjson",
         ]
         for candidate in event_candidates:
-            snapshot.events_path = self._relative_if_exists(candidate)
+            snapshot.events_path = self._relative_if_exists(candidate, run_dir=run_dir)
             if snapshot.events_path:
                 break
 
-        # Output paths: summary-specified relative paths first, then scan output dir.
-        output_candidates = details.get("output_paths") if isinstance(details, dict) else None
-        if isinstance(output_candidates, list):
-            snapshot.output_paths = [
-                p
-                for p in (self._relative_if_exists(path) for path in output_candidates)
-                if p
-            ]
+        # Output path: prefer explicit summary field, then fallback to inferred defaults.
+        output_candidates: list[str | Path | None] = []
+        if isinstance(details, dict):
+            output_candidates.append(details.get("output_path"))
+            legacy_outputs = details.get("output_paths")
+            if isinstance(legacy_outputs, list) and legacy_outputs:
+                output_candidates.extend(legacy_outputs)
+        output_candidates.append(default_paths.output_path)
+        output_candidates.append(run_dir / "output" / "normalized.xlsx")
 
-        if not snapshot.output_paths:
-            snapshot.output_paths = self._relative_output_paths(run_dir / "output")
+        for candidate in output_candidates:
+            snapshot.output_path = self._relative_if_exists(candidate, run_dir=run_dir)
+            if snapshot.output_path:
+                break
 
-        # Processed files: summary value if present, otherwise leave as-is.
-        processed_candidates = details.get("processed_files") if isinstance(details, dict) else None
-        if isinstance(processed_candidates, list):
-            snapshot.processed_files = [str(path) for path in processed_candidates]
+        if not snapshot.output_path:
+            snapshot.output_path = self._relative_output_path(run_dir / "output", run_dir)
+
+        # Processed file: summary value if present, otherwise leave as-is/default.
+        processed_candidate: str | None = None
+        if isinstance(details, dict):
+            processed_value = details.get("processed_file")
+            if isinstance(processed_value, str):
+                processed_candidate = processed_value
+            else:
+                legacy_processed = details.get("processed_files")
+                if isinstance(legacy_processed, list) and legacy_processed:
+                    processed_candidate = str(legacy_processed[0])
+        if not processed_candidate and default_paths.processed_file:
+            processed_candidate = default_paths.processed_file
+        snapshot.processed_file = processed_candidate
 
         return snapshot
 
@@ -1326,7 +1304,8 @@ class RunsService:
                 "duration_ms": self._duration_ms(run),
             },
             artifacts={
-                "output_paths": paths.output_paths,
+                "output_path": paths.output_path,
+                "processed_file": paths.processed_file,
                 "events_path": paths.events_path,
             },
         )
@@ -1588,11 +1567,8 @@ class RunsService:
         command.extend(["--output-dir", str(run_dir / "output")])
         command.extend(["--logs-dir", str(engine_logs_dir)])
 
-        sheets = options.input_sheet_names or []
         if options.input_sheet_name:
-            sheets.append(options.input_sheet_name)
-        for sheet in sheets:
-            command.extend(["--input-sheet", sheet])
+            command.extend(["--input-sheet", options.input_sheet_name])
 
         metadata: dict[str, str] = {
             "run_id": run.id,
@@ -1842,10 +1818,10 @@ class RunsService:
                         summary_json = self._serialize_summary(summary_model)
 
                     paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
-                    if latest_paths_snapshot.processed_files and not paths_snapshot.processed_files:
-                        paths_snapshot.processed_files = list(latest_paths_snapshot.processed_files)
-                    if latest_paths_snapshot.output_paths and not paths_snapshot.output_paths:
-                        paths_snapshot.output_paths = list(latest_paths_snapshot.output_paths)
+                    if latest_paths_snapshot.processed_file and not paths_snapshot.processed_file:
+                        paths_snapshot.processed_file = latest_paths_snapshot.processed_file
+                    if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
+                        paths_snapshot.output_path = latest_paths_snapshot.output_path
 
                     completion = await self._complete_run(
                         run,
@@ -1885,38 +1861,43 @@ class RunsService:
                                 summary_json=engine_summary_json,
                             )
                             details = engine_summary.details or {}
-                            if (
-                                not latest_paths_snapshot.processed_files
-                                and isinstance(details, dict)
-                            ):
-                                processed = details.get("processed_files")
-                                if processed:
-                                    latest_paths_snapshot.processed_files = [
-                                        str(path)
-                                        for path in processed
-                                    ]
-                            if not latest_paths_snapshot.output_paths and isinstance(details, dict):
-                                outputs = details.get("output_paths")
-                                if outputs:
-                                    latest_paths_snapshot.output_paths = [
-                                        str(path)
-                                        for path in outputs
-                                    ]
+                            if not latest_paths_snapshot.processed_file and isinstance(details, dict):
+                                processed = details.get("processed_file")
+                                if isinstance(processed, str):
+                                    latest_paths_snapshot.processed_file = processed
+                                else:
+                                    processed_list = details.get("processed_files")
+                                    if isinstance(processed_list, list) and processed_list:
+                                        latest_paths_snapshot.processed_file = str(processed_list[0])
+                            if not latest_paths_snapshot.output_path and isinstance(details, dict):
+                                output_path = details.get("output_path")
+                                if isinstance(output_path, str):
+                                    latest_paths_snapshot.output_path = output_path
+                                else:
+                                    outputs = details.get("output_paths")
+                                    if isinstance(outputs, list) and outputs:
+                                        latest_paths_snapshot.output_path = str(outputs[0])
                         except ValidationError:
                             engine_summary = None
                     elif event.type == "engine.complete" and isinstance(payload_dict, dict):
-                        processed_files = payload_dict.get("processed_files")
-                        if processed_files:
-                            latest_paths_snapshot.processed_files = [
-                                str(path)
-                                for path in processed_files
-                            ]
-                        output_paths = payload_dict.get("output_paths")
-                        if output_paths:
-                            latest_paths_snapshot.output_paths = [
-                                str(path)
-                                for path in output_paths
-                            ]
+                        processed_file = payload_dict.get("processed_file")
+                        if isinstance(processed_file, str):
+                            latest_paths_snapshot.processed_file = processed_file
+                        elif payload_dict.get("processed_files"):
+                            processed_files = payload_dict.get("processed_files") or []
+                            if processed_files:
+                                latest_paths_snapshot.processed_file = str(
+                                    list(processed_files)[0]
+                                )
+                        output_path = payload_dict.get("output_path")
+                        if isinstance(output_path, str):
+                            latest_paths_snapshot.output_path = output_path
+                        elif payload_dict.get("output_paths"):
+                            output_paths = payload_dict.get("output_paths") or []
+                            if output_paths:
+                                latest_paths_snapshot.output_path = str(
+                                    list(output_paths)[0]
+                                )
 
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
@@ -2169,10 +2150,6 @@ class RunsService:
             env["ADE_RUN_VALIDATE_ONLY"] = "1"
         if options.input_sheet_name:
             env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
-        if options.input_sheet_names:
-            env["ADE_RUN_INPUT_SHEETS"] = json_dumps(options.input_sheet_names)
-            if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
-                env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
         if context.run_id:
             env["ADE_TELEMETRY_CORRELATION_ID"] = str(context.run_id)
             env["ADE_RUN_ID"] = str(context.run_id)
@@ -2232,11 +2209,7 @@ class RunsService:
     def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
         """Resolve a single selected sheet name from the run options, if any."""
 
-        selected = options.input_sheet_name
-        if not selected and options.input_sheet_names:
-            if len(options.input_sheet_names) == 1:
-                selected = options.input_sheet_names[0]
-        return selected
+        return options.input_sheet_name
 
     # ------------------------------------------------------------------ #
     # Internal helpers: event logging

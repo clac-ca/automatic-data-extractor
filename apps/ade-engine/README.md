@@ -409,7 +409,7 @@ Key events the engine emits:
 - `engine.run.summary` — authoritative hierarchical summary built from in-memory artifacts.
 - `engine.validation.summary` — aggregated validation counts (optional, emitted when there are issues).
 - `engine.validation.issue` — optional per-issue events.
-- `engine.complete` — terminal status with `status`, `output_paths`, `processed_files`, and optional failure/error payloads.
+- `engine.complete` — terminal status with `status`, `output_path`, `processed_file`, and optional failure/error payloads.
 
 How it’s written:
 

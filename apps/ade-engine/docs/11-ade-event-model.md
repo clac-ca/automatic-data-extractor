@@ -34,7 +34,7 @@ and stamps those fields before persisting/streaming to clients.
 - **`engine.validation.summary`** — aggregated validation counts (emitted when issues exist).
 - **`engine.validation.issue`** — optional per-issue events for debugging.
 - **`engine.run.summary`** — authoritative run summary emitted before completion (paired with `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary`).
-- **`engine.complete`** — terminal status with `status`, `output_paths`, `processed_files`, and optional `failure`/`error` info.
+- **`engine.complete`** — terminal status with `status`, `output_path`, `processed_file`, and optional `failure`/`error` info.
 - **`config.*`** — optional custom events emitted by config code via `ConfigEventEmitter`.
 
 Build events are produced by ade-api (not the engine) and re-enveloped through

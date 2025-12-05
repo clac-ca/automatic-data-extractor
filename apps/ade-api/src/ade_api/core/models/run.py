@@ -46,11 +46,7 @@ class Run(Base):
     input_document_id: Mapped[UUID | None] = mapped_column(
         UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=True
     )
-    input_documents: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSON, nullable=True
-    )
     input_sheet_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
     status: Mapped[RunStatus] = mapped_column(
         SAEnum(

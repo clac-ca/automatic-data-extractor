@@ -10,11 +10,16 @@
 
 ## Work Package Checklist
 
-* [ ] Replace the current tabbed workspace settings route with a “standard settings” layout (sidebar + subpages)
-* [ ] Fix **all** settings-related API calls to respect backend pagination limits (page_size ≤ 100) and correct scope usage
-* [ ] Refactor the Members settings UX (loaders/errors, user directory handling, role assignment flow) and verify end-to-end functionality
-* [ ] Refactor the Roles settings UX (permissions scope, create/edit/delete role flows) and verify end-to-end functionality
-* [ ] Add/adjust tests, remove old settings code paths, and run a full manual QA pass for Workspace Settings
+* [x] Replace the current tabbed workspace settings route with a “standard settings” layout (sidebar + subpages)
+* [x] Fix **all** settings-related API calls to respect backend pagination limits (page_size ≤ 100) and correct scope usage
+* [x] Refactor the Members settings UX (loaders/errors, user directory handling, role assignment flow) and verify end-to-end functionality
+* [x] Refactor the Roles settings UX (permissions scope, create/edit/delete role flows) and verify end-to-end functionality
+* [x] Add/adjust tests and remove old settings code paths — new nav/pagination coverage added; old bundle references updated
+* [x] Rebuilt settings shell/navigation (grouped IA, canonical paths, shared confirm dialog) across settings sections
+* [x] Remove ADE safe mode control from workspace settings (surface as system/global-only)
+* [x] Introduce drawers + routeable detail/editors for Members and Roles (list + drawer patterns, no inline editors)
+* [x] Add settings shell affordances: breadcrumbs + unsaved-change guard for form sections
+* [ ] Manual QA pass for Workspace Settings (deep links, members/roles flows, danger zone)
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:

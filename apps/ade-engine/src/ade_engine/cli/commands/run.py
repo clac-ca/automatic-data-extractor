@@ -23,7 +23,11 @@ def _parse_metadata(values: list[str]) -> dict[str, str]:
 
 def run_command(
     input: Optional[Path] = typer.Option(None, "--input", exists=True, file_okay=True, dir_okay=False, help="Source file to process"),
-    input_sheet: list[str] = typer.Option([], "--input-sheet"),
+    input_sheet: Optional[str] = typer.Option(
+        None,
+        "--input-sheet",
+        help="Optional worksheet to ingest; defaults to all visible sheets.",
+    ),
     output_dir: Optional[Path] = typer.Option(None, "--output-dir", file_okay=False, dir_okay=True),
     logs_dir: Optional[Path] = typer.Option(None, "--logs-dir", file_okay=False, dir_okay=True),
     config_package: str = typer.Option("ade_config", "--config-package"),
@@ -39,7 +43,7 @@ def run_command(
         config_package=config_package,
         manifest_path=manifest_path,
         input_file=input,
-        input_sheets=input_sheet or None,
+        input_sheet=input_sheet,
         output_dir=output_dir,
         logs_dir=logs_dir,
         metadata=_parse_metadata(metadata) if metadata else None,
@@ -49,10 +53,10 @@ def run_command(
     payload = {
         "status": result.status.value,
         "run_id": str(result.run_id),
-        "output_paths": [str(path) for path in result.output_paths],
+        "output_path": str(result.output_path) if result.output_path else None,
         "logs_dir": str(result.logs_dir),
         "events_path": str(Path(result.logs_dir) / "events.ndjson"),
-        "processed_files": list(result.processed_files),
+        "processed_file": result.processed_file,
     }
     if result.error:
         payload["error"] = {

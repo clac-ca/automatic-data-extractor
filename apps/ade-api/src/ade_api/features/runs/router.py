@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
 from collections.abc import AsyncIterator
-from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -42,8 +40,6 @@ from .schemas import (
     RunCreateRequest,
     RunEventsPage,
     RunFilters,
-    RunOutputFile,
-    RunOutputListing,
     RunPage,
     RunResource,
 )
@@ -342,49 +338,16 @@ async def download_run_logs_file_endpoint(
 
 
 @router.get(
-    "/runs/{run_id}/outputs",
-    response_model=RunOutputListing,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Outputs unavailable"}},
-)
-async def list_run_outputs_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-) -> RunOutputListing:
-    try:
-        files = await service.list_output_files(run_id=run_id)
-    except (RunNotFoundError, RunOutputMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    entries: list[RunOutputFile] = []
-    for relative_path, size in files:
-        name = FilePath(relative_path).name
-        content_type, _ = mimetypes.guess_type(name)
-        normalized_path = FilePath(relative_path).as_posix()
-        download_url = f"/api/v1/runs/{run_id}/outputs/{normalized_path}"
-        entries.append(
-            RunOutputFile(
-                name=name,
-                kind="normalized_workbook" if name.endswith((".xlsx", ".xlsm")) else None,
-                content_type=content_type,
-                byte_size=size,
-                download_url=download_url,
-            )
-        )
-    return RunOutputListing(files=entries)
-
-
-@router.get(
-    "/runs/{run_id}/outputs/{output_path:path}",
+    "/runs/{run_id}/output",
     response_class=FileResponse,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Output not found"}},
 )
 async def download_run_output_endpoint(
     run_id: Annotated[UUID, Path(description="Run identifier")],
-    output_path: str,
     service: RunsService = runs_service_dependency,
 ):
     try:
-        path = await service.resolve_output_file(run_id=run_id, relative_path=output_path)
+        path = await service.resolve_output_file(run_id=run_id)
     except (RunNotFoundError, RunOutputMissingError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return FileResponse(path=path, filename=path.name)
