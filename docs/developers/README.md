@@ -57,7 +57,7 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
-Bundled ADE config templates now live under `apps/ade-api/src/ade_api/templates/config_packages/` and ship with the backend package.
+Bundled ADE config templates ship under `apps/ade-api/src/ade_api/templates/config_packages/`; on startup the API copies them into `ADE_CONFIG_TEMPLATES_DIR` (default `./data/templates/config_packages`), replacing bundled template folders while leaving any user-added templates in place.
 
 Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
 
@@ -110,7 +110,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + logs/events.ndjson"]
+    A5 --> R1["Results: output.xlsx + events stream (API persists events.ndjson)"]
 
     %% Run B
     S2 -->|reuse frozen venv| J2["Step 3: Run run B"]
@@ -120,7 +120,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + logs/events.ndjson"]
+    B5 --> R2["Results: output.xlsx + events stream (API persists events.ndjson)"]
 
     %% Run C
     S2 -->|reuse frozen venv| J3["Step 3: Run run C"]
@@ -130,7 +130,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + logs/events.ndjson"]
+    C5 --> R3["Results: output.xlsx + events stream (API persists events.ndjson)"]
 ```
 
 ## Step 1: Config — Define the Rules

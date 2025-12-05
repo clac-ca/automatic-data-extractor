@@ -237,9 +237,6 @@ async def test_list_documents_includes_last_run_summary() -> None:
             attempt=1,
             retry_of_run_id=None,
             input_document_id=processed.id,
-            input_documents=[
-                {"document_id": str(processed.id), "name": processed.original_filename},
-            ],
             trace_id=None,
             artifact_uri=None,
             output_uri=None,

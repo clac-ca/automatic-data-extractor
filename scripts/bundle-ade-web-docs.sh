@@ -104,9 +104,18 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx \
   apps/ade-web/src/screens/Workspace/sections/Runs/index.tsx \
   apps/ade-web/src/screens/Workspace/sections/Overview/index.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/SafeModeControls.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/WorkspaceMembersSection.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/WorkspaceRolesSection.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/WorkspaceSettingsRoute.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsLayout.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsDrawer.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsSectionHeader.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/SaveBar.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/ConfirmDialog.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/components/UnsavedChangesPrompt.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/sectionContext.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/pages/GeneralSettingsPage.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/pages/MembersSettingsPage.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/pages/RolesSettingsPage.tsx \
+  apps/ade-web/src/screens/Workspace/sections/Settings/pages/DangerSettingsPage.tsx \
   --out "${generated_dir}/bundle-workspace-sections.md" \
   --no-clip --show
 

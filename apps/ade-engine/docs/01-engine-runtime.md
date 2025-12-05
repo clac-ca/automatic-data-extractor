@@ -72,7 +72,7 @@ python -m ade_engine \
 ```
 
 The CLI parses flags into a `RunRequest`, runs the engine once, prints a JSON
-summary (status, run_id, output_paths, logs_dir, events_path) to stdout, and
+summary (status, run_id, output_path, logs_dir, events_path) to stdout, and
 exits non-zero on failure. See `09-cli-and-integration.md` for flag details.
 
 ## 3. Core runtime types
@@ -112,7 +112,7 @@ Holds `run_id`, `metadata`, `manifest`, `paths`, timestamps, and a mutable
 - `status: RunStatus` (`succeeded` | `failed`)
 - `error: RunError | None` — structured failure info when present
 - `run_id: str`
-- `output_paths: tuple[Path, ...]`
+- `output_path: Path | None`
 - `logs_dir: Path`
 - `processed_files: tuple[str, ...]`
 

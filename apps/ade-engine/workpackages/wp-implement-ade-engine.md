@@ -122,7 +122,7 @@ Keep short inline status notes as you go.
 - [x] Implement row‑detector integration + table detection (`core/pipeline/extract.py`) per `03-io-and-table-detection.md` §5–§6:
   - Integrate `ade_config.row_detectors.*`:
     - Call all `detect_*` functions per row
-    - Aggregate `"scores"` into header/data scores
+    - Aggregate detector outputs into header/data scores
   - Implement heuristics to construct one or more `ExtractedTable` per sheet:
     - Detect header row
     - Identify contiguous data rows
@@ -289,9 +289,9 @@ Keep short inline status notes as you go.
   - Emit `pipeline_transition` telemetry events via `PipelineLogger`
 - [x] Implement CLI (`cli/app.py`, `cli/commands/run.py`, `cli/commands/version.py`, `__main__.py`) per `09-cli-and-integration.md`:
   - `ade-engine run`:
-    - Flags → `RunRequest` (`--input`, `--input-dir`, `--input-sheet`, `--output-dir`, `--logs-dir`, `--config-package`, `--manifest-path`, optional `--metadata key=value`)
+    - Flags → `RunRequest` (`--input`, `--input-dir`, `--input-sheet`, `--output-dir`/`--output-file`, `--events-dir`/`--events-file`, `--config-package` (module or path), optional `--metadata key=value`)
     - Run engine once
-    - Print JSON summary mirroring `RunResult` (`status`, `output_paths`, `artifact_path`, `events_path`, `processed_files`, `error`)
+    - Emit NDJSON events to stdout (parse `engine.complete` for status and artifacts)
     - Set exit code 0 on success, non‑zero on failure / usage error
   - `ade-engine version`:
     - Print engine `__version__`
@@ -303,7 +303,7 @@ Keep short inline status notes as you go.
     - Failure modes: config error, input error, hook error, pipeline error
   - `tests/test_cli.py`:
     - `subprocess` call to `python -m ade_engine run ...`
-    - Validate JSON summary and exit codes
+    - Validate NDJSON event output and exit codes (single and multi-input)
 
 ---
 

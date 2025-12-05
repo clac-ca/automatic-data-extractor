@@ -102,7 +102,7 @@ export function WorkspaceNavList({
           <li key={item.id} className="w-full">
             <NavLink
               to={item.href}
-              end
+              end={!(item.matchPrefix ?? false)}
               title={collapsed ? item.label : undefined}
               onClick={onNavigate}
               className={({ isActive }) =>

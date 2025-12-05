@@ -3,8 +3,7 @@
 from ade_engine.core.engine import Engine
 from ade_engine.core.types import EngineInfo, RunRequest, RunResult, RunStatus
 
-__version__ = "1.6.0"
-
+__version__ = "1.6.1"
 
 def run(*args, **kwargs) -> RunResult:
     """Convenience helper to execute a single run."""

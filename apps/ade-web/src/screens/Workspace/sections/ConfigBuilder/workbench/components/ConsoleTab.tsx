@@ -3,7 +3,7 @@ import type { ReactNode, UIEvent } from "react";
 import clsx from "clsx";
 
 import type { RunStreamStatus } from "../state/runStream";
-import { formatConsoleTimestamp } from "../utils/console";
+import { formatConsoleTimestamp } from "../events/format";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
 import { renderConsoleMessage, resolveSeverity } from "./consoleFormatting";
 
@@ -11,7 +11,6 @@ interface ConsoleTabProps {
   readonly consoleLines: readonly WorkbenchConsoleLine[];
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly onShowRunDetails?: () => void;
   readonly runStatus?: RunStreamStatus;
 }
 
@@ -29,7 +28,6 @@ export function ConsoleTab({
   consoleLines,
   latestRun,
   onClearConsole,
-  onShowRunDetails,
   runStatus,
 }: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
@@ -250,13 +248,6 @@ export function ConsoleTab({
                 <span className="text-slate-600">· {formatRunDuration(latestRun.durationMs)}</span>
               ) : null}
             </div>
-            <button
-              type="button"
-              className="text-[11px] font-semibold text-emerald-300 transition hover:text-emerald-200"
-              onClick={() => onShowRunDetails?.()}
-            >
-              View details →
-            </button>
           </div>
         ) : null}
       </div>
@@ -437,6 +428,22 @@ function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw
   const ts = displayTimestamp(line.timestamp);
   const origin = originLabel(line.origin);
   const level = consoleLevelLabel(line.level).toLowerCase();
+  if (viewMode === "parsed") {
+    const parsed = parseStructuredMessage(line.message);
+    if (parsed?.type === "ade.console.run_complete") {
+      const headline = parsed.headline ?? "";
+      const outputLabel =
+        parsed.output && typeof parsed.output === "object"
+          ? (typeof parsed.output.label === "string" && parsed.output.label.trim()) ||
+            (typeof parsed.output.path === "string" && parsed.output.path.trim()) ||
+            null
+          : null;
+      const outputsText = outputLabel ? ` Output: ${outputLabel}` : "";
+      const eventsText =
+        typeof parsed.eventsPath === "string" && parsed.eventsPath.trim() ? ` Events: ${parsed.eventsPath}` : "";
+      return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${headline}${outputsText}${eventsText}`.trim();
+    }
+  }
   if (viewMode === "raw") {
     const rawString =
       typeof line.raw === "string"
@@ -447,6 +454,19 @@ function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw
     return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${rawString}`.trim();
   }
   return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${line.message ?? ""}`.trim();
+}
+
+function parseStructuredMessage(message?: string) {
+  if (!message) return null;
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {

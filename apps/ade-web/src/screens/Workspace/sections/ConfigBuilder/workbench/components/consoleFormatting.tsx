@@ -104,6 +104,47 @@ function formatStructuredEvent(event: Record<string, unknown>) {
   };
 
   switch (type) {
+    case "ade.console.run_complete": {
+      const headline = typeof (event as { headline?: unknown }).headline === "string"
+        ? (event as { headline: string }).headline
+        : "Run completed.";
+      const output =
+        (event as { output?: unknown }).output && typeof (event as { output?: unknown }).output === "object"
+          ? ((event as { output: Record<string, unknown> }).output)
+          : null;
+      const eventsPath =
+        typeof (event as { eventsPath?: unknown }).eventsPath === "string"
+          ? (event as { eventsPath: string }).eventsPath
+          : null;
+      return (
+        <div className="flex flex-col gap-[2px]">
+          <span className="break-words">{headline}</span>
+          {output ? (
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-emerald-200">
+              {(() => {
+                const label =
+                  (typeof output?.label === "string" && output.label.trim()) ||
+                  (typeof output?.path === "string" && output.path.trim()) ||
+                  "output";
+                const href = typeof output?.href === "string" && output.href.trim().length > 0 ? output.href : null;
+                return href ? (
+                  <a key={href} href={href} className="text-emerald-200 hover:underline">
+                    {label}
+                  </a>
+                ) : (
+                  <span key={label} className="text-slate-300">
+                    {label}
+                  </span>
+                );
+              })()}
+            </div>
+          ) : null}
+          {eventsPath ? (
+            <span className="text-[12px] text-slate-400">Events log: {eventsPath}</span>
+          ) : null}
+        </div>
+      );
+    }
     case "run.queued": {
       const mode = typeof payload.mode === "string" ? payload.mode : undefined;
       return `Run queued${mode ? ` (${mode})` : ""}.`;
@@ -117,7 +158,6 @@ function formatStructuredEvent(event: Record<string, unknown>) {
       return `Run started${mode ? ` (${mode})` : ""}.`;
     }
     case "run.complete":
-    case "run.completed":
     case "engine.run.summary":
     case "engine.complete":
       return `Run ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;

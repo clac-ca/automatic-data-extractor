@@ -343,7 +343,7 @@ Typical flow in `test_engine_runtime.py`:
 5. Assert:
 
    * `result.status == "succeeded"`.
-   * Workbook exists at each `output_paths` entry and is a valid XLSX.
+  * Workbook exists at `output_path` and is a valid XLSX.
    * `events.ndjson` exists and contains at least `engine.start` and
      `engine.complete` events.
 

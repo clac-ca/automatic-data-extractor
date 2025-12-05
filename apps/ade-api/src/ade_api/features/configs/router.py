@@ -33,7 +33,7 @@ from ade_api.core.http import require_authenticated, require_csrf, require_works
 from ade_api.core.models import User
 from ade_api.features.builds.router import _execute_build_background
 from ade_api.features.builds.schemas import BuildCreateOptions
-from ade_api.features.builds.service import BuildsService
+from ade_api.features.builds.service import BuildDecision, BuildsService
 
 from .etag import canonicalize_etag, format_etag, format_weak_etag
 from .exceptions import (
@@ -442,7 +442,7 @@ async def validate_configuration(
             run_id=None,
             reason="validation",
         )
-        if context.should_run:
+        if context.decision is BuildDecision.START_NEW:
             background_tasks.add_task(
                 _execute_build_background,
                 context.as_dict(),

@@ -234,9 +234,9 @@ def run(*, logger, event_emitter, **__):
         status=RunStatus.SUCCEEDED,
         error=None,
         run_id=run.run_id,
-        output_paths=(),
+        output_path=None,
         logs_dir=run.paths.logs_dir,
-        processed_files=(),
+        processed_file=None,
     )
 
     with pytest.raises(HookError) as excinfo:
@@ -244,11 +244,11 @@ def run(*, logger, event_emitter, **__):
             stage=HookStage.ON_RUN_END,
             registry=runtime.hooks,
             run=run,
-        manifest=runtime.manifest,
-        logger=logger,
-        event_emitter=event_emitter,
-        result=result,
-    )
+            manifest=runtime.manifest,
+            logger=logger,
+            event_emitter=event_emitter,
+            result=result,
+        )
 
     message = str(excinfo.value)
     assert "on_run_end" in message

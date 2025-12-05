@@ -9,7 +9,7 @@ from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, RunSummary
+from ade_engine.schemas import RunSummary
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -35,6 +35,7 @@ from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.core.models import RunStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.infra.db.session import get_sessionmaker
+from ade_api.schemas.events import AdeEvent
 from ade_api.settings import Settings
 
 from .schemas import (
@@ -42,8 +43,9 @@ from .schemas import (
     RunCreateRequest,
     RunEventsPage,
     RunFilters,
+    RunInput,
+    RunOutput,
     RunOutputFile,
-    RunOutputListing,
     RunPage,
     RunResource,
 )
@@ -55,7 +57,9 @@ from .service import (
     RunLogsFileMissingError,
     RunNotFoundError,
     RunOutputMissingError,
+    RunOutputNotReadyError,
     RunsService,
+    _build_download_disposition,
 )
 
 router = APIRouter(
@@ -88,6 +92,19 @@ def _sse_event_bytes(event: AdeEvent) -> bytes:
     parts.append(f"event: {event.type}")
     parts.extend(f"data: {line}" for line in lines)
     return "\n".join(parts).encode("utf-8") + b"\n\n"
+
+
+def _legacy_output_file(output: RunOutput) -> RunOutputFile:
+    name = output.filename
+    if not name and output.output_path:
+        name = FilePath(output.output_path).name
+    return RunOutputFile(
+        name=name,
+        path=output.output_path,
+        byte_size=output.size_bytes,
+        content_type=output.content_type,
+        download_url=output.download_url,
+    )
 
 
 async def _execute_run_background(
@@ -153,7 +170,7 @@ async def create_run_endpoint(
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    resource = service.to_resource(run)
+    resource = await service.to_resource(run)
     context_dict = context.as_dict()
     options_dict = payload.options.model_dump()
     background_tasks.add_task(
@@ -220,7 +237,49 @@ async def get_run_endpoint(
     run = await service.get_run(run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
-    return service.to_resource(run)
+    return await service.to_resource(run)
+
+
+@router.get(
+    "/runs/{run_id}/input",
+    response_model=RunInput,
+    response_model_exclude_none=True,
+    summary="Get run input metadata",
+)
+async def get_run_input_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunInput:
+    try:
+        return await service.get_run_input_metadata(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/runs/{run_id}/input/download",
+    summary="Download run input file",
+)
+async def download_run_input_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> StreamingResponse:
+    try:
+        run, document, stream = await service.stream_run_input(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (RunDocumentMissingError, RunInputMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    media_type = document.content_type or "application/octet-stream"
+    response = StreamingResponse(stream, media_type=media_type)
+    disposition = _build_download_disposition(document.original_filename)
+    response.headers["Content-Disposition"] = disposition
+    return response
 
 
 @router.get(
@@ -322,9 +381,32 @@ async def stream_run_events_endpoint(
 
 
 @router.get(
+    "/runs/{run_id}/events/download",
+    response_class=FileResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Events unavailable"}},
+    summary="Download run events (NDJSON log)",
+)
+async def download_run_events_file_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+):
+    try:
+        path = await service.get_logs_file_path(run_id=run_id)
+    except (RunNotFoundError, RunLogsFileMissingError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return FileResponse(
+        path=path,
+        media_type="application/x-ndjson",
+        filename=path.name,
+        headers={"Content-Disposition": _build_download_disposition(path.name)},
+    )
+
+
+@router.get(
     "/runs/{run_id}/logs",
     response_class=FileResponse,
     responses={status.HTTP_404_NOT_FOUND: {"description": "Logs unavailable"}},
+    deprecated=True,
 )
 async def download_run_logs_file_endpoint(
     run_id: Annotated[UUID, Path(description="Run identifier")],
@@ -338,53 +420,105 @@ async def download_run_logs_file_endpoint(
         path=path,
         media_type="application/x-ndjson",
         filename=path.name,
+        headers={"Content-Disposition": _build_download_disposition(path.name)},
+    )
+
+
+@router.get(
+    "/runs/{run_id}/output",
+    response_model=RunOutput,
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Run or output not found"},
+    },
+    summary="Get run output metadata",
+)
+async def get_run_output_metadata_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunOutput:
+    try:
+        return await service.get_run_output_metadata(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/runs/{run_id}/output/download",
+    response_class=FileResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Output not found"},
+        status.HTTP_409_CONFLICT: {"description": "Output not ready"},
+    },
+    summary="Download run output file",
+)
+async def download_run_output_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+):
+    try:
+        run, path = await service.resolve_output_for_download(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunOutputNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "OUTPUT_NOT_READY",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+    except RunOutputMissingError as exc:
+        status_code = status.HTTP_404_NOT_FOUND
+        run_record = await service.get_run(run_id)  # type: ignore[arg-type]
+        if run_record and run_record.status is RunStatus.FAILED:
+            detail = {
+                "error": {
+                    "code": "RUN_FAILED_NO_OUTPUT",
+                    "message": str(exc),
+                }
+            }
+        else:
+            detail = str(exc)
+        raise HTTPException(status_code, detail=detail) from exc
+
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path=path,
+        media_type=media_type,
+        filename=path.name,
+        headers={"Content-Disposition": _build_download_disposition(path.name)},
     )
 
 
 @router.get(
     "/runs/{run_id}/outputs",
-    response_model=RunOutputListing,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Outputs unavailable"}},
+    response_model=list[RunOutputFile],
+    response_model_exclude_none=True,
+    deprecated=True,
 )
-async def list_run_outputs_endpoint(
+async def list_run_outputs_legacy(
     run_id: Annotated[UUID, Path(description="Run identifier")],
     service: RunsService = runs_service_dependency,
-) -> RunOutputListing:
+) -> list[RunOutputFile]:
     try:
-        files = await service.list_output_files(run_id=run_id)
-    except (RunNotFoundError, RunOutputMissingError) as exc:
+        output = await service.get_run_output_metadata(run_id=run_id)
+    except RunNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    entries: list[RunOutputFile] = []
-    for relative_path, size in files:
-        name = FilePath(relative_path).name
-        content_type, _ = mimetypes.guess_type(name)
-        normalized_path = FilePath(relative_path).as_posix()
-        download_url = f"/api/v1/runs/{run_id}/outputs/{normalized_path}"
-        entries.append(
-            RunOutputFile(
-                name=name,
-                kind="normalized_workbook" if name.endswith((".xlsx", ".xlsm")) else None,
-                content_type=content_type,
-                byte_size=size,
-                download_url=download_url,
-            )
-        )
-    return RunOutputListing(files=entries)
+    return [_legacy_output_file(output)]
 
 
 @router.get(
     "/runs/{run_id}/outputs/{output_path:path}",
     response_class=FileResponse,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Output not found"}},
+    deprecated=True,
 )
-async def download_run_output_endpoint(
+async def download_run_output_legacy_endpoint(
     run_id: Annotated[UUID, Path(description="Run identifier")],
-    output_path: str,
+    output_path: Annotated[str, Path(description="Legacy output path")],
     service: RunsService = runs_service_dependency,
 ):
-    try:
-        path = await service.resolve_output_file(run_id=run_id, relative_path=output_path)
-    except (RunNotFoundError, RunOutputMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return FileResponse(path=path, filename=path.name)
+    # ``output_path`` is ignored to keep behavior lenient for single-output runs.
+    return await download_run_output_endpoint(run_id=run_id, service=service)

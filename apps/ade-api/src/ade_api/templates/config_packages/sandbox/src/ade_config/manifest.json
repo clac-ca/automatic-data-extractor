@@ -1,8 +1,8 @@
 {
   "schema": "ade.manifest/v1",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "name": "Sandbox Minimal Config",
-  "description": "Sample config mirroring the ade_engine end-to-end fixtures.",
+  "description": "Sample config mirroring the ade_engine smoke-test fixtures.",
   "script_api_version": 3,
   "columns": {
     "order": ["member_id", "value"],
@@ -34,5 +34,6 @@
     "append_unmapped_columns": true,
     "unmapped_prefix": "raw_",
     "output_sheet": "Normalized"
-  }
+  },
+  "extra": null
 }

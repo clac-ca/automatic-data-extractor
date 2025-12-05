@@ -10,17 +10,11 @@ import sys
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from ade_engine.schemas import (
-    AdeEvent,
-    AdeEventPayload,
-    BuildCompletedPayload,
-    BuildStartedPayload,
-    ConsoleLinePayload,
-)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
@@ -33,6 +27,13 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
 from ade_api.infra.storage import build_venv_root
+from ade_api.schemas.events import (
+    AdeEvent,
+    AdeEventPayload,
+    BuildCompletedPayload,
+    BuildStartedPayload,
+    ConsoleLinePayload,
+)
 from ade_api.settings import Settings
 
 from .builder import (
@@ -54,6 +55,7 @@ from .repository import BuildsRepository
 from .schemas import BuildCreateOptions, BuildLinks, BuildResource
 
 __all__ = [
+    "BuildDecision",
     "BuildExecutionContext",
     "BuildNotFoundError",
     "BuildsService",
@@ -62,6 +64,36 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
+
+
+@dataclass(slots=True, frozen=True)
+class BuildSpec:
+    """Immutable build inputs used to compute a fingerprint."""
+
+    workspace_id: UUID
+    configuration_id: UUID
+    config_path: Path
+    config_digest: str
+    engine_spec: str
+    engine_version_hint: str | None
+    python_bin: str | None
+    python_version: str | None
+    fingerprint: str
+
+
+class BuildDecision(StrEnum):
+    REUSE_READY = "reuse_ready"
+    JOIN_INFLIGHT = "join_inflight"
+    START_NEW = "start_new"
+
+
+@dataclass(slots=True, frozen=True)
+class _BuildResolution:
+    build: Build
+    decision: BuildDecision
+    spec: BuildSpec
+    reason: str | None
+    reuse_summary: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -78,7 +110,7 @@ class BuildExecutionContext:
     engine_version_hint: str | None
     pip_cache_dir: str | None
     timeout_seconds: float
-    should_run: bool
+    decision: BuildDecision
     fingerprint: str
     reason: str | None = None
     run_id: UUID | None = None
@@ -96,7 +128,7 @@ class BuildExecutionContext:
             "engine_version_hint": self.engine_version_hint,
             "pip_cache_dir": self.pip_cache_dir,
             "timeout_seconds": self.timeout_seconds,
-            "should_run": self.should_run,
+            "decision": self.decision.value,
             "fingerprint": self.fingerprint,
             "reason": self.reason,
             "run_id": str(self.run_id) if self.run_id else None,
@@ -116,7 +148,7 @@ class BuildExecutionContext:
             engine_version_hint=payload.get("engine_version_hint") or None,
             pip_cache_dir=payload.get("pip_cache_dir") or None,
             timeout_seconds=float(payload["timeout_seconds"]),
-            should_run=bool(payload["should_run"]),
+            decision=BuildDecision(str(payload["decision"])),
             fingerprint=str(payload["fingerprint"]),
             reason=payload.get("reason") or None,
             run_id=UUID(str(payload["run_id"])) if payload.get("run_id") else None,
@@ -174,6 +206,7 @@ class BuildsService:
         reason: str | None = None,
         run_id: UUID | None = None,
     ) -> tuple[Build, BuildExecutionContext]:
+        decision_reason = reason or ("force_rebuild" if options.force else "on_demand")
         logger.debug(
             "build.prepare.start",
             extra=log_context(
@@ -185,160 +218,44 @@ class BuildsService:
         )
 
         configuration = await self._require_configuration(workspace_id, configuration_id)
-        config_path = await self._storage.ensure_config_path(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-        config_digest = compute_config_digest(config_path)
-        configuration.content_digest = config_digest
-        python_interpreter = self._resolve_python_interpreter()
-        python_version = await self._python_version(python_interpreter)
-        engine_spec = self._settings.engine_spec
-        engine_version_hint = self._resolve_engine_version(engine_spec)
-        fingerprint = compute_build_fingerprint(
-            config_digest=config_digest,
-            engine_spec=engine_spec,
-            engine_version=engine_version_hint,
-            python_version=python_version,
-            python_bin=python_interpreter,
-            extra={},
-        )
-
-        logger.debug(
-            "build.prepare.fingerprint",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                fingerprint=fingerprint,
-                engine_spec=engine_spec,
-                engine_version=engine_version_hint,
-                python_bin=python_interpreter,
-            ),
-        )
-
-        ready_build: Build | None = None
-        if not options.force:
-            ready_build = await self._find_ready_build_match(
-                configuration=configuration,
-                fingerprint=fingerprint,
-            )
-        if ready_build:
-            await self._sync_active_pointer(configuration, ready_build, fingerprint)
-            context = self._reuse_context(
-                build=ready_build,
-                configuration=configuration,
-                config_path=config_path,
-                python_interpreter=python_interpreter,
-                engine_spec=engine_spec,
-                engine_version_hint=engine_version_hint,
-                fingerprint=fingerprint,
-                reason=reason,
-                run_id=run_id,
-            )
-            await self._session.commit()
-            logger.info(
-                "build.prepare.reuse",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    build_id=ready_build.id,
-                    reuse_summary=context.reuse_summary,
-                ),
-            )
-            return ready_build, context
-
-        inflight = await self._builds.get_latest_inflight(configuration_id=configuration.id)
-        if inflight and not options.force:
-            if options.wait:
-                logger.debug(
-                    "build.prepare.wait_existing",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        configuration_id=configuration_id,
-                        build_id=inflight.id,
-                    ),
-                )
-                await self._wait_for_build(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                )
-                return await self.prepare_build(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    options=BuildCreateOptions(force=options.force, wait=False),
-                    allow_inflight=allow_inflight,
-                    reason=reason,
-                    run_id=run_id,
-                )
-            if not allow_inflight:
-                logger.warning(
-                    "build.prepare.already_in_progress",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        configuration_id=configuration_id,
-                        build_status=str(inflight.status),
-                    ),
-                )
-                raise BuildAlreadyInProgressError(
-                    "Build in progress for "
-                    f"workspace={workspace_id} configuration={configuration_id}"
-                )
-            context = self._reuse_context(
-                build=inflight,
-                configuration=configuration,
-                config_path=config_path,
-                python_interpreter=python_interpreter,
-                engine_spec=engine_spec,
-                engine_version_hint=engine_version_hint,
-                fingerprint=fingerprint,
-                should_run=False,
-                reason=reason,
-                run_id=run_id,
-            )
-            await self._ensure_build_queued_event(
-                build=inflight,
-                reason=reason or "on_demand",
-                should_build=context.should_run,
-                engine_spec=engine_spec,
-                engine_version_hint=engine_version_hint,
-                python_bin=python_interpreter,
-                run_id=run_id,
-            )
-            return inflight, context
-
-        plan = await self._create_build_plan(
+        spec = await self._build_spec(
             configuration=configuration,
-            config_path=config_path,
-            engine_spec=engine_spec,
-            engine_version_hint=engine_version_hint,
-            python_interpreter=python_interpreter,
-            config_digest=config_digest,
-            python_version=python_version,
-            fingerprint=fingerprint,
-            reason=reason or ("force_rebuild" if options.force else "on_demand"),
+            workspace_id=workspace_id,
+        )
+        resolution = await self._resolve_build(
+            configuration=configuration,
+            spec=spec,
+            options=options,
+            allow_inflight=allow_inflight,
+            reason=decision_reason,
+        )
+        context = self._build_execution_context(
+            resolution=resolution,
             run_id=run_id,
         )
         await self._session.commit()
 
         logger.info(
-            "build.prepare.plan_created",
+            "build.prepare.resolved",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                build_id=plan.build.id,
-                should_rebuild=True,
+                build_id=resolution.build.id,
+                decision=resolution.decision.value,
+                reuse_summary=context.reuse_summary,
             ),
         )
-        await self._ensure_build_queued_event(
-            build=plan.build,
-            reason=reason or ("force_rebuild" if options.force else "on_demand"),
-            should_build=plan.context.should_run,
-            engine_spec=engine_spec,
-            engine_version_hint=engine_version_hint,
-            python_bin=python_interpreter,
-            run_id=run_id,
-        )
-        return plan.build, plan.context
+        if resolution.decision in (BuildDecision.JOIN_INFLIGHT, BuildDecision.START_NEW):
+            await self._ensure_build_queued_event(
+                build=resolution.build,
+                reason=decision_reason,
+                should_build=resolution.decision is BuildDecision.START_NEW,
+                engine_spec=spec.engine_spec,
+                engine_version_hint=spec.engine_version_hint,
+                python_bin=spec.python_bin,
+                run_id=run_id,
+            )
+        return resolution.build, context
 
     async def ensure_build_for_run(
         self,
@@ -367,13 +284,14 @@ class BuildsService:
         context: BuildExecutionContext,
         options: BuildCreateOptions,
     ) -> AsyncIterator[AdeEvent]:
+        decision = context.decision
         logger.debug(
             "build.stream.start",
             extra=log_context(
                 workspace_id=context.workspace_id,
                 configuration_id=context.configuration_id,
                 build_id=context.build_id,
-                should_run=context.should_run,
+                decision=decision.value,
                 force=options.force,
             ),
         )
@@ -384,7 +302,7 @@ class BuildsService:
         queued_event = await self._ensure_build_queued_event(
             build=build,
             reason=reason,
-            should_build=context.should_run,
+            should_build=decision is BuildDecision.START_NEW,
             engine_spec=context.engine_spec,
             engine_version_hint=context.engine_version_hint,
             python_bin=context.python_bin,
@@ -393,7 +311,7 @@ class BuildsService:
         if queued_event:
             yield queued_event
 
-        if not context.should_run:
+        if decision is BuildDecision.REUSE_READY:
             logger.info(
                 "build.stream.reuse_short_circuit",
                 extra=log_context(
@@ -407,18 +325,32 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload={
-                    "status": build.status,
-                    "summary": summary,
-                    "exit_code": build.exit_code,
-                    "env": {
-                        "reason": "reuse_ok",
-                        "should_build": False,
-                        "force": bool(options.force),
-                    },
-                },
+                payload=self._build_completed_payload(
+                    build=build,
+                    reason="reuse_ok",
+                    should_build=False,
+                    reuse_summary=summary,
+                    engine_spec=context.engine_spec,
+                    engine_version_hint=context.engine_version_hint,
+                    python_bin=context.python_bin,
+                ),
                 run_id=context.run_id,
             )
+            return
+        if decision is BuildDecision.JOIN_INFLIGHT:
+            logger.info(
+                "build.stream.join_inflight",
+                extra=log_context(
+                    workspace_id=context.workspace_id,
+                    configuration_id=context.configuration_id,
+                    build_id=context.build_id,
+                ),
+            )
+            async for event in self._stream_existing_and_live_events(
+                build=build,
+                start_sequence=queued_event.sequence if queued_event else None,
+            ):
+                yield event
             return
 
         build = await self._transition_status(build, BuildStatus.BUILDING)
@@ -497,11 +429,12 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload=BuildCompletedPayload(
-                    status=build.status,
-                    exit_code=build.exit_code,
-                    summary=build.summary,
-                    error={"message": build.error_message} if build.error_message else None,
+                payload=self._build_completed_payload(
+                    build=build,
+                    duration_ms=None,
+                    reason="reuse_ok",
+                    should_build=False,
+                    reuse_summary=summary,
                 ),
                 run_id=context.run_id,
             )
@@ -525,12 +458,7 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload=BuildCompletedPayload(
-                    status=build.status,
-                    exit_code=build.exit_code,
-                    summary=build.summary,
-                    error={"message": build.error_message} if build.error_message else None,
-                ),
+                payload=self._build_completed_payload(build=build),
                 run_id=context.run_id,
             )
             return
@@ -559,14 +487,14 @@ class BuildsService:
         yield await self._emit_event(
             build=build,
             type_="build.complete",
-            payload={
-                "status": build.status,
-                "exit_code": build.exit_code,
-                "summary": build.summary,
-                "duration_ms": duration_ms,
-                "error": {"message": build.error_message} if build.error_message else None,
-                "env": {"reason": reason},
-            },
+            payload=self._build_completed_payload(
+                build=build,
+                duration_ms=duration_ms,
+                reason=reason,
+                engine_spec=context.engine_spec,
+                engine_version_hint=context.engine_version_hint,
+                python_bin=context.python_bin,
+            ),
             run_id=context.run_id,
         )
 
@@ -814,6 +742,55 @@ class BuildsService:
     def subscribe_to_events(self, build_id: UUID):
         return self._event_dispatcher.subscribe(build_id)
 
+    def _build_completed_payload(
+        self,
+        *,
+        build: Build,
+        duration_ms: int | None = None,
+        reason: str | None = None,
+        should_build: bool | None = None,
+        engine_spec: str | None = None,
+        engine_version_hint: str | None = None,
+        python_bin: str | None = None,
+        reuse_summary: str | None = None,
+    ) -> BuildCompletedPayload:
+        execution: dict[str, Any] = {}
+        if build.exit_code is not None:
+            execution["exit_code"] = build.exit_code
+        if duration_ms is not None:
+            execution["duration_ms"] = duration_ms
+
+        context: dict[str, Any] = {}
+        if reason:
+            context["reason"] = reason
+        if should_build is not None:
+            context["should_build"] = should_build
+        if engine_spec:
+            context["engine_spec"] = engine_spec
+        if engine_version_hint:
+            context["engine_version_hint"] = engine_version_hint
+        if python_bin:
+            context["python_bin"] = python_bin
+        if reuse_summary:
+            context["reuse_summary"] = reuse_summary
+
+        artifacts: dict[str, Any] = {}
+        summary_value = build.summary or reuse_summary
+        if summary_value:
+            artifacts["summary"] = summary_value
+        if context:
+            artifacts["context"] = context
+
+        failure = {"message": build.error_message} if build.error_message else None
+
+        return BuildCompletedPayload(
+            status=str(build.status.value if hasattr(build.status, "value") else build.status),
+            failure=failure,
+            execution=execution or None,
+            artifacts=artifacts or None,
+            summary=summary_value,
+        )
+
     async def _emit_event(
         self,
         *,
@@ -860,15 +837,225 @@ class BuildsService:
             build=build,
             type_="build.queued",
             payload={
-                "status": "queued",
-                "reason": reason,
-                "should_build": should_build,
-                "engine_spec": engine_spec,
-                "engine_version_hint": engine_version_hint,
-                "python_bin": python_bin,
+                k: v
+                for k, v in {
+                    "status": "queued",
+                    "reason": reason,
+                    "should_build": should_build,
+                    "engine_spec": engine_spec,
+                    "engine_version_hint": engine_version_hint,
+                    "python_bin": python_bin,
+                }.items()
+                if v is not None
             },
             run_id=run_id,
         )
+
+    async def _build_spec(
+        self,
+        *,
+        configuration: Configuration,
+        workspace_id: UUID,
+    ) -> BuildSpec:
+        config_path = await self._storage.ensure_config_path(
+            workspace_id=workspace_id,
+            configuration_id=configuration.id,
+        )
+        config_digest = compute_config_digest(config_path)
+        configuration.content_digest = config_digest
+        python_interpreter = self._resolve_python_interpreter()
+        python_version = await self._python_version(python_interpreter)
+        engine_spec = self._settings.engine_spec
+        engine_version_hint = self._resolve_engine_version(engine_spec)
+        fingerprint = compute_build_fingerprint(
+            config_digest=config_digest,
+            engine_spec=engine_spec,
+            engine_version=engine_version_hint,
+            python_version=python_version,
+            python_bin=python_interpreter,
+            extra={},
+        )
+        logger.debug(
+            "build.prepare.fingerprint",
+            extra=log_context(
+                workspace_id=workspace_id,
+                configuration_id=configuration.id,
+                fingerprint=fingerprint,
+                engine_spec=engine_spec,
+                engine_version=engine_version_hint,
+                python_bin=python_interpreter,
+            ),
+        )
+        return BuildSpec(
+            workspace_id=workspace_id,
+            configuration_id=configuration.id,
+            config_path=config_path,
+            config_digest=config_digest,
+            engine_spec=engine_spec,
+            engine_version_hint=engine_version_hint,
+            python_bin=python_interpreter,
+            python_version=python_version,
+            fingerprint=fingerprint,
+        )
+
+    async def _resolve_build(
+        self,
+        *,
+        configuration: Configuration,
+        spec: BuildSpec,
+        options: BuildCreateOptions,
+        allow_inflight: bool,
+        reason: str | None,
+    ) -> _BuildResolution:
+        if not options.force:
+            ready_build = await self._find_ready_build_match(
+                configuration=configuration,
+                fingerprint=spec.fingerprint,
+            )
+            if ready_build:
+                await self._sync_active_pointer(configuration, ready_build, spec.fingerprint)
+                return _BuildResolution(
+                    build=ready_build,
+                    decision=BuildDecision.REUSE_READY,
+                    spec=spec,
+                    reason=reason,
+                    reuse_summary="Reused existing build",
+                )
+
+        inflight = None
+        if not options.force:
+            inflight = await self._builds.get_inflight_by_fingerprint(
+                configuration_id=configuration.id,
+                fingerprint=spec.fingerprint,
+            )
+        if inflight:
+            if options.wait:
+                logger.debug(
+                    "build.prepare.wait_existing",
+                    extra=log_context(
+                        workspace_id=spec.workspace_id,
+                        configuration_id=configuration.id,
+                        build_id=inflight.id,
+                        fingerprint=spec.fingerprint,
+                    ),
+                )
+                await self._wait_for_build(
+                    workspace_id=spec.workspace_id,
+                    configuration_id=configuration.id,
+                    fingerprint=spec.fingerprint,
+                )
+                return await self._resolve_build(
+                    configuration=configuration,
+                    spec=spec,
+                    options=BuildCreateOptions(force=options.force, wait=False),
+                    allow_inflight=allow_inflight,
+                    reason=reason,
+                )
+            if not allow_inflight:
+                logger.warning(
+                    "build.prepare.already_in_progress",
+                    extra=log_context(
+                        workspace_id=spec.workspace_id,
+                        configuration_id=configuration.id,
+                        build_status=str(inflight.status),
+                        build_id=inflight.id,
+                        fingerprint=spec.fingerprint,
+                    ),
+                )
+                raise BuildAlreadyInProgressError(
+                    "Build in progress for "
+                    f"workspace={spec.workspace_id} configuration={configuration.id}"
+                )
+            return _BuildResolution(
+                build=inflight,
+                decision=BuildDecision.JOIN_INFLIGHT,
+                spec=spec,
+                reason=reason,
+                reuse_summary="Joined inflight build",
+            )
+
+        other_inflight = await self._builds.get_latest_inflight(configuration_id=configuration.id)
+        if other_inflight and other_inflight.fingerprint != spec.fingerprint:
+            if options.wait:
+                logger.debug(
+                    "build.prepare.wait_other_inflight",
+                    extra=log_context(
+                        workspace_id=spec.workspace_id,
+                        configuration_id=configuration.id,
+                        build_id=other_inflight.id,
+                        fingerprint=other_inflight.fingerprint,
+                    ),
+                )
+                await self._wait_for_build(
+                    workspace_id=spec.workspace_id,
+                    configuration_id=configuration.id,
+                )
+                return await self._resolve_build(
+                    configuration=configuration,
+                    spec=spec,
+                    options=BuildCreateOptions(force=options.force, wait=False),
+                    allow_inflight=allow_inflight,
+                    reason=reason,
+                )
+            if not allow_inflight:
+                logger.warning(
+                    "build.prepare.already_in_progress",
+                    extra=log_context(
+                        workspace_id=spec.workspace_id,
+                        configuration_id=configuration.id,
+                        build_status=str(other_inflight.status),
+                        build_id=other_inflight.id,
+                        fingerprint=other_inflight.fingerprint,
+                    ),
+                )
+                raise BuildAlreadyInProgressError(
+                    "Build in progress for "
+                    f"workspace={spec.workspace_id} configuration={configuration.id}"
+                )
+
+        build = await self._create_build(
+            configuration=configuration,
+            spec=spec,
+            reason=reason,
+        )
+        return _BuildResolution(
+            build=build,
+            decision=BuildDecision.START_NEW,
+            spec=spec,
+            reason=reason,
+        )
+
+    async def _stream_existing_and_live_events(
+        self,
+        *,
+        build: Build,
+        start_sequence: int | None = None,
+    ) -> AsyncIterator[AdeEvent]:
+        """Yield persisted and live events for ``build`` until completion."""
+
+        reader = self.event_log_reader(
+            workspace_id=build.workspace_id,
+            configuration_id=build.configuration_id,
+            build_id=build.id,
+        )
+        last_sequence = start_sequence or 0
+        for event in reader.iter(after_sequence=start_sequence or 0):
+            yield event
+            if event.sequence:
+                last_sequence = event.sequence
+            if event.type in {"build.complete", "build.failed"}:
+                return
+
+        async with self.subscribe_to_events(build.id) as subscription:
+            async for live_event in subscription:
+                if live_event.sequence and live_event.sequence <= last_sequence:
+                    continue
+                yield live_event
+                if live_event.sequence:
+                    last_sequence = live_event.sequence
+                if live_event.type in {"build.complete", "build.failed"}:
+                    break
+
     async def _require_configuration(
         self,
         workspace_id: UUID,
@@ -925,23 +1112,15 @@ class BuildsService:
             )
             return None
 
-    async def _create_build_plan(
+    async def _create_build(
         self,
         *,
         configuration: Configuration,
-        config_path: Path,
-        engine_spec: str,
-        engine_version_hint: str | None,
-        python_interpreter: str | None,
-        config_digest: str,
-        python_version: str | None,
-        fingerprint: str,
+        spec: BuildSpec,
         reason: str | None,
-        run_id: UUID | None,
-    ) -> _BuildPlan:
+    ) -> Build:
         workspace_id = configuration.workspace_id
         now = self._now()
-        configuration.content_digest = config_digest
 
         build_id = self._generate_build_id()
         build = Build(
@@ -950,34 +1129,14 @@ class BuildsService:
             configuration_id=configuration.id,
             status=BuildStatus.QUEUED,
             created_at=now,
-            fingerprint=fingerprint,
-            engine_spec=engine_spec,
-            engine_version=engine_version_hint,
-            python_version=python_version,
-            python_interpreter=python_interpreter,
-            config_digest=config_digest,
+            fingerprint=spec.fingerprint,
+            engine_spec=spec.engine_spec,
+            engine_version=spec.engine_version_hint,
+            python_version=spec.python_version,
+            python_interpreter=spec.python_bin,
+            config_digest=spec.config_digest,
         )
         await self._builds.add(build)
-
-        venv_root = build_venv_root(self._settings, workspace_id, configuration.id, build_id)
-        context = BuildExecutionContext(
-            build_id=build.id,
-            workspace_id=workspace_id,
-            configuration_id=configuration.id,
-            config_path=str(config_path),
-            venv_root=str(venv_root),
-            python_bin=python_interpreter,
-            engine_spec=engine_spec,
-            engine_version_hint=engine_version_hint,
-            pip_cache_dir=str(self._settings.pip_cache_dir)
-            if self._settings.pip_cache_dir
-            else None,
-            timeout_seconds=float(self._settings.build_timeout.total_seconds()),
-            should_run=True,
-            fingerprint=fingerprint,
-            reason=reason,
-            run_id=run_id,
-        )
 
         logger.debug(
             "build.plan.created",
@@ -985,9 +1144,10 @@ class BuildsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration.id,
                 build_id=build.id,
+                reason=reason,
             ),
         )
-        return _BuildPlan(build=build, context=context)
+        return build
 
     async def _transition_status(self, build: Build, status: BuildStatus) -> Build:
         if status is BuildStatus.BUILDING:
@@ -1065,7 +1225,13 @@ class BuildsService:
         )
         return build
 
-    async def _wait_for_build(self, *, workspace_id: UUID, configuration_id: UUID) -> None:
+    async def _wait_for_build(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        fingerprint: str | None = None,
+    ) -> None:
         deadline = self._now() + self._settings.build_ensure_wait
         logger.debug(
             "build.wait_for_existing.start",
@@ -1073,11 +1239,17 @@ class BuildsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 deadline=deadline.isoformat(),
+                fingerprint=fingerprint,
             ),
         )
         while self._now() < deadline:
-            inflight = await self._builds.get_latest_inflight(
-                configuration_id=configuration_id
+            inflight = (
+                await self._builds.get_inflight_by_fingerprint(
+                    configuration_id=configuration_id,
+                    fingerprint=fingerprint,
+                )
+                if fingerprint
+                else await self._builds.get_latest_inflight(configuration_id=configuration_id)
             )
             if inflight is None or inflight.status not in (
                 BuildStatus.QUEUED,
@@ -1089,6 +1261,7 @@ class BuildsService:
                         workspace_id=workspace_id,
                         configuration_id=configuration_id,
                         final_status=str(inflight.status) if inflight else "none",
+                        fingerprint=fingerprint,
                     ),
                 )
                 return
@@ -1098,6 +1271,7 @@ class BuildsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
+                fingerprint=fingerprint,
             ),
         )
         raise BuildAlreadyInProgressError(
@@ -1155,47 +1329,41 @@ class BuildsService:
             configuration.activated_at = self._now()
         await self._session.flush()
 
-    def _reuse_context(
+    def _build_execution_context(
         self,
         *,
-        build: Build,
-        configuration: Configuration,
-        config_path: Path,
-        python_interpreter: str | None,
-        engine_spec: str,
-        engine_version_hint: str | None,
-        fingerprint: str,
-        should_run: bool = False,
-        reason: str | None = None,
-        run_id: UUID | None = None,
-        reuse_summary: str | None = None,
+        resolution: _BuildResolution,
+        run_id: UUID | None,
     ) -> BuildExecutionContext:
+        spec = resolution.spec
         venv_root = build_venv_root(
             self._settings,
-            configuration.workspace_id,
-            configuration.id,
-            build.id,
+            spec.workspace_id,
+            spec.configuration_id,
+            resolution.build.id,
         )
+        reuse_summary = resolution.reuse_summary
+        if reuse_summary is None and resolution.decision is BuildDecision.REUSE_READY:
+            reuse_summary = "Reused existing build"
+
         return BuildExecutionContext(
-            build_id=build.id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            config_path=str(config_path),
+            build_id=resolution.build.id,
+            workspace_id=spec.workspace_id,
+            configuration_id=spec.configuration_id,
+            config_path=str(spec.config_path),
             venv_root=str(venv_root),
-            python_bin=python_interpreter,
-            engine_spec=engine_spec,
-            engine_version_hint=engine_version_hint,
+            python_bin=spec.python_bin,
+            engine_spec=spec.engine_spec,
+            engine_version_hint=spec.engine_version_hint,
             pip_cache_dir=str(self._settings.pip_cache_dir)
             if self._settings.pip_cache_dir
             else None,
             timeout_seconds=float(self._settings.build_timeout.total_seconds()),
-            should_run=should_run,
-            fingerprint=fingerprint,
-            reason=reason,
+            decision=resolution.decision,
+            fingerprint=spec.fingerprint,
+            reason=resolution.reason,
             run_id=run_id,
-            reuse_summary=(
-                reuse_summary or ("Reused existing build" if not should_run else None)
-            ),
+            reuse_summary=reuse_summary,
         )
 
     async def _complete_build(
@@ -1253,9 +1421,3 @@ class BuildsService:
 
     def _generate_build_id(self) -> UUID:
         return generate_uuid7()
-
-
-@dataclass(slots=True)
-class _BuildPlan:
-    build: Build
-    context: BuildExecutionContext

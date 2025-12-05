@@ -31,11 +31,13 @@ const rowDetectorSpec: AdeFunctionSpec = {
     "    row_values: list,",
     "    logger,",
     "    **_,",
-    ") -> dict:",
+    ") -> float | dict:",
   ].join("\n"),
   doc: "Row detector entrypoint: return tiny score deltas to help the engine classify streamed rows as header/data.",
   snippet: `
-def detect_\${1:name}(
+DEFAULT_LABEL = "\${1:header}"
+
+def detect_\${2:name}(
     *,
     run,
     state,
@@ -43,10 +45,11 @@ def detect_\${1:name}(
     row_values: list,
     logger,
     **_,
-) -> dict:
-    """\${2:Explain what this detector scores.}"""
+) -> float | dict:
+    """\${3:Explain what this detector scores.}"""
     score = 0.0
-    return {"scores": {"\${3:label}": score}}
+    # Return a float to apply to DEFAULT_LABEL, or a dict to touch multiple labels.
+    return score
 `.trim(),
   parameters: ["run", "state", "row_index", "row_values", "logger"],
 };
@@ -69,7 +72,7 @@ const columnDetectorSpec: AdeFunctionSpec = {
     "    column_index: int,",
     "    logger,",
     "    **_,",
-    ") -> dict:",
+    ") -> float | dict:",
   ].join("\n"),
   doc: "Column detector entrypoint: score how likely the current raw column maps to this canonical field.",
   snippet: `
@@ -86,11 +89,11 @@ def detect_\${1:value_shape}(
     column_index: int,
     logger,
     **_,
-) -> dict:
+) -> float | dict:
     """\${2:Describe your heuristic for this field.}"""
     score = 0.0
     # TODO: inspect header, column_values_sample, etc.
-    return {"scores": {field_name: score}}
+    return {field_name: score}
 `.trim(),
   parameters: [
     "run",

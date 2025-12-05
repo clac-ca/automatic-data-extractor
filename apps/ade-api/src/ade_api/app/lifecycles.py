@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 
+from ade_api.features.configs.utils import COPY_IGNORE_PATTERNS, copytree_no_stat
 from ade_api.features.rbac import RbacService
 from ade_api.infra.db.engine import ensure_database_ready
 from ade_api.infra.db.session import get_sessionmaker
@@ -28,6 +30,7 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
         "workspaces_dir",
         "documents_dir",
         "configs_dir",
+        "config_templates_dir",
         "venvs_dir",
         "runs_dir",
         "pip_cache_dir",
@@ -40,6 +43,47 @@ def ensure_runtime_dirs(settings: Settings | None = None) -> None:
         target.mkdir(parents=True, exist_ok=True)
 
     _validate_venvs_dir(Path(resolved.venvs_dir))
+
+
+def sync_config_templates(settings: Settings | None = None) -> None:
+    """Hydrate bundled config templates into the runtime templates directory."""
+
+    resolved = settings or get_settings()
+
+    source_root = Path(resolved.config_templates_source_dir).expanduser().resolve()
+    destination_root = Path(resolved.config_templates_dir).expanduser().resolve()
+
+    if source_root == destination_root:
+        return
+
+    if not source_root.exists():
+        raise RuntimeError(
+            f"ADE_CONFIG_TEMPLATES_SOURCE_DIR does not exist: {source_root}"
+        )
+
+    destination_root.mkdir(parents=True, exist_ok=True)
+
+    template_dirs = [path for path in sorted(source_root.iterdir()) if path.is_dir()]
+    template_ids = [path.name for path in template_dirs]
+
+    for template_dir in template_dirs:
+        destination_dir = destination_root / template_dir.name
+        if destination_dir.exists():
+            shutil.rmtree(destination_dir, ignore_errors=True)
+        copytree_no_stat(
+            template_dir,
+            destination_dir,
+            ignore=shutil.ignore_patterns(*COPY_IGNORE_PATTERNS),
+        )
+
+    logger.info(
+        "config_templates.synced",
+        extra={
+            "source": str(source_root),
+            "destination": str(destination_root),
+            "template_ids": template_ids,
+        },
+    )
 
 
 def _validate_venvs_dir(venvs_dir: Path) -> None:
@@ -108,6 +152,7 @@ def create_application_lifespan(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ensure_runtime_dirs(settings)
+        sync_config_templates(settings)
         app.state.settings = settings
         app.state.safe_mode = bool(settings.safe_mode)
         await ensure_database_ready(settings)
@@ -125,4 +170,4 @@ def create_application_lifespan(
     return lifespan
 
 
-__all__ = ["create_application_lifespan", "ensure_runtime_dirs"]
+__all__ = ["create_application_lifespan", "ensure_runtime_dirs", "sync_config_templates"]

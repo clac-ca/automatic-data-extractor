@@ -18,12 +18,19 @@ Every detector function is keyword-only and receives a standard set of inputs:
 ```py
 def detect_...(
     *,
+    run=None,
+    state=None,
+    extracted_table=None,
+    input_file_name: str | None = None,
+    column_index: int | None = None,
     header: str | None = None,
+    column_values: list[object] | None = None,
     column_values_sample: list[object] = (),
+    manifest=None,
     logger=None,
     event_emitter=None,
     **_,   # required for forward compatibility
-) -> dict | float:
+) -> float | dict:
     ...
 ```
 
@@ -31,8 +38,14 @@ def detect_...(
 
 | Argument                 | Purpose                                                     |
 | ------------------------ | ----------------------------------------------------------- |
+| **run/state**            | Run metadata and shared cache for this run.                 |
+| **extracted_table**      | Full table context (header + data rows + source info).      |
+| **input_file_name**      | Basename of the current source file.                        |
+| **column_index**         | 1-based index of this column in the table.                  |
 | **header**               | Cleaned column header text (string or `None`).              |
 | **column_values_sample** | A small list of sample cell values from the column.         |
+| **column_values**        | The full column values (already materialized once).         |
+| **manifest**             | Manifest context for additional hints.                      |
 | **logger**               | A standard `logging.Logger` for `debug/info/warning/error`. |
 | **event_emitter**        | Structured event emitter (`event_emitter.custom(...)`).     |
 | ******_                  | Required placeholder for future engine parameters.          |
@@ -61,7 +74,7 @@ Used when a detector provides information about multiple fields at once.
 return {"first_name": 1.0, "last_name": -0.5}
 ```
 
-**No wrappers like `"scores"`**, and you may omit fields you don't want to adjust.
+You may omit fields you don't want to adjust.
 
 ### Scoring Concept
 

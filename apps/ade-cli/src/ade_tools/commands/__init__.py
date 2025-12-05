@@ -10,6 +10,7 @@ from . import ci
 from . import clean_reset
 from . import dev
 from . import docker
+from . import engine
 from . import lint_cmd
 from . import migrate
 from . import routes
@@ -32,6 +33,7 @@ COMMAND_MODULES = (
     routes,
     users,
     docker,
+    engine,
     clean_reset,
     ci,
 )

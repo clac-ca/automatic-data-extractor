@@ -87,8 +87,8 @@ def test_summary_aggregator_builds_hierarchy():
         status=RunStatus.SUCCEEDED,
         failure=None,
         completed_at=ctx.completed_at,
-        output_paths=["output/file.xlsx"],
-        processed_files=["file1.xlsx"],
+        output_path="output/file.xlsx",
+        processed_file="file1.xlsx",
     )
 
     assert table_summary.counts.rows.total == 2
@@ -98,4 +98,5 @@ def test_summary_aggregator_builds_hierarchy():
     assert run_summary.counts.tables == {"total": 1}
     assert run_summary.counts.columns.distinct_headers == 3
     assert run_summary.validation.issues_total == 1
-    assert run_summary.details.get("processed_files") == ["file1.xlsx"]
+    assert run_summary.details.get("processed_file") == "file1.xlsx"
+    assert run_summary.details.get("output_path") == "output/file.xlsx"

@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.schemas import (
+from ade_api.infra.events.base import BaseEventEmitter
+from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
     ConsoleLinePayload,
     RunQueuedPayload,
     RunStartedPayload,
 )
-
-from ade_api.infra.events.base import BaseEventEmitter
 
 
 class RunEventEmitter(BaseEventEmitter):
@@ -39,11 +38,12 @@ class RunEventEmitter(BaseEventEmitter):
         return await self.emit(type="console.line", payload=payload)
 
     async def queued(self, *, mode: str, options: dict[str, Any]) -> AdeEvent:
-        return await self.emit_prefixed(
-            prefix="run",
-            suffix="queued",
-            payload=RunQueuedPayload(status="queued", mode=mode, options=options),
-        )
+        payload = RunQueuedPayload(
+            status="queued",
+            mode=mode,
+            options=options,
+        ).model_dump(exclude_none=True)
+        return await self.emit_prefixed(prefix="run", suffix="queued", payload=payload)
 
     async def start(
         self,
@@ -52,16 +52,13 @@ class RunEventEmitter(BaseEventEmitter):
         engine_version: str | None = None,
         config_version: str | None = None,
     ) -> AdeEvent:
-        return await self.emit_prefixed(
-            prefix="run",
-            suffix="start",
-            payload=RunStartedPayload(
-                status="in_progress",
-                mode=mode,
-                engine_version=engine_version,
-                config_version=config_version,
-            ),
-        )
+        payload = RunStartedPayload(
+            status="in_progress",
+            mode=mode,
+            engine_version=engine_version,
+            config_version=config_version,
+        ).model_dump(exclude_none=True)
+        return await self.emit_prefixed(prefix="run", suffix="start", payload=payload)
 
     async def complete(
         self,

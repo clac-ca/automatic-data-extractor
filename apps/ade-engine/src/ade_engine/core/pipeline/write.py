@@ -76,7 +76,9 @@ def write_workbook(
     )
 
     output_dir = ctx.paths.output_dir
+    output_file = ctx.paths.output_file
     output_dir.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
 
     sheet_override = writer_cfg.output_sheet
@@ -129,10 +131,9 @@ def write_workbook(
     )
     workbook = before_save_context.workbook or workbook
 
-    output_path = output_dir / "normalized.xlsx"
-    workbook.save(output_path)
-    logger.info("Wrote normalized workbook", extra={"output": str(output_path)})
-    return output_path
+    workbook.save(output_file)
+    logger.info("Wrote normalized workbook", extra={"output": str(output_file)})
+    return output_file
 
 
 __all__ = ["write_workbook"]

@@ -6,33 +6,30 @@ import asyncio
 import inspect
 import json
 import logging
+import mimetypes
 import os
+import unicodedata
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 from ade_engine.schemas import (
-    AdeEvent,
-    AdeEventPayload,
     ColumnCounts,
-    ConsoleLinePayload,
     Counts,
     FieldCounts,
     FieldSummaryAggregate,
     ManifestV1,
     RowCounts,
-    RunCompletedPayload,
-    RunQueuedPayload,
     RunSummary,
     ValidationSummary,
 )
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.encoding import json_dumps
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
@@ -66,6 +63,14 @@ from ade_api.infra.storage import (
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.schemas.events import (
+    AdeEvent,
+    AdeEventPayload,
+    ConsoleLinePayload,
+    EngineEventFrame,
+    RunCompletedPayload,
+    RunQueuedPayload,
+)
 from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
@@ -86,6 +91,7 @@ __all__ = [
     "RunDocumentMissingError",
     "RunLogsFileMissingError",
     "RunNotFoundError",
+    "RunOutputNotReadyError",
     "RunOutputMissingError",
     "RunsService",
     "RunStreamFrame",
@@ -97,8 +103,8 @@ event_logger = logging.getLogger("ade_api.runs.events")
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 # Stream frames are AdeEvents as far as the public API is concerned. Internally
-# we also see StdoutFrame objects from the process runner and RunExecutionResult
-# markers used to finalize runs.
+# we also see EngineEventFrame and StdoutFrame objects from the process runner
+# plus RunExecutionResult markers used to finalize runs.
 @dataclass(slots=True)
 class RunExecutionResult:
     """Outcome of an engine-backed run execution."""
@@ -111,7 +117,38 @@ class RunExecutionResult:
     error_message: str | None = None
 
 
-RunStreamFrame = AdeEvent | StdoutFrame | RunExecutionResult
+RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
+
+
+# --------------------------------------------------------------------------- #
+# Small helpers
+# --------------------------------------------------------------------------- #
+
+
+def _build_download_disposition(filename: str) -> str:
+    """Return a safe Content-Disposition header value for ``filename``."""
+
+    stripped = filename.strip()
+    cleaned = "".join(
+        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
+    ).strip()
+    candidate = cleaned or "download"
+
+    fallback_chars: list[str] = []
+    for char in candidate:
+        code_point = ord(char)
+        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
+            fallback_chars.append(char)
+        else:
+            fallback_chars.append("_")
+    fallback = "".join(fallback_chars).strip("_ ") or "download"
+    fallback = fallback[:255]
+
+    encoded = quote(candidate, safe="")
+    if fallback == candidate:
+        return f'attachment; filename="{fallback}"'
+
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
 # --------------------------------------------------------------------------- #
@@ -128,8 +165,8 @@ class RunPathsSnapshot:
     """
 
     events_path: str | None = None
-    output_paths: list[str] = field(default_factory=list)
-    processed_files: list[str] = field(default_factory=list)
+    output_path: str | None = None
+    processed_file: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -191,6 +228,10 @@ class RunLogsFileMissingError(RuntimeError):
 
 class RunOutputMissingError(RuntimeError):
     """Raised when requested run outputs cannot be resolved."""
+
+
+class RunOutputNotReadyError(RuntimeError):
+    """Raised when a run output is requested before it is ready."""
 
 
 class RunInputMissingError(RuntimeError):
@@ -283,13 +324,11 @@ class RunsService:
 
         # Optional primary input document descriptor
         input_document_id = options.input_document_id or None
-        document_descriptor: dict[str, Any] | None = None
         if input_document_id:
-            document = await self._require_document(
+            await self._require_document(
                 workspace_id=configuration.workspace_id,
                 document_id=input_document_id,
             )
-            document_descriptor = self._document_descriptor(document)
 
         run_id = self._generate_run_id()
 
@@ -318,7 +357,7 @@ class RunsService:
             else RunStatus.QUEUED
         )
 
-        selected_sheet_name = self._select_input_sheet_name(options)
+        selected_sheet_names = self._select_input_sheet_names(options)
 
         run = Run(
             id=run_id,
@@ -329,12 +368,7 @@ class RunsService:
             retry_of_run_id=None,
             trace_id=str(run_id),
             input_document_id=input_document_id,
-            input_documents=[document_descriptor] if document_descriptor else [],
-            input_sheet_name=selected_sheet_name,
-            input_sheet_names=(
-                options.input_sheet_names
-                or ([selected_sheet_name] if selected_sheet_name else None)
-            ),
+            input_sheet_names=selected_sheet_names or None,
             build_id=build_id,
         )
         self._session.add(run)
@@ -364,7 +398,7 @@ class RunsService:
             payload=RunQueuedPayload(
                 status="queued",
                 mode=mode_literal,
-                options=options.model_dump(),
+                options=options.model_dump(exclude_none=True),
             ),
         )
         if run.status is RunStatus.WAITING_FOR_BUILD:
@@ -475,63 +509,20 @@ class RunsService:
         if context.build_context:
             build_context = context.build_context
             build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            if build_context.should_run:
-                async for event in self._builds_service.stream_build(
-                    context=build_context,
-                    options=build_options,
-                ):
-                    forwarded = await self._event_dispatcher.emit(
-                        type=event.type,
-                        source=event.source or "api",
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        build_id=event.build_id or build_context.build_id,
-                        payload=event.payload,
-                    )
-                    yield forwarded
-            else:
-                build = await self._builds_service.get_build_or_raise(
-                    build_context.build_id,
-                    workspace_id=build_context.workspace_id,
+            async for event in self._builds_service.stream_build(
+                context=build_context,
+                options=build_options,
+            ):
+                forwarded = await self._event_dispatcher.emit(
+                    type=event.type,
+                    source=self._normalized_event_source(getattr(event, "source", None)),
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    build_id=event.build_id or build_context.build_id,
+                    payload=event.payload,
                 )
-                reader = self._builds_service.event_log_reader(
-                    workspace_id=build.workspace_id,
-                    configuration_id=build.configuration_id,
-                    build_id=build.id,
-                )
-                last_sequence = 0
-                for event in reader.iter(after_sequence=0):
-                    forwarded = await self._event_dispatcher.emit(
-                        type=event.type,
-                        source=event.source or "api",
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        build_id=event.build_id or build_context.build_id,
-                        payload=event.payload,
-                    )
-                    yield forwarded
-                    if event.sequence:
-                        last_sequence = max(last_sequence, event.sequence)
-                async with self._builds_service.subscribe_to_events(build.id) as subscription:
-                    async for live_event in subscription:
-                        if live_event.sequence and live_event.sequence <= last_sequence:
-                            continue
-                        forwarded = await self._event_dispatcher.emit(
-                            type=live_event.type,
-                            source=live_event.source or "api",
-                            workspace_id=run.workspace_id,
-                            configuration_id=run.configuration_id,
-                            run_id=run.id,
-                            build_id=live_event.build_id or build_context.build_id,
-                            payload=live_event.payload,
-                        )
-                        yield forwarded
-                        if live_event.sequence:
-                            last_sequence = live_event.sequence
-                        if live_event.type in {"build.complete", "build.failed"}:
-                            break
+                yield forwarded
 
             build = await self._builds_service.get_build_or_raise(
                 build_context.build_id,
@@ -887,7 +878,7 @@ class RunsService:
             page_size=page_size,
             include_total=include_total,
         )
-        resources = [self.to_resource(run) for run in page_result.items]
+        resources = [await self.to_resource(run) for run in page_result.items]
         response = Page(
             items=resources,
             page=page_result.page,
@@ -933,7 +924,7 @@ class RunsService:
             include_total=include_total,
         )
 
-    def to_resource(self, run: Run) -> RunResource:
+    async def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
 
         run_dir = self._run_dir_for_run(
@@ -969,27 +960,10 @@ class RunsService:
             default_paths=RunPathsSnapshot(),
         )
 
-        # Input documents
-        document_ids = [
-            str(doc["document_id"])
-            for doc in (run.input_documents or [])
-            if isinstance(doc, dict) and doc.get("document_id")
-        ]
-        if run.input_document_id and run.input_document_id not in document_ids:
-            document_ids.append(run.input_document_id)
-
-        # Input sheets
-        sheet_names = run.input_sheet_names or []
-        if run.input_sheet_name and run.input_sheet_name not in sheet_names:
-            sheet_names.append(run.input_sheet_name)
-
-        # Outputs and processed files
-        output_files = paths.output_paths or self._relative_output_paths(run_dir / "output")
-        processed_files = list(paths.processed_files or [])
-        if not processed_files and isinstance(summary_details, dict):
-            processed_files = [
-                str(item) for item in summary_details.get("processed_files", []) or []
-            ]
+        processed_file = self._resolve_processed_file(
+            paths=paths,
+            summary_details=summary_details if isinstance(summary_details, dict) else None,
+        )
 
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at) or self._coerce_datetime(
@@ -1018,6 +992,20 @@ class RunsService:
         if not isinstance(sheets_counts, dict):
             sheets_counts = {}
 
+        input_meta = await self._build_input_metadata(
+            run=run,
+            files_counts=files_counts,
+            sheets_counts=sheets_counts,
+        )
+        output_meta = await self._build_output_metadata(
+            run=run,
+            run_dir=run_dir,
+            paths=paths,
+            summary_details=summary_details if isinstance(summary_details, dict) else None,
+            processed_file=processed_file,
+        )
+        links = self._links(run.id)
+
         return RunResource(
             id=run.id,
             workspace_id=run.workspace_id,
@@ -1036,31 +1024,250 @@ class RunsService:
             completed_at=finished_at,
             duration_seconds=duration_seconds,
             exit_code=run.exit_code,
-            input=RunInput(
-                document_ids=document_ids,
-                input_sheet_names=sheet_names,
-                input_file_count=files_counts.get("total"),
-                input_sheet_count=sheets_counts.get("total"),
-            ),
-            output=RunOutput(
-                has_outputs=bool(output_files),
-                output_count=len(output_files),
-                processed_files=processed_files,
-            ),
-            links=self._links(run.id),
+            input=input_meta,
+            output=output_meta,
+            links=links,
+            events_url=links.events,
+            events_stream_url=links.events_stream,
+            events_download_url=links.events_download,
+        )
+
+    def _resolve_processed_file(
+        self,
+        *,
+        paths: RunPathsSnapshot,
+        summary_details: dict[str, Any] | None,
+    ) -> str | None:
+        processed_file = paths.processed_file
+        if processed_file:
+            return processed_file
+        if isinstance(summary_details, dict):
+            processed_file = summary_details.get("processed_file")
+            if processed_file:
+                return str(processed_file)
+            processed = summary_details.get("processed_files", [])
+            if isinstance(processed, list) and processed:
+                return str(processed[0])
+        return None
+
+    async def _build_input_metadata(
+        self,
+        *,
+        run: Run,
+        files_counts: dict[str, Any],
+        sheets_counts: dict[str, Any],
+    ) -> RunInput:
+        document_id = str(run.input_document_id) if run.input_document_id else None
+        filename: str | None = None
+        content_type: str | None = None
+        size_bytes: int | None = None
+        download_url: str | None = None
+
+        if document_id:
+            download_url = f"/api/v1/runs/{run.id}/input/download"
+            try:
+                document = await self._require_document(
+                    workspace_id=run.workspace_id,
+                    document_id=run.input_document_id,  # type: ignore[arg-type]
+                )
+                filename = document.original_filename
+                content_type = document.content_type
+                size_bytes = document.byte_size
+            except RunDocumentMissingError:
+                logger.warning(
+                    "run.input.metadata.missing_document",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        document_id=document_id,
+                    ),
+                )
+
+        return RunInput(
+            document_id=document_id,
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            download_url=download_url,
+            input_sheet_names=run.input_sheet_names,
+            input_file_count=files_counts.get("total"),
+            input_sheet_count=sheets_counts.get("total"),
+        )
+
+    async def _build_output_metadata(
+        self,
+        *,
+        run: Run,
+        run_dir: Path,
+        paths: RunPathsSnapshot,
+        summary_details: dict[str, Any] | None,
+        processed_file: str | None,
+    ) -> RunOutput:
+        output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
+        output_file: Path | None = None
+        if output_path:
+            candidate = (run_dir / output_path).resolve()
+            try:
+                candidate.relative_to(run_dir)
+            except ValueError:
+                candidate = None
+            if candidate and candidate.is_file():
+                output_file = candidate
+
+        ready = bool(output_file) and run.status in {
+            RunStatus.SUCCEEDED,
+            RunStatus.FAILED,
+            RunStatus.CANCELLED,
+        }
+
+        filename: str | None = None
+        size_bytes: int | None = None
+        content_type: str | None = None
+
+        if output_file:
+            filename = output_file.name
+            try:
+                size_bytes = output_file.stat().st_size
+            except OSError:
+                size_bytes = None
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        if not processed_file and isinstance(summary_details, dict):
+            processed_file = summary_details.get("processed_file")
+            if not processed_file:
+                processed_files = summary_details.get("processed_files", [])
+                if isinstance(processed_files, list) and processed_files:
+                    processed_file = str(processed_files[0])
+
+        return RunOutput(
+            ready=ready,
+            download_url=f"/api/v1/runs/{run.id}/output/download",
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            has_output=bool(output_path),
+            output_path=output_path,
+            processed_file=str(processed_file) if processed_file else None,
         )
 
     @staticmethod
     def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
+        events = f"{base}/events"
+        events_stream = f"{events}/stream"
+        events_download = f"{events}/download"
+        output_metadata = f"{base}/output"
+        output_download = f"{output_metadata}/download"
+        input_metadata = f"{base}/input"
+        input_download = f"{input_metadata}/download"
+
         return RunLinks(
             self=base,
             summary=f"{base}/summary",
-            events=f"{base}/events",
-            events_stream=f"{base}/events/stream",
-            logs=f"{base}/logs",
-            outputs=f"{base}/outputs",
+            events=events,
+            events_stream=events_stream,
+            events_download=events_download,
+            logs=events_download,
+            input=input_metadata,
+            input_download=input_download,
+            output=output_download,
+            output_download=output_download,
+            output_metadata=output_metadata,
         )
+
+    async def get_run_input_metadata(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RunInput:
+        run = await self._require_run(run_id)
+        resource = await self.to_resource(run)
+        if resource.input.document_id is None:
+            raise RunInputMissingError("Run input is unavailable")
+        if resource.input.filename is None:
+            raise RunDocumentMissingError("Run input file is unavailable")
+        return resource.input
+
+    async def stream_run_input(
+        self,
+        *,
+        run_id: UUID,
+    ) -> tuple[Run, Document, AsyncIterator[bytes]]:
+        run = await self._require_run(run_id)
+        if not run.input_document_id:
+            raise RunInputMissingError("Run input is unavailable")
+        document = await self._require_document(
+            workspace_id=run.workspace_id,
+            document_id=run.input_document_id,
+        )
+        storage = self._storage_for(run.workspace_id)
+        path = storage.path_for(document.stored_uri)
+        exists = await asyncio.to_thread(path.exists)
+        if not exists:
+            logger.warning(
+                "run.input.stream.missing_file",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    document_id=document.id,
+                    stored_uri=document.stored_uri,
+                ),
+            )
+            raise RunDocumentMissingError("Run input file is unavailable")
+
+        stream = storage.stream(document.stored_uri)
+
+        async def _guarded() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                logger.warning(
+                    "run.input.stream.file_lost",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        document_id=document.id,
+                        stored_uri=document.stored_uri,
+                    ),
+                )
+                raise RunDocumentMissingError("Run input file is unavailable") from exc
+
+        return run, document, _guarded()
+
+    async def get_run_output_metadata(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RunOutput:
+        run = await self._require_run(run_id)
+        resource = await self.to_resource(run)
+        return resource.output
+
+    async def resolve_output_for_download(
+        self,
+        *,
+        run_id: UUID,
+    ) -> tuple[Run, Path]:
+        run = await self._require_run(run_id)
+        if run.status in {
+            RunStatus.QUEUED,
+            RunStatus.WAITING_FOR_BUILD,
+            RunStatus.RUNNING,
+        }:
+            raise RunOutputNotReadyError("Run output is not available until the run completes.")
+        try:
+            path = await self.resolve_output_file(run_id=run_id)
+        except RunOutputMissingError as err:
+            if run.status is RunStatus.FAILED:
+                raise RunOutputMissingError(
+                    "Run failed and no output is available",
+                ) from err
+            raise
+        return run, path
 
     async def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""
@@ -1094,83 +1301,50 @@ class RunsService:
         )
         return logs_path
 
-    async def list_output_files(self, *, run_id: UUID) -> list[tuple[str, int]]:
-        """Return output file tuples for ``run_id``."""
-
-        logger.debug(
-            "run.outputs.list.start",
-            extra=log_context(run_id=run_id),
-        )
-        run = await self._require_run(run_id)
-        output_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id) / "output"
-        if not output_dir.exists() or not output_dir.is_dir():
-            logger.warning(
-                "run.outputs.list.missing",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    path=str(output_dir),
-                ),
-            )
-            raise RunOutputMissingError("Run output is unavailable")
-
-        files: list[tuple[str, int]] = []
-        for path in output_dir.rglob("*"):
-            if not path.is_file():
-                continue
-            try:
-                relative = path.relative_to(output_dir)
-            except ValueError:
-                continue
-            files.append((str(relative), path.stat().st_size))
-
-        logger.info(
-            "run.outputs.list.success",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-                count=len(files),
-            ),
-        )
-        return files
-
     async def resolve_output_file(
         self,
         *,
         run_id: UUID,
-        relative_path: str,
     ) -> Path:
         """Return the absolute path for ``relative_path`` in ``run_id`` outputs."""
 
         logger.debug(
             "run.outputs.resolve.start",
-            extra=log_context(run_id=run_id, path=relative_path),
+            extra=log_context(run_id=run_id),
         )
         run = await self._require_run(run_id)
-        output_dir = (
-            self._run_dir_for_run(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-            )
-            / "output"
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+
+        summary_payload = self._deserialize_run_summary(run.summary)
+        summary_details = (
+            summary_payload.get("details")
+            if isinstance(summary_payload, dict)
+            else summary_payload
         )
-        if not output_dir.exists() or not output_dir.is_dir():
+        paths_snapshot = self._finalize_paths(
+            summary=summary_details if isinstance(summary_details, dict) else None,
+            run_dir=run_dir,
+            default_paths=RunPathsSnapshot(),
+        )
+        output_relative = (
+            paths_snapshot.output_path
+            or self._relative_output_path(run_dir / "output", run_dir)
+        )
+        if not output_relative:
             logger.warning(
                 "run.outputs.resolve.missing_root",
                 extra=log_context(
                     workspace_id=run.workspace_id,
                     configuration_id=run.configuration_id,
                     run_id=run.id,
-                    path=str(output_dir),
+                    path=str(run_dir / "output"),
                 ),
             )
             raise RunOutputMissingError("Run output is unavailable")
 
-        candidate = (output_dir / relative_path).resolve()
+        candidate = (run_dir / output_relative).resolve()
         try:
-            candidate.relative_to(output_dir)
+            candidate.relative_to(run_dir)
         except ValueError:
             logger.warning(
                 "run.outputs.resolve.outside_directory",
@@ -1216,10 +1390,10 @@ class RunsService:
         )
         return path
 
-    def run_relative_path(self, path: Path) -> str:
-        """Return ``path`` relative to the runs root, validating traversal."""
+    def run_relative_path(self, path: Path, *, base_dir: Path | None = None) -> str:
+        """Return ``path`` relative to ``base_dir`` (or runs root), validating traversal."""
 
-        root = self._runs_dir.resolve()
+        root = (base_dir or self._runs_dir).resolve()
         candidate = path.resolve()
         try:
             value = str(candidate.relative_to(root))
@@ -1235,26 +1409,56 @@ class RunsService:
     # Internal helpers: paths, summaries, manifests
     # --------------------------------------------------------------------- #
 
-    def _relative_if_exists(self, path: str | Path | None) -> str | None:
+    def _relative_if_exists(
+        self,
+        path: str | Path | None,
+        *,
+        run_dir: Path | None = None,
+    ) -> str | None:
         if path is None:
             return None
+
+        candidates: list[Path] = []
         candidate = Path(path)
-        if not candidate.exists():
+        candidates.append(candidate)
+        if run_dir is not None and not candidate.is_absolute():
+            candidates.append(run_dir / candidate)
+
+        for option in candidates:
+            if not option.exists():
+                continue
+            try:
+                return self.run_relative_path(option, base_dir=run_dir)
+            except RunOutputMissingError:
+                continue
+        return None
+
+    def _relative_output_path(self, output_dir: Path, run_dir: Path) -> str | None:
+        if not output_dir.exists() or not output_dir.is_dir():
             return None
-        try:
-            return self.run_relative_path(candidate)
-        except RunOutputMissingError:
+        normalized = output_dir / "normalized.xlsx"
+        relative = self._relative_if_exists(normalized, run_dir=run_dir)
+        if relative:
+            return relative
+        for path in sorted(p for p in output_dir.rglob("*") if p.is_file()):
+            relative = self._relative_if_exists(path, run_dir=run_dir)
+        if relative is not None:
+            return relative
+        return None
+
+    def _run_relative_hint(self, path: str | Path | None, *, run_dir: Path | None) -> str | None:
+        """Return ``path`` relative to the run directory without hitting the filesystem."""
+
+        if path is None or run_dir is None:
             return None
 
-    def _relative_output_paths(self, output_dir: Path) -> list[str]:
-        if not output_dir.exists() or not output_dir.is_dir():
-            return []
-        paths: list[str] = []
-        for path in sorted(p for p in output_dir.rglob("*") if p.is_file()):
-            relative = self._relative_if_exists(path)
-            if relative is not None:
-                paths.append(relative)
-        return paths
+        candidate = Path(path)
+        if not candidate.is_absolute():
+            candidate = (run_dir / candidate).resolve()
+        try:
+            return self.run_relative_path(candidate, base_dir=run_dir)
+        except RunOutputMissingError:
+            return None
 
     @staticmethod
     def _document_descriptor(document: Document) -> dict[str, Any]:
@@ -1278,42 +1482,60 @@ class RunsService:
 
         snapshot = RunPathsSnapshot(
             events_path=default_paths.events_path,
-            output_paths=list(default_paths.output_paths),
-            processed_files=list(default_paths.processed_files),
+            output_path=default_paths.output_path,
+            processed_file=default_paths.processed_file,
         )
         details = summary.get("details") if isinstance(summary, dict) else None
         if not isinstance(details, dict):
             details = summary if isinstance(summary, dict) else {}
 
-        # Events path: summary beats defaults, then fall back to logs/events.ndjson.
-        logs_dir = run_dir / "logs"
-        event_candidates: list[str | Path | None] = [
-            logs_dir / "events.ndjson",
-            details.get("events_path") if isinstance(details, dict) else None,
-        ]
-        for candidate in event_candidates:
-            snapshot.events_path = self._relative_if_exists(candidate)
-            if snapshot.events_path:
+        # Events path: prefer summary/default hints; avoid filesystem probing.
+        if isinstance(details, dict) and not snapshot.events_path:
+            snapshot.events_path = self._run_relative_hint(
+                details.get("events_path"),
+                run_dir=run_dir,
+            )
+        if not snapshot.events_path:
+            for candidate in (
+                run_dir / "engine-logs" / "engine_events.ndjson",
+                run_dir / "engine-logs" / run_dir.name / "engine_events.ndjson",
+                run_dir / "logs" / "events.ndjson",
+            ):
+                snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
+                if snapshot.events_path:
+                    break
+
+        # Output path: only propagate hints already in scope (summary/defaults).
+        output_candidates: list[str | Path | None] = []
+        if isinstance(details, dict):
+            output_candidates.append(details.get("output_path"))
+            legacy_outputs = details.get("output_paths")
+            if isinstance(legacy_outputs, list) and legacy_outputs:
+                output_candidates.append(legacy_outputs[0])
+        output_candidates.append(default_paths.output_path)
+
+        for candidate in output_candidates:
+            if snapshot.output_path:
                 break
+            snapshot.output_path = self._run_relative_hint(candidate, run_dir=run_dir)
 
-        # Output paths: summary-specified relative paths first, then scan output dir.
-        output_candidates = details.get("output_paths") if isinstance(details, dict) else None
-        if isinstance(output_candidates, list):
-            snapshot.output_paths = [
-                p
-                for p in (self._relative_if_exists(path) for path in output_candidates)
-                if p
-            ]
-
-        if not snapshot.output_paths:
-            snapshot.output_paths = self._relative_output_paths(run_dir / "output")
-
-        # Processed files: summary value if present, otherwise leave as-is.
-        processed_candidates = details.get("processed_files") if isinstance(details, dict) else None
-        if isinstance(processed_candidates, list):
-            snapshot.processed_files = [str(path) for path in processed_candidates]
+        # Processed file: summary value if present, otherwise default snapshot.
+        if not snapshot.processed_file and isinstance(details, dict):
+            processed_value = details.get("processed_file")
+            if isinstance(processed_value, str):
+                snapshot.processed_file = processed_value
+            else:
+                legacy_processed = details.get("processed_files")
+                if isinstance(legacy_processed, list) and legacy_processed:
+                    snapshot.processed_file = str(legacy_processed[0])
 
         return snapshot
+
+    @staticmethod
+    def _normalized_event_source(source: str | None) -> str:
+        if source in {"api", "engine"}:
+            return source
+        return "engine"
 
     @staticmethod
     def _parse_summary(
@@ -1369,7 +1591,8 @@ class RunsService:
                 "duration_ms": self._duration_ms(run),
             },
             artifacts={
-                "output_paths": paths.output_paths,
+                "output_path": paths.output_path,
+                "processed_file": paths.processed_file,
                 "events_path": paths.events_path,
             },
         )
@@ -1597,7 +1820,15 @@ class RunsService:
         )
 
         python = self._resolve_python(Path(context.venv_path))
-        env = self._build_env(Path(context.venv_path), options, context)
+        selected_sheet_names = self._select_input_sheet_names(options)
+        if not selected_sheet_names and run.input_sheet_names:
+            selected_sheet_names = list(run.input_sheet_names)
+        env = self._build_env(
+            Path(context.venv_path),
+            options,
+            context,
+            input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
+        )
         runs_root = (
             Path(context.runs_dir)
             if context.runs_dir
@@ -1631,11 +1862,8 @@ class RunsService:
         command.extend(["--output-dir", str(run_dir / "output")])
         command.extend(["--logs-dir", str(engine_logs_dir)])
 
-        sheets = options.input_sheet_names or []
-        if options.input_sheet_name:
-            sheets.append(options.input_sheet_name)
-        for sheet in sheets:
-            command.extend(["--input-sheet", sheet])
+        for sheet_name in selected_sheet_names:
+            command.extend(["--input-sheet", sheet_name])
 
         metadata: dict[str, str] = {
             "run_id": run.id,
@@ -1654,19 +1882,17 @@ class RunsService:
 
         runner = EngineSubprocessRunner(
             command=command,
-            logs_dir=engine_logs_dir,
             env=env,
         )
 
-        paths_snapshot = RunPathsSnapshot()
+        paths_snapshot = RunPathsSnapshot(
+            events_path=str(engine_logs_dir / "engine_events.ndjson"),
+            output_path=str(run_dir / "output" / "normalized.xlsx"),
+            processed_file=staged_input.name,
+        )
 
-        # Stream frames from the engine process: either StdoutFrame or AdeEvent.
+        # Stream frames from the engine process: either stdout frames or stderr lines.
         async for frame in runner.stream():
-            if isinstance(frame, StdoutFrame):
-                continue
-
-            # Engine AdeEvents flow through unchanged, mirrored to logs in debug mode.
-            self._log_event_debug(frame, origin="engine")
             yield frame
 
         # Process completion and summarize.
@@ -1885,10 +2111,10 @@ class RunsService:
                         summary_json = self._serialize_summary(summary_model)
 
                     paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
-                    if latest_paths_snapshot.processed_files and not paths_snapshot.processed_files:
-                        paths_snapshot.processed_files = list(latest_paths_snapshot.processed_files)
-                    if latest_paths_snapshot.output_paths and not paths_snapshot.output_paths:
-                        paths_snapshot.output_paths = list(latest_paths_snapshot.output_paths)
+                    if latest_paths_snapshot.processed_file and not paths_snapshot.processed_file:
+                        paths_snapshot.processed_file = latest_paths_snapshot.processed_file
+                    if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
+                        paths_snapshot.output_path = latest_paths_snapshot.output_path
 
                     completion = await self._complete_run(
                         run,
@@ -1916,8 +2142,8 @@ class RunsService:
                     )
                     continue
 
-                if isinstance(event, AdeEvent):
-                    payload_dict = event.payload_dict()
+                if isinstance(event, EngineEventFrame):
+                    payload_dict = event.payload or {}
                     if event.type == "engine.run.summary":
                         summary_payload = payload_dict
                         try:
@@ -1929,48 +2155,84 @@ class RunsService:
                             )
                             details = engine_summary.details or {}
                             if (
-                                not latest_paths_snapshot.processed_files
+                                not latest_paths_snapshot.processed_file
                                 and isinstance(details, dict)
                             ):
-                                processed = details.get("processed_files")
-                                if processed:
-                                    latest_paths_snapshot.processed_files = [
-                                        str(path)
-                                        for path in processed
-                                    ]
-                            if not latest_paths_snapshot.output_paths and isinstance(details, dict):
-                                outputs = details.get("output_paths")
-                                if outputs:
-                                    latest_paths_snapshot.output_paths = [
-                                        str(path)
-                                        for path in outputs
-                                    ]
+                                processed = details.get("processed_file")
+                                if isinstance(processed, str):
+                                    latest_paths_snapshot.processed_file = processed
+                                else:
+                                    processed_list = details.get("processed_files")
+                                    if isinstance(processed_list, list) and processed_list:
+                                        latest_paths_snapshot.processed_file = str(
+                                            processed_list[0],
+                                        )
+                            if (
+                                not latest_paths_snapshot.output_path
+                                and isinstance(details, dict)
+                            ):
+                                output_path = details.get("output_path")
+                                if isinstance(output_path, str):
+                                    latest_paths_snapshot.output_path = output_path
+                                else:
+                                    outputs = details.get("output_paths")
+                                    if isinstance(outputs, list) and outputs:
+                                        latest_paths_snapshot.output_path = str(outputs[0])
                         except ValidationError:
                             engine_summary = None
                     elif event.type == "engine.complete" and isinstance(payload_dict, dict):
-                        processed_files = payload_dict.get("processed_files")
-                        if processed_files:
-                            latest_paths_snapshot.processed_files = [
-                                str(path)
-                                for path in processed_files
-                            ]
-                        output_paths = payload_dict.get("output_paths")
-                        if output_paths:
-                            latest_paths_snapshot.output_paths = [
-                                str(path)
-                                for path in output_paths
-                            ]
+                        artifacts_value = payload_dict.get("artifacts")
+                        artifacts = (
+                            artifacts_value
+                            if isinstance(artifacts_value, dict)
+                            else payload_dict
+                        )
+                        processed_file = (
+                            artifacts.get("processed_file")
+                            if isinstance(artifacts, dict)
+                            else None
+                        )
+                        if isinstance(processed_file, str):
+                            latest_paths_snapshot.processed_file = processed_file
+                        elif isinstance(artifacts, dict) and artifacts.get("processed_files"):
+                            processed_files = artifacts.get("processed_files") or []
+                            if processed_files:
+                                latest_paths_snapshot.processed_file = str(
+                                    list(processed_files)[0],
+                                )
+                        output_path = (
+                            artifacts.get("output_path")
+                            if isinstance(artifacts, dict)
+                            else None
+                        )
+                        if isinstance(output_path, str):
+                            latest_paths_snapshot.output_path = output_path
+                        elif isinstance(artifacts, dict) and artifacts.get("output_paths"):
+                            output_paths = artifacts.get("output_paths") or []
+                            if output_paths:
+                                latest_paths_snapshot.output_path = str(
+                                    list(output_paths)[0],
+                                )
 
-                forwarded = await self._event_dispatcher.emit(
-                    type=event.type,
-                    source=event.source or "engine",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=getattr(event, "build_id", None) or getattr(run, "build_id", None),
-                    payload=getattr(event, "payload", None),
-                )
-                yield forwarded
+                    forwarded = await self._event_dispatcher.emit_from_engine_frame(
+                        frame=event,
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=getattr(run, "build_id", None),
+                    )
+                    self._log_event_debug(forwarded, origin="engine")
+                    yield forwarded
+                    continue
+
+                if isinstance(event, StdoutFrame):
+                    forwarded = await self._emit_engine_console_line(
+                        run=run,
+                        frame=event,
+                    )
+                    self._log_event_debug(forwarded, origin="engine")
+                    yield forwarded
+                    continue
         except asyncio.CancelledError:
             logger.warning(
                 "run.engine.stream.cancelled",
@@ -2200,6 +2462,8 @@ class RunsService:
         venv_path: Path,
         options: RunCreateOptions,
         context: RunExecutionContext,
+        *,
+        input_sheet_name: str | None = None,
     ) -> dict[str, str]:
         env = os.environ.copy()
         bin_dir = "Scripts" if os.name == "nt" else "bin"
@@ -2210,12 +2474,9 @@ class RunsService:
             env["ADE_RUN_DRY_RUN"] = "1"
         if options.validate_only:
             env["ADE_RUN_VALIDATE_ONLY"] = "1"
-        if options.input_sheet_name:
-            env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_name
-        if options.input_sheet_names:
-            env["ADE_RUN_INPUT_SHEETS"] = json_dumps(options.input_sheet_names)
-            if len(options.input_sheet_names) == 1 and not options.input_sheet_name:
-                env["ADE_RUN_INPUT_SHEET"] = options.input_sheet_names[0]
+        sheet_name = input_sheet_name
+        if sheet_name:
+            env["ADE_RUN_INPUT_SHEET"] = sheet_name
         if context.run_id:
             env["ADE_TELEMETRY_CORRELATION_ID"] = str(context.run_id)
             env["ADE_RUN_ID"] = str(context.run_id)
@@ -2272,14 +2533,24 @@ class RunsService:
         )
 
     @staticmethod
-    def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
-        """Resolve a single selected sheet name from the run options, if any."""
+    def _select_input_sheet_names(options: RunCreateOptions) -> list[str]:
+        """Normalize requested sheet names into a unique, ordered list."""
 
-        selected = options.input_sheet_name
-        if not selected and options.input_sheet_names:
-            if len(options.input_sheet_names) == 1:
-                selected = options.input_sheet_names[0]
-        return selected
+        names: list[str] = []
+        for name in getattr(options, "input_sheet_names", None) or []:
+            if not isinstance(name, str):
+                continue
+            cleaned = name.strip()
+            if cleaned and cleaned not in names:
+                names.append(cleaned)
+        return names
+
+    @staticmethod
+    def _select_input_sheet_name(options: RunCreateOptions) -> str | None:
+        """Resolve the first selected sheet name from the run options, if any."""
+
+        normalized = RunsService._select_input_sheet_names(options)
+        return normalized[0] if normalized else None
 
     # ------------------------------------------------------------------ #
     # Internal helpers: event logging
@@ -2307,6 +2578,26 @@ class RunsService:
             run_id=run.id,
             build_id=getattr(run, "build_id", None),
             source="api",
+        )
+
+    async def _emit_engine_console_line(self, *, run: Run, frame: StdoutFrame) -> AdeEvent:
+        """Coerce stdout/stderr lines into canonical console events."""
+
+        payload = ConsoleLinePayload(
+            scope="run",
+            stream=frame.stream,
+            level="warning" if frame.stream == "stderr" else "info",
+            message=frame.message,
+        ).model_dump(exclude_none=True)
+
+        return await self._event_dispatcher.emit(
+            type="console.line",
+            workspace_id=run.workspace_id,
+            configuration_id=run.configuration_id,
+            run_id=run.id,
+            build_id=getattr(run, "build_id", None),
+            payload=payload,
+            source="engine",
         )
 
     async def _emit_api_event(
@@ -2354,7 +2645,7 @@ class RunsService:
             payload=RunQueuedPayload(
                 status="queued",
                 mode=mode_literal,
-                options=options.model_dump(),
+                options=options.model_dump(exclude_none=True),
             ),
         )
 

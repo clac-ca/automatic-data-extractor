@@ -14,10 +14,10 @@ def test_telemetry_envelope_defaults():
         run_id=run_id,
         workspace_id=workspace_id,
         configuration_id=configuration_id,
-        payload={"engine_version": "1.6.0"},
+        payload={"engine_version": "1.6.1"},
     )
 
-    assert envelope.payload_dict()["engine_version"] == "1.6.0"
+    assert envelope.payload_dict()["engine_version"] == "1.6.1"
     assert envelope.workspace_id == workspace_id
     assert envelope.configuration_id == configuration_id
     assert envelope.run_id == run_id

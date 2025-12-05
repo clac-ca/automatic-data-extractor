@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { clampPageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@shared/api/pagination";
 import { client } from "@shared/api/client";
 import type {
   PermissionOut,
@@ -22,12 +23,11 @@ import type {
 } from "@schema";
 import type { PathsWithMethod } from "openapi-typescript-helpers";
 
-const DEFAULT_WORKSPACE_PAGE_SIZE = 100;
-const DEFAULT_MEMBER_PAGE_SIZE = 100;
-const DEFAULT_ROLE_PAGE_SIZE = 100;
-const DEFAULT_PERMISSION_PAGE_SIZE = 200;
+const DEFAULT_WORKSPACE_PAGE_SIZE = MAX_PAGE_SIZE;
+const DEFAULT_MEMBER_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+const DEFAULT_ROLE_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+const DEFAULT_PERMISSION_PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
-const GLOBAL_SCOPE: ScopeType = "global";
 const WORKSPACE_SCOPE: ScopeType = "workspace";
 
 type ListWorkspacesQuery = paths["/api/v1/workspaces"]["get"]["parameters"]["query"];
@@ -68,8 +68,10 @@ export async function fetchWorkspaces(options: ListWorkspacesOptions = {}): Prom
   if (typeof page === "number" && page > 0) {
     query.page = page;
   }
-  if (typeof pageSize === "number" && pageSize > 0) {
-    query.page_size = pageSize;
+
+  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_WORKSPACE_PAGE_SIZE);
+  if (normalizedPageSize) {
+    query.page_size = normalizedPageSize;
   }
   if (includeTotal) {
     query.include_total = true;
@@ -116,6 +118,12 @@ export async function updateWorkspace(
   return data;
 }
 
+export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspace_id}", {
+    params: { path: { workspace_id: workspaceId } },
+  });
+}
+
 export async function listWorkspaceMembers(
   workspaceId: string,
   options: ListWorkspaceMembersOptions = {},
@@ -126,8 +134,10 @@ export async function listWorkspaceMembers(
   if (typeof page === "number" && page > 0) {
     query.page = page;
   }
-  if (typeof pageSize === "number" && pageSize > 0) {
-    query.page_size = pageSize;
+
+  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_MEMBER_PAGE_SIZE);
+  if (normalizedPageSize) {
+    query.page_size = normalizedPageSize;
   }
   if (includeTotal) {
     query.include_total = true;
@@ -220,8 +230,10 @@ export async function listWorkspaceRoles(
   if (typeof page === "number" && page > 0) {
     query.page = page;
   }
-  if (typeof pageSize === "number" && pageSize > 0) {
-    query.page_size = pageSize;
+
+  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_ROLE_PAGE_SIZE);
+  if (normalizedPageSize) {
+    query.page_size = normalizedPageSize;
   }
   if (includeTotal) {
     query.include_total = true;
@@ -278,14 +290,16 @@ export interface ListPermissionsOptions {
 }
 
 export async function listPermissions(options: ListPermissionsOptions = {}): Promise<PermissionListPage> {
-  const { scope = GLOBAL_SCOPE, page, pageSize, includeTotal, signal } = options;
+  const { scope = WORKSPACE_SCOPE, page, pageSize, includeTotal, signal } = options;
   const query: ListPermissionsQuery = { scope };
 
   if (typeof page === "number" && page > 0) {
     query.page = page;
   }
-  if (typeof pageSize === "number" && pageSize > 0) {
-    query.page_size = pageSize;
+
+  const normalizedPageSize = clampPageSize(pageSize ?? DEFAULT_PERMISSION_PAGE_SIZE);
+  if (normalizedPageSize) {
+    query.page_size = normalizedPageSize;
   }
   if (includeTotal) {
     query.include_total = true;
@@ -322,7 +336,7 @@ const defaultRoleListParams: WorkspaceListParams = {
 };
 
 const defaultPermissionListParams: PermissionListParams = {
-  scope: GLOBAL_SCOPE,
+  scope: WORKSPACE_SCOPE,
   page: 1,
   pageSize: DEFAULT_PERMISSION_PAGE_SIZE,
   includeTotal: false,

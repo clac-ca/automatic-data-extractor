@@ -19,7 +19,7 @@ from ade_engine.core.types import (
 from ade_engine.infra.event_emitter import EngineEventEmitter
 from ade_engine.infra.telemetry import FileEventSink
 from ade_engine.schemas.manifest import ColumnsConfig, FieldConfig, HookCollection, ManifestV1, WriterConfig
-from ade_engine.schemas.telemetry import AdeEvent
+from ade_engine.schemas.events import EngineEventFrameV1
 
 
 def build_run_context(tmp_path: Path) -> RunContext:
@@ -98,16 +98,16 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     path = run.paths.logs_dir / "events.ndjson"
     sink = FileEventSink(path=path, min_level="info")
 
-    info_event = AdeEvent(
+    info_event = EngineEventFrameV1(
         type="console.line",
+        event_id=uuid4(),
         created_at=datetime.now(timezone.utc),
-        run_id=run.run_id,
         payload={"scope": "run", "stream": "stdout", "level": "info", "message": "started"},
     )
-    debug_event = AdeEvent(
+    debug_event = EngineEventFrameV1(
         type="console.line",
+        event_id=uuid4(),
         created_at=datetime.now(timezone.utc),
-        run_id=run.run_id,
         payload={"scope": "run", "stream": "stdout", "level": "debug", "message": "verbose"},
     )
 
@@ -118,7 +118,7 @@ def test_file_event_sink_writes_ndjson(tmp_path: Path) -> None:
     assert len(lines) == 1
 
     first = json.loads(lines[0])
-    assert first["run_id"] == str(run.run_id)
+    assert first["schema_id"] == "ade.engine.events.v1"
     assert first["payload"]["message"] == "started"
 
 
@@ -134,15 +134,18 @@ def test_event_emitter_records_events(tmp_path: Path) -> None:
     emitter.phase_start("mapping", file_count=1)
     emitter.table_summary(table)
 
-    events = [json.loads(line) for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")]
+    events = [
+        EngineEventFrameV1.model_validate_json(line)
+        for line in (run.paths.logs_dir / "events.ndjson").read_text().strip().split("\n")
+    ]
 
-    assert events[0]["type"] == "console.line"
-    assert events[0]["payload"]["message"] == "Started run"
-    assert events[1]["type"] == "engine.phase.start"
-    assert events[1]["payload"]["phase"] == "mapping"
+    assert events[0].type == "console.line"
+    assert events[0].payload["message"] == "Started run"
+    assert events[1].type == "engine.phase.start"
+    assert events[1].payload["phase"] == "mapping"
 
     table_event = events[2]
-    assert table_event["type"] == "engine.table.summary"
-    assert table_event["payload"]["row_count"] == 2
-    assert table_event["payload"]["validation"]["total"] == 0
-    assert table_event["payload"]["mapped_fields"][0]["field"] == "id"
+    assert table_event.type == "engine.table.summary"
+    assert table_event.payload["row_count"] == 2
+    assert table_event.payload["validation"]["total"] == 0
+    assert table_event.payload["mapped_fields"][0]["field"] == "id"

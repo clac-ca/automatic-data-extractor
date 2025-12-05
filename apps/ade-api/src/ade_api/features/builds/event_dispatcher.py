@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, AdeEventPayload
 from pydantic import BaseModel
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
+from ade_api.infra.events.utils import ensure_event_defaults
 from ade_api.infra.storage import build_venv_root
+from ade_api.schemas.events import AdeEvent, AdeEventPayload
 from ade_api.settings import Settings
 
 __all__ = [
@@ -81,6 +82,7 @@ class BuildEventStorage:
                 "workspace_id, configuration_id, and build_id are required to append events"
             )
 
+        ensure_event_defaults(event)
         path = self.events_path(
             workspace_id=event.workspace_id,
             configuration_id=event.configuration_id,
@@ -112,7 +114,7 @@ class BuildEventStorage:
                 for raw in handle:
                     if not raw.strip():
                         continue
-                    event = AdeEvent.model_validate_json(raw)
+                    event = ensure_event_defaults(AdeEvent.model_validate_json(raw))
                     if after_sequence is not None and event.sequence is not None:
                         if event.sequence <= after_sequence:
                             continue
@@ -166,7 +168,8 @@ class BuildEventDispatcher:
         run_id: UUID | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
-            payload = payload.model_dump()
+            payload = payload.model_dump(exclude_none=True)
+        payload = payload or {}
         sequence = await self._next_sequence(
             workspace_id=workspace_id,
             configuration_id=configuration_id,

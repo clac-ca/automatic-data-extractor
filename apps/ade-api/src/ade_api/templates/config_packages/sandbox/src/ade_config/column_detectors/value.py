@@ -1,29 +1,64 @@
-"""Detect a generic value/amount column for sandbox runs."""
+"""Lightweight detector for generic numeric value columns."""
 
 from __future__ import annotations
 
 from typing import Any
 
+TOKENS = {"value", "amount", "score", "total"}
 
-def detect_value(
+
+def detect_value_from_header(
     *,
-    header: str | None,
-    column_values_sample: list[Any],
-    logger=None,
-    event_emitter=None,
+    header: str | None = None,
+    logger: Any | None = None,
+    event_emitter: Any | None = None,
     **_: Any,
 ) -> float:
-    """Return a confidence score favoring the "value" header name."""
-    lowered = (header or "").strip().lower()
-    header_score = 0.8 if lowered == "value" else 0.4 if "value" in lowered else 0.0
-    non_empty = sum(1 for value in column_values_sample if value not in (None, ""))
-    sample_score = min(1.0, non_empty / max(1, len(column_values_sample))) * 0.2
-    return round(min(1.0, header_score + sample_score), 2)
+    """Bias headers that mention values or amounts."""
+
+    if not header:
+        return 0.0
+
+    normalized = header.strip().lower().replace("_", " ").replace("-", " ")
+    compact = normalized.replace(" ", "")
+
+    if compact in TOKENS or normalized in TOKENS:
+        return 0.9
+
+    if any(token in compact for token in TOKENS):
+        return 0.5
+
+    return 0.0
 
 
-def transform(*, value: Any, logger=None, event_emitter=None, **_: Any) -> dict[str, Any]:
-    """Normalize values to stripped strings for workbook output."""
-    if value is None:
-        return {"value": None}
-    cleaned = str(value).strip()
-    return {"value": cleaned or None}
+def detect_value_from_values(
+    *,
+    column_values_sample: list[Any] | None = None,
+    logger: Any | None = None,
+    event_emitter: Any | None = None,
+    **_: Any,
+) -> float:
+    """Treat mostly-numeric samples as likely value columns."""
+
+    if not column_values_sample:
+        return 0.0
+
+    observed = 0
+    numeric_like = 0
+    for value in column_values_sample:
+        if value in (None, ""):
+            continue
+        observed += 1
+        text = str(value).strip().replace(",", "")
+        if text.replace(".", "", 1).isdigit():
+            numeric_like += 1
+
+    if observed == 0:
+        return 0.0
+
+    ratio = numeric_like / observed
+    if ratio >= 0.9:
+        return 0.7
+    if ratio >= 0.6:
+        return 0.35
+    return 0.0

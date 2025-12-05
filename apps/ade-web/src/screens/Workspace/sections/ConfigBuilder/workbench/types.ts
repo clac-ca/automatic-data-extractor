@@ -72,15 +72,13 @@ export interface WorkbenchValidationState {
 export interface WorkbenchRunSummary {
   readonly runId: string;
   readonly status: RunStatus;
-  readonly outputsBase?: string;
+  readonly outputUrl?: string;
+  readonly outputReady?: boolean;
+  readonly outputFilename?: string | null;
+  readonly outputPath?: string | null;
   readonly logsUrl?: string;
-  readonly outputs: ReadonlyArray<{
-    name: string;
-    path?: string;
-    byte_size: number;
-    download_url?: string | null;
-  }>;
-  readonly outputsLoaded: boolean;
+  readonly processedFile?: string | null;
+  readonly outputLoaded: boolean;
   readonly summary?: RunSummary | null;
   readonly summaryLoaded: boolean;
   readonly summaryError?: string | null;
