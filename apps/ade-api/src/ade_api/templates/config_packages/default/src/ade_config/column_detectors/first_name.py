@@ -22,6 +22,16 @@ COMMON_FIRST_NAMES = {
     "richard", "susan", "joseph", "karen",
 }
 
+# Quick shape of inputs (Script API v3):
+#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
+#   manifest.columns.order → ["first_name", "last_name", "email"]
+#   extracted_table.header_row → ["First Name", "Last Name", "Email"]
+#   extracted_table.data_rows[:1] → [["Alice", "Smith", "alice@example.com"], ...]
+#   column_index → 1   header → "First Name"
+#   column_values_sample → ["Alice", "Bob", None]
+#   state → dict shared across detectors/transforms (cache and reuse hints)
+#   logger/event_emitter → standard logger + optional config telemetry
+
 # ---------------------------------------------------------------------------
 # HEADER-BASED DETECTOR
 # ---------------------------------------------------------------------------
@@ -40,7 +50,7 @@ def detect_first_name_from_header(
     logger: Any | None = None,
     event_emitter: Any | None = None,   # included even if not used
     **_: Any,
-) -> dict[str, float]:
+) -> float | dict[str, float]:
     """
     Score headers that look like first-name columns.
 
@@ -116,7 +126,7 @@ def detect_first_name_from_values(
     logger: Any | None = None,
     event_emitter: Any | None = None,   # unused but included
     **_: Any,
-) -> float:
+) -> dict[str, float]:
     """
     Score column values that *look* like first names.
 
@@ -220,7 +230,7 @@ def detect_value_shape(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict:
+) -> float | dict[str, float]:
     """
     Example placeholder showing how a shape-based detector *would* fit in.
 

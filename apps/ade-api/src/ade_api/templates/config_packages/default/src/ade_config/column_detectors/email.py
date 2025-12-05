@@ -7,6 +7,16 @@ Patterns demonstrated:
     • Transform function     → normalizes email casing and whitespace
 
 This mirrors the structure of first_name / last_name examples so users can compare and learn.
+
+# Quick shape of inputs (Script API v3):
+#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
+#   manifest.columns.order → ["first_name", "last_name", "email"]
+#   extracted_table.header_row → ["First Name", "Last Name", "Email"]
+#   extracted_table.data_rows[:2] → [["Alice", "Smith", "alice@example.com"], ...]
+#   column_index → 3   header → "Email"
+#   column_values_sample → ["alice@example.com", "bob@acme.com"]
+#   state → dict shared across detectors/transforms (cache something and reuse it)
+#   logger/event_emitter → standard logger + optional config telemetry
 """
 
 from __future__ import annotations
@@ -34,7 +44,7 @@ def detect_email_from_header(
     logger: Any | None = None,
     event_emitter: Any | None = None,   # unused but kept for parity
     **_: Any,
-) -> dict[str, float]:
+) -> float | dict[str, float]:
     """
     Score headers that look like email columns.
 
@@ -86,7 +96,7 @@ def detect_email_from_values(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """
     Score values that look like email addresses.
 

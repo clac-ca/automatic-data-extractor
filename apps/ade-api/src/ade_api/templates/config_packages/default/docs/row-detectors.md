@@ -20,13 +20,13 @@ Each detector function is keyword-only and receives the shape:
 ```py
 def detect_...(
     *,
-    row_index: int,             # 0-based index of the row
+    row_index: int,             # 1-based index of the row
     row_values: list[object],   # raw cell values for the row
     logger=None,                # standard logging.Logger
     event_emitter=None,         # optional structured event emitter
     **_,                        # required for forward compatibility
 ) -> float | dict:
-    return 0.8  # applies to this detector's default label (DEFAULT_LABEL)
+    return 0.8  # applies to this detector's label (e.g., "header" or "data")
     # or touch multiple labels explicitly:
     # return {"header": 0.8, "data": -0.2}
 ```
@@ -47,10 +47,10 @@ def detect_...(
 
 Row detectors return either:
 
-- A float, applied to the detector’s default label (set `DEFAULT_LABEL` in the module or via `detect_*.row_label`), or
+- A float, applied to the detector’s label (e.g., `header.py` → `"header"`), or
 - A dict of label → delta if you want to influence multiple labels explicitly.
 
-These represent **deltas** added to the running total for each label. The legacy `"scores"` wrapper is no longer accepted.
+These represent **deltas** added to the running total for each label.
 
 Common labels:
 
@@ -79,8 +79,6 @@ low-volume `config.*` checkpoints (`event_emitter.custom("checkpoint", {...})`).
 ---
 
 ## Template Detectors in This Workspace
-
-Each template module sets `DEFAULT_LABEL` so a bare float return applies to the expected label.
 
 ### **header.py**
 
