@@ -189,7 +189,6 @@ export function Workbench({
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
   const {
-    stream: runStreamState,
     runStatus: derivedRunStatus,
     runMode: derivedRunMode,
     runInProgress,
@@ -314,7 +313,7 @@ export function Workbench({
     if (!pendingCompletion) {
       return;
     }
-    const { runId: completedRunId, status, mode, durationMs, payload, completedAt } = pendingCompletion;
+    const { runId: completedRunId, status, payload } = pendingCompletion;
     const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
     const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
@@ -2135,21 +2134,6 @@ function ChromeIconButton({
       {icon}
     </button>
   );
-}
-
-function formatRunDurationLabel(durationMs?: number | null): string | null {
-  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) {
-    return null;
-  }
-  if (durationMs < 1000) {
-    return `${Math.round(durationMs)} ms`;
-  }
-  if (durationMs < 60_000) {
-    return `${(durationMs / 1000).toFixed(1)} s`;
-  }
-  const minutes = Math.floor(durationMs / 60_000);
-  const seconds = Math.round((durationMs % 60_000) / 1000);
-  return `${minutes}m ${seconds}s`;
 }
 
 function WorkbenchBadgeIcon() {

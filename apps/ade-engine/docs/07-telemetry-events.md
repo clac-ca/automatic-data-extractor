@@ -1,30 +1,31 @@
-# Telemetry Events (`ade.event/v1`)
+# Telemetry Events (`ade.engine.events.v1` → `ade.events.v1`)
 
 The engine’s external contract is **telemetry + normalized outputs**. Every
-observable action is emitted as an `AdeEvent` envelope and written to
-`logs/events.ndjson` by the default `FileEventSink`. Downstream systems derive
-run summaries and status from this stream.
+observable action is emitted as an **EngineEventFrameV1** NDJSON line to stdout
+(`ade_engine/schemas/events/v1/frame.py`). The ADE API ingests those frames,
+stamps `event_id` + `sequence`, and persists the canonical run log (`ade.events.v1`)
+for replay/streaming.
 
 ## 1. Event envelope
 
-Envelope class: `AdeEvent` in `schemas/telemetry.py`.
+Frame class: `EngineEventFrameV1` in `schemas/events/v1/frame.py`.
 
+- `schema_id`: `"ade.engine.events.v1"` (discriminator for stdout parsing).
 - `type`: string, e.g., `console.line`, `engine.start`, `engine.table.summary`, `engine.complete`.
 - `created_at`: timestamp (UTC).
-- `sequence`: optional, monotonic per run **when assigned by the ADE API**; engine leaves unset.
-- `workspace_id`, `configuration_id`, `run_id`: propagated from `RunRequest.metadata` when provided.
+- `event_id`: UUID (engine-local traceability).
 - `payload`: type-specific fields (see below).
 
 Payloads are emitted from the producing layer without extra enrichment or filesystem probing; when paths are present they are kept run-relative to the run directory.
 
-Events are serialized one per line (NDJSON). File order matches emission order;
-ordering-sensitive consumers should still use `sequence` once the API replays
-and stamps the stream.
+Frames are serialized one per line (NDJSON). Ordering is the emission order; the
+API will re-envelope frames as `ade.events.v1` (via `schema_id`) and apply monotonic `sequence`
+per run.
 
 ## 2. Default sink and location
 
-- Default sink: `FileEventSink` from `TelemetryConfig.build_sink`.
-- Location: `<logs_dir>/events.ndjson`.
+- Default sink: `StdoutFrameSink` from `TelemetryConfig.build_sink` (writes to stdout).
+- Optional: `FileEventSink` can be injected for tests/local debugging to write `<logs_dir>/events.ndjson`.
 - Filtering: `min_event_level` on `TelemetryConfig` (default `info`) suppresses lower-level events.
 
 You can add additional sinks (IPC/HTTP/etc.) via `TelemetryConfig.event_sink_factories`.
@@ -46,16 +47,16 @@ You can add additional sinks (IPC/HTTP/etc.) via `TelemetryConfig.event_sink_fac
 
 ## 4. Correlation and metadata
 
-`RunRequest.metadata` is used to populate `workspace_id`/`configuration_id`
-fields on events. Additional payload data can be passed through
-`EventEmitter.custom("type_suffix", **payload)` or human logs emitted via the run `logger`.
+`RunRequest.metadata` is used to populate correlation IDs on API-enveloped
+events. Additional payload data can be passed through
+`EventEmitter.custom("type_suffix", **payload)` or human logs emitted via the run
+`logger`.
 
 ## 5. Consuming events
 
-- Treat `events.ndjson` as the single source of truth for run telemetry.
-- The engine now emits hierarchical summaries (`engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`); consumers should persist/use the run-level payload instead of recomputing from the log.
-- In streaming scenarios, tail `events.ndjson` while the engine runs, or plug
-  in a custom sink; the ADE API replays these events, stamps `event_id`/`sequence`, and streams them via SSE.
+- Treat the API-written `events.ndjson` as the single source of truth for run telemetry (API wraps engine frames).
+- The engine emits hierarchical summaries (`engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`); consumers should persist/use the run-level payload instead of recomputing from the log.
+- In streaming scenarios, read stdout frames directly or attach a custom sink, but prefer consuming the API SSE/NDJSON endpoints for canonical ordering and IDs.
 
 ## 6. Emitting custom telemetry from hooks
 

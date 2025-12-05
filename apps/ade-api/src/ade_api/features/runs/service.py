@@ -6,36 +6,30 @@ import asyncio
 import inspect
 import json
 import logging
-import os
 import mimetypes
+import os
 import unicodedata
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
 from urllib.parse import quote
+from uuid import UUID
 
 from ade_engine.schemas import (
-    AdeEvent,
-    AdeEventPayload,
     ColumnCounts,
-    ConsoleLinePayload,
     Counts,
     FieldCounts,
     FieldSummaryAggregate,
     ManifestV1,
     RowCounts,
-    RunCompletedPayload,
-    RunQueuedPayload,
     RunSummary,
     ValidationSummary,
 )
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.common.encoding import json_dumps
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
@@ -69,6 +63,14 @@ from ade_api.infra.storage import (
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.schemas.events import (
+    AdeEvent,
+    AdeEventPayload,
+    ConsoleLinePayload,
+    EngineEventFrame,
+    RunCompletedPayload,
+    RunQueuedPayload,
+)
 from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
@@ -101,8 +103,8 @@ event_logger = logging.getLogger("ade_api.runs.events")
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
 # Stream frames are AdeEvents as far as the public API is concerned. Internally
-# we also see StdoutFrame objects from the process runner and RunExecutionResult
-# markers used to finalize runs.
+# we also see EngineEventFrame and StdoutFrame objects from the process runner
+# plus RunExecutionResult markers used to finalize runs.
 @dataclass(slots=True)
 class RunExecutionResult:
     """Outcome of an engine-backed run execution."""
@@ -115,7 +117,7 @@ class RunExecutionResult:
     error_message: str | None = None
 
 
-RunStreamFrame = AdeEvent | StdoutFrame | RunExecutionResult
+RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
 
 
 # --------------------------------------------------------------------------- #
@@ -513,7 +515,7 @@ class RunsService:
             ):
                 forwarded = await self._event_dispatcher.emit(
                     type=event.type,
-                    source=event.source or "api",
+                    source=self._normalized_event_source(getattr(event, "source", None)),
                     workspace_id=run.workspace_id,
                     configuration_id=run.configuration_id,
                     run_id=run.id,
@@ -1259,9 +1261,11 @@ class RunsService:
             raise RunOutputNotReadyError("Run output is not available until the run completes.")
         try:
             path = await self.resolve_output_file(run_id=run_id)
-        except RunOutputMissingError:
+        except RunOutputMissingError as err:
             if run.status is RunStatus.FAILED:
-                raise RunOutputMissingError("Run failed and no output is available")
+                raise RunOutputMissingError(
+                    "Run failed and no output is available",
+                ) from err
             raise
         return run, path
 
@@ -1405,7 +1409,12 @@ class RunsService:
     # Internal helpers: paths, summaries, manifests
     # --------------------------------------------------------------------- #
 
-    def _relative_if_exists(self, path: str | Path | None, *, run_dir: Path | None = None) -> str | None:
+    def _relative_if_exists(
+        self,
+        path: str | Path | None,
+        *,
+        run_dir: Path | None = None,
+    ) -> str | None:
         if path is None:
             return None
 
@@ -1482,9 +1491,15 @@ class RunsService:
 
         # Events path: prefer summary/default hints; avoid filesystem probing.
         if isinstance(details, dict) and not snapshot.events_path:
-            snapshot.events_path = self._run_relative_hint(details.get("events_path"), run_dir=run_dir)
+            snapshot.events_path = self._run_relative_hint(
+                details.get("events_path"),
+                run_dir=run_dir,
+            )
         if not snapshot.events_path:
-            snapshot.events_path = self._run_relative_hint(run_dir / "logs" / "events.ndjson", run_dir=run_dir)
+            snapshot.events_path = self._run_relative_hint(
+                run_dir / "logs" / "events.ndjson",
+                run_dir=run_dir,
+            )
 
         # Output path: only propagate hints already in scope (summary/defaults).
         output_candidates: list[str | Path | None] = []
@@ -1511,6 +1526,12 @@ class RunsService:
                     snapshot.processed_file = str(legacy_processed[0])
 
         return snapshot
+
+    @staticmethod
+    def _normalized_event_source(source: str | None) -> str:
+        if source in {"api", "engine"}:
+            return source
+        return "engine"
 
     @staticmethod
     def _parse_summary(
@@ -1857,19 +1878,13 @@ class RunsService:
 
         runner = EngineSubprocessRunner(
             command=command,
-            logs_dir=engine_logs_dir,
             env=env,
         )
 
         paths_snapshot = RunPathsSnapshot()
 
-        # Stream frames from the engine process: either StdoutFrame or AdeEvent.
+        # Stream frames from the engine process: either stdout frames or stderr lines.
         async for frame in runner.stream():
-            if isinstance(frame, StdoutFrame):
-                continue
-
-            # Engine AdeEvents flow through unchanged, mirrored to logs in debug mode.
-            self._log_event_debug(frame, origin="engine")
             yield frame
 
         # Process completion and summarize.
@@ -2119,8 +2134,8 @@ class RunsService:
                     )
                     continue
 
-                if isinstance(event, AdeEvent):
-                    payload_dict = event.payload_dict()
+                if isinstance(event, EngineEventFrame):
+                    payload_dict = event.payload or {}
                     if event.type == "engine.run.summary":
                         summary_payload = payload_dict
                         try:
@@ -2131,15 +2146,23 @@ class RunsService:
                                 summary_json=engine_summary_json,
                             )
                             details = engine_summary.details or {}
-                            if not latest_paths_snapshot.processed_file and isinstance(details, dict):
+                            if (
+                                not latest_paths_snapshot.processed_file
+                                and isinstance(details, dict)
+                            ):
                                 processed = details.get("processed_file")
                                 if isinstance(processed, str):
                                     latest_paths_snapshot.processed_file = processed
                                 else:
                                     processed_list = details.get("processed_files")
                                     if isinstance(processed_list, list) and processed_list:
-                                        latest_paths_snapshot.processed_file = str(processed_list[0])
-                            if not latest_paths_snapshot.output_path and isinstance(details, dict):
+                                        latest_paths_snapshot.processed_file = str(
+                                            processed_list[0],
+                                        )
+                            if (
+                                not latest_paths_snapshot.output_path
+                                and isinstance(details, dict)
+                            ):
                                 output_path = details.get("output_path")
                                 if isinstance(output_path, str):
                                     latest_paths_snapshot.output_path = output_path
@@ -2150,32 +2173,58 @@ class RunsService:
                         except ValidationError:
                             engine_summary = None
                     elif event.type == "engine.complete" and isinstance(payload_dict, dict):
-                        artifacts = payload_dict.get("artifacts") if isinstance(payload_dict.get("artifacts"), dict) else payload_dict
-                        processed_file = artifacts.get("processed_file") if isinstance(artifacts, dict) else None
+                        artifacts_value = payload_dict.get("artifacts")
+                        artifacts = (
+                            artifacts_value
+                            if isinstance(artifacts_value, dict)
+                            else payload_dict
+                        )
+                        processed_file = (
+                            artifacts.get("processed_file")
+                            if isinstance(artifacts, dict)
+                            else None
+                        )
                         if isinstance(processed_file, str):
                             latest_paths_snapshot.processed_file = processed_file
                         elif isinstance(artifacts, dict) and artifacts.get("processed_files"):
                             processed_files = artifacts.get("processed_files") or []
                             if processed_files:
-                                latest_paths_snapshot.processed_file = str(list(processed_files)[0])
-                        output_path = artifacts.get("output_path") if isinstance(artifacts, dict) else None
+                                latest_paths_snapshot.processed_file = str(
+                                    list(processed_files)[0],
+                                )
+                        output_path = (
+                            artifacts.get("output_path")
+                            if isinstance(artifacts, dict)
+                            else None
+                        )
                         if isinstance(output_path, str):
                             latest_paths_snapshot.output_path = output_path
                         elif isinstance(artifacts, dict) and artifacts.get("output_paths"):
                             output_paths = artifacts.get("output_paths") or []
                             if output_paths:
-                                latest_paths_snapshot.output_path = str(list(output_paths)[0])
+                                latest_paths_snapshot.output_path = str(
+                                    list(output_paths)[0],
+                                )
 
-                forwarded = await self._event_dispatcher.emit(
-                    type=event.type,
-                    source=event.source or "engine",
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=getattr(event, "build_id", None) or getattr(run, "build_id", None),
-                    payload=getattr(event, "payload", None),
-                )
-                yield forwarded
+                    forwarded = await self._event_dispatcher.emit_from_engine_frame(
+                        frame=event,
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        build_id=getattr(run, "build_id", None),
+                    )
+                    self._log_event_debug(forwarded, origin="engine")
+                    yield forwarded
+                    continue
+
+                if isinstance(event, StdoutFrame):
+                    forwarded = await self._emit_engine_console_line(
+                        run=run,
+                        frame=event,
+                    )
+                    self._log_event_debug(forwarded, origin="engine")
+                    yield forwarded
+                    continue
         except asyncio.CancelledError:
             logger.warning(
                 "run.engine.stream.cancelled",
@@ -2521,6 +2570,26 @@ class RunsService:
             run_id=run.id,
             build_id=getattr(run, "build_id", None),
             source="api",
+        )
+
+    async def _emit_engine_console_line(self, *, run: Run, frame: StdoutFrame) -> AdeEvent:
+        """Coerce stdout/stderr lines into canonical console events."""
+
+        payload = ConsoleLinePayload(
+            scope="run",
+            stream=frame.stream,
+            level="warning" if frame.stream == "stderr" else "info",
+            message=frame.message,
+        ).model_dump(exclude_none=True)
+
+        return await self._event_dispatcher.emit(
+            type="console.line",
+            workspace_id=run.workspace_id,
+            configuration_id=run.configuration_id,
+            run_id=run.id,
+            build_id=getattr(run, "build_id", None),
+            payload=payload,
+            source="engine",
         )
 
     async def _emit_api_event(

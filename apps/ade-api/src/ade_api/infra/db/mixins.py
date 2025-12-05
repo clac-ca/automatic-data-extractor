@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID, uuid4, uuid7
+from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
@@ -53,6 +53,6 @@ def generate_ulid() -> str:
 
     # uuid7 preserves time ordering; trim/hex for compatibility with prior ULID usage.
     try:
-        return uuid7().hex
+        return generate_uuid7().hex
     except Exception:
         return uuid4().hex

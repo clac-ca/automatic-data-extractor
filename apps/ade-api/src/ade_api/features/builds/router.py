@@ -6,7 +6,6 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -27,6 +26,7 @@ from ade_api.core.http import require_authenticated, require_csrf, require_works
 from ade_api.core.models import BuildStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.infra.db.session import get_sessionmaker
+from ade_api.schemas.events import AdeEvent
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 from .exceptions import BuildAlreadyInProgressError, BuildNotFoundError

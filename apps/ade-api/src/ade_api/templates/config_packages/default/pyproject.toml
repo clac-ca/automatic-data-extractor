@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 # Keep the name stable; the import path for the config code is always
 # `ade_config`, regardless of the project name here.
 name = "ade-config"
-version = "1.6.0"
+version = "1.6.1"
 description = "Default ADE config package template"
 requires-python = ">=3.14"
 

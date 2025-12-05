@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from typing import Annotated
 
 from pydantic import Field
@@ -20,10 +21,19 @@ UUIDStr = Annotated[
 ]
 
 
-def generate_uuid7() -> uuid.UUID:
-    """Return an RFC 9562 UUIDv7 generated in the application layer."""
+def _resolve_uuid7() -> Callable[[], uuid.UUID]:
+    """Return a callable that produces a UUIDv7, falling back to uuid4 when absent."""
 
-    if not hasattr(uuid, "uuid7"):  # pragma: no cover - guard for unexpected runtimes
-        msg = "Python 3.14+ is required for uuid.uuid7()"
-        raise RuntimeError(msg)
-    return uuid.uuid7()
+    maybe_uuid7 = getattr(uuid, "uuid7", None)
+    if callable(maybe_uuid7):
+        return maybe_uuid7
+    return uuid.uuid4
+
+
+_uuid7_factory = _resolve_uuid7()
+
+
+def generate_uuid7() -> uuid.UUID:
+    """Return a sortable UUID for ADE identifiers (prefers RFC 9562 uuid7)."""
+
+    return _uuid7_factory()

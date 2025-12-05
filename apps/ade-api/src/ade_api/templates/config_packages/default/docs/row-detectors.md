@@ -25,20 +25,17 @@ def detect_...(
     logger=None,                # standard logging.Logger
     event_emitter=None,         # optional structured event emitter
     **_,                        # required for forward compatibility
-) -> dict:
-    return {
-        "scores": {
-            "header": float,
-            "data": float,
-        }
-    }
+) -> float | dict:
+    return 0.8  # applies to this detector's default label (DEFAULT_LABEL)
+    # or touch multiple labels explicitly:
+    # return {"header": 0.8, "data": -0.2}
 ```
 
 ### Parameters
 
 | Parameter         | Description                                         |
 | ----------------- | --------------------------------------------------- |
-| **row_index**     | 0-based index of the row being evaluated.           |
+| **row_index**     | 1-based index of the row being evaluated.           |
 | **row_values**    | List of raw cell values for that row.               |
 | **logger**        | Optional logger for debug/info output.              |
 | **event_emitter** | Optional event emitter for custom telemetry.        |
@@ -48,18 +45,12 @@ def detect_...(
 
 ## What to Return
 
-Row detectors return a dictionary with a `scores` map:
+Row detectors return either:
 
-```py
-return {
-    "scores": {
-        "header": <float>,
-        "data": <float>
-    }
-}
-```
+- A float, applied to the detector’s default label (set `DEFAULT_LABEL` in the module or via `detect_*.row_label`), or
+- A dict of label → delta if you want to influence multiple labels explicitly.
 
-These represent **deltas** added to the running total for each label.
+These represent **deltas** added to the running total for each label. The legacy `"scores"` wrapper is no longer accepted.
 
 Common labels:
 
@@ -88,6 +79,8 @@ low-volume `config.*` checkpoints (`event_emitter.custom("checkpoint", {...})`).
 ---
 
 ## Template Detectors in This Workspace
+
+Each template module sets `DEFAULT_LABEL` so a bare float return applies to the expected label.
 
 ### **header.py**
 

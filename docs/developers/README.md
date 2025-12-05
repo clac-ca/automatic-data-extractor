@@ -110,7 +110,7 @@ flowchart TD
         A1 --> A2 --> A3 --> A4 --> A5
     end
     J1 --> A1
-    A5 --> R1["Results: output.xlsx + logs/events.ndjson"]
+    A5 --> R1["Results: output.xlsx + events stream (API persists events.ndjson)"]
 
     %% Run B
     S2 -->|reuse frozen venv| J2["Step 3: Run run B"]
@@ -120,7 +120,7 @@ flowchart TD
         B3 --> B4["4) Validate (optional)"] --> B5["5) Generate outputs"]
     end
     J2 --> B1
-    B5 --> R2["Results: output.xlsx + logs/events.ndjson"]
+    B5 --> R2["Results: output.xlsx + events stream (API persists events.ndjson)"]
 
     %% Run C
     S2 -->|reuse frozen venv| J3["Step 3: Run run C"]
@@ -130,7 +130,7 @@ flowchart TD
         C3 --> C4["4) Validate (optional)"] --> C5["5) Generate outputs"]
     end
     J3 --> C1
-    C5 --> R3["Results: output.xlsx + logs/events.ndjson"]
+    C5 --> R3["Results: output.xlsx + events stream (API persists events.ndjson)"]
 ```
 
 ## Step 1: Config — Define the Rules

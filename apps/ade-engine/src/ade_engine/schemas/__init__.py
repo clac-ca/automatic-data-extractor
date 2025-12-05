@@ -37,6 +37,7 @@ from ade_engine.schemas.telemetry import (
     TelemetryEnvelope,
     TelemetryEvent,
 )
+from ade_engine.schemas.events import ENGINE_FRAME_SCHEMA, EngineEventFrameV1
 
 __all__ = [
     "AdeEvent",
@@ -59,6 +60,8 @@ __all__ = [
     "RunValidationSummaryPayload",
     "TelemetryEnvelope",
     "TelemetryEvent",
+    "ENGINE_FRAME_SCHEMA",
+    "EngineEventFrameV1",
     "BaseSummary",
     "ColumnCounts",
     "ColumnSummaryDistinct",

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import json
+import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Callable, Iterable, Protocol, TextIO
 from uuid import UUID
 
-from ade_engine.core.types import NormalizedTable, RunContext
-from ade_engine.schemas.telemetry import AdeEvent
+from ade_engine.core.types import RunContext
+from ade_engine.schemas.events.v1 import EngineEventFrameV1
 
 # Treat "success" as an info-level event for filtering.
 _LEVEL_ORDER = {
@@ -26,10 +26,10 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _event_level(event: AdeEvent) -> str:
+def _event_level(frame: EngineEventFrameV1) -> str:
     """Best-effort level extraction for filtering."""
 
-    payload = event.payload_dict()
+    payload = frame.payload or {}
     level = payload.get("level")
     if isinstance(level, str):
         return level
@@ -52,59 +52,49 @@ def _coerce_uuid(value: Any) -> UUID | None:
         return None
 
 
-def _context_ids(run: RunContext) -> tuple[UUID | None, UUID | None]:
-    meta = run.metadata or {}
-    return _coerce_uuid(meta.get("workspace_id")), _coerce_uuid(meta.get("configuration_id"))
-
-
-def _make_event(
-    *,
-    run: RunContext,
-    type_: str,
-    payload: dict[str, Any] | None = None,
-    sequence: int | None = None,
-    source: str | None = None,
-) -> AdeEvent:
-    """Construct a typed AdeEvent with the common envelope fields populated."""
-
-    workspace_id, configuration_id = _context_ids(run)
-    payload = payload or {}
-
-    return AdeEvent(
-        type=type_,
-        created_at=_now(),
-        sequence=sequence,
-        workspace_id=workspace_id,
-        configuration_id=configuration_id,
-        run_id=run.run_id,
-        source=source,
-        payload=payload,
-    )
-
-
 class EventSink(Protocol):
     """Protocol for ADE event emission."""
 
-    def emit(self, event: AdeEvent) -> None: ...
+    def emit(self, frame: EngineEventFrameV1) -> None: ...
+
+
+@dataclass
+class StdoutFrameSink:
+    """Write engine event frames to stdout as NDJSON."""
+
+    stream: TextIO = sys.stdout
+    min_level: str = "info"
+
+    def emit(self, frame: EngineEventFrameV1) -> None:
+        level = _event_level(frame)
+        level_key = level.lower()
+        if _LEVEL_ORDER.get(level_key, 0) < _LEVEL_ORDER.get(self.min_level, 0):
+            return
+
+        serialized = frame.model_dump_json(exclude_none=True, by_alias=True)
+        self.stream.write(serialized)
+        self.stream.write("\n")
+        self.stream.flush()
 
 
 @dataclass
 class FileEventSink:
-    """Append-only NDJSON writer for ADE events."""
+    """Append-only NDJSON writer for engine event frames."""
 
     path: Path
     min_level: str = "info"
 
-    def emit(self, event: AdeEvent) -> None:
-        level = _event_level(event)
+    def emit(self, frame: EngineEventFrameV1) -> None:
+        level = _event_level(frame)
         level_key = level.lower()
         if _LEVEL_ORDER.get(level_key, 0) < _LEVEL_ORDER.get(self.min_level, 0):
             return
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(event.model_dump(mode="json", by_alias=True), ensure_ascii=False)
+        line = frame.model_dump_json(exclude_none=True, by_alias=True)
         with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
+            handle.write(line)
+            handle.write("\n")
 
 
 @dataclass
@@ -113,9 +103,9 @@ class DispatchEventSink:
 
     sinks: Iterable[EventSink]
 
-    def emit(self, event: AdeEvent) -> None:
+    def emit(self, frame: EngineEventFrameV1) -> None:
         for sink in self.sinks:
-            sink.emit(event)
+            sink.emit(frame)
 
 
 @dataclass
@@ -125,10 +115,12 @@ class TelemetryConfig:
     correlation_id: str | None = None
     min_event_level: str = "info"
     event_sink_factories: list[Callable[[RunContext], EventSink]] = field(default_factory=list)
+    stdout_sink_factory: Callable[[RunContext], EventSink] | None = None
 
     def build_sink(self, run: RunContext) -> EventSink:
         sinks = [factory(run) for factory in self.event_sink_factories]
-        sinks.append(FileEventSink(path=run.paths.logs_dir / "events.ndjson", min_level=self.min_event_level))
+        sink_factory = self.stdout_sink_factory or (lambda _run: StdoutFrameSink(min_level=self.min_event_level))
+        sinks.append(sink_factory(run))
         return DispatchEventSink(sinks)
 
 
@@ -200,10 +192,9 @@ __all__ = [
     "DispatchEventSink",
     "EventSink",
     "FileEventSink",
+    "StdoutFrameSink",
     "TelemetryConfig",
     "_aggregate_validation",
-    "_context_ids",
-    "_make_event",
     "_now",
     "_coerce_uuid",
 ]

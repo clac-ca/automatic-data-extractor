@@ -84,13 +84,15 @@ def detect_something(
     logger=None,
     event_emitter=None,
     **_,
-) -> dict:
-    return {"scores": {"header": <float_delta>, "data": <float_delta>}}
+) -> float | dict:
+    return 0.8  # applies to this detector's default label (e.g., "header" or "data")
+    # or influence multiple labels explicitly:
+    # return {"header": 0.8, "data": -0.2}
 ```
 
 `input_file_name` is the basename of the current source file (useful when heuristics differ by feed/source).
 
-**Return:** a dict with a `scores` mapping (label → delta). The engine sums deltas per label across detectors, then applies thresholds. Keep row detectors cheap—they run for every row.
+**Return:** either a float delta (applied to the detector’s default label) or a dict of deltas keyed by labels. Defaults are inferred from `detect_*.__row_label__`, `detect_*.row_label`/`detect_*.default_label`, a module-level `DEFAULT_LABEL`/`DEFAULT_ROW_LABEL`, or the module name (`header.py` → `"header"`, `data.py` → `"data"`). The legacy `"scores"` wrapper is no longer accepted. The engine sums deltas per label across detectors, then applies thresholds. Keep row detectors cheap—they run for every row.
 
 ---
 

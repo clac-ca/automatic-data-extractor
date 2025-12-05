@@ -118,7 +118,7 @@ def service_factory(
             """
 [project]
 name = "ade-engine"
-version = "1.6.0"
+version = "1.6.1"
 """.strip(),
             encoding="utf-8",
         )
@@ -470,7 +470,7 @@ async def test_stream_build_success(
             BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
             BuilderLogEvent(message="log 2"),
             BuilderArtifactsEvent(
-                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.6.0")
+                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.6.1")
             ),
         ]
     )

@@ -42,7 +42,7 @@ def _write_row_detectors(package_dir: Path) -> None:
         textwrap.dedent(
             """
             def detect_header(*, row_index, logger, event_emitter, **_):
-                return {"scores": {"header": 1.0 if row_index == 1 else 0.0, "data": 1.0 if row_index > 1 else 0.0}}
+                return {"header": 1.0 if row_index == 1 else 0.0, "data": 1.0 if row_index > 1 else 0.0}
             """
         )
     )

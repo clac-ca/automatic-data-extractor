@@ -62,7 +62,7 @@ def detect_labels(*, row_values, logger, event_emitter, **_):
     cells = [str(c or "").lower() for c in row_values]
     header_score = 1.0 if cells and cells[0].startswith("header") else 0.0
     data_score = 1.0 if any(cells) and not header_score else 0.0
-    return {"scores": {"header": header_score, "data": data_score}}
+    return {"header": header_score, "data": data_score}
 """
     )
 

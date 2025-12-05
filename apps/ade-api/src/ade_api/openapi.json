@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Automatic Data Extractor API",
-    "version": "1.6.0"
+    "version": "1.6.1"
   },
   "paths": {
     "/api/v1/health": {
@@ -6793,79 +6793,57 @@
   },
   "components": {
     "schemas": {
-      "AdeEvent": {
+      "AdeEventV1": {
         "properties": {
+          "schema_id": {
+            "type": "string",
+            "const": "ade.events.v1",
+            "title": "Schema Id",
+            "default": "ade.events.v1"
+          },
           "type": {
             "type": "string",
             "title": "Type"
           },
           "event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Event Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
           },
-          "sequence": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sequence"
-          },
           "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": "string",
+            "enum": [
+              "api",
+              "engine"
             ],
             "title": "Source"
           },
           "workspace_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Workspace Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "configuration_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Configuration Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Configuration Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "run_id": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "uuid"
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
               },
               {
                 "type": "null"
@@ -6877,7 +6855,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "format": "uuid"
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
               },
               {
                 "type": "null"
@@ -6885,36 +6864,36 @@
             ],
             "title": "Build Id"
           },
-          "payload": {
+          "origin_event_id": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AdeEventPayload"
-              },
-              {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Origin Event Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
             "title": "Payload"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "type",
-          "created_at"
+          "event_id",
+          "sequence",
+          "created_at",
+          "source",
+          "workspace_id",
+          "configuration_id"
         ],
-        "title": "AdeEvent",
-        "description": "Canonical ADE event envelope for build + run streaming."
-      },
-      "AdeEventPayload": {
-        "properties": {},
-        "additionalProperties": true,
-        "type": "object",
-        "title": "AdeEventPayload",
-        "description": "Base class for structured AdeEvent payloads."
+        "title": "AdeEventV1",
+        "description": "API-owned canonical ADE event envelope."
       },
       "ApiKeyCreateRequest": {
         "properties": {
@@ -7598,7 +7577,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEvent"
+              "$ref": "#/components/schemas/AdeEventV1"
             },
             "type": "array",
             "title": "Items"
@@ -9953,7 +9932,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEvent"
+              "$ref": "#/components/schemas/AdeEventV1"
             },
             "type": "array",
             "title": "Items"

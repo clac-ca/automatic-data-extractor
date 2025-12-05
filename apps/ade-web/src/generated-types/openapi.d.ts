@@ -1212,42 +1212,54 @@ export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
         /**
-         * AdeEvent
-         * @description Canonical ADE event envelope for build + run streaming.
+         * AdeEventV1
+         * @description API-owned canonical ADE event envelope.
          */
-        AdeEvent: {
+        AdeEventV1: {
+            /**
+             * Schema Id
+             * @default ade.events.v1
+             * @constant
+             */
+            schema_id: "ade.events.v1";
             /** Type */
             type: string;
             /** Event Id */
-            event_id?: string | null;
+            event_id: string;
+            /** Sequence */
+            sequence: number;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Sequence */
-            sequence?: number | null;
-            /** Source */
-            source?: string | null;
-            /** Workspace Id */
-            workspace_id?: string | null;
-            /** Configuration Id */
-            configuration_id?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "api" | "engine";
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspace_id: string;
+            /**
+             * Configuration Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            configuration_id: string;
             /** Run Id */
             run_id?: string | null;
             /** Build Id */
             build_id?: string | null;
+            /** Origin Event Id */
+            origin_event_id?: string | null;
             /** Payload */
-            payload?: components["schemas"]["AdeEventPayload"] | {
+            payload?: {
                 [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * AdeEventPayload
-         * @description Base class for structured AdeEvent payloads.
-         */
-        AdeEventPayload: {
-            [key: string]: unknown;
+            };
         };
         /**
          * ApiKeyCreateRequest
@@ -1590,7 +1602,7 @@ export type components = {
          */
         BuildEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEvent"][];
+            items: components["schemas"]["AdeEventV1"][];
             /** Next After Sequence */
             next_after_sequence?: number | null;
         };
@@ -2735,7 +2747,7 @@ export type components = {
          */
         RunEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEvent"][];
+            items: components["schemas"]["AdeEventV1"][];
             /** Next After Sequence */
             next_after_sequence?: number | null;
         };

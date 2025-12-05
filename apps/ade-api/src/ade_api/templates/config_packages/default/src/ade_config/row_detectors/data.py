@@ -14,6 +14,8 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
 PHONE_RE = re.compile(r"^\s*(\+?\d[\d\-\s().]{7,}\d)\s*$")  # loose NA/E.164-ish
 AGG_WORDS = {"total", "subtotal", "grand total", "summary", "average", "avg"}
 
+DEFAULT_LABEL = "data"
+
 
 def detect_mixed_text_and_numbers(
     *,
@@ -26,7 +28,7 @@ def detect_mixed_text_and_numbers(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Data rows often contain both text and numbers.
 
@@ -67,7 +69,7 @@ def detect_mixed_text_and_numbers(
     else:
         score = 0.0
 
-    return {"scores": {"data": score}}
+    return score
 
 
 def detect_value_patterns(
@@ -81,7 +83,7 @@ def detect_value_patterns(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, dict[str, float]]:
+) -> float:
     """
     Look for concrete value shapes common in data rows:
       - email addresses
@@ -128,4 +130,4 @@ def detect_value_patterns(
     else:
         score = 0.55
 
-    return {"scores": {"data": score}}
+    return score

@@ -94,7 +94,7 @@ async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
         """
 [project]
 name = "ade-config"
-version = "1.6.0"
+version = "1.6.1"
 """.strip(),
         encoding="utf-8",
     )

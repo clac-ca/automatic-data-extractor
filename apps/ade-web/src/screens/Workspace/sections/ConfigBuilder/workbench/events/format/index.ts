@@ -18,8 +18,10 @@ type PrefixFormatter = (type: string, payload: Record<string, unknown>, timestam
 type PrefixHandler = { prefix: string; formatter: PrefixFormatter };
 
 const BUILD_EVENT_HANDLERS: Record<string, EventFormatter> = {
+  "build.created": (_event, payload, timestamp) => formatBuildCreated(payload, timestamp),
   "build.queued": (_event, payload, timestamp) => formatBuildQueued(payload, timestamp),
   "build.start": (_event, payload, timestamp) => formatBuildStarted(payload, timestamp),
+  "build.progress": (_event, payload, timestamp) => formatBuildProgress(payload, timestamp),
   "build.phase.start": (_event, payload, timestamp) => formatBuildPhaseStarted(payload, timestamp),
   "build.phase.complete": (_event, payload, timestamp) => formatBuildPhaseCompleted(payload, timestamp),
   "build.complete": (_event, payload, timestamp) => formatBuildCompletion(payload, timestamp),
@@ -39,6 +41,7 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "engine.sheet.summary": (_event, payload, timestamp) => formatSheetSummary(payload, timestamp),
   "engine.validation.issue": (_event, payload, timestamp) => formatValidationIssue(payload, timestamp),
   "engine.validation.summary": (_event, payload, timestamp) => formatValidationSummary(payload, timestamp),
+  "run.error": (_event, payload, timestamp) => formatRunError(payload, timestamp),
   "run.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.run.summary": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
@@ -781,36 +784,6 @@ function formatRowDetectorScore(
   return {
     level,
     message: [primary, secondary, tertiary, sample && contribPreview ? sample : ""].filter(Boolean).join("\n"),
-    timestamp,
-    origin: "run",
-    raw: payload,
-  };
-}
-
-function formatHookCheckpoint(
-  payload: Record<string, unknown>,
-  timestamp: string,
-): WorkbenchConsoleLine {
-  const stage = (payload.stage as string | undefined) ?? "checkpoint";
-  return {
-    level: "info",
-    message: `Hook checkpoint: ${stage}`,
-    timestamp,
-    origin: "run",
-    raw: payload,
-  };
-}
-
-function formatMappingChecked(
-  payload: Record<string, unknown>,
-  timestamp: string,
-): WorkbenchConsoleLine {
-  const mapped = asNumber(payload.mapped_columns) ?? 0;
-  const extra = asNumber(payload.extra_columns) ?? 0;
-  const level: WorkbenchConsoleLine["level"] = mapped === 0 ? "warning" : mapped > 0 ? "success" : "info";
-  return {
-    level,
-    message: `Mapping result: ${mapped} mapped, ${extra} extra`,
     timestamp,
     origin: "run",
     raw: payload,

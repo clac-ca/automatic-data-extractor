@@ -9,7 +9,7 @@ from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import AdeEvent, RunSummary
+from ade_engine.schemas import RunSummary
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -35,6 +35,7 @@ from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.core.models import RunStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.infra.db.session import get_sessionmaker
+from ade_api.schemas.events import AdeEvent
 from ade_api.settings import Settings
 
 from .schemas import (
@@ -43,9 +44,9 @@ from .schemas import (
     RunEventsPage,
     RunFilters,
     RunInput,
-    RunPage,
     RunOutput,
     RunOutputFile,
+    RunPage,
     RunResource,
 )
 from .service import (
@@ -276,7 +277,8 @@ async def download_run_input_endpoint(
 
     media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = _build_download_disposition(document.original_filename)
+    disposition = _build_download_disposition(document.original_filename)
+    response.headers["Content-Disposition"] = disposition
     return response
 
 
