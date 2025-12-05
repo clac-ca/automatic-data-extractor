@@ -71,10 +71,10 @@ def test_run_resource_dump_uses_aliases_and_defaults(
 
 def test_run_create_options_captures_input_document() -> None:
     primary = uuid4()
-    options = RunCreateOptions(input_document_id=primary, input_sheet_name="Sheet1")
+    options = RunCreateOptions(input_document_id=primary, input_sheet_names=["Sheet1"])
 
     assert options.input_document_id == primary
-    assert options.input_sheet_name == "Sheet1"
+    assert options.input_sheet_names == ["Sheet1"]
     assert options.metadata is None
 
 

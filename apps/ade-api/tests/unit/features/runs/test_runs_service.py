@@ -210,7 +210,7 @@ async def test_prepare_run_emits_queued_event(session, tmp_path: Path) -> None:
     assert Path(context.venv_path).name == ".venv"
     assert fake_builds.force_calls == [False]
     assert run.input_document_id == document.id
-    assert run.input_sheet_name is None
+    assert run.input_sheet_names is None
 
     events, _ = await service.get_run_events(run_id=run.id, limit=5)
     assert events and events[0].type == "run.queued"

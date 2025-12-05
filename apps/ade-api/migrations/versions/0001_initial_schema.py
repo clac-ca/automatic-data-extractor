@@ -730,8 +730,6 @@ def _create_runs() -> None:
             sa.ForeignKey("documents.id", ondelete="NO ACTION"),
             nullable=True,
         ),
-        sa.Column("input_documents", sa.JSON(), nullable=True),
-        sa.Column("input_sheet_name", sa.String(length=64), nullable=True),
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
         sa.Column("status", RUN_STATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),

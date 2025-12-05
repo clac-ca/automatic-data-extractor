@@ -9902,18 +9902,20 @@
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
           },
-          "input_sheet_name": {
+          "input_sheet_names": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 64
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Input Sheet Name",
-            "description": "Preferred worksheet to ingest when processing XLSX files."
+            "title": "Input Sheet Names",
+            "description": "Optional worksheet names to ingest when processing XLSX files."
           },
           "metadata": {
             "anyOf": [
@@ -10035,16 +10037,19 @@
             ],
             "title": "Download Url"
           },
-          "input_sheet_name": {
+          "input_sheet_names": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Input Sheet Name"
+            "title": "Input Sheet Names"
           },
           "input_file_count": {
             "anyOf": [

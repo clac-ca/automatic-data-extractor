@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 from uuid import UUID
 
 
@@ -62,7 +62,7 @@ class RunRequest:
 
     input_file: Path | None = None
 
-    input_sheet: str | None = None
+    input_sheets: Sequence[str] | None = None
 
     output_dir: Path | None = None
     logs_dir: Path | None = None

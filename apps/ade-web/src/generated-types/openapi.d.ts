@@ -2710,10 +2710,10 @@ export type components = {
              */
             input_document_id?: string | null;
             /**
-             * Input Sheet Name
-             * @description Preferred worksheet to ingest when processing XLSX files.
+             * Input Sheet Names
+             * @description Optional worksheet names to ingest when processing XLSX files.
              */
-            input_sheet_name?: string | null;
+            input_sheet_names?: string[] | null;
             /**
              * Metadata
              * @description Opaque metadata to propagate with run telemetry.
@@ -2754,8 +2754,8 @@ export type components = {
             size_bytes?: number | null;
             /** Download Url */
             download_url?: string | null;
-            /** Input Sheet Name */
-            input_sheet_name?: string | null;
+            /** Input Sheet Names */
+            input_sheet_names?: string[] | null;
             /** Input File Count */
             input_file_count?: number | null;
             /** Input Sheet Count */

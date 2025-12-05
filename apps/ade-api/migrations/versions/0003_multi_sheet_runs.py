@@ -4,19 +4,20 @@ from __future__ import annotations
 
 from typing import Optional
 
+import sqlalchemy as sa
 from alembic import op
 
 # Revision identifiers, used by Alembic.
-revision = "0002_single_file_runs"
-down_revision: Optional[str] = "0001_initial_schema"
+revision = "0003_multi_sheet_runs"
+down_revision: Optional[str] = "0002_single_file_runs"
 branch_labels: Optional[str] = None
 depends_on: Optional[str] = None
 
 
 def upgrade() -> None:
-    # No-op: legacy columns removed from initial schema.
+    # No-op: input_sheet_names is already present from initial schema.
     pass
 
 
 def downgrade() -> None:  # pragma: no cover
-    raise NotImplementedError("Downgrade is not supported for this revision.")
+    pass
