@@ -15,6 +15,8 @@ Envelope class: `AdeEvent` in `schemas/telemetry.py`.
 - `workspace_id`, `configuration_id`, `run_id`: propagated from `RunRequest.metadata` when provided.
 - `payload`: type-specific fields (see below).
 
+Payloads are emitted from the producing layer without extra enrichment or filesystem probing; when paths are present they are kept run-relative to the run directory.
+
 Events are serialized one per line (NDJSON). File order matches emission order;
 ordering-sensitive consumers should still use `sequence` once the API replays
 and stamps the stream.

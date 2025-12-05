@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Iterable
 from uuid import UUID
 
@@ -128,6 +129,7 @@ class SummaryAggregator:
 
         self.workspace_id, self.configuration_id, self.run_id, self.build_id = self._hydrate_ids(run)
         self.env_reason, self.env_reused = self._resolve_environment_metadata(run)
+        self._run_root = self._resolve_run_root(run)
 
         self._field_catalog: dict[str, _FieldInfo] = {}
         self._field_order: list[str] = []
@@ -142,6 +144,27 @@ class SummaryAggregator:
 
         self._register_manifest_fields()
         self._ensure_run_scope_has_catalog_fields()
+
+    def _resolve_run_root(self, run: RunContext) -> Path | None:
+        try:
+            output_dir = getattr(run.paths, "output_dir", None)
+            logs_dir = getattr(run.paths, "logs_dir", None)
+            for candidate in (output_dir, logs_dir):
+                if candidate:
+                    return Path(candidate).resolve().parent
+        except Exception:
+            return None
+        return None
+
+    def _relative_path(self, path: str | Path | None) -> str | None:
+        if path is None:
+            return None
+        if self._run_root is None:
+            return str(path)
+        try:
+            return str(Path(path).resolve().relative_to(self._run_root))
+        except Exception:
+            return str(path)
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -199,20 +222,22 @@ class SummaryAggregator:
         return env_reason, env_reused
 
     def _build_run_scope(self, run: RunContext) -> _ScopeState:
+        source = {
+            "run_id": str(self.run_id),
+            "workspace_id": str(self.workspace_id) if self.workspace_id else None,
+            "configuration_id": str(self.configuration_id) if self.configuration_id else None,
+            "build_id": str(self.build_id) if self.build_id else None,
+            "engine_version": self.engine_version,
+            "config_version": self.config_version,
+            "started_at": run.started_at,
+            "env_reason": self.env_reason,
+            "env_reused": self.env_reused,
+        }
+        source = {k: v for k, v in source.items() if v is not None}
         return _ScopeState(
             id="run",
             parent_ids={"run_id": str(self.run_id)},
-            source={
-                "run_id": str(self.run_id),
-                "workspace_id": str(self.workspace_id) if self.workspace_id else None,
-                "configuration_id": str(self.configuration_id) if self.configuration_id else None,
-                "build_id": str(self.build_id) if self.build_id else None,
-                "engine_version": self.engine_version,
-                "config_version": self.config_version,
-                "started_at": run.started_at,
-                "env_reason": self.env_reason,
-                "env_reused": self.env_reused,
-            },
+            source=source,
             field_states={},
         )
 
@@ -279,7 +304,9 @@ class SummaryAggregator:
             "stage": getattr(getattr(failure, "stage", None), "value", None) if failure else None,
             "message": getattr(failure, "message", None) if failure else None,
         }
-        self._run_state.source["failure"] = {k: v for k, v in failure_payload.items() if v is not None}
+        failure_clean = {k: v for k, v in failure_payload.items() if v is not None}
+        if failure_clean:
+            self._run_state.source["failure"] = failure_clean
 
         sheet_summaries = [self._build_sheet_summary(state) for state in self._sheet_states.values()]
         file_summaries = [self._build_file_summary(state) for state in self._file_states.values()]
@@ -314,7 +341,7 @@ class SummaryAggregator:
         return _ScopeState(
             id=file_id,
             parent_ids={"run_id": str(self.run_id)},
-            source={"file_path": file_path},
+            source={"file_path": self._relative_path(file_path)},
             field_states=field_states,
         )
 
@@ -334,7 +361,7 @@ class SummaryAggregator:
         return _ScopeState(
             id=sheet_id,
             parent_ids={"run_id": str(self.run_id), "file_id": file_id},
-            source={"file_path": file_path, "sheet_name": sheet_name},
+            source={"file_path": self._relative_path(file_path), "sheet_name": sheet_name},
             field_states=field_states,
         )
 
@@ -465,7 +492,7 @@ class SummaryAggregator:
             id=table_id,
             parent_ids={"run_id": str(self.run_id), "file_id": file_id, "sheet_id": sheet_id},
             source={
-                "file_path": str(extracted.source_file),
+                "file_path": self._relative_path(str(extracted.source_file)),
                 "sheet_name": extracted.source_sheet,
                 "table_index": extracted.table_index,
                 "output_sheet": table.output_sheet_name,
@@ -654,9 +681,9 @@ class SummaryAggregator:
             "table_ids": list(state.table_ids),
         }
         if output_path is not None:
-            details["output_path"] = output_path
+            details["output_path"] = self._relative_path(output_path)
         if processed_file is not None:
-            details["processed_file"] = processed_file
+            details["processed_file"] = self._relative_path(processed_file)
         return RunSummary(
             id=state.id,
             parent_ids=state.parent_ids,

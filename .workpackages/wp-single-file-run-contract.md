@@ -20,7 +20,7 @@ We are simplifying runs to a single-file contract: each run consumes exactly one
 * [x] Update engine types/pipeline/telemetry to emit single output path + processed file — core RunResult/summary/emitter/CLI now expose `output_path`/`processed_file`; tests adjusted.
 * [x] Simplify API surface and CLI/output endpoints to a single output file — removed `/runs/{id}/outputs*`, added singular download, run.complete artifacts emit `output_path` + `processed_file`.
 * [x] Align frontend types, run state, and event formatting to singular fields — removed outputs listing query, updated run session/console formatting/UI to single output link and regenerated TS types.
-* [ ] Refresh tests/fixtures and regenerate artifacts (OpenAPI/types, SPA if needed) — OpenAPI/TS types regenerated; remaining test runs pending.
+* [x] Refresh tests/fixtures and regenerate artifacts (OpenAPI/types, SPA if needed) — OpenAPI/TS types regenerated; `ade test` (backend + frontend) now passing; SPA build still pending if static assets are required.
 * [x] Update docs/templates/CLI help to single-file wording — engine docs and default on_run_end hook updated to `output_path` language.
 
 > **Agent note:**
@@ -139,12 +139,12 @@ automatic-data-extractor/
 - [x] Frontend alignment — shared API + workbench consume single output link.
   - [x] Regenerate TS types; update shared run API to new links/fields (no listing call).
   - [x] Simplify workbench and documents UI state/rendering to a single output link; update console formatter to singular artifact fields.
-  - [ ] Adjust frontend tests/fixtures to match singular contract.
+  - [x] Adjust frontend tests/fixtures to match singular contract.
 
 - [x] Docs & templates — engine docs and default config hooks reference `output_path`.
   - [x] Rewrite engine docs/README snippets to single `output_path` + download link.
   - [x] Update config template hooks (on_run_end) and CLI help/examples to the new contract.
 
-- [ ] Finalization
-  - [ ] Run targeted backend/engine/frontend tests.
-  - [x] Re-run `ade openapi-types`; `ade build` still pending if static assets are needed.
+- [x] Finalization
+  - [x] Run targeted backend/engine/frontend tests.
+  - [x] Re-run `ade openapi-types`; `ade build` not rerun (static assets still pending if required).

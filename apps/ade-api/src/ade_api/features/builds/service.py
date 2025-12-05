@@ -325,16 +325,15 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload={
-                    "status": build.status,
-                    "summary": summary,
-                    "exit_code": build.exit_code,
-                    "env": {
-                        "reason": "reuse_ok",
-                        "should_build": False,
-                        "force": bool(options.force),
-                    },
-                },
+                payload=self._build_completed_payload(
+                    build=build,
+                    reason="reuse_ok",
+                    should_build=False,
+                    reuse_summary=summary,
+                    engine_spec=context.engine_spec,
+                    engine_version_hint=context.engine_version_hint,
+                    python_bin=context.python_bin,
+                ),
                 run_id=context.run_id,
             )
             return
@@ -430,11 +429,12 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload=BuildCompletedPayload(
-                    status=build.status,
-                    exit_code=build.exit_code,
-                    summary=build.summary,
-                    error={"message": build.error_message} if build.error_message else None,
+                payload=self._build_completed_payload(
+                    build=build,
+                    duration_ms=None,
+                    reason="reuse_ok",
+                    should_build=False,
+                    reuse_summary=summary,
                 ),
                 run_id=context.run_id,
             )
@@ -458,12 +458,7 @@ class BuildsService:
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
-                payload=BuildCompletedPayload(
-                    status=build.status,
-                    exit_code=build.exit_code,
-                    summary=build.summary,
-                    error={"message": build.error_message} if build.error_message else None,
-                ),
+                payload=self._build_completed_payload(build=build),
                 run_id=context.run_id,
             )
             return
@@ -492,14 +487,14 @@ class BuildsService:
         yield await self._emit_event(
             build=build,
             type_="build.complete",
-            payload={
-                "status": build.status,
-                "exit_code": build.exit_code,
-                "summary": build.summary,
-                "duration_ms": duration_ms,
-                "error": {"message": build.error_message} if build.error_message else None,
-                "env": {"reason": reason},
-            },
+            payload=self._build_completed_payload(
+                build=build,
+                duration_ms=duration_ms,
+                reason=reason,
+                engine_spec=context.engine_spec,
+                engine_version_hint=context.engine_version_hint,
+                python_bin=context.python_bin,
+            ),
             run_id=context.run_id,
         )
 
@@ -747,6 +742,55 @@ class BuildsService:
     def subscribe_to_events(self, build_id: UUID):
         return self._event_dispatcher.subscribe(build_id)
 
+    def _build_completed_payload(
+        self,
+        *,
+        build: Build,
+        duration_ms: int | None = None,
+        reason: str | None = None,
+        should_build: bool | None = None,
+        engine_spec: str | None = None,
+        engine_version_hint: str | None = None,
+        python_bin: str | None = None,
+        reuse_summary: str | None = None,
+    ) -> BuildCompletedPayload:
+        execution: dict[str, Any] = {}
+        if build.exit_code is not None:
+            execution["exit_code"] = build.exit_code
+        if duration_ms is not None:
+            execution["duration_ms"] = duration_ms
+
+        context: dict[str, Any] = {}
+        if reason:
+            context["reason"] = reason
+        if should_build is not None:
+            context["should_build"] = should_build
+        if engine_spec:
+            context["engine_spec"] = engine_spec
+        if engine_version_hint:
+            context["engine_version_hint"] = engine_version_hint
+        if python_bin:
+            context["python_bin"] = python_bin
+        if reuse_summary:
+            context["reuse_summary"] = reuse_summary
+
+        artifacts: dict[str, Any] = {}
+        summary_value = build.summary or reuse_summary
+        if summary_value:
+            artifacts["summary"] = summary_value
+        if context:
+            artifacts["context"] = context
+
+        failure = {"message": build.error_message} if build.error_message else None
+
+        return BuildCompletedPayload(
+            status=str(build.status.value if hasattr(build.status, "value") else build.status),
+            failure=failure,
+            execution=execution or None,
+            artifacts=artifacts or None,
+            summary=summary_value,
+        )
+
     async def _emit_event(
         self,
         *,
@@ -793,12 +837,16 @@ class BuildsService:
             build=build,
             type_="build.queued",
             payload={
-                "status": "queued",
-                "reason": reason,
-                "should_build": should_build,
-                "engine_spec": engine_spec,
-                "engine_version_hint": engine_version_hint,
-                "python_bin": python_bin,
+                k: v
+                for k, v in {
+                    "status": "queued",
+                    "reason": reason,
+                    "should_build": should_build,
+                    "engine_spec": engine_spec,
+                    "engine_version_hint": engine_version_hint,
+                    "python_bin": python_bin,
+                }.items()
+                if v is not None
             },
             run_id=run_id,
         )

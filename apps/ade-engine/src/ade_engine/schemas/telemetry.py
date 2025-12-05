@@ -52,11 +52,10 @@ class BuildPhaseCompletedPayload(AdeEventPayload):
 
 class BuildCompletedPayload(AdeEventPayload):
     status: str
-    exit_code: int | None = None
+    failure: dict[str, Any] | None = None
+    execution: dict[str, Any] | None = None
+    artifacts: dict[str, Any] | None = None
     summary: str | None = None
-    duration_ms: int | None = None
-    env: dict[str, Any] | None = None
-    error: dict[str, Any] | None = None
 
 
 class RunQueuedPayload(AdeEventPayload):
@@ -203,7 +202,7 @@ class AdeEvent(BaseModel):
         if self.payload is None:
             return {}
         if isinstance(self.payload, BaseModel):
-            return self.payload.model_dump()
+            return self.payload.model_dump(exclude_none=True)
         if isinstance(self.payload, dict):
             return self.payload
         return {}

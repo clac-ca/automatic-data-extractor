@@ -37,7 +37,7 @@ class BaseEventEmitter:
         extra_ids: dict[str, Any] | None = None,
     ) -> AdeEvent:
         if isinstance(payload, BaseModel):
-            payload = payload.model_dump()
+            payload = payload.model_dump(exclude_none=True)
 
         ids = dict(self._ids)
         if extra_ids:

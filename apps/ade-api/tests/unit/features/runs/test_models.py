@@ -40,7 +40,8 @@ async def test_run_defaults(session: AsyncSession) -> None:
     assert run.attempt == 1
     assert run.retry_of_run_id is None
     assert run.trace_id is None
-    assert run.input_documents is None
+    assert run.input_document_id is None
+    assert run.input_sheet_name is None
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None
     assert run.finished_at is None
