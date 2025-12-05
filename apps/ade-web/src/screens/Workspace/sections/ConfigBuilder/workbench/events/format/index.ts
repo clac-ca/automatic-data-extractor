@@ -955,7 +955,7 @@ function formatTableDetails(
 function buildRunOutputUrl(runId: string | null): string | null {
   if (!runId) return null;
   const encodedRun = encodeURIComponent(runId);
-  return `/api/v1/runs/${encodedRun}/output`;
+  return `/api/v1/runs/${encodedRun}/output/download`;
 }
 
 function basename(path: string): string {

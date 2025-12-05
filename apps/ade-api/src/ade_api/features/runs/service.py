@@ -7,12 +7,15 @@ import inspect
 import json
 import logging
 import os
+import mimetypes
+import unicodedata
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
+from urllib.parse import quote
 
 from ade_engine.schemas import (
     AdeEvent,
@@ -86,6 +89,7 @@ __all__ = [
     "RunDocumentMissingError",
     "RunLogsFileMissingError",
     "RunNotFoundError",
+    "RunOutputNotReadyError",
     "RunOutputMissingError",
     "RunsService",
     "RunStreamFrame",
@@ -112,6 +116,37 @@ class RunExecutionResult:
 
 
 RunStreamFrame = AdeEvent | StdoutFrame | RunExecutionResult
+
+
+# --------------------------------------------------------------------------- #
+# Small helpers
+# --------------------------------------------------------------------------- #
+
+
+def _build_download_disposition(filename: str) -> str:
+    """Return a safe Content-Disposition header value for ``filename``."""
+
+    stripped = filename.strip()
+    cleaned = "".join(
+        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
+    ).strip()
+    candidate = cleaned or "download"
+
+    fallback_chars: list[str] = []
+    for char in candidate:
+        code_point = ord(char)
+        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
+            fallback_chars.append(char)
+        else:
+            fallback_chars.append("_")
+    fallback = "".join(fallback_chars).strip("_ ") or "download"
+    fallback = fallback[:255]
+
+    encoded = quote(candidate, safe="")
+    if fallback == candidate:
+        return f'attachment; filename="{fallback}"'
+
+    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
 # --------------------------------------------------------------------------- #
@@ -191,6 +226,10 @@ class RunLogsFileMissingError(RuntimeError):
 
 class RunOutputMissingError(RuntimeError):
     """Raised when requested run outputs cannot be resolved."""
+
+
+class RunOutputNotReadyError(RuntimeError):
+    """Raised when a run output is requested before it is ready."""
 
 
 class RunInputMissingError(RuntimeError):
@@ -837,7 +876,7 @@ class RunsService:
             page_size=page_size,
             include_total=include_total,
         )
-        resources = [self.to_resource(run) for run in page_result.items]
+        resources = [await self.to_resource(run) for run in page_result.items]
         response = Page(
             items=resources,
             page=page_result.page,
@@ -883,7 +922,7 @@ class RunsService:
             include_total=include_total,
         )
 
-    def to_resource(self, run: Run) -> RunResource:
+    async def to_resource(self, run: Run) -> RunResource:
         """Convert ``run`` into its API representation."""
 
         run_dir = self._run_dir_for_run(
@@ -919,19 +958,10 @@ class RunsService:
             default_paths=RunPathsSnapshot(),
         )
 
-        # Input document + sheet metadata
-        document_id = str(run.input_document_id) if run.input_document_id else None
-        sheet_name = run.input_sheet_name
-
-        # Outputs and processed files
-        output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
-        processed_file = paths.processed_file
-        if not processed_file and isinstance(summary_details, dict):
-            processed_file = summary_details.get("processed_file")
-            if not processed_file:
-                processed = summary_details.get("processed_files", [])
-                if isinstance(processed, list) and processed:
-                    processed_file = str(processed[0])
+        processed_file = self._resolve_processed_file(
+            paths=paths,
+            summary_details=summary_details if isinstance(summary_details, dict) else None,
+        )
 
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at) or self._coerce_datetime(
@@ -960,6 +990,20 @@ class RunsService:
         if not isinstance(sheets_counts, dict):
             sheets_counts = {}
 
+        input_meta = await self._build_input_metadata(
+            run=run,
+            files_counts=files_counts,
+            sheets_counts=sheets_counts,
+        )
+        output_meta = await self._build_output_metadata(
+            run=run,
+            run_dir=run_dir,
+            paths=paths,
+            summary_details=summary_details if isinstance(summary_details, dict) else None,
+            processed_file=processed_file,
+        )
+        links = self._links(run.id)
+
         return RunResource(
             id=run.id,
             workspace_id=run.workspace_id,
@@ -978,31 +1022,248 @@ class RunsService:
             completed_at=finished_at,
             duration_seconds=duration_seconds,
             exit_code=run.exit_code,
-            input=RunInput(
-                document_id=document_id,
-                input_sheet_name=sheet_name,
-                input_file_count=files_counts.get("total"),
-                input_sheet_count=sheets_counts.get("total"),
-            ),
-            output=RunOutput(
-                has_output=bool(output_path),
-                output_path=output_path,
-                processed_file=str(processed_file) if processed_file else None,
-            ),
-            links=self._links(run.id),
+            input=input_meta,
+            output=output_meta,
+            links=links,
+            events_url=links.events,
+            events_stream_url=links.events_stream,
+            events_download_url=links.events_download,
+        )
+
+    def _resolve_processed_file(
+        self,
+        *,
+        paths: RunPathsSnapshot,
+        summary_details: dict[str, Any] | None,
+    ) -> str | None:
+        processed_file = paths.processed_file
+        if processed_file:
+            return processed_file
+        if isinstance(summary_details, dict):
+            processed_file = summary_details.get("processed_file")
+            if processed_file:
+                return str(processed_file)
+            processed = summary_details.get("processed_files", [])
+            if isinstance(processed, list) and processed:
+                return str(processed[0])
+        return None
+
+    async def _build_input_metadata(
+        self,
+        *,
+        run: Run,
+        files_counts: dict[str, Any],
+        sheets_counts: dict[str, Any],
+    ) -> RunInput:
+        document_id = str(run.input_document_id) if run.input_document_id else None
+        filename: str | None = None
+        content_type: str | None = None
+        size_bytes: int | None = None
+        download_url: str | None = None
+
+        if document_id:
+            download_url = f"/api/v1/runs/{run.id}/input/download"
+            try:
+                document = await self._require_document(
+                    workspace_id=run.workspace_id,
+                    document_id=run.input_document_id,  # type: ignore[arg-type]
+                )
+                filename = document.original_filename
+                content_type = document.content_type
+                size_bytes = document.byte_size
+            except RunDocumentMissingError:
+                logger.warning(
+                    "run.input.metadata.missing_document",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        document_id=document_id,
+                    ),
+                )
+
+        return RunInput(
+            document_id=document_id,
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            download_url=download_url,
+            input_sheet_name=run.input_sheet_name,
+            input_file_count=files_counts.get("total"),
+            input_sheet_count=sheets_counts.get("total"),
+        )
+
+    async def _build_output_metadata(
+        self,
+        *,
+        run: Run,
+        run_dir: Path,
+        paths: RunPathsSnapshot,
+        summary_details: dict[str, Any] | None,
+        processed_file: str | None,
+    ) -> RunOutput:
+        output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
+        output_file: Path | None = None
+        if output_path:
+            candidate = (self._runs_dir / output_path).resolve()
+            try:
+                candidate.relative_to(run_dir)
+            except ValueError:
+                candidate = None
+            if candidate and candidate.is_file():
+                output_file = candidate
+
+        ready = bool(output_file) and run.status in {
+            RunStatus.SUCCEEDED,
+            RunStatus.FAILED,
+            RunStatus.CANCELLED,
+        }
+
+        filename: str | None = None
+        size_bytes: int | None = None
+        content_type: str | None = None
+
+        if output_file:
+            filename = output_file.name
+            try:
+                size_bytes = output_file.stat().st_size
+            except OSError:
+                size_bytes = None
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        if not processed_file and isinstance(summary_details, dict):
+            processed_file = summary_details.get("processed_file")
+            if not processed_file:
+                processed_files = summary_details.get("processed_files", [])
+                if isinstance(processed_files, list) and processed_files:
+                    processed_file = str(processed_files[0])
+
+        return RunOutput(
+            ready=ready,
+            download_url=f"/api/v1/runs/{run.id}/output/download",
+            filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            has_output=bool(output_path),
+            output_path=output_path,
+            processed_file=str(processed_file) if processed_file else None,
         )
 
     @staticmethod
     def _links(run_id: UUID) -> RunLinks:
         base = f"/api/v1/runs/{run_id}"
+        events = f"{base}/events"
+        events_stream = f"{events}/stream"
+        events_download = f"{events}/download"
+        output_metadata = f"{base}/output"
+        output_download = f"{output_metadata}/download"
+        input_metadata = f"{base}/input"
+        input_download = f"{input_metadata}/download"
+
         return RunLinks(
             self=base,
             summary=f"{base}/summary",
-            events=f"{base}/events",
-            events_stream=f"{base}/events/stream",
-            logs=f"{base}/logs",
-            output=f"{base}/output",
+            events=events,
+            events_stream=events_stream,
+            events_download=events_download,
+            logs=events_download,
+            input=input_metadata,
+            input_download=input_download,
+            output=output_download,
+            output_download=output_download,
+            output_metadata=output_metadata,
         )
+
+    async def get_run_input_metadata(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RunInput:
+        run = await self._require_run(run_id)
+        resource = await self.to_resource(run)
+        if resource.input.document_id is None:
+            raise RunInputMissingError("Run input is unavailable")
+        if resource.input.filename is None:
+            raise RunDocumentMissingError("Run input file is unavailable")
+        return resource.input
+
+    async def stream_run_input(
+        self,
+        *,
+        run_id: UUID,
+    ) -> tuple[Run, Document, AsyncIterator[bytes]]:
+        run = await self._require_run(run_id)
+        if not run.input_document_id:
+            raise RunInputMissingError("Run input is unavailable")
+        document = await self._require_document(
+            workspace_id=run.workspace_id,
+            document_id=run.input_document_id,
+        )
+        storage = self._storage_for(run.workspace_id)
+        path = storage.path_for(document.stored_uri)
+        exists = await asyncio.to_thread(path.exists)
+        if not exists:
+            logger.warning(
+                "run.input.stream.missing_file",
+                extra=log_context(
+                    workspace_id=run.workspace_id,
+                    configuration_id=run.configuration_id,
+                    run_id=run.id,
+                    document_id=document.id,
+                    stored_uri=document.stored_uri,
+                ),
+            )
+            raise RunDocumentMissingError("Run input file is unavailable")
+
+        stream = storage.stream(document.stored_uri)
+
+        async def _guarded() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in stream:
+                    yield chunk
+            except FileNotFoundError as exc:
+                logger.warning(
+                    "run.input.stream.file_lost",
+                    extra=log_context(
+                        workspace_id=run.workspace_id,
+                        configuration_id=run.configuration_id,
+                        run_id=run.id,
+                        document_id=document.id,
+                        stored_uri=document.stored_uri,
+                    ),
+                )
+                raise RunDocumentMissingError("Run input file is unavailable") from exc
+
+        return run, document, _guarded()
+
+    async def get_run_output_metadata(
+        self,
+        *,
+        run_id: UUID,
+    ) -> RunOutput:
+        run = await self._require_run(run_id)
+        resource = await self.to_resource(run)
+        return resource.output
+
+    async def resolve_output_for_download(
+        self,
+        *,
+        run_id: UUID,
+    ) -> tuple[Run, Path]:
+        run = await self._require_run(run_id)
+        if run.status in {
+            RunStatus.QUEUED,
+            RunStatus.WAITING_FOR_BUILD,
+            RunStatus.RUNNING,
+        }:
+            raise RunOutputNotReadyError("Run output is not available until the run completes.")
+        try:
+            path = await self.resolve_output_file(run_id=run_id)
+        except RunOutputMissingError:
+            if run.status is RunStatus.FAILED:
+                raise RunOutputMissingError("Run failed and no output is available")
+            raise
+        return run, path
 
     async def get_logs_file_path(self, *, run_id: UUID) -> Path:
         """Return the raw log stream path for ``run_id`` when available."""

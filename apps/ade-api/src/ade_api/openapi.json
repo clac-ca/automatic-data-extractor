@@ -6033,6 +6033,116 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/input": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get run input metadata",
+        "operationId": "get_run_input_endpoint_api_v1_runs__run_id__input_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunInput"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/input/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run input file",
+        "operationId": "download_run_input_endpoint_api_v1_runs__run_id__input_download_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/summary": {
       "get": {
         "tags": [
@@ -6262,6 +6372,58 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/events/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run events (NDJSON log)",
+        "operationId": "download_run_events_file_endpoint_api_v1_runs__run_id__events_download_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Events unavailable"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/logs": {
       "get": {
         "tags": [
@@ -6269,6 +6431,7 @@
         ],
         "summary": "Download Run Logs File Endpoint",
         "operationId": "download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get",
+        "deprecated": true,
         "parameters": [
           {
             "name": "run_id",
@@ -6319,8 +6482,67 @@
         "tags": [
           "runs"
         ],
-        "summary": "Download Run Output Endpoint",
-        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__output_get",
+        "summary": "Get run output metadata",
+        "operationId": "get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOutput"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Run or output not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/output/download": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download run output file",
+        "operationId": "download_run_output_endpoint_api_v1_runs__run_id__output_download_get",
         "parameters": [
           {
             "name": "run_id",
@@ -6341,6 +6563,131 @@
           },
           "404": {
             "description": "Output not found"
+          },
+          "409": {
+            "description": "Output not ready"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/outputs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Outputs Legacy",
+        "operationId": "list_run_outputs_legacy_api_v1_runs__run_id__outputs_get",
+        "deprecated": true,
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunOutputFile"
+                  },
+                  "title": "Response List Run Outputs Legacy Api V1 Runs  Run Id  Outputs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/outputs/{output_path}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Download Run Output Legacy Endpoint",
+        "operationId": "download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get",
+        "deprecated": true,
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "output_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Legacy output path",
+              "title": "Output Path"
+            },
+            "description": "Legacy output path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -9644,6 +9991,50 @@
             ],
             "title": "Document Id"
           },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
           "input_sheet_name": {
             "anyOf": [
               {
@@ -9701,13 +10092,33 @@
             "type": "string",
             "title": "Events Stream"
           },
+          "events_download": {
+            "type": "string",
+            "title": "Events Download"
+          },
           "logs": {
             "type": "string",
             "title": "Logs"
           },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "input_download": {
+            "type": "string",
+            "title": "Input Download"
+          },
           "output": {
             "type": "string",
             "title": "Output"
+          },
+          "output_download": {
+            "type": "string",
+            "title": "Output Download"
+          },
+          "output_metadata": {
+            "type": "string",
+            "title": "Output Metadata"
           }
         },
         "additionalProperties": false,
@@ -9717,14 +10128,68 @@
           "summary",
           "events",
           "events_stream",
+          "events_download",
           "logs",
-          "output"
+          "input",
+          "input_download",
+          "output",
+          "output_download",
+          "output_metadata"
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
       },
       "RunOutput": {
         "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": false
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
           "has_output": {
             "type": "boolean",
             "title": "Has Output",
@@ -9757,6 +10222,69 @@
         "type": "object",
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
+      },
+      "RunOutputFile": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "byte_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Byte Size"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunOutputFile",
+        "description": "Deprecated collection wrapper for legacy output listings."
       },
       "RunPage": {
         "properties": {
@@ -9985,6 +10513,39 @@
           },
           "links": {
             "$ref": "#/components/schemas/RunLinks"
+          },
+          "events_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Url"
+          },
+          "events_stream_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Stream Url"
+          },
+          "events_download_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events Download Url"
           }
         },
         "additionalProperties": false,
