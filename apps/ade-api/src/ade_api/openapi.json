@@ -5210,6 +5210,42 @@
         ]
       }
     },
+    "/api/v1/config-templates": {
+      "get": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "List configuration templates",
+        "operationId": "list_config_templates_api_v1_config_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConfigTemplate"
+                  },
+                  "type": "array",
+                  "title": "Response List Config Templates Api V1 Config Templates Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
       "get": {
         "tags": [
@@ -7925,6 +7961,48 @@
         ],
         "title": "ConfigSourceTemplate",
         "description": "Reference to a bundled template."
+      },
+      "ConfigTemplate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ConfigTemplate",
+        "description": "Metadata for an available configuration template."
       },
       "ConfigValidationIssue": {
         "properties": {

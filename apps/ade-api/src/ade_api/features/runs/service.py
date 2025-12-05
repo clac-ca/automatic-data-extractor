@@ -1496,10 +1496,14 @@ class RunsService:
                 run_dir=run_dir,
             )
         if not snapshot.events_path:
-            snapshot.events_path = self._run_relative_hint(
+            for candidate in (
+                run_dir / "engine-logs" / "engine_events.ndjson",
+                run_dir / "engine-logs" / run_dir.name / "engine_events.ndjson",
                 run_dir / "logs" / "events.ndjson",
-                run_dir=run_dir,
-            )
+            ):
+                snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
+                if snapshot.events_path:
+                    break
 
         # Output path: only propagate hints already in scope (summary/defaults).
         output_candidates: list[str | Path | None] = []
@@ -1881,7 +1885,11 @@ class RunsService:
             env=env,
         )
 
-        paths_snapshot = RunPathsSnapshot()
+        paths_snapshot = RunPathsSnapshot(
+            events_path=str(engine_logs_dir / "engine_events.ndjson"),
+            output_path=str(run_dir / "output" / "normalized.xlsx"),
+            processed_file=staged_input.name,
+        )
 
         # Stream frames from the engine process: either stdout frames or stderr lines.
         async for frame in runner.stream():
