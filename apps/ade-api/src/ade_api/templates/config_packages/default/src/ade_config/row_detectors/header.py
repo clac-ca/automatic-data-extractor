@@ -67,8 +67,8 @@ def detect_known_header_words(
                 break
 
     if hits >= 2:
-        score = 0.60
-    elif hits == 1:
+        return 0.60
+    if hits == 1:
         return 0.35
     return 0.0
 

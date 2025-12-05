@@ -11,11 +11,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.routing import Lifespan
 
+from ade_api.features.configs.utils import COPY_IGNORE_PATTERNS, copytree_no_stat
 from ade_api.features.rbac import RbacService
 from ade_api.infra.db.engine import ensure_database_ready
 from ade_api.infra.db.session import get_sessionmaker
 from ade_api.settings import Settings, get_settings
-from ade_api.features.configs.utils import COPY_IGNORE_PATTERNS, copytree_no_stat
 
 logger = logging.getLogger(__name__)
 
