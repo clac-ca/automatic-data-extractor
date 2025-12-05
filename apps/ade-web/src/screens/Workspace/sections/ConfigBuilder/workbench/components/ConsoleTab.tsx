@@ -11,7 +11,6 @@ interface ConsoleTabProps {
   readonly consoleLines: readonly WorkbenchConsoleLine[];
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly onShowRunDetails?: () => void;
   readonly runStatus?: RunStreamStatus;
 }
 
@@ -29,7 +28,6 @@ export function ConsoleTab({
   consoleLines,
   latestRun,
   onClearConsole,
-  onShowRunDetails,
   runStatus,
 }: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
@@ -250,13 +248,6 @@ export function ConsoleTab({
                 <span className="text-slate-600">· {formatRunDuration(latestRun.durationMs)}</span>
               ) : null}
             </div>
-            <button
-              type="button"
-              className="text-[11px] font-semibold text-emerald-300 transition hover:text-emerald-200"
-              onClick={() => onShowRunDetails?.()}
-            >
-              View details →
-            </button>
           </div>
         ) : null}
       </div>

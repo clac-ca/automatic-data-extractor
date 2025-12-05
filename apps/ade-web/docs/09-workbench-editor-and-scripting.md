@@ -534,7 +534,7 @@ URL query parameters encode **shareable view state**—the bits we want to survi
 
 ```ts
 export type ConfigBuilderTab = "editor";
-export type ConfigBuilderPane = "terminal" | "problems" | "runSummary";
+export type ConfigBuilderPane = "terminal" | "problems";
 export type ConfigBuilderConsole = "open" | "closed";
 export type ConfigBuilderView = "editor" | "split" | "zen";
 
