@@ -35,22 +35,22 @@ Docs:
 
 Run `ade --help` for the full list; `ade <command> --help` for flags. Key commands:
 
-- `ade setup` — initial repo setup (env, hooks).
-- `ade dev` — backend/frontend dev servers (`--backend-only/--frontend-only`).
-- `ade start` — serve API + built SPA.
-- `ade build` — build frontend assets into `apps/ade-api/src/ade_api/web/static`.
-- `ade tests` — run Python/JS test suites.
-- `ade lint` — lint/format helpers.
-- `ade bundle` — bundle files/dirs into Markdown for LLM/code review (filters, include/exclude, `--out`, `--no-clip`).
-- `ade types` — generate frontend types from OpenAPI.
-- `ade migrate` — run DB migrations.
-- `ade routes` — list FastAPI routes.
-- `ade users` — manage users/roles (see subcommands).
-- `ade docker` — local Docker helpers.
-- `ade lint` — lint/format helpers (`--fix` to auto-fix issues; start here before manual fixes).
-- `ade clean` / `ade reset` — remove build artifacts/venvs/cache.
-- `ade ci` — full pipeline (lint, test, build).
-- `ade engine ...` — full `ade_engine` CLI (mirrors `python -m ade_engine`).
+- `./.venv/bin/ade ade setup` — initial repo setup (env, hooks).
+- `./.venv/bin/ade ade dev` — backend/frontend dev servers (`--backend-only/--frontend-only`).
+- `./.venv/bin/ade ade start` — serve API + built SPA.
+- `./.venv/bin/ade ade build` — build frontend assets into `apps/ade-api/src/ade_api/web/static`.
+- `./.venv/bin/ade ade tests` — run Python/JS test suites.
+- `./.venv/bin/ade ade lint` — lint/format helpers.
+- `./.venv/bin/ade ade bundle` — bundle files/dirs into Markdown for LLM/code review (filters, include/exclude, `--out`, `--no-clip`).
+- `./.venv/bin/ade ade types` — generate frontend types from OpenAPI.
+- `./.venv/bin/ade ade migrate` — run DB migrations.
+- `./.venv/bin/ade ade routes` — list FastAPI routes.
+- `./.venv/bin/ade ade users` — manage users/roles (see subcommands).
+- `./.venv/bin/ade ade docker` — local Docker helpers.
+- `./.venv/bin/ade ade lint` — lint/format helpers (`--fix` to auto-fix issues; start here before manual fixes).
+- `./.venv/bin/ade ade clean` / `ade reset` — remove build artifacts/venvs/cache.
+- `./.venv/bin/ade ade ci` — full pipeline (lint, test, build).
+- `./.venv/bin/ade ade engine ...` — full `ade_engine` CLI (mirrors `python -m ade_engine`).
 
 ### Engine CLI (via `ade engine`)
 
