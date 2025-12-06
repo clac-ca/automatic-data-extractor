@@ -62,10 +62,15 @@ ade engine run \
   --config-package "data/templates/config_packages/DaRT Remittance" \
   --output-dir /tmp/out \            # or --output-file /tmp/out/normalized.xlsx
   --logs-dir /tmp/out/logs           # or --logs-file /tmp/out/logs/engine_events.ndjson
+  --quiet \                          # suppress NDJSON on stdout
+  --format json \                    # emit single JSON per run (or aggregate)
+  --aggregate-summary \              # print aggregate table/JSON across inputs
+  --aggregate-summary-file /tmp/out/aggregate.json
 ```
 
-- Multiple inputs: repeat `--input` to run each file separately.
-- If `--logs-*` is omitted, events stream to stdout only (no file sink).
+- Inputs: use `--input` (repeatable) and/or `--input-dir` with `--include/--exclude`; inputs are merged, de-duplicated, and sorted.
+- Default includes under `--input-dir`: `*.xlsx`, `*.csv` when no `--include` is provided.
+- If `--logs-*` is omitted, events stream to stdout only (suppressed with `--quiet`).
 - Defaults: output → `<output-dir>/normalized.xlsx` (or `<input_dir>/output/normalized.xlsx` if no dir given).
 
 ### Bundle examples
