@@ -13,7 +13,7 @@ def detect_value_from_header(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """Bias headers that mention values or amounts."""
 
     if not header:
@@ -37,7 +37,7 @@ def detect_value_from_values(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """Treat mostly-numeric samples as likely value columns."""
 
     if not column_values_sample:

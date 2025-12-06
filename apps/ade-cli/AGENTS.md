@@ -29,7 +29,7 @@ Key commands (invoke with `ade <command> --help` for full flags):
 Notes for agents:
 
 - Always check `--help` before guessing flags.
-- `ade engine` forwards arguments verbatim; use it to discover current ade_engine run flags (output/events file options, etc.).
+- `ade engine` forwards arguments verbatim; use it to discover current ade_engine run flags (output/log file options, etc.).
 - Respect repo structure: commands assume you’re at the repo root. Use `ade --help` to confirm available commands in this environment.
 
 Quick examples:
@@ -60,5 +60,5 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 ade types
 
 # Run the engine directly (see full flags with `ade engine run --help`)
-ade engine run --input data/samples/example.xlsx --output-dir data/samples/output --events-dir data/samples/output
+ade engine run --input data/samples/example.xlsx --output-dir data/samples/output --logs-dir data/samples/output
 ```

@@ -1865,21 +1865,6 @@ class RunsService:
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
 
-        metadata: dict[str, str] = {
-            "run_id": run.id,
-            "configuration_id": run.configuration_id,
-            "workspace_id": run.workspace_id,
-            "context_configuration_id": context.configuration_id,
-        }
-        if options.metadata:
-            for key, value in options.metadata.items():
-                metadata[key] = str(value)
-        for key, value in metadata.items():
-            command.extend(["--metadata", f"{key}={value}"])
-
-        if safe_mode_enabled:
-            command.append("--safe-mode")
-
         runner = EngineSubprocessRunner(
             command=command,
             env=env,

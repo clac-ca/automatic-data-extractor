@@ -12,7 +12,7 @@ def detect_first_header_row(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, float]:
+) -> float | dict[str, float]:
     """Prefer the first non-empty row as the header."""
 
     if not any(value not in (None, "") for value in row_values):
