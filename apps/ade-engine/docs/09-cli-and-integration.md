@@ -4,8 +4,8 @@ This document describes the command‑line interface to the ADE engine and how
 the ADE backend invokes it inside a virtual environment.
 
 It assumes you’ve read `ade_engine/README.md` and understand that the engine
-is **path‑based and backend-run-agnostic**: it sees source/output/log paths and opaque
-metadata for telemetry correlation, not run queues or orchestration state in its own models.
+is **path‑based and backend-run-agnostic**: it sees source/output/log paths, not run queues
+or orchestration state in its own models.
 
 ## Terminology
 
@@ -61,30 +61,29 @@ inside the correct venv (`ade_engine` + the desired `ade_config`).
 
 ## 3. Argument model
 
-The CLI maps directly to `RunRequest` fields. Conceptually:
+The CLI maps directly to `RunRequest` fields plus output-formatting toggles. Conceptually:
 
 ```bash
 ade-engine run \
   [SOURCE SELECTION] \
   [OUTPUT / LOGS] \
   [CONFIG OPTIONS] \
-  [METADATA]
+  [OUTPUT FORMAT / SUMMARIES]
 ```
 
 ### 3.1 Source selection
 
-At least one source file must be provided:
+Provide at least one source via `--input` and/or `--input-dir` (they’re merged,
+de‑duplicated, and sorted):
 
-* `--input PATH` (repeatable)
-  Explicit source file(s):
+* `--input PATH` (repeatable) — explicit source file(s).
+* `--input-dir PATH` — recurse a directory of inputs.
+  * `--include PATTERN` — glob(s) applied under `--input-dir` (default: `*.xlsx`, `*.csv`).
+  * `--exclude PATTERN` — glob(s) to skip under `--input-dir`.
 
-  ```bash
-  --input /data/runs/123/input/input.xlsx \
-  --input /data/runs/456/input/input.xlsx
-  ```
-
-  → Each `--input` triggers a separate run. Outputs/events are written to the
-    specified paths (or per-input subdirectories when you pass multiple inputs with a shared `--output-dir`/`--events-dir`).
+→ Each input triggers a separate run. Outputs/events are written to the
+  specified paths (or per-input subdirectories when you pass multiple inputs with a shared
+  `--output-dir`/`--logs-dir`).
 
 ### 3.2 Sheet filtering (XLSX only)
 
@@ -114,11 +113,11 @@ Where to write normalized workbooks and optional engine events:
   → If no `--output-file` is provided, default to `DIR/normalized.xlsx`.
     If omitted, defaults to `<input_dir>/output/normalized.xlsx`.
 
-* `--events-file FILE`
-  → Write engine NDJSON events to this path. No file sink is created unless this is set (or `--events-dir` is provided).
+* `--logs-file FILE`
+  → Write engine NDJSON events to this path. No file sink is created unless this is set (or `--logs-dir` is provided).
 
-* `--events-dir DIR` (alias: `--logs-dir`)
-  → If no `--events-file` is provided, default to `DIR/engine_events.ndjson`.
+* `--logs-dir DIR`
+  → If no `--logs-file` is provided, default to `DIR/engine_events.ndjson`.
     If omitted, the engine only emits events to stdout.
 
 ### 3.4 Config selection
@@ -138,19 +137,13 @@ Config package:
     If no config is installed or the path does not contain `ade_config/manifest.json`,
     the CLI raises a config error.
 
-### 3.5 Metadata (optional)
+### 3.5 Output formatting and summaries
 
-* `--metadata KEY=VALUE` (repeatable, if supported)
-  For injecting simple tags into `RunRequest.metadata`:
-
-  ```bash
-  --metadata run_id=abc123 \
-  --metadata config_id=config-01
-  ```
-
-  The engine treats metadata as opaque; it mirrors it into
-  `RunContext.metadata` and telemetry envelopes. How those keys relate back to
-  runs is entirely a backend concern.
+* `--quiet / --no-quiet` — suppress NDJSON on stdout; file sinks still honored.
+* `--format [text|json]` — `text` (default) streams NDJSON and prints a final run
+  summary; `json` emits a single JSON object per run (or a single aggregate JSON when requested).
+* `--aggregate-summary` — print an aggregate summary across inputs (table in text mode; JSON in json mode).
+* `--aggregate-summary-file PATH` — write aggregate summary JSON to a path (regardless of stdout format).
 
 ---
 
@@ -167,16 +160,17 @@ The CLI also supports simple non‑run queries:
 
 ## 5. Output format and exit codes
 
-### 5.1 NDJSON events
+### 5.1 Text mode (default)
 
-For a normal run, the CLI prints **one JSON object per line** (NDJSON) to stdout. Key frames:
+* Streams **one JSON object per line** (NDJSON) to stdout unless `--quiet`.
+  Key frames:
 
-* `engine.start` — indicates config version and engine version.
-* `engine.complete` — final status and artifacts (output path, processed file).
+  * `engine.start` — indicates config version and engine version.
+  * `engine.complete` — final status and artifacts (output path, processed file).
 
-Parse the final `engine.complete` frame to determine success/failure and locate outputs.
+* Prints a concise run summary after all inputs complete (and an aggregate view when `--aggregate-summary` is set).
 
-When `--events-file`/`--events-dir` is explicitly provided, the engine also writes a local copy
+When `--logs-file`/`--logs-dir` is explicitly provided, the engine also writes a local copy
 (`engine_events.ndjson`) so you can inspect events without scraping stdout. Normalized workbooks
 are written to the configured output path (`--output-file` or `--output-dir/normalized.xlsx`).
 
@@ -184,7 +178,13 @@ The ADE backend should **not parse internal error messages** for control flow;
 it should rely on `status` and the presence of the event log. Error messages
 are for logs and operator visibility.
 
-### 5.2 Exit codes
+### 5.2 JSON mode
+
+* Suppresses NDJSON on stdout.
+* Emits **one JSON object per run** (or a single aggregate JSON object when `--aggregate-summary` is set).
+* Combine with `--aggregate-summary-file` to persist the aggregate payload alongside stdout.
+
+### 5.3 Exit codes
 
 * `0`
 
@@ -199,6 +199,44 @@ are for logs and operator visibility.
 The exact non‑zero values are not intended as a stable API; backend code
 should treat any non‑zero as “run/CLI failed” and use the JSON summary +
 log files for details.
+
+### 5.4 Common invocations
+
+```bash
+# Single file (text mode, NDJSON to stdout)
+ade-engine run \
+  --config-package ade_config \
+  --input /data/runs/<id>/input/input.xlsx \
+  --output-dir /data/runs/<id>/output \
+  --logs-dir /data/runs/<id>/logs
+
+# Batch via shell glob
+ade-engine run \
+  --config-package ade_config \
+  --output-dir /tmp/ade-out \
+  --logs-dir /tmp/ade-logs \
+  $(printf -- '--input %q ' /data/samples/*.xlsx)
+
+# Directory scan with include/exclude filters
+ade-engine run \
+  --config-package ade_config \
+  --input-dir /data/samples \
+  --include '*.xlsx' --exclude '*~' \
+  --output-dir /tmp/ade-out \
+  --logs-dir /tmp/ade-logs
+
+# JSON-only with quiet + aggregate summary
+ade-engine run \
+  --config-package ade_config \
+  --input-dir /data/samples \
+  --include '*.xlsx' \
+  --output-dir /tmp/ade-out \
+  --logs-dir /tmp/ade-logs \
+  --quiet \
+  --format json \
+  --aggregate-summary \
+  --aggregate-summary-file /tmp/ade-agg.json
+```
 
 ---
 
@@ -239,12 +277,13 @@ A typical end‑to‑end flow:
 
      ```bash
      /path/to/.venv/<config_id>/<build_id>/bin/python -m ade_engine \
+       run \
        --input /data/runs/<run_id>/input/input.xlsx \
        --output-dir /data/runs/<run_id>/output \
        --logs-dir /data/runs/<run_id>/logs \
        --config-package ade_config \
-       --metadata run_id=<run_id> \
-       --metadata config_id=<config_id>
+       --quiet \
+       --format json
      ```
 
    * **Python API** (equivalent):
@@ -258,7 +297,6 @@ A typical end‑to‑end flow:
          input_file=Path(f"/data/runs/{run_id}/input/input.xlsx"),
          output_dir=Path(f"/data/runs/{run_id}/output"),
          logs_dir=Path(f"/data/runs/{run_id}/logs"),
-         metadata={"run_id": run_id, "config_id": config_id},
      )
      ```
 
@@ -275,8 +313,8 @@ A typical end‑to‑end flow:
 
 Importantly, the engine:
 
-* Never needs to know queue semantics or workspace tenancy beyond the opaque metadata provided.
-* Treats run/workspace/config identifiers purely as metadata.
+* Never needs to know queue semantics or workspace tenancy beyond the paths and config provided for a run.
+* Treats run/workspace/config identifiers as caller-provided context, not engine state.
 
 ### 6.2 Python API vs CLI
 
@@ -326,7 +364,6 @@ result = run(
     input_file=Path("examples/input.xlsx"),
     output_dir=Path("examples/output"),
     logs_dir=Path("examples/logs"),
-    metadata={"debug": True},
 )
 
 print(result.status, result.output_path)
@@ -354,5 +391,5 @@ Backends should:
   read inputs and write outputs/logs.
 
 The engine and CLI themselves remain deliberately simple: they operate only on
-paths and metadata passed in; all higher‑level security and scheduling policies
+paths and caller-provided context; all higher‑level security and scheduling policies
 live in the ADE API layer.

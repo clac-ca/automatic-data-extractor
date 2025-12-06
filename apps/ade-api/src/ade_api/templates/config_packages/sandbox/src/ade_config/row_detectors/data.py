@@ -12,7 +12,7 @@ def detect_non_empty_data_rows(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> dict[str, float]:
+) -> float | dict[str, float]:
     """Mark rows after the header that contain data."""
 
     if row_index <= 1:

@@ -456,7 +456,7 @@ venvs is documented in `09-cli-and-integration.md`.
 Key ideas:
 
 * CLI is a thin wrapper over `Engine.run()`.
-* It prints a JSON summary mirroring `RunResult`.
+* It streams NDJSON events in text mode (with a final run/aggregate summary) or emits JSON objects per run/aggregate when `--format json` is used.
 * Non‑zero exit code means the run failed or CLI usage was invalid.
 
 ---

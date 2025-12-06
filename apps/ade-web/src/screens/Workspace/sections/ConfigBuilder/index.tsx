@@ -15,9 +15,8 @@ import {
   useCreateConfigurationMutation,
   useImportConfigurationMutation,
 } from "@shared/configurations";
+import { useConfigTemplatesQuery } from "@shared/config-templates";
 import { buildLastSelectionStorageKey, createLastSelectionStorage, persistLastSelection, type LastSelection } from "./storage";
-
-const TEMPLATE_OPTIONS = [{ value: "default", label: "Default template" }] as const;
 
 const buildConfigDetailPath = (workspaceId: string, configId: string) =>
   `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}`;
@@ -30,11 +29,20 @@ export default function WorkspaceConfigsIndexRoute() {
   const storageKey = useMemo(() => buildLastSelectionStorageKey(workspace.id), [workspace.id]);
   const storage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const configTemplatesQuery = useConfigTemplatesQuery();
+  const templateOptions = useMemo(
+    () =>
+      (configTemplatesQuery.data ?? []).map((template) => ({
+        value: template.id,
+        label: template.name || template.id,
+      })),
+    [configTemplatesQuery.data],
+  );
   const createConfig = useCreateConfigurationMutation(workspace.id);
   const importConfig = useImportConfigurationMutation(workspace.id);
 
   const [displayName, setDisplayName] = useState(() => `${workspace.name} Config`);
-  const [templateId, setTemplateId] = useState<string>(TEMPLATE_OPTIONS[0]?.value ?? "default");
+  const [templateId, setTemplateId] = useState<string>(templateOptions[0]?.value ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importDisplayName, setImportDisplayName] = useState(() => `${workspace.name} Import`);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -77,7 +85,7 @@ export default function WorkspaceConfigsIndexRoute() {
 
     if (idChanged) {
       setDisplayName(`${workspace.name} Config`);
-      setTemplateId(TEMPLATE_OPTIONS[0]?.value ?? "default");
+      setTemplateId(templateOptions[0]?.value ?? "");
       setValidationError(null);
       setImportDisplayName(`${workspace.name} Import`);
       setImportFile(null);
@@ -92,7 +100,17 @@ export default function WorkspaceConfigsIndexRoute() {
       setDisplayName((current) => (current === `${previous?.name ?? ""} Config` ? `${workspace.name} Config` : current));
       setImportDisplayName((current) => (current === `${previous?.name ?? ""} Import` ? `${workspace.name} Import` : current));
     }
-  }, [workspace.id, workspace.name]);
+  }, [templateOptions, workspace.id, workspace.name]);
+
+  useEffect(() => {
+    if (templateOptions.length === 0) {
+      return;
+    }
+    if (!templateOptions.some((option) => option.value === templateId)) {
+      setTemplateId(templateOptions[0].value);
+      setValidationError((current) => (current === "Select a template." ? null : current));
+    }
+  }, [templateId, templateOptions]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -145,6 +163,10 @@ export default function WorkspaceConfigsIndexRoute() {
       setValidationError("Enter a display name for the configuration.");
       return;
     }
+    if (!templateId) {
+      setValidationError("Select a template.");
+      return;
+    }
     setValidationError(null);
     createConfig.mutate(
       {
@@ -189,8 +211,35 @@ export default function WorkspaceConfigsIndexRoute() {
   };
 
   const creationError = validationError ?? (createConfig.error instanceof Error ? createConfig.error.message : null);
-  const canSubmit = displayName.trim().length > 0 && !createConfig.isPending;
+  const canSubmit = displayName.trim().length > 0 && templateId.length > 0 && !createConfig.isPending;
   const canImport = importDisplayName.trim().length > 0 && Boolean(importFile) && !importConfig.isPending;
+  const renderTemplateField = (disabled: boolean) => (
+    <FormField label="Template">
+      <Select
+        value={templateId}
+        onChange={(event) => {
+          setTemplateId(event.target.value);
+          setValidationError(null);
+        }}
+        disabled={disabled || configTemplatesQuery.isLoading}
+      >
+        {templateOptions.length === 0 ? (
+          <option value="" disabled>
+            {configTemplatesQuery.isLoading ? "Loading templates..." : "No templates available"}
+          </option>
+        ) : (
+          templateOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))
+        )}
+      </Select>
+      {configTemplatesQuery.isError ? (
+        <p className="mt-1 text-xs font-medium text-danger-600">Unable to load templates.</p>
+      ) : null}
+    </FormField>
+  );
 
   if (configurationsQuery.isLoading) {
     return <PageState variant="loading" title="Loading configurations" description="Fetching workspace configurations…" />;
@@ -218,19 +267,7 @@ export default function WorkspaceConfigsIndexRoute() {
                   autoFocus
                 />
               </FormField>
-              <FormField label="Template">
-                <Select
-                  value={templateId}
-                  onChange={(event) => setTemplateId(event.target.value)}
-                  disabled={createConfig.isPending}
-                >
-                  {TEMPLATE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
+              {renderTemplateField(createConfig.isPending)}
               {creationError ? <p className="text-sm font-medium text-danger-600">{creationError}</p> : null}
               <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
                 Create from template
@@ -332,19 +369,7 @@ export default function WorkspaceConfigsIndexRoute() {
               disabled={createConfig.isPending}
             />
           </FormField>
-          <FormField label="Template">
-            <Select
-              value={templateId}
-              onChange={(event) => setTemplateId(event.target.value)}
-              disabled={createConfig.isPending}
-            >
-              {TEMPLATE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          {renderTemplateField(createConfig.isPending)}
           {creationError ? <p className="text-sm font-medium text-danger-600">{creationError}</p> : null}
           <Button type="submit" className="w-full" disabled={!canSubmit} isLoading={createConfig.isPending}>
             Create from template

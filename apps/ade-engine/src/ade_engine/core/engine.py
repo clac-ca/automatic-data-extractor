@@ -74,10 +74,10 @@ def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path | None, 
     output_dir = Path(request.output_dir).resolve() if request.output_dir else input_file.parent / "output"
     output_file = Path(request.output_file).resolve() if request.output_file else output_dir / "normalized.xlsx"
 
-    events_dir = request.events_dir or getattr(request, "logs_dir", None)
-    events_dir_resolved = Path(events_dir).resolve() if events_dir else None
-    events_file = Path(request.events_file).resolve() if request.events_file else (
-        events_dir_resolved / "engine_events.ndjson" if events_dir_resolved else None
+    logs_dir = request.logs_dir
+    logs_dir_resolved = Path(logs_dir).resolve() if logs_dir else None
+    logs_file = Path(request.logs_file).resolve() if request.logs_file else (
+        logs_dir_resolved / "engine_events.ndjson" if logs_dir_resolved else None
     )
 
     normalized = RunRequest(
@@ -87,11 +87,11 @@ def _resolve_paths(request: RunRequest) -> tuple[RunRequest, Path, Path | None, 
         input_sheets=list(request.input_sheets) if request.input_sheets else None,
         output_dir=output_dir,
         output_file=output_file,
-        events_dir=events_dir_resolved,
-        events_file=events_file,
+        logs_dir=logs_dir_resolved,
+        logs_file=logs_file,
         metadata=dict(request.metadata) if request.metadata else {},
     )
-    return normalized, output_dir, output_file, events_dir_resolved, events_file, config_sys_path
+    return normalized, output_dir, output_file, logs_dir_resolved, logs_file, config_sys_path
 
 
 def _ensure_dirs(output_dir: Path, logs_dir: Path) -> None:
@@ -272,12 +272,12 @@ class Engine:
             )
 
     def _prepare_execution(self, request: RunRequest) -> _EngineExecutionState:
-        normalized_request, output_dir, output_file, events_dir, events_file, config_sys_path = _resolve_paths(request)
+        normalized_request, output_dir, output_file, logs_dir, logs_file, config_sys_path = _resolve_paths(request)
 
         metadata = dict(normalized_request.metadata) if normalized_request.metadata else {}
         run_id = _coerce_uuid(metadata.get("run_id")) or uuid7()
 
-        _ensure_dirs(output_file.parent, events_dir or output_file.parent)
+        _ensure_dirs(output_file.parent, logs_dir or output_file.parent)
         assert normalized_request.input_file is not None
         input_file_name = _input_file_name(normalized_request)
 
@@ -294,16 +294,16 @@ class Engine:
                 input_file=normalized_request.input_file,
                 output_dir=output_dir,
                 output_file=output_file,
-                events_dir=events_dir,
-                events_file=events_file,
+                logs_dir=logs_dir,
+                logs_file=logs_file,
             ),
             started_at=datetime.now(timezone.utc),
         )
 
         normalized_request.output_dir = output_dir
         normalized_request.output_file = output_file
-        normalized_request.events_dir = events_dir
-        normalized_request.events_file = events_file
+        normalized_request.logs_dir = logs_dir
+        normalized_request.logs_file = logs_file
 
         runtime = load_config_runtime(package=normalized_request.config_package, manifest_path=normalized_request.manifest_path)
         run_ctx.manifest = runtime.manifest
@@ -317,11 +317,11 @@ class Engine:
         base_telemetry = self.telemetry or TelemetryConfig()
         sink_factories = list(base_telemetry.event_sink_factories)
 
-        if events_file:
+        if logs_file:
             def _file_sink(run: RunContext) -> FileEventSink:
-                assert run.paths.events_file is not None
-                run.paths.events_file.parent.mkdir(parents=True, exist_ok=True)
-                return FileEventSink(path=run.paths.events_file, min_level=base_telemetry.min_event_level)
+                assert run.paths.logs_file is not None
+                run.paths.logs_file.parent.mkdir(parents=True, exist_ok=True)
+                return FileEventSink(path=run.paths.logs_file, min_level=base_telemetry.min_event_level)
 
             sink_factories.append(_file_sink)
 
@@ -346,7 +346,7 @@ class Engine:
         return _EngineExecutionState(
             normalized_request=normalized_request,
             output_dir=output_dir,
-            logs_dir=events_dir or output_dir,
+            logs_dir=logs_dir or output_dir,
             run_ctx=run_ctx,
             runtime=runtime,
             event_emitter=event_emitter,
