@@ -84,7 +84,7 @@ At least one source file must be provided:
   ```
 
   → Each `--input` triggers a separate run. Outputs/events are written to the
-    specified paths (or per-input subdirectories when you pass multiple inputs with a shared `--output-dir`/`--events-dir`).
+    specified paths (or per-input subdirectories when you pass multiple inputs with a shared `--output-dir`/`--logs-dir`).
 
 ### 3.2 Sheet filtering (XLSX only)
 
@@ -114,11 +114,11 @@ Where to write normalized workbooks and optional engine events:
   → If no `--output-file` is provided, default to `DIR/normalized.xlsx`.
     If omitted, defaults to `<input_dir>/output/normalized.xlsx`.
 
-* `--events-file FILE`
-  → Write engine NDJSON events to this path. No file sink is created unless this is set (or `--events-dir` is provided).
+* `--logs-file FILE`
+  → Write engine NDJSON events to this path. No file sink is created unless this is set (or `--logs-dir` is provided).
 
-* `--events-dir DIR` (alias: `--logs-dir`)
-  → If no `--events-file` is provided, default to `DIR/engine_events.ndjson`.
+* `--logs-dir DIR`
+  → If no `--logs-file` is provided, default to `DIR/engine_events.ndjson`.
     If omitted, the engine only emits events to stdout.
 
 ### 3.4 Config selection
@@ -176,7 +176,7 @@ For a normal run, the CLI prints **one JSON object per line** (NDJSON) to stdout
 
 Parse the final `engine.complete` frame to determine success/failure and locate outputs.
 
-When `--events-file`/`--events-dir` is explicitly provided, the engine also writes a local copy
+When `--logs-file`/`--logs-dir` is explicitly provided, the engine also writes a local copy
 (`engine_events.ndjson`) so you can inspect events without scraping stdout. Normalized workbooks
 are written to the configured output path (`--output-file` or `--output-dir/normalized.xlsx`).
 
