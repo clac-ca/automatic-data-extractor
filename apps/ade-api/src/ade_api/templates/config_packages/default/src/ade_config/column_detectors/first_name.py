@@ -126,7 +126,7 @@ def detect_first_name_from_values(
     logger: Any | None = None,
     event_emitter: Any | None = None,   # unused but included
     **_: Any,
-) -> dict[str, float]:
+) -> float | dict[str, float]:
     """
     Score column values that *look* like first names.
 
