@@ -38,17 +38,16 @@ def run_command(
     ),
     output_dir: Optional[Path] = typer.Option(None, "--output-dir", file_okay=False, dir_okay=True),
     output_file: Optional[Path] = typer.Option(None, "--output-file", file_okay=True, dir_okay=False),
-    events_dir: Optional[Path] = typer.Option(
+    logs_dir: Optional[Path] = typer.Option(
         None,
-        "--events-dir",
         "--logs-dir",
         file_okay=False,
         dir_okay=True,
         help="Directory for engine NDJSON events (no file sink unless provided).",
     ),
-    events_file: Optional[Path] = typer.Option(
+    logs_file: Optional[Path] = typer.Option(
         None,
-        "--events-file",
+        "--logs-file",
         file_okay=True,
         dir_okay=False,
         help="Explicit file path for engine NDJSON events (disables stdout-only).",
@@ -77,14 +76,14 @@ def run_command(
         if resolved_output_file is None:
             resolved_output_file = resolved_output_dir / "normalized.xlsx"
 
-        base_events_dir = events_dir
-        if base_events_dir and multiple_inputs:
-            base_events_dir = base_events_dir / input_file.stem
+        base_logs_dir = logs_dir
+        if base_logs_dir and multiple_inputs:
+            base_logs_dir = base_logs_dir / input_file.stem
 
-        resolved_events_file = events_file
-        resolved_events_dir = base_events_dir
-        if resolved_events_file is None and base_events_dir is not None:
-            resolved_events_file = base_events_dir / "engine_events.ndjson"
+        resolved_logs_file = logs_file
+        resolved_logs_dir = base_logs_dir
+        if resolved_logs_file is None and base_logs_dir is not None:
+            resolved_logs_file = base_logs_dir / "engine_events.ndjson"
 
         request = RunRequest(
             config_package=config_package,
@@ -92,8 +91,8 @@ def run_command(
             input_sheets=list(input_sheet) if input_sheet else None,
             output_dir=resolved_output_dir,
             output_file=resolved_output_file,
-            events_dir=resolved_events_dir,
-            events_file=resolved_events_file,
+            logs_dir=resolved_logs_dir,
+            logs_file=resolved_logs_file,
             metadata=_parse_metadata(metadata) if metadata else None,
         )
 

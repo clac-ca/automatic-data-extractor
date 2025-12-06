@@ -61,11 +61,11 @@ ade engine run \
   --input data/samples/example.xlsx \
   --config-package "data/templates/config_packages/DaRT Remittance" \
   --output-dir /tmp/out \            # or --output-file /tmp/out/normalized.xlsx
-  --events-dir /tmp/out/logs         # or --events-file /tmp/out/logs/engine_events.ndjson
+  --logs-dir /tmp/out/logs           # or --logs-file /tmp/out/logs/engine_events.ndjson
 ```
 
 - Multiple inputs: repeat `--input` to run each file separately.
-- If `--events-*` is omitted, events stream to stdout only (no file sink).
+- If `--logs-*` is omitted, events stream to stdout only (no file sink).
 - Defaults: output → `<output-dir>/normalized.xlsx` (or `<input_dir>/output/normalized.xlsx` if no dir given).
 
 ### Bundle examples

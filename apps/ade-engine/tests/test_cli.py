@@ -49,7 +49,7 @@ def test_cli_run_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
             str(source),
             "--output-dir",
             str(tmp_path / "out"),
-            "--events-dir",
+            "--logs-dir",
             str(tmp_path / "logs"),
         ],
         capture_output=True,
