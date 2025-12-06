@@ -13,7 +13,7 @@ def detect_member_id_from_header(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """Score headers that look like member identifiers."""
 
     if not header:
@@ -39,7 +39,7 @@ def detect_member_id_from_values(
     logger: Any | None = None,
     event_emitter: Any | None = None,
     **_: Any,
-) -> float:
+) -> float | dict[str, float]:
     """Lightweight detector for mostly-numeric identifiers."""
 
     if not column_values_sample:
