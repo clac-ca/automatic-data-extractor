@@ -105,6 +105,8 @@ ade_config/
 
 Why configs exist (plain-language): the engine is generic plumbing that knows how to scan spreadsheets, map columns, normalize rows, and write an output workbook. The business-specific rules—what fields matter, how to detect them, how to clean them, and how to style/report results—live in **versioned config packages** so each customer/workspace can evolve independently. Shipping them as small Python packages keeps business logic isolated, testable, and upgradeable without changing the engine; you can pin a config version for a run, roll out a new version when rules change, and keep multiple configs side-by-side in the same deployment.
 
+Detector scoring (plain-language): each column detector is scoped to its canonical field but can emit two shapes: a float (e.g., `0.8`) that applies only to its own field, or a dict (e.g., `{"first_name": 1.0, "last_name": -0.5}`) that nudges multiple fields up or down. The engine aggregates scores per field per column, picks the highest-scoring field above the manifest’s mapping threshold, and assigns that column; if nothing clears the bar and `append_unmapped_columns` is true, the column is kept as a prefixed passthrough. Cross-field dict returns are how a detector can say “this looks like X and definitely not Y” in one shot, without any changes to the Script API v3 contract.
+
 ---
 
 ## 3. Target architecture / structure (ideal)
