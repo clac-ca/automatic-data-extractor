@@ -30,11 +30,12 @@ class ColumnsConfig(BaseModel):
 class HookCollection(BaseModel):
     """Lifecycle hook modules keyed by stage."""
 
-    on_run_start: list[str] = Field(default_factory=list)
-    on_after_extract: list[str] = Field(default_factory=list)
-    on_after_mapping: list[str] = Field(default_factory=list)
-    on_before_save: list[str] = Field(default_factory=list)
-    on_run_end: list[str] = Field(default_factory=list)
+    on_workbook_start: list[str] = Field(default_factory=list)
+    on_sheet_start: list[str] = Field(default_factory=list)
+    on_table_detected: list[str] = Field(default_factory=list)
+    on_table_mapped: list[str] = Field(default_factory=list)
+    on_table_written: list[str] = Field(default_factory=list)
+    on_workbook_before_save: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
