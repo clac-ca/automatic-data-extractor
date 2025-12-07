@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import inspect
 import logging
 import mimetypes
@@ -46,10 +47,11 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.infra.storage import (
-    build_venv_root,
+    build_venv_path,
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.infra.venv import apply_venv_to_env, venv_python_path
 from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
@@ -100,6 +102,8 @@ class RunExecutionResult:
     return_code: int | None
     paths_snapshot: RunPathsSnapshot
     error_message: str | None = None
+    summary_model: Any | None = None
+    summary_json: str | None = None
 
 
 RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
@@ -325,17 +329,12 @@ class RunsService:
             reason="on_demand",
         )
         build_id = build.id
-        venv_root = (
-            Path(build_ctx.venv_root)
-            if build_ctx
-            else build_venv_root(
-                self._settings,
-                configuration.workspace_id,
-                configuration.id,
-                build_id,
-            )
+        venv_path = build_venv_path(
+            self._settings,
+            configuration.workspace_id,
+            configuration.id,
+            build_id,
         )
-        venv_path = venv_root / ".venv"
         run_status = (
             RunStatus.WAITING_FOR_BUILD
             if build.status is not BuildStatus.READY
@@ -1482,7 +1481,7 @@ class RunsService:
             ),
         )
 
-        python = self._resolve_python(Path(context.venv_path))
+        python = venv_python_path(Path(context.venv_path))
         selected_sheet_names = self._select_input_sheet_names(options)
         if not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
@@ -1604,10 +1603,18 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
+        summary_json = self._serialize_summary(
+            await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message="Validation-only execution",
+            )
+        )
         completion = await self._complete_run(
             run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            summary=summary_json,
         )
         yield await self._emit_api_event(
             run=completion,
@@ -1653,10 +1660,18 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
+        summary_json = self._serialize_summary(
+            await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message=message,
+            )
+        )
         completion = await self._complete_run(
             run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
+            summary=summary_json,
         )
 
         # Console notification
@@ -1740,11 +1755,16 @@ class RunsService:
                     if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
                         paths_snapshot.output_path = latest_paths_snapshot.output_path
 
+                    summary_json = event.summary_json
+                    if summary_json is None and event.summary_model is not None:
+                        summary_json = self._serialize_summary(event.summary_model)
+
                     completion = await self._complete_run(
                         run,
                         status=event.status,
                         exit_code=event.return_code,
                         error_message=event.error_message,
+                        summary=summary_json,
                     )
                     yield await self._emit_api_event(
                         run=completion,
@@ -1986,12 +2006,15 @@ class RunsService:
         *,
         status: RunStatus,
         exit_code: int | None,
+        summary: str | None = None,
         error_message: str | None = None,
     ) -> Run:
         run.status = status
         run.exit_code = exit_code
         if error_message is not None:
             run.error_message = error_message
+        if summary is not None:
+            run.summary = summary
         run.finished_at = utc_now()
         run.cancelled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
@@ -2010,13 +2033,29 @@ class RunsService:
         )
         return run
 
+    async def _build_placeholder_summary(
+        self,
+        *,
+        run: Run,
+        status: RunStatus,
+        message: str,
+    ) -> dict[str, Any]:
+        """Construct a minimal run summary payload without engine output."""
+
+        return {
+            "run_id": str(run.id),
+            "status": status.value,
+            "message": message,
+        }
+
     @staticmethod
-    def _resolve_python(venv_path: Path) -> Path:
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        candidate = venv_path / bin_dir / ("python.exe" if os.name == "nt" else "python")
-        if not candidate.exists():
-            raise FileNotFoundError(f"Python interpreter not found in {venv_path}")
-        return candidate
+    def _serialize_summary(summary: Any) -> str:
+        if isinstance(summary, str):
+            return summary
+        try:
+            return json.dumps(summary, default=str)
+        except TypeError:
+            return json.dumps(str(summary))
 
     @staticmethod
     def _build_env(
@@ -2026,11 +2065,7 @@ class RunsService:
         *,
         input_sheet_name: str | None = None,
     ) -> dict[str, str]:
-        env = os.environ.copy()
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        bin_path = venv_path / bin_dir
-        env["VIRTUAL_ENV"] = str(venv_path)
-        env["PATH"] = os.pathsep.join([str(bin_path), env.get("PATH", "")])
+        env = apply_venv_to_env(os.environ, venv_path)
         if options.dry_run:
             env["ADE_RUN_DRY_RUN"] = "1"
         if options.validate_only:

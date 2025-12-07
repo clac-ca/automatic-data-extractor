@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -12,13 +13,14 @@ from typing import Any, cast
 import openpyxl
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
 from ade_api.common.types import OrderBy
-from ade_api.core.models import Document, DocumentSource, DocumentStatus, User
+from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, User
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.settings import Settings
 
@@ -439,8 +441,18 @@ class DocumentsService:
     ) -> None:
         """Populate ``last_run`` on each document using recent run data."""
 
+        if not documents:
+            return
+
+        last_runs = await self._latest_stream_runs(
+            workspace_id=workspace_id,
+            documents=documents,
+        )
         for document in documents:
-            document.last_run = None
+            doc_id = str(document.id)
+            document.last_run = last_runs.get(doc_id)
+            if document.last_run and document.last_run.run_at:
+                document.last_run_at = document.last_run.run_at
 
     async def _latest_stream_runs(
         self,
@@ -448,7 +460,81 @@ class DocumentsService:
         workspace_id: str,
         documents: Sequence[DocumentOut],
     ) -> dict[str, DocumentLastRun]:
-        return {}
+        doc_ids = [str(doc.id) for doc in documents]
+        if not doc_ids:
+            return {}
+
+        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
+        ranked_runs = (
+            select(
+                Run.input_document_id.label("document_id"),
+                Run.id.label("run_id"),
+                Run.status.label("status"),
+                Run.error_message.label("error_message"),
+                Run.summary.label("summary"),
+                Run.finished_at.label("finished_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=timestamp.desc(),
+                )
+                .label("rank"),
+            )
+            .where(
+                Run.workspace_id == workspace_id,
+                Run.input_document_id.is_not(None),
+                Run.input_document_id.in_(doc_ids),
+            )
+            .subquery()
+        )
+
+        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
+        result = await self._session.execute(stmt)
+
+        latest: dict[str, DocumentLastRun] = {}
+        for row in result.mappings():
+            run_at = self._ensure_utc(
+                row.get("finished_at") or row.get("started_at") or row.get("created_at")
+            )
+            message = self._last_run_message(
+                error_message=row.get("error_message"),
+                summary=row.get("summary"),
+            )
+            latest[str(row["document_id"])] = DocumentLastRun(
+                run_id=row.get("run_id"),
+                status=row.get("status"),
+                run_at=run_at,
+                message=message,
+            )
+
+        return latest
+
+    @staticmethod
+    def _last_run_message(*, error_message: str | None, summary: str | None) -> str | None:
+        if error_message:
+            return error_message
+        if not summary:
+            return None
+        try:
+            data = json.loads(summary)
+        except (TypeError, json.JSONDecodeError):
+            return summary
+
+        if isinstance(data, Mapping):
+            message = data.get("message")
+            if message:
+                return str(message)
+        return summary
+
+    @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:

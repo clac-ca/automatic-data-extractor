@@ -10,7 +10,7 @@ columns = [
 ]
 
 [hooks]
-on_workbook_start = ["hooks.notes"]
+on_workbook_start = ["notes"]
 
 [writer]
 append_unmapped_columns = true
