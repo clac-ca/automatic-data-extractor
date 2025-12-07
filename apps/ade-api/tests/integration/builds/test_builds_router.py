@@ -98,7 +98,20 @@ version = "1.6.1"
 """.strip(),
         encoding="utf-8",
     )
-    (config_root / "src" / "ade_config" / "manifest.json").write_text("{}", encoding="utf-8")
+    (config_root / "src" / "ade_config" / "manifest.toml").write_text(
+        """
+schema = "ade.manifest/v1"
+version = "1.0.0"
+script_api_version = 3
+columns = []
+
+[writer]
+append_unmapped_columns = true
+unmapped_prefix = "raw_"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
     return configuration_id
 
 

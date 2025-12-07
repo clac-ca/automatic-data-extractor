@@ -17,7 +17,7 @@ def register(app: typer.Typer) -> None:
     )
 
     # Import lazily so the module check above can provide a friendly error.
-    from ade_engine.cli.app import app as engine_app  # type: ignore
+    from ade_engine.cli import app as engine_app  # type: ignore
 
     app.add_typer(
         engine_app,

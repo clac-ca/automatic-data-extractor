@@ -74,7 +74,7 @@ If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates
 │     │        ├─ column_detectors/ # detect → transform (opt) → validate (opt)
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
-│     │        ├─ manifest.json     # read via importlib.resources
+│     │        ├─ manifest.toml     # read via importlib.resources
 │     ├─ .venv/                     # (legacy) not used for runtime venvs
 │     ├─ runs/
 │     │  └─ <run_id>/
@@ -173,7 +173,7 @@ and can emit telemetry/notes using `context.logger.note(...)`.
 ./data/                                                  # Default root for ADE state
 ├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
 │  └─ <config_id>/                                        # One folder per published config (immutable once published)
-│     ├─ manifest.json                                    # Config manifest: metadata, defaults, entrypoints
+│     ├─ manifest.toml                                    # Config manifest: metadata, defaults, entrypoints
 │     ├─ pyproject.toml?                                  # Optional dependency list (supersedes requirements.txt)
 │     ├─ column_detectors/                                # Field logic: detect → transform (optional) → validate (optional)
 │     │  └─ <field>.py                                    # One Python file per target field (e.g., member_id.py)

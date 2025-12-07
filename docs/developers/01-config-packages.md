@@ -13,7 +13,7 @@ An ADE **config package** is a small, installable Python project (**`ade_config`
 
     * **ade_config/** — runtime package the engine imports
 
-      * **[manifest.json](#manifestjson)** — engine defaults, columns model, hooks
+      * **[manifest.toml](#manifestjson)** — engine defaults, columns model, hooks
       * **[config.env](#configenv)** *(optional)* — environment knobs (e.g., `DATE_FMT`)
       * **[_shared.py](#sharedpy)** — tiny helpers (names, dates, numbers)
       * **[column_detectors/](#columndetectors)** — one file per **canonical field**
@@ -58,7 +58,7 @@ Think of an ADE **config package** as a set of tiny functions the engine calls w
    For each column, the engine calls your column detectors (`column_detectors/<field>.py`). Each `detect_*` receives:
 
    * `header` — the column’s header text
-   * `column_values_sample` — a small, representative slice of that column (size is **configurable** in `manifest.json`)
+   * `column_values_sample` — a small, representative slice of that column (size is **configurable** in `manifest.toml`)
    * `column_values` — the entire column (already built once; no extra copying)
    * `table` — the whole table, if context helps
      Each `detect_*` returns a tiny **score** for *its* field. The engine sums scores and assigns the best‑scoring field to the column. If enabled in the manifest, **unmatched** columns are appended on the far right with a prefix like `raw_Amount`.
@@ -346,7 +346,7 @@ tags = ["membership","hr","finance"]
 
 ---
 
-## `src/ade_config/manifest.json`
+## `src/ade_config/manifest.toml`
 
 <a id="manifestjson"></a>
 
@@ -1100,7 +1100,7 @@ def on_run_end(*, tables=None, logger: Logger | None = None, **_) -> None:
 * **Column detectors**: `column_detectors/<field>.py` with `detect_*` → receive `header`, `column_values_sample`, `column_values`, `table_data`; return a **score for your field**.
 * **Transforms / validators** (optional): run **row‑by‑row after mapping** in the same column file.
 * **Hooks**: `after_mapping(table) → table`, `before_save(workbook) → workbook`, `on_run_start/on_run_end → None`.
-* **Unmatched columns**: appended on the right when enabled in `manifest.json` (using `unmapped_prefix`).
+* **Unmatched columns**: appended on the right when enabled in `manifest.toml` (using `unmapped_prefix`).
 * **Artifact**: every detection, mapping, transform, and validation is recorded for auditability.
 
 This layout keeps the authoring model **simple** and the runtime **fast**: sample first, full list if you need it; whole table to `after_mapping`; whole workbook to `before_save`.

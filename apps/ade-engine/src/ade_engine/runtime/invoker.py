@@ -1,0 +1,46 @@
+"""Uniform invocation of config-provided callables.
+
+The goal is to keep call sites small while preserving backwards-compatible
+keyword names expected by existing ``ade_config`` scripts.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable
+
+from ade_engine.config.loader import ConfigRuntime
+from ade_engine.events import NULL_EVENT_EMITTER
+from ade_engine.types.contexts import RunContext
+
+
+@dataclass(frozen=True)
+class PluginInvoker:
+    runtime: ConfigRuntime
+    run: RunContext
+    logger: Any
+    event_emitter: Any = NULL_EVENT_EMITTER
+
+    def base_kwargs(self) -> dict[str, Any]:
+        file_name = self.run.source_path.name
+        # Provide a stable set of kwargs for all config callables; scripts must accept **_.
+        return {
+            "run": self.run,
+            "state": self.run.state,
+            "meta": self.run.meta,
+            "manifest": self.runtime.manifest,
+            "logger": self.logger,
+            "event_emitter": self.event_emitter,
+            # Common aliases used across old/new scripts.
+            "events": self.event_emitter,
+            "input_file_name": file_name,
+            "file_name": file_name,
+        }
+
+    def call(self, fn: Callable[..., Any], /, **kwargs: Any) -> Any:
+        payload = self.base_kwargs()
+        payload.update(kwargs)
+        return fn(**payload)
+
+
+__all__ = ["PluginInvoker"]

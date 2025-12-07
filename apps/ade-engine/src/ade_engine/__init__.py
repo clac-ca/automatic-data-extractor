@@ -1,23 +1,21 @@
-"""Public API for ade_engine."""
+"""Public API for :mod:`ade_engine`."""
 
-from ade_engine.core.engine import Engine
-from ade_engine.core.types import EngineInfo, RunRequest, RunResult, RunStatus
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = "1.6.1"
+from ade_engine.engine import ADEngine
+from ade_engine.settings import Settings
+from ade_engine.types.run import RunRequest, RunResult, RunStatus
 
-def run(*args, **kwargs) -> RunResult:
-    """Convenience helper to execute a single run."""
-
-    engine = Engine()
-    return engine.run(*args, **kwargs)
-
+try:
+    __version__ = version("ade-engine")
+except PackageNotFoundError:  # pragma: no cover - source checkout / editable installs
+    __version__ = "0.0.0"
 
 __all__ = [
-    "Engine",
-    "run",
+    "ADEngine",
     "RunRequest",
     "RunResult",
-    "EngineInfo",
     "RunStatus",
+    "Settings",
     "__version__",
 ]

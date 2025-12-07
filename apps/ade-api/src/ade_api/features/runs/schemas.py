@@ -62,7 +62,6 @@ class RunLinks(BaseSchema):
     """Hypermedia links for run-related resources."""
 
     self: str
-    summary: str
     events: str
     events_stream: str
     events_download: str

@@ -1,4 +1,5 @@
 """Pydantic models for the ade_config manifest."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,20 +10,12 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 class FieldConfig(BaseModel):
     """Column metadata for a canonical field."""
 
+    name: str
     label: str
-    module: str
+    module: str | None = None
     required: bool = False
     synonyms: list[str] = Field(default_factory=list)
     type: str | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ColumnsConfig(BaseModel):
-    """Column ordering and field definitions."""
-
-    order: list[str]
-    fields: dict[str, FieldConfig]
 
     model_config = ConfigDict(extra="forbid")
 
@@ -60,8 +53,8 @@ class ManifestV1(BaseModel):
     name: str | None = None
     description: str | None = None
     script_api_version: int
-    columns: ColumnsConfig
-    hooks: HookCollection
+    columns: list[FieldConfig]
+    hooks: HookCollection = Field(default_factory=HookCollection)
     writer: WriterConfig
     extra: dict[str, Any] | None = Field(default=None, description="Reserved for future extensions")
 

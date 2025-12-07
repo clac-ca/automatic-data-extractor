@@ -174,13 +174,16 @@ class RunEventDispatcher:
         run_id: UUID,
         build_id: UUID | None = None,
     ) -> AdeEvent:
+        payload = dict(frame.payload or {})
+        if frame.meta:
+            payload.setdefault("meta", frame.meta)
         return await self.emit(
             type=frame.type,
             workspace_id=workspace_id,
             configuration_id=configuration_id,
             run_id=run_id,
             build_id=build_id,
-            payload=frame.payload,
+            payload=payload,
             source="engine",
             origin_event_id=str(frame.event_id),
         )

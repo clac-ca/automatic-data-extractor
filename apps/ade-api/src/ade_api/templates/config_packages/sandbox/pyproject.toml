@@ -30,4 +30,4 @@ namespaces = true
 
 [tool.setuptools.package-data]
 # Ensure the manifest ships in the wheel (ade_engine loads it at runtime)
-ade_config = ["manifest.json"]
+ade_config = ["manifest.toml"]

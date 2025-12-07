@@ -297,6 +297,7 @@ class BuildsService:
         )
 
         build = await self._require_build(context.build_id)
+        summary: str | None = build.summary or context.reuse_summary
         reason = context.reason or ("force_rebuild" if options.force else "on_demand")
 
         queued_event = await self._ensure_build_queued_event(
@@ -321,7 +322,6 @@ class BuildsService:
                     reason="reuse_ok",
                 ),
             )
-            summary = build.summary or context.reuse_summary
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
