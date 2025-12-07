@@ -386,7 +386,7 @@ class NormalizedTable:
     mapped: MappedTable
     rows: list[list[Any]]           # normalized matrix
     validation_issues: list[ValidationIssue]   # all row-level issues
-    output_sheet_name: str          # chosen by writer stage
+    output_sheet_name: str          # derived from source sheet/file name
 ```
 
 ### 6.1 Building `rows`

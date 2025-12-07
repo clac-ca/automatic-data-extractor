@@ -127,8 +127,7 @@ The manifest has a small number of top-level sections:
   },
   "writer": {
     "append_unmapped_columns": true,
-    "unmapped_prefix": "raw_",
-    "output_sheet": "Normalized"
+    "unmapped_prefix": "raw_"
   }
 }
 ```

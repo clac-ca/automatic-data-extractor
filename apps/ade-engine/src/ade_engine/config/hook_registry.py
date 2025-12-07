@@ -36,6 +36,7 @@ class HookContext:
     state: dict[str, Any]
     input_file_name: str | None
     manifest: ManifestContext
+    table: ExtractedTable | MappedTable | NormalizedTable | None
     tables: list[ExtractedTable | MappedTable | NormalizedTable] | None
     workbook: Workbook | None
     result: RunResult | None

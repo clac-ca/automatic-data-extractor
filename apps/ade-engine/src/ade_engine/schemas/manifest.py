@@ -44,7 +44,6 @@ class WriterConfig(BaseModel):
 
     append_unmapped_columns: bool = True
     unmapped_prefix: str = "raw_"
-    output_sheet: str | None = "Normalized"
 
     model_config = ConfigDict(extra="forbid")
 

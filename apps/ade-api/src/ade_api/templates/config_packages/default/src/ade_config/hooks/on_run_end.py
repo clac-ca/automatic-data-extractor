@@ -1,27 +1,15 @@
-"""
-Example: `on_run_end` hook
-
-This hook runs ONCE after the entire pipeline has completed,
-regardless of success or failure.
-
-By the time this executes:
-    • Extraction, mapping, normalization, and saving are all finished
-    • Tables and workbook have already been written to disk (if successful)
-    • `result` contains the run outcome and output file paths
-
-Common use cases:
-    • Logging / audit records
-    • Sending notifications (Slack, email, webhooks)
-    • Emitting telemetry / metrics
-    • Cleanup tasks (temp files, state flags)
-    • Post-run diagnostics
-
-This hook does *not* modify tables, workbook, or result.
-"""
+"""No-op `on_run_end` hook."""
 
 from __future__ import annotations
 
+from logging import Logger
 from typing import Any
+
+from openpyxl import Workbook
+
+from ade_engine.config.manifest_context import ManifestContext
+from ade_engine.core.types import ExtractedTable, MappedTable, NormalizedTable, RunContext, RunResult
+from ade_engine.infra.event_emitter import ConfigEventEmitter
 
 # ---------------------------------------------------------------------------
 # HOOK ENTRYPOINT
@@ -29,52 +17,17 @@ from typing import Any
 
 def run(
     *,
-    run: Any | None = None,
-    result: Any | None = None,
-    logger=None,
-    event_emitter=None,
+    run: RunContext | None = None,
+    result: RunResult | None = None,
+    logger: Logger | None = None,
+    event_emitter: ConfigEventEmitter | None = None,
     state: dict[str, Any] | None = None,
     input_file_name: str | None = None,
-    manifest: Any | None = None,
-    tables: list[Any] | None = None,
-    workbook: Any | None = None,
-    stage: Any | None = None,
+    manifest: ManifestContext | None = None,
+    tables: list[ExtractedTable | MappedTable | NormalizedTable] | None = None,
+    workbook: Workbook | None = None,
     **_: Any,
 ) -> None:
-    """
-    Main entrypoint for the `on_run_end` hook.
+    """Pass through with no side effects."""
 
-    This hook cannot influence the pipeline. It is a final
-    "after everything" callback for logging and notification.
-    """
-
-    # If key objects are missing, silently skip (common during failures)
-    if logger is None or run is None or result is None:
-        return
-
-    # Extract run metadata safely
-    run_id = getattr(run, "run_id", None)
-    status = getattr(result, "status", None)
-    output_path = getattr(result, "output_path", None)
-
-    # -----------------------------------------------------------------------
-    # EXAMPLE: Log final run status
-    # -----------------------------------------------------------------------
-    logger.info(
-        "on_run_end: run_id=%s finished status=%s output=%s",
-        run_id,
-        status,
-        str(output_path) if output_path is not None else None,
-    )
-
-    # -----------------------------------------------------------------------
-    # EXAMPLE: Emit a custom event to the frontend/monitoring system
-    # -----------------------------------------------------------------------
-    # if event_emitter is not None:
-    #     event_emitter.custom(
-    #         "hook.run_completed",
-    #         stage=getattr(stage, "value", stage),
-    #         run_id=str(run_id),
-    #         status=str(status),
-    #         output=str(output_path) if output_path is not None else None,
-    #     )
+    return None

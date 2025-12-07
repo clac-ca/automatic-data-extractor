@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-ade = "ade_tools.cli:app"
+ade = "ade_cli.cli:app"
 
 [tool.setuptools]
 include-package-data = true
@@ -29,9 +29,12 @@ include-package-data = true
 [tool.setuptools.package-dir]
 "" = "src"
 
+[tool.setuptools.package-data]
+"ade_cli" = ["py.typed"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["ade_tools*"]
+include = ["ade_cli*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

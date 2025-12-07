@@ -5,7 +5,7 @@ import sys
 import pytest
 import typer
 
-from ade_tools.commands import tests as tests_cmd
+from ade_cli.commands import tests as tests_cmd
 
 
 def test_conflicting_flags_exit(monkeypatch: pytest.MonkeyPatch) -> None:

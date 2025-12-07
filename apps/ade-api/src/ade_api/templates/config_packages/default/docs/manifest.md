@@ -50,8 +50,7 @@ Below is the template manifest used in this example workspace.
 
   "writer": {
     "append_unmapped_columns": true,
-    "unmapped_prefix": "raw_",
-    "output_sheet": "Normalized"
+    "unmapped_prefix": "raw_"
   }
 }
 ```
@@ -127,7 +126,6 @@ Controls how the final Excel workbook is produced.
 | --------------------------- | ------------------------------------------------- |
 | **append_unmapped_columns** | Include columns that weren’t mapped.              |
 | **unmapped_prefix**         | Prefix applied to unmapped column names.          |
-| **output_sheet**            | Name of the worksheet containing normalized data. |
 
 The writer takes care of sheet creation and column output order.
 

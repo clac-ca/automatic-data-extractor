@@ -13,7 +13,7 @@ from uuid import UUID
 import typer
 
 from ade_engine import Engine, RunRequest, RunResult
-from ade_engine.core.types import RunStatus
+from ade_engine.core.types import RunContext, RunStatus
 from ade_engine.infra.telemetry import EventSink, TelemetryConfig
 from ade_engine.schemas import EngineEventFrameV1, RunSummary
 
@@ -126,7 +126,7 @@ def _plan_runs(
 def _build_telemetry(quiet: bool, format: str, captures: list[RunCapture]) -> TelemetryConfig:
     suppress_stdout = quiet or format.lower() == "json"
 
-    def _capture_factory(run_ctx) -> EventSink:
+    def _capture_factory(run_ctx: RunContext) -> EventSink:
         capture = RunCapture(
             input_file=run_ctx.paths.input_file,
             output_dir=run_ctx.paths.output_dir,
@@ -138,7 +138,10 @@ def _build_telemetry(quiet: bool, format: str, captures: list[RunCapture]) -> Te
         captures.append(capture)
         return _CaptureSink(capture)
 
-    stdout_sink_factory = (lambda _run: _NullEventSink()) if suppress_stdout else None
+    def _null_sink(_: RunContext) -> EventSink:
+        return _NullEventSink()
+
+    stdout_sink_factory = _null_sink if suppress_stdout else None
     return TelemetryConfig(event_sink_factories=[_capture_factory], stdout_sink_factory=stdout_sink_factory)
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 docker_app = typer.Typer(
     help="Docker Compose helpers (API + SPA) with default app at http://localhost:8000; subcommands: up, down, logs.",

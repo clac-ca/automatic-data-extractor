@@ -89,7 +89,7 @@ def build_table(tmp_path: Path) -> NormalizedTable:
         mapped=mapped_table,
         rows=[["1", None], ["2", None]],
         validation_issues=[],
-        output_sheet_name="Normalized",
+        output_sheet_name="Sheet1",
     )
 
 

@@ -24,6 +24,10 @@ MAPPING_SCORE_THRESHOLD = 0.5
 # Number of sample values forwarded to column detectors for quick inspection.
 COLUMN_SAMPLE_SIZE = 10
 
+# Allow certain fields to reuse a column that has already been mapped. This is
+# needed for combined address columns that legitimately feed multiple fields.
+REUSABLE_FIELDS: set[str] = {"state_prov_code", "postal_code"}
+
 
 @dataclass
 class _ColumnCandidate:
@@ -210,9 +214,11 @@ def map_extracted_tables(
         mapped_columns: list[MappedColumn] = []
 
         for field in runtime.manifest.columns.order:
+            allow_reuse = field in REUSABLE_FIELDS
+            field_candidates = candidates if allow_reuse else [c for c in candidates if c.index not in used_columns]
             mapped, candidate_scores = _score_field(
                 field=field,
-                candidates=[c for c in candidates if c.index not in used_columns],
+                candidates=field_candidates,
                 runtime=runtime,
                 raw=raw,
                 run=run,
@@ -223,7 +229,11 @@ def map_extracted_tables(
             )
             if mapped:
                 mapped_columns.append(mapped)
-                used_columns.add(mapped.source_column_index)
+                if allow_reuse and mapped.source_column_index in used_columns:
+                    # Preserve the existing claim but still record the mapping for reporting.
+                    pass
+                else:
+                    used_columns.add(mapped.source_column_index)
             else:
                 mapped_columns.append(
                     MappedColumn(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from ade_engine.config.hook_registry import HookStage
 from ade_engine.config.loader import ConfigRuntime
@@ -55,19 +55,23 @@ def execute_pipeline(
         event_emitter=event_emitter,
         config_event_emitter=config_emitter,
     )
-    extract_context = run_hooks(
-        HookStage.ON_AFTER_EXTRACT,
-        runtime.hooks,
-        run=run,
-        input_file_name=input_file_name,
-        manifest=runtime.manifest,
-        tables=raw_tables,
-        workbook=None,
-        result=None,
-        logger=logger,
-        event_emitter=config_emitter,
-    )
-    raw_tables = extract_context.tables or []
+    processed_extracted: list[Any] = []
+    for raw_table in raw_tables:
+        extract_context = run_hooks(
+            HookStage.ON_AFTER_EXTRACT,
+            runtime.hooks,
+            run=run,
+            input_file_name=input_file_name,
+            manifest=runtime.manifest,
+            table=raw_table,
+            tables=None,
+            workbook=None,
+            result=None,
+            logger=logger,
+            event_emitter=config_emitter,
+        )
+        processed_extracted.append(extract_context.table or raw_table)
+    raw_tables = processed_extracted
 
     _enter_phase(RunPhase.MAPPING)
     mapped_tables = map_extracted_tables(
@@ -78,19 +82,23 @@ def execute_pipeline(
         event_emitter=event_emitter,
         config_event_emitter=config_emitter,
     )
-    mapping_context = run_hooks(
-        HookStage.ON_AFTER_MAPPING,
-        runtime.hooks,
-        run=run,
-        input_file_name=input_file_name,
-        manifest=runtime.manifest,
-        tables=mapped_tables,
-        workbook=None,
-        result=None,
-        logger=logger,
-        event_emitter=config_emitter,
-    )
-    mapped_tables = mapping_context.tables or []
+    processed_mapped: list[Any] = []
+    for mapped_table in mapped_tables:
+        mapping_context = run_hooks(
+            HookStage.ON_AFTER_MAPPING,
+            runtime.hooks,
+            run=run,
+            input_file_name=input_file_name,
+            manifest=runtime.manifest,
+            table=mapped_table,
+            tables=None,
+            workbook=None,
+            result=None,
+            logger=logger,
+            event_emitter=config_emitter,
+        )
+        processed_mapped.append(mapping_context.table or mapped_table)
+    mapped_tables = processed_mapped
 
     _enter_phase(RunPhase.NORMALIZING)
     normalized_tables = [
@@ -104,15 +112,6 @@ def execute_pipeline(
         )
         for mapped in mapped_tables
     ]
-    for table in normalized_tables:
-        if summary_aggregator:
-            table_summary = summary_aggregator.add_table(table)
-            event_emitter.table_summary(table_summary)
-
-    # Run-level validation summary (useful for validation-only mode and analytics).
-    all_issues = [issue for table in normalized_tables for issue in table.validation_issues]
-    event_emitter.validation_summary(all_issues)
-
     _enter_phase(RunPhase.WRITING_OUTPUT)
     processed_file = _collect_processed_file(normalized_tables)
     output_path = write_workbook(
@@ -123,6 +122,15 @@ def execute_pipeline(
         logger=logger,
         event_emitter=config_emitter,
     )
+
+    if summary_aggregator:
+        for table in normalized_tables:
+            table_summary = summary_aggregator.add_table(table)
+            event_emitter.table_summary(table_summary)
+
+    # Run-level validation summary (useful for validation-only mode and analytics).
+    all_issues = [issue for table in normalized_tables for issue in table.validation_issues]
+    event_emitter.validation_summary(all_issues)
 
     return normalized_tables, output_path, processed_file
 

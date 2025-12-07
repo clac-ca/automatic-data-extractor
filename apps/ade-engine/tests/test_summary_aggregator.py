@@ -71,7 +71,7 @@ def _normalized_table(source_file: Path, sheet: str | None = None) -> Normalized
         mapped=mapped,
         rows=extracted.data_rows,
         validation_issues=issues,
-        output_sheet_name="Normalized",
+        output_sheet_name=sheet or source_file.stem,
     )
 
 

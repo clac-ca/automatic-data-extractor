@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 def register(app: typer.Typer) -> None:

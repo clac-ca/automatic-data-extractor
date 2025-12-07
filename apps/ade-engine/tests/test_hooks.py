@@ -35,11 +35,7 @@ BASE_MANIFEST = {
         "on_before_save": [],
         "on_run_end": [],
     },
-    "writer": {
-        "append_unmapped_columns": True,
-        "unmapped_prefix": "raw_",
-        "output_sheet": "Normalized",
-    },
+    "writer": {"append_unmapped_columns": True, "unmapped_prefix": "raw_"},
     "extra": None,
 }
 
@@ -114,24 +110,25 @@ def test_after_extract_hooks_apply_in_order_and_propagate_tables(
         config_package,
         "first",
         """
-from typing import Sequence
 from ade_engine.core.types import ExtractedTable
 
-def run(*, tables: Sequence[ExtractedTable] | None, run, logger, event_emitter, **_):
-    run.state.setdefault("order", []).append("first")
+def run(*, table: ExtractedTable | None, run, logger, event_emitter, **_):
+    run.state.setdefault("order", []).append(f"first:{getattr(table, 'table_index', None)}")
     logger.info("first hook")
-    return list(tables or [])[:1]
+    return table
 """,
     )
     _write_hook(
         config_package,
         "second",
         """
-def run(*, tables, run, logger, event_emitter, **_):
-    run.state.setdefault("order", []).append("second")
-    if tables:
-        tables[0].header_row.append("extra")
-    return tables
+from ade_engine.core.types import ExtractedTable
+
+def run(*, table: ExtractedTable | None, run, logger, event_emitter, **_):
+    run.state.setdefault("order", []).append(f"second:{getattr(table, 'table_index', None)}")
+    if table:
+        table.header_row.append("extra")
+    return table
 """,
     )
 
@@ -161,20 +158,23 @@ def run(*, tables, run, logger, event_emitter, **_):
         ),
     ]
 
-    context = run_hooks(
-        stage=HookStage.ON_AFTER_EXTRACT,
-        registry=runtime.hooks,
-        run=run,
-        input_file_name=run.paths.input_file.name,
-        manifest=runtime.manifest,
-        logger=logger,
-        event_emitter=event_emitter,
-        tables=tables,
-    )
+    processed: list[ExtractedTable] = []
+    for table in tables:
+        context = run_hooks(
+            stage=HookStage.ON_AFTER_EXTRACT,
+            registry=runtime.hooks,
+            run=run,
+            input_file_name=run.paths.input_file.name,
+            manifest=runtime.manifest,
+            logger=logger,
+            event_emitter=event_emitter,
+            table=table,
+        )
+        processed.append(context.table or table)
 
-    assert run.state["order"] == ["first", "second"]
-    assert context.tables is not None and len(context.tables) == 1
-    assert context.tables[0].header_row == ["col1", "extra"]
+    assert run.state["order"] == ["first:1", "second:1", "first:2", "second:2"]
+    assert processed[0].header_row == ["col1", "extra"]
+    assert processed[1].header_row == ["ignored", "extra"]
 
 
 def test_on_before_save_prefers_workbook_returned_by_hook(config_package: Path, tmp_path: Path) -> None:

@@ -144,7 +144,7 @@ def _write_manifest(
             on_before_save=[],
             on_run_end=[],
         ),
-        writer=WriterConfig(append_unmapped_columns=True, unmapped_prefix="raw_", output_sheet="Normalized"),
+        writer=WriterConfig(append_unmapped_columns=True, unmapped_prefix="raw_"),
         extra=None,
     )
 

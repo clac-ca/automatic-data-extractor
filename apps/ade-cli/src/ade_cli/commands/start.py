@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 def run_start(
@@ -33,7 +33,7 @@ def run_start(
             typer.echo("ℹ️  static assets missing; running build first…")
 
         # Import locally to avoid circular imports at module load time.
-        from ade_tools.commands.build import run_build
+        from ade_cli.commands.build import run_build
 
         run_build()
 

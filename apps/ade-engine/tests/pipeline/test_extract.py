@@ -45,7 +45,7 @@ def _write_manifest(pkg_dir: Path) -> Path:
             "on_before_save": [],
             "on_run_end": [],
         },
-        "writer": {"append_unmapped_columns": False, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+        "writer": {"append_unmapped_columns": False, "unmapped_prefix": "raw_"},
     }
     manifest_path = pkg_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest))

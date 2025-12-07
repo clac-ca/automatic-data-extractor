@@ -40,7 +40,6 @@ def sample_manifest() -> dict:
         "writer": {
             "append_unmapped_columns": True,
             "unmapped_prefix": "raw_",
-            "output_sheet": "Normalized",
         },
     }
 

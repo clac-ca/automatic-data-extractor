@@ -12,7 +12,7 @@ from uuid import UUID
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 if TYPE_CHECKING:
     from ade_api.core.models import Role, User, UserRoleAssignment

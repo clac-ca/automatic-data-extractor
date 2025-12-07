@@ -11,27 +11,40 @@ from openpyxl import Workbook
 from ade_engine.config.hook_registry import HookContext, HookRegistry, HookStage
 from ade_engine.config.manifest_context import ManifestContext
 from ade_engine.core.errors import ConfigError, HookError
-from ade_engine.core.types import MappedTable, NormalizedTable, ExtractedTable, RunContext, RunResult
+from ade_engine.core.types import (
+    ExtractedTable,
+    MappedTable,
+    NormalizedTable,
+    RunContext,
+    RunResult,
+)
 from ade_engine.infra.event_emitter import ConfigEventEmitter
 
-HookTables = list[ExtractedTable | MappedTable | NormalizedTable] | None
+HookTable = ExtractedTable | MappedTable | NormalizedTable
+HookTables = list[HookTable] | None
 
 
 def _build_kwargs(context: HookContext) -> dict[str, Any]:
-    return {
+    kwargs: dict[str, Any] = {
         "context": context,
         "run": context.run,
         "state": context.state,
         "input_file_name": context.input_file_name,
         "file_name": context.input_file_name,
         "manifest": context.manifest,
-        "tables": context.tables,
-        "workbook": context.workbook,
-        "result": context.result,
         "logger": context.logger,
         "event_emitter": context.event_emitter,
-        "stage": context.stage,
     }
+    if context.table is not None:
+        kwargs["table"] = context.table
+    if context.tables is not None:
+        kwargs["tables"] = context.tables
+    if context.workbook is not None:
+        kwargs["workbook"] = context.workbook
+    if context.result is not None:
+        kwargs["result"] = context.result
+
+    return kwargs
 
 
 def _validate_signature(hook: Callable[..., Any], *, stage: HookStage) -> None:
@@ -72,6 +85,7 @@ def run_hooks(
     manifest: ManifestContext,
     logger: logging.Logger,
     event_emitter: ConfigEventEmitter,
+    table: HookTable | None = None,
     tables: HookTables = None,
     workbook: Workbook | None = None,
     result: RunResult | None = None,
@@ -83,6 +97,7 @@ def run_hooks(
         state=run.state,
         input_file_name=input_file_name,
         manifest=manifest,
+        table=table,
         tables=tables,
         workbook=workbook,
         result=result,
@@ -108,7 +123,7 @@ def run_hooks(
             continue
 
         if stage in {HookStage.ON_AFTER_EXTRACT, HookStage.ON_AFTER_MAPPING}:
-            context.tables = list(ret)
+            context.table = ret
         elif stage is HookStage.ON_BEFORE_SAVE:
             context.workbook = ret
 

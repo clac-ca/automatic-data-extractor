@@ -62,7 +62,6 @@ def test_load_config_runtime_happy_path(tmp_path: Path, monkeypatch: pytest.Monk
         "writer": {
             "append_unmapped_columns": True,
             "unmapped_prefix": "raw_",
-            "output_sheet": "Normalized",
         },
         "extra": None,
     }
@@ -133,7 +132,7 @@ def test_manifest_requires_script_api_version_three(tmp_path: Path, monkeypatch:
         "script_api_version": 2,
         "columns": {"order": [], "fields": {}},
         "hooks": {"on_run_start": [], "on_after_extract": [], "on_after_mapping": [], "on_before_save": [], "on_run_end": []},
-        "writer": {"append_unmapped_columns": True, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+        "writer": {"append_unmapped_columns": True, "unmapped_prefix": "raw_"},
     }
     manifest_path = _write_manifest(pkg_dir, manifest)
 
