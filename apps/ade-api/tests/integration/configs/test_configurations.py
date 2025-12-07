@@ -75,7 +75,7 @@ async def test_create_configuration_and_validate(
 
     config_path = _config_path(workspace_id, record["id"])
     assert config_path.exists()
-    manifest = config_path / "src" / "ade_config" / "manifest.json"
+    manifest = config_path / "src" / "ade_config" / "manifest.toml"
     assert manifest.exists()
 
     response = await async_client.post(
@@ -117,7 +117,7 @@ async def test_clone_configuration_creates_copy(
     assert clone["display_name"] == "Cloned Config"
     clone_path = _config_path(workspace_id, clone["id"])
     assert clone_path.exists()
-    assert (clone_path / "src" / "ade_config" / "manifest.json").exists()
+    assert (clone_path / "src" / "ade_config" / "manifest.toml").exists()
 
 
 async def test_validate_reports_issues_when_manifest_missing(
@@ -138,7 +138,7 @@ async def test_validate_reports_issues_when_manifest_missing(
         _config_path(workspace_id, record["id"])
         / "src"
         / "ade_config"
-        / "manifest.json"
+        / "manifest.toml"
     )
     manifest_path.unlink()
 
@@ -308,7 +308,7 @@ async def test_file_editor_endpoints(
     )
     assert resp.status_code == 200
     with zipfile.ZipFile(io.BytesIO(resp.content)) as archive:
-        assert "src/ade_config/manifest.json" in archive.namelist()
+        assert "src/ade_config/manifest.toml" in archive.namelist()
 
 
 async def test_editing_non_draft_rejected(
@@ -452,7 +452,7 @@ async def test_activate_returns_422_when_validation_fails(
         _config_path(workspace_id, record["id"])
         / "src"
         / "ade_config"
-        / "manifest.json"
+        / "manifest.toml"
     )
     manifest_path.unlink()
 

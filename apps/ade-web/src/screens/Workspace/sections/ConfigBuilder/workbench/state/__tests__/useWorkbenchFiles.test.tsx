@@ -17,7 +17,7 @@ const tree: WorkbenchFileNode = {
   name: "ade_config",
   kind: "folder",
   children: [
-    { id: "manifest.json", name: "manifest.json", kind: "file", language: "json" },
+    { id: "manifest.toml", name: "manifest.toml", kind: "file", language: "toml" },
     { id: "src/data.py", name: "data.py", kind: "file", language: "python" },
   ],
 };
@@ -59,9 +59,9 @@ function Harness({ tree, loadFile, persistence }: HarnessProps) {
       <div data-testid="active-tab">{files.activeTabId}</div>
       <div data-testid="open-tabs">{files.tabs.map((tab) => tab.id).join(",")}</div>
       <div data-testid="tab-statuses">{files.tabs.map((tab) => tab.status).join(",")}</div>
-      <button type="button" onClick={() => files.openFile("manifest.json")}>Open manifest</button>
+      <button type="button" onClick={() => files.openFile("manifest.toml")}>Open manifest</button>
       <button type="button" onClick={() => files.openFile("src/data.py")}>Open data</button>
-      <button type="button" onClick={() => files.selectTab("manifest.json")}>Select manifest</button>
+      <button type="button" onClick={() => files.selectTab("manifest.toml")}>Select manifest</button>
       <button type="button" onClick={() => files.closeTab(files.activeTabId)} disabled={!files.activeTabId}>
         Close active
       </button>
@@ -71,12 +71,12 @@ function Harness({ tree, loadFile, persistence }: HarnessProps) {
 
 describe("useWorkbenchFiles", () => {
   it("hydrates persisted tabs from storage", async () => {
-    const storage = createStorageStub({ openTabs: ["manifest.json", "src/data.py"], activeTabId: "src/data.py" });
+    const storage = createStorageStub({ openTabs: ["manifest.toml", "src/data.py"], activeTabId: "src/data.py" });
     const loadFile = vi.fn(async (id: string) => ({ content: `content:${id}`, etag: null }));
 
     render(<Harness tree={tree} loadFile={loadFile} persistence={storage.persistence} />);
 
-    await waitFor(() => expect(screen.getByTestId("open-tabs").textContent).toBe("manifest.json,src/data.py"));
+    await waitFor(() => expect(screen.getByTestId("open-tabs").textContent).toBe("manifest.toml,src/data.py"));
     expect(screen.getByTestId("active-tab").textContent).toBe("src/data.py");
     await waitFor(() => expect(loadFile).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByTestId("tab-statuses").textContent).toBe("ready,ready"));
@@ -93,9 +93,9 @@ describe("useWorkbenchFiles", () => {
     await waitFor(() => {
       const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
       expect(lastCall).toMatchObject({
-        openTabs: [{ id: "manifest.json", pinned: false }],
-        activeTabId: "manifest.json",
-        mru: ["manifest.json"],
+        openTabs: [{ id: "manifest.toml", pinned: false }],
+        activeTabId: "manifest.toml",
+        mru: ["manifest.toml"],
       });
     });
 
@@ -105,11 +105,11 @@ describe("useWorkbenchFiles", () => {
       const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
       expect(lastCall).toMatchObject({
         openTabs: [
-          { id: "manifest.json", pinned: false },
+          { id: "manifest.toml", pinned: false },
           { id: "src/data.py", pinned: false },
         ],
         activeTabId: "src/data.py",
-        mru: ["src/data.py", "manifest.json"],
+        mru: ["src/data.py", "manifest.toml"],
       });
     });
 
@@ -117,9 +117,9 @@ describe("useWorkbenchFiles", () => {
     await waitFor(() => {
       const lastCall = storage.setMock.mock.calls.at(-1)?.[0];
       expect(lastCall).toMatchObject({
-        openTabs: [{ id: "manifest.json", pinned: false }],
-        activeTabId: "manifest.json",
-        mru: ["manifest.json"],
+        openTabs: [{ id: "manifest.toml", pinned: false }],
+        activeTabId: "manifest.toml",
+        mru: ["manifest.toml"],
       });
     });
 
@@ -139,7 +139,7 @@ describe("useWorkbenchFiles", () => {
     render(<Harness tree={tree} loadFile={loadFile} />);
 
     fireEvent.click(screen.getByText("Open manifest"));
-    await waitFor(() => expect(loadFile).toHaveBeenCalledWith("manifest.json"));
+    await waitFor(() => expect(loadFile).toHaveBeenCalledWith("manifest.toml"));
   });
 
   it("retries loading when a tab errors and is re-selected", async () => {

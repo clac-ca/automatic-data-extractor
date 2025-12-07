@@ -28,9 +28,9 @@ const focusEditor = (container: HTMLElement) => {
 
 const tabs: WorkbenchFileTab[] = [
   {
-    id: "manifest.json",
-    name: "manifest.json",
-    language: "json",
+    id: "manifest.toml",
+    name: "manifest.toml",
+    language: "toml",
     initialContent: "{}",
     content: "{}",
     status: "ready",
@@ -69,7 +69,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
-        activeTabId="manifest.json"
+        activeTabId="manifest.toml"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onCloseOtherTabs={onCloseOthers}
@@ -145,7 +145,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
-        activeTabId="manifest.json"
+        activeTabId="manifest.toml"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onCloseOtherTabs={onCloseOthers}
@@ -201,7 +201,7 @@ describe("EditorArea keyboard shortcuts", () => {
 
     focusEditor(container);
     fireEvent.keyDown(window, { key: "PageUp", ctrlKey: true });
-    expect(onSelectTab).toHaveBeenCalledWith("manifest.json");
+    expect(onSelectTab).toHaveBeenCalledWith("manifest.toml");
 
     unmount();
   });
@@ -221,7 +221,7 @@ describe("EditorArea keyboard shortcuts", () => {
     const { unmount, container } = render(
       <EditorArea
         tabs={tabs}
-        activeTabId="manifest.json"
+        activeTabId="manifest.toml"
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
         onCloseOtherTabs={onCloseOthers}
@@ -239,7 +239,7 @@ describe("EditorArea keyboard shortcuts", () => {
 
     focusEditor(container);
     fireEvent.keyDown(window, { key: "w", ctrlKey: true });
-    expect(onCloseTab).toHaveBeenCalledWith("manifest.json");
+    expect(onCloseTab).toHaveBeenCalledWith("manifest.toml");
 
     unmount();
   });

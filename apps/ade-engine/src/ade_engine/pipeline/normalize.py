@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ade_engine.config.loader import ConfigRuntime
+from ade_engine.runtime import PluginInvoker
 from ade_engine.types.contexts import RunContext
 from ade_engine.types.issues import Severity, ValidationIssue
 from ade_engine.types.tables import MappedTable, NormalizedTable
+
+
+def _coerce_severity(value: Any) -> Severity:
+    try:
+        return Severity(str(value))
+    except Exception:
+        return Severity.ERROR
 
 
 class TableNormalizer:
@@ -13,87 +23,91 @@ class TableNormalizer:
         self,
         mapped: MappedTable,
         runtime: ConfigRuntime,
-        run_ctx: RunContext,
+        run_ctx: RunContext,  # noqa: ARG002 - available via invoker.base_kwargs()
         *,
-        logger=None,
+        invoker: PluginInvoker,
+        logger=None,  # noqa: ARG002 - included for config callables
     ) -> NormalizedTable:
         manifest = runtime.manifest
-        order = manifest.columns.order
-        field_configs = manifest.columns.fields
+        order = manifest.column_names
+        field_configs = {col.name: col for col in manifest.columns}
         column_modules = runtime.columns
-        state = run_ctx.state
 
         mapped_fields = {field.field: field for field in mapped.mapping.fields}
         normalized_rows: list[list[object]] = []
         issues: list[ValidationIssue] = []
 
-        for offset, data_row in enumerate(mapped.extracted.rows):
-            row_index = mapped.region.min_row + 1 + offset
-            canonical_row: dict[str, object | None] = {}
+        for row_offset, source_row in enumerate(mapped.extracted.rows):
+            source_row_index = mapped.region.min_row + 1 + row_offset  # 1-based row index on the source sheet
+
+            canonical: dict[str, object | None] = {}
+            for field_name in order:
+                source_col = mapped_fields.get(field_name).source_col if field_name in mapped_fields else None
+                canonical[field_name] = (
+                    source_row[source_col] if source_col is not None and source_col < len(source_row) else None
+                )
 
             for field_name in order:
-                mapped_field = mapped_fields.get(field_name)
-                source_col = mapped_field.source_col if mapped_field else None
-                value = data_row[source_col] if source_col is not None and source_col < len(data_row) else None
-                canonical_row[field_name] = value
-
-            for field_name in order:
-                transform = column_modules[field_name].transformer
-                if not transform:
+                transformer = column_modules[field_name].transformer
+                if not transformer:
                     continue
-                updates = transform(
-                    run=run_ctx,
-                    state=state,
-                    row_index=row_index,
+                updates = invoker.call(
+                    transformer,
+                    row_index=source_row_index,
                     field_name=field_name,
-                    value=canonical_row.get(field_name),
-                    row=canonical_row,
+                    value=canonical.get(field_name),
+                    row=canonical,
                     field_config=field_configs.get(field_name),
-                    manifest=manifest,
-                    logger=logger,
-                    event_emitter=emitter,
                 )
                 if updates:
-                    canonical_row.update(updates)
+                    canonical.update(updates)
 
             for field_name in order:
                 validator = column_modules[field_name].validator
                 if not validator:
                     continue
-                results = validator(
-                    run=run_ctx,
-                    state=state,
-                    row_index=row_index,
+
+                results = invoker.call(
+                    validator,
+                    row_index=source_row_index,
                     field_name=field_name,
-                    value=canonical_row.get(field_name),
-                    row=canonical_row,
+                    value=canonical.get(field_name),
+                    row=canonical,
                     field_config=field_configs.get(field_name),
-                    manifest=manifest,
-                    logger=logger,
-                    event_emitter=emitter,
                 )
-                for issue in results or []:
-                    severity_value = issue.get("severity") if isinstance(issue, dict) else None
-                    try:
-                        severity = Severity(str(severity_value))
-                    except Exception:
-                        severity = Severity.ERROR
+
+                for raw_issue in results or []:
+                    if isinstance(raw_issue, ValidationIssue):
+                        issues.append(raw_issue)
+                        continue
+                    if not isinstance(raw_issue, dict):
+                        issues.append(
+                            ValidationIssue(
+                                row_index=row_offset,
+                                field=field_name,
+                                code="invalid_issue",
+                                severity=Severity.ERROR,
+                                message=str(raw_issue),
+                                details=None,
+                            )
+                        )
+                        continue
+
                     issues.append(
                         ValidationIssue(
-                            row_index=offset,
+                            row_index=row_offset,
                             field=field_name,
-                            code=str(issue.get("code")) if isinstance(issue, dict) else "",
-                            severity=severity,
-                            message=issue.get("message") if isinstance(issue, dict) else None,
-                            details=issue.get("details") if isinstance(issue, dict) else None,
+                            code=str(raw_issue.get("code") or ""),
+                            severity=_coerce_severity(raw_issue.get("severity")),
+                            message=raw_issue.get("message"),
+                            details=raw_issue.get("details"),
                         )
                     )
 
-            canonical_values = [canonical_row.get(field_name) for field_name in order]
-            passthrough_values = []
-            for p in mapped.mapping.passthrough:
-                value = data_row[p.source_col] if p.source_col < len(data_row) else None
-                passthrough_values.append(value)
+            canonical_values = [canonical.get(field_name) for field_name in order]
+            passthrough_values = [
+                source_row[p.source_col] if p.source_col < len(source_row) else None for p in mapped.mapping.passthrough
+            ]
 
             normalized_rows.append(canonical_values + passthrough_values)
 

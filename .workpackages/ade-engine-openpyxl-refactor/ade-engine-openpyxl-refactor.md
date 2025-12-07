@@ -12,36 +12,43 @@
 
 ### Architecture & core API
 
-* [ ] Replace the current pipeline with the new **Workbook → Sheets → Tables** architecture (sheet-order + table-order preserved).
-* [ ] Introduce new domain terminology + types: `TableOrigin`, `TableRegion`, `ColumnMapping`, `ColumnMappingPatch`, `TablePlacement`, contexts.
-* [ ] Implement the new hook interface and contexts: `on_workbook_start`, `on_sheet_start`, `on_table_detected`, `on_table_mapped` (returns patch), `on_table_written`, `on_workbook_before_save`.
-* [ ] Implement table detection as a pluggable `TableDetector`.
-* [ ] Implement Extract → Map (+patch) → Normalize stages using **pure data** (no openpyxl cell mutations).
-* [ ] Implement Render/Write stage that writes normalized output into an **openpyxl output workbook** and returns a `TablePlacement` (`Worksheet + CellRange`).
+* [x] Replace the current pipeline with the new **Workbook → Sheets → Tables** architecture (sheet-order + table-order preserved).
+* [x] Introduce new domain terminology + types: `TableOrigin`, `TableRegion`, `ColumnMapping`, `ColumnMappingPatch`, `TablePlacement`, contexts.
+* [x] Implement the new hook interface and contexts: `on_workbook_start`, `on_sheet_start`, `on_table_detected`, `on_table_mapped` (returns patch), `on_table_written`, `on_workbook_before_save`.
+* [x] Implement table detection as a pluggable `TableDetector`.
+* [x] Implement Extract → Map (+patch) → Normalize stages using **pure data** (no openpyxl cell mutations).
+* [x] Implement Render/Write stage that writes normalized output into an **openpyxl output workbook** and returns a `TablePlacement` (`Worksheet + CellRange`).
 
 ### Efficiency & safety conventions
 
-* [ ] Output workbook/worksheets are created at run start, but **cells are only created during render**.
-* [ ] Add `TableView` helper so hooks naturally stay within the written range.
-* [ ] Define and document the “no structural sheet edits in hooks” contract (no row/col insert/delete outside of renderer; style/comments are fine).
+* [x] Output workbook/worksheets are created at run start, but **cells are only created during render**.
+* [x] Add `TableView` helper so hooks naturally stay within the written range.
+* [x] Define and document the “no structural sheet edits in hooks” contract (no row/col insert/delete outside of renderer; style/comments are fine).
 
 ### Config packages (compatibility)
 
-* [ ] Keep the config package layout + manifest schema intact (pyproject + `src/ade_config/manifest.json` with `script_api_version: 3`, `columns.order/fields`, writer toggles, row/column detectors).
-* [ ] Change only the hook lifecycle: new workbook/sheet/table stages wired via manifest `hooks` entries and updated template modules (basic + advanced + LLM-assisted mapping examples).
+* [x] Keep the config package layout + manifest schema intact (pyproject + `src/ade_config/manifest.json` with `script_api_version: 3`, `columns.order/fields`, writer toggles, row/column detectors).
+* [x] Change only the hook lifecycle: new workbook/sheet/table stages wired via manifest `hooks` entries and updated template modules (basic + advanced + LLM-assisted mapping examples).
 
 ### Refactor & deletions
 
-* [ ] Delete old types (`ExtractedTable`/`MappedTable` wrappers), old hook points, old engine runner, and related docs (no compat layer).
-* [ ] Update CLI/entrypoints to the new API and remove obsolete flags.
+* [x] Delete old types (`ExtractedTable`/`MappedTable` wrappers), old hook points, old engine runner, and related docs (no compat layer).
+* [x] Update CLI/entrypoints to the new API and remove obsolete flags.
 
 ### Tests & docs
 
-* [ ] Rewrite unit tests for detector, mapping, patch validation, normalization, rendering placement, and hook calls.
-* [ ] Add integration tests that run end-to-end and assert output workbook content + styles/comments.
-* [ ] Rewrite documentation: architecture overview, terminology glossary, hook guide, examples, manifest spec.
+* [x] Rewrite unit tests for detector, mapping, patch validation, normalization, rendering placement, and hook calls.
+* [x] Add integration tests that run end-to-end and assert output workbook content + styles/comments.
+* [x] Rewrite documentation: architecture overview, terminology glossary, hook guide, examples, manifest spec. (New summaries added under src/ade_engine/docs/; legacy chapters archived as legacy stubs.)
 
 ---
+
+### Current plan (Codex session)
+
+- Reconcile this workpackage with the codebase and update the checklist as pieces land.
+- Implement the new types/contexts + hook protocol and wire manifest/hook loading to the new lifecycle.
+- Build the workbook → sheet → table pipeline (detector/extract/map/normalize/render) and adjust CLI entrypoints to call it.
+- Refresh config package templates/hooks to the new lifecycle; add/adjust tests and docs for the new architecture.
 
 # ADE Engine: Openpyxl-native Output Architecture
 

@@ -9,7 +9,6 @@ from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from ade_engine.schemas import RunSummary
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -280,25 +279,6 @@ async def download_run_input_endpoint(
     disposition = _build_download_disposition(document.original_filename)
     response.headers["Content-Disposition"] = disposition
     return response
-
-
-@router.get(
-    "/runs/{run_id}/summary",
-    response_model=RunSummary,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Run summary not found"}},
-)
-async def get_run_summary_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-) -> RunSummary:
-    try:
-        summary = await service.get_run_summary(run_id)
-    except RunNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
-    if summary is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run summary is unavailable")
-    return summary
 
 
 @router.get(

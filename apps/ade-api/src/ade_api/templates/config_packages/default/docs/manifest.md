@@ -1,6 +1,6 @@
 # Manifest
 
-`manifest.json` is the **entry point** for an ADE workspace.
+`manifest.toml` is the **entry point** for an ADE workspace.
 It defines:
 
 * Which fields your pipeline extracts
@@ -41,11 +41,12 @@ Below is the template manifest used in this example workspace.
   },
 
   "hooks": {
-    "on_run_start": ["hooks.on_run_start"],
-    "on_after_extract": ["hooks.on_after_extract"],
-    "on_after_mapping": ["hooks.on_after_mapping"],
-    "on_before_save": ["hooks.on_before_save"],
-    "on_run_end": ["hooks.on_run_end"]
+    "on_workbook_start": ["hooks.on_workbook_start"],
+    "on_sheet_start": ["hooks.on_sheet_start"],
+    "on_table_detected": ["hooks.on_table_detected"],
+    "on_table_mapped": ["hooks.on_table_mapped"],
+    "on_table_written": ["hooks.on_table_written"],
+    "on_workbook_before_save": ["hooks.on_workbook_before_save"]
   },
 
   "writer": {
@@ -101,18 +102,19 @@ The engine imports the module and calls its `detect_*` and optional `transform` 
 Each hook stage lists one or more modules to load:
 
 ```json
-"on_after_extract": ["hooks.on_after_extract"]
+"on_table_mapped": ["hooks.on_table_mapped"]
 ```
 
 Paths are **relative to the `ade_config` package root**.
 
 Stages correspond to lifecycle callbacks:
 
-1. `on_run_start`
-2. `on_after_extract`
-3. `on_after_mapping`
-4. `on_before_save`
-5. `on_run_end`
+1. `on_workbook_start`
+2. `on_sheet_start`
+3. `on_table_detected`
+4. `on_table_mapped`
+5. `on_table_written`
+6. `on_workbook_before_save`
 
 Each script must implement a keyword-only `run(...)` hook function.
 

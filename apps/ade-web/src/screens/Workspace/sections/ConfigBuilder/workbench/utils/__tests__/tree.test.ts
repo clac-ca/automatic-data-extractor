@@ -35,15 +35,15 @@ function createListing(): FileListing {
         has_children: true,
       },
       {
-        path: "ade_config/manifest.json",
-        name: "manifest.json",
+        path: "ade_config/manifest.toml",
+        name: "manifest.toml",
         parent: "ade_config",
         kind: "file",
         depth: 1,
         size: 100,
         mtime: ISO,
         etag: "manifest",
-        content_type: "application/json",
+        content_type: "application/octet-stream",
         has_children: false,
       },
       {
@@ -81,7 +81,7 @@ describe("createWorkbenchTreeFromListing", () => {
 
     expect(tree).not.toBeNull();
     expect(tree?.id).toBe("ade_config");
-    expect(tree?.children?.map((node) => node.name)).toEqual(["hooks", "manifest.json"]);
+    expect(tree?.children?.map((node) => node.name)).toEqual(["hooks", "manifest.toml"]);
 
     const hooks = tree?.children?.find((node) => node.name === "hooks");
     expect(hooks?.kind).toBe("folder");
@@ -94,12 +94,12 @@ describe("createWorkbenchTreeFromListing", () => {
       etag: "normalize",
     });
 
-    const manifest = tree?.children?.find((node) => node.name === "manifest.json");
-    expect(manifest?.language).toBe("json");
+    const manifest = tree?.children?.find((node) => node.name === "manifest.toml");
+    expect(manifest?.language).toBe("toml");
     expect(manifest?.metadata).toEqual({
       size: 100,
       modifiedAt: ISO,
-      contentType: "application/json",
+      contentType: "application/octet-stream",
       etag: "manifest",
     });
   });
@@ -157,8 +157,8 @@ describe("createWorkbenchTreeFromListing", () => {
         has_children: true,
       },
       {
-        path: "src/ade_config/manifest.json",
-        name: "manifest.json",
+        path: "src/ade_config/manifest.toml",
+        name: "manifest.toml",
         parent: "src/ade_config",
         kind: "file",
         depth: 2,
@@ -177,7 +177,7 @@ describe("createWorkbenchTreeFromListing", () => {
     const adeConfig = src?.children?.[0];
     expect(adeConfig?.children?.map((node) => node.id).sort()).toEqual([
       "src/ade_config/hooks",
-      "src/ade_config/manifest.json",
+      "src/ade_config/manifest.toml",
     ]);
   });
 });

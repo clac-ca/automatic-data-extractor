@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from ade_engine.schemas import AdeEvent
+from ade_api.schemas.events import AdeEvent
 
 from ade_api.features.runs.event_dispatcher import (
     RunEventDispatcher,
@@ -111,6 +111,7 @@ async def test_sequences_resume_from_disk(
         event_id="evt_existing",
         created_at=utc_now(),
         sequence=3,
+        source="api",
         workspace_id=workspace_id,
         configuration_id=configuration_id,
         run_id=run_id,
@@ -157,6 +158,7 @@ async def test_log_reader_filters_by_sequence(storage: RunEventStorage) -> None:
             event_id="evt_first",
             created_at=utc_now(),
             sequence=1,
+            source="api",
             workspace_id=workspace_id,
             configuration_id=uuid4(),
             run_id=run_id,
@@ -169,6 +171,7 @@ async def test_log_reader_filters_by_sequence(storage: RunEventStorage) -> None:
             event_id="evt_second",
             created_at=utc_now(),
             sequence=2,
+            source="api",
             workspace_id=workspace_id,
             configuration_id=uuid4(),
             run_id=run_id,
