@@ -25,10 +25,10 @@
 * [ ] Add `TableView` helper so hooks naturally stay within the written range.
 * [ ] Define and document the “no structural sheet edits in hooks” contract (no row/col insert/delete outside of renderer; style/comments are fine).
 
-### Manifest/config normalization
+### Config packages (compatibility)
 
-* [ ] Redefine manifest/config schema around canonical fields, mapping rules, and normalization rules (no backwards compatibility).
-* [ ] Provide reference examples of manifests (basic + advanced + LLM-assisted mapping).
+* [ ] Keep the config package layout + manifest schema intact (pyproject + `src/ade_config/manifest.json` with `script_api_version: 3`, `columns.order/fields`, writer toggles, row/column detectors).
+* [ ] Change only the hook lifecycle: new workbook/sheet/table stages wired via manifest `hooks` entries and updated template modules (basic + advanced + LLM-assisted mapping examples).
 
 ### Refactor & deletions
 
@@ -88,6 +88,22 @@ Current pain points:
 * mapping stage is mostly metadata (nested `.extracted.` access)
 * hooks aren’t naturally positioned for LLM mapping refinement
 * future needs: add comments/styles/types naturally, using openpyxl APIs
+
+## 2.5 Config packages (what stays the same)
+
+Config packages stay as installable Script API v3 projects (see templates at `apps/ade-engine/templates/config_packages/default` and the mirrored API templates under `apps/ade-api/src/ade_api/templates/config_packages/default`). Layout:
+
+```text
+ade_config/
+  manifest.json             # schema ade.manifest/v1, script_api_version: 3
+  row_detectors/            # header/data voters
+  column_detectors/         # per-canonical-field detectors (plus transforms/validators)
+  hooks/                    # lifecycle modules (run(**kwargs))
+```
+
+`manifest.json` keeps `script_api_version: 3`, `columns.order/fields` (module paths relative to `ade_config`), and writer toggles (`append_unmapped_columns`, `unmapped_prefix`). Row/column detectors keep the existing keyword-only Script API v3 signatures and behavior; the refactor must wrap them in the new detector/mapper layers instead of changing their contract. The only config-package shift for this refactor is the hook lifecycle described in §4.5—hook modules stay under `ade_config/hooks/` with `run(**kwargs)` entrypoints, but the stage names/contexts change to the new workbook/sheet/table events.
+
+Why configs exist (plain-language): the engine is generic plumbing that knows how to scan spreadsheets, map columns, normalize rows, and write an output workbook. The business-specific rules—what fields matter, how to detect them, how to clean them, and how to style/report results—live in **versioned config packages** so each customer/workspace can evolve independently. Shipping them as small Python packages keeps business logic isolated, testable, and upgradeable without changing the engine; you can pin a config version for a run, roll out a new version when rules change, and keep multiple configs side-by-side in the same deployment.
 
 ---
 
@@ -474,6 +490,33 @@ class ADEHooks(Protocol):
     def on_table_written(self, table_ctx: TableContext) -> None: ...
 
     def on_workbook_before_save(self, ctx: RunContext) -> None: ...
+```
+
+Config packages remain manifest-driven: `ade_config/manifest.json` lists hook modules using the stage names above (paths are relative to the `ade_config` package):
+
+```json
+"hooks": {
+  "on_workbook_start": ["hooks.on_workbook_start"],
+  "on_sheet_start": ["hooks.on_sheet_start"],
+  "on_table_detected": ["hooks.on_table_detected"],
+  "on_table_mapped": ["hooks.on_table_mapped"],
+  "on_table_written": ["hooks.on_table_written"],
+  "on_workbook_before_save": ["hooks.on_workbook_before_save"]
+}
+```
+
+Each hook module keeps a keyword-only `run(**kwargs)` entrypoint (with `**_` for forward compatibility). The engine injects the contexts above: `run_ctx` for workbook-level calls, `sheet_ctx` for sheet-level calls, and `table_ctx` for table-level calls; `on_table_mapped` returns a `ColumnMappingPatch | None`, all other stages return `None`. Shared state remains available through `run_ctx.state` (reachable from `sheet_ctx.run` / `table_ctx.sheet.run`).
+
+```python
+# ade_config/hooks/on_table_mapped.py
+def run(
+    *,
+    table_ctx: TableContext,
+    run_ctx: RunContext,
+    logger=None,
+    **_,
+) -> ColumnMappingPatch | None:
+    ...
 ```
 
 ### 4.5.3 Hook call order (per workbook run)
@@ -876,7 +919,7 @@ Once `TablePlacement` exists, hooks (or renderer) can create an Excel “Table�
 
 * `docs/architecture.md`: the pipeline + terminology + diagrams
 * `docs/hooks.md`: hook lifecycle + examples + dos/don’ts
-* `docs/manifest.md`: config schema + examples (+ LLM patch workflows)
+* `docs/manifest.md`: Script API v3 manifest schema (unchanged columns/writer) + new hook stage names + examples (+ LLM patch workflows)
 * `README.md`: quickstart, minimal example hook + run command
 
 ---
