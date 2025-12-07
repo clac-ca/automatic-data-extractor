@@ -34,6 +34,40 @@ from ade_api.settings import Settings
 class FakeBuilder:
     events: list[BuilderEvent]
 
+    async def build(
+        self,
+        *,
+        build_id: str,
+        workspace_id: str,
+        configuration_id: str,
+        venv_root: Path,
+        config_path: Path,
+        engine_spec: str,
+        pip_cache_dir: Path | None,
+        python_bin: str | None,
+        timeout: float,
+        fingerprint: str | None = None,
+    ) -> BuildArtifacts:
+        artifacts: BuildArtifacts | None = None
+        async for event in self.build_stream(
+            build_id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            venv_root=venv_root,
+            config_path=config_path,
+            engine_spec=engine_spec,
+            pip_cache_dir=pip_cache_dir,
+            python_bin=python_bin,
+            timeout=timeout,
+            fingerprint=fingerprint,
+        ):
+            if isinstance(event, BuilderArtifactsEvent):
+                artifacts = event.artifacts
+
+        assert artifacts is not None
+        return artifacts
+
+
     async def build_stream(
         self,
         *,

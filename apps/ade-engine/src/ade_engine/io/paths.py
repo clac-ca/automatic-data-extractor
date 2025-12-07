@@ -24,7 +24,15 @@ class PreparedRun:
 
 
 def prepare_run_request(request: RunRequest, *, default_config_package: str | None = None) -> PreparedRun:
-    """Normalize paths, resolve config package, and fill defaults."""
+    """Normalize paths, resolve the config package, and fill defaults.
+
+    Rules:
+    - ``input_file`` is required.
+    - If ``output_dir`` is omitted, output is written to ``<input_dir>/output``.
+    - If ``output_file`` is omitted, it defaults to ``<input_stem>_normalized.xlsx`` under ``output_dir``.
+    - If ``output_file`` is provided as a bare filename, it is treated as relative to ``output_dir``.
+    - If ``logs_file`` is provided as a bare filename, it is treated as relative to ``logs_dir``.
+    """
 
     resolved_config = resolve_config_package(request.config_package or default_config_package)
 
@@ -32,16 +40,24 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
         raise InputError("RunRequest must include input_file")
 
     input_file = Path(request.input_file).resolve()
-
     output_dir = Path(request.output_dir).resolve() if request.output_dir else (input_file.parent / "output")
-    output_file = Path(request.output_file).resolve() if request.output_file else (output_dir / "normalized.xlsx")
+
+    if request.output_file:
+        candidate = Path(request.output_file)
+        if not candidate.is_absolute() and candidate.parent == Path("."):
+            candidate = output_dir / candidate
+        output_file = candidate.resolve()
+    else:
+        output_file = (output_dir / f"{input_file.stem}_normalized.xlsx").resolve()
 
     logs_dir = Path(request.logs_dir).resolve() if request.logs_dir else None
-    logs_file = (
-        Path(request.logs_file).resolve()
-        if request.logs_file
-        else (logs_dir / "engine_events.ndjson" if logs_dir else None)
-    )
+    if request.logs_file:
+        candidate = Path(request.logs_file)
+        if logs_dir and not candidate.is_absolute() and candidate.parent == Path("."):
+            candidate = logs_dir / candidate
+        logs_file = candidate.resolve()
+    else:
+        logs_file = (logs_dir / "engine_events.ndjson").resolve() if logs_dir else None
 
     normalized = RunRequest(
         run_id=request.run_id,
@@ -53,7 +69,7 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
         output_file=output_file,
         logs_dir=logs_dir,
         logs_file=logs_file,
-        metadata=dict(request.metadata or {}),
+        metadata=dict(request.metadata) if request.metadata else {},
     )
 
     return PreparedRun(
@@ -65,6 +81,4 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
         logs_file=logs_file,
         config_sys_path=resolved_config.sys_path,
     )
-
-
 __all__ = ["PreparedRun", "prepare_run_request"]

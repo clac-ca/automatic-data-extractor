@@ -25,6 +25,30 @@ app = typer.Typer(add_completion=False, help="ADE engine runtime CLI")
 _LOG_FORMATS = {"text", "ndjson"}
 
 
+def _validate_log_format(log_format: str) -> str:
+    candidate = str(log_format or "").strip().lower()
+    if candidate not in _LOG_FORMATS:
+        allowed = ", ".join(sorted(_LOG_FORMATS))
+        raise typer.BadParameter(f"--log-format must be one of: {allowed}.", param_name="log_format")
+    return candidate
+
+
+def parse_metadata(meta: list[str]) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for item in meta:
+        candidate = str(item or "").strip()
+        if not candidate:
+            continue
+        if "=" not in candidate:
+            raise typer.BadParameter("--meta must be provided as KEY=VALUE", param_name="meta")
+        key, value = candidate.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter("Metadata key cannot be empty", param_name="meta")
+        metadata[key] = value.strip()
+    return metadata
+
+
 @dataclass(frozen=True)
 class RunPlan:
     input_file: Path
@@ -78,23 +102,40 @@ def plan_runs(
     logs_dir: Path | None,
     logs_file: Path | None,
 ) -> list[RunPlan]:
+    """Compute input/output/log paths for each input file."""
+
     multiple_inputs = len(inputs) > 1
     plans: list[RunPlan] = []
 
     for input_file in inputs:
-        resolved_output_dir = output_dir
-        if resolved_output_dir and multiple_inputs:
-            resolved_output_dir = resolved_output_dir / input_file.stem
-        resolved_output_dir = resolved_output_dir or (input_file.parent / "output")
-        resolved_output_file = output_file or (resolved_output_dir / "normalized.xlsx")
+        base_output_dir = output_dir
+        if base_output_dir and multiple_inputs:
+            base_output_dir = base_output_dir / input_file.stem
+        resolved_output_dir = base_output_dir or (input_file.parent / "output")
 
-        resolved_logs_dir = logs_dir
-        if resolved_logs_dir and multiple_inputs:
-            resolved_logs_dir = resolved_logs_dir / input_file.stem
+        if output_file:
+            candidate = output_file
+            if not candidate.is_absolute() and candidate.parent == Path("."):
+                candidate = resolved_output_dir / candidate
+            resolved_output_file = candidate
+        else:
+            resolved_output_file = resolved_output_dir / f"{input_file.stem}_normalized.xlsx"
 
-        resolved_logs_file = logs_file
-        if resolved_logs_file is None and resolved_logs_dir is not None:
-            resolved_logs_file = resolved_logs_dir / default_logs_filename(log_format)
+        base_logs_dir = logs_dir
+        if base_logs_dir and multiple_inputs:
+            base_logs_dir = base_logs_dir / input_file.stem
+        resolved_logs_dir = base_logs_dir
+
+        resolved_logs_file: Path | None
+        if logs_file:
+            candidate = logs_file
+            if resolved_logs_dir and not candidate.is_absolute() and candidate.parent == Path("."):
+                candidate = resolved_logs_dir / candidate
+            resolved_logs_file = candidate
+        else:
+            resolved_logs_file = (
+                resolved_logs_dir / default_logs_filename(log_format) if resolved_logs_dir is not None else None
+            )
 
         plans.append(
             RunPlan(
@@ -109,42 +150,32 @@ def plan_runs(
     return plans
 
 
-def parse_metadata(pairs: list[str]) -> dict[str, str]:
-    meta: dict[str, str] = {}
-
-    for raw in pairs:
-        item = raw.strip()
-        if not item:
-            continue
-        if "=" not in item:
-            raise typer.BadParameter("--meta must be in KEY=VALUE form.", param_hint="--meta")
-
-        key, value = item.split("=", 1)
-        key = key.strip()
-        if not key:
-            raise typer.BadParameter("--meta must have a non-empty key before '='.", param_hint="--meta")
-
-        meta[key] = value.strip()
-
-    return meta
-
-
 def print_text_summary(reports: list[RunReport], *, to_stderr: bool = False) -> None:
+    """Print a concise, human-friendly summary for one or more runs."""
+
     typer.echo("Run summary:", err=to_stderr)
     for report in reports:
-        if report.result is None:
+        result = report.result
+        if result is None:
             continue
-        status = report.result.status.value if isinstance(report.result.status, RunStatus) else str(report.result.status)
-        typer.echo(f"{status} | {report.plan.input_file} | output={report.plan.output_file}", err=to_stderr)
 
+        status_value = result.status.value if isinstance(result.status, RunStatus) else str(result.status)
+        input_path = report.plan.input_file
+        parts: list[str] = [status_value, str(input_path)]
 
-def _validate_log_format(log_format: str) -> str:
-    value = (log_format or "text").strip().lower()
-    if value not in _LOG_FORMATS:
-        raise typer.BadParameter("--log-format must be 'text' or 'ndjson'.", param_hint="--log-format")
-    return value
+        output_path = result.output_path or report.plan.output_file
+        if output_path:
+            parts.append(f"output={output_path}")
+        if report.plan.logs_file:
+            parts.append(f"logs={report.plan.logs_file}")
 
+        if result.error is not None:
+            if result.error.stage:
+                parts.append(f"stage={result.error.stage}")
+            message = (result.error.message or "").replace("\n", " ").strip()
+            parts.append(f"{result.error.code.value}: {message}")
 
+        typer.echo(" | ".join(part for part in parts if part), err=to_stderr)
 @app.command("run")
 def run_command(
     input: list[Path] = typer.Option(

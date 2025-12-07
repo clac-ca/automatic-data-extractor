@@ -43,7 +43,7 @@ class NdjsonSink:
             pass
 
 
-class TextSink:
+class TextSink(Sink):
     def __init__(self, stream: IO[str]) -> None:
         self._stream = stream
 
@@ -51,26 +51,65 @@ class TextSink:
         ts = event.get("ts") or _utc_now()
         name = event.get("event") or "event"
         message = event.get("message")
+        level = event.get("level")
+        stage = event.get("stage")
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
 
         if name == "log":
-            level = str(event.get("level") or "info").upper()
             logger_name = event.get("logger")
-            head = f"[{ts}] {level}"
+            head = f"[{ts}] {str(level or 'info').upper()}"
             if logger_name:
                 head += f" {logger_name}"
-            line = f"{head}: {message or ''}"
-        else:
-            line = f"[{ts}] {name}"
-            if message:
-                line += f" - {message}"
+            line = head + ": " + str(message or "")
+            self._stream.write(line + "\n")
 
-        self._stream.write(line + "\n")
+            tb = event.get("traceback")
+            if tb:
+                self._stream.write(str(tb).rstrip("\n") + "\n")
+        else:
+            lvl = str(level or "info").upper()
+            head = f"[{ts}] {lvl} {name}"
+            line = f"{head}: {message}" if message else head
+
+            extras: list[str] = []
+            if stage:
+                extras.append(f"stage={stage}")
+
+            status = data.get("status")
+            if status:
+                extras.append(f"status={status}")
+
+            output = data.get("output_file") or data.get("output_path")
+            if output and name in {"run.planned", "run.completed"}:
+                extras.append(f"output={output}")
+
+            error = data.get("error")
+            if isinstance(error, dict):
+                code = error.get("code")
+                err_stage = error.get("stage")
+                err_msg = error.get("message")
+
+                if err_stage and not stage:
+                    extras.append(f"stage={err_stage}")
+
+                if code or err_msg:
+                    clean_msg = str(err_msg or "").replace("\n", " ").strip()
+                    if clean_msg and code:
+                        extras.append(f"error={code}: {clean_msg}")
+                    elif code:
+                        extras.append(f"error={code}")
+                    elif clean_msg:
+                        extras.append(f"error={clean_msg}")
+
+            if extras:
+                line += " (" + ", ".join(extras) + ")"
+
+            self._stream.write(line + "\n")
+
         try:
             self._stream.flush()
         except Exception:
             pass
-
-
 class EventEmitter:
     """Structured event emitter used by the CLI/API (dependency-free)."""
 

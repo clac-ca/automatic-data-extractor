@@ -206,6 +206,7 @@ class ADEngine:
                 code = RunErrorCode.HOOK_ERROR
             elif isinstance(exc, PipelineError):
                 code = RunErrorCode.PIPELINE_ERROR
+            logger_obj.error("%s at stage=%s: %s", code.value, stage.value, exc)
             error = RunError(code=code, stage=stage.value, message=str(exc))
 
         except Exception as exc:
