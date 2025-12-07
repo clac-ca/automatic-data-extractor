@@ -1,4 +1,4 @@
-"""Module entrypoint so `python -m ade_tools` works when ade_tools is installed."""
+"""Module entrypoint so `python -m ade_cli` works when ade_cli is installed."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ def _print_install_help(missing: str) -> None:
 
 def main() -> None:
     try:
-        from ade_tools.cli import app  # type: ignore
+        from ade_cli.cli import app  # type: ignore
     except ModuleNotFoundError as exc:
-        missing = exc.name or "ade_tools dependencies"
+        missing = exc.name or "ade_cli dependencies"
         _print_install_help(missing)
 
     app()

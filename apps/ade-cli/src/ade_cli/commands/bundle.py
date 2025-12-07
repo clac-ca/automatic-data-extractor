@@ -10,7 +10,7 @@ from typing import Iterable, Sequence
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 LANGUAGE_HINTS: dict[str, str] = {

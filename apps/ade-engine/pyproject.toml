@@ -23,6 +23,7 @@ ade-engine = "ade_engine.cli.app:app"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"ade_engine" = ["py.typed"]
 "ade_engine.schemas" = ["*.json"]
 
 [tool.pytest.ini_options]

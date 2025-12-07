@@ -99,7 +99,7 @@ def normalize_table(
         mapped=mapped,
         rows=normalized_rows,
         validation_issues=validation_issues,
-        output_sheet_name=manifest.writer.output_sheet,
+        output_sheet_name="",
     )
 
 

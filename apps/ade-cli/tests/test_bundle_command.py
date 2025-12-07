@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 
-from ade_tools.commands import common
-from ade_tools.commands import bundle
+from ade_cli.commands import common
+from ade_cli.commands import bundle
 
 
 def test_format_files_for_clipboard_uses_relative_paths_and_languages(tmp_path, monkeypatch) -> None:

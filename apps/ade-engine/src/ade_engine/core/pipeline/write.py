@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 
 from ade_engine.config.loader import ConfigRuntime
 from ade_engine.config.manifest_context import ManifestContext
@@ -11,31 +12,6 @@ from ade_engine.config.hook_registry import HookStage
 from ade_engine.core.hooks import run_hooks
 from ade_engine.core.types import NormalizedTable, RunContext
 from ade_engine.infra.event_emitter import ConfigEventEmitter
-
-
-def _generate_sheet_name(table: NormalizedTable) -> str:
-    extracted = table.mapped.extracted
-    base = extracted.source_file.stem
-    if extracted.source_sheet:
-        base = f"{base}-{extracted.source_sheet}"
-    if extracted.table_index > 0:
-        base = f"{base}-{extracted.table_index + 1}"
-
-    # Excel limits sheet titles to 31 characters.
-    base = base[:31] if len(base) > 31 else base
-    return base or "Sheet"
-
-
-def _unique_sheet_name(base: str, existing: set[str]) -> str:
-    name = base
-    counter = 2
-    while name in existing:
-        suffix = f"-{counter}"
-        trimmed = base[: 31 - len(suffix)]
-        name = f"{trimmed}{suffix}"
-        counter += 1
-    existing.add(name)
-    return name
 
 
 def _build_header(table: NormalizedTable, *, append_unmapped: bool, manifest: ManifestContext) -> list:
@@ -81,41 +57,38 @@ def write_workbook(
     output_file.parent.mkdir(parents=True, exist_ok=True)
     workbook = Workbook()
 
-    sheet_override = writer_cfg.output_sheet
-    used_names: set[str] = set()
-
-    def assign_sheet(table: NormalizedTable) -> tuple[Workbook, str]:
-        nonlocal workbook
-        if sheet_override:
-            sheet = workbook.active
-            sheet.title = sheet_override
-            return sheet, sheet_override
-
-        base = _generate_sheet_name(table)
-        name = _unique_sheet_name(base, used_names)
-        if not used_names:
-            sheet = workbook.active
-            sheet.title = name
-        else:
-            sheet = workbook.create_sheet(title=name)
-        return sheet, name
-
-    header_written = False
+    groups: dict[tuple[str, str | None], list[NormalizedTable]] = {}
     for table in sorted_tables:
-        sheet, title = assign_sheet(table)
-        table.output_sheet_name = title
+        key = (str(table.mapped.extracted.source_file), table.mapped.extracted.source_sheet)
+        groups.setdefault(key, []).append(table)
 
-        header = _build_header(table, append_unmapped=append_unmapped, manifest=cfg.manifest)
-        if sheet_override:
-            if not header_written:
-                sheet.append(header)
-                header_written = True
-        else:
-            sheet.append(header)
+    used_names: set[str] = set()
+    first_sheet = True
 
-        for row in table.rows:
-            row_values = row if append_unmapped else row[: len(header)]
-            sheet.append(row_values)
+    for key in groups:
+        tables_for_sheet = groups[key]
+        exemplar = tables_for_sheet[0]
+        base_name = exemplar.mapped.extracted.source_sheet or exemplar.mapped.extracted.source_file.stem or "Sheet"
+        name = base_name
+        suffix = 2
+        while name in used_names:
+            name = f"{base_name}-{suffix}"
+            suffix += 1
+        used_names.add(name)
+
+        sheet = workbook.active if first_sheet else workbook.create_sheet(title=name)
+        if first_sheet:
+            sheet.title = name
+            first_sheet = False
+
+        header = _build_header(exemplar, append_unmapped=append_unmapped, manifest=cfg.manifest)
+        sheet.append(header)
+
+        for table in tables_for_sheet:
+            table.output_sheet_name = name
+            for row in table.rows:
+                row_values = row if append_unmapped else row[: len(header)]
+                sheet.append(row_values)
 
     before_save_context = run_hooks(
         HookStage.ON_BEFORE_SAVE,

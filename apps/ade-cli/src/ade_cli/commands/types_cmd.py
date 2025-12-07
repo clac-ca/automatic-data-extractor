@@ -7,7 +7,7 @@ import sys
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 def run_types() -> None:

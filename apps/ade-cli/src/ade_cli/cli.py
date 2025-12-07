@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from ade_tools.commands import register_all
+from ade_cli.commands import register_all
 
 app = typer.Typer(
     add_completion=False,

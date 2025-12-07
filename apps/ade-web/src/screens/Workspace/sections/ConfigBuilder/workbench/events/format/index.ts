@@ -453,7 +453,6 @@ function formatTableSummary(payload: Record<string, unknown>, timestamp: string)
   const source = (payload.source as Record<string, unknown> | undefined) ?? {};
   const sheet = (source.sheet_name as string | undefined) ?? "sheet";
   const tableIndex = asNumber(source.table_index) ?? 0;
-  const outputSheet = (source.output_sheet as string | undefined) ?? undefined;
   const counts = (payload.counts as Record<string, unknown> | undefined) ?? {};
   const rows = asNumber((counts.rows as Record<string, unknown> | undefined)?.total);
   const cols = asNumber((counts.columns as Record<string, unknown> | undefined)?.physical_total);
@@ -474,7 +473,7 @@ function formatTableSummary(payload: Record<string, unknown>, timestamp: string)
 
   const detailParts = formatTableDetails(payload.details, source.file_path as string | undefined);
   const headlineParts = [
-    `Table summary: ${sheet}${outputSheet ? ` → ${outputSheet}` : ""}`,
+    `Table summary: ${sheet}`,
     `table ${tableIndex}`,
     rows !== undefined ? `rows ${rows}` : null,
     cols !== undefined ? `cols ${cols}` : null,

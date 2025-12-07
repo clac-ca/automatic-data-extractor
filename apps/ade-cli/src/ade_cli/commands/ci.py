@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import typer
 
-from ade_tools.commands import common
-from ade_tools.commands.build import run_build
-from ade_tools.commands.lint_cmd import run_lint
-from ade_tools.commands.tests import run_tests
-from ade_tools.commands.types_cmd import run_types
+from ade_cli.commands import common
+from ade_cli.commands.build import run_build
+from ade_cli.commands.lint_cmd import run_lint
+from ade_cli.commands.tests import run_tests
+from ade_cli.commands.types_cmd import run_types
 
 
 def run_ci(skip_types: bool = False, skip_tests: bool = False) -> None:

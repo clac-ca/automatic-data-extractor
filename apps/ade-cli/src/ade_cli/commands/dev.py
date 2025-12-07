@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 def run_dev(

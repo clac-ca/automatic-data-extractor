@@ -47,8 +47,7 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], writer: dict | None = No
             "on_before_save": [],
             "on_run_end": [],
         },
-        "writer": writer
-        or {"append_unmapped_columns": True, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+        "writer": writer or {"append_unmapped_columns": True, "unmapped_prefix": "raw_"},
     }
     manifest_path = pkg_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest))
@@ -90,12 +89,12 @@ def _event_emitters(run: RunContext) -> tuple[EngineEventEmitter, ConfigEventEmi
     return engine_emitter, engine_emitter.config_emitter()
 
 
-def test_writes_combined_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_writes_sheet_with_unmapped_columns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pkg_dir = _bootstrap_package(tmp_path, monkeypatch)
     manifest_path = _write_manifest(
         pkg_dir,
         order=["alpha", "beta"],
-        writer={"append_unmapped_columns": True, "unmapped_prefix": "raw_", "output_sheet": "Combined"},
+        writer={"append_unmapped_columns": True, "unmapped_prefix": "raw_"},
     )
     _write_column_detector(
         pkg_dir,
@@ -156,14 +155,14 @@ def detect_header(*, header, logger, event_emitter, **_):
     )
 
     workbook = load_workbook(output_path)
-    sheet = workbook["Combined"]
+    sheet = workbook["input"]
 
     header = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
     assert header == ["alpha", "beta", "raw_3"]
 
     row = [cell.value for cell in next(sheet.iter_rows(min_row=2, max_row=2))]
     assert row == ["a1", "b1", "c1"]
-    assert normalized.output_sheet_name == "Combined"
+    assert normalized.output_sheet_name == "input"
 
 
 def test_omits_unmapped_columns_when_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -171,7 +170,7 @@ def test_omits_unmapped_columns_when_disabled(tmp_path: Path, monkeypatch: pytes
     manifest_path = _write_manifest(
         pkg_dir,
         order=["alpha"],
-        writer={"append_unmapped_columns": False, "unmapped_prefix": "raw_", "output_sheet": "Normalized"},
+        writer={"append_unmapped_columns": False, "unmapped_prefix": "raw_"},
     )
     _write_column_detector(
         pkg_dir,
@@ -224,7 +223,7 @@ def detect_header(*, header, logger, event_emitter, **_):
 
     workbook = load_workbook(output_path)
     try:
-        sheet = workbook["Normalized"]
+        sheet = workbook["input"]
         header = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
         row = [cell.value for cell in next(sheet.iter_rows(min_row=2, max_row=2))]
         assert header == ["alpha"]
@@ -247,7 +246,7 @@ def run(*, workbook, tables, logger, event_emitter, **_):
     manifest_path = _write_manifest(
         pkg_dir,
         order=["alpha"],
-        writer={"append_unmapped_columns": True, "unmapped_prefix": "raw_", "output_sheet": None},
+        writer={"append_unmapped_columns": True, "unmapped_prefix": "raw_"},
         hooks={
             "on_run_start": [],
             "on_after_extract": [],
@@ -323,7 +322,7 @@ def detect_header(*, header, logger, event_emitter, **_):
     sheet_names = workbook.sheetnames
     assert "Hooked" in sheet_names
     assert normalized_tables[0].output_sheet_name == "first"
-    assert normalized_tables[1].output_sheet_name.startswith("second-Sheet1")
+    assert normalized_tables[1].output_sheet_name == "Sheet1"
 
     first_sheet = workbook[normalized_tables[0].output_sheet_name]
     first_header = [cell.value for cell in next(first_sheet.iter_rows(min_row=1, max_row=1))]

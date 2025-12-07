@@ -4,10 +4,10 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from ade_tools import cli
-from ade_tools.commands import build
-from ade_tools.commands import ci
-from ade_tools.commands import common
+from ade_cli import cli
+from ade_cli.commands import build
+from ade_cli.commands import ci
+from ade_cli.commands import common
 
 runner = CliRunner()
 

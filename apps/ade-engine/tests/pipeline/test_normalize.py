@@ -47,7 +47,6 @@ def _write_manifest(pkg_dir: Path, *, order: list[str], append_unmapped: bool = 
         "writer": {
             "append_unmapped_columns": append_unmapped,
             "unmapped_prefix": "raw_",
-            "output_sheet": "Normalized",
         },
     }
     manifest_path = pkg_dir / "manifest.json"
@@ -151,7 +150,7 @@ def transform(*, value, logger, event_emitter, **_):
 
     assert normalized.rows == [["ALICE", 31, "x"], ["BOB", 41, "y"]]
     assert normalized.validation_issues == []
-    assert normalized.output_sheet_name == "Normalized"
+    assert normalized.output_sheet_name == ""
 
 
 def test_validator_collects_issues_with_row_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
