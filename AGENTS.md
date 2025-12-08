@@ -1,79 +1,81 @@
 # AGENTS.md
 ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-## Monorepo cheat sheet
+## Repo map
 
 ```
 automatic-data-extractor/
 ├─ apps/
 │  ├─ ade-api/      # FastAPI backend (serves /api + built SPA)
-│  │  ├─ src/ade_api/             # core app code
-│  │  ├─ migrations/              # Alembic migrations
-│  │  └─ templates/config_packages# starter config packages
 │  ├─ ade-web/      # React/Vite SPA
-│  │  ├─ src/                    # app/, screens/, ui/, schema/, generated-types/
-│  │  └─ docs/                   # frontend architecture guides
-│  ├─ ade-engine/   # Engine runtime (Python package)
-│  │  ├─ src/ade_engine/         # engine code
-│  │  └─ docs/                   # engine runtime/CLI docs
+│  ├─ ade-engine/   # Engine runtime (Python package + Typer CLI)
 │  └─ ade-cli/      # Orchestration CLI (console script: ade)
-│     └─ src/ade_tools/          # CLI commands
-├─ data/            # Workspaces, runs, docs
+├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
 ```
 
-Config templates live under `apps/ade-api/src/ade_api/templates/config_packages`.
-Workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs)
+Docs to know:
+- Top-level `docs/` (guides, admin, templates, events)
+- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
+- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
-Docs:
-- Top-level `docs/` (guides, admin, templates, events).
-- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI).
-- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing).
+## ade CLI essentials
 
-## ⚡ CLI (ade) quickstart
+- `ade --help` and `ade <command> --help` surface all flags; `ade engine --help` mounts the engine Typer CLI.
+- Common commands: `ade setup`, `ade dev`, `ade start`, `ade build`, `ade tests`, `ade lint`, `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean`/`ade reset`, `ade ci`, `ade bundle`.
+- Config templates live under `apps/ade-api/src/ade_api/templates/config_packages`.
+- Workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
 
-Run `ade --help` for the full list; `ade <command> --help` for flags. Key commands:
+## Engine CLI smoke tests (revamped)
 
-- `./.venv/bin/ade ade setup` — initial repo setup (env, hooks).
-- `./.venv/bin/ade ade dev` — backend/frontend dev servers (`--backend-only/--frontend-only`).
-- `./.venv/bin/ade ade start` — serve API + built SPA.
-- `./.venv/bin/ade ade build` — build frontend assets into `apps/ade-api/src/ade_api/web/static`.
-- `./.venv/bin/ade ade tests` — run Python/JS test suites.
-- `./.venv/bin/ade ade lint` — lint/format helpers.
-- `./.venv/bin/ade ade bundle` — bundle files/dirs into Markdown for LLM/code review (filters, include/exclude, `--out`, `--no-clip`).
-- `./.venv/bin/ade ade types` — generate frontend types from OpenAPI.
-- `./.venv/bin/ade ade migrate` — run DB migrations.
-- `./.venv/bin/ade ade routes` — list FastAPI routes.
-- `./.venv/bin/ade ade users` — manage users/roles (see subcommands).
-- `./.venv/bin/ade ade docker` — local Docker helpers.
-- `./.venv/bin/ade ade lint` — lint/format helpers (`--fix` to auto-fix issues; start here before manual fixes).
-- `./.venv/bin/ade ade clean` / `ade reset` — remove build artifacts/venvs/cache.
-- `./.venv/bin/ade ade ci` — full pipeline (lint, test, build).
-- `./.venv/bin/ade ade engine ...` — full `ade_engine` CLI (mirrors `python -m ade_engine`).
+`apps/ade-engine/src/ade_engine/cli.py` is a Typer CLI surfaced as `ade engine ...` (or `python -m ade_engine ...`). It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
 
-### Engine CLI (via `ade engine`)
+- Inputs: combine `--input` (repeatable) and `--input-dir` with `--include/--exclude` (defaults to `*.xlsx, *.csv` when not provided).
+- Outputs: if no flags are set, output lands in `<input_dir>/output/<input_stem>_normalized.xlsx`. When multiple inputs are provided, `--output-dir`/`--logs-dir` are nested per input stem to avoid collisions.
+- Logs: `--log-format text|ndjson` (default text). Text mode writes readable lines to stderr and prints a summary to stdout; NDJSON mode streams to stdout unless `--logs-file/--logs-dir` is set, in which case it writes `engine_events.ndjson`. Text logs default to `engine.log`.
+- Metadata: `--meta KEY=VALUE` attaches to every emitted event.
 
-Use `ade engine run --help` to see all flags. Highlights:
+### Quick text-mode run (good sanity check)
+
+Use the template config package shipped in the repo and a sample input:
 
 ```bash
 ade engine run \
-  --input data/samples/example.xlsx \
-  --config-package "data/templates/config_packages/DaRT Remittance" \
-  --output-dir /tmp/out \            # or --output-file /tmp/out/normalized.xlsx
-  --logs-dir /tmp/out/logs           # or --logs-file /tmp/out/logs/engine_events.ndjson
-  --quiet \                          # suppress NDJSON on stdout
-  --format json \                    # emit single JSON per run (or aggregate)
-  --aggregate-summary \              # print aggregate table/JSON across inputs
-  --aggregate-summary-file /tmp/out/aggregate.json
+  --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
+  --config-package data/templates/config_packages/default \
+  --output-dir data/samples/output/cli-smoke \
+  --logs-dir data/samples/output/cli-smoke
 ```
 
-- Inputs: use `--input` (repeatable) and/or `--input-dir` with `--include/--exclude`; inputs are merged, de-duplicated, and sorted.
-- Default includes under `--input-dir`: `*.xlsx`, `*.csv` when no `--include` is provided.
-- If `--logs-*` is omitted, events stream to stdout only (suppressed with `--quiet`).
-- Defaults: output → `<output-dir>/normalized.xlsx` (or `<input_dir>/output/normalized.xlsx` if no dir given).
+Expected: output at `data/samples/output/cli-smoke/z_pass6_synthetic_contacts_net_normalized.xlsx`, logs at `data/samples/output/cli-smoke/engine.log`, and a one-line summary on stdout.
 
-### Bundle examples
+### NDJSON stream run (for API-style validation)
+
+```bash
+ade engine run \
+  --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
+  --config-package data/templates/config_packages/default \
+  --log-format ndjson \
+  --output-dir /tmp/ade-engine/ndjson-smoke
+```
+
+Expected: NDJSON events on stdout (kept clean via `protect_stdout`), with output at `/tmp/ade-engine/ndjson-smoke/z_pass6_synthetic_contacts_net_normalized.xlsx`. Add `--logs-dir /tmp/ade-engine/ndjson-smoke` to also persist `engine_events.ndjson`.
+
+### Batch multiple inputs
+
+```bash
+ade engine run \
+  --input-dir data/samples/input \
+  --config-package data/templates/config_packages/default \
+  --include "*.xlsx" --exclude "detector-pass*" \
+  --output-dir /tmp/ade-engine/batch \
+  --logs-dir /tmp/ade-engine/batch
+```
+
+Outputs/logs are automatically split under `/tmp/ade-engine/batch/<input_stem>/...` so each file gets its own folder.
+
+## Bundle examples
 
 ```bash
 # Bundle docs as Markdown
