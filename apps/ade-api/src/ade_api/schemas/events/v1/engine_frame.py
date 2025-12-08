@@ -28,6 +28,10 @@ class EngineEventFrameV1(BaseModel):
     event_id: UUID = Field(..., description="Engine-local UUID for traceability")
     created_at: datetime
     payload: dict[str, Any] = Field(default_factory=dict)
+    meta: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata attached by the CLI (e.g., --meta flags).",
+    )
 
 
 __all__ = ["ENGINE_FRAME_SCHEMA", "EngineEventFrameV1"]

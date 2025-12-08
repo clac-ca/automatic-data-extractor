@@ -42,7 +42,7 @@ Base prefix:
 
 * **Editability:** only `status='draft'` is writable. Writes in `active`/`inactive` → `409 Conflict` (`code: "configuration_not_editable"`). Reads are allowed in any state.
 * **Root:** `${ADE_CONFIGS_DIR}/{workspace_id}/config_packages/{config_id}/`
-* **Editable set (include):** `src/ade_config/**`, `manifest.json`, `pyproject.toml` (optional), `config.env` (optional), `assets/**`
+* **Editable set (include):** `src/ade_config/**`, `manifest.toml`, `pyproject.toml` (optional), `config.env` (optional), `assets/**`
 * **Exclude:** `.git/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.venv/`, `venv/`, `env/`, `node_modules/`, `.idea/`, `.vscode/`, `dist/`, `build/`
 * **Path hygiene:** `path` is POSIX‑relative (no leading `/`), normalized, must remain under the config root **and** within the editable set. **Deny symlinks** (files or dirs).
 * **ETags:** strong per‑file ETag = `sha256(file bytes)` (quoted in HTTP headers).
@@ -94,7 +94,7 @@ Accept: application/json
 {
   "root": "",
   "entries": [
-    {"path":"manifest.json","type":"file","size":752,"mtime":"2025-11-10T14:24:03Z","etag":"\"sha256:3b1e…\""},
+    {"path":"manifest.toml","type":"file","size":752,"mtime":"2025-11-10T14:24:03Z","etag":"\"sha256:3b1e…\""},
     {"path":"src/ade_config","type":"dir"},
     {"path":"src/ade_config/column_detectors/email.py","type":"file","size":3142,"mtime":"2025-11-10T14:24:03Z","etag":"\"sha256:7f6d…\""}
   ]

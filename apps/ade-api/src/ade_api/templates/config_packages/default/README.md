@@ -6,7 +6,7 @@ This starter `ade_config` is intentionally small so you can see exactly how Scri
 
 ```
 ade_config/
-  manifest.json                # script_api_version: 3
+  manifest.toml                # script_api_version: 3
   row_detectors/               # decide header/data rows
     header.py
     data.py
@@ -15,11 +15,12 @@ ade_config/
     last_name.py
     email.py
   hooks/                       # optional lifecycle customization
-    on_run_start.py
-    on_after_extract.py
-    on_after_mapping.py
-    on_before_save.py
-    on_run_end.py
+    on_workbook_start.py
+    on_sheet_start.py
+    on_table_detected.py
+    on_table_mapped.py
+    on_table_written.py
+    on_workbook_before_save.py
 ```
 
 All script functions are keyword-only and accept `**_` for future args. ADE always passes a `logger` (standard `logging.Logger`) and an `event_emitter` (structured run events via `event_emitter.custom("type", **payload)`).
@@ -32,13 +33,11 @@ All script functions are keyword-only and accept `**_` for future args. ADE alwa
 
 Detectors return either a float or a direct dict of deltas (no `"scores"` wrapper) to keep examples first-class and obvious.
 
-You don’t need to emit score telemetry yourself—ADE emits `run.row_detector.score` and `run.column_detector.score` automatically.
-
 ## Quick start to customize
 
-1. Edit `manifest.json` to list your fields and point to matching detector modules.
+1. Edit `manifest.toml` to list your fields and point to matching detector modules.
 2. Open the detectors in `column_detectors/` and adjust the simple rules to match your headers/values.
 3. Tweak row detectors (`row_detectors/`) if your headers/data appear in different patterns.
-4. (Optional) Use hooks to log extra info or style the workbook before save.
+4. (Optional) Use hooks to log extra info, patch mappings, or style the workbook after tables are written.
 
 For a deeper walkthrough of Script API v3, see the docs in `docs/` next to this file.***

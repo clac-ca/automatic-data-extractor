@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import uuid
 
@@ -12,6 +13,7 @@ from ade_api.features.builds.builder import (
     BuilderLogEvent,
     VirtualEnvironmentBuilder,
 )
+from ade_api.infra.venv import venv_bin_dir
 
 pytestmark = pytest.mark.asyncio
 
@@ -26,7 +28,11 @@ async def test_builder_installs_dependencies(
     commands: list[list[str]] = []
 
     async def _prepare_target(root: Path, temp_target: Path) -> None:  # noqa: D401
-        return None
+        temp_target.mkdir(parents=True, exist_ok=True)
+        bin_dir = temp_target / venv_bin_dir()
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        python_name = "python.exe" if os.name == "nt" else "python"
+        (bin_dir / python_name).touch()
 
     async def _stream_command(  # noqa: D401 - stubbed in test
         command: list[str],

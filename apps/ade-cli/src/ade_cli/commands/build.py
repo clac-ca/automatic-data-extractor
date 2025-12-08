@@ -1,0 +1,40 @@
+"""Build command."""
+
+from __future__ import annotations
+
+import shutil
+
+import typer
+
+from ade_cli.commands import common
+
+
+def run_build() -> None:
+    """Build frontend and copy static assets into the backend for production serving."""
+
+    common.refresh_paths()
+    common.ensure_frontend_dir()
+    common.ensure_backend_dir()
+    dist_dir = common.FRONTEND_DIR / "dist"
+    target = common.BACKEND_SRC / "web" / "static"
+
+    npm_bin = common.npm_path()
+    common.ensure_node_modules()
+    common.run([npm_bin, "run", "build"], cwd=common.FRONTEND_DIR)
+
+    if not dist_dir.exists():
+        typer.echo(f"❌ build output missing: expected {dist_dir.relative_to(common.REPO_ROOT)}", err=True)
+        raise typer.Exit(code=1)
+
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(dist_dir, target)
+    typer.echo(f"📦 copied {dist_dir.relative_to(common.REPO_ROOT)} → {target.relative_to(common.REPO_ROOT)}")
+
+    typer.echo("✅ build complete")
+
+
+def register(app: typer.Typer) -> None:
+    @app.command("build", help=run_build.__doc__)
+    def build() -> None:
+        run_build()

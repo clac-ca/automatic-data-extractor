@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from uuid import uuid4
 from typing import AsyncIterator
 
 import pytest
-from ade_engine.schemas import AdeEvent
+from ade_api.schemas.events import AdeEvent
 
 from ade_api.common.time import utc_now
 from ade_api.core.models import (
@@ -230,11 +231,11 @@ async def test_stream_run_waits_for_build_and_forwards_events(
         event_id="evt_1",
         created_at=utc_now(),
         sequence=1,
-        source="builder",
-        workspace_id=None,
-        configuration_id=None,
-        run_id=None,
-        build_id=None,
+        source="api",
+        workspace_id=uuid4(),
+        configuration_id=uuid4(),
+        run_id=uuid4(),
+        build_id=uuid4(),
         payload={"status": "building"},
     )
     service, configuration, document, fake_builds, _ = await _build_service(

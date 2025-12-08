@@ -10,7 +10,7 @@ from fastapi import Request
 
 from ade_api.features.builds.router import stream_build_events_endpoint
 from ade_api.features.runs.router import stream_run_events_endpoint
-from ade_engine.schemas import AdeEvent
+from ade_api.schemas.events import AdeEvent
 
 pytestmark = pytest.mark.asyncio
 

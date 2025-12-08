@@ -10,7 +10,7 @@ const tree: WorkbenchFileNode = {
   name: "ade_config",
   kind: "folder",
   children: [
-    { id: "ade_config/manifest.json", name: "manifest.json", kind: "file", language: "json" },
+    { id: "ade_config/manifest.toml", name: "manifest.toml", kind: "file", language: "toml" },
     { id: "ade_config/config.env", name: "config.env", kind: "file", language: "dotenv" },
     {
       id: "ade_config/header.py",
@@ -67,15 +67,22 @@ const tree: WorkbenchFileNode = {
 };
 
 const content: Record<string, string> = {
-  "ade_config/manifest.json": `{
-  "name": "membership-normalization",
-  "version": "1.6.1",
-  "description": "Normalize membership exports into ADE schema",
-  "entry": {
-    "module": "ade_config.detectors.membership",
-    "callable": "build_pipeline"
-  }
-}`,
+  "ade_config/manifest.toml": `schema = "ade.manifest/v1"
+version = "1.6.1"
+name = "membership-normalization"
+description = "Normalize membership exports into ADE schema"
+script_api_version = 3
+
+[[columns]]
+name = "member_id"
+label = "Member ID"
+module = "detectors.membership"
+required = true
+
+[writer]
+append_unmapped_columns = true
+unmapped_prefix = "raw_"
+`,
   "ade_config/config.env": `# Environment variables required to run this configuration
 ADE_ENV=development
 `,

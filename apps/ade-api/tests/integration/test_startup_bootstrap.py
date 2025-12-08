@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 
 import pytest
@@ -52,8 +51,15 @@ async def test_app_startup_syncs_config_templates(tmp_path: Path) -> None:
     for name in ("default", "sandbox"):
         manifest_dir = templates_source / name / "src" / "ade_config"
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        (manifest_dir / "manifest.json").write_text(
-            json.dumps({"name": f"{name}-template"}),
+        (manifest_dir / "manifest.toml").write_text(
+            f'schema = "ade.manifest/v1"\n'
+            f'version = "1.0.0"\n'
+            f'name = "{name}-template"\n'
+            f'script_api_version = 3\n'
+            "columns = []\n"
+            "[writer]\n"
+            "append_unmapped_columns = true\n"
+            'unmapped_prefix = "raw_"\n',
             encoding="utf-8",
         )
 
@@ -80,8 +86,8 @@ async def test_app_startup_syncs_config_templates(tmp_path: Path) -> None:
     async with app.router.lifespan_context(app):
         pass
 
-    default_manifest = templates_dest / "default" / "src" / "ade_config" / "manifest.json"
-    sandbox_manifest = templates_dest / "sandbox" / "src" / "ade_config" / "manifest.json"
+    default_manifest = templates_dest / "default" / "src" / "ade_config" / "manifest.toml"
+    sandbox_manifest = templates_dest / "sandbox" / "src" / "ade_config" / "manifest.toml"
     assert default_manifest.exists()
     assert sandbox_manifest.exists()
     # Bundled templates are replaced, custom templates are preserved.

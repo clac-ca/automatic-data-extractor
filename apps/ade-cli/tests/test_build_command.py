@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 import typer
 
-from ade_tools.commands import build, common
+from ade_cli.commands import build, common
 
 
 def test_build_requires_backend_and_dist(monkeypatch, tmp_path):

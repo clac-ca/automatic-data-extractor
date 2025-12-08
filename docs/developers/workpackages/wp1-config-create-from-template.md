@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_cfg_ws_status ON configurations(workspace_id, sta
 
 ## Minimal shape of a valid config folder
 
-* **Required files**: `manifest.json`, `pyproject.toml`.  We will enforce richer structure in later work packages.
+* **Required files**: `manifest.toml`, `pyproject.toml`.  We will enforce richer structure in later work packages.
 * **Digest include set**: during validate we only hash files under the config folder whose extension is `.py`, `.toml`, or `.json`. Everything else is ignored for WP‑1 to keep hashing fast and deterministic.
 
 ---
@@ -128,7 +128,7 @@ POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
 }
 ```
 
-If issues are found (e.g., malformed `manifest.json`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
+If issues are found (e.g., malformed `manifest.toml`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
 
 Error: `409 configuration_not_editable` if state ≠ `draft`.
 

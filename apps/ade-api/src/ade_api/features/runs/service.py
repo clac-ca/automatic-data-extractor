@@ -3,31 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import json
+import inspect
 import logging
 import mimetypes
 import os
-import unicodedata
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 from uuid import UUID
 
-from ade_engine.schemas import (
-    ColumnCounts,
-    Counts,
-    FieldCounts,
-    FieldSummaryAggregate,
-    ManifestV1,
-    RowCounts,
-    RunSummary,
-    ValidationSummary,
-)
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
@@ -58,11 +45,11 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.infra.storage import (
-    build_venv_root,
-    workspace_config_root,
+    build_venv_path,
     workspace_documents_root,
     workspace_run_root,
 )
+from ade_api.infra.venv import apply_venv_to_env, venv_python_path
 from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
@@ -74,6 +61,14 @@ from ade_api.schemas.events import (
 from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
+from .exceptions import (
+    RunDocumentMissingError,
+    RunInputMissingError,
+    RunLogsFileMissingError,
+    RunNotFoundError,
+    RunOutputMissingError,
+    RunOutputNotReadyError,
+)
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
@@ -111,10 +106,10 @@ class RunExecutionResult:
 
     status: RunStatus
     return_code: int | None
-    summary_model: RunSummary | None
-    summary_json: str | None
     paths_snapshot: RunPathsSnapshot
     error_message: str | None = None
+    summary_model: Any | None = None
+    summary_json: str | None = None
 
 
 RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
@@ -122,37 +117,6 @@ RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
 
 # --------------------------------------------------------------------------- #
 # Small helpers
-# --------------------------------------------------------------------------- #
-
-
-def _build_download_disposition(filename: str) -> str:
-    """Return a safe Content-Disposition header value for ``filename``."""
-
-    stripped = filename.strip()
-    cleaned = "".join(
-        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
-    ).strip()
-    candidate = cleaned or "download"
-
-    fallback_chars: list[str] = []
-    for char in candidate:
-        code_point = ord(char)
-        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
-            fallback_chars.append(char)
-        else:
-            fallback_chars.append("_")
-    fallback = "".join(fallback_chars).strip("_ ") or "download"
-    fallback = fallback[:255]
-
-    encoded = quote(candidate, safe="")
-    if fallback == candidate:
-        return f'attachment; filename="{fallback}"'
-
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
-
-
-# --------------------------------------------------------------------------- #
-# Small supporting types
 # --------------------------------------------------------------------------- #
 
 
@@ -207,35 +171,6 @@ class RunExecutionContext:
                 else None
             ),
         )
-
-
-# --------------------------------------------------------------------------- #
-# Error types
-# --------------------------------------------------------------------------- #
-
-
-class RunNotFoundError(RuntimeError):
-    """Raised when a requested run row cannot be located."""
-
-
-class RunDocumentMissingError(RuntimeError):
-    """Raised when a requested input document cannot be located."""
-
-
-class RunLogsFileMissingError(RuntimeError):
-    """Raised when a requested run log file cannot be read."""
-
-
-class RunOutputMissingError(RuntimeError):
-    """Raised when requested run outputs cannot be resolved."""
-
-
-class RunOutputNotReadyError(RuntimeError):
-    """Raised when a run output is requested before it is ready."""
-
-
-class RunInputMissingError(RuntimeError):
-    """Raised when a run is attempted without required staged inputs."""
 
 
 # --------------------------------------------------------------------------- #
@@ -340,17 +275,12 @@ class RunsService:
             reason="on_demand",
         )
         build_id = build.id
-        venv_root = (
-            Path(build_ctx.venv_root)
-            if build_ctx
-            else build_venv_root(
-                self._settings,
-                configuration.workspace_id,
-                configuration.id,
-                build_id,
-            )
+        venv_path = build_venv_path(
+            self._settings,
+            configuration.workspace_id,
+            configuration.id,
+            build_id,
         )
-        venv_path = venv_root / ".venv"
         run_status = (
             RunStatus.WAITING_FOR_BUILD
             if build.status is not BuildStatus.READY
@@ -547,7 +477,6 @@ class RunsService:
                     run_id=run.id,
                 )
                 paths_snapshot = self._finalize_paths(
-                    summary=None,
                     run_dir=run_dir,
                     default_paths=RunPathsSnapshot(),
                 )
@@ -628,7 +557,7 @@ class RunsService:
                 yield event
             return
 
-        # Safe mode short circuit: log, synthesize a summary, and exit.
+        # Safe mode short circuit: log the skip and exit.
         if safe_mode.enabled:
             logger.debug(
                 "run.stream.safe_mode_short_circuit",
@@ -696,15 +625,8 @@ class RunsService:
             ),
         )
 
-        placeholder_summary = await self._build_placeholder_summary(
-            run=run,
-            status=RunStatus.FAILED,
-            message=str(error),
-        )
-        summary_json = self._serialize_summary(placeholder_summary)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         paths_snapshot = self._finalize_paths(
-            summary=placeholder_summary.model_dump(mode="json"),
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
@@ -712,7 +634,6 @@ class RunsService:
             run,
             status=RunStatus.FAILED,
             exit_code=None,
-            summary=summary_json,
             error_message=str(error),
         )
         yield await self._emit_api_event(
@@ -771,38 +692,6 @@ class RunsService:
                 ),
             )
         return run
-
-    async def get_run_summary(self, run_id: UUID) -> RunSummary | None:
-        """Return a RunSummary for ``run_id`` if available or derivable."""
-
-        logger.debug(
-            "run.summary.get.start",
-            extra=log_context(run_id=run_id),
-        )
-        run = await self._require_run(run_id)
-        summary_payload = self._deserialize_run_summary(run.summary)
-        if isinstance(summary_payload, dict):
-            try:
-                summary = RunSummary.model_validate(summary_payload)
-                logger.info(
-                    "run.summary.get.cached",
-                    extra=log_context(
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                    ),
-                )
-                return summary
-            except ValidationError:
-                logger.warning(
-                    "run.summary.get.cached_invalid",
-                    extra=log_context(
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                    ),
-                )
-        return None
 
     async def get_run_events(
         self,
@@ -931,77 +820,37 @@ class RunsService:
             workspace_id=run.workspace_id,
             run_id=run.id,
         )
-        summary_payload = self._deserialize_run_summary(run.summary)
-        summary_source = (
-            summary_payload.get("source")
-            if isinstance(summary_payload, dict)
-            else {}
-        )
-        summary_counts = (
-            summary_payload.get("counts")
-            if isinstance(summary_payload, dict)
-            else {}
-        )
-        summary_details = (
-            summary_payload.get("details")
-            if isinstance(summary_payload, dict)
-            else {}
-        )
-
-        summary_for_paths: dict[str, Any] | None = None
-        if isinstance(summary_details, dict) and summary_details:
-            summary_for_paths = summary_details
-        elif isinstance(summary_payload, dict):
-            summary_for_paths = summary_payload
-
         paths = self._finalize_paths(
-            summary=summary_for_paths,
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
 
         processed_file = self._resolve_processed_file(
             paths=paths,
-            summary_details=summary_details if isinstance(summary_details, dict) else None,
         )
 
         # Timing and failure info
-        started_at = self._ensure_utc(run.started_at) or self._coerce_datetime(
-            summary_source.get("started_at")
-        )
-        finished_at = self._ensure_utc(run.finished_at) or self._coerce_datetime(
-            summary_source.get("completed_at")
-        )
+        started_at = self._ensure_utc(run.started_at)
+        finished_at = self._ensure_utc(run.finished_at)
         duration_seconds = (
             (finished_at - started_at).total_seconds()
             if started_at and finished_at
             else None
         )
 
-        failure_info = summary_source.get("failure", {})
-        failure_code = failure_info.get("code")
-        failure_stage = failure_info.get("stage")
-        failure_message = run.error_message or failure_info.get("message")
-
-        files_counts = summary_counts.get("files") if isinstance(summary_counts, dict) else {}
-        sheets_counts = summary_counts.get("sheets") if isinstance(summary_counts, dict) else {}
-
-        # Defensive: ensure we always have dict-like counts so .get calls below are safe
-        if not isinstance(files_counts, dict):
-            files_counts = {}
-        if not isinstance(sheets_counts, dict):
-            sheets_counts = {}
+        failure_code = None
+        failure_stage = None
+        failure_message = run.error_message
 
         input_meta = await self._build_input_metadata(
             run=run,
-            files_counts=files_counts,
-            sheets_counts=sheets_counts,
+            files_counts={},
+            sheets_counts={},
         )
         output_meta = await self._build_output_metadata(
             run=run,
             run_dir=run_dir,
             paths=paths,
-            summary_details=summary_details if isinstance(summary_details, dict) else None,
             processed_file=processed_file,
         )
         links = self._links(run.id)
@@ -1015,10 +864,10 @@ class RunsService:
             failure_code=failure_code,
             failure_stage=failure_stage,
             failure_message=failure_message,
-            engine_version=summary_source.get("engine_version"),
-            config_version=summary_source.get("config_version"),
-            env_reason=summary_source.get("env_reason"),
-            env_reused=summary_source.get("env_reused"),
+            engine_version=None,
+            config_version=None,
+            env_reason=None,
+            env_reused=None,
             created_at=self._ensure_utc(run.created_at) or utc_now(),
             started_at=started_at,
             completed_at=finished_at,
@@ -1036,19 +885,9 @@ class RunsService:
         self,
         *,
         paths: RunPathsSnapshot,
-        summary_details: dict[str, Any] | None,
     ) -> str | None:
         processed_file = paths.processed_file
-        if processed_file:
-            return processed_file
-        if isinstance(summary_details, dict):
-            processed_file = summary_details.get("processed_file")
-            if processed_file:
-                return str(processed_file)
-            processed = summary_details.get("processed_files", [])
-            if isinstance(processed, list) and processed:
-                return str(processed[0])
-        return None
+        return processed_file
 
     async def _build_input_metadata(
         self,
@@ -1101,7 +940,6 @@ class RunsService:
         run: Run,
         run_dir: Path,
         paths: RunPathsSnapshot,
-        summary_details: dict[str, Any] | None,
         processed_file: str | None,
     ) -> RunOutput:
         output_path = paths.output_path or self._relative_output_path(run_dir / "output", run_dir)
@@ -1133,13 +971,6 @@ class RunsService:
                 size_bytes = None
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
-        if not processed_file and isinstance(summary_details, dict):
-            processed_file = summary_details.get("processed_file")
-            if not processed_file:
-                processed_files = summary_details.get("processed_files", [])
-                if isinstance(processed_files, list) and processed_files:
-                    processed_file = str(processed_files[0])
-
         return RunOutput(
             ready=ready,
             download_url=f"/api/v1/runs/{run.id}/output/download",
@@ -1164,7 +995,6 @@ class RunsService:
 
         return RunLinks(
             self=base,
-            summary=f"{base}/summary",
             events=events,
             events_stream=events_stream,
             events_download=events_download,
@@ -1315,14 +1145,7 @@ class RunsService:
         run = await self._require_run(run_id)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
 
-        summary_payload = self._deserialize_run_summary(run.summary)
-        summary_details = (
-            summary_payload.get("details")
-            if isinstance(summary_payload, dict)
-            else summary_payload
-        )
         paths_snapshot = self._finalize_paths(
-            summary=summary_details if isinstance(summary_details, dict) else None,
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
@@ -1474,27 +1297,17 @@ class RunsService:
     def _finalize_paths(
         self,
         *,
-        summary: dict[str, Any] | None,
         run_dir: Path,
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
-        """Merge summary-derived paths with inferred filesystem paths."""
+        """Merge inferred filesystem paths."""
 
         snapshot = RunPathsSnapshot(
             events_path=default_paths.events_path,
             output_path=default_paths.output_path,
             processed_file=default_paths.processed_file,
         )
-        details = summary.get("details") if isinstance(summary, dict) else None
-        if not isinstance(details, dict):
-            details = summary if isinstance(summary, dict) else {}
-
-        # Events path: prefer summary/default hints; avoid filesystem probing.
-        if isinstance(details, dict) and not snapshot.events_path:
-            snapshot.events_path = self._run_relative_hint(
-                details.get("events_path"),
-                run_dir=run_dir,
-            )
+        # Events path: prefer default hints; avoid filesystem probing.
         if not snapshot.events_path:
             for candidate in (
                 run_dir / "engine-logs" / "engine_events.ndjson",
@@ -1505,29 +1318,14 @@ class RunsService:
                 if snapshot.events_path:
                     break
 
-        # Output path: only propagate hints already in scope (summary/defaults).
+        # Output path: only propagate hints already in scope (defaults).
         output_candidates: list[str | Path | None] = []
-        if isinstance(details, dict):
-            output_candidates.append(details.get("output_path"))
-            legacy_outputs = details.get("output_paths")
-            if isinstance(legacy_outputs, list) and legacy_outputs:
-                output_candidates.append(legacy_outputs[0])
         output_candidates.append(default_paths.output_path)
 
         for candidate in output_candidates:
             if snapshot.output_path:
                 break
             snapshot.output_path = self._run_relative_hint(candidate, run_dir=run_dir)
-
-        # Processed file: summary value if present, otherwise default snapshot.
-        if not snapshot.processed_file and isinstance(details, dict):
-            processed_value = details.get("processed_file")
-            if isinstance(processed_value, str):
-                snapshot.processed_file = processed_value
-            else:
-                legacy_processed = details.get("processed_files")
-                if isinstance(legacy_processed, list) and legacy_processed:
-                    snapshot.processed_file = str(legacy_processed[0])
 
         return snapshot
 
@@ -1536,33 +1334,6 @@ class RunsService:
         if source in {"api", "engine"}:
             return source
         return "engine"
-
-    @staticmethod
-    def _parse_summary(
-        line: str,
-        default: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
-        """Best-effort parse of a JSON summary line from the engine CLI."""
-
-        try:
-            candidate = json.loads(line)
-        except json.JSONDecodeError:
-            return default
-        return candidate if isinstance(candidate, dict) else default
-
-    @staticmethod
-    def _deserialize_run_summary(summary: str | None) -> dict[str, Any] | None:
-        if summary is None:
-            return None
-        try:
-            candidate = json.loads(summary)
-        except json.JSONDecodeError:
-            return None
-        return candidate if isinstance(candidate, dict) else None
-
-    @staticmethod
-    def _serialize_summary(summary: RunSummary | None) -> str | None:
-        return summary.model_dump_json() if summary else None
 
     def _run_completed_payload(
         self,
@@ -1619,179 +1390,16 @@ class RunsService:
 
     @staticmethod
     def _resolve_completion(
-        summary: dict[str, Any] | None,
         return_code: int,
     ) -> tuple[RunStatus, str | None]:
-        """Resolve final RunStatus and error message from exit code + summary."""
+        """Resolve final RunStatus and error message from exit code."""
 
         status = RunStatus.SUCCEEDED if return_code == 0 else RunStatus.FAILED
         error_message: str | None = (
             None if status is RunStatus.SUCCEEDED else f"Process exited with {return_code}"
         )
 
-        if summary:
-            summary_status = summary.get("status")
-            if summary_status == "failed":
-                status = RunStatus.FAILED
-                error = summary.get("error")
-                if isinstance(error, dict):
-                    error_message = error.get("message", error_message)
-            elif summary_status == "succeeded":
-                status = RunStatus.SUCCEEDED
-                error_message = None
-            elif summary_status == "cancelled":
-                status = RunStatus.CANCELLED
-                error = summary.get("error")
-                error_message = (
-                    error.get("message") if isinstance(error, dict) else None
-                ) or "Run cancelled"
-
         return status, error_message
-
-    def _manifest_path(self, workspace_id: UUID, configuration_id: UUID) -> Path:
-        return (
-            workspace_config_root(
-                self._settings,
-                workspace_id,
-                configuration_id,
-            )
-            / "src"
-            / "ade_config"
-            / "manifest.json"
-        )
-
-    def _load_manifest(self, workspace_id: UUID, configuration_id: UUID) -> ManifestV1 | None:
-        path = self._manifest_path(workspace_id, configuration_id)
-        if not path.exists():
-            return None
-        try:
-            return ManifestV1.model_validate_json(path.read_text(encoding="utf-8"))
-        except (ValidationError, OSError, ValueError):
-            logger.warning(
-                "run.manifest.parse_failed",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    path=str(path),
-                ),
-            )
-            return None
-
-    async def _persist_run_summary(self, *, run: Run, summary_json: str | None) -> None:
-        if summary_json is None:
-            return
-
-        run.summary = summary_json
-        await self._session.commit()
-        await self._session.refresh(run)
-        logger.info(
-            "run.summary.persisted",
-            extra=log_context(
-                workspace_id=run.workspace_id,
-                configuration_id=run.configuration_id,
-                run_id=run.id,
-            ),
-        )
-
-    async def _build_placeholder_summary(
-        self,
-        *,
-        run: Run,
-        status: RunStatus,
-        message: str | None = None,
-        failure_code: str | None = None,
-        failure_stage: str | None = None,
-    ) -> RunSummary:
-        """Synthesize a minimal RunSummary when engine execution is skipped."""
-
-        manifest = await asyncio.to_thread(
-            self._load_manifest,
-            run.workspace_id,
-            run.configuration_id,
-        )
-        started = self._ensure_utc(run.started_at) or utc_now()
-        completed = self._ensure_utc(run.finished_at) or utc_now()
-        status_literal = status.value
-        field_total = len(manifest.columns.fields) if manifest else 0  # type: ignore[union-attr]
-        required_total = (
-            len([f for f in manifest.columns.fields.values() if f.required]) if manifest else 0  # type: ignore[union-attr]
-        )
-
-        field_summaries: list[FieldSummaryAggregate] = []
-        if manifest:
-            for field_name in manifest.columns.order:
-                field_cfg = manifest.columns.fields.get(field_name)
-                if field_cfg is None:
-                    continue
-                field_summaries.append(
-                    FieldSummaryAggregate(
-                        field=field_name,
-                        label=field_cfg.label,
-                        required=bool(field_cfg.required),
-                        mapped=False,
-                        max_score=None,
-                        tables_mapped=0,
-                        sheets_mapped=0,
-                        files_mapped=0,
-                    )
-                )
-
-        failure = {
-            "code": failure_code or ("cancelled" if status is RunStatus.CANCELLED else None),
-            "stage": failure_stage,
-            "message": message,
-        }
-        failure = {k: v for k, v in failure.items() if v is not None}
-
-        counts = Counts(
-            files={"total": 0},
-            sheets={"total": 0},
-            tables={"total": 0},
-            rows=RowCounts(total=0, empty=0, non_empty=0),
-            columns=ColumnCounts(
-                physical_total=0,
-                physical_empty=0,
-                physical_non_empty=0,
-                distinct_headers=0,
-                distinct_headers_mapped=0,
-                distinct_headers_unmapped=0,
-            ),
-            fields=FieldCounts(
-                total=field_total,
-                required=required_total,
-                mapped=0,
-                unmapped=field_total,
-                required_mapped=0,
-                required_unmapped=required_total,
-            ),
-        )
-
-        details: dict[str, Any] = {}
-        if message:
-            details["message"] = message
-
-        return RunSummary(
-            scope="run",
-            id="run",
-            parent_ids={"run_id": str(run.id)},
-            source={
-                "run_id": str(run.id),
-                "workspace_id": str(run.workspace_id),
-                "configuration_id": str(run.configuration_id),
-                "build_id": str(run.build_id) if run.build_id else None,
-                "engine_version": getattr(run, "engine_version", None),
-                "config_version": manifest.version if manifest else None,  # type: ignore[union-attr]
-                "started_at": started,
-                "completed_at": completed,
-                "status": status_literal,
-                "failure": failure,
-            },
-            counts=counts,
-            fields=field_summaries,
-            columns=[],
-            validation=ValidationSummary(),
-            details=details,
-        )
 
     # --------------------------------------------------------------------- #
     # Engine execution helpers
@@ -1819,7 +1427,7 @@ class RunsService:
             ),
         )
 
-        python = self._resolve_python(Path(context.venv_path))
+        python = venv_python_path(Path(context.venv_path))
         selected_sheet_names = self._select_input_sheet_names(options)
         if not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
@@ -1858,9 +1466,22 @@ class RunsService:
         engine_logs_dir.mkdir(parents=True, exist_ok=True)
 
         command = [str(python), "-m", "ade_engine", "run"]
+        command.extend(["--log-format", "ndjson"])
         command.extend(["--input", str(staged_input)])
         command.extend(["--output-dir", str(run_dir / "output")])
         command.extend(["--logs-dir", str(engine_logs_dir)])
+
+        meta_fields: dict[str, object] = {
+            "workspace_id": run.workspace_id,
+            "configuration_id": run.configuration_id,
+            "run_id": run.id,
+        }
+        build_id = getattr(run, "build_id", None)
+        if build_id is not None:
+            meta_fields["build_id"] = build_id
+
+        for key, value in meta_fields.items():
+            command.extend(["--meta", f"{key}={value}"])
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
@@ -1882,15 +1503,12 @@ class RunsService:
 
         # Process completion and summarize.
         return_code = runner.returncode if runner.returncode is not None else 1
-        status, error_message = self._resolve_completion(None, return_code)
+        status, error_message = self._resolve_completion(return_code)
 
         paths_snapshot = self._finalize_paths(
-            summary=None,
             run_dir=run_dir,
             default_paths=paths_snapshot,
         )
-        summary_model = None
-        summary_json = None
 
         logger.info(
             "run.engine.execute.completed",
@@ -1906,8 +1524,6 @@ class RunsService:
         yield RunExecutionResult(
             status=status,
             return_code=return_code,
-            summary_model=summary_model,
-            summary_json=summary_json,
             paths_snapshot=paths_snapshot,
             error_message=error_message,
         )
@@ -1928,17 +1544,17 @@ class RunsService:
                 run_id=run.id,
             ),
         )
-        placeholder_summary = await self._build_placeholder_summary(
-            run=run,
-            status=RunStatus.SUCCEEDED,
-            message="Validation-only execution",
-        )
-        summary_json = self._serialize_summary(placeholder_summary)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         paths_snapshot = self._finalize_paths(
-            summary=placeholder_summary.model_dump(mode="json"),
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
+        )
+        summary_json = self._serialize_summary(
+            await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message="Validation-only execution",
+            )
         )
         completion = await self._complete_run(
             run,
@@ -1985,17 +1601,17 @@ class RunsService:
         )
 
         message = f"Safe mode enabled: {safe_mode.detail}"
-        placeholder_summary = await self._build_placeholder_summary(
-            run=run,
-            status=RunStatus.SUCCEEDED,
-            message="Safe mode skip",
-        )
-        summary_json = self._serialize_summary(placeholder_summary)
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         paths_snapshot = self._finalize_paths(
-            summary=placeholder_summary.model_dump(mode="json"),
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
+        )
+        summary_json = self._serialize_summary(
+            await self._build_placeholder_summary(
+                run=run,
+                status=RunStatus.SUCCEEDED,
+                message=message,
+            )
         )
         completion = await self._complete_run(
             run,
@@ -2071,8 +1687,6 @@ class RunsService:
             ),
         )
 
-        engine_summary: RunSummary | None = None
-        engine_summary_json: str | None = None
         latest_paths_snapshot = RunPathsSnapshot()
 
         try:
@@ -2081,32 +1695,22 @@ class RunsService:
                 generator=generator,
             ):
                 if isinstance(event, RunExecutionResult):
-                    summary_model = engine_summary or event.summary_model
-                    summary_json = engine_summary_json or event.summary_json
-                    if summary_model and not summary_json:
-                        summary_json = self._serialize_summary(summary_model)
-                    if summary_model is None:
-                        summary_model = await self._build_placeholder_summary(
-                            run=run,
-                            status=event.status,
-                            message=event.error_message or "Engine summary missing",
-                            failure_code="engine_summary_missing",
-                            failure_stage="engine",
-                        )
-                        summary_json = self._serialize_summary(summary_model)
-
                     paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
                     if latest_paths_snapshot.processed_file and not paths_snapshot.processed_file:
                         paths_snapshot.processed_file = latest_paths_snapshot.processed_file
                     if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
                         paths_snapshot.output_path = latest_paths_snapshot.output_path
 
+                    summary_json = event.summary_json
+                    if summary_json is None and event.summary_model is not None:
+                        summary_json = self._serialize_summary(event.summary_model)
+
                     completion = await self._complete_run(
                         run,
                         status=event.status,
                         exit_code=event.return_code,
-                        summary=summary_json,
                         error_message=event.error_message,
+                        summary=summary_json,
                     )
                     yield await self._emit_api_event(
                         run=completion,
@@ -2114,14 +1718,7 @@ class RunsService:
                         payload=self._run_completed_payload(
                             run=completion,
                             paths=paths_snapshot,
-                            failure_stage=(
-                                "run" if event.status is RunStatus.FAILED else None
-                            ),
-                            failure_code=(
-                                "engine_summary_missing"
-                                if engine_summary is None
-                                else None
-                            ),
+                            failure_stage=("run" if event.status is RunStatus.FAILED else None),
                             failure_message=event.error_message,
                         ),
                     )
@@ -2129,43 +1726,7 @@ class RunsService:
 
                 if isinstance(event, EngineEventFrame):
                     payload_dict = event.payload or {}
-                    if event.type == "engine.run.summary":
-                        summary_payload = payload_dict
-                        try:
-                            engine_summary = RunSummary.model_validate(summary_payload)
-                            engine_summary_json = self._serialize_summary(engine_summary)
-                            await self._persist_run_summary(
-                                run=run,
-                                summary_json=engine_summary_json,
-                            )
-                            details = engine_summary.details or {}
-                            if (
-                                not latest_paths_snapshot.processed_file
-                                and isinstance(details, dict)
-                            ):
-                                processed = details.get("processed_file")
-                                if isinstance(processed, str):
-                                    latest_paths_snapshot.processed_file = processed
-                                else:
-                                    processed_list = details.get("processed_files")
-                                    if isinstance(processed_list, list) and processed_list:
-                                        latest_paths_snapshot.processed_file = str(
-                                            processed_list[0],
-                                        )
-                            if (
-                                not latest_paths_snapshot.output_path
-                                and isinstance(details, dict)
-                            ):
-                                output_path = details.get("output_path")
-                                if isinstance(output_path, str):
-                                    latest_paths_snapshot.output_path = output_path
-                                else:
-                                    outputs = details.get("output_paths")
-                                    if isinstance(outputs, list) and outputs:
-                                        latest_paths_snapshot.output_path = str(outputs[0])
-                        except ValidationError:
-                            engine_summary = None
-                    elif event.type == "engine.complete" and isinstance(payload_dict, dict):
+                    if event.type == "engine.complete" and isinstance(payload_dict, dict):
                         artifacts_value = payload_dict.get("artifacts")
                         artifacts = (
                             artifacts_value
@@ -2227,23 +1788,15 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            placeholder_summary = await self._build_placeholder_summary(
-                run=run,
-                status=RunStatus.CANCELLED,
-                message="Run execution cancelled",
-            )
-            summary_json = self._serialize_summary(placeholder_summary)
             run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
             paths_snapshot = self._finalize_paths(
-                summary=placeholder_summary.model_dump(mode="json"),
                 run_dir=run_dir,
-                default_paths=RunPathsSnapshot(),
+                default_paths=latest_paths_snapshot,
             )
             completion = await self._complete_run(
                 run,
                 status=RunStatus.CANCELLED,
                 exit_code=None,
-                summary=summary_json,
                 error_message="Run execution cancelled",
             )
             yield await self._emit_api_event(
@@ -2267,23 +1820,15 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            placeholder_summary = await self._build_placeholder_summary(
-                run=run,
-                status=RunStatus.FAILED,
-                message=str(exc),
-            )
-            summary_json = self._serialize_summary(placeholder_summary)
             run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
             paths_snapshot = self._finalize_paths(
-                summary=placeholder_summary.model_dump(mode="json"),
                 run_dir=run_dir,
-                default_paths=RunPathsSnapshot(),
+                default_paths=latest_paths_snapshot,
             )
             completion = await self._complete_run(
                 run,
                 status=RunStatus.FAILED,
                 exit_code=None,
-                summary=summary_json,
                 error_message=str(exc),
             )
             # Error console frame
@@ -2412,10 +1957,10 @@ class RunsService:
     ) -> Run:
         run.status = status
         run.exit_code = exit_code
-        if summary is not None:
-            run.summary = summary
         if error_message is not None:
             run.error_message = error_message
+        if summary is not None:
+            run.summary = summary
         run.finished_at = utc_now()
         run.cancelled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
@@ -2434,13 +1979,29 @@ class RunsService:
         )
         return run
 
+    async def _build_placeholder_summary(
+        self,
+        *,
+        run: Run,
+        status: RunStatus,
+        message: str,
+    ) -> dict[str, Any]:
+        """Construct a minimal run summary payload without engine output."""
+
+        return {
+            "run_id": str(run.id),
+            "status": status.value,
+            "message": message,
+        }
+
     @staticmethod
-    def _resolve_python(venv_path: Path) -> Path:
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        candidate = venv_path / bin_dir / ("python.exe" if os.name == "nt" else "python")
-        if not candidate.exists():
-            raise FileNotFoundError(f"Python interpreter not found in {venv_path}")
-        return candidate
+    def _serialize_summary(summary: Any) -> str:
+        if isinstance(summary, str):
+            return summary
+        try:
+            return json.dumps(summary, default=str)
+        except TypeError:
+            return json.dumps(str(summary))
 
     @staticmethod
     def _build_env(
@@ -2450,11 +2011,7 @@ class RunsService:
         *,
         input_sheet_name: str | None = None,
     ) -> dict[str, str]:
-        env = os.environ.copy()
-        bin_dir = "Scripts" if os.name == "nt" else "bin"
-        bin_path = venv_path / bin_dir
-        env["VIRTUAL_ENV"] = str(venv_path)
-        env["PATH"] = os.pathsep.join([str(bin_path), env.get("PATH", "")])
+        env = apply_venv_to_env(os.environ, venv_path)
         if options.dry_run:
             env["ADE_RUN_DRY_RUN"] = "1"
         if options.validate_only:

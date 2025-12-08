@@ -38,7 +38,7 @@ async def test_templates_materialize_and_load(
     )
 
     config_path = storage.config_path("ws", f"cfg-{template_id}")
-    manifest_path = config_path / "src" / "ade_config" / "manifest.json"
+    manifest_path = config_path / "src" / "ade_config" / "manifest.toml"
 
     monkeypatch.syspath_prepend(str(config_path / "src"))
     _clear_config_imports()
@@ -46,5 +46,5 @@ async def test_templates_materialize_and_load(
     manifest = runtime.manifest.model
 
     assert manifest.schema_id == "ade.manifest/v1"
-    assert manifest.columns.order
+    assert [col.name for col in manifest.columns]
     assert runtime.columns

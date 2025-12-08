@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import unicodedata
 from typing import Annotated, Any
-from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -23,6 +21,7 @@ from ade_api.app.dependencies import get_documents_service
 from ade_api.common.pagination import PageParams
 from ade_api.common.sorting import make_sort_dependency
 from ade_api.common.types import OrderBy
+from ade_api.common.downloads import build_content_disposition
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.core.models import User
 
@@ -144,32 +143,6 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
             detail="metadata must be a JSON object",
         )
     return decoded
-
-
-def _build_download_disposition(filename: str) -> str:
-    """Return a safe Content-Disposition header value for ``filename``."""
-
-    stripped = filename.strip()
-    cleaned = "".join(
-        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
-    ).strip()
-    candidate = cleaned or "download"
-
-    fallback_chars: list[str] = []
-    for char in candidate:
-        code_point = ord(char)
-        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
-            fallback_chars.append(char)
-        else:
-            fallback_chars.append("_")
-    fallback = "".join(fallback_chars).strip("_ ") or "download"
-    fallback = fallback[:255]
-
-    encoded = quote(candidate, safe="")
-    if fallback == candidate:
-        return f'attachment; filename="{fallback}"'
-
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
 
 
 @router.post(
@@ -321,7 +294,7 @@ async def download_document(
 
     media_type = record.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    response.headers["Content-Disposition"] = _build_download_disposition(record.name)
+    response.headers["Content-Disposition"] = build_content_disposition(record.name)
     return response
 
 

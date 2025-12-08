@@ -176,7 +176,6 @@ class RunCompletedPayload(AdeEventPayload):
     failure: dict[str, Any] | None = None
     execution: dict[str, Any] | None = None
     artifacts: dict[str, Any] | None = None
-    summary: dict[str, Any] | None = None
 
 
 __all__ = [

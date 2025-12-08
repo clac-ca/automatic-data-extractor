@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -11,6 +10,11 @@ from fastapi.concurrency import run_in_threadpool
 from ade_api.settings import Settings
 
 from .schemas import ConfigTemplate
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - fallback for older interpreters
+    import tomli as tomllib  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +52,15 @@ class ConfigTemplatesService:
 
     def _read_manifest(self, template_dir: Path) -> tuple[str, str | None, str | None]:
         manifest_candidates = [
-            template_dir / "src" / "ade_config" / "manifest.json",
-            template_dir / "manifest.json",
+            template_dir / "src" / "ade_config" / "manifest.toml",
+            template_dir / "manifest.toml",
         ]
 
         for manifest_path in manifest_candidates:
             if not manifest_path.exists():
                 continue
             try:
-                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+                payload = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
             except Exception:
                 logger.warning(
                     "config_templates.manifest_read_failed",

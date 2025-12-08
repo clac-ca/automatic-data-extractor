@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from ade_tools import cli
-from ade_tools.commands import lint_cmd
+from ade_cli import cli
+from ade_cli.commands import lint_cmd
 
 runner = CliRunner()
 

@@ -35,16 +35,16 @@
     }
   },
   "hooks": {
-    "on_run_start": [],
-    "on_after_extract": [],
-    "on_after_mapping": [],
-    "on_before_save": [],
-    "on_run_end": []
+    "on_workbook_start": [],
+    "on_sheet_start": [],
+    "on_table_detected": [],
+    "on_table_mapped": [],
+    "on_table_written": [],
+    "on_workbook_before_save": []
   },
   "writer": {
     "append_unmapped_columns": true,
-    "unmapped_prefix": "raw_",
-    "output_sheet": "Normalized"
+    "unmapped_prefix": "raw_"
   },
   "extra": null
 }

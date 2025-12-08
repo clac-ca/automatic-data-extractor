@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import io
-import json
 import secrets
 import shutil
 import tomllib
@@ -193,7 +192,7 @@ class ConfigStorage:
         def _validate() -> tuple[list[ConfigValidationIssue], str | None]:
             issues: list[ConfigValidationIssue] = []
             pyproject = path / "pyproject.toml"
-            manifest = path / "src" / "ade_config" / "manifest.json"
+            manifest = path / "src" / "ade_config" / "manifest.toml"
 
             if not pyproject.is_file():
                 issues.append(
@@ -216,18 +215,18 @@ class ConfigStorage:
             if not manifest.is_file():
                 issues.append(
                     ConfigValidationIssue(
-                        path="src/ade_config/manifest.json",
-                        message="manifest.json is required within src/ade_config",
+                        path="src/ade_config/manifest.toml",
+                        message="manifest.toml is required within src/ade_config",
                     )
                 )
             else:
                 try:
-                    json.loads(manifest.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError) as exc:
+                    tomllib.loads(manifest.read_text(encoding="utf-8"))
+                except (tomllib.TOMLDecodeError, OSError) as exc:
                     issues.append(
                         ConfigValidationIssue(
-                            path="src/ade_config/manifest.json",
-                            message=f"manifest.json is invalid: {exc}",
+                            path="src/ade_config/manifest.toml",
+                            message=f"manifest.toml is invalid: {exc}",
                         )
                     )
 
