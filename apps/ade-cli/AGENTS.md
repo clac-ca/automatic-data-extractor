@@ -5,7 +5,7 @@ Start by exploring the built-in help:
 ```bash
 ade --help                       # list commands
 ade <command> --help             # inspect flags for any command
-python -m apps.ade_engine --help # engine CLI (invoked directly)
+python -m ade_engine --help # engine CLI (invoked directly)
 ```
 
 Fast reference (run `--help` for details):
@@ -45,8 +45,8 @@ Commands:
 ```
 
 ```bash
-$ python -m apps.ade_engine run --help
-Usage: python -m apps.ade_engine run [OPTIONS]
+$ python -m ade_engine run --help
+Usage: python -m ade_engine run [OPTIONS]
 
 Options:
   -i, --input PATH               Source file(s) (repeatable)
@@ -67,7 +67,7 @@ Options:
 Notes for agents:
 
 - Always check `--help` before guessing flags.
-- Use `python -m apps.ade_engine ...` for engine runs; the `ade` wrapper no longer mounts the engine CLI.
+- Use `python -m ade_engine ...` for engine runs; the `ade` wrapper no longer mounts the engine CLI.
 - Respect repo structure: commands assume you’re at the repo root. Use `ade --help` to confirm available commands in this environment.
 
 Quick examples:
@@ -97,6 +97,6 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 # Generate frontend types from OpenAPI
 ade types
 
-# Run the engine directly (see full flags with `python -m apps.ade_engine run --help`)
-python -m apps.ade_engine run --input data/samples/example.xlsx --output-dir data/samples/output --logs-dir data/samples/output
+# Run the engine directly (see full flags with `python -m ade_engine run --help`)
+python -m ade_engine run --input data/samples/example.xlsx --output-dir data/samples/output --logs-dir data/samples/output
 ```

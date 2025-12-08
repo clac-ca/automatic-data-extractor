@@ -1,8 +1,4 @@
-"""Uniform invocation of config-provided callables.
-
-The goal is to keep call sites small while preserving backwards-compatible
-keyword names expected by existing ``ade_config`` scripts.
-"""
+"""Uniform invocation of config-provided callables with a stable kwarg set."""
 
 from __future__ import annotations
 
@@ -22,7 +18,7 @@ class PluginInvoker:
     event_emitter: Any = NULL_EVENT_EMITTER
 
     def base_kwargs(self) -> dict[str, Any]:
-        file_name = self.run.source_path.name
+        input_file_name = self.run.source_path.name
         # Provide a stable set of kwargs for all config callables; scripts must accept **_.
         return {
             "run": self.run,
@@ -31,10 +27,7 @@ class PluginInvoker:
             "manifest": self.runtime.manifest,
             "logger": self.logger,
             "event_emitter": self.event_emitter,
-            # Common aliases used across old/new scripts.
-            "events": self.event_emitter,
-            "input_file_name": file_name,
-            "file_name": file_name,
+            "input_file_name": input_file_name,
         }
 
     def call(self, fn: Callable[..., Any], /, **kwargs: Any) -> Any:

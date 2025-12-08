@@ -1,4 +1,4 @@
-"""Workbook IO helpers for :class:`~ade_engine.engine.ADEngine`."""
+"""Workbook IO helpers for :class:`~ade_engine.engine.Engine`."""
 
 from __future__ import annotations
 

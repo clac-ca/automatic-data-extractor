@@ -12,7 +12,7 @@ This document describes the main components of `ade-engine`, how they are wired,
 - Builds **reporting** (`text` or `ndjson`) and injects it into the engine.
 - Runs one or more inputs and summarizes results.
 
-### 2) ADEngine (`ade_engine.engine.ADEngine`)
+### 2) Engine (`ade_engine.engine.Engine`)
 High-level orchestration:
 
 - normalizes the `RunRequest`
@@ -64,7 +64,7 @@ sequenceDiagram
   participant User as User/Orchestrator
   participant CLI as CLI
   participant Rep as Reporting
-  participant Eng as ADEngine
+  participant Eng as Engine
   participant Cfg as Config runtime
   participant Pipe as Pipeline
   participant Config as Config callables
