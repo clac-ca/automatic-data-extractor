@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from ade_api.app.dependencies import get_builds_service, get_configurations_service
 from ade_api.common.pagination import PageParams, paginate_sequence
+from ade_api.common.downloads import build_content_disposition
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.core.models import User
 from ade_api.features.builds.router import _execute_build_background
@@ -777,7 +778,7 @@ async def export_config(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
     stream = io.BytesIO(blob)
     headers = {
-        "Content-Disposition": f'attachment; filename="{configuration_id}.zip"',
+            "Content-Disposition": build_content_disposition(f"{configuration_id}.zip"),
     }
     return StreamingResponse(stream, media_type="application/zip", headers=headers)
 

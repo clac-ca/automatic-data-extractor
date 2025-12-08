@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from ade_api.features.documents.router import _build_download_disposition
+from ade_api.common.downloads import build_content_disposition
 from ade_api.features.documents.service import DocumentsService
 from ade_api.settings import Settings
 
@@ -17,8 +17,8 @@ def _make_documents_service(tmp_path: Path) -> DocumentsService:
     return DocumentsService(session=session, settings=settings)
 
 
-def test_build_download_disposition_strips_control_characters() -> None:
-    header_value = _build_download_disposition("report\r\nSet-Cookie: evil.txt")
+def testbuild_content_disposition_strips_control_characters() -> None:
+    header_value = build_content_disposition("report\r\nSet-Cookie: evil.txt")
 
     assert "\r" not in header_value
     assert "\n" not in header_value
@@ -26,8 +26,8 @@ def test_build_download_disposition_strips_control_characters() -> None:
     assert "filename*=UTF-8''reportSet-Cookie%3A%20evil.txt" in header_value
 
 
-def test_build_download_disposition_preserves_unicode_filename() -> None:
-    header_value = _build_download_disposition("rêport ✅.pdf")
+def testbuild_content_disposition_preserves_unicode_filename() -> None:
+    header_value = build_content_disposition("rêport ✅.pdf")
 
     assert 'filename="r_port _.pdf"' in header_value
     assert "filename*=UTF-8''r%C3%AAport%20%E2%9C%85.pdf" in header_value

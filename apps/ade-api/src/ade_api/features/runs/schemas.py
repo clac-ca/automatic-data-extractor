@@ -20,7 +20,6 @@ __all__ = [
     "RunCreateRequest",
     "RunFilters",
     "RunInput",
-    "RunOutputFile",
     "RunLinks",
     "RunOutput",
     "RunPage",
@@ -62,7 +61,6 @@ class RunLinks(BaseSchema):
     """Hypermedia links for run-related resources."""
 
     self: str
-    summary: str
     events: str
     events_stream: str
     events_download: str
@@ -98,16 +96,6 @@ class RunOutput(BaseSchema):
     has_output: bool = False
     output_path: str | None = None
     processed_file: str | None = None
-
-
-class RunOutputFile(BaseSchema):
-    """Deprecated collection wrapper for legacy output listings."""
-
-    name: str | None = None
-    path: str | None = None
-    byte_size: int | None = None
-    content_type: str | None = None
-    download_url: str | None = None
 
 
 class RunResource(BaseSchema):

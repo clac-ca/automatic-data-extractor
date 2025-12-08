@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ade_tools.commands import common, docker
+from ade_cli.commands import common, docker
 
 
 def test_docker_up_uses_docker_cli(monkeypatch, tmp_path):

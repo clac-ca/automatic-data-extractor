@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import typer
 
-from ade_tools.commands import common
+from ade_cli.commands import common
 
 
 def test_run_parallel_handles_keyboard_interrupt(monkeypatch):

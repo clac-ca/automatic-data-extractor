@@ -26,7 +26,7 @@ from ade_api.features.builds.fingerprint import compute_build_fingerprint
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
-from ade_api.infra.storage import build_venv_root
+from ade_api.infra.storage import build_venv_marker_path, build_venv_path, build_venv_root
 from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
@@ -297,6 +297,7 @@ class BuildsService:
         )
 
         build = await self._require_build(context.build_id)
+        summary: str | None = build.summary or context.reuse_summary
         reason = context.reason or ("force_rebuild" if options.force else "on_demand")
 
         queued_event = await self._ensure_build_queued_event(
@@ -321,7 +322,6 @@ class BuildsService:
                     reason="reuse_ok",
                 ),
             )
-            summary = build.summary or context.reuse_summary
             yield await self._emit_event(
                 build=build,
                 type_="build.complete",
@@ -618,8 +618,18 @@ class BuildsService:
                 build.configuration_id,
                 build.id,
             )
-            venv_path = venv_root / ".venv"
-            marker_path = venv_path / "ade_build.json"
+            venv_path = build_venv_path(
+                self._settings,
+                build.workspace_id,
+                build.configuration_id,
+                build.id,
+            )
+            marker_path = build_venv_marker_path(
+                self._settings,
+                build.workspace_id,
+                build.configuration_id,
+                build.id,
+            )
             if self._marker_matches(marker_path, build):
                 logger.info(
                     "build.env.hydrate.cache_hit",
@@ -645,7 +655,7 @@ class BuildsService:
                 workspace_id=build.workspace_id,
                 configuration_id=build.configuration_id,
             )
-            async for _ in self._builder.build_stream(
+            await self._builder.build(
                 build_id=build.id,
                 workspace_id=build.workspace_id,
                 configuration_id=build.configuration_id,
@@ -660,10 +670,8 @@ class BuildsService:
                 python_bin=build.python_interpreter or self._resolve_python_interpreter(),
                 timeout=float(self._settings.build_timeout.total_seconds()),
                 fingerprint=build.fingerprint or "",
-            ):
-                # Hydration is best-effort and local-only; we intentionally do
-                # not persist per-step events or logs here.
-                pass
+
+            )
 
             logger.info(
                 "build.env.hydrate.complete",

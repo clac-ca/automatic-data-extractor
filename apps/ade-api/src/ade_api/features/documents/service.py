@@ -19,9 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
-from ade_api.common.sql import nulls_last
 from ade_api.common.types import OrderBy
-from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, RunStatus, User
+from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, User
 from ade_api.infra.storage import workspace_documents_root
 from ade_api.settings import Settings
 
@@ -445,32 +444,15 @@ class DocumentsService:
         if not documents:
             return
 
-        logger.debug(
-            "document.last_run.attach.start",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(documents),
-            ),
-        )
-
-        run_summaries = await self._latest_stream_runs(
+        last_runs = await self._latest_stream_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
         for document in documents:
-            summary = run_summaries.get(document.id)
-            if summary is None:
-                document.last_run = None
-                continue
-            document.last_run = summary
-
-        logger.debug(
-            "document.last_run.attach.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                matched_documents=len(run_summaries),
-            ),
-        )
+            doc_id = str(document.id)
+            document.last_run = last_runs.get(doc_id)
+            if document.last_run and document.last_run.run_at:
+                document.last_run_at = document.last_run.run_at
 
     async def _latest_stream_runs(
         self,
@@ -478,105 +460,81 @@ class DocumentsService:
         workspace_id: str,
         documents: Sequence[DocumentOut],
     ) -> dict[str, DocumentLastRun]:
-        ids = [document.id for document in documents if document.id]
-        if not ids:
+        doc_ids = [str(doc.id) for doc in documents]
+        if not doc_ids:
             return {}
 
-        logger.debug(
-            "document.last_run.query.start",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(ids),
-            ),
-        )
-
+        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
-                Run.id,
-                Run.input_document_id,
-                Run.status,
-                Run.finished_at,
-                Run.started_at,
-                Run.created_at,
-                Run.summary,
-                Run.error_message,
+                Run.input_document_id.label("document_id"),
+                Run.id.label("run_id"),
+                Run.status.label("status"),
+                Run.error_message.label("error_message"),
+                Run.summary.label("summary"),
+                Run.finished_at.label("finished_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
                 func.row_number()
                 .over(
                     partition_by=Run.input_document_id,
-                    order_by=(
-                        *nulls_last(Run.finished_at.desc()),
-                        *nulls_last(Run.started_at.desc()),
-                        *nulls_last(Run.created_at.desc()),
-                    ),
+                    order_by=timestamp.desc(),
                 )
-                .label("run_rank"),
+                .label("rank"),
             )
             .where(
                 Run.workspace_id == workspace_id,
-                Run.input_document_id.in_(ids),
+                Run.input_document_id.is_not(None),
+                Run.input_document_id.in_(doc_ids),
             )
-        ).subquery()
-
-        stmt = (
-            select(
-                ranked_runs.c.id,
-                ranked_runs.c.input_document_id,
-                ranked_runs.c.status,
-                ranked_runs.c.finished_at,
-                ranked_runs.c.started_at,
-                ranked_runs.c.created_at,
-                ranked_runs.c.summary,
-                ranked_runs.c.error_message,
-            )
-            .where(ranked_runs.c.run_rank == 1)
+            .subquery()
         )
+
+        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
         result = await self._session.execute(stmt)
-        rows = result.all()
 
         latest: dict[str, DocumentLastRun] = {}
-        for row in rows:
-            doc_id = row.input_document_id
-            if doc_id is None:
-                continue
-            timestamp = row.finished_at or row.started_at or row.created_at
-            status_value = (
-                RunStatus.CANCELLED if row.status == RunStatus.CANCELLED else row.status
+        for row in result.mappings():
+            run_at = self._ensure_utc(
+                row.get("finished_at") or row.get("started_at") or row.get("created_at")
             )
-            summary_payload = None
-            if row.summary:
-                try:
-                    parsed = json.loads(row.summary)
-                    summary_payload = parsed if isinstance(parsed, dict) else None
-                except json.JSONDecodeError:
-                    summary_payload = None
-            message = row.error_message
-            if summary_payload:
-                run_block = summary_payload.get("run", {})
-                message = (
-                    run_block.get("failure_message")
-                    or message
-                    or run_block.get("status")
-                )
-            latest[doc_id] = DocumentLastRun(
-                run_id=row.id,
-                status=status_value,
-                run_at=(
-                    timestamp
-                    if timestamp is None or timestamp.tzinfo
-                    else timestamp.replace(tzinfo=UTC)
-                ),
+            message = self._last_run_message(
+                error_message=row.get("error_message"),
+                summary=row.get("summary"),
+            )
+            latest[str(row["document_id"])] = DocumentLastRun(
+                run_id=row.get("run_id"),
+                status=row.get("status"),
+                run_at=run_at,
                 message=message,
             )
 
-        logger.debug(
-            "document.last_run.query.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(ids),
-                matched_runs=len(latest),
-            ),
-        )
         return latest
+
+    @staticmethod
+    def _last_run_message(*, error_message: str | None, summary: str | None) -> str | None:
+        if error_message:
+            return error_message
+        if not summary:
+            return None
+        try:
+            data = json.loads(summary)
+        except (TypeError, json.JSONDecodeError):
+            return summary
+
+        if isinstance(data, Mapping):
+            message = data.get("message")
+            if message:
+                return str(message)
+        return summary
+
+    @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:

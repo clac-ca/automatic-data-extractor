@@ -12,7 +12,7 @@ Enforce a simple config lifecycle with exactly one active config per workspace a
 ## Activate Behavior
 * Allowed from `draft` or `inactive` → `active`.
 * Re-validate the config tree.
-* Compute and persist `content_digest` over `pyproject.toml`, `manifest.json`, `src/ade_config/**`, and optional `config.env`.
+* Compute and persist `content_digest` over `pyproject.toml`, `manifest.toml`, `src/ade_config/**`, and optional `config.env`.
 * Increment `config_version` (first activation bumps `0 → 1`).
 * Demote the previous active config (if any) to `inactive`.
 * Optional body `{ "ensure_build": true }` triggers WP5 build warming after state flips.

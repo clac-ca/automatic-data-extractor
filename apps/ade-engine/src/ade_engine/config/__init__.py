@@ -1,6 +1,12 @@
 """Config runtime helpers for loading manifests and registries."""
 
-from .loader import ConfigRuntime, load_config_runtime
-from .manifest_context import ManifestContext
+from ade_engine.config.loader import ConfigRuntime, ResolvedConfigPackage, load_config_runtime, resolve_config_package
+from ade_engine.config.manifest import ManifestContext
 
-__all__ = ["ConfigRuntime", "ManifestContext", "load_config_runtime"]
+__all__ = [
+    "ConfigRuntime",
+    "ManifestContext",
+    "ResolvedConfigPackage",
+    "load_config_runtime",
+    "resolve_config_package",
+]

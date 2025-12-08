@@ -44,12 +44,11 @@
         "writer": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode", "append_unmapped_columns", "unmapped_prefix", "output_sheet"],
+          "required": ["mode", "append_unmapped_columns", "unmapped_prefix"],
           "properties": {
             "mode": { "type": "string", "enum": ["row_streaming", "in_memory"], "default": "row_streaming" },
             "append_unmapped_columns": { "type": "boolean", "default": true },
-            "unmapped_prefix": { "type": "string", "minLength": 1, "default": "raw_" },
-            "output_sheet": { "type": "string", "minLength": 1, "maxLength": 31, "default": "Normalized" }
+            "unmapped_prefix": { "type": "string", "minLength": 1, "default": "raw_" }
           }
         }
       }
