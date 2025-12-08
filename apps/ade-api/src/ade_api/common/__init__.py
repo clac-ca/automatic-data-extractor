@@ -1,6 +1,8 @@
 """Common utilities and helpers used across the API service."""
 
 __all__ = [
+    "downloads",
+    "encoding",
     "exceptions",
     "filters",
     "ids",

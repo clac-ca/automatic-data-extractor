@@ -29,6 +29,7 @@ from ade_api.app.dependencies import (
 )
 from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
+from ade_api.common.downloads import build_content_disposition
 from ade_api.common.pagination import PageParams
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.core.models import RunStatus
@@ -44,21 +45,21 @@ from .schemas import (
     RunFilters,
     RunInput,
     RunOutput,
-    RunOutputFile,
     RunPage,
     RunResource,
 )
 from .service import (
     DEFAULT_EVENTS_PAGE_LIMIT,
-    RunDocumentMissingError,
     RunExecutionContext,
+    RunsService,
+)
+from .exceptions import (
+    RunDocumentMissingError,
     RunInputMissingError,
     RunLogsFileMissingError,
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
-    RunsService,
-    _build_download_disposition,
 )
 
 router = APIRouter(
@@ -91,19 +92,6 @@ def _sse_event_bytes(event: AdeEvent) -> bytes:
     parts.append(f"event: {event.type}")
     parts.extend(f"data: {line}" for line in lines)
     return "\n".join(parts).encode("utf-8") + b"\n\n"
-
-
-def _legacy_output_file(output: RunOutput) -> RunOutputFile:
-    name = output.filename
-    if not name and output.output_path:
-        name = FilePath(output.output_path).name
-    return RunOutputFile(
-        name=name,
-        path=output.output_path,
-        byte_size=output.size_bytes,
-        content_type=output.content_type,
-        download_url=output.download_url,
-    )
 
 
 async def _execute_run_background(
@@ -276,7 +264,7 @@ async def download_run_input_endpoint(
 
     media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    disposition = _build_download_disposition(document.original_filename)
+    disposition = (document.original_filename)
     response.headers["Content-Disposition"] = disposition
     return response
 
@@ -378,29 +366,7 @@ async def download_run_events_file_endpoint(
         path=path,
         media_type="application/x-ndjson",
         filename=path.name,
-        headers={"Content-Disposition": _build_download_disposition(path.name)},
-    )
-
-
-@router.get(
-    "/runs/{run_id}/logs",
-    response_class=FileResponse,
-    responses={status.HTTP_404_NOT_FOUND: {"description": "Logs unavailable"}},
-    deprecated=True,
-)
-async def download_run_logs_file_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-):
-    try:
-        path = await service.get_logs_file_path(run_id=run_id)
-    except (RunNotFoundError, RunLogsFileMissingError) as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return FileResponse(
-        path=path,
-        media_type="application/x-ndjson",
-        filename=path.name,
-        headers={"Content-Disposition": _build_download_disposition(path.name)},
+        headers={"Content-Disposition": build_content_disposition(path.name)},
     )
 
 
@@ -469,36 +435,5 @@ async def download_run_output_endpoint(
         path=path,
         media_type=media_type,
         filename=path.name,
-        headers={"Content-Disposition": _build_download_disposition(path.name)},
+        headers={"Content-Disposition": build_content_disposition(path.name)},
     )
-
-
-@router.get(
-    "/runs/{run_id}/outputs",
-    response_model=list[RunOutputFile],
-    response_model_exclude_none=True,
-    deprecated=True,
-)
-async def list_run_outputs_legacy(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
-    service: RunsService = runs_service_dependency,
-) -> list[RunOutputFile]:
-    try:
-        output = await service.get_run_output_metadata(run_id=run_id)
-    except RunNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return [_legacy_output_file(output)]
-
-
-@router.get(
-    "/runs/{run_id}/outputs/{output_path:path}",
-    response_class=FileResponse,
-    deprecated=True,
-)
-async def download_run_output_legacy_endpoint(
-    run_id: Annotated[UUID, Path(description="Run identifier")],
-    output_path: Annotated[str, Path(description="Legacy output path")],
-    service: RunsService = runs_service_dependency,
-):
-    # ``output_path`` is ignored to keep behavior lenient for single-output runs.
-    return await download_run_output_endpoint(run_id=run_id, service=service)

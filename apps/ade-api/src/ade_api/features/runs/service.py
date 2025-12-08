@@ -8,13 +8,11 @@ import inspect
 import logging
 import mimetypes
 import os
-import unicodedata
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,6 +61,14 @@ from ade_api.schemas.events import (
 from ade_api.settings import Settings
 
 from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
+from .exceptions import (
+    RunDocumentMissingError,
+    RunInputMissingError,
+    RunLogsFileMissingError,
+    RunNotFoundError,
+    RunOutputMissingError,
+    RunOutputNotReadyError,
+)
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
@@ -111,37 +117,6 @@ RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
 
 # --------------------------------------------------------------------------- #
 # Small helpers
-# --------------------------------------------------------------------------- #
-
-
-def _build_download_disposition(filename: str) -> str:
-    """Return a safe Content-Disposition header value for ``filename``."""
-
-    stripped = filename.strip()
-    cleaned = "".join(
-        ch for ch in stripped if unicodedata.category(ch)[0] != "C"
-    ).strip()
-    candidate = cleaned or "download"
-
-    fallback_chars: list[str] = []
-    for char in candidate:
-        code_point = ord(char)
-        if 32 <= code_point < 127 and char not in {'"', "\\", ";", ":"}:
-            fallback_chars.append(char)
-        else:
-            fallback_chars.append("_")
-    fallback = "".join(fallback_chars).strip("_ ") or "download"
-    fallback = fallback[:255]
-
-    encoded = quote(candidate, safe="")
-    if fallback == candidate:
-        return f'attachment; filename="{fallback}"'
-
-    return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{encoded}'
-
-
-# --------------------------------------------------------------------------- #
-# Small supporting types
 # --------------------------------------------------------------------------- #
 
 
@@ -196,35 +171,6 @@ class RunExecutionContext:
                 else None
             ),
         )
-
-
-# --------------------------------------------------------------------------- #
-# Error types
-# --------------------------------------------------------------------------- #
-
-
-class RunNotFoundError(RuntimeError):
-    """Raised when a requested run row cannot be located."""
-
-
-class RunDocumentMissingError(RuntimeError):
-    """Raised when a requested input document cannot be located."""
-
-
-class RunLogsFileMissingError(RuntimeError):
-    """Raised when a requested run log file cannot be read."""
-
-
-class RunOutputMissingError(RuntimeError):
-    """Raised when requested run outputs cannot be resolved."""
-
-
-class RunOutputNotReadyError(RuntimeError):
-    """Raised when a run output is requested before it is ready."""
-
-
-class RunInputMissingError(RuntimeError):
-    """Raised when a run is attempted without required staged inputs."""
 
 
 # --------------------------------------------------------------------------- #

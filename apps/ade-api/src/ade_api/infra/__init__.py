@@ -1,3 +1,3 @@
-"""Infrastructure primitives (database, storage, etc.)."""
+"""Infrastructure primitives (database, storage, events, etc.)."""
 
-__all__ = ["db", "storage", "venv"]
+__all__ = ["db", "events", "storage", "venv"]
