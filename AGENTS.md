@@ -22,14 +22,65 @@ Docs to know:
 
 ## ade CLI essentials
 
-- `ade --help` and `ade <command> --help` surface all flags; `ade engine --help` mounts the engine Typer CLI.
-- Common commands: `ade setup`, `ade dev`, `ade start`, `ade build`, `ade tests`, `ade lint`, `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean`/`ade reset`, `ade ci`, `ade bundle`.
-- Config templates live under `apps/ade-api/src/ade_api/templates/config_packages`.
-- Workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
+Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m apps.ade_engine --help`.
+
+- `ade setup` — one-time bootstrap (venv, hooks).
+- `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
+- `ade start` — serve API + built SPA. `ade build` — build frontend assets.
+- `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
+- `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
+- Config templates: `apps/ade-api/src/ade_api/templates/config_packages`; workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
+
+### Help snapshots (truncated)
+
+```bash
+$ ade --help
+Usage: ade [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  setup     Bootstrap repo env and hooks
+  dev       Run backend/frontend dev servers
+  start     Serve API + built SPA
+  build     Build frontend assets
+  tests     Run Python/JS tests
+  lint      Lint/format helpers
+  bundle    Bundle files into Markdown
+  types     Generate frontend API types
+  migrate   Run DB migrations
+  routes    List FastAPI routes
+  users     Manage users/roles
+  docker    Local Docker helpers
+  clean     Remove build artifacts/caches
+  reset     Clean + venv reset
+  ci        Full lint/test/build pipeline
+```
+
+```bash
+$ python -m apps.ade_engine run --help
+Usage: python -m apps.ade_engine run [OPTIONS]
+
+Options:
+  -i, --input PATH               Source file(s) (repeatable)
+      --input-dir PATH           Recurse for inputs
+      --include TEXT             Glob applied under --input-dir
+      --exclude TEXT             Glob to skip under --input-dir
+  -s, --input-sheet TEXT         Optional worksheet(s)
+      --output-dir PATH          Output directory (auto-nests per input when multiple)
+      --output-file PATH         Output file (default: <input>_normalized.xlsx)
+      --logs-dir PATH            Logs directory (auto-nests per input when multiple)
+      --logs-file PATH           Log output file path
+      --log-format [text|ndjson] Log output format
+      --meta TEXT                KEY=VALUE metadata (repeatable)
+      --config-package TEXT      Config package name or path
+      --help                     Show this message and exit.
+```
 
 ## Engine CLI smoke tests (revamped)
 
-`apps/ade-engine/src/ade_engine/cli.py` is a Typer CLI surfaced as `ade engine ...` (or `python -m ade_engine ...`). It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
+`apps/ade-engine/src/ade_engine/cli.py` is a Typer CLI invoked as `python -m apps.ade_engine ...`. It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
 
 - Inputs: combine `--input` (repeatable) and `--input-dir` with `--include/--exclude` (defaults to `*.xlsx, *.csv` when not provided).
 - Outputs: if no flags are set, output lands in `<input_dir>/output/<input_stem>_normalized.xlsx`. When multiple inputs are provided, `--output-dir`/`--logs-dir` are nested per input stem to avoid collisions.
@@ -41,7 +92,7 @@ Docs to know:
 Use the template config package shipped in the repo and a sample input:
 
 ```bash
-ade engine run \
+python -m apps.ade_engine run \
   --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
   --config-package data/templates/config_packages/default \
   --output-dir data/samples/output/cli-smoke \
@@ -53,7 +104,7 @@ Expected: output at `data/samples/output/cli-smoke/z_pass6_synthetic_contacts_ne
 ### NDJSON stream run (for API-style validation)
 
 ```bash
-ade engine run \
+python -m apps.ade_engine run \
   --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
   --config-package data/templates/config_packages/default \
   --log-format ndjson \
@@ -65,7 +116,7 @@ Expected: NDJSON events on stdout (kept clean via `protect_stdout`), with output
 ### Batch multiple inputs
 
 ```bash
-ade engine run \
+python -m apps.ade_engine run \
   --input-dir data/samples/input \
   --config-package data/templates/config_packages/default \
   --include "*.xlsx" --exclude "detector-pass*" \

@@ -1,4 +1,4 @@
-"""Module entrypoint for ``python -m ade_engine``."""
+"""Module entrypoint for ``python -m apps.ade_engine``."""
 
 from ade_engine.cli import main
 
