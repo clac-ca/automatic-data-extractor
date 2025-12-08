@@ -22,17 +22,17 @@ Within `apps/ade-engine/src/ade_engine`:
 
 ### Run via module (always works)
 ```bash
-python -m ade_engine run --input ./example.xlsx
+python -m apps.ade_engine run --input ./example.xlsx
 ```
 
 ### Run with NDJSON events
 ```bash
-python -m ade_engine run --input ./example.xlsx --log-format ndjson
+python -m apps.ade_engine run --input ./example.xlsx --log-format ndjson
 ```
 
 ### Use a local config package by path
 ```bash
-python -m ade_engine run --input ./example.xlsx --config-package ./path/to/config-repo
+python -m apps.ade_engine run --input ./example.xlsx --config-package ./path/to/config-repo
 ```
 
 ---

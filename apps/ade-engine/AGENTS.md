@@ -166,7 +166,7 @@ Key design choice: **meta injection**
 ### 1) Local CLI (text)
 
 ```bash
-python -m ade_engine run --input ./source.xlsx
+python -m apps.ade_engine run --input ./source.xlsx
 ```
 
 Produces human-friendly lines to stderr and writes `output/normalized.xlsx`.
@@ -174,7 +174,7 @@ Produces human-friendly lines to stderr and writes `output/normalized.xlsx`.
 ### 2) API mode (NDJSON to stdout)
 
 ```bash
-python -m ade_engine run --input ./source.xlsx --log-format ndjson \
+python -m apps.ade_engine run --input ./source.xlsx --log-format ndjson \
   --meta workspace_id=ws_123 --meta config_id=cfg_456
 ```
 

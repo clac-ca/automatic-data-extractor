@@ -45,31 +45,31 @@ Dependencies include `openpyxl` (XLSX IO), `pydantic` (manifest validation), and
 Normalize a workbook:
 
 ```bash
-python -m ade_engine run --input path/to/source.xlsx
+python -m apps.ade_engine run --input path/to/source.xlsx
 ```
 
 Write output to a custom directory:
 
 ```bash
-python -m ade_engine run --input source.xlsx --output-dir ./out
+python -m apps.ade_engine run --input source.xlsx --output-dir ./out
 ```
 
 Emit NDJSON events to stdout (useful for an API that streams progress):
 
 ```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson
+python -m apps.ade_engine run --input source.xlsx --log-format ndjson
 ```
 
 Write NDJSON to a file:
 
 ```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
+python -m apps.ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
 ```
 
 Pass run-level metadata (included in every event):
 
 ```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson \
+python -m apps.ade_engine run --input source.xlsx --log-format ndjson \
   --meta workspace_id=ws_123 --meta config_id=cfg_456
 ```
 
