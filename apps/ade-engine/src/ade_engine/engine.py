@@ -1,4 +1,4 @@
-"""ADEngine orchestration using the Workbook → Sheet → Table pipeline."""
+"""Engine orchestration using the Workbook → Sheet → Table pipeline."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def _classify_unknown(stage: str) -> RunErrorCode:
     return RunErrorCode.UNKNOWN_ERROR
 
 
-class ADEngine:
+class Engine:
     """High-level orchestration for normalization runs."""
 
     def __init__(
@@ -244,4 +244,4 @@ class ADEngine:
         )
 
 
-__all__ = ["ADEngine"]
+__all__ = ["Engine"]

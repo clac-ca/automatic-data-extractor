@@ -8,7 +8,7 @@ This document is aimed at developers working on `ade-engine` or writing `ade_con
 
 Within `apps/ade-engine/src/ade_engine`:
 
-- `cli.py`: Typer CLI
+- `cli/`: Typer CLI
 - `engine.py`: orchestration and run lifecycle
 - `config/`: manifest + plugin loader/runtime
 - `pipeline/`: sheet/table stages
@@ -22,17 +22,17 @@ Within `apps/ade-engine/src/ade_engine`:
 
 ### Run via module (always works)
 ```bash
-python -m apps.ade_engine run --input ./example.xlsx
+python -m ade_engine run --input ./example.xlsx
 ```
 
 ### Run with NDJSON events
 ```bash
-python -m apps.ade_engine run --input ./example.xlsx --log-format ndjson
+python -m ade_engine run --input ./example.xlsx --log-format ndjson
 ```
 
 ### Use a local config package by path
 ```bash
-python -m apps.ade_engine run --input ./example.xlsx --config-package ./path/to/config-repo
+python -m ade_engine run --input ./example.xlsx --config-package ./path/to/config-repo
 ```
 
 ---

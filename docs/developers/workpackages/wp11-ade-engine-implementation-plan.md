@@ -26,7 +26,7 @@ breaks the implementation into incremental, testable milestones.
 - **Frozen execution environment:** Runs must execute inside the build-specific virtual environment referenced by the backend so results remain reproducible and isolated from other tenants.【F:docs/developers/02-build-venv.md†L7-L38】【F:docs/developers/workpackages/wp6-runs-integration.md†L7-L24】
 - **Run directory contract:** All reads and writes are confined to the run's `input/`, `output/`, and `logs/` folders, with artifact and event writers persisting into `artifact.json` and `events.ndjson` respectively.【F:docs/developers/README.md†L100-L116】
 - **Five-pass pipeline fidelity:** The runtime must follow the documented detection → mapping → transform → validate → output sequence so tooling and documentation stay aligned.【F:docs/developers/README.md†L126-L165】
-- **CLI compatibility:** Maintain the manifest inspection mode for `python -m apps.ade_engine` while adding a worker entry point consumable by the runs service; flag-breaking changes in advance.【F:docs/ade_runs_api_spec.md†L298-L355】
+- **CLI compatibility:** Maintain the manifest inspection mode for `python -m ade_engine` while adding a worker entry point consumable by the runs service; flag-breaking changes in advance.【F:docs/ade_runs_api_spec.md†L298-L355】
 
 ## Source Material Reviewed
 - Developer overview of build/run lifecycle and config layout.【F:docs/developers/README.md†L1-L196】
@@ -44,7 +44,7 @@ breaks the implementation into incremental, testable milestones.
 2. **Five-pass pipeline** — Table detection, column mapping, optional transforms, optional validations, and output generation mirror the conceptual flow documented for runs.【F:docs/developers/README.md†L118-L176】
 3. **Hookable lifecycle** — Support for `ade_config` hooks (`on_run_start`, `after_mapping`, `before_save`, `on_run_end`) with well-defined context objects and safe artifact logging APIs.【F:docs/developers/README.md†L176-L199】
 4. **Streaming-friendly logging** — Emit structured events (NDJSON) and maintain a human-readable artifact narrative to satisfy the runs API contract.【F:docs/ade_runs_api_spec.md†L298-L537】
-5. **CLI/worker entry points** — Maintain `python -m apps.ade_engine` for manifest inspection while introducing a worker module (e.g., `ade_engine.worker`) that can be invoked with `run_id` as WP6 envisions.【F:docs/developers/workpackages/wp6-runs-integration.md†L11-L19】
+5. **CLI/worker entry points** — Maintain `python -m ade_engine` for manifest inspection while introducing a worker module (e.g., `ade_engine.worker`) that can be invoked with `run_id` as WP6 envisions.【F:docs/developers/workpackages/wp6-runs-integration.md†L11-L19】
 
 ## External Dependencies & Integration Points
 - **Backend run service:** Accepts `run_id`, resolves the active build, and invokes `ade_engine.worker`; coordinate CLI argument names (`--run-id`, `--runs-dir`, `--config-id`) and exit codes with WP6 owners.【F:docs/developers/workpackages/wp6-runs-integration.md†L7-L24】
@@ -92,7 +92,7 @@ breaks the implementation into incremental, testable milestones.
 ### 7. Testing Strategy
 - Unit tests for manifest loader, artifact/event writers, hook dispatchers, detector adapters.
 - Integration tests using a minimal fixture `ade_config` to validate end-to-end processing of sample CSV/XLSX files.
-- CLI tests for `python -m apps.ade_engine` manifest mode and future worker command.
+- CLI tests for `python -m ade_engine` manifest mode and future worker command.
 - Contract tests to ensure logs + outputs align with expected file names/structures.
 
 ## Definition of Done

@@ -22,7 +22,7 @@ Docs to know:
 
 ## ade CLI essentials
 
-Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m apps.ade_engine --help`.
+Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
 
 - `ade setup` — one-time bootstrap (venv, hooks).
 - `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
@@ -59,8 +59,8 @@ Commands:
 ```
 
 ```bash
-$ python -m apps.ade_engine run --help
-Usage: python -m apps.ade_engine run [OPTIONS]
+$ python -m ade_engine run --help
+Usage: python -m ade_engine run [OPTIONS]
 
 Options:
   -i, --input PATH               Source file(s) (repeatable)
@@ -80,7 +80,7 @@ Options:
 
 ## Engine CLI smoke tests (revamped)
 
-`apps/ade-engine/src/ade_engine/cli.py` is a Typer CLI invoked as `python -m apps.ade_engine ...`. It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
+`apps/ade-engine/src/ade_engine/cli/app.py` is a Typer CLI invoked as `python -m ade_engine ...`. It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
 
 - Inputs: combine `--input` (repeatable) and `--input-dir` with `--include/--exclude` (defaults to `*.xlsx, *.csv` when not provided).
 - Outputs: if no flags are set, output lands in `<input_dir>/output/<input_stem>_normalized.xlsx`. When multiple inputs are provided, `--output-dir`/`--logs-dir` are nested per input stem to avoid collisions.
@@ -92,7 +92,7 @@ Options:
 Use the template config package shipped in the repo and a sample input:
 
 ```bash
-python -m apps.ade_engine run \
+python -m ade_engine run \
   --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
   --config-package data/templates/config_packages/default \
   --output-dir data/samples/output/cli-smoke \
@@ -104,7 +104,7 @@ Expected: output at `data/samples/output/cli-smoke/z_pass6_synthetic_contacts_ne
 ### NDJSON stream run (for API-style validation)
 
 ```bash
-python -m apps.ade_engine run \
+python -m ade_engine run \
   --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
   --config-package data/templates/config_packages/default \
   --log-format ndjson \
@@ -116,7 +116,7 @@ Expected: NDJSON events on stdout (kept clean via `protect_stdout`), with output
 ### Batch multiple inputs
 
 ```bash
-python -m apps.ade_engine run \
+python -m ade_engine run \
   --input-dir data/samples/input \
   --config-package data/templates/config_packages/default \
   --include "*.xlsx" --exclude "detector-pass*" \

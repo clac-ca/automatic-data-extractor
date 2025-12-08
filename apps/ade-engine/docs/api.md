@@ -8,22 +8,22 @@ This document describes the supported, stable API surface of `ade-engine`.
 
 `ade_engine` exports:
 
-- `ADEngine`
+- `Engine`
 - `Settings`
 - `RunRequest`, `RunResult`, `RunStatus`
 - `__version__`
 
-### ADEngine
+### Engine
 
 ```python
-from ade_engine import ADEngine
+from ade_engine import Engine
 from ade_engine.types.run import RunRequest
 
-engine = ADEngine()
+engine = Engine()
 result = engine.run(RunRequest(input_file=Path("source.xlsx")))
 ```
 
-`ADEngine.run(...)` accepts either a `RunRequest` or keyword arguments used to build one.
+`Engine.run(...)` accepts either a `RunRequest` or keyword arguments used to build one.
 
 Key parameters (high level):
 
@@ -100,8 +100,8 @@ Common kwargs:
 - `state`: run state dict (mutable)
 - `manifest`: `ManifestContext`
 - `logger`: logger instance
-- `event_emitter` (and alias `events`): structured emitter
-- `file_name` / `input_file_name`
+- `event_emitter`: structured emitter
+- `input_file_name`: basename of the source file
 
 Plus stage-specific kwargs (examples):
 - column detectors: `header`, `column_values`, `column_values_sample`, `extracted_table`…

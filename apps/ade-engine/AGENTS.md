@@ -26,7 +26,7 @@ This document is a reference for how those actors interact, what messages they e
   - attach `run_id` + `meta` to all events
   - ensure reporting failures do not crash the engine
 
-### 3) Engine Agent (`ade_engine.engine.ADEngine`)
+### 3) Engine Agent (`ade_engine.engine.Engine`)
 **Role:** Orchestrate a single normalization run.
 - **Inputs:** `RunRequest`, `logger`, `event_emitter`
 - **Outputs:** `RunResult`, normalized workbook artifact
@@ -138,7 +138,7 @@ sequenceDiagram
   participant API as Orchestrator (ADE API)
   participant CLI as CLI
   participant Rep as Reporter/EventEmitter
-  participant Eng as ADEngine
+  participant Eng as Engine
   participant Pipe as Pipeline
   participant Cfg as Config callables
 
@@ -166,7 +166,7 @@ Key design choice: **meta injection**
 ### 1) Local CLI (text)
 
 ```bash
-python -m apps.ade_engine run --input ./source.xlsx
+python -m ade_engine run --input ./source.xlsx
 ```
 
 Produces human-friendly lines to stderr and writes `output/normalized.xlsx`.
@@ -174,7 +174,7 @@ Produces human-friendly lines to stderr and writes `output/normalized.xlsx`.
 ### 2) API mode (NDJSON to stdout)
 
 ```bash
-python -m apps.ade_engine run --input ./source.xlsx --log-format ndjson \
+python -m ade_engine run --input ./source.xlsx --log-format ndjson \
   --meta workspace_id=ws_123 --meta config_id=cfg_456
 ```
 

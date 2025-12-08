@@ -36,6 +36,11 @@ pip install ade-engine
 pip install -e apps/ade-engine
 ```
 
+```bash
+# Install just the ade-engine package from GitHub (no local clone needed):
+pip install "git+https://github.com/clac-ca/automatic-data-extractor.git#subdirectory=apps/ade-engine"
+```
+
 Dependencies include `openpyxl` (XLSX IO), `pydantic` (manifest validation), and `typer` (CLI).
 
 ---
@@ -45,31 +50,31 @@ Dependencies include `openpyxl` (XLSX IO), `pydantic` (manifest validation), and
 Normalize a workbook:
 
 ```bash
-python -m apps.ade_engine run --input path/to/source.xlsx
+python -m ade_engine run --input path/to/source.xlsx
 ```
 
 Write output to a custom directory:
 
 ```bash
-python -m apps.ade_engine run --input source.xlsx --output-dir ./out
+python -m ade_engine run --input source.xlsx --output-dir ./out
 ```
 
 Emit NDJSON events to stdout (useful for an API that streams progress):
 
 ```bash
-python -m apps.ade_engine run --input source.xlsx --log-format ndjson
+python -m ade_engine run --input source.xlsx --log-format ndjson
 ```
 
 Write NDJSON to a file:
 
 ```bash
-python -m apps.ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
+python -m ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
 ```
 
 Pass run-level metadata (included in every event):
 
 ```bash
-python -m apps.ade_engine run --input source.xlsx --log-format ndjson \
+python -m ade_engine run --input source.xlsx --log-format ndjson \
   --meta workspace_id=ws_123 --meta config_id=cfg_456
 ```
 
@@ -91,7 +96,7 @@ python -m apps.ade_engine run --input source.xlsx --log-format ndjson \
 
 ```mermaid
 flowchart LR
-  CLI[CLI / API runner] -->|RunRequest| Engine[ADEngine]
+  CLI[CLI / API runner] -->|RunRequest| Engine[Engine]
   Engine --> Config[Config runtime (manifest + modules)]
   Engine --> IO[Workbook IO]
   Engine --> Pipeline[Pipeline]
