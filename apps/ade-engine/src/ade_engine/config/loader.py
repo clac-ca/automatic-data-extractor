@@ -107,27 +107,32 @@ def _load_manifest(package: str, manifest_path: Path | None) -> ManifestContext:
     except ModuleNotFoundError as exc:
         raise ConfigError(f"Config package '{package}' could not be imported") from exc
 
-    default_manifest = Path(resources.files(pkg) / _MANIFEST_FILE)
-    path = Path(manifest_path) if manifest_path else default_manifest
+    def _load_from_path(path: Path) -> ManifestContext:
+        if not path.exists():
+            raise ConfigError(f"Manifest file not found at '{path}'")
+        if path.suffix.lower() != ".toml":
+            raise ConfigError(f"Manifest must be a TOML file, got '{path.name}'")
 
-    if not path.exists():
-        raise ConfigError(f"Manifest file not found at '{path}'")
-    if path.suffix.lower() != ".toml":
-        raise ConfigError(f"Manifest must be a TOML file, got '{path.name}'")
+        try:
+            raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"Manifest at '{path}' is not valid TOML: {exc}") from exc
+        except OSError as exc:
+            raise ConfigError(f"Unable to read manifest file '{path}'") from exc
 
-    try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"Manifest at '{path}' is not valid TOML: {exc}") from exc
-    except OSError as exc:
-        raise ConfigError(f"Unable to read manifest file '{path}'") from exc
+        try:
+            model = ManifestV1.model_validate(raw)
+        except ValidationError as exc:
+            raise ConfigError(f"Manifest validation failed: {exc}") from exc
 
-    try:
-        model = ManifestV1.model_validate(raw)
-    except ValidationError as exc:
-        raise ConfigError(f"Manifest validation failed: {exc}") from exc
+        return ManifestContext(raw=raw, model=model)
 
-    return ManifestContext(raw=raw, model=model)
+    manifest_resource = resources.files(pkg).joinpath(_MANIFEST_FILE)
+    if manifest_path:
+        return _load_from_path(Path(manifest_path))
+
+    with resources.as_file(manifest_resource) as default_manifest_path:
+        return _load_from_path(default_manifest_path)
 
 
 def load_config_runtime(

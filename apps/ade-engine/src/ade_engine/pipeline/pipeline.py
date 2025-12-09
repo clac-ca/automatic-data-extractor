@@ -51,9 +51,9 @@ class Pipeline:
         sheet_name: str,
         sheet_position: int,
         sheet_index_lookup: dict[str, int],
-        logger: logging.Logger | None = None,
+        logger: logging.Logger | logging.LoggerAdapter | None = None,
     ) -> None:
-        emitter = invoker.event_emitter
+        emitter = invoker.events
 
         src_ws = source_wb[sheet_name]
         out_ws = output_wb.create_sheet(title=sheet_name, index=sheet_position)
@@ -128,10 +128,10 @@ class Pipeline:
         region: TableRegion,
         table_index: int,
         renderer: TableRenderer,
-        logger: logging.Logger | None = None,
+        logger: logging.Logger | logging.LoggerAdapter | None = None,
     ) -> TableContext:
         sheet_name = sheet_ctx.source_worksheet.title
-        emitter = invoker.event_emitter
+        emitter = invoker.events
 
         origin = TableOrigin(
             source_path=run_ctx.source_path,

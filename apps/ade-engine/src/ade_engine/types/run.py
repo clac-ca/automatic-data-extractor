@@ -6,10 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping
-from uuid import UUID
-
-
 class RunStatus(str, Enum):
     """Overall run outcome."""
 
@@ -32,7 +28,6 @@ class RunErrorCode(str, Enum):
 class RunRequest:
     """Configuration for a single engine run."""
 
-    run_id: UUID | None = None
     config_package: str = "ade_config"
     manifest_path: Path | None = None
     input_file: Path | None = None
@@ -41,7 +36,6 @@ class RunRequest:
     output_file: Path | None = None
     logs_dir: Path | None = None
     logs_file: Path | None = None
-    metadata: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +53,6 @@ class RunResult:
 
     status: RunStatus
     error: RunError | None
-    run_id: UUID
     output_path: Path | None
     logs_dir: Path
     processed_file: str | None

@@ -6,6 +6,7 @@ import importlib
 import inspect
 from dataclasses import dataclass
 from importlib import resources
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable
 
@@ -48,10 +49,11 @@ def discover_row_detectors(package: ModuleType) -> tuple[RowDetector, ...]:
 
     detectors: list[RowDetector] = []
     for entry in sorted(resources.files(detectors_pkg).iterdir(), key=lambda e: e.name):
-        if entry.name.startswith("_") or entry.suffix != ".py":
+        entry_path = Path(entry.name)
+        if entry_path.name.startswith("_") or entry_path.suffix != ".py":
             continue
 
-        module = importlib.import_module(f"{detectors_pkg.__name__}.{entry.stem}")
+        module = importlib.import_module(f"{detectors_pkg.__name__}.{entry_path.stem}")
         for name, attr in inspect.getmembers(module, callable):
             if not name.startswith("detect_"):
                 continue

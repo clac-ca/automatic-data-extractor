@@ -63,7 +63,6 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
         logs_file = None
 
     normalized = RunRequest(
-        run_id=request.run_id,
         config_package=resolved_config.package,
         manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
         input_file=input_file,
@@ -72,7 +71,6 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
         output_file=output_file,
         logs_dir=logs_dir,
         logs_file=logs_file,
-        metadata=dict(request.metadata) if request.metadata else {},
     )
 
     return PreparedRun(

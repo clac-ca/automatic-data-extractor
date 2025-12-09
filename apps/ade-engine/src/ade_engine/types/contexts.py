@@ -24,9 +24,8 @@ class RunContext:
     source_workbook: openpyxl.Workbook
     output_workbook: openpyxl.Workbook
     state: dict[str, Any] = field(default_factory=dict)
-    meta: dict[str, Any] = field(default_factory=dict)
     logger: Any | None = None
-    event_emitter: Any | None = None
+    events: Any | None = None
 
 
 @dataclass

@@ -18,6 +18,8 @@ def load_source_workbook(path: Path) -> Workbook:
     if path.suffix.lower() == ".csv":
         wb = Workbook()
         ws = wb.active
+        if ws is None:
+            raise InputError("Failed to initialize worksheet for CSV input")
         ws.title = path.stem
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             for row in csv.reader(handle):

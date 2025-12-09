@@ -43,7 +43,7 @@ Implements the main Workbook → Sheet → Table flow:
 
 The pipeline emits stage-level events (sheet/table progress).
 
-### 5) Reporting (`ade_engine.reporting`)
+### 5) Reporting (`ade_engine.logger`)
 Provides a consistent interface for:
 
 - **structured events** via `EventEmitter.emit(event, **fields)`
@@ -70,8 +70,8 @@ sequenceDiagram
   participant Config as Config callables
 
   User->>CLI: run (input, config, outputs)
-  CLI->>Rep: build_reporting(text|ndjson, meta)
-  CLI->>Eng: engine.run(request, logger, event_emitter)
+  CLI->>Rep: start_run_logging(text|ndjson)
+  CLI->>Eng: engine.run(request, logger, events)
   Eng->>Rep: emit run.started / run.planned
   Eng->>Cfg: load_config_runtime()
   Cfg-->>Eng: ConfigRuntime (manifest + registries)

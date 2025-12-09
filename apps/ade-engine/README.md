@@ -71,13 +71,6 @@ Write NDJSON to a file:
 python -m ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
 ```
 
-Pass run-level metadata (included in every event):
-
-```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson \
-  --meta workspace_id=ws_123 --meta config_id=cfg_456
-```
-
 ---
 
 ## Where to read next

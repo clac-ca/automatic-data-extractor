@@ -1,5 +1,4 @@
 from pathlib import Path
-from uuid import uuid4
 
 from typer.testing import CliRunner
 
@@ -19,7 +18,7 @@ def test_run_command_happy_path(tmp_path, monkeypatch):
     logs_dir = tmp_path / "logs"
     calls: dict[str, Path] = {}
 
-    def fake_run(self, request, logger=None, event_emitter=None, **_kwargs):
+    def fake_run(self, request, logger=None, events=None, **_kwargs):
         calls["input"] = Path(request.input_file)
         calls["output"] = Path(request.output_file)
         calls["logs_file"] = Path(request.logs_file)
@@ -29,7 +28,6 @@ def test_run_command_happy_path(tmp_path, monkeypatch):
         return RunResult(
             status=RunStatus.SUCCEEDED,
             error=None,
-            run_id=request.run_id or uuid4(),
             output_path=output_path,
             logs_dir=Path(request.logs_dir or request.output_dir or "."),
             processed_file=request.input_file.name,

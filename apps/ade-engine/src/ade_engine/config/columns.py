@@ -6,7 +6,7 @@ import importlib
 import inspect
 from dataclasses import dataclass
 from types import ModuleType
-from typing import Callable
+from typing import Callable, cast
 
 from ade_engine.config.validators import require_keyword_only
 from ade_engine.exceptions import ConfigError
@@ -41,7 +41,7 @@ def _discover_detectors(module: ModuleType, *, module_path: str) -> tuple[Detect
     for name, attr in inspect.getmembers(module, callable):
         if name.startswith("detect_"):
             require_keyword_only(attr, label=f"Detector '{module_path}.{name}'")
-            detectors.append(attr)
+            detectors.append(cast(DetectorFn, attr))
     detectors.sort(key=lambda fn: fn.__name__)
     return tuple(detectors)
 

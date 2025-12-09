@@ -17,18 +17,17 @@ This document is a reference for how those actors interact, what messages they e
   - build reporting (`text` or `ndjson`)
   - keep stdout clean in NDJSON mode (redirect stray prints to stderr)
 
-### 2) Reporting Agent (`ade_engine.reporting`)
+### 2) Reporting Agent (`ade_engine.logger`)
 **Role:** Convert engine activity into a stream of consumable messages.
 - **Inputs:** `emit(event, **fields)` calls and standard logging records
 - **Outputs:** text lines or NDJSON objects to stdout/stderr/file
 - **Responsibilities:**
   - generate timestamps
-  - attach `run_id` + `meta` to all events
   - ensure reporting failures do not crash the engine
 
 ### 3) Engine Agent (`ade_engine.engine.Engine`)
 **Role:** Orchestrate a single normalization run.
-- **Inputs:** `RunRequest`, `logger`, `event_emitter`
+- **Inputs:** `RunRequest`, `logger`, `events`
 - **Outputs:** `RunResult`, normalized workbook artifact
 - **Responsibilities:**
   - path normalization and config resolution
@@ -74,7 +73,7 @@ These are “user-provided agents”:
 They operate under strict invocation rules:
 - keyword-only parameters
 - accept `**_`
-- treat `logger` / `event_emitter` as their output channel
+- treat `logger` / `events` as their output channel
 
 ---
 
@@ -88,8 +87,6 @@ An emitted event becomes a JSON object with this general shape:
 {
   "ts": "2025-12-07T12:34:56.789Z",
   "event": "table.mapped",
-  "run_id": "9c2a1c2d-...",
-  "meta": { "workspace_id": "ws_123", "config_id": "cfg_456" },
   "message": "Mapped 10/12 fields",
   "data": {
     "sheet_name": "Sheet1",
@@ -101,7 +98,7 @@ An emitted event becomes a JSON object with this general shape:
 ```
 
 Reserved (top-level) keys:
-- `ts`, `event`, `run_id`, `meta`
+- `ts`, `event`
 - `message`, `level`, `stage`, `logger`
 - `exc_type`, `exc`, `traceback`
 - `data` (arbitrary structured payload)
@@ -111,7 +108,7 @@ Reserved (top-level) keys:
 Standard Python logging is converted into event name `log`:
 
 ```json
-{"event":"log","level":"info","logger":"ade_engine.run.<id>","message":"..."}
+{"event":"log","level":"info","logger":"ade_engine.run","message":"..."}
 ```
 
 ---
@@ -143,8 +140,8 @@ sequenceDiagram
   participant Cfg as Config callables
 
   API->>CLI: spawn ade-engine (ndjson)
-  CLI->>Rep: build_reporting(run_id, meta)
-  CLI->>Eng: run(request, logger, emitter)
+  CLI->>Rep: start_run_logging(log_format)
+  CLI->>Eng: run(request, logger, events)
   Eng->>Rep: run.started / run.planned
   Pipe->>Rep: sheet.* / table.*
   Cfg->>Rep: custom config events
@@ -153,11 +150,6 @@ sequenceDiagram
   API->>API: enrich events (workspace_id, config_id, ...)
   API-->>UI: stream progress
 ```
-
-Key design choice: **meta injection**
-- The CLI can include `--meta KEY=VALUE`.
-- The reporter attaches `meta` to every event.
-- An orchestrator can avoid re-writing event payloads downstream.
 
 ---
 
@@ -175,7 +167,6 @@ Produces human-friendly lines to stderr and writes `output/normalized.xlsx`.
 
 ```bash
 python -m ade_engine run --input ./source.xlsx --log-format ndjson \
-  --meta workspace_id=ws_123 --meta config_id=cfg_456
 ```
 
 Consumes as an event stream, one JSON object per line.
@@ -183,9 +174,9 @@ Consumes as an event stream, one JSON object per line.
 ### 3) A config transformer that emits an event
 
 ```python
-def transform(*, row_index: int, field_name: str, value: object, event_emitter, **_):
+def transform(*, row_index: int, field_name: str, value: object, events, **_):
     if field_name == "email" and value is None:
-        event_emitter.emit("config.email.missing", row_index=row_index)
+        events.emit("config.email.missing", row_index=row_index)
     return None
 ```
 

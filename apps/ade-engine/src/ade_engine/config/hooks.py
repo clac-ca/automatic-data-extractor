@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 from importlib import resources
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Iterable
 
@@ -88,9 +89,10 @@ class HooksRuntime:
 
         loaded: list[HookFn] = []
         for hook_file in sorted(resources.files(hooks_pkg).iterdir(), key=lambda p: p.name):
-            if hook_file.name.startswith("_") or hook_file.suffix != ".py":
+            hook_path = Path(hook_file.name)
+            if hook_path.name.startswith("_") or hook_path.suffix != ".py":
                 continue
-            loaded.append(load_entrypoint(f"{hooks_pkg_name}.{hook_file.stem}"))
+            loaded.append(load_entrypoint(f"{hooks_pkg_name}.{hook_path.stem}"))
 
         hooks_tuple = tuple(loaded)
         return cls(
