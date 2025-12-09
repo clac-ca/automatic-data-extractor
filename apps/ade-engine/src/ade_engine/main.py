@@ -8,15 +8,16 @@ Exposes the ADE engine runtime CLI with:
 
 from __future__ import annotations
 
+import logging
 from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List, Optional
 
 import typer
 from typer import BadParameter
 
-from ade_engine import ExecutedRun, __version__
+from ade_engine import __version__
 from ade_engine.engine import run_inputs
 from ade_engine.settings import Settings
 from ade_engine.types.run import RunStatus
@@ -43,35 +44,26 @@ class LogFormat(str, Enum):
 # ---------------------------------------------------------------------------
 
 
-def parse_metadata(meta: list[str]) -> dict[str, str]:
-    """Parse repeated --meta=KEY=VALUE options into a dictionary."""
-    result: dict[str, str] = {}
+def resolve_log_level(log_level: Optional[str], default_level: int) -> int:
+    """Resolve a string log level to a logging level constant."""
+    if not log_level:
+        return default_level
 
-    for raw in meta:
-        value = (raw or "").strip()
-        if not value:
-            continue
+    mapping = logging.getLevelNamesMapping()
+    resolved = mapping.get(str(log_level).upper())
+    if isinstance(resolved, int):
+        return resolved
 
-        if "=" not in value:
-            raise BadParameter("--meta must be provided as KEY=VALUE", param_name="meta")
-
-        key, val = value.split("=", 1)
-        key = key.strip()
-        if not key:
-            raise BadParameter("Metadata key cannot be empty", param_name="meta")
-
-        result[key] = val.strip()
-
-    return result
+    raise BadParameter(f"Invalid log level: {log_level}", param_hint="log_level")
 
 
 def collect_input_files(
     explicit_inputs: Iterable[Path],
-    input_dir: Path | None,
-    include: list[str],
-    exclude: list[str],
+    input_dir: Optional[Path],
+    include: List[str],
+    exclude: List[str],
     settings: Settings,
-) -> list[Path]:
+) -> List[Path]:
     """Collect all input files from explicit paths and/or a directory scan."""
     paths = list(explicit_inputs)
     include_globs = list(dict.fromkeys((*settings.supported_file_extensions, *include)))
@@ -94,31 +86,6 @@ def collect_input_files(
     return sorted(set(paths))
 
 
-def print_text_summary(reports: Iterable[ExecutedRun]) -> None:
-    """Print a concise, human-friendly summary for one or more runs."""
-    typer.echo("Run summary:")
-
-    for report in reports:
-        result = report.result
-        status = result.status.value if isinstance(result.status, RunStatus) else str(result.status)
-
-        parts: list[str] = [status, str(report.input_file)]
-
-        output_path = result.output_path or report.output_file
-        if output_path:
-            parts.append(f"output={output_path}")
-        if report.logs_file:
-            parts.append(f"logs={report.logs_file}")
-
-        if result.error is not None:
-            if result.error.stage:
-                parts.append(f"stage={result.error.stage}")
-            message = (result.error.message or "").replace("\n", " ").strip()
-            parts.append(f"{result.error.code.value}: {message}")
-
-        typer.echo(" | ".join(parts))
-
-
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -126,7 +93,7 @@ def print_text_summary(reports: Iterable[ExecutedRun]) -> None:
 
 @app.command("run")
 def run_command(
-    inputs: list[Path] = typer.Option(
+    inputs: List[Path] = typer.Option(
         [],
         "--input",
         "-i",
@@ -136,7 +103,7 @@ def run_command(
         resolve_path=True,
         help="Input file(s). Repeatable; may be combined with --input-dir.",
     ),
-    input_dir: Path | None = typer.Option(
+    input_dir: Optional[Path] = typer.Option(
         None,
         "--input-dir",
         exists=True,
@@ -145,7 +112,7 @@ def run_command(
         resolve_path=True,
         help="Recurse this directory for input files; may be combined with --input.",
     ),
-    include: list[str] = typer.Option(
+    include: List[str] = typer.Option(
         [],
         "--include",
         help=(
@@ -153,18 +120,18 @@ def run_command(
             "Examples: --include '*.xls', --include 'receipts/**', --include '*_raw.*'."
         ),
     ),
-    exclude: list[str] = typer.Option(
+    exclude: List[str] = typer.Option(
         [],
         "--exclude",
         help="Glob pattern(s) for files under --input-dir to exclude.",
     ),
-    input_sheet: list[str] = typer.Option(
+    input_sheet: List[str] = typer.Option(
         [],
         "--input-sheet",
         "-s",
         help="Optional worksheet(s) to ingest; defaults to all visible sheets.",
     ),
-    output_dir: Path | None = typer.Option(
+    output_dir: Optional[Path] = typer.Option(
         None,
         "--output-dir",
         file_okay=False,
@@ -172,7 +139,7 @@ def run_command(
         resolve_path=True,
         help="Directory for generated outputs.",
     ),
-    logs_dir: Path | None = typer.Option(
+    logs_dir: Optional[Path] = typer.Option(
         None,
         "--logs-dir",
         file_okay=False,
@@ -180,18 +147,29 @@ def run_command(
         resolve_path=True,
         help="Directory for per-run log files.",
     ),
-    log_format: LogFormat = typer.Option(
-        LogFormat.text,
+    log_format: Optional[LogFormat] = typer.Option(
+        None,
         "--log-format",
         case_sensitive=False,
         help="Log output format.",
     ),
-    meta: list[str] = typer.Option(
-        [],
-        "--meta",
-        help="Extra metadata KEY=VALUE to attach to all events. Repeatable.",
+    log_level: Optional[str] = typer.Option(
+        None,
+        "--log-level",
+        case_sensitive=False,
+        help="Log level (debug, info, warning, error, critical).",
     ),
-    config_package: str | None = typer.Option(
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Enable debug logging and verbose diagnostics.",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet",
+        help="Reduce output to warnings and errors.",
+    ),
+    config_package: Optional[str] = typer.Option(
         None,
         "--config-package",
         help=(
@@ -203,29 +181,32 @@ def run_command(
     """Execute the engine for one or more inputs."""
 
     if (include or exclude) and not input_dir:
-        raise BadParameter("--include/--exclude require --input-dir.", param_name="input_dir")
+        raise BadParameter("--include/--exclude require --input-dir.", param_hint="input_dir")
 
     settings = Settings()
     all_inputs = collect_input_files(inputs, input_dir, include, exclude, settings)
     if not all_inputs:
         raise BadParameter("No inputs found. Provide --input and/or --input-dir.")
 
-    metadata = parse_metadata(meta)
+    effective_log_format = log_format.value if log_format else settings.log_format
+
+    effective_log_level = resolve_log_level(log_level, settings.log_level)
+    if debug:
+        effective_log_level = logging.DEBUG
+    if quiet:
+        effective_log_level = logging.WARNING
 
     executed = run_inputs(
         all_inputs,
         config_package=config_package or settings.config_package,
         output_dir=output_dir,
         logs_dir=logs_dir,
-        log_format=log_format.value,
+        log_format=effective_log_format,
+        log_level=effective_log_level,
         input_sheets=input_sheet or None,
-        metadata=metadata,
     )
 
     any_failed = any(report.result.status != RunStatus.SUCCEEDED for report in executed)
-
-    if log_format is LogFormat.text:
-        print_text_summary(executed)
 
     raise typer.Exit(code=1 if any_failed else 0)
 
