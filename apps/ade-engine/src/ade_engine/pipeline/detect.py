@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
@@ -148,8 +149,22 @@ class TableDetector:
         logger=None,  # noqa: ARG002 - reserved for future visibility
     ) -> list[TableRegion]:
         scored_rows = _score_rows(rows=_iter_rows(worksheet), detectors=runtime.row_detectors, invoker=invoker)
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Scored rows for detection",
+                extra={
+                    "stage": "detect",
+                    "data": {
+                        "row_count": len(scored_rows),
+                        "header_threshold": self.header_threshold,
+                        "data_threshold": self.data_threshold,
+                        "detector_count": len(runtime.row_detectors),
+                        "sheet_name": worksheet.title,
+                    },
+                },
+            )
 
-        return [
+        regions = [
             TableRegion(min_row=min_row, max_row=max_row, min_col=1, max_col=max_col)
             for min_row, max_row, max_col in _detect_regions(
                 scored_rows=scored_rows,
@@ -157,6 +172,21 @@ class TableDetector:
                 data_threshold=self.data_threshold,
             )
         ]
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Detected table regions",
+                extra={
+                    "stage": "detect",
+                    "data": {
+                        "sheet_name": worksheet.title,
+                        "regions": [
+                            {"min_row": r.min_row, "max_row": r.max_row, "min_col": r.min_col, "max_col": r.max_col}
+                            for r in regions
+                        ],
+                    },
+                },
+            )
+        return regions
 
 
 __all__ = ["TableDetector", "HEADER_SCORE_THRESHOLD", "DATA_SCORE_THRESHOLD", "RowDetectorScore"]
