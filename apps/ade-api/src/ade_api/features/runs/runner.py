@@ -9,27 +9,25 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import ValidationError
-
 from ade_api.common.logging import log_context
-from ade_api.schemas.events import EngineEventFrame
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
 class StdoutFrame:
-    """Single stdout line emitted by the ADE engine process."""
+    """Single line emitted by the ADE engine process."""
 
     message: str
     stream: Literal["stdout", "stderr"] = "stdout"
 
 
-RunnerFrame = StdoutFrame | EngineEventFrame
+# For now, runner frames are just stdout/stderr lines.
+RunnerFrame = StdoutFrame
 
 
 class EngineSubprocessRunner:
-    """Manage a single ADE engine subprocess and stream its telemetry."""
+    """Manage a single ADE engine subprocess and stream its output."""
 
     def __init__(
         self,
@@ -43,7 +41,12 @@ class EngineSubprocessRunner:
         self.returncode: int | None = None
 
     async def stream(self) -> AsyncIterator[RunnerFrame]:
-        """Yield stdout lines and ADE events as they are produced."""
+        """Yield stdout/stderr lines as they are produced."""
+
+        logger.debug(
+            "run.engine.subprocess.start",
+            extra=log_context(command=" ".join(self._command)),
+        )
 
         process = await asyncio.create_subprocess_exec(
             *self._command,
@@ -51,7 +54,9 @@ class EngineSubprocessRunner:
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
         )
+
         assert process.stdout is not None
+        assert process.stderr is not None
 
         stdout_task = asyncio.create_task(self._capture_stdout(process))
         stderr_task = asyncio.create_task(self._capture_stderr(process))
@@ -73,6 +78,13 @@ class EngineSubprocessRunner:
                 await stderr_task
 
         self.returncode = await process.wait()
+        logger.debug(
+            "run.engine.subprocess.exit",
+            extra=log_context(
+                command=" ".join(self._command),
+                returncode=self.returncode,
+            ),
+        )
 
     async def _capture_stdout(self, process: asyncio.subprocess.Process) -> None:
         assert process.stdout is not None
@@ -81,7 +93,7 @@ class EngineSubprocessRunner:
                 text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
                 if not text:
                     continue
-                await self._queue.put(self._parse_frame(text))
+                await self._queue.put(StdoutFrame(message=text, stream="stdout"))
         finally:
             await self._queue.put(None)
 
@@ -95,20 +107,6 @@ class EngineSubprocessRunner:
                 await self._queue.put(StdoutFrame(message=text, stream="stderr"))
         finally:
             await self._queue.put(None)
-
-    def _parse_frame(self, text: str) -> RunnerFrame:
-        try:
-            return EngineEventFrame.model_validate_json(text)
-        except ValidationError as exc:
-            logger.warning(
-                "run.engine.frame.invalid",
-                extra=log_context(
-                    command=" ".join(self._command),
-                    line=text,
-                    error=str(exc),
-                ),
-            )
-            return StdoutFrame(message=text, stream="stdout")
 
 
 __all__ = ["EngineSubprocessRunner", "RunnerFrame", "StdoutFrame"]

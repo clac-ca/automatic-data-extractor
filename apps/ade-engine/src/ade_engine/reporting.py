@@ -1,13 +1,13 @@
-"""Structured logging + events.
+"""Reporting utilities: structured logging + domain events.
 
-The engine can be run in two reporting modes:
-
-- ``text``: human-friendly lines (default; written to stderr)
-- ``ndjson``: structured newline-delimited JSON (default; written to stdout)
-
-Inside engine code and config scripts, the API is the same:
-- ``logger.<level>(...)`` for log-style messages
-- ``event_emitter.emit("event.name", ...)`` for structured events
+Design goals:
+- One logger per run, configured once.
+- One handler per run.
+  - ``text`` mode renders human-friendly lines.
+  - ``ndjson`` mode renders one JSON object per line (NDJSON).
+- Domain events are just log records with an ``event`` name and optional structured ``data``.
+- Engine code and config scripts use the standard ``logger`` *and* a tiny helper:
+  ``event_emitter.emit("event.name", **data)``.
 """
 
 from __future__ import annotations
@@ -20,158 +20,102 @@ from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, IO, Mapping, Protocol
+from typing import Any, IO, Mapping
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+def _format_ts(created: float) -> str:
+    """Format a LogRecord ``created`` timestamp as RFC3339-ish UTC."""
+    return (
+        datetime.fromtimestamp(created, tz=timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
-class Sink(Protocol):
-    def write(self, event: dict[str, Any]) -> None: ...
+def _short(value: Any, *, limit: int = 120) -> str:
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
 
 
-class NdjsonSink:
-    def __init__(self, stream: IO[str]) -> None:
-        self._stream = stream
+class RunLogger(logging.LoggerAdapter):
+    """LoggerAdapter that injects ``run_id`` and ``meta`` into every record."""
 
-    def write(self, event: dict[str, Any]) -> None:
-        self._stream.write(json.dumps(event, ensure_ascii=False) + "\n")
-        try:
-            self._stream.flush()
-        except Exception:
-            pass
+    def __init__(self, logger: logging.Logger, *, run_id: str, meta: Mapping[str, Any] | None = None) -> None:
+        super().__init__(logger, {"run_id": str(run_id), "meta": dict(meta or {})})
 
-
-class TextSink(Sink):
-    def __init__(self, stream: IO[str]) -> None:
-        self._stream = stream
-
-    def write(self, event: dict[str, Any]) -> None:
-        ts = event.get("ts") or _utc_now()
-        name = event.get("event") or "event"
-        message = event.get("message")
-        level = event.get("level")
-        stage = event.get("stage")
-        data = event.get("data") if isinstance(event.get("data"), dict) else {}
-
-        if name == "log":
-            logger_name = event.get("logger")
-            head = f"[{ts}] {str(level or 'info').upper()}"
-            if logger_name:
-                head += f" {logger_name}"
-            line = head + ": " + str(message or "")
-            self._stream.write(line + "\n")
-
-            tb = event.get("traceback")
-            if tb:
-                self._stream.write(str(tb).rstrip("\n") + "\n")
-        else:
-            lvl = str(level or "info").upper()
-            head = f"[{ts}] {lvl} {name}"
-            line = f"{head}: {message}" if message else head
-
-            extras: list[str] = []
-            if stage:
-                extras.append(f"stage={stage}")
-
-            status = data.get("status")
-            if status:
-                extras.append(f"status={status}")
-
-            output = data.get("output_file") or data.get("output_path")
-            if output and name in {"run.planned", "run.completed"}:
-                extras.append(f"output={output}")
-
-            error = data.get("error")
-            if isinstance(error, dict):
-                code = error.get("code")
-                err_stage = error.get("stage")
-                err_msg = error.get("message")
-
-                if err_stage and not stage:
-                    extras.append(f"stage={err_stage}")
-
-                if code or err_msg:
-                    clean_msg = str(err_msg or "").replace("\n", " ").strip()
-                    if clean_msg and code:
-                        extras.append(f"error={code}: {clean_msg}")
-                    elif code:
-                        extras.append(f"error={code}")
-                    elif clean_msg:
-                        extras.append(f"error={clean_msg}")
-
-            if extras:
-                line += " (" + ", ".join(extras) + ")"
-
-            self._stream.write(line + "\n")
-
-        try:
-            self._stream.flush()
-        except Exception:
-            pass
-class EventEmitter:
-    """Structured event emitter used by the CLI/API (dependency-free)."""
-
-    def __init__(self, sink: Sink, *, run_id: str | None = None, meta: Mapping[str, Any] | None = None) -> None:
-        self._sink = sink
-        self._run_id = str(run_id) if run_id is not None else None
-        self._meta = dict(meta or {})
-
-    def child(self, meta: Mapping[str, Any] | None = None) -> "EventEmitter":
-        merged = dict(self._meta)
+    def process(self, msg: Any, kwargs: dict[str, Any]):
+        extra = dict(kwargs.pop("extra", {}) or {})
+        extra.setdefault("run_id", self.extra.get("run_id"))
+        meta = self.extra.get("meta") or {}
         if meta:
-            merged.update(meta)
-        return EventEmitter(self._sink, run_id=self._run_id, meta=merged)
-
-    def emit(self, event: str, /, **fields: Any) -> None:
-        payload: dict[str, Any] = {"ts": _utc_now(), "event": event}
-
-        if self._run_id:
-            payload["run_id"] = self._run_id
-        if self._meta:
-            payload["meta"] = dict(self._meta)
-
-        # Common top-level fields
-        for key in ("message", "level", "stage", "logger", "exc_type", "exc", "traceback"):
-            if key in fields and fields[key] is not None:
-                payload[key] = fields.pop(key)
-
-        if fields:
-            payload["data"] = fields
-
-        try:
-            self._sink.write(payload)
-        except Exception:
-            # Reporting should never crash a run.
-            pass
-
-    # Backwards-compatible alias some scripts use.
-    def custom(self, event: str, /, **fields: Any) -> None:
-        self.emit(event, **fields)
-
-    def config_emitter(self) -> "EventEmitter":
-        return self
+            # Avoid surprising mutation by downstream code.
+            extra.setdefault("meta", dict(meta))
+        kwargs["extra"] = extra
+        return msg, kwargs
 
 
-class EmitToSinkHandler(logging.Handler):
-    """Convert standard logging records into structured ``log`` events."""
+class EventEmitter:
+    """Tiny helper to emit domain events without touching ``extra``."""
 
-    def __init__(self, emitter: EventEmitter) -> None:
-        super().__init__()
-        self._emitter = emitter
+    def __init__(self, logger: logging.Logger) -> None:
+        self._logger = logger
 
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            message = record.getMessage()
-        except Exception:
-            message = str(getattr(record, "msg", ""))
+    def emit(
+        self,
+        event: str,
+        *,
+        message: str | None = None,
+        level: int = logging.INFO,
+        stage: str | None = None,
+        **data: Any,
+    ) -> None:
+        """Emit a domain event as a structured log record.
+
+        Args:
+          event: Stable event name (e.g. ``table.mapped``).
+          message: Optional human-friendly message (defaults to the event name).
+          level: Standard logging level (INFO by default).
+          stage: Optional engine stage (top-level field).
+          **data: Structured payload, stored under ``data`` in NDJSON output.
+        """
+        extra: dict[str, Any] = {"event": str(event)}
+        if stage is not None:
+            extra["stage"] = str(stage)
+        if data:
+            extra["data"] = data
+        self._logger.log(level, message or str(event), extra=extra)
+
+
+class JsonFormatter(logging.Formatter):
+    """Formatter that renders structured log records as one JSON object per line."""
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: A003 - matches logging.Formatter API
+        event = getattr(record, "event", None) or "log"
 
         payload: dict[str, Any] = {
+            "ts": _format_ts(record.created),
             "level": record.levelname.lower(),
-            "logger": record.name,
-            "message": message,
+            "event": event,
+            "message": record.getMessage(),
         }
+
+        run_id = getattr(record, "run_id", None)
+        if run_id:
+            payload["run_id"] = run_id
+
+        meta = getattr(record, "meta", None)
+        if meta:
+            payload["meta"] = meta
+
+        stage = getattr(record, "stage", None)
+        if stage:
+            payload["stage"] = stage
+
+        data = getattr(record, "data", None)
+        if data is not None:
+            payload["data"] = data
 
         if record.exc_info:
             exc_type, exc, _ = record.exc_info
@@ -182,13 +126,56 @@ class EmitToSinkHandler(logging.Handler):
             except Exception:
                 pass
 
-        self._emitter.emit("log", **payload)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+class TextFormatter(logging.Formatter):
+    """Formatter that renders structured records into readable single-line text."""
+
+    def format(self, record: logging.LogRecord) -> str:  # noqa: A003 - matches logging.Formatter API
+        ts = _format_ts(record.created)
+        level = record.levelname.upper()
+        event = getattr(record, "event", None) or "log"
+        message = record.getMessage()
+
+        if event == "log":
+            head = f"[{ts}] {level} {record.name}: {message}"
+        else:
+            head = f"[{ts}] {level} {event}: {message}"
+
+        extras: list[str] = []
+        stage = getattr(record, "stage", None)
+        if stage:
+            extras.append(f"stage={stage}")
+
+        data = getattr(record, "data", None)
+        if isinstance(data, dict) and data:
+            # Show a small, stable slice of data fields.
+            for key in sorted(data)[:8]:
+                extras.append(f"{key}={_short(data[key])}")
+            if len(data) > 8:
+                extras.append("…")
+
+        if extras:
+            head += " (" + ", ".join(extras) + ")"
+
+        if record.exc_info:
+            try:
+                tb = "".join(traceback.format_exception(*record.exc_info)).rstrip("\n")
+            except Exception:
+                tb = ""
+            if tb:
+                head += "\n" + tb
+
+        return head
 
 
 @dataclass
 class Reporter:
-    logger: logging.Logger
-    emitter: EventEmitter
+    """Bundle of run-scoped logger and event helper."""
+
+    logger: RunLogger
+    event_emitter: EventEmitter
     _handle: IO[str] | None = None
 
     def close(self) -> None:
@@ -208,21 +195,19 @@ class Reporter:
 
 
 def build_reporting(
-    fmt: Any,
+    fmt: str,
     *,
     run_id: str,
     meta: Mapping[str, Any] | None = None,
     file_path: Path | None = None,
     level: int = logging.INFO,
 ) -> Reporter:
-    """Create a logger + event emitter pair.
+    """Create the per-run logger and event helper.
 
-    - If ``file_path`` is provided, logs/events are written there.
+    - If ``file_path`` is provided, output goes there.
     - Otherwise: ``text`` -> stderr, ``ndjson`` -> stdout.
     """
-
-    fmt_value = getattr(fmt, "value", fmt)
-    fmt_value = str(fmt_value or "text").strip().lower()
+    fmt_value = str(fmt or "text").strip().lower()
     if fmt_value not in {"text", "ndjson"}:
         raise ValueError("fmt must be 'text' or 'ndjson'")
 
@@ -234,18 +219,20 @@ def build_reporting(
     else:
         stream = sys.stdout if fmt_value == "ndjson" else sys.stderr
 
-    sink: Sink = NdjsonSink(stream) if fmt_value == "ndjson" else TextSink(stream)
-    emitter = EventEmitter(sink, run_id=run_id, meta=meta)
-
-    logger = logging.getLogger(f"ade_engine.run.{run_id}")
-    logger.setLevel(level)
-    logger.handlers.clear()
-    logger.propagate = False
-    handler = EmitToSinkHandler(emitter)
+    handler = logging.StreamHandler(stream)
     handler.setLevel(level)
-    logger.addHandler(handler)
+    handler.setFormatter(JsonFormatter() if fmt_value == "ndjson" else TextFormatter())
 
-    return Reporter(logger=logger, emitter=emitter, _handle=handle)
+    base_logger = logging.getLogger(f"ade_engine.run.{run_id}")
+    base_logger.setLevel(level)
+    base_logger.handlers.clear()
+    base_logger.propagate = False
+    base_logger.addHandler(handler)
+
+    run_logger = RunLogger(base_logger, run_id=run_id, meta=meta)
+    event_emitter = EventEmitter(run_logger)
+
+    return Reporter(logger=run_logger, event_emitter=event_emitter, _handle=handle)
 
 
 @contextmanager
@@ -258,4 +245,10 @@ def protect_stdout(*, enabled: bool = True):
         yield
 
 
-__all__ = ["EventEmitter", "Reporter", "build_reporting", "protect_stdout"]
+__all__ = [
+    "EventEmitter",
+    "Reporter",
+    "RunLogger",
+    "build_reporting",
+    "protect_stdout",
+]

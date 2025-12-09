@@ -15,7 +15,7 @@ from ade_engine.pipeline.layout import SheetLayout
 from ade_engine.pipeline.mapping import ColumnMapper
 from ade_engine.pipeline.normalize import TableNormalizer
 from ade_engine.pipeline.render import TableRenderer
-from ade_engine.runtime import PluginInvoker, StageTracker
+from ade_engine.runtime import PluginInvoker
 from ade_engine.types.contexts import RunContext, TableContext, TableView, WorksheetContext
 from ade_engine.types.origin import TableOrigin, TableRegion
 from ade_engine.types.issues import Severity
@@ -46,7 +46,6 @@ class Pipeline:
         run_ctx: RunContext,
         hook_dispatcher: HookDispatcher,
         invoker: PluginInvoker,
-        stage: StageTracker,
         source_wb: Workbook,
         output_wb: Workbook,
         sheet_name: str,
@@ -54,7 +53,6 @@ class Pipeline:
         sheet_index_lookup: dict[str, int],
         logger: logging.Logger | None = None,
     ) -> None:
-        stage.set(f"sheet[{sheet_name}]")
         emitter = invoker.event_emitter
 
         src_ws = source_wb[sheet_name]
@@ -74,7 +72,6 @@ class Pipeline:
         )
         hook_dispatcher.on_sheet_start(sheet_ctx)
 
-        stage.set(f"detect[{sheet_name}]")
         regions = self.detector.detect(
             source_path=run_ctx.source_path,
             worksheet=src_ws,
@@ -87,7 +84,22 @@ class Pipeline:
             "sheet.tables_detected",
             message=f"Detected {len(regions)} table(s) in {sheet_name}",
             sheet_name=sheet_name,
+            sheet_index=sheet_ctx.sheet_index,
+            input_file=str(run_ctx.source_path),
+            row_count=row_count,
             table_count=len(regions),
+            tables=[
+                {
+                    "table_index": idx,
+                    "region": {
+                        "min_row": r.min_row,
+                        "max_row": r.max_row,
+                        "min_col": r.min_col,
+                        "max_col": r.max_col,
+                    },
+                }
+                for idx, r in enumerate(regions)
+            ],
         )
 
         renderer = self.renderer_factory()
@@ -97,7 +109,6 @@ class Pipeline:
                 run_ctx=run_ctx,
                 hook_dispatcher=hook_dispatcher,
                 invoker=invoker,
-                stage=stage,
                 sheet_ctx=sheet_ctx,
                 region=region,
                 table_index=table_index,
@@ -112,7 +123,6 @@ class Pipeline:
         run_ctx: RunContext,
         hook_dispatcher: HookDispatcher,
         invoker: PluginInvoker,
-        stage: StageTracker,
         sheet_ctx: WorksheetContext,
         region: TableRegion,
         table_index: int,
@@ -130,16 +140,26 @@ class Pipeline:
         )
         table_ctx = TableContext(sheet=sheet_ctx, origin=origin, region=region)
 
+        row_count = region.max_row - region.min_row + 1
+        col_count = region.max_col - region.min_col + 1
+
         emitter.emit(
             "table.detected",
             message=f"Table detected in {sheet_name} (#{table_index + 1})",
             sheet_name=sheet_name,
             sheet_index=sheet_ctx.sheet_index,
             table_index=table_index,
-            region={"min_row": region.min_row, "max_row": region.max_row, "min_col": region.min_col, "max_col": region.max_col},
+            input_file=str(run_ctx.source_path),
+            region={
+                "min_row": region.min_row,
+                "max_row": region.max_row,
+                "min_col": region.min_col,
+                "max_col": region.max_col,
+            },
+            row_count=row_count,
+            column_count=col_count,
         )
 
-        stage.set(f"extract[{sheet_name}:{table_index}]")
         extracted = self.extractor.extract(sheet_ctx.source_worksheet, origin, region)
         table_ctx.extracted = extracted
 
@@ -155,7 +175,6 @@ class Pipeline:
 
         hook_dispatcher.on_table_detected(table_ctx)
 
-        stage.set(f"map[{sheet_name}:{table_index}]")
         mapped = self.mapper.map(extracted, runtime, run_ctx, invoker=invoker, logger=logger)
         table_ctx.mapped = mapped
 
@@ -182,7 +201,6 @@ class Pipeline:
                 table_index=table_index,
             )
 
-        stage.set(f"normalize[{sheet_name}:{table_index}]")
         normalized = self.normalizer.normalize(mapped, runtime, run_ctx, invoker=invoker, logger=logger)
         table_ctx.normalized = normalized
 
@@ -201,7 +219,6 @@ class Pipeline:
             issues_by_severity=counts,
         )
 
-        stage.set(f"render[{sheet_name}:{table_index}]")
         placement = renderer.write_table(sheet_ctx.output_worksheet, normalized)
         table_ctx.placement = placement
         table_ctx.view = TableView(placement.worksheet, placement.cell_range)
