@@ -7,14 +7,14 @@ name = "ade-engine"
 version = "1.6.1"
 description = "Deterministic workbook normalization engine (detect → extract → map → normalize → render)."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.8"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 dependencies = [
-  "openpyxl>=3.1",
-  "pydantic>=2,<3",
-  "typer>=0.12",
-  "tomli>=2; python_version<'3.11'",
+  "openpyxl==3.1.5",
+  "pydantic==2.12.5",
+  "typer==0.20.0",
+  "tomli==2.3.0",
 ]
 
 [project.optional-dependencies]
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-ade-engine = "ade_engine.cli:main"
+ade-engine = "ade_engine.main:app"
 
 [tool.setuptools]
 include-package-data = true

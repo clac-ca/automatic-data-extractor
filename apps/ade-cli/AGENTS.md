@@ -54,10 +54,8 @@ Options:
       --include TEXT             Glob applied under --input-dir
       --exclude TEXT             Glob to skip under --input-dir
   -s, --input-sheet TEXT         Optional worksheet(s)
-      --output-dir PATH          Output directory (auto-nests per input when multiple)
-      --output-file PATH         Output file (default: <input>_normalized.xlsx)
-      --logs-dir PATH            Logs directory (auto-nests per input when multiple)
-      --logs-file PATH           Log output file path
+      --output-dir PATH          Output directory (default: ./output)
+      --logs-dir PATH            Logs directory (default: ./logs)
       --log-format [text|ndjson] Log output format
       --meta TEXT                KEY=VALUE metadata (repeatable)
       --config-package TEXT      Config package name or path
@@ -98,5 +96,5 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 ade types
 
 # Run the engine directly (see full flags with `python -m ade_engine run --help`)
-python -m ade_engine run --input data/samples/example.xlsx --output-dir data/samples/output --logs-dir data/samples/output
+python -m ade_engine run --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx --output-dir data/samples-output --logs-dir data/samples-output
 ```

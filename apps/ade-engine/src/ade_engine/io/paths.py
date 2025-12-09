@@ -28,7 +28,7 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
 
     Rules:
     - ``input_file`` is required.
-    - If ``output_dir`` is omitted, output is written to ``<input_dir>/output``.
+    - ``output_dir`` is required; callers decide where artifacts live.
     - If ``output_file`` is omitted, it defaults to ``<input_stem>_normalized.xlsx`` under ``output_dir``.
     - If ``output_file`` is provided as a bare filename, it is treated as relative to ``output_dir``.
     - If ``logs_file`` is provided as a bare filename, it is treated as relative to ``logs_dir``.
@@ -39,8 +39,11 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
     if request.input_file is None:
         raise InputError("RunRequest must include input_file")
 
+    if request.output_dir is None:
+        raise InputError("RunRequest must include output_dir")
+
     input_file = Path(request.input_file).resolve()
-    output_dir = Path(request.output_dir).resolve() if request.output_dir else (input_file.parent / "output")
+    output_dir = Path(request.output_dir).resolve()
 
     if request.output_file:
         candidate = Path(request.output_file)
@@ -57,7 +60,7 @@ def prepare_run_request(request: RunRequest, *, default_config_package: str | No
             candidate = logs_dir / candidate
         logs_file = candidate.resolve()
     else:
-        logs_file = (logs_dir / "engine_events.ndjson").resolve() if logs_dir else None
+        logs_file = None
 
     normalized = RunRequest(
         run_id=request.run_id,

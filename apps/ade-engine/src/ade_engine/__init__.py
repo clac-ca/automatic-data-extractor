@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from ade_engine.engine import Engine
+from ade_engine.engine import Engine, ExecutedRun, run_inputs
 from ade_engine.settings import Settings
 from ade_engine.types.run import RunRequest, RunResult, RunStatus
 
@@ -13,9 +13,11 @@ except PackageNotFoundError:  # pragma: no cover - source checkout / editable in
 
 __all__ = [
     "Engine",
+    "ExecutedRun",
     "RunRequest",
     "RunResult",
     "RunStatus",
     "Settings",
+    "run_inputs",
     "__version__",
 ]
