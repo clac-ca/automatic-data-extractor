@@ -35,6 +35,21 @@ class HookDispatcher(BaseHooks):
         self.logger = logger or logging.getLogger(__name__)
 
     def _invoke(self, stage_name: str, callables: Iterable[Any], **kwargs: Any) -> list[Any]:
+        callables = tuple(callables)
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(
+                "Invoking hooks for %s",
+                stage_name,
+                extra={
+                    "stage": "hooks",
+                    "data": {
+                        "stage": stage_name,
+                        "hook_count": len(callables),
+                        "hooks": [_hook_name(hook) for hook in callables],
+                    },
+                },
+            )
+
         results: list[Any] = []
         for hook in callables:
             try:

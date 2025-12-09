@@ -71,6 +71,19 @@ class Engine:
         logger = logger or logging.getLogger(__name__)
         engine_events = events or EventLogger(logger, namespace="engine")
         config_events = EventLogger(logger, namespace="engine.config")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Run starting",
+                extra={
+                    "stage": "run",
+                    "data": {
+                        "config_package": req.config_package,
+                        "input_file": str(req.input_file) if req.input_file else None,
+                        "output_dir": str(req.output_dir) if req.output_dir else None,
+                        "logs_dir": str(req.logs_dir) if req.logs_dir else None,
+                    },
+                },
+            )
 
         status = RunStatus.RUNNING
         error: RunError | None = None
@@ -105,6 +118,20 @@ class Engine:
             output_dir.mkdir(parents=True, exist_ok=True)
             if logs_dir:
                 logs_dir.mkdir(parents=True, exist_ok=True)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Resolved run paths",
+                    extra={
+                        "stage": "run",
+                        "data": {
+                            "input_file": str(input_path),
+                            "output_file": str(output_path),
+                            "output_dir": str(output_dir),
+                            "logs_file": str(prepared.logs_file) if prepared.logs_file else None,
+                            "logs_dir": str(logs_dir) if logs_dir else None,
+                        },
+                    },
+                )
 
             engine_events.emit(
                 "run.planned",
@@ -158,6 +185,18 @@ class Engine:
 
                 sheet_names = self.workbook_io.resolve_sheet_names(source_wb, prepared.request.input_sheets)
                 sheet_index_lookup = {ws.title: idx for idx, ws in enumerate(source_wb.worksheets)}
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "Processing sheets",
+                        extra={
+                            "stage": "run",
+                            "data": {
+                                "sheet_names": sheet_names,
+                                "input_sheets_filter": prepared.request.input_sheets,
+                                "sheet_count": len(sheet_names),
+                            },
+                        },
+                    )
 
                 for sheet_position, sheet_name in enumerate(sheet_names):
                     self.pipeline.process_sheet(
@@ -176,6 +215,17 @@ class Engine:
                 hooks.on_workbook_before_save(run_ctx)
 
                 self.workbook_io.save_output(output_wb, prepared.output_file)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        "Output workbook saved",
+                        extra={
+                            "stage": "run",
+                            "data": {
+                                "output_file": str(prepared.output_file),
+                                "logs_dir": str(logs_dir) if logs_dir else None,
+                            },
+                        },
+                    )
 
             status = RunStatus.SUCCEEDED
 
@@ -281,7 +331,7 @@ def run_inputs(
 
     results: list[ExecutedRun] = []
 
-    for input_file in input_paths:
+    for idx, input_file in enumerate(input_paths):
         output_file = (resolved_output_dir / f"{input_file.stem}_normalized.xlsx").resolve()
         logs_file = (
             (resolved_logs_dir / f"{input_file.stem}_{_log_file_name(resolved_log_format)}").resolve()
@@ -305,7 +355,37 @@ def run_inputs(
             log_file=logs_file,
             log_level=effective_log_level,
         ) as log_ctx:
+            if log_ctx.logger.isEnabledFor(logging.DEBUG):
+                log_ctx.logger.debug(
+                    "Engine run planned",
+                    extra={
+                        "stage": "run",
+                        "data": {
+                            "sequence": {"current": idx + 1, "total": len(input_paths)},
+                            "input_file": str(input_file),
+                            "output_file": str(output_file),
+                            "logs_file": str(logs_file) if logs_file else None,
+                            "log_format": resolved_log_format,
+                            "log_level": logging.getLevelName(effective_log_level),
+                            "input_sheets": list(input_sheets) if input_sheets else None,
+                        },
+                    },
+                )
             result = engine.run(request, logger=log_ctx.logger, events=log_ctx.events)
+            if log_ctx.logger.isEnabledFor(logging.DEBUG):
+                log_ctx.logger.debug(
+                    "Engine run completed",
+                    extra={
+                        "stage": "run",
+                        "data": {
+                            "input_file": str(input_file),
+                            "status": result.status.value,
+                            "output_file": str(output_file),
+                            "logs_file": str(logs_file) if logs_file else None,
+                            "error": result.error.message if result.error else None,
+                        },
+                    },
+                )
 
         results.append(
             ExecutedRun(
