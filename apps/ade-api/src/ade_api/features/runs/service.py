@@ -1464,19 +1464,6 @@ class RunsService:
         command.extend(["--input", str(staged_input)])
         command.extend(["--output-dir", str(output_dir)])
 
-        # Inject correlation metadata for the engine (optional, but nice to have)
-        meta_fields: dict[str, object] = {
-            "workspace_id": run.workspace_id,
-            "configuration_id": run.configuration_id,
-            "run_id": run.id,
-        }
-        build_id = getattr(run, "build_id", None)
-        if build_id is not None:
-            meta_fields["build_id"] = build_id
-
-        for key, value in meta_fields.items():
-            command.extend(["--meta", f"{key}={value}"])
-
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
 
