@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ade_engine.config.loader import ConfigRuntime
-from ade_engine.events import NULL_EVENT_EMITTER
 from ade_engine.types.contexts import RunContext
 
 
@@ -15,7 +14,7 @@ class PluginInvoker:
     runtime: ConfigRuntime
     run: RunContext
     logger: Any
-    event_emitter: Any = NULL_EVENT_EMITTER
+    event_emitter: Any
 
     def base_kwargs(self) -> dict[str, Any]:
         input_file_name = self.run.source_path.name

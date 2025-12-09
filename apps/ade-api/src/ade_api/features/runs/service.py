@@ -54,7 +54,6 @@ from ade_api.schemas.events import (
     AdeEvent,
     AdeEventPayload,
     ConsoleLinePayload,
-    EngineEventFrame,
     RunCompletedPayload,
     RunQueuedPayload,
 )
@@ -112,7 +111,7 @@ class RunExecutionResult:
     summary_json: str | None = None
 
 
-RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
+RunStreamFrame = StdoutFrame | RunExecutionResult
 
 
 # --------------------------------------------------------------------------- #
@@ -1300,34 +1299,25 @@ class RunsService:
         run_dir: Path,
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
-        """Merge inferred filesystem paths."""
+        """Merge inferred filesystem paths for events and outputs."""
 
         snapshot = RunPathsSnapshot(
             events_path=default_paths.events_path,
             output_path=default_paths.output_path,
             processed_file=default_paths.processed_file,
         )
-        # Events path: prefer default hints; avoid filesystem probing.
+
+        # Events path: default to <run_dir>/logs/events.ndjson, if it exists.
         if not snapshot.events_path:
-            for candidate in (
-                run_dir / "engine-logs" / "engine_events.ndjson",
-                run_dir / "engine-logs" / run_dir.name / "engine_events.ndjson",
-                run_dir / "logs" / "events.ndjson",
-            ):
-                snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
-                if snapshot.events_path:
-                    break
+            candidate = run_dir / "logs" / "events.ndjson"
+            snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
 
-        # Output path: only propagate hints already in scope (defaults).
-        output_candidates: list[str | Path | None] = []
-        output_candidates.append(default_paths.output_path)
-
-        for candidate in output_candidates:
-            if snapshot.output_path:
-                break
-            snapshot.output_path = self._run_relative_hint(candidate, run_dir=run_dir)
+        # Output path: if not provided, infer from <run_dir>/output.
+        if not snapshot.output_path:
+            snapshot.output_path = self._relative_output_path(run_dir / "output", run_dir)
 
         return snapshot
+
 
     @staticmethod
     def _normalized_event_source(source: str | None) -> str:
@@ -1413,7 +1403,7 @@ class RunsService:
         options: RunCreateOptions,
         safe_mode_enabled: bool = False,
     ) -> AsyncIterator[RunStreamFrame]:
-        """Invoke the engine process and stream ADE events back to the caller."""
+        """Invoke the engine process and stream its output lines."""
 
         logger.info(
             "run.engine.execute.start",
@@ -1431,12 +1421,14 @@ class RunsService:
         selected_sheet_names = self._select_input_sheet_names(options)
         if not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
+
         env = self._build_env(
             Path(context.venv_path),
             options,
             context,
             input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
         )
+
         runs_root = (
             Path(context.runs_dir)
             if context.runs_dir
@@ -1462,15 +1454,17 @@ class RunsService:
             run_dir=run_dir,
         )
 
-        engine_logs_dir = run_dir / "engine-logs"
-        engine_logs_dir.mkdir(parents=True, exist_ok=True)
+        # Canonical paths we expect after execution
+        output_dir = run_dir / "output"
+        logs_dir = run_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
 
         command = [str(python), "-m", "ade_engine", "run"]
         command.extend(["--log-format", "ndjson"])
         command.extend(["--input", str(staged_input)])
-        command.extend(["--output-dir", str(run_dir / "output")])
-        command.extend(["--logs-dir", str(engine_logs_dir)])
+        command.extend(["--output-dir", str(output_dir)])
 
+        # Inject correlation metadata for the engine (optional, but nice to have)
         meta_fields: dict[str, object] = {
             "workspace_id": run.workspace_id,
             "configuration_id": run.configuration_id,
@@ -1491,13 +1485,14 @@ class RunsService:
             env=env,
         )
 
+        # We expect API-level events to be written under <run>/logs/events.ndjson
         paths_snapshot = RunPathsSnapshot(
-            events_path=str(engine_logs_dir / "engine_events.ndjson"),
-            output_path=str(run_dir / "output" / "normalized.xlsx"),
+            events_path=str(logs_dir / "events.ndjson"),
+            output_path=str(output_dir / "normalized.xlsx"),
             processed_file=staged_input.name,
         )
 
-        # Stream frames from the engine process: either stdout frames or stderr lines.
+        # Stream stdout/stderr lines from the engine process.
         async for frame in runner.stream():
             yield frame
 
@@ -1661,20 +1656,15 @@ class RunsService:
         mode_literal: str,
         safe_mode_enabled: bool,
     ) -> AsyncIterator[RunStreamFrame]:
-        """Wrap `_execute_engine` with supervision and error handling."""
+        """Wrap `_execute_engine` with supervision and event translation."""
 
         async def generator() -> AsyncIterator[RunStreamFrame]:
-            execute_engine = self._execute_engine
-            parameters = inspect.signature(execute_engine).parameters
-            kwargs: dict[str, object] = {
-                "run": run,
-                "context": context,
-                "options": options,
-            }
-            if "safe_mode_enabled" in parameters:
-                kwargs["safe_mode_enabled"] = safe_mode_enabled
-
-            async for frame in execute_engine(**kwargs):  # type: ignore[misc]
+            async for frame in self._execute_engine(
+                run=run,
+                context=context,
+                options=options,
+                safe_mode_enabled=safe_mode_enabled,
+            ):
                 yield frame
 
         logger.debug(
@@ -1687,98 +1677,89 @@ class RunsService:
             ),
         )
 
-        latest_paths_snapshot = RunPathsSnapshot()
-
         try:
-            async for event in self._supervisor.stream(
+            async for frame in self._supervisor.stream(
                 run.id,
                 generator=generator,
             ):
-                if isinstance(event, RunExecutionResult):
-                    paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
-                    if latest_paths_snapshot.processed_file and not paths_snapshot.processed_file:
-                        paths_snapshot.processed_file = latest_paths_snapshot.processed_file
-                    if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
-                        paths_snapshot.output_path = latest_paths_snapshot.output_path
+                # Final result from _execute_engine
+                if isinstance(frame, RunExecutionResult):
+                    paths_snapshot = frame.paths_snapshot or RunPathsSnapshot()
 
-                    summary_json = event.summary_json
-                    if summary_json is None and event.summary_model is not None:
-                        summary_json = self._serialize_summary(event.summary_model)
+                    summary_json = frame.summary_json
+                    if summary_json is None and frame.summary_model is not None:
+                        summary_json = self._serialize_summary(frame.summary_model)
 
                     completion = await self._complete_run(
                         run,
-                        status=event.status,
-                        exit_code=event.return_code,
-                        error_message=event.error_message,
+                        status=frame.status,
+                        exit_code=frame.return_code,
+                        error_message=frame.error_message,
                         summary=summary_json,
                     )
-                    yield await self._emit_api_event(
+                    event = await self._emit_api_event(
                         run=completion,
                         type_="run.complete",
                         payload=self._run_completed_payload(
                             run=completion,
                             paths=paths_snapshot,
-                            failure_stage=("run" if event.status is RunStatus.FAILED else None),
-                            failure_message=event.error_message,
+                            failure_stage=("run" if frame.status is RunStatus.FAILED else None),
+                            failure_message=frame.error_message,
                         ),
                     )
+                    self._log_event_debug(event, origin="api")
+                    yield event
                     continue
 
-                if isinstance(event, EngineEventFrame):
-                    payload_dict = event.payload or {}
-                    if event.type == "engine.complete" and isinstance(payload_dict, dict):
-                        artifacts_value = payload_dict.get("artifacts")
-                        artifacts = (
-                            artifacts_value
-                            if isinstance(artifacts_value, dict)
-                            else payload_dict
+                # Stdout/stderr line from the engine
+                if isinstance(frame, StdoutFrame):
+                    # Try to parse as structured engine event (NDJSON).
+                    try:
+                        obj = json.loads(frame.message)
+                    except json.JSONDecodeError:
+                        # Not JSON -> expose as console line event.
+                        forwarded = await self._emit_engine_console_line(
+                            run=run,
+                            frame=frame,
                         )
-                        processed_file = (
-                            artifacts.get("processed_file")
-                            if isinstance(artifacts, dict)
-                            else None
-                        )
-                        if isinstance(processed_file, str):
-                            latest_paths_snapshot.processed_file = processed_file
-                        elif isinstance(artifacts, dict) and artifacts.get("processed_files"):
-                            processed_files = artifacts.get("processed_files") or []
-                            if processed_files:
-                                latest_paths_snapshot.processed_file = str(
-                                    list(processed_files)[0],
-                                )
-                        output_path = (
-                            artifacts.get("output_path")
-                            if isinstance(artifacts, dict)
-                            else None
-                        )
-                        if isinstance(output_path, str):
-                            latest_paths_snapshot.output_path = output_path
-                        elif isinstance(artifacts, dict) and artifacts.get("output_paths"):
-                            output_paths = artifacts.get("output_paths") or []
-                            if output_paths:
-                                latest_paths_snapshot.output_path = str(
-                                    list(output_paths)[0],
-                                )
+                        self._log_event_debug(forwarded, origin="engine")
+                        yield forwarded
+                        continue
 
-                    forwarded = await self._event_dispatcher.emit_from_engine_frame(
-                        frame=event,
+                    if not isinstance(obj, dict) or "event" not in obj:
+                        # JSON but not an engine event -> treat as console line.
+                        forwarded = await self._emit_engine_console_line(
+                            run=run,
+                            frame=frame,
+                        )
+                        self._log_event_debug(forwarded, origin="engine")
+                        yield forwarded
+                        continue
+
+                    engine_event_type = str(obj.get("event") or "").strip()
+                    if not engine_event_type:
+                        forwarded = await self._emit_engine_console_line(
+                            run=run,
+                            frame=frame,
+                        )
+                        self._log_event_debug(forwarded, origin="engine")
+                        yield forwarded
+                        continue
+
+                    # Forward as an AdeEvent with the raw engine JSON as payload.
+                    forwarded = await self._event_dispatcher.emit(
+                        type=engine_event_type,
                         workspace_id=run.workspace_id,
                         configuration_id=run.configuration_id,
                         run_id=run.id,
                         build_id=getattr(run, "build_id", None),
+                        payload=obj,
+                        source="engine",
                     )
                     self._log_event_debug(forwarded, origin="engine")
                     yield forwarded
                     continue
 
-                if isinstance(event, StdoutFrame):
-                    forwarded = await self._emit_engine_console_line(
-                        run=run,
-                        frame=event,
-                    )
-                    self._log_event_debug(forwarded, origin="engine")
-                    yield forwarded
-                    continue
         except asyncio.CancelledError:
             logger.warning(
                 "run.engine.stream.cancelled",
@@ -1788,10 +1769,13 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+            run_dir = self._run_dir_for_run(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
             paths_snapshot = self._finalize_paths(
                 run_dir=run_dir,
-                default_paths=latest_paths_snapshot,
+                default_paths=RunPathsSnapshot(),
             )
             completion = await self._complete_run(
                 run,
@@ -1799,7 +1783,7 @@ class RunsService:
                 exit_code=None,
                 error_message="Run execution cancelled",
             )
-            yield await self._emit_api_event(
+            event = await self._emit_api_event(
                 run=completion,
                 type_="run.complete",
                 payload=self._run_completed_payload(
@@ -1810,7 +1794,10 @@ class RunsService:
                     failure_message=completion.error_message,
                 ),
             )
+            self._log_event_debug(event, origin="api")
+            yield event
             raise
+
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception(
                 "run.engine.stream.error",
@@ -1820,10 +1807,13 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+            run_dir = self._run_dir_for_run(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
             paths_snapshot = self._finalize_paths(
                 run_dir=run_dir,
-                default_paths=latest_paths_snapshot,
+                default_paths=RunPathsSnapshot(),
             )
             completion = await self._complete_run(
                 run,
@@ -1832,7 +1822,7 @@ class RunsService:
                 error_message=str(exc),
             )
             # Error console frame
-            yield await self._emit_api_event(
+            console_event = await self._emit_api_event(
                 run=run,
                 type_="console.line",
                 payload=ConsoleLinePayload(
@@ -1842,8 +1832,11 @@ class RunsService:
                     message=f"ADE run failed: {exc}",
                 ),
             )
+            self._log_event_debug(console_event, origin="api")
+            yield console_event
+
             # Run completion frame
-            yield await self._emit_api_event(
+            complete_event = await self._emit_api_event(
                 run=completion,
                 type_="run.complete",
                 payload=self._run_completed_payload(
@@ -1854,6 +1847,8 @@ class RunsService:
                     failure_message=completion.error_message,
                 ),
             )
+            self._log_event_debug(complete_event, origin="api")
+            yield complete_event
             return
 
     # --------------------------------------------------------------------- #

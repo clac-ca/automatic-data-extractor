@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from ade_engine.config.hooks import HooksRuntime
 from ade_engine.exceptions import HookError
 from ade_engine.hooks.base import BaseHooks
-from ade_engine.runtime import PluginInvoker, StageTracker
+from ade_engine.runtime import PluginInvoker
 from ade_engine.types.contexts import RunContext, TableContext, WorksheetContext
 from ade_engine.types.mapping import ColumnMappingPatch
 
@@ -27,19 +27,14 @@ class HookDispatcher(BaseHooks):
         hooks: HooksRuntime | None,
         *,
         invoker: PluginInvoker,
-        stage: StageTracker | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         super().__init__()
         self.hooks = hooks or HooksRuntime()
         self.invoker = invoker
-        self.stage = stage
         self.logger = logger or logging.getLogger(__name__)
 
     def _invoke(self, stage_name: str, callables: Iterable[Any], **kwargs: Any) -> list[Any]:
-        if self.stage is not None:
-            self.stage.set(f"hooks.{stage_name}")
-
         results: list[Any] = []
         for hook in callables:
             try:

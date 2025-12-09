@@ -15,7 +15,7 @@ from ade_api.infra.events.ndjson import append_line, iter_events_file
 from ade_api.infra.events.scoped_dispatcher import EventSubscription, ScopedEventDispatcher
 from ade_api.infra.events.utils import ensure_event_defaults
 from ade_api.infra.storage import workspace_run_root
-from ade_api.schemas.events import AdeEvent, AdeEventPayload, EngineEventFrame
+from ade_api.schemas.events import AdeEvent, AdeEventPayload
 from ade_api.settings import Settings
 
 __all__ = [
@@ -125,29 +125,6 @@ class RunEventDispatcher(ScopedEventDispatcher):
         await self.storage.append(event)
         await self.publish(run_id, event)
         return event
-
-    async def emit_from_engine_frame(
-        self,
-        *,
-        frame: EngineEventFrame,
-        workspace_id: UUID,
-        configuration_id: UUID,
-        run_id: UUID,
-        build_id: UUID | None = None,
-    ) -> AdeEvent:
-        payload = dict(frame.payload or {})
-        if frame.meta:
-            payload.setdefault("meta", frame.meta)
-        return await self.emit(
-            type=frame.type,
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            run_id=run_id,
-            build_id=build_id,
-            payload=payload,
-            source="engine",
-            origin_event_id=str(frame.event_id),
-        )
 
     @asynccontextmanager
     async def subscribe(self, run_id: UUID) -> AsyncIterator[RunEventSubscription]:

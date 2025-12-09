@@ -274,7 +274,7 @@ def run_command(
         # In NDJSON/stdout mode, keep stdout clean by redirecting stray prints to stderr.
         use_stdout = log_format_value == "ndjson" and plan.logs_file is None
         with protect_stdout(enabled=use_stdout):
-            result = engine.run(request, logger=reporter.logger, event_emitter=reporter.emitter)
+            result = engine.run(request, logger=reporter.logger, event_emitter=reporter.event_emitter)
 
         reporter.close()
 
