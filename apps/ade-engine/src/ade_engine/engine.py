@@ -75,7 +75,6 @@ class Engine:
             logger.debug(
                 "Run starting",
                 extra={
-                    "stage": "run",
                     "data": {
                         "config_package": req.config_package,
                         "input_file": str(req.input_file) if req.input_file else None,
@@ -122,7 +121,6 @@ class Engine:
                 logger.debug(
                     "Resolved run paths",
                     extra={
-                        "stage": "run",
                         "data": {
                             "input_file": str(input_path),
                             "output_file": str(output_path),
@@ -189,7 +187,6 @@ class Engine:
                     logger.debug(
                         "Processing sheets",
                         extra={
-                            "stage": "run",
                             "data": {
                                 "sheet_names": sheet_names,
                                 "input_sheets_filter": prepared.request.input_sheets,
@@ -219,7 +216,6 @@ class Engine:
                     logger.debug(
                         "Output workbook saved",
                         extra={
-                            "stage": "run",
                             "data": {
                                 "output_file": str(prepared.output_file),
                                 "logs_dir": str(logs_dir) if logs_dir else None,
@@ -359,7 +355,6 @@ def run_inputs(
                 log_ctx.logger.debug(
                     "Engine run planned",
                     extra={
-                        "stage": "run",
                         "data": {
                             "sequence": {"current": idx + 1, "total": len(input_paths)},
                             "input_file": str(input_file),
@@ -376,7 +371,6 @@ def run_inputs(
                 log_ctx.logger.debug(
                     "Engine run completed",
                     extra={
-                        "stage": "run",
                         "data": {
                             "input_file": str(input_file),
                             "status": result.status.value,

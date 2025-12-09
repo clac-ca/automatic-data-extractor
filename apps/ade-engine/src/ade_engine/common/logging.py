@@ -39,7 +39,7 @@ class JsonFormatter(logging.Formatter):
     """Formatter that renders structured log records as one JSON object per line."""
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: A003 - matches logging.Formatter API
-        event_name = getattr(record, "event", None) or "log"
+        event_name = getattr(record, "event", None) or "engine.console.line"
 
         payload: dict[str, Any] = {
             "ts": _format_timestamp(record.created),
@@ -47,10 +47,6 @@ class JsonFormatter(logging.Formatter):
             "event": event_name,
             "message": record.getMessage(),
         }
-
-        stage = getattr(record, "stage", None)
-        if stage:
-            payload["stage"] = stage
 
         data = getattr(record, "data", None)
         if data is not None:
@@ -84,10 +80,6 @@ class TextFormatter(logging.Formatter):
             head = f"[{timestamp}] {level_name} {event_name}: {message}"
 
         extras: list[str] = []
-
-        stage = getattr(record, "stage", None)
-        if stage:
-            extras.append(f"stage={stage}")
 
         data = getattr(record, "data", None)
         if isinstance(data, dict) and data:

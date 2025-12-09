@@ -161,7 +161,7 @@ class Pipeline:
             column_count=col_count,
         )
 
-        extracted = self.extractor.extract(sheet_ctx.source_worksheet, origin, region)
+        extracted = self.extractor.extract(sheet_ctx.source_worksheet, origin, region, logger=logger)
         table_ctx.extracted = extracted
 
         col_count = max(len(extracted.header), max((len(r) for r in extracted.rows), default=0))

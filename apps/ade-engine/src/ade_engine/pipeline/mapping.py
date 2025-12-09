@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -92,6 +93,20 @@ class ColumnMapper:
     ) -> MappedTable:
         candidates = _collect_candidates(extracted)
         manifest_fields = set(runtime.manifest.column_names)
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Mapping columns",
+                extra={
+                    "stage": "mapping",
+                    "data": {
+                        "sheet_name": extracted.origin.sheet_name,
+                        "table_index": extracted.origin.table_index,
+                        "candidate_count": len(candidates),
+                        "manifest_fields": list(runtime.manifest.column_names),
+                        "threshold": self.threshold,
+                    },
+                },
+            )
 
         # field -> candidate_index -> score
         field_scores: dict[str, dict[int, float]] = {}
@@ -159,6 +174,21 @@ class ColumnMapper:
                 )
 
         mapping = ColumnMapping(fields=mapped_fields, passthrough=passthrough)
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            assignments = {mf.field: mf.source_col for mf in mapped_fields}
+            logger.debug(
+                "Column mapping decisions",
+                extra={
+                    "stage": "mapping",
+                    "data": {
+                        "sheet_name": extracted.origin.sheet_name,
+                        "table_index": extracted.origin.table_index,
+                        "assignments": assignments,
+                        "passthrough_columns": [p.source_col for p in passthrough],
+                        "unmapped_fields": sorted([f for f, col in assignments.items() if col is None]),
+                    },
+                },
+            )
         return MappedTable(
             origin=extracted.origin,
             region=extracted.region,
