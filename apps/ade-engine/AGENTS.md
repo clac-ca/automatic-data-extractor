@@ -8,7 +8,7 @@ This document is a reference for how those actors interact, what messages they e
 
 ## Agent catalog
 
-### 1) CLI Agent (`ade_engine.cli`)
+### 1) CLI Agent (`ade_engine.main`)
 **Role:** Entry point for humans and automation.
 - **Inputs:** CLI flags (inputs, config package, output paths, reporting mode)
 - **Outputs:** exit code, optional console summary, artifacts on disk

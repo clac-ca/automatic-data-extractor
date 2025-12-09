@@ -140,8 +140,8 @@ The CLI exposes:
 
 - `--input` / `--input-dir` (+ `--include` / `--exclude`)
 - `--input-sheet` to restrict worksheets
-- `--output-dir` / `--output-file`
-- `--logs-dir` / `--logs-file`
+- `--output-dir` (defaults to `./output`, output file names follow `<input>_normalized.xlsx`)
+- `--logs-dir` (defaults to `./logs`, log file names follow `<input>_engine.log` or `_engine_events.ndjson`)
 - `--log-format` (`text` or `ndjson`)
 - `--meta KEY=VALUE` to add run-level metadata to all events
 - `--config-package` (module name or path)

@@ -80,6 +80,7 @@ class Pipeline:
             invoker=invoker,
             logger=logger,
         )
+        row_count = getattr(src_ws, "max_row", None) or 0
         emitter.emit(
             "sheet.tables_detected",
             message=f"Detected {len(regions)} table(s) in {sheet_name}",

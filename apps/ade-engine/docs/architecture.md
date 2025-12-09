@@ -6,7 +6,7 @@ This document describes the main components of `ade-engine`, how they are wired,
 
 ## Component map
 
-### 1) CLI (`ade_engine.cli`)
+### 1) CLI (`ade_engine.main`)
 - Parses CLI flags.
 - Plans outputs (output workbook path, logs path).
 - Builds **reporting** (`text` or `ndjson`) and injects it into the engine.

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Mapping
 from uuid import UUID, uuid4
 
 from ade_engine.config.loader import load_config_runtime
@@ -22,7 +23,7 @@ from ade_engine.pipeline import (
     TableNormalizer,
     TableRenderer,
 )
-from ade_engine.reporting import EventEmitter
+from ade_engine.reporting import EventEmitter, build_reporting
 from ade_engine.runtime import PluginInvoker
 from ade_engine.settings import Settings
 from ade_engine.types.contexts import RunContext
@@ -78,7 +79,7 @@ class Engine:
         output_dir: Path | None = None
         logs_dir: Path | None = None
 
-        started_at = datetime.utcnow()
+        started_at = datetime.now(timezone.utc)
         completed_at: datetime | None = None
 
         emitter.emit(
@@ -195,7 +196,7 @@ class Engine:
             error = RunError(code=RunErrorCode.UNKNOWN_ERROR, stage=None, message=str(exc))
 
         finally:
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             emitter.emit(
                 "run.completed",
                 message="Run completed",
@@ -224,4 +225,70 @@ class Engine:
         )
 
 
-__all__ = ["Engine"]
+@dataclass(frozen=True)
+class ExecutedRun:
+    """Simple bundle of run output metadata."""
+
+    input_file: Path
+    output_file: Path
+    logs_file: Path | None
+    result: RunResult
+
+
+def _log_filename(fmt: str) -> str:
+    return "engine_events.ndjson" if fmt == "ndjson" else "engine.log"
+
+
+def run_inputs(
+    inputs: Iterable[Path],
+    *,
+    config_package: str,
+    output_dir: Path | None = None,
+    logs_dir: Path | None = None,
+    log_format: str = "text",
+    input_sheets: list[str] | None = None,
+    metadata: Mapping[str, str] | None = None,
+) -> list[ExecutedRun]:
+    """Run the engine for multiple inputs with explicit paths."""
+
+    fmt = str(log_format or "text").strip().lower()
+    if fmt not in {"text", "ndjson"}:
+        raise ValueError("log_format must be 'text' or 'ndjson'")
+
+    input_paths = [Path(path).resolve() for path in inputs]
+    if not input_paths:
+        raise InputError("At least one input file is required")
+
+    resolved_output_dir = Path(output_dir or Path("output")).resolve()
+    resolved_logs_dir = Path(logs_dir or Path("logs")).resolve()
+
+    engine = Engine(settings=Settings(config_package=config_package))
+    results: list[ExecutedRun] = []
+
+    for input_file in input_paths:
+        output_file = (resolved_output_dir / f"{input_file.stem}_normalized.xlsx").resolve()
+        logs_file = (resolved_logs_dir / f"{input_file.stem}_{_log_filename(fmt)}").resolve()
+
+        run_id = uuid4()
+        request = RunRequest(
+            run_id=run_id,
+            config_package=config_package,
+            input_file=input_file,
+            input_sheets=list(input_sheets) if input_sheets else None,
+            output_dir=resolved_output_dir,
+            output_file=output_file,
+            logs_dir=resolved_logs_dir,
+            logs_file=logs_file,
+            metadata=dict(metadata) if metadata else {},
+        )
+
+        reporter = build_reporting(fmt, run_id=str(run_id), meta=metadata, file_path=logs_file)
+        result = engine.run(request, logger=reporter.logger, event_emitter=reporter.event_emitter)
+        reporter.close()
+
+        results.append(ExecutedRun(input_file=input_file, output_file=output_file, logs_file=logs_file, result=result))
+
+    return results
+
+
+__all__ = ["Engine", "ExecutedRun", "run_inputs"]
