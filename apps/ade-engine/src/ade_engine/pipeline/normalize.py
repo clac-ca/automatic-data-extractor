@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ade_engine.config.loader import ConfigRuntime
@@ -32,6 +33,20 @@ class TableNormalizer:
         order = manifest.column_names
         field_configs = {col.name: col for col in manifest.columns}
         column_modules = runtime.columns
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Normalizing table",
+                extra={
+                    "stage": "normalize",
+                    "data": {
+                        "sheet_name": mapped.origin.sheet_name,
+                        "table_index": mapped.origin.table_index,
+                        "row_count": len(mapped.extracted.rows),
+                        "transformer_count": sum(1 for col in column_modules.values() if col.transformer),
+                        "validator_count": sum(1 for col in column_modules.values() if col.validator),
+                    },
+                },
+            )
 
         mapped_fields = {field.field: field for field in mapped.mapping.fields}
         normalized_rows: list[list[object]] = []
@@ -111,6 +126,25 @@ class TableNormalizer:
             ]
 
             normalized_rows.append(canonical_values + passthrough_values)
+
+        issues_by_severity = {sev.value: 0 for sev in Severity}
+        for issue in issues:
+            issues_by_severity[issue.severity.value] = issues_by_severity.get(issue.severity.value, 0) + 1
+
+        if logger and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Normalization completed",
+                extra={
+                    "stage": "normalize",
+                    "data": {
+                        "sheet_name": mapped.origin.sheet_name,
+                        "table_index": mapped.origin.table_index,
+                        "row_count": len(normalized_rows),
+                        "issue_count": len(issues),
+                        "issues_by_severity": issues_by_severity,
+                    },
+                },
+            )
 
         return NormalizedTable(
             origin=mapped.origin,

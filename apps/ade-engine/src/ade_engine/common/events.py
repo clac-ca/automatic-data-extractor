@@ -25,7 +25,6 @@ class EventLogger:
         *,
         message: str | None = None,
         level: int = logging.INFO,
-        stage: str | None = None,
         **data: Any,
     ) -> None:
         """Emit a domain event as a structured log record.
@@ -37,16 +36,12 @@ class EventLogger:
                 Optional human-friendly message (defaults to the event name).
             level:
                 Standard logging level (INFO by default).
-            stage:
-                Optional engine stage (top-level field).
             **data:
                 Structured payload, stored under ``data`` in NDJSON output.
         """
         full_name = self._qualify(str(event_name))
 
         extra: dict[str, Any] = {"event": full_name}
-        if stage is not None:
-            extra["stage"] = str(stage)
         if data:
             extra["data"] = data
         self._logger.log(level, message or full_name, extra=extra)
