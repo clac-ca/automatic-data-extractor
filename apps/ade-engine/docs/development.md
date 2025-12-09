@@ -55,8 +55,8 @@ def detect_email(*, header: str, column_values_sample: list[object], **_) -> flo
 Config scripts can emit structured events:
 
 ```python
-def transform(*, row_index: int, field_name: str, value: object, event_emitter, **_):
-    event_emitter.emit("config.transform.called", row_index=row_index, field=field_name)
+def transform(*, row_index: int, field_name: str, value: object, events, **_):
+    events.emit("config.transform.called", row_index=row_index, field=field_name)
     return None
 ```
 

@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class FieldConfig(BaseModel):
-    """Column metadata for a canonical field."""
+    """Column details for a canonical field."""
 
     name: str
     label: str
@@ -59,7 +59,3 @@ class ManifestV1(BaseModel):
     extra: dict[str, Any] | None = Field(default=None, description="Reserved for future extensions")
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    @property
-    def schema(self) -> str:
-        return self.schema_id

@@ -76,7 +76,7 @@ Common problems, symptoms, and fixes.
 
 **Fix:**
 - Run the CLI in NDJSON mode; it redirects non-event stdout to stderr.
-- Prefer `logger` or `event_emitter.emit(...)` over `print()`.
+- Prefer `logger` or `events.emit(...)` over `print()`.
 
 ---
 
@@ -96,4 +96,4 @@ Common problems, symptoms, and fixes.
 - Use `--log-format text` for readable progress while iterating.
 - Use `--log-format ndjson --logs-dir ./logs` to capture an exact event stream for replay.
 - Add temporary config events around tricky logic:
-  `event_emitter.emit("debug.marker", ...)`
+  `events.emit("debug.marker", ...)`

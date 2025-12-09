@@ -56,7 +56,7 @@ breaks the implementation into incremental, testable milestones.
 
 ### 1. Runtime Foundations
 - Define configuration/data directories helper (resolve `ADE_*` env vars, default paths). Reuse logic from backend if available.
-- Model core dataclasses: `RunContext`, `TableContext`, `ArtifactWriter`, `EventLogger`.
+- Model core dataclasses: `RunContext`, `TableContext`, `ArtifactWriter`, `EventEmitter`.
 - Implement artifact + event appenders that enforce atomic writes inside `runs/<run_id>/`.
 - Establish manifest loading + validation utilities (extend `load_config_manifest` with schema guardrails if schemas exist).
 - Expand CLI arguments to accept `--run-id` and `--runs-dir` once worker path is ready; keep backward-compatible manifest mode.

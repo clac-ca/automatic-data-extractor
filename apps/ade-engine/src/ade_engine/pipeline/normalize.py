@@ -42,7 +42,8 @@ class TableNormalizer:
 
             canonical: dict[str, object | None] = {}
             for field_name in order:
-                source_col = mapped_fields.get(field_name).source_col if field_name in mapped_fields else None
+                mapping = mapped_fields.get(field_name)
+                source_col = mapping.source_col if mapping else None
                 canonical[field_name] = (
                     source_row[source_col] if source_col is not None and source_col < len(source_row) else None
                 )

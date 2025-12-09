@@ -27,7 +27,7 @@ class HookDispatcher(BaseHooks):
         hooks: HooksRuntime | None,
         *,
         invoker: PluginInvoker,
-        logger: logging.Logger | None = None,
+        logger: logging.Logger | logging.LoggerAdapter | None = None,
     ) -> None:
         super().__init__()
         self.hooks = hooks or HooksRuntime()

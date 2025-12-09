@@ -29,21 +29,19 @@ Key parameters (high level):
 
 - `request`: run configuration (input, outputs, config package)
 - `logger`: standard `logging.Logger` (optional)
-- `event_emitter`: object with `.emit(event, **fields)` (optional)
+- `events`: object with `.emit(event, **fields)` (optional)
 
-Return value: `RunResult` with status, run_id, output_path, logs_dir, and optional error details.
+Return value: `RunResult` with status, output_path, logs_dir, and optional error details.
 
 ### RunRequest
 
 RunRequest fields include:
 
-- `run_id` (optional UUID; if omitted, one is generated)
 - `config_package` (module name or path; default `ade_config`)
 - `manifest_path` (optional override for `manifest.toml`)
 - `input_file` and optional `input_sheets`
 - output: `output_dir`, `output_file`
 - logs: `logs_dir`, `logs_file`
-- `metadata` (included in `RunContext.state` and emitted events)
 
 ### RunResult
 
@@ -51,7 +49,6 @@ RunRequest fields include:
 
 - `status`: `running|succeeded|failed`
 - `error`: `RunError` or `None`
-- `run_id`
 - `output_path`: where the normalized workbook was written
 - `logs_dir`: where logs/artifacts were written (best-effort)
 - `processed_file`
@@ -59,7 +56,7 @@ RunRequest fields include:
 
 ---
 
-## Reporting API (`ade_engine.reporting`)
+## Reporting API (`ade_engine.logger`)
 
 ### EventEmitter
 `EventEmitter.emit(event, **fields)` writes a structured event.
@@ -67,8 +64,6 @@ RunRequest fields include:
 Reserved top-level fields:
 - `ts`: UTC timestamp (added automatically)
 - `event`: event name (string)
-- `run_id`: run identifier (if provided)
-- `meta`: run-level metadata dict (if provided)
 - `message`, `level`, `stage`, `logger`
 - `data`: remaining fields
 
@@ -84,8 +79,8 @@ emitter.emit(
 )
 ```
 
-### build_reporting(fmt, run_id, meta, file_path)
-Creates a `Reporter` containing:
+### start_run_logging(log_format, log_file, log_level)
+Creates a `RunLogContext` containing:
 - a `logging.Logger` that emits structured `log` events
 - an `EventEmitter`
 
@@ -100,7 +95,7 @@ Common kwargs:
 - `state`: run state dict (mutable)
 - `manifest`: `ManifestContext`
 - `logger`: logger instance
-- `event_emitter`: structured emitter
+- `events`: structured emitter
 - `input_file_name`: basename of the source file
 
 Plus stage-specific kwargs (examples):

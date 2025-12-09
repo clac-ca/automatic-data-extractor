@@ -26,7 +26,7 @@ The config package is loaded dynamically at runtime, so you can ship multiple sc
 ## Key concepts
 
 ### Canonical schema
-The schema is defined in `manifest.toml` under `[[columns]]`. Each column has a canonical `name` (used in outputs) plus metadata like `label`, `required`, and `synonyms`.
+The schema is defined in `manifest.toml` under `[[columns]]`. Each column has a canonical `name` (used in outputs) plus attributes like `label`, `required`, and `synonyms`.
 
 ### Table region
 A **table region** is a rectangular bounding box in source worksheet coordinates:
@@ -56,7 +56,7 @@ The engine supports two “reporting” outputs:
 - **text:** readable log lines (default; typically stderr)
 - **ndjson:** structured JSON objects, one per line (stdout or a file)
 
-Both modes use the same internal API: `logger` + `event_emitter`.
+Both modes use the same internal API: `logger` + `events`.
 
 ---
 
