@@ -25,8 +25,8 @@ from ade_engine.types.run import RunStatus
 app = typer.Typer(
     help=(
         "ADE engine runtime CLI.\n\n"
-        "- **run** – execute the engine\n"
-        "- **version** – show engine version"
+        "- **run** - execute the engine\n"
+        "- **version** - show engine version"
     ),
     no_args_is_help=True,
     rich_markup_mode="markdown",
