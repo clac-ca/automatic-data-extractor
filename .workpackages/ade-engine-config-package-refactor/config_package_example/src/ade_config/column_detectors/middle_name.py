@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from typing import Any, Dict
 
-from ade_config.column_detectors.types import ColumnTransformRow, ColumnValidatorIssue, ScoreMap
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
 
 def register(registry):
@@ -18,7 +18,7 @@ def register(registry):
     registry.register_column_validator(validate_middle_name, field="middle_name", priority=0)
 
 
-def detect_middle_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_middle_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     header_text = "" if ctx.header in (None, "") else str(ctx.header)
     t = set(header_text.lower().replace("-", " ").split())
     if not t:
@@ -31,7 +31,7 @@ def detect_middle_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return None
 
 
-def detect_middle_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_middle_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     sample = ctx.sample or []
     initials = 0
     total = 0
@@ -48,22 +48,24 @@ def detect_middle_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return {"middle_name": score}
 
 
-def normalize_middle_name(ctx: TransformContext) -> list[ColumnTransformRow]:
+def normalize_middle_name(ctx: TransformContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {"middle_name": ...}}, ...]`."""
 
     return [
         {
             "row_index": idx,
-            "value": {"middle_name": (None if v is None else str(v).strip() or None)},
+            "value": {
+                "middle_name": (None if v is None else str(v).strip() or None),
+            },
         }
         for idx, v in enumerate(ctx.values)
     ]
 
 
-def validate_middle_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
+def validate_middle_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for failing cells."""
 
-    issues: list[ColumnValidatorIssue] = []
+    issues: list[Dict[str, Any]] = []
     for idx, v in enumerate(ctx.values):
         s = "" if v is None else str(v).strip()
         if len(s) > 40:
@@ -77,10 +79,10 @@ def validate_middle_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
 # These run per cell; use column-level variants above when possible for speed and
 # when populating multiple fields from one column.
 #
-# def normalize_middle_name_cell(value: object | None) -> ColumnTransformRow:
+# def normalize_middle_name_cell(value: object | None) -> Dict[str, Any]:
 #     return {"row_index": 0, "value": {"middle_name": (None if value is None else str(value).strip() or None)}}
 #
-# def validate_middle_name_cell(value: object | None) -> ColumnValidatorIssue | None:
+# def validate_middle_name_cell(value: object | None) -> Dict[str, Any] | None:
 #     text_value = "" if value is None else str(value).strip()
 #     if text_value and len(text_value) > 40:
 #         return {"row_index": 0, "message": "Middle name too long"}

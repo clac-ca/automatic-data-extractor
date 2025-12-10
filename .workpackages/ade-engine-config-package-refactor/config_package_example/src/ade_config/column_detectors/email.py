@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Any, Dict
 
 from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
-
-from ade_config.column_detectors.types import ColumnTransformRow, ColumnValidatorIssue, ScoreMap
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -12,10 +11,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 def register(registry):
     registry.register_field(FieldDef(
         name="email",
-        label="Email",
-        required=True,
         dtype="string",
-        synonyms=["email", "email address", "e-mail"],
     ))
     registry.register_column_detector(detect_email_header, field="email", priority=60)
     registry.register_column_detector(detect_email_values, field="email", priority=30)
@@ -30,7 +26,7 @@ def _norm(text: object | None) -> str:
     return "" if text is None else str(text).strip().lower()
 
 
-def detect_email_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_email_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     header = _norm(ctx.header)
     if not header:
         return None
@@ -39,7 +35,7 @@ def detect_email_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return None
 
 
-def detect_email_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_email_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     sample = ctx.sample or []
     hits = 0
     total = 0
@@ -56,22 +52,24 @@ def detect_email_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return {"email": score}
 
 
-def normalize_email(ctx: TransformContext) -> list[ColumnTransformRow]:
+def normalize_email(ctx: TransformContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {"email": ...}}, ...]`."""
 
     return [
         {
             "row_index": idx,
-            "value": {"email": (_norm(v) or None)},
+            "value": {
+                "email": (_norm(v) or None),
+            },
         }
         for idx, v in enumerate(ctx.values)
     ]
 
 
-def validate_email(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
+def validate_email(ctx: ValidateContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for invalid cells."""
 
-    issues: list[ColumnValidatorIssue] = []
+    issues: list[Dict[str, Any]] = []
     for idx, v in enumerate(ctx.values):
         s = _norm(v)
         if not s:
@@ -87,11 +85,11 @@ def validate_email(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
 # - These are thin wrappers that handle one cell at a time.
 # - Use the column-level versions above for better performance or when emitting multiple fields per column.
 #
-# def normalize_email_cell(value: object | None) -> ColumnTransformRow:
+# def normalize_email_cell(value: object | None) -> Dict[str, Any]:
 #     """Return a single normalized email dict for one cell."""
 #     return {"row_index": 0, "value": {"email": (_norm(value) or None)}}
 #
-# def validate_email_cell(value: object | None) -> ColumnValidatorIssue | None:
+# def validate_email_cell(value: object | None) -> Dict[str, Any] | None:
 #     """Validate one email cell; return a single issue or None."""
 #     text_value = _norm(value)
 #     if text_value and not EMAIL_RE.match(text_value):

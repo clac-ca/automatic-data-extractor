@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from typing import Any, Dict
 
-from ade_config.column_detectors.types import ColumnTransformRow, ColumnValidatorIssue, ScoreMap
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
 
 def register(registry):
@@ -18,7 +18,7 @@ def register(registry):
     registry.register_column_validator(validate_first_name, field="first_name", priority=0)
 
 
-def detect_first_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_first_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     header_text = "" if ctx.header in (None, "") else str(ctx.header)
     header_tokens = set(header_text.lower().replace("-", " ").split())
     if not header_tokens:
@@ -30,7 +30,7 @@ def detect_first_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return None
 
 
-def detect_first_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_first_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     sample = ctx.sample or []
     if not sample:
         return None
@@ -49,22 +49,24 @@ def detect_first_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return {"first_name": score}
 
 
-def normalize_first_name(ctx: TransformContext) -> list[ColumnTransformRow]:
-    """Return `[{'row_index': int, 'value': {'first_name': ...}}, ...]`."""
+def normalize_first_name(ctx: TransformContext) -> list[Dict[str, Any]]:
+    """Return `[{"row_index": int, "value": {"first_name": ...}}, ...]`."""
 
     return [
         {
             "row_index": idx,
-            "value": {"first_name": (None if v is None else str(v).strip() or None)},
+            "value": {
+                "first_name": (None if v is None else str(v).strip() or None),
+            },
         }
         for idx, v in enumerate(ctx.values)
     ]
 
 
-def validate_first_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
+def validate_first_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for failed cells."""
 
-    issues: list[ColumnValidatorIssue] = []
+    issues: list[Dict[str, Any]] = []
     for idx, v in enumerate(ctx.values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 50:
@@ -78,10 +80,10 @@ def validate_first_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
 # These process a single cell at a time; prefer the column-level versions above
 # when registering for better performance and when touching multiple fields.
 #
-# def normalize_first_name_cell(value: object | None) -> ColumnTransformRow:
+# def normalize_first_name_cell(value: object | None) -> dict[str, Any]:
 #     return {"row_index": 0, "value": {"first_name": (None if value is None else str(value).strip() or None)}}
 #
-# def validate_first_name_cell(value: object | None) -> ColumnValidatorIssue | None:
+# def validate_first_name_cell(value: object | None) -> dict[str, Any] | None:
 #     text_value = "" if value is None else str(value).strip()
 #     if text_value and len(text_value) > 50:
 #         return {"row_index": 0, "message": "First name too long"}

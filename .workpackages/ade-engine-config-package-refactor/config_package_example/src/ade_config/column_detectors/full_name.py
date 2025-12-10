@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Any, Dict
 
 from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
-
-from ade_config.column_detectors.types import ColumnTransformRow, ColumnValidatorIssue, ScoreMap
 
 def register(registry):
     registry.register_field(FieldDef(
@@ -19,7 +18,7 @@ def register(registry):
     registry.register_column_validator(validate_full_name, field="full_name", priority=0)
 
 
-def detect_full_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_full_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     """Real-world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
 
     header = ("" if ctx.header in (None, "") else str(ctx.header)).strip().lower()
@@ -30,7 +29,7 @@ def detect_full_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return None
 
 
-def detect_full_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
+def detect_full_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
     """Look for two-part names ("First Last") or comma names ("Last, First")."""
 
     sample = ctx.sample or []
@@ -58,7 +57,7 @@ def detect_full_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
     return {"full_name": score}
 
 
-def normalize_full_name(ctx: TransformContext) -> list[ColumnTransformRow]:
+def normalize_full_name(ctx: TransformContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {...}}, ...]`, splitting full names where possible.
 
     Supported shapes:
@@ -68,7 +67,7 @@ def normalize_full_name(ctx: TransformContext) -> list[ColumnTransformRow]:
 
     comma_pattern = re.compile(r"^(?P<last>[A-Za-z][\w'\-]*),\s*(?P<first>[A-Za-z][\w'\-]*)$")
 
-    normalized_rows: list[ColumnTransformRow] = []
+    normalized_rows: list[Dict[str, Any]] = []
 
     for idx, raw_value in enumerate(ctx.values):
         text_value = None if raw_value is None else str(raw_value).strip()
@@ -119,10 +118,10 @@ def normalize_full_name(ctx: TransformContext) -> list[ColumnTransformRow]:
     return normalized_rows
 
 
-def validate_full_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
+def validate_full_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` when names include invalid symbols."""
 
-    issues: list[ColumnValidatorIssue] = []
+    issues: list[Dict[str, Any]] = []
     pattern = re.compile(r"^[A-Za-z][A-Za-z '\-]*$")
 
     for idx, v in enumerate(ctx.values):
@@ -142,11 +141,11 @@ def validate_full_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
 # Prefer the column-level transforms/validators above when you want to touch multiple
 # fields at once or keep things more performant.
 #
-# def normalize_full_name_cell(value: object | None) -> ColumnTransformRow:
+# def normalize_full_name_cell(value: object | None) -> Dict[str, Any]:
 #     text_value = None if value is None else str(value).strip()
 #     return {"row_index": 0, "value": {"full_name": (text_value or None)}}
 #
-# def validate_full_name_cell(value: object | None) -> ColumnValidatorIssue | None:
+# def validate_full_name_cell(value: object | None) -> Dict[str, Any] | None:
 #     text_value = "" if value is None else str(value).strip()
 #     if text_value and not pattern.fullmatch(text_value):
 #         return {"row_index": 0, "message": "Full name must be letters with spaces/hyphens/apostrophes"}
