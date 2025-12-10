@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import row_detector
+from ade_engine.registry import RowDetectorContext, RowKind, row_detector
 from ade_config.helpers import header_tokens
 
 
@@ -18,15 +18,15 @@ COMMON_HEADER_TOKENS = {
 }
 
 
-@row_detector
-def detect_header_row_by_known_words(*, ctx: Any, **_: Any) -> dict[str, float]:
+@row_detector(row_kind=RowKind.HEADER)
+def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float]:
     """Vote for a row being a header row.
 
     Heuristic:
       - header rows contain lots of short text labels
       - header rows often include common schema words (email, name, hours, etc.)
     """
-    values = getattr(ctx, "row_values", None) or []
+    values = ctx.row_values or []
     if not values:
         return {"header": 0.0}
 

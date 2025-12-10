@@ -20,7 +20,7 @@ def detect_middle_name_header(ctx: ColumnDetectorContext):
 
 @column_detector(field="middle_name", priority=15)
 def detect_middle_name_values(ctx: ColumnDetectorContext):
-    sample = ctx.column_values_sample or []
+    sample = ctx.sample or []
     initials = 0
     total = 0
     for v in sample:

@@ -1,3 +1,3 @@
-from ade_engine.schemas.manifest import ManifestV1
+"""Schema artifacts bundled with ade_engine."""
 
-__all__ = ["ManifestV1"]
+__all__ = []

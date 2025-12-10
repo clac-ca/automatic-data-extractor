@@ -27,7 +27,7 @@ def detect_email_header(ctx: ColumnDetectorContext):
 
 @column_detector(field="email", priority=30)
 def detect_email_values(ctx: ColumnDetectorContext):
-    sample = ctx.column_values_sample or []
+    sample = ctx.sample or []
     hits = 0
     total = 0
     for v in sample:

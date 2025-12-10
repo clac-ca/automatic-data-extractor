@@ -2,74 +2,57 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import hook
-
+from ade_engine.registry import HookContext, HookName, hook
 
 # Optional: set a desired canonical output order.
 # If left as None, the engine's default ordering is used.
 DESIRED_FIELD_ORDER: list[str] | None = None
 
 
-@hook("on_table_written")
-def run(*, table_ctx: Any, sheet_ctx: Any, run_ctx: Any, logger: Any | None = None, **_: Any) -> None:
-    """Called after a table has been written to the output workbook.
+@hook(HookName.ON_TABLE_WRITTEN)
+def on_table_written(ctx: HookContext) -> None:
+    """Called after a table has been written to the output workbook."""
 
-    This is the best place to:
-      - style the output range (header bold, column widths, number formats)
-      - add comments
-      - (optionally) reorder columns *in-place* by rewriting the table range
+    if ctx.logger and ctx.table:
+        ctx.logger.info(
+            "Config hook: table written (rows=%d, issues=%d)",
+            len(getattr(ctx.table, "rows", []) or []),
+            len(getattr(ctx.table, "issues", []) or []),
+        )
 
-    Reordering is off by default. To enable, set DESIRED_FIELD_ORDER above.
-    """
-    if logger:
-        logger.info("Config hook: table written")
+    if DESIRED_FIELD_ORDER:
+        reorder_table_columns_in_place(ctx.sheet, DESIRED_FIELD_ORDER)
 
-    if not DESIRED_FIELD_ORDER:
+
+def reorder_table_columns_in_place(sheet: Any, desired_headers: list[str]) -> None:
+    """Reorder columns in the rendered sheet by header name (no insert/delete)."""
+
+    if sheet is None or not desired_headers:
         return
 
-    view = getattr(table_ctx, "view", None)
-    if view is None:
+    header_rows = list(sheet.iter_rows(min_row=1, max_row=1))
+    if not header_rows:
         return
 
-    reorder_table_columns_in_place(view, DESIRED_FIELD_ORDER)
+    header_values = [str(cell.value or "") for cell in header_rows[0]]
+    index_by_header = {h: idx for idx, h in enumerate(header_values)}
 
-
-def reorder_table_columns_in_place(view: Any, desired_headers: list[str]) -> None:
-    """Reorder columns inside an existing written table range (no insert/delete).
-
-    This works by:
-      1) reading the whole range into memory
-      2) re-ordering columns by header name
-      3) writing the reordered grid back into the same range
-
-    This respects the hook safety contract because it doesn't insert/delete rows/cols.
-    """
-    ws = view.worksheet
-    cr = view.cell_range  # openpyxl CellRange
-    min_col, min_row, max_col, max_row = cr.min_col, cr.min_row, cr.max_col, cr.max_row
-
-    # Read grid
-    grid: list[list[Any]] = []
-    for r in range(min_row, max_row + 1):
-        row_vals: list[Any] = []
-        for c in range(min_col, max_col + 1):
-            row_vals.append(ws.cell(row=r, column=c).value)
-        grid.append(row_vals)
-
-    header = [str(x) if x is not None else "" for x in grid[0]]
-    index_by_header = {h: i for i, h in enumerate(header)}
-
-    # Build new column order: desired headers first, then everything else
     desired_idxs = [index_by_header[h] for h in desired_headers if h in index_by_header]
-    remaining_idxs = [i for i in range(len(header)) if i not in desired_idxs]
+    remaining_idxs = [i for i in range(len(header_values)) if i not in desired_idxs]
     new_order = desired_idxs + remaining_idxs
 
-    # Reorder
-    new_grid = []
-    for row in grid:
-        new_grid.append([row[i] for i in new_order])
+    max_row = sheet.max_row or 0
+    max_col = sheet.max_column or 0
+    if max_row == 0 or max_col == 0:
+        return
 
-    # Write back
-    for r_off, r in enumerate(range(min_row, max_row + 1)):
-        for c_off, c in enumerate(range(min_col, max_col + 1)):
-            ws.cell(row=r, column=c).value = new_grid[r_off][c_off]
+    # Snapshot grid
+    grid: list[list[Any]] = [
+        [sheet.cell(row=r, column=c).value for c in range(1, max_col + 1)]
+        for r in range(1, max_row + 1)
+    ]
+
+    # Rewrite in new order
+    for r_idx, row_values in enumerate(grid, start=1):
+        for out_col, src_idx in enumerate(new_order, start=1):
+            sheet.cell(row=r_idx, column=out_col).value = row_values[src_idx]

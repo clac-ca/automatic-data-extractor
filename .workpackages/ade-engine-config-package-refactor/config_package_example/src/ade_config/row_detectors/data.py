@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import row_detector
+from ade_engine.registry import RowDetectorContext, RowKind, row_detector
 
 
-@row_detector
-def detect_data_row_by_density(*, ctx: Any, **_: Any) -> dict[str, float]:
+@row_detector(row_kind=RowKind.DATA)
+def detect_data_row_by_density(ctx: RowDetectorContext) -> dict[str, float]:
     """Vote for a row being a data row.
 
     Heuristic:
       - data rows have more non-empty cells
       - data rows often contain numerics/dates mixed in
     """
-    values = getattr(ctx, "row_values", None) or []
+    values = ctx.row_values or []
     if not values:
         return {"data": 0.0}
 

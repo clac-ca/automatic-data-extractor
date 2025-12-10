@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import hook
+from ade_engine.registry import HookContext, HookName, hook
 
 
-@hook("on_table_mapped")
-def run(*, table_ctx: Any, sheet_ctx: Any, run_ctx: Any, logger: Any | None = None, **_: Any):
+@hook(HookName.ON_TABLE_MAPPED)
+def on_table_mapped(ctx: HookContext):
     """Optional mapping patch hook.
 
     Return a ColumnMappingPatch (or None). This is the place to:
@@ -16,6 +16,8 @@ def run(*, table_ctx: Any, sheet_ctx: Any, run_ctx: Any, logger: Any | None = No
 
     This template returns None by default.
     """
-    if logger:
-        logger.info("Config hook: table mapped (mapping is available on table_ctx.mapping)")
+
+    if ctx.logger and ctx.table:
+        mapped_fields = [col.field_name for col in getattr(ctx.table, "mapped_columns", [])]
+        ctx.logger.info("Config hook: table mapped (fields=%s)", mapped_fields)
     return None

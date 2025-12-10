@@ -20,7 +20,7 @@ def detect_last_name_header(ctx: ColumnDetectorContext):
 
 @column_detector(field="last_name", priority=20)
 def detect_last_name_values(ctx: ColumnDetectorContext):
-    sample = ctx.column_values_sample or []
+    sample = ctx.sample or []
     total = 0
     longish = 0
     for v in sample:

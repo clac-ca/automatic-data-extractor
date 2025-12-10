@@ -17,58 +17,58 @@
 
 ### B) New architecture: registry + discovery
 
-* [ ] Add **Registry** core (models + decorators + ordering rules). (Task: [01-registry-core](tasks/01-registry-core.md))
-  * [ ] Add **Config discovery** (import all modules under config package to auto-register detectors/transforms/validators/hooks). (Task: [02-config-discovery](tasks/02-config-discovery.md))
-  * [ ] Define and document **Callable contracts** (contexts + return types) for:
+* [x] Add **Registry** core (models + decorators + ordering rules). (Task: [01-registry-core](tasks/01-registry-core.md))
+  * [x] Add **Config discovery** (import all modules under config package to auto-register detectors/transforms/validators/hooks). (Task: [02-config-discovery](tasks/02-config-discovery.md))
+  * [x] Define and document **Callable contracts** (contexts + return types) for:
 
-  * [ ] Row Detectors (Task: [03-callable-row-detectors](tasks/03-callable-row-detectors.md))
-  * [ ] Column Detectors (field defs optional; engine auto-creates fields on first reference; optional `@field_meta` for metadata — see docs/registry-spec.md and docs/config-package-conventions.md) (Task: [04-callable-column-detectors](tasks/04-callable-column-detectors.md))
-  * [ ] Column Transforms (row-aligned list; each item is a raw value or a dict of `field -> value` that MUST include the current field; extra keys set other fields; `cell_transformer` sugar returns the same shape per cell — see docs/callable-contracts.md and docs/pipeline-and-registry.md) (Task: [05-callable-column-transforms](tasks/05-callable-column-transforms.md))
-  * [ ] Column Validators (return a validation result dict with `passed` and optional `message/row_index/column_index/value`, or a list of them; `cell_validator` sugar aggregates per-cell — see docs/callable-contracts.md and docs/registry-spec.md) (Task: [06-callable-column-validators](tasks/06-callable-column-validators.md))
-  * [ ] Hooks (HookName) (Task: [07-callable-hooks](tasks/07-callable-hooks.md))
+  * [x] Row Detectors (Task: [03-callable-row-detectors](tasks/03-callable-row-detectors.md))
+  * [x] Column Detectors (field defs optional; engine auto-creates fields on first reference; optional `@field_meta` for metadata — see docs/registry-spec.md and docs/config-package-conventions.md) (Task: [04-callable-column-detectors](tasks/04-callable-column-detectors.md))
+  * [x] Column Transforms (row-aligned list; each item is a raw value or a dict of `field -> value` that MUST include the current field; extra keys set other fields; `cell_transformer` sugar returns the same shape per cell — see docs/callable-contracts.md and docs/pipeline-and-registry.md) (Task: [05-callable-column-transforms](tasks/05-callable-column-transforms.md))
+  * [x] Column Validators (return a validation result dict with `passed` and optional `message/row_index/column_index/value`, or a list of them; `cell_validator` sugar aggregates per-cell — see docs/callable-contracts.md and docs/registry-spec.md) (Task: [06-callable-column-validators](tasks/06-callable-column-validators.md))
+  * [x] Hooks (HookName) (Task: [07-callable-hooks](tasks/07-callable-hooks.md))
 
 ### C) Pipeline refactor (no backwards compatibility)
 
-* [ ] Refactor row detection to use Registry row detectors (remove legacy loader usage). (Task: [08-pipeline-row-detection](tasks/08-pipeline-row-detection.md))
-* [ ] Refactor column detection + mapping to use Registry fields + column detectors. (Task: [09-pipeline-column-detection-mapping](tasks/09-pipeline-column-detection-mapping.md))
-* [ ] Refactor transform step to use Registry column transforms. (Task: [10-pipeline-transform](tasks/10-pipeline-transform.md))
-* [ ] Refactor validation step to use Registry column validators (reporting only). (Task: [11-pipeline-validation](tasks/11-pipeline-validation.md))
-* [ ] Refactor hook execution to use Registry hooks (HookName), remove old dispatcher/protocol if redundant. (Task: [12-pipeline-hooks](tasks/12-pipeline-hooks.md))
+* [x] Refactor row detection to use Registry row detectors (remove legacy loader usage). (Task: [08-pipeline-row-detection](tasks/08-pipeline-row-detection.md))
+* [x] Refactor column detection + mapping to use Registry fields + column detectors. (Task: [09-pipeline-column-detection-mapping](tasks/09-pipeline-column-detection-mapping.md))
+* [x] Refactor transform step to use Registry column transforms. (Task: [10-pipeline-transform](tasks/10-pipeline-transform.md))
+* [x] Refactor validation step to use Registry column validators (reporting only). (Task: [11-pipeline-validation](tasks/11-pipeline-validation.md))
+* [x] Refactor hook execution to use Registry hooks (HookName), remove old dispatcher/protocol if redundant. (Task: [12-pipeline-hooks](tasks/12-pipeline-hooks.md))
 
 ### D) Output writer changes (new default ordering)
 
-* [ ] Implement output ordering rule:
+* [x] Implement output ordering rule:
 
-  * [ ] mapped columns in **input column order** (Task: [13-output-ordering-mapped-input-order](tasks/13-output-ordering-mapped-input-order.md))
-  * [ ] unmapped columns appended right (if enabled) (Task: [14-output-ordering-unmapped-append](tasks/14-output-ordering-unmapped-append.md))
-* [ ] Add a supported “manual reorder” path via hook (recommended: `HookName.ON_TABLE_MAPPED`). (Task: [15-output-manual-reorder-hook](tasks/15-output-manual-reorder-hook.md))
+  * [x] mapped columns in **input column order** (Task: [13-output-ordering-mapped-input-order](tasks/13-output-ordering-mapped-input-order.md))
+  * [x] unmapped columns appended right (if enabled) (Task: [14-output-ordering-unmapped-append](tasks/14-output-ordering-unmapped-append.md))
+* [x] Add a supported “manual reorder” path via hook (recommended: `HookName.ON_TABLE_MAPPED`). (Task: [15-output-manual-reorder-hook](tasks/15-output-manual-reorder-hook.md))
 
 ### E) Settings refactor
 
-* [ ] Implement `ade_engine.settings.Settings` via `pydantic_settings` with:
+* [x] Implement `ade_engine.settings.Settings` via `pydantic_settings` with:
 
-  * [ ] defaults < TOML < `.env` < env vars < init kwargs (Task: [16-settings-implementation](tasks/16-settings-implementation.md))
-  * [ ] keys: `append_unmapped_columns`, `unmapped_prefix`, `mapping_tie_resolution` (leftmost|drop_all), etc.
-* [ ] Update engine + pipeline to read Settings (not manifest/config writer blocks). (Task: [17-settings-pipeline-integration](tasks/17-settings-pipeline-integration.md))
+  * [x] defaults < TOML < `.env` < env vars < init kwargs (Task: [16-settings-implementation](tasks/16-settings-implementation.md))
+  * [x] keys: `append_unmapped_columns`, `unmapped_prefix`, `mapping_tie_resolution` (leftmost|drop_all), etc.
+* [x] Update engine + pipeline to read Settings (not manifest/config writer blocks). (Task: [17-settings-pipeline-integration](tasks/17-settings-pipeline-integration.md))
 
 ### F) Remove legacy code + docs
 
-* [ ] Delete `ade_engine/config/*` legacy manifest/loader modules. (Task: [18-remove-legacy-config](tasks/18-remove-legacy-config.md))
-* [ ] Delete `ade_engine/schemas/manifest.py` (and any manifest schema plumbing). (Task: [19-remove-manifest-schema](tasks/19-remove-manifest-schema.md))
-* [ ] Remove/replace old docs referring to TOML manifest columns ordering & module strings. (Task: [20-docs-cleanup-manifest-refs](tasks/20-docs-cleanup-manifest-refs.md))
-* [ ] Update README(s) to the new “registry config package” model. (Task: [21-update-readmes-registry-model](tasks/21-update-readmes-registry-model.md))
+* [x] Delete `ade_engine/config/*` legacy manifest/loader modules. (Task: [18-remove-legacy-config](tasks/18-remove-legacy-config.md))
+* [x] Delete `ade_engine/schemas/manifest.py` (and any manifest schema plumbing). (Task: [19-remove-manifest-schema](tasks/19-remove-manifest-schema.md))
+* [x] Remove/replace old docs referring to TOML manifest columns ordering & module strings. (Task: [20-docs-cleanup-manifest-refs](tasks/20-docs-cleanup-manifest-refs.md))
+* [x] Update README(s) to the new “registry config package” model. (Task: [21-update-readmes-registry-model.md))
 
 ### G) Config package template (ade-config, ADE Engine)
 
-* [ ] Remove `manifest.toml` requirement. (Task: [22-config-package-no-manifest](tasks/22-config-package-no-manifest.md))
-* [ ] Provide recommended folder layout + examples (but keep registry flexible). (Task: [23-config-package-layout-examples](tasks/23-config-package-layout-examples.md))
-* [ ] Update config package README/docs to new approach. (Task: [24-config-package-docs-update](tasks/24-config-package-docs-update.md))
+* [x] Remove `manifest.toml` requirement. (Task: [22-config-package-no-manifest](tasks/22-config-package-no-manifest.md))
+* [x] Provide recommended folder layout + examples (but keep registry flexible). (Task: [23-config-package-layout-examples](tasks/23-config-package-layout-examples.md))
+* [x] Update config package README/docs to new approach. (Task: [24-config-package-docs-update](tasks/24-config-package-docs-update.md))
 
 ### H) Tests
 
-* [ ] Unit tests: registry ordering + score patch normalization. (Task: [25-tests-registry-ordering-scorepatch](tasks/25-tests-registry-ordering-scorepatch.md))
-* [ ] Unit tests: discovery imports all modules deterministically. (Task: [26-tests-discovery](tasks/26-tests-discovery.md))
-* [ ] Integration test: small sample config package → run pipeline end-to-end. (Task: [27-tests-integration-e2e](tasks/27-tests-integration-e2e.md))
+* [x] Unit tests: registry ordering + score patch normalization. (Task: [25-tests-registry-ordering-scorepatch](tasks/25-tests-registry-ordering-scorepatch.md))
+* [x] Unit tests: discovery imports all modules deterministically. (Task: [26-tests-discovery](tasks/26-tests-discovery.md))
+* [x] Integration test: small sample config package → run pipeline end-to-end. (Task: [27-tests-integration-e2e](tasks/27-tests-integration-e2e.md))
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, e.g.:

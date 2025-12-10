@@ -21,7 +21,7 @@ def detect_first_name_header(ctx: ColumnDetectorContext):
 
 @column_detector(field="first_name", priority=20)
 def detect_first_name_values(ctx: ColumnDetectorContext):
-    sample = ctx.column_values_sample or []
+    sample = ctx.sample or []
     if not sample:
         return {"first_name": 0.0}
     shortish = 0

@@ -172,6 +172,21 @@ ENGINE_EVENT_SCHEMAS: dict[str, PayloadModel] = {
     f"{ENGINE_NAMESPACE}.table.mapping_patched": TableMappingPatchedPayload,
     f"{ENGINE_NAMESPACE}.table.normalized": TableNormalizedPayload,
     f"{ENGINE_NAMESPACE}.table.written": TableWrittenPayload,
+
+    # Debug/telemetry events (payloads are open/optional)
+    f"{ENGINE_NAMESPACE}.settings.effective": None,
+    f"{ENGINE_NAMESPACE}.row_detector.result": None,
+    f"{ENGINE_NAMESPACE}.row_detector.summary": None,
+    f"{ENGINE_NAMESPACE}.row_classification": None,
+    f"{ENGINE_NAMESPACE}.column_detector.result": None,
+    f"{ENGINE_NAMESPACE}.column_detector.candidate": None,
+    f"{ENGINE_NAMESPACE}.column_detector.summary": None,
+    f"{ENGINE_NAMESPACE}.column_classification": None,
+    f"{ENGINE_NAMESPACE}.transform.applied": None,
+    f"{ENGINE_NAMESPACE}.transform.overwrite": None,
+    f"{ENGINE_NAMESPACE}.validator.result": None,
+    f"{ENGINE_NAMESPACE}.hook.start": None,
+    f"{ENGINE_NAMESPACE}.hook.end": None,
 }
 
 

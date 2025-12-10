@@ -19,7 +19,7 @@ from typer import BadParameter
 
 from ade_engine import __version__
 from ade_engine.engine import run_inputs
-from ade_engine.settings import DEFAULT_CONFIG_PACKAGE, Settings
+from ade_engine.settings import Settings
 from ade_engine.types.run import RunStatus
 
 app = typer.Typer(
@@ -169,13 +169,14 @@ def run_command(
         "--quiet",
         help="Reduce output to warnings and errors.",
     ),
-    config_package: Optional[str] = typer.Option(
-        None,
+    config_package: Path = typer.Option(
+        ...,
         "--config-package",
-        help=(
-            "Config package to load (module name) or path to a config package directory. "
-            f"Defaults to {DEFAULT_CONFIG_PACKAGE!r}."
-        ),
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+        help="Path to the config package directory (e.g., <workspace>/config_packages/<id>/src/ade_config or its root).",
     ),
 ) -> None:
     """Execute the engine for one or more inputs."""
@@ -198,7 +199,7 @@ def run_command(
 
     executed = run_inputs(
         all_inputs,
-        config_package=config_package or settings.config_package,
+        config_package=config_package,
         output_dir=output_dir,
         logs_dir=logs_dir,
         log_format=effective_log_format,

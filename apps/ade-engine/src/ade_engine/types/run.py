@@ -28,7 +28,7 @@ class RunErrorCode(str, Enum):
 class RunRequest:
     """Configuration for a single engine run."""
 
-    config_package: str = "ade_config"
+    config_package: Path | None = None
     manifest_path: Path | None = None
     input_file: Path | None = None
     input_sheets: list[str] | None = None
@@ -54,7 +54,7 @@ class RunResult:
     status: RunStatus
     error: RunError | None
     output_path: Path | None
-    logs_dir: Path
+    logs_dir: Path | None
     processed_file: str | None
     started_at: datetime | None = None
     completed_at: datetime | None = None

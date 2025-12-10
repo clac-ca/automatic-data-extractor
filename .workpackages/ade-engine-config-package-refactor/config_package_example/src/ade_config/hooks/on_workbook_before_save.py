@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import hook
+from ade_engine.registry import HookContext, HookName, hook
 
 
-@hook("on_workbook_before_save")
-def run(*, run_ctx: Any, logger: Any | None = None, **_: Any) -> None:
-    # Example: final workbook-level formatting, cover sheets, metadata, etc.
-    if logger:
-        logger.info("Config hook: workbook before save (%s)", getattr(run_ctx, "output_path", ""))
+@hook(HookName.ON_WORKBOOK_BEFORE_SAVE)
+def on_workbook_before_save(ctx: HookContext) -> None:
+    """Example finalization hook."""
+
+    if ctx.logger:
+        ctx.logger.info("Config hook: workbook before save (%s)", ctx.run_metadata.get("output_file", ""))
