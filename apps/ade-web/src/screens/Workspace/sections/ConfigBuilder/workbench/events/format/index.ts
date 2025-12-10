@@ -107,7 +107,7 @@ export function formatBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
   return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" });
 }
 
-function formatBuildCompletion(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildCompletion(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const statusRaw = (payload.status as string | undefined) ?? "completed";
   const status = statusRaw === "ready" ? "succeeded" : statusRaw;
   const summary = (payload.summary as string | undefined)?.trim();
@@ -247,7 +247,7 @@ export function formatRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
   return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
 }
 
-function formatRunQueued(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunQueued(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const mode = (payload.mode as string | undefined) ?? undefined;
   const runId =
     (payload.jobId as string | undefined) ??
