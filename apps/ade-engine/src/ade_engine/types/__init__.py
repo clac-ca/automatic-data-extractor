@@ -1,6 +1,6 @@
 """Typed models used by the ADE engine pipeline."""
 
-from ade_engine.types.contexts import RunContext, TableContext, TableView, WorksheetContext
+from ade_engine.types.contexts import RunContext, TableContext, WorksheetContext
 from ade_engine.types.issues import Severity, ValidationIssue
 from ade_engine.types.mapping import ColumnMappingPatch
 from ade_engine.types.origin import TableOrigin, TablePlacement, TableRegion
@@ -18,7 +18,6 @@ __all__ = [
     "RunContext",
     "WorksheetContext",
     "TableContext",
-    "TableView",
     "Severity",
     "ValidationIssue",
     "ColumnMappingPatch",

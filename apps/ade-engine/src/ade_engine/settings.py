@@ -1,60 +1,119 @@
-"""Minimal engine settings (external to the manifest)."""
+"""Settings for ade_engine using pydantic-settings.
 
+Defines a minimal set of engine-level toggles loaded from (in precedence order):
+init kwargs > env vars > .env file > ade_engine.toml > defaults.
+"""
 from __future__ import annotations
 
 import logging
+import tomllib
+from pathlib import Path
+from typing import Any, Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_CONFIG_PACKAGE = "ade_config"
-DEFAULT_SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = ("*.xlsx", "*.csv")
-DEFAULT_LOG_FORMAT = "text"
+
+def _toml_settings_source() -> dict[str, Any]:
+    """Load settings from ``ade_engine.toml`` if present.
+
+    The function returns a flat dict suitable for pydantic-settings.  We accept
+    either top-level keys or a nested ``[ade_engine]`` table for flexibility.
+    """
+
+    path = Path("ade_engine.toml")
+    if not path.exists():
+        return {}
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    # Prefer nested table to avoid collisions with other tooling.
+    nested = data.get("ade_engine")
+    if isinstance(nested, dict):
+        return nested
+    return data
 
 
 class Settings(BaseSettings):
-    """
-    External defaults; pipeline behavior comes from the config manifest.
+    """Runtime settings for the engine.
 
-    Pydantic-driven parsing gives us:
-    - env var overrides (prefix: ADE_ENGINE_)
-    - immutability (frozen) so settings stay consistent across the run
+    Defaults are safe for local development.  Callers can override via init
+    kwargs, environment variables (``ADE_ENGINE_*``), a ``.env`` file, or an
+    optional ``ade_engine.toml``.
     """
 
     model_config = SettingsConfigDict(
         env_prefix="ADE_ENGINE_",
-        case_sensitive=False,
+        env_file=".env",
         extra="ignore",
-        frozen=True,
     )
 
-    config_package: str = DEFAULT_CONFIG_PACKAGE
-    supported_file_extensions: tuple[str, ...] = DEFAULT_SUPPORTED_FILE_EXTENSIONS
-    log_level: int = logging.INFO
-    log_format: str = DEFAULT_LOG_FORMAT
+    # Core paths / packages
+    config_package: str | None = Field(
+        default=None,
+        description="(Required) Path to the config package directory (contains ade_config).",
+    )
 
-    @field_validator("log_format", mode="before")
-    @classmethod
-    def _normalize_log_format(cls, value: object) -> str:
-        """Normalize log format; allow only text or ndjson."""
-        fmt = DEFAULT_LOG_FORMAT if value is None else str(value).strip().lower()
-        if fmt not in {"text", "ndjson"}:
-            raise ValueError("log_format must be 'text' or 'ndjson'")
-        return fmt
+    # Output / writer toggles
+    append_unmapped_columns: bool = Field(
+        default=True,
+        description="Whether to include unmapped source columns in the output workbook.",
+    )
+    unmapped_prefix: str = Field(
+        default="raw_",
+        description="Prefix applied to unmapped column headers when appended to output.",
+    )
 
-    @field_validator("log_level", mode="before")
+    # Mapping behavior
+    mapping_tie_resolution: Literal["leftmost", "drop_all"] = Field(
+        default="leftmost",
+        description=(
+            "How to resolve multiple source columns mapping to the same field: "
+            "'leftmost' keeps the earliest column, 'drop_all' leaves all unmapped."
+        ),
+    )
+
+    # Logging
+    log_format: Literal["text", "ndjson"] = Field(default="text")
+    log_level: int = Field(default=logging.INFO)
+
+    # File discovery
+    supported_file_extensions: tuple[str, ...] = Field(
+        default=("*.xlsx", "*.xlsm", "*.csv", "*.xls"),
+        description="Glob patterns considered when scanning directories for inputs.",
+    )
+
+    @field_validator("unmapped_prefix")
     @classmethod
-    def _normalize_log_level(cls, value: object) -> int:
-        if value is None:
-            return logging.INFO
-        if isinstance(value, int):
-            return value
-        if isinstance(value, str):
-            mapping = logging.getLevelNamesMapping()
-            resolved = mapping.get(value.upper())
-            if isinstance(resolved, int):
-                return resolved
-        raise ValueError("log_level must be an int or a standard logging level name")
+    def _ensure_prefix_non_empty(cls, v: str) -> str:
+        if not v:
+            raise ValueError("unmapped_prefix must be non-empty")
+        return v
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):  # type: ignore[override]
+        toml_source = lambda: _toml_settings_source()
+        # Precedence: init > env vars > .env > TOML > defaults
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            toml_source,
+            file_secret_settings,
+        )
 
 
 __all__ = ["Settings"]

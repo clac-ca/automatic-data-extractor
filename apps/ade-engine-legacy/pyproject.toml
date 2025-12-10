@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-engine"
+version = "1.6.2"
+description = "Deterministic workbook normalization engine (detect → extract → map → normalize → render)."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "CLAC IT Team" }]
+license = { text = "Proprietary" }
+dependencies = [
+  "openpyxl==3.1.5",
+  "pydantic==2.12.5",
+  "pydantic-settings==2.12.0",
+  "typer==0.20.0",
+  "tomli==2.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+ade-engine = "ade_engine.main:app"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_engine*"]
