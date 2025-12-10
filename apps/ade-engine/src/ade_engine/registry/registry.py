@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import math
+import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Mapping
 
-from ade_engine.registry.models import FieldDef, HookName, ScorePatch
-
+from ade_engine.exceptions import HookError
+from ade_engine.logging import RunLogger
+from ade_engine.registry.models import FieldDef, HookContext, HookName, ScorePatch
 
 @dataclass
 class RegisteredFn:
@@ -28,6 +30,8 @@ class Registry:
         self.column_detectors: List[RegisteredFn] = []
         self.column_transforms: List[RegisteredFn] = []
         self.column_validators: List[RegisteredFn] = []
+        self.column_transforms_by_field: Dict[str, List[RegisteredFn]] = {}
+        self.column_validators_by_field: Dict[str, List[RegisteredFn]] = {}
         self.hooks: Dict[HookName, List[RegisteredFn]] = {name: [] for name in HookName}
 
     # ------------------------------------------------------------------
@@ -36,13 +40,72 @@ class Registry:
     def _sort_key(self, item: RegisteredFn):
         return (-item.priority, item.module, item.qualname)
 
+    def _group_by_field(self, items: List[RegisteredFn]) -> Dict[str, List[RegisteredFn]]:
+        grouped: Dict[str, List[RegisteredFn]] = {}
+        for item in items:
+            if item.field is None:
+                continue
+            grouped.setdefault(item.field, []).append(item)
+        return grouped
+
     def finalize(self) -> None:
         self.row_detectors.sort(key=self._sort_key)
         self.column_detectors.sort(key=self._sort_key)
         self.column_transforms.sort(key=self._sort_key)
         self.column_validators.sort(key=self._sort_key)
+        self.column_transforms_by_field = self._group_by_field(self.column_transforms)
+        self.column_validators_by_field = self._group_by_field(self.column_validators)
         for hook_list in self.hooks.values():
             hook_list.sort(key=self._sort_key)
+
+    def run_hooks(
+        self,
+        hook_name: HookName,
+        *,
+        state: dict,
+        run_metadata: Mapping[str, Any],
+        logger: RunLogger,
+        workbook=None,
+        sheet=None,
+        table=None,
+    ) -> None:
+        hooks = self.hooks.get(hook_name, [])
+        if not hooks:
+            return
+
+        hook_stage = hook_name.value if hasattr(hook_name, "value") else str(hook_name)
+        ctx = HookContext(
+            hook_name=hook_name,
+            run_metadata=run_metadata,
+            state=state,
+            workbook=workbook,
+            sheet=sheet,
+            table=table,
+            logger=logger,
+        )
+        for hook_def in hooks:
+            logger.event(
+                "hook.start",
+                level=logging.DEBUG,
+                data={
+                    "hook_name": hook_stage,
+                    "hook": hook_def.qualname,
+                },
+            )
+            try:
+                hook_def.fn(ctx)
+            except Exception as exc:
+                message = f"Hook {hook_def.qualname} failed during {hook_stage}"
+                logger.exception(message, exc_info=exc)
+                raise HookError(message, stage=hook_stage) from exc
+            logger.event(
+                "hook.end",
+                level=logging.DEBUG,
+                data={
+                    "hook_name": hook_stage,
+                    "hook": hook_def.qualname,
+                },
+            )
 
     # ------------------------------------------------------------------
     # Field registration

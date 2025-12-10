@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import openpyxl
 from openpyxl.worksheet.cell_range import CellRange
@@ -40,12 +40,12 @@ class TableContext:
     sheet: WorksheetContext
     origin: TableOrigin
     region: TableRegion
-    extracted: Optional[ExtractedTable] = None
-    mapped: Optional[MappedTable] = None
-    normalized: Optional[NormalizedTable] = None
-    placement: Optional[TablePlacement] = None
-    view: Optional["TableView"] = None
-    mapping_patch: Optional[ColumnMappingPatch] = None
+    extracted: ExtractedTable | None = None
+    mapped: MappedTable | None = None
+    normalized: NormalizedTable | None = None
+    placement: TablePlacement | None = None
+    view: "TableView" | None = None
+    mapping_patch: ColumnMappingPatch | None = None
 
 
 @dataclass(frozen=True)
@@ -58,13 +58,13 @@ class TableView:
         return self.cell_range.bounds
 
     def header_cells(self):
-        min_col, min_row, max_col, _ = self.cell_range.bounds
+        min_col, min_row, max_col, _ = self.bounds
         return [self.worksheet.cell(row=min_row, column=col) for col in range(min_col, max_col + 1)]
 
     def iter_data_rows(self):
-        min_col, min_row, max_col, max_row = self.cell_range.bounds
-        for row in range(min_row + 1, max_row + 1):
-            yield [self.worksheet.cell(row=row, column=col) for col in range(min_col, max_col + 1)]
+        min_col, min_row, max_col, max_row = self.bounds
+        for row_idx in range(min_row + 1, max_row + 1):
+            yield [self.worksheet.cell(row=row_idx, column=col) for col in range(min_col, max_col + 1)]
 
 
 __all__ = ["RunContext", "WorksheetContext", "TableContext", "TableView"]

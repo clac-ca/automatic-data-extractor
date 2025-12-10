@@ -476,6 +476,9 @@ class RunLogger(logging.LoggerAdapter):
         exc: BaseException | None = None,
         **fields: Any,
     ) -> None:
+        if not self.isEnabledFor(level):
+            return
+
         ns = self.namespace
         full_name = qualify_event_name(name, ns) if ns else normalize_dotpath(name) or "invalid_event"
 

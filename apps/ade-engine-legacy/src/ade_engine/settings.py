@@ -8,7 +8,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_CONFIG_PACKAGE = "ade_config"
-DEFAULT_SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = ("*.xlsx", "*.csv")
+DEFAULT_SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (".xlsx", ".csv")
 DEFAULT_LOG_FORMAT = "text"
 
 

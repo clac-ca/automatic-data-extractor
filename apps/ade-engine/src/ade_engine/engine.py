@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
 
-from ade_engine.exceptions import PipelineError
+from ade_engine.exceptions import ConfigError, HookError, InputError, PipelineError
 from ade_engine.io.workbook import (
     create_output_workbook,
     open_source_workbook,
@@ -15,7 +15,7 @@ from ade_engine.io.workbook import (
 from ade_engine.logging import create_run_logger_context
 from ade_engine.pipeline import Pipeline
 from ade_engine.registry import Registry, import_all, registry_context
-from ade_engine.registry.models import HookContext, HookName
+from ade_engine.registry.models import HookName
 from ade_engine.settings import Settings
 from ade_engine.types.run import RunError, RunErrorCode, RunRequest, RunResult, RunStatus
 from ade_engine.io.paths import PreparedRun, prepare_run_request
@@ -116,38 +116,6 @@ class Engine:
         )
         return registry
 
-    def _run_hooks(self, registry: Registry, hook_name: HookName, *, state: dict, run_metadata: dict, workbook=None, sheet=None, table=None, logger: RunLogger):
-        hooks = registry.hooks.get(hook_name, [])
-        if not hooks:
-            return
-        ctx = HookContext(
-            hook_name=hook_name,
-            run_metadata=run_metadata,
-            state=state,
-            workbook=workbook,
-            sheet=sheet,
-            table=table,
-            logger=logger,
-        )
-        for hook_def in hooks:
-            logger.event(
-                "hook.start",
-                level=logging.DEBUG,
-                data={
-                    "hook_name": hook_name.value if hasattr(hook_name, "value") else str(hook_name),
-                    "hook": hook_def.qualname,
-                },
-            )
-            hook_def.fn(ctx)
-            logger.event(
-                "hook.end",
-                level=logging.DEBUG,
-                data={
-                    "hook_name": hook_name.value if hasattr(hook_name, "value") else str(hook_name),
-                    "hook": hook_def.qualname,
-                },
-            )
-
     # ------------------------------------------------------------------
     def run(self, request: RunRequest | None = None, *, logger: RunLogger | None = None, **kwargs: Any) -> RunResult:
         req = request or RunRequest(**kwargs)
@@ -198,8 +166,7 @@ class Engine:
                     output_wb = create_output_workbook()
 
                     # Hooks: workbook start
-                    self._run_hooks(
-                        registry,
+                    registry.run_hooks(
                         HookName.ON_WORKBOOK_START,
                         state=state,
                         run_metadata=run_metadata,
@@ -214,8 +181,7 @@ class Engine:
                         sheet = source_wb[sheet_name]
                         out_sheet = output_wb.create_sheet(title=sheet_name)
 
-                        self._run_hooks(
-                            registry,
+                        registry.run_hooks(
                             HookName.ON_SHEET_START,
                             state=state,
                             run_metadata=run_metadata,
@@ -232,8 +198,7 @@ class Engine:
                             run_metadata=run_metadata,
                         )
 
-                    self._run_hooks(
-                        registry,
+                    registry.run_hooks(
                         HookName.ON_WORKBOOK_BEFORE_SAVE,
                         state=state,
                         run_metadata=run_metadata,
@@ -245,11 +210,21 @@ class Engine:
                     output_wb.save(prepared.output_file)
 
                 status = RunStatus.SUCCEEDED
+            except (ConfigError, InputError, HookError, PipelineError) as exc:
+                status = RunStatus.FAILED
+                code_lookup = {
+                    ConfigError: RunErrorCode.CONFIG_ERROR,
+                    InputError: RunErrorCode.INPUT_ERROR,
+                    HookError: RunErrorCode.HOOK_ERROR,
+                    PipelineError: RunErrorCode.PIPELINE_ERROR,
+                }
+                code = next((val for exc_type, val in code_lookup.items() if isinstance(exc, exc_type)), RunErrorCode.PIPELINE_ERROR)
+                error = RunError(code=code, stage=getattr(exc, "stage", None), message=str(exc))
+                run_logger.exception("Run failed", exc_info=exc)
             except Exception as exc:
                 status = RunStatus.FAILED
-                error = RunError(code=RunErrorCode.PIPELINE_ERROR, stage=None, message=str(exc))
-                if run_logger:
-                    run_logger.exception("Run failed", exc_info=exc)
+                error = RunError(code=RunErrorCode.UNKNOWN_ERROR, stage=None, message=str(exc))
+                run_logger.exception("Run failed", exc_info=exc)
             return RunResult(
                 status=status,
                 error=error,
