@@ -115,6 +115,7 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
 function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStreamState {
   const payload = extractPayload(event);
   const type = typeof event.event === "string" ? event.event : "";
+  const eventMessage = typeof event.message === "string" ? event.message : undefined;
 
   const line = formatConsoleEvent(event);
   const consoleLines = clampConsoleLines(
@@ -126,7 +127,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     type === "build.phase.started" || type === "build.phase.start"
       ? {
           ...state.buildPhases,
-          [payload.phase as string]: { status: "running", message: payload.message as string | undefined },
+          [payload.phase as string]: { status: "running", message: eventMessage },
         }
       : type === "build.phase.completed" || type === "build.phase.complete"
         ? {
@@ -134,7 +135,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
             [payload.phase as string]: {
               status: normalizePhaseStatus(payload.status),
               durationMs: asNumber(payload.duration_ms),
-              message: payload.message as string | undefined,
+              message: eventMessage,
             },
           }
         : state.buildPhases;
@@ -143,7 +144,7 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     type === "run.phase.started" || type === "run.phase.start" || type === "engine.phase.start"
       ? {
           ...state.runPhases,
-          [payload.phase as string]: { status: "running", message: payload.message as string | undefined },
+          [payload.phase as string]: { status: "running", message: eventMessage },
         }
       : type === "run.phase.completed" || type === "run.phase.complete" || type === "engine.phase.complete"
         ? {
@@ -151,14 +152,14 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
             [payload.phase as string]: {
               status: normalizePhaseStatus(payload.status),
               durationMs: asNumber(payload.duration_ms),
-              message: payload.message as string | undefined,
+              message: eventMessage,
             },
           }
         : state.runPhases;
 
   let validationSummary: ValidationSummary | null = state.validationSummary;
   if (type === "run.validation.issue" || type === "engine.validation.issue") {
-    const issue = toValidationIssue(payload);
+    const issue = toValidationIssue(payload, eventMessage);
     const existingIssues = validationSummary?.issues ?? [];
     validationSummary = {
       ...validationSummary,
@@ -283,12 +284,12 @@ function extractPayload(event: RunStreamEvent): Record<string, unknown> {
   return {};
 }
 
-function toValidationIssue(payload: Record<string, unknown>): ValidationIssue | null {
+function toValidationIssue(payload: Record<string, unknown>, eventMessage?: string): ValidationIssue | null {
   const severity = (payload.severity as string | undefined) ?? (payload.level as string | undefined);
   const level: ValidationIssue["level"] =
     severity === "error" ? "error" : severity === "warning" ? "warning" : "info";
   const message =
-    (payload.message as string | undefined) ??
+    (eventMessage as string | undefined) ??
     (payload.code as string | undefined) ??
     "Validation issue";
   const path = payload.path as string | undefined;
@@ -304,7 +305,11 @@ function normalizeValidationSummary(
   const rawIssues = payload.issues;
   if (Array.isArray(rawIssues)) {
     const issues = rawIssues
-      .map((issue) => (issue && typeof issue === "object" ? toValidationIssue(issue as Record<string, unknown>) : null))
+      .map((issue) =>
+        issue && typeof issue === "object"
+          ? toValidationIssue(issue as Record<string, unknown>)
+          : null,
+      )
       .filter(Boolean) as ValidationIssue[];
     next.issues = issues;
   }

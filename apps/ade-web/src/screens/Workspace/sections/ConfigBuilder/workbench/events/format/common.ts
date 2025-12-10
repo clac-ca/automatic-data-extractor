@@ -31,6 +31,7 @@ export function payloadOf(event: RunStreamEvent): Record<string, unknown> {
 }
 
 export function normalizeLevel(level?: string): WorkbenchConsoleLine["level"] {
+  if (level === "debug") return "debug";
   if (level === "error") return "error";
   if (level === "warning" || level === "warn") return "warning";
   if (level === "success") return "success";
@@ -61,7 +62,7 @@ export function formatConsole(
   const stream = payload.stream as string | undefined;
   const level = (payload.level as string | undefined) ?? (stream === "stderr" ? "warning" : "info");
   const message =
-    (payload.message as string | undefined) ??
+    (event.message as string | undefined) ??
     (typeof payload.text === "string" ? payload.text : JSON.stringify(payload));
   const scope = (payload.scope as string | undefined) ?? undefined;
   const origin: WorkbenchConsoleLine["origin"] =

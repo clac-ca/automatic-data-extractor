@@ -53,6 +53,7 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "engine.row_detector.result": (event, payload, timestamp) => formatEngineRowDetectorResult(event, payload, timestamp),
   "engine.row_classification": (event, payload, timestamp) => formatEngineRowClassification(event, payload, timestamp),
   "engine.column_detector.result": (event, payload, timestamp) => formatEngineColumnDetectorResult(event, payload, timestamp),
+  "engine.column_detector.candidate": (event, payload, timestamp) => formatEngineColumnDetectorCandidate(event, payload, timestamp),
   "engine.column_classification": (event, payload, timestamp) => formatEngineColumnClassification(event, payload, timestamp),
   "engine.config.loaded": (event, payload, timestamp) => formatEngineConfigLoaded(event, payload, timestamp),
   "engine.log": (event, payload, timestamp) => formatEngineLog(event, payload, timestamp),
@@ -438,9 +439,9 @@ function formatEngineConfigLoaded(_event: RunStreamEvent, payload: Record<string
 
 function formatEngineLog(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const level = normalizeLevel((payload.level as string | undefined) ?? (event.level as string | undefined) ?? "info");
-  const msgFromPayload = typeof payload.message === "string" ? payload.message.trim() : "";
   const msgFromEvent = typeof event.message === "string" ? event.message.trim() : "";
-  const message = msgFromPayload || msgFromEvent || "Engine log";
+  const fallback = typeof payload.text === "string" ? payload.text : "";
+  const message = msgFromEvent || fallback || "Engine log";
   return { level, message, timestamp, origin: "run", raw: event };
 }
 
@@ -516,6 +517,27 @@ function formatEngineColumnClassification(
   return { level, message, timestamp, origin: "run" };
 }
 
+function formatEngineColumnDetectorCandidate(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const columnIndex = payload.column_index as number | undefined;
+  const header = (payload.header as string | undefined) ?? undefined;
+  const bestField = (payload.best_field as string | undefined) ?? "unknown";
+  const bestScore = typeof payload.best_score === "number" ? payload.best_score : undefined;
+  const scores = formatScores(payload.scores as Record<string, unknown> | undefined);
+  const messageParts = [
+    `Column ${columnIndex ?? "?"} candidate ${bestField}`,
+    bestScore !== undefined ? `(score=${bestScore.toFixed(3)})` : null,
+    header ? `header="${header}"` : null,
+    scores ? `scores: ${scores}` : null,
+  ].filter(Boolean);
+  const message = messageParts.join(" · ");
+  return { level, message, timestamp, origin: "run" };
+}
+
 function formatScores(scores?: Record<string, unknown>): string | null {
   if (!scores || typeof scores !== "object") return null;
   const entries = Object.entries(scores).filter(([, value]) => typeof value === "number");
@@ -530,9 +552,14 @@ function withRaw(event: RunStreamEvent, line: WorkbenchConsoleLine): WorkbenchCo
   return { ...line, raw: event };
 }
 
-function formatConfigEvent(type: string, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatConfigEvent(
+  event: RunStreamEvent,
+  type: string,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
   const message =
-    typeof payload.message === "string" ? payload.message : `Config event: ${type.replace(/^config\\./, "")}`;
+    (event.message as string | undefined)?.trim() ?? `Config event: ${type.replace(/^config\\./, "")}`;
   return {
     level: normalizeLevel((payload.level as string | undefined) ?? "info"),
     message,
@@ -543,6 +570,7 @@ function formatConfigEvent(type: string, payload: Record<string, unknown>, times
 }
 
 function formatTransformEvent(
+  event: RunStreamEvent,
   type: string,
   payload: Record<string, unknown>,
   timestamp: string,
@@ -550,7 +578,7 @@ function formatTransformEvent(
   const phase = type.replace("run.transform.", "");
   const level = normalizeLevel((payload.level as string | undefined) ?? "info");
   const message =
-    (payload.message as string | undefined) ??
+    (event.message as string | undefined)?.trim() ??
     `Transform ${phase}${payload.status ? ` ${payload.status as string}` : ""}`;
   return {
     level,
