@@ -66,7 +66,12 @@ def collect_input_files(
 ) -> List[Path]:
     """Collect all input files from explicit paths and/or a directory scan."""
     paths = list(explicit_inputs)
-    include_globs = list(dict.fromkeys((*settings.supported_file_extensions, *include)))
+    include_globs = list(dict.fromkeys(include))
+    supported_extensions = {
+        ext.lower() if ext.startswith(".") else f".{ext.lower().lstrip('*.')}"
+        for ext in settings.supported_file_extensions
+        if ext
+    }
 
     if input_dir:
         for path in input_dir.rglob("*"):
@@ -75,7 +80,10 @@ def collect_input_files(
 
             rel = path.relative_to(input_dir).as_posix()
 
-            if include_globs and not any(fnmatch(rel, pat) for pat in include_globs):
+            matches_include = bool(include_globs) and any(fnmatch(rel, pat) for pat in include_globs)
+            matches_default_ext = not supported_extensions or path.suffix.lower() in supported_extensions
+
+            if not matches_default_ext and not matches_include:
                 continue
             if exclude and any(fnmatch(rel, pat) for pat in exclude):
                 continue

@@ -36,10 +36,11 @@ def apply_validators(
 ) -> List[Dict[str, Any]]:
     issues: List[Dict[str, Any]] = []
     mapping_lookup = {col.field_name: col.source_index for col in mapped_columns}
+    validators_by_field = registry.column_validators_by_field
 
     for col in mapped_columns:
         values = [row.get(col.field_name) for row in transformed_rows]
-        validators = [v for v in registry.column_validators if v.field == col.field_name]
+        validators = validators_by_field.get(col.field_name, [])
         for val in validators:
             ctx = ValidateContext(
                 field_name=col.field_name,

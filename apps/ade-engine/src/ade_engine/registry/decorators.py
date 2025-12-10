@@ -53,7 +53,8 @@ def define_field(**kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., 
 def row_detector(*, row_kind: RowKind | str = RowKind.UNKNOWN, priority: int = 0):
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         registry = get_current_registry()
-        registry.register_row_detector(fn, row_kind=str(row_kind), priority=priority)
+        kind = row_kind.value if isinstance(row_kind, RowKind) else str(row_kind)
+        registry.register_row_detector(fn, row_kind=kind, priority=priority)
         return fn
 
     return decorator

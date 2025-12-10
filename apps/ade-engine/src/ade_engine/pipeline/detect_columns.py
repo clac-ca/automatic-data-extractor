@@ -25,15 +25,13 @@ def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> L
 def detect_and_map_columns(
     *,
     sheet_name: str,
-    header_row: List[Any],
-    data_rows: List[List[Any]],
+    source_columns: List[SourceColumn],
     registry: Registry,
     settings: Settings,
     state: dict,
     run_metadata: dict,
     logger: RunLogger,
 ) -> tuple[List[MappedColumn], List[SourceColumn]]:
-    source_columns = build_source_columns(header_row, data_rows)
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
     field_competitors: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
     contributions_by_column: Dict[int, Dict[str, List[Dict[str, float]]]] = {}

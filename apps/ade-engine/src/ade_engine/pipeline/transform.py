@@ -11,7 +11,7 @@ from ade_engine.logging import RunLogger
 
 def _normalize_transform_output(field_name: str, raw: Any, expected_len: int) -> List[Dict[str, Any]]:
     if raw is None:
-        return [{field_name: None} for _ in range(expected_len)]
+        raise ValueError("Transform returned None; expected a list aligned to input rows")
     if not isinstance(raw, list):
         raise ValueError("Transform must return a list aligned to input rows")
     if len(raw) != expected_len:
@@ -44,12 +44,13 @@ def apply_transforms(
     output_rows: List[Dict[str, Any]] = [dict() for _ in range(row_count)]
 
     mapping_lookup = {col.field_name: col.source_index for col in mapped_columns}
+    transforms_by_field = registry.column_transforms_by_field
 
     for col in mapped_columns:
         # base values from source column
         working = [{col.field_name: v} for v in col.values]
 
-        transforms = [tf for tf in registry.column_transforms if tf.field == col.field_name]
+        transforms = transforms_by_field.get(col.field_name, [])
         for tf in transforms:
             before_sample = working[:3]
             ctx = TransformContext(

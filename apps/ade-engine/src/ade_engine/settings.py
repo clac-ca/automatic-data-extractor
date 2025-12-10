@@ -100,8 +100,8 @@ class Settings(BaseSettings):
 
     # File discovery
     supported_file_extensions: tuple[str, ...] = Field(
-        default=("*.xlsx", "*.xlsm", "*.csv"),
-        description="Glob patterns considered when scanning directories for inputs.",
+        default=(".xlsx", ".xlsm", ".csv"),
+        description="File extensions considered when scanning directories for inputs (case-insensitive).",
     )
 
     @field_validator("unmapped_prefix")
