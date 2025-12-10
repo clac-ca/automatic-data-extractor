@@ -186,25 +186,25 @@ function formatBuildStarted(_event: RunStreamEvent, payload: Record<string, unkn
   };
 }
 
-function formatBuildPhaseStarted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildPhaseStarted(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "building";
-  const message = (payload.message as string | undefined) ?? `Starting ${phase}`;
+  const message = (event.message as string | undefined)?.trim() ?? `Starting ${phase}`;
   return { level: "info", message, timestamp, origin: "build" };
 }
 
-function formatBuildProgress(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildProgress(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const message =
-    (payload.message as string | undefined) ??
+    (event.message as string | undefined)?.trim() ??
     ((payload.step as string | undefined) ? `Build: ${payload.step as string}` : "Build progress");
   return { level: "info", message, timestamp, origin: "build" };
 }
 
-function formatBuildPhaseCompleted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildPhaseCompleted(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "build";
   const status = (payload.status as string | undefined) ?? "completed";
   const duration = formatDurationMs(payload.duration_ms);
   const message =
-    (payload.message as string | undefined) ??
+    (event.message as string | undefined)?.trim() ??
     `${phase} ${status}${duration ? ` in ${duration}` : ""}`;
   const level: WorkbenchConsoleLine["level"] =
     status === "failed" ? "error" : status === "skipped" ? "warning" : "success";
@@ -287,9 +287,9 @@ function formatRunStarted(_event: RunStreamEvent, payload: Record<string, unknow
   };
 }
 
-function formatRunPhaseStarted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunPhaseStarted(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "progress";
-  const message = (payload.message as string | undefined) ?? `Phase: ${phase}`;
+  const message = (event.message as string | undefined)?.trim() ?? `Phase: ${phase}`;
   const level = normalizeLevel((payload.level as string | undefined) ?? "info");
   return {
     level,
@@ -299,12 +299,12 @@ function formatRunPhaseStarted(_event: RunStreamEvent, payload: Record<string, u
   };
 }
 
-function formatRunPhaseCompleted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunPhaseCompleted(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "phase";
   const status = (payload.status as string | undefined) ?? "completed";
   const duration = formatDurationMs(payload.duration_ms);
   const message =
-    (payload.message as string | undefined) ??
+    (event.message as string | undefined)?.trim() ??
     `Phase ${phase} ${status}${duration ? ` in ${duration}` : ""}`;
   const level: WorkbenchConsoleLine["level"] =
     status === "failed" ? "error" : status === "skipped" ? "warning" : "success";
@@ -347,9 +347,9 @@ function formatValidationSummary(_event: RunStreamEvent, payload: Record<string,
   };
 }
 
-function formatRunError(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunError(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const code = (payload.code as string | undefined) ?? "unknown_error";
-  const message = (payload.message as string | undefined) ?? "Run error.";
+  const message = (event.message as string | undefined)?.trim() ?? "Run error.";
   const stage = (payload.stage as string | undefined) ?? (payload.phase as string | undefined);
   const stageLabel = stage ? ` [${stage}]` : "";
   return {
