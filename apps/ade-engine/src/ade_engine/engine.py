@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, List
@@ -14,7 +15,7 @@ from ade_engine.io.workbook import (
 )
 from ade_engine.logging import create_run_logger_context
 from ade_engine.pipeline import Pipeline
-from ade_engine.registry import Registry, import_all, registry_context
+from ade_engine.registry import Registry
 from ade_engine.registry.models import HookName
 from ade_engine.settings import Settings
 from ade_engine.types.run import RunError, RunErrorCode, RunRequest, RunResult, RunStatus
@@ -91,18 +92,27 @@ class Engine:
         raise ModuleNotFoundError(f"Could not locate a Python package under {path}")
 
     def _load_registry(self, *, config_package: Path, logger: RunLogger) -> Registry:
-        """Create a Registry and populate it by importing the config package (path required)."""
+        """Create a Registry and populate it using a config package entrypoint."""
 
         registry = Registry()
         resolved_package, resolved_root = self._coerce_config_package_path(Path(config_package))
 
-        # Add resolved_root to sys.path if provided
         root_path = Path(resolved_root).expanduser().resolve()
         if str(root_path) not in sys.path:
             sys.path.insert(0, str(root_path))
 
-        with registry_context(registry):
-            import_all(resolved_package, fresh=True)
+        entrypoint = None
+        pkg = importlib.import_module(resolved_package)
+        register_fn = getattr(pkg, "register", None)
+
+        if callable(register_fn):
+            entrypoint = f"{resolved_package}.register"
+            register_fn(registry)
+        else:
+            raise ModuleNotFoundError(
+                f"Config package '{resolved_package}' must define a register(registry) entrypoint"
+            )
+
         registry.finalize()
         logger.event(
             "config.loaded",
@@ -110,6 +120,7 @@ class Engine:
             data={
                 "config_package": resolved_package,
                 "config_path": str(root_path),
+                "entrypoint": entrypoint,
                 "fields": list(registry.fields.keys()),
                 "settings": self._settings_snapshot(),
             },
