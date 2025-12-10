@@ -15,12 +15,8 @@ def register(registry):
     registry.register_column_transform(normalize_email, field="email", priority=0)
     registry.register_column_validator(validate_email, field="email", priority=0)
     # If you prefer per-cell helpers, uncomment the functions below and register them instead:
-    # registry.register_column_transform(normalize_email_cell, field="email", priority=0)
-    # registry.register_column_validator(validate_email_cell, field="email", priority=0)
-
-
-def _norm(text: object | None) -> str:
-    return "" if text is None else str(text).strip().lower()
+    # registry.register_cell_transform(normalize_email_cell, field="email", priority=0)
+    # registry.register_cell_validator(validate_email_cell, field="email", priority=0)
 
 
 def detect_email_header(
@@ -35,7 +31,7 @@ def detect_email_header(
     input_file_name,
     logger,
 ) -> dict[str, float] | None:
-    header = _norm(header)
+    header = "" if header is None else str(header).strip().lower()
     if not header:
         return None
     if "email" in header or "e-mail" in header:

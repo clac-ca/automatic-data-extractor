@@ -30,6 +30,20 @@ LANGUAGE_HINTS: dict[str, str] = {
 DEFAULT_EXCLUDE_PATTERNS: tuple[str, ...] = (
     "__pycache__/**",
     "**/__pycache__/**",
+    "*.egg-info/**",
+    "**/*.egg-info/**",
+    ".pytest_cache/**",
+    "**/.pytest_cache/**",
+    ".mypy_cache/**",
+    "**/.mypy_cache/**",
+    ".venv/**",
+    "**/.venv/**",
+    "build/**",
+    "**/build/**",
+    "dist/**",
+    "**/dist/**",
+    "node_modules/**",
+    "**/node_modules/**",
 )
 
 
