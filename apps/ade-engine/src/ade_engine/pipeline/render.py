@@ -31,7 +31,9 @@ def render_table(
 
     worksheet.append(headers)
 
-    row_count = max((len(col.values) for col in mapped_cols), default=0)
+    # Include unmapped columns when determining how many data rows to emit; otherwise
+    # sheets with only unmapped columns would collapse to a header-only table.
+    row_count = max((len(col.values) for col in [*mapped_cols, *unmapped_cols]), default=0)
     for row_idx in range(row_count):
         row_values: List[Any] = []
         for col in mapped_cols:
