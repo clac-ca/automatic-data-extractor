@@ -5,7 +5,7 @@ import type {
   WorkbenchValidationState,
 } from "../types";
 
-import type { AdeEvent as RunStreamEvent } from "@shared/runs/types";
+import type { RunStreamEvent } from "@shared/runs/types";
 import type { RunStatus } from "@shared/runs/types";
 
 export type PhaseStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
@@ -114,7 +114,7 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
 
 function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStreamState {
   const payload = extractPayload(event);
-  const type = typeof event.type === "string" ? event.type : "";
+  const type = typeof event.event === "string" ? event.event : "";
 
   const line = formatConsoleEvent(event);
   const consoleLines = clampConsoleLines(
@@ -176,7 +176,14 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
         : state.completedPayload;
 
   const status = resolveStatus(state.status, type, payload);
-  const runId = state.runId ?? (typeof event.run_id === "string" ? event.run_id : null);
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const runId =
+    state.runId ??
+    (typeof data.jobId === "string"
+      ? data.jobId
+      : typeof data.run_id === "string"
+        ? data.run_id
+        : null);
   const runMode =
     typeof payload.mode === "string"
       ? payload.mode === "validation"
@@ -269,7 +276,7 @@ function normalizePhaseStatus(value: unknown): PhaseStatus {
 }
 
 function extractPayload(event: RunStreamEvent): Record<string, unknown> {
-  const payload = event?.payload;
+  const payload = event?.data;
   if (payload && typeof payload === "object") {
     return payload as Record<string, unknown>;
   }

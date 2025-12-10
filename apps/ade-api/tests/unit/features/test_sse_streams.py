@@ -1,28 +1,29 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import datetime
 from types import SimpleNamespace
 from uuid import uuid4
+import json
 
 import pytest
 from fastapi import Request
 
 from ade_api.features.builds.router import stream_build_events_endpoint
 from ade_api.features.runs.router import stream_run_events_endpoint
-from ade_api.schemas.events import AdeEvent
+from ade_api.schemas.event_record import EventRecord, new_event_record
 
 pytestmark = pytest.mark.asyncio
 
 
 class _ListReader:
-    def __init__(self, events: list[AdeEvent]) -> None:
+    def __init__(self, events: list[EventRecord]) -> None:
         self._events = events
 
-    def iter(self, *, after_sequence: int | None = None):
+    def iter_persisted(self, *, after_sequence: int | None = None):
         for event in self._events:
-            if after_sequence is not None and event.sequence is not None:
-                if event.sequence <= after_sequence:
+            seq = event.get("sequence")
+            if after_sequence is not None and isinstance(seq, int):
+                if seq <= after_sequence:
                     continue
             yield event
 
@@ -36,7 +37,7 @@ class _EmptySubscription:
 
 
 class _StubBuildsService:
-    def __init__(self, *, build_id, workspace_id, configuration_id, events: list[AdeEvent]):
+    def __init__(self, *, build_id, workspace_id, configuration_id, events: list[EventRecord]):
         self._build = SimpleNamespace(
             id=build_id,
             workspace_id=workspace_id,
@@ -53,12 +54,12 @@ class _StubBuildsService:
         return _ListReader(self._events)
 
     @asynccontextmanager
-    async def subscribe_to_events(self, build_id):
+    async def subscribe_to_events(self, build):
         yield _EmptySubscription()
 
 
 class _StubRunsService:
-    def __init__(self, *, run_id, workspace_id, configuration_id, events: list[AdeEvent]):
+    def __init__(self, *, run_id, workspace_id, configuration_id, events: list[EventRecord]):
         self._run = SimpleNamespace(
             id=run_id,
             workspace_id=workspace_id,
@@ -71,11 +72,11 @@ class _StubRunsService:
             return self._run
         return None
 
-    def event_log_reader(self, *, workspace_id, run_id):
-        return _ListReader(self._events)
+    def iter_events(self, *, run, after_sequence: int | None = None):
+        return _ListReader(self._events).iter_persisted(after_sequence=after_sequence)
 
     @asynccontextmanager
-    async def subscribe_to_events(self, run_id):
+    async def subscribe_to_events(self, run):
         yield _EmptySubscription()
 
 
@@ -84,28 +85,11 @@ async def test_build_stream_formats_replayed_events_without_hanging() -> None:
     workspace_id = uuid4()
     configuration_id = uuid4()
     events = [
-        AdeEvent(
-            type="build.queued",
-            event_id="evt_build_1",
-            created_at=datetime.utcnow(),
-            sequence=1,
-            source="api",
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=build_id,
-            payload={"status": "queued"},
-        ),
-        AdeEvent(
-            type="build.complete",
-            event_id="evt_build_2",
-            created_at=datetime.utcnow(),
-            sequence=2,
-            source="api",
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            build_id=build_id,
-            payload={"status": "ready", "exit_code": 0},
-        ),
+        {**new_event_record(event="build.queued", data={"status": "queued"}), "sequence": 1},
+        {
+            **new_event_record(event="build.complete", data={"status": "ready", "exit_code": 0}),
+            "sequence": 2,
+        },
     ]
 
     service = _StubBuildsService(
@@ -139,28 +123,8 @@ async def test_run_stream_respects_resume_cursor_header() -> None:
     workspace_id = uuid4()
     configuration_id = uuid4()
     events = [
-        AdeEvent(
-            type="run.queued",
-            event_id="evt_run_1",
-            created_at=datetime.utcnow(),
-            sequence=1,
-            source="api",
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            run_id=run_id,
-            payload={"status": "queued"},
-        ),
-        AdeEvent(
-            type="run.complete",
-            event_id="evt_run_2",
-            created_at=datetime.utcnow(),
-            sequence=2,
-            source="api",
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-            run_id=run_id,
-            payload={"status": "succeeded"},
-        ),
+        {**new_event_record(event="run.queued", data={"status": "queued"}), "sequence": 1},
+        {**new_event_record(event="run.complete", data={"status": "succeeded"}), "sequence": 2},
     ]
 
     service = _StubRunsService(
@@ -180,9 +144,10 @@ async def test_run_stream_respects_resume_cursor_header() -> None:
     chunks = [chunk async for chunk in response.body_iterator]
     payload = b"".join(chunks).decode("utf-8").strip().split("\n\n")
 
-    assert len(payload) == 1  # resumed at sequence 1, so only the second event should stream
+    assert len(payload) == 1  # resumed at id 1, so only the second event should stream
     lines = payload[0].splitlines()
-    assert lines[0] == "id: 2"
+    assert lines[0] == "id: 1"
     assert lines[1] == "event: run.complete"
     assert lines[2].startswith("data: ")
-    assert '"status":"succeeded"' in payload[0]
+    data_obj = json.loads(lines[2].removeprefix("data: "))
+    assert data_obj["data"]["status"] == "succeeded"

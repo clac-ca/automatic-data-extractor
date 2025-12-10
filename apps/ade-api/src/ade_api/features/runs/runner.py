@@ -1,4 +1,4 @@
-"""Asynchronous supervisor for ADE engine subprocess streams."""
+"""Minimal async subprocess runner used by run execution."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Literal
-
-from ade_api.common.logging import log_context
 
 logger = logging.getLogger(__name__)
 
@@ -22,91 +20,56 @@ class StdoutFrame:
     stream: Literal["stdout", "stderr"] = "stdout"
 
 
-# For now, runner frames are just stdout/stderr lines.
-RunnerFrame = StdoutFrame
-
-
 class EngineSubprocessRunner:
-    """Manage a single ADE engine subprocess and stream its output."""
+    """Spawn the engine subprocess and yield stdout/stderr lines."""
 
-    def __init__(
-        self,
-        *,
-        command: list[str],
-        env: dict[str, str],
-    ) -> None:
+    def __init__(self, *, command: list[str], env: dict[str, str]) -> None:
         self._command = command
         self._env = env
-        self._queue: asyncio.Queue[RunnerFrame | None] = asyncio.Queue()
         self.returncode: int | None = None
 
-    async def stream(self) -> AsyncIterator[RunnerFrame]:
-        """Yield stdout/stderr lines as they are produced."""
-
-        logger.debug(
-            "run.engine.subprocess.start",
-            extra=log_context(command=" ".join(self._command)),
-        )
-
+    async def stream(self) -> AsyncIterator[StdoutFrame]:
         process = await asyncio.create_subprocess_exec(
             *self._command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
         )
+        assert process.stdout is not None and process.stderr is not None
 
-        assert process.stdout is not None
-        assert process.stderr is not None
+        async def drain(pipe, stream: Literal["stdout", "stderr"]):
+            async for raw in pipe:  # type: ignore[attr-defined]
+                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+                if line:
+                    yield StdoutFrame(message=line, stream=stream)
 
-        stdout_task = asyncio.create_task(self._capture_stdout(process))
-        stderr_task = asyncio.create_task(self._capture_stderr(process))
+        stdout_iter = drain(process.stdout, "stdout")
+        stderr_iter = drain(process.stderr, "stderr")
 
-        completed = 0
-        try:
-            while completed < 2:
-                item = await self._queue.get()
-                if item is None:
-                    completed += 1
-                    continue
-                yield item
-        finally:
-            stdout_task.cancel()
-            stderr_task.cancel()
-            with contextlib.suppress(Exception):
-                await stdout_task
-            with contextlib.suppress(Exception):
-                await stderr_task
+        async def merged() -> AsyncIterator[StdoutFrame]:
+            tasks = {
+                asyncio.create_task(stdout_iter.__anext__()): "stdout",
+                asyncio.create_task(stderr_iter.__anext__()): "stderr",
+            }
+            while tasks:
+                done, _ = await asyncio.wait(tasks.keys(), return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    stream_name = tasks.pop(task)
+                    try:
+                        frame = task.result()
+                    except StopAsyncIteration:
+                        continue
+                    yield frame
+                    # schedule next
+                    next_task = asyncio.create_task(
+                        (stdout_iter if stream_name == "stdout" else stderr_iter).__anext__()
+                    )
+                    tasks[next_task] = stream_name
+
+        async for frame in merged():
+            yield frame
 
         self.returncode = await process.wait()
-        logger.debug(
-            "run.engine.subprocess.exit",
-            extra=log_context(
-                command=" ".join(self._command),
-                returncode=self.returncode,
-            ),
-        )
-
-    async def _capture_stdout(self, process: asyncio.subprocess.Process) -> None:
-        assert process.stdout is not None
-        try:
-            async for raw_line in process.stdout:  # type: ignore[attr-defined]
-                text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
-                if not text:
-                    continue
-                await self._queue.put(StdoutFrame(message=text, stream="stdout"))
-        finally:
-            await self._queue.put(None)
-
-    async def _capture_stderr(self, process: asyncio.subprocess.Process) -> None:
-        assert process.stderr is not None
-        try:
-            async for raw_line in process.stderr:  # type: ignore[attr-defined]
-                text = raw_line.decode("utf-8", errors="replace").rstrip("\n")
-                if not text:
-                    continue
-                await self._queue.put(StdoutFrame(message=text, stream="stderr"))
-        finally:
-            await self._queue.put(None)
 
 
-__all__ = ["EngineSubprocessRunner", "RunnerFrame", "StdoutFrame"]
+__all__ = ["EngineSubprocessRunner", "StdoutFrame"]

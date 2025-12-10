@@ -489,24 +489,24 @@ Data hooks:
 
 * `useRunQuery(runId)` → `GET /api/v1/runs/{run_id}` (global; `runId` is unique).
 * `useRunOutputQuery(runId)` → `/api/v1/runs/{run_id}/output`.
-* `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/events?stream=true`:
+* `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/events/stream`:
 
-  * Parses `AdeEvent` envelopes emitted over SSE, such as:
+  * Parses `EventRecord` dictionaries emitted over SSE, such as:
 
     * `run.queued`
     * `run.start`
     * `engine.phase.start`
-    * `console.line` (payload carries `scope`, `stream`, `message`)
+    * `console.line` (payload lives under `data.scope`/`data.stream`/`data.message`)
     * `engine.table.summary`
     * `engine.sheet.summary`
     * `engine.file.summary`
     * `engine.run.summary`
     * `run.complete`
-  * Updates console output incrementally as events arrive.
+  * Updates console output incrementally as events arrive; uses the SSE `id` counter for ordering/resume.
   * For schema details, see:
 
     * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` §6
-    * `apps/ade-engine/docs/11-ade-event-model.md`.
+    * `docs/events-v1.md`.
 
 If a backend also exposes workspace‑scoped detail endpoints, we may add a `useWorkspaceRunQuery(workspaceId, runId)`; the global `useRunQuery(runId)` remains the canonical entry point.
 

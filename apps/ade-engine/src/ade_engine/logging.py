@@ -141,6 +141,52 @@ class TableWrittenPayload(StrictPayload):
     output_range: str
 
 
+class DetectorResult(StrictPayload):
+    name: str
+    scores: dict[str, float]
+    duration_ms: float
+
+
+class RowClassificationResult(StrictPayload):
+    row_kind: str
+    score: float
+    considered_row_kinds: list[str]
+
+
+class ColumnClassificationResult(StrictPayload):
+    field: str
+    score: float
+    considered_fields: list[str]
+
+
+class RowClassificationPayload(StrictPayload):
+    sheet_name: str
+    row_index: int
+    detectors: list[DetectorResult]
+    scores: dict[str, float]
+    classification: RowClassificationResult
+
+
+class RowDetectorResultPayload(StrictPayload):
+    sheet_name: str
+    row_index: int
+    detector: DetectorResult
+
+
+class ColumnDetectorResultPayload(StrictPayload):
+    sheet_name: str
+    column_index: int
+    detector: DetectorResult
+
+
+class ColumnClassificationPayload(StrictPayload):
+    sheet_name: str
+    column_index: int
+    detectors: list[DetectorResult]
+    scores: dict[str, float]
+    classification: ColumnClassificationResult
+
+
 class RunCompletedPayload(StrictPayload):
     status: str
     started_at: str
@@ -175,13 +221,13 @@ ENGINE_EVENT_SCHEMAS: dict[str, PayloadModel] = {
 
     # Debug/telemetry events (payloads are open/optional)
     f"{ENGINE_NAMESPACE}.settings.effective": None,
-    f"{ENGINE_NAMESPACE}.row_detector.result": None,
+    f"{ENGINE_NAMESPACE}.row_detector.result": RowDetectorResultPayload,
     f"{ENGINE_NAMESPACE}.row_detector.summary": None,
-    f"{ENGINE_NAMESPACE}.row_classification": None,
-    f"{ENGINE_NAMESPACE}.column_detector.result": None,
+    f"{ENGINE_NAMESPACE}.row_classification": RowClassificationPayload,
+    f"{ENGINE_NAMESPACE}.column_detector.result": ColumnDetectorResultPayload,
     f"{ENGINE_NAMESPACE}.column_detector.candidate": None,
     f"{ENGINE_NAMESPACE}.column_detector.summary": None,
-    f"{ENGINE_NAMESPACE}.column_classification": None,
+    f"{ENGINE_NAMESPACE}.column_classification": ColumnClassificationPayload,
     f"{ENGINE_NAMESPACE}.transform.applied": None,
     f"{ENGINE_NAMESPACE}.transform.overwrite": None,
     f"{ENGINE_NAMESPACE}.validator.result": None,

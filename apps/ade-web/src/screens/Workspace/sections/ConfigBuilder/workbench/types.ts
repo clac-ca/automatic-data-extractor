@@ -1,5 +1,5 @@
 import type { RunSummary } from "@schema";
-import type { AdeEvent, RunStatus } from "@shared/runs/types";
+import type { RunStreamEvent, RunStatus } from "@shared/runs/types";
 
 export type WorkbenchFileKind = "file" | "folder";
 
@@ -82,7 +82,7 @@ export interface WorkbenchRunSummary {
   readonly summary?: RunSummary | null;
   readonly summaryLoaded: boolean;
   readonly summaryError?: string | null;
-  readonly telemetry?: readonly AdeEvent[] | null;
+  readonly telemetry?: readonly RunStreamEvent[] | null;
   readonly telemetryLoaded: boolean;
   readonly telemetryError?: string | null;
   readonly documentName?: string;

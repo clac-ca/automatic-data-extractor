@@ -1,5 +1,5 @@
-import { eventTimestamp, isAdeEvent } from "@shared/runs/types";
-import type { AdeEvent as RunStreamEvent } from "@shared/runs/types";
+import { eventName, eventPayload, eventTimestamp, isEventRecord } from "@shared/runs/types";
+import type { RunStreamEvent } from "@shared/runs/types";
 
 import type { WorkbenchConsoleLine } from "../../types";
 
@@ -27,11 +27,7 @@ export function formatConsoleTimestamp(value: string | Date): string {
 }
 
 export function payloadOf(event: RunStreamEvent): Record<string, unknown> {
-  const payload = event.payload;
-  if (payload && typeof payload === "object") {
-    return payload as Record<string, unknown>;
-  }
-  return {};
+  return eventPayload(event);
 }
 
 export function normalizeLevel(level?: string): WorkbenchConsoleLine["level"] {
@@ -81,15 +77,15 @@ export function formatConsole(
 }
 
 export function isConsoleLine(event: RunStreamEvent): boolean {
-  return event.type === "console.line";
+  return eventName(event) === "console.line";
 }
 
 export function isBuildEvent(event: RunStreamEvent): boolean {
-  if (!isAdeEvent(event)) return false;
+  if (!isEventRecord(event)) return false;
   const payload = payloadOf(event);
   return (
-    (typeof event.type === "string" && event.type.startsWith("build.")) ||
-    (event.type === "console.line" && (payload.scope as string | undefined) === "build")
+    (eventName(event).startsWith("build.")) ||
+    (eventName(event) === "console.line" && (payload.scope as string | undefined) === "build")
   );
 }
 

@@ -1,292 +1,63 @@
-"""
-Example: Readable first-name detector showing BOTH return styles.
-
-Detectors may return:
-    • A float → applies only to the field being detected (e.g., 0.8 for first_name)
-    • A dict  → lets you influence multiple fields (e.g., {"first_name": 1.0, "last_name": -0.5})
-
-This example:
-    ✔ Shows both return patterns
-    ✔ Keeps all parameters in the signature so users see the full real-world shape
-    ✔ Avoids abstractions and helper functions to stay intuitive
-    ✔ Includes inline commentary to help new authors learn how to build detectors
-"""
-
 from __future__ import annotations
 
-from typing import Any
+from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
+from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
-COMMON_FIRST_NAMES = {
-    "james", "mary", "john", "patricia", "robert", "jennifer",
-    "michael", "linda", "william", "elizabeth", "david", "barbara",
-    "richard", "susan", "joseph", "karen",
-}
-
-# Quick shape of inputs (Script API v3):
-#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
-#   manifest.columns.order → ["first_name", "last_name", "email"]
-#   extracted_table.header_row → ["First Name", "Last Name", "Email"]
-#   extracted_table.data_rows[:1] → [["Alice", "Smith", "alice@example.com"], ...]
-#   column_index → 1   header → "First Name"
-#   column_values_sample → ["Alice", "Bob", None]
-#   state → dict shared across detectors/transforms (cache and reuse hints)
-#   logger/event_emitter → standard logger + optional config telemetry
-
-# ---------------------------------------------------------------------------
-# HEADER-BASED DETECTOR
-# ---------------------------------------------------------------------------
-
-def detect_first_name_from_header(
-    *,
-    run: Any | None = None,
-    state: dict[str, Any] | None = None,
-    extracted_table: Any | None = None,
-    input_file_name: str | None = None,
-    column_index: int | None = None,
-    header: str | None = None,
-    column_values: list[Any] | None = None,
-    column_values_sample: list[Any] | None = None,
-    manifest: Any | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,   # included even if not used
-    **_: Any,
-) -> float | dict[str, float]:
-    """
-    Score headers that look like first-name columns.
-
-    This detector returns a DICT so it can:
-        • Boost first_name
-        • Penalize last_name (or vice-versa)
-
-    Full signature is shown because real detectors receive many arguments.
-    Even though some aren't used here, keeping them helps readers understand
-    what they have access to when they write their own detectors.
-    """
-
-    # Default neutral scoring
-    scores = {"first_name": 0.0, "last_name": 0.0}
-
-    if not header:
-        return scores
-
-    # Make the header easier to compare across formats:
-    #   "FirstName" → "first name"
-    #   "first_name" → "first name"
-    h = header.strip().lower()
-    h = h.replace("_", " ").replace("-", " ").replace("/", " ").replace(".", " ")
-    h = " ".join(h.split())     # collapse repeated spaces
-    compact = h.replace(" ", "")  # catching "firstname" / "lastname" variants
-    padded = f" {h} "            # cheap way to check word boundaries
-
-    # Strong signals of FIRST NAME
-    if (
-        "firstname" in compact
-        or "fname" in compact
-        or "givenname" in compact
-        or any(w in padded for w in (" first ", " given ", " forename "))
-    ):
-        if logger:
-            logger.debug("Header FIRST-name match: %r → %r", header, h)
-        return {"first_name": 1.0, "last_name": -0.5}
-
-    # Strong signals of LAST NAME
-    if (
-        "lastname" in compact
-        or "lname" in compact
-        or any(w in padded for w in (" last ", " surname ", " family "))
-    ):
-        if logger:
-            logger.debug("Header LAST-name match: %r → %r", header, h)
-        return {"first_name": -0.5, "last_name": 1.0}
-
-    # Generic "name" field → ambiguous
-    if " name " in padded or "fullname" in compact:
-        if logger:
-            logger.debug("Header ambiguous NAME column: %r → %r", header, h)
-        return {"first_name": 0.25, "last_name": 0.25}
-
-    return scores
+# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
+@field_meta(name="first_name", label="First Name", dtype="string", synonyms=["first name", "given name", "fname"])
 
 
-# ---------------------------------------------------------------------------
-# VALUE-BASED DETECTOR
-# ---------------------------------------------------------------------------
+@column_detector(field="first_name", priority=50)
+def detect_first_name_header(ctx: ColumnDetectorContext):
+    header_tokens = set((ctx.header or "").lower().replace("-", " ").split())
+    if not header_tokens:
+        return {"first_name": 0.0}
+    if "first" in header_tokens and "name" in header_tokens:
+        return {"first_name": 1.0}
+    if "fname" in header_tokens or "given" in header_tokens:
+        return {"first_name": 0.9}
+    return {"first_name": 0.0}
 
-def detect_first_name_from_values(
-    *,
-    run: Any | None = None,
-    state: dict[str, Any] | None = None,
-    extracted_table: Any | None = None,
-    input_file_name: str | None = None,
-    column_index: int | None = None,
-    header: str | None = None,
-    column_values: list[Any] | None = None,
-    column_values_sample: list[Any] | None = None,
-    manifest: Any | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,   # unused but included
-    **_: Any,
-) -> float | dict[str, float]:
-    """
-    Score column values that *look* like first names.
 
-    This detector returns a FLOAT — boosting only first_name.
-
-    Heuristics:
-        • One-token names are good candidates
-        • Known common names produce strong signals
-        • Comma-separated or multi-word entries tend to be full names → penalize
-    """
-
-    if not column_values_sample:
-        return 0.0
-
-    valid_strings = 0
-    simple_firsts = 0
-    common_hits = 0
-    full_names = 0
-
-    for value in column_values_sample:
-        if not isinstance(value, str):
+@column_detector(field="first_name", priority=20)
+def detect_first_name_values(ctx: ColumnDetectorContext):
+    sample = ctx.sample or []
+    if not sample:
+        return {"first_name": 0.0}
+    shortish = 0
+    total = 0
+    for v in sample:
+        s = ("" if v is None else str(v)).strip()
+        if not s:
             continue
-
-        cleaned = value.strip()
-        if not cleaned:
-            continue
-
-        # Skip emails
-        if "@" in cleaned:
-            continue
-
-        # Skip placeholders
-        if cleaned.lower() in {"n/a", "na", "none", "null", "-", "--"}:
-            continue
-
-        valid_strings += 1
-
-        # "Last, First"
-        if "," in cleaned:
-            full_names += 1
-            continue
-
-        tokens = cleaned.split()
-
-        # Multi-word name
-        if len(tokens) >= 2:
-            full_names += 1
-            continue
-
-        # "Anne-Marie", "O'Neil" etc.
-        token = tokens[0].strip().strip(".")
-        if not (2 <= len(token) <= 14):
-            continue
-
-        if not all(c.isalpha() or c in {"'", "-"} for c in token):
-            continue
-
-        simple_firsts += 1
-
-        key = token.lower().strip("'-")
-        if key in COMMON_FIRST_NAMES:
-            common_hits += 1
-
-    if logger:
-        logger.debug(
-            "Value pattern summary: valid=%d, simple=%d, common=%d, full=%d",
-            valid_strings, simple_firsts, common_hits, full_names
-        )
-
-    # Decision rules
-    if common_hits >= 3:
-        return 1.0
-
-    if simple_firsts >= 3 and simple_firsts > full_names:
-        return 0.75
-
-    if full_names > simple_firsts:
-        return -0.3
-
-    if simple_firsts:
-        return 0.4
-
-    return 0.0
+        total += 1
+        if 2 <= len(s) <= 20 and " " not in s:
+            shortish += 1
+    if total == 0:
+        return {"first_name": 0.0}
+    score = min(1.0, shortish / total)
+    return {"first_name": score}
 
 
-# ---------------------------------------------------------------------------
-# VALUE SHAPE DETECTOR (stub example)
-# ---------------------------------------------------------------------------
-
-def detect_value_shape(
-    *,
-    run: Any | None = None,
-    state: dict[str, Any] | None = None,
-    extracted_table: Any | None = None,
-    input_file_name: str | None = None,
-    column_index: int | None = None,
-    header: str | None = None,
-    column_values: list[Any] | None = None,
-    column_values_sample: list[Any] | None = None,
-    manifest: Any | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,
-    **_: Any,
-) -> float | dict[str, float]:
-    """
-    Example placeholder showing how a shape-based detector *would* fit in.
-
-    This detector returns a dict so it can influence multiple fields
-    (if someone wanted to detect general structure like:
-         • "everything looks numeric"
-         • "everything looks like dates"
-         • "everything looks like single short tokens"
-    )
-
-    This stub does nothing but shows authors the full template.
-    """
-    if logger:
-        logger.debug("Running detect_value_shape() on column %d", column_index)
-
-    # A shape detector would normally analyze:
-    #   - length consistencies
-    #   - digit ratios
-    #   - pattern regularity
-    #   - etc.
-    # Returning a neutral dict keeps this as an example.
-    return {"first_name": 0.0, "last_name": 0.0}
+@column_transform(field="first_name", priority=0)
+def normalize_first_name(ctx: TransformContext):
+    return [
+        {"first_name": (None if v is None else str(v).strip() or None)}
+        for v in ctx.values
+    ]
 
 
-# ---------------------------------------------------------------------------
-# TRANSFORM FUNCTION
-# ---------------------------------------------------------------------------
-
-def transform(
-    *,
-    run: Any | None = None,
-    state: dict[str, Any] | None = None,
-    row_index: int | None = None,
-    field_name: str | None = None,
-    value: Any = None,
-    row: dict[str, Any] | None = None,
-    field_config: Any | None = None,
-    manifest: Any | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,
-    **_: Any,
-) -> dict[str, Any]:
-    """
-    Example transform: clean and standardize first names.
-    """
-
-    if value in (None, ""):
-        return {"first_name": None}
-
-    text = str(value).strip()
-    if not text:
-        return {"first_name": None}
-
-    standardized = text.title()
-
-    if logger and standardized != text:
-        logger.debug("Transform: %r → %r", text, standardized)
-
-    return {"first_name": standardized or None}
+@column_validator(field="first_name", priority=0)
+def validate_first_name(ctx: ValidateContext):
+    issues = []
+    for idx, v in enumerate(ctx.values):
+        s = "" if v is None else str(v).strip()
+        if s and len(s) > 50:
+            issues.append({
+                "passed": False,
+                "message": "First name too long",
+                "row_index": idx,
+                "column_index": getattr(ctx, "column_index", None),
+                "value": v,
+            })
+    return issues or {"passed": True}
