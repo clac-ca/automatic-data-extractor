@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from ade_engine.exceptions import PipelineError
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.pipeline.validate import apply_validators
-from ade_engine.registry import Registry
+from ade_engine.registry import FieldDef, Registry
 
 
 def _mapped_column() -> MappedColumn:
@@ -28,6 +28,7 @@ def test_validator_returns_issue_list():
                 issues.append({"row_index": idx, "message": "bad value"})
         return issues
 
+    registry.register_field(FieldDef(name="foo"))
     registry.register_column_validator(validator, field="foo", priority=0)
     registry.finalize()
 
@@ -55,6 +56,7 @@ def test_validator_invalid_shape_raises():
     def bad_validator(*, values, **_):
         return {"row_index": 0, "message": "oops"}
 
+    registry.register_field(FieldDef(name="foo"))
     registry.register_column_validator(bad_validator, field="foo", priority=0)
     registry.finalize()
 

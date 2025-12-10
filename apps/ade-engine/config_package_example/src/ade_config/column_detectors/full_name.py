@@ -6,7 +6,7 @@ from typing import Any, Dict
 from ade_engine.registry.models import FieldDef
 
 def register(registry):
-    registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"]))
+    registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string"))
     registry.register_column_detector(detect_full_name_header, field="full_name", priority=30)
     registry.register_column_detector(detect_full_name_values, field="full_name", priority=10)
     registry.register_column_transform(normalize_full_name, field="full_name", priority=0)

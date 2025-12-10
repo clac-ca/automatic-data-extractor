@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.exceptions import PipelineError
+from ade_engine.exceptions import ConfigError, PipelineError
 from ade_engine.registry import FieldDef, Registry
 
 
@@ -21,6 +21,7 @@ def test_registry_sorting_priorities_and_names():
     def detector_b(ctx):
         return {"email": 0.0}
 
+    reg.register_field(FieldDef(name="email"))
     reg.register_column_detector(detector_a, field="email", priority=5)
     reg.register_column_detector(detector_b, field="email", priority=10)
     reg.finalize()
@@ -30,8 +31,8 @@ def test_registry_sorting_priorities_and_names():
 
 def test_validate_detector_scores_requires_dicts_and_known_fields():
     reg = Registry()
-    reg.ensure_field("email")
-    reg.ensure_field("name")
+    reg.register_field(FieldDef(name="email"))
+    reg.register_field(FieldDef(name="name"))
 
     patch = reg.validate_detector_scores({"email": 1.0, "name": 0.2}, source="test")
     assert patch == {"email": 1.0, "name": 0.2}
@@ -50,9 +51,5 @@ def test_validate_detector_scores_requires_dicts_and_known_fields():
 def test_duplicate_field_registration_raises():
     reg = Registry()
     reg.register_field(FieldDef(name="email"))
-    try:
+    with pytest.raises(ConfigError):
         reg.register_field(FieldDef(name="email"))
-    except ValueError:
-        pass
-    else:  # pragma: no cover
-        assert False, "Expected duplicate registration to raise"

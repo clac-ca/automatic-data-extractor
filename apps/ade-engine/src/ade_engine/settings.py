@@ -1,7 +1,7 @@
 """Settings for ade_engine using pydantic-settings.
 
 Defines a minimal set of engine-level toggles loaded from (in precedence order):
-init kwargs > env vars > .env file > ade_engine.toml > defaults.
+init kwargs > env vars > .env file > settings.toml > defaults.
 """
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _toml_settings_source() -> dict[str, Any]:
-    """Load settings from ``ade_engine.toml`` if present.
+    """Load settings from ``settings.toml`` if present.
 
     The function returns a flat dict suitable for pydantic-settings.  We accept
     either top-level keys or a nested ``[ade_engine]`` table for flexibility.
     """
 
-    path = Path("ade_engine.toml")
+    path = Path("settings.toml")
     if not path.exists():
         return {}
 
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     Defaults are safe for local development.  Callers can override via init
     kwargs, environment variables (``ADE_ENGINE_*``), a ``.env`` file, or an
-    optional ``ade_engine.toml``.
+    optional ``settings.toml``.
     """
 
     model_config = SettingsConfigDict(
@@ -71,11 +71,11 @@ class Settings(BaseSettings):
     )
 
     # Mapping behavior
-    mapping_tie_resolution: Literal["leftmost", "drop_all"] = Field(
+    mapping_tie_resolution: Literal["leftmost", "leave_unmapped"] = Field(
         default="leftmost",
         description=(
             "How to resolve multiple source columns mapping to the same field: "
-            "'leftmost' keeps the earliest column, 'drop_all' leaves all unmapped."
+            "'leftmost' keeps the earliest column, 'leave_unmapped' leaves all unmapped."
         ),
     )
 

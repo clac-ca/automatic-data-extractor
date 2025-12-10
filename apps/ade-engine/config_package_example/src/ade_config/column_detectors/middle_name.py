@@ -6,7 +6,7 @@ from ade_engine.registry.models import FieldDef
 
 
 def register(registry):
-    registry.register_field(FieldDef(name="middle_name", label="Middle Name", dtype="string", synonyms=["middle name", "mname", "middle initial"]))
+    registry.register_field(FieldDef(name="middle_name", label="Middle Name", dtype="string"))
     registry.register_column_detector(detect_middle_name_header, field="middle_name", priority=40)
     registry.register_column_detector(detect_middle_name_values, field="middle_name", priority=15)
     registry.register_column_transform(normalize_middle_name, field="middle_name", priority=0)

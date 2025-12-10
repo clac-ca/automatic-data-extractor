@@ -14,9 +14,7 @@ def register(registry):
     registry.register_column_detector(detect_email_values, field="email", priority=30)
     registry.register_column_transform(normalize_email, field="email", priority=0)
     registry.register_column_validator(validate_email, field="email", priority=0)
-    # If you prefer per-cell helpers, uncomment the functions below and register them instead:
-    # registry.register_cell_transform(normalize_email_cell, field="email", priority=0)
-    # registry.register_cell_validator(validate_email_cell, field="email", priority=0)
+    # If you prefer per-cell helpers, wrap them yourself and register via register_column_transform/validator.
 
 
 def detect_email_header(

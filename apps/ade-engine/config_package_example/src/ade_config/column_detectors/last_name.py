@@ -6,7 +6,7 @@ from ade_engine.registry.models import FieldDef
 
 
 def register(registry):
-    registry.register_field(FieldDef(name="last_name", label="Last Name", dtype="string", synonyms=["last name", "surname", "family name", "lname"]))
+    registry.register_field(FieldDef(name="last_name", label="Last Name", dtype="string"))
     registry.register_column_detector(detect_last_name_header, field="last_name", priority=50)
     registry.register_column_detector(detect_last_name_values, field="last_name", priority=20)
     registry.register_column_transform(normalize_last_name, field="last_name", priority=0)

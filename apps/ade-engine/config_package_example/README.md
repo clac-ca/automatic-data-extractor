@@ -11,9 +11,9 @@ This is a **template ADE config package**. It defines a *target schema* (fields)
 ## The big idea
 
 - You add Python files wherever you want inside `src/ade_config/`.
-- The ADE engine **imports all modules** in this package.
-- Decorators register your detectors/transforms/validators/hooks automatically.
-- No manifest lists, no manual wiring, no "switchboard" files.
+- The ADE engine calls your package’s `register(registry)` entrypoint.
+- That entrypoint should call `registry.register_*` for detectors/transforms/validators/hooks/fields.
+- No manifest lists or switchboard files—just explicit registration in one place.
 
 ## Folder layout (suggested)
 
@@ -31,18 +31,18 @@ src/ade_config/
 
 Engine runtime settings (writer options, thresholds, etc.) can be set via:
 
-- `ade_engine.toml` (recommended for config packages)
+- `settings.toml` (recommended for config packages)
 - `.env` (works too)
 - environment variables
 
-This template includes an example `ade_engine.toml`.
+This template includes an example `settings.toml`.
 
 ## Adding a new column (canonical field)
 
 1. Copy an existing file in `columns/` (ex: `email.py`)
 2. Update the `FIELD = field(...)` metadata
-3. Add one or more `@column_detector(...)` functions
-4. Optionally add `@column_transform(...)` / `@column_validator(...)`
+3. Add one or more detector functions and register them via `registry.register_column_detector(...)`.
+4. Optionally add transforms/validators and register them via `registry.register_column_transform` / `registry.register_column_validator`.
 
 That’s it.
 

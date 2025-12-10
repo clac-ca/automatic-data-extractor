@@ -10,17 +10,17 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.exceptions import PipelineError
 from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_bounds
-from ade_engine.registry import Registry, registry_context, row_detector
+from ade_engine.registry import Registry
 from ade_engine.registry.models import RowKind
 
 
-def test_row_detector_decorator_normalizes_enum_row_kind_for_mapping_patch():
+def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():
     reg = Registry()
 
-    with registry_context(reg):
-        @row_detector(row_kind=RowKind.HEADER, priority=5)
-        def pick_header(*, row_index, **_):
-            return {RowKind.HEADER.value: 1.0}
+    def pick_header(*, row_index, **_):
+        return {RowKind.HEADER.value: 1.0}
+
+    reg.register_row_detector(pick_header, row_kind=RowKind.HEADER.value, priority=5)
 
     scores, classifications = _classify_rows(
         sheet_name="Sheet1",
@@ -40,10 +40,10 @@ def test_row_detector_decorator_normalizes_enum_row_kind_for_mapping_patch():
 def test_row_detector_invalid_return_shape_raises():
     reg = Registry()
 
-    with registry_context(reg):
-        @row_detector(row_kind=RowKind.HEADER, priority=5)
-        def pick_header(*, row_index, **_):
-            return 1.0
+    def pick_header(*, row_index, **_):
+        return 1.0
+
+    reg.register_row_detector(pick_header, row_kind=RowKind.HEADER.value, priority=5)
 
     with pytest.raises(PipelineError):
         _classify_rows(

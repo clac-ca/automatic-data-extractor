@@ -15,7 +15,7 @@ There are three main moving parts:
 
 1. **Engine** (orchestration + IO + config loading)
 2. **Pipeline** (sheet/table processing logic)
-3. **Registry** (plugin container populated by decorators in config packages)
+3. **Registry** (plugin container populated by imperative `registry.register_*` calls in config packages)
 
 
 ### How to test run the ADE Engine locally
