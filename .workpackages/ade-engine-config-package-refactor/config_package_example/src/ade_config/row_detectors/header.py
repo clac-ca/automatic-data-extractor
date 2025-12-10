@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import re
+
 from ade_engine.registry import RowDetectorContext, RowKind, row_detector
-from ade_config.helpers import header_tokens
 
 
 COMMON_HEADER_TOKENS = {
@@ -37,7 +38,8 @@ def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float
     # Tokenize across all string cells in the row.
     tokens: set[str] = set()
     for s in strings:
-        tokens |= header_tokens(s)
+        normalized = re.sub(r"[^a-z0-9]+", " ", s.lower())
+        tokens |= {tok for tok in normalized.split() if tok}
 
     hits = len(tokens & COMMON_HEADER_TOKENS)
     text_ratio = len(strings) / max(len(values), 1)

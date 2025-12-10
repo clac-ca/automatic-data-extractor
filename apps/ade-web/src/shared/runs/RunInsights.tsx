@@ -104,7 +104,7 @@ export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
           >
             {(() => {
               const payload = payloadOf(event);
-              const message = (payload.message as string | undefined)?.trim();
+              const message = typeof event.message === "string" ? event.message.trim() : undefined;
               return (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">

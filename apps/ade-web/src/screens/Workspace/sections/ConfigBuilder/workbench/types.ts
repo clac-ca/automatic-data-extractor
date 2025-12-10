@@ -37,7 +37,7 @@ export interface WorkbenchFileTab {
   lastSavedAt?: string | null;
 }
 
-export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";
+export type WorkbenchConsoleLevel = "debug" | "info" | "success" | "warning" | "error";
 
 export interface WorkbenchConsoleLine {
   readonly id?: string;

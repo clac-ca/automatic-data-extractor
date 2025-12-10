@@ -6,11 +6,8 @@ from ade_engine.registry.decorators import column_detector, column_transform, co
 from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-@field_meta(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"])
-
-
 # --- Detection --------------------------------------------------------------
-
+@field_meta(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"])
 @column_detector(field="full_name", priority=30)
 def detect_full_name_header(ctx: ColumnDetectorContext):
     """Real‑world but simple: exact "full name" boosts, also slightly nudges plain "name"."""

@@ -5,9 +5,6 @@ import re
 from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
 from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
-# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-@field_meta(name="email", label="Email", required=True, dtype="string", synonyms=["email", "email address", "e-mail"])
-
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -15,6 +12,7 @@ def _norm(text: object | None) -> str:
     return "" if text is None else str(text).strip().lower()
 
 
+@field_meta(name="email", label="Email", required=True, dtype="string", synonyms=["email", "email address", "e-mail"])
 @column_detector(field="email", priority=60)
 def detect_email_header(ctx: ColumnDetectorContext):
     header = _norm(ctx.header)

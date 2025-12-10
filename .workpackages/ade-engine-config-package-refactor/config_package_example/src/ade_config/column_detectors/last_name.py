@@ -5,7 +5,6 @@ from ade_engine.registry.models import ColumnDetectorContext, TransformContext, 
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
 @field_meta(name="last_name", label="Last Name", dtype="string", synonyms=["last name", "surname", "family name", "lname"])
-
 @column_detector(field="last_name", priority=50)
 def detect_last_name_header(ctx: ColumnDetectorContext):
     t = set((ctx.header or "").lower().replace("-", " ").split())
