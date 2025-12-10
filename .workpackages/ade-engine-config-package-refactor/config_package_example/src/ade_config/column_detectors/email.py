@@ -2,18 +2,32 @@ from __future__ import annotations
 
 import re
 
-from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def register(registry):
+    registry.register_field(FieldDef(
+        name="email",
+        label="Email",
+        required=True,
+        dtype="string",
+        synonyms=["email", "email address", "e-mail"],
+    ))
+    registry.register_column_detector(detect_email_header, field="email", priority=60)
+    registry.register_column_detector(detect_email_values, field="email", priority=30)
+    registry.register_column_transform(normalize_email, field="email", priority=0)
+    registry.register_column_validator(validate_email, field="email", priority=0)
+    # If you prefer per-cell helpers, uncomment the functions below and register them instead:
+    # registry.register_column_transform(normalize_email_cell, field="email", priority=0)
+    # registry.register_column_validator(validate_email_cell, field="email", priority=0)
 
 
 def _norm(text: object | None) -> str:
     return "" if text is None else str(text).strip().lower()
 
 
-@field_meta(name="email", label="Email", required=True, dtype="string", synonyms=["email", "email address", "e-mail"])
-@column_detector(field="email", priority=60)
 def detect_email_header(ctx: ColumnDetectorContext):
     header = _norm(ctx.header)
     if not header:
@@ -23,7 +37,6 @@ def detect_email_header(ctx: ColumnDetectorContext):
     return {"email": 0.0}
 
 
-@column_detector(field="email", priority=30)
 def detect_email_values(ctx: ColumnDetectorContext):
     sample = ctx.sample or []
     hits = 0
@@ -41,7 +54,6 @@ def detect_email_values(ctx: ColumnDetectorContext):
     return {"email": score}
 
 
-@column_transform(field="email", priority=0)
 def normalize_email(ctx: TransformContext):
     return [
         {"email": (_norm(v) or None)}
@@ -49,7 +61,6 @@ def normalize_email(ctx: TransformContext):
     ]
 
 
-@column_validator(field="email", priority=0)
 def validate_email(ctx: ValidateContext):
     issues = []
     for idx, v in enumerate(ctx.values):
@@ -65,3 +76,18 @@ def validate_email(ctx: ValidateContext):
                 "value": v,
             })
     return issues or {"passed": True}
+
+# Optional cell-level helpers (commented out):
+# - These are thin wrappers that handle one cell at a time.
+# - Use the column-level versions above for better performance or when emitting multiple fields per column.
+#
+# def normalize_email_cell(value: object | None):
+#     """Return a single normalized email dict for one cell."""
+#     return {"email": (_norm(value) or None)}
+#
+# def validate_email_cell(value: object | None):
+#     """Validate one email cell; return a pass/fail dict."""
+#     text_value = _norm(value)
+#     if text_value and not EMAIL_RE.match(text_value):
+#         return {"passed": False, "message": f"Invalid email: {value}", "value": value}
+#     return {"passed": True}

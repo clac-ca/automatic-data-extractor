@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
-
 import re
 
-from ade_engine.registry import RowDetectorContext, RowKind, row_detector
+from ade_engine.registry.models import RowDetectorContext, RowKind
 
 
 COMMON_HEADER_TOKENS = {
@@ -19,7 +17,10 @@ COMMON_HEADER_TOKENS = {
 }
 
 
-@row_detector(row_kind=RowKind.HEADER)
+def register(registry):
+    registry.register_row_detector(detect_header_row_by_known_words, row_kind=RowKind.HEADER.value, priority=0)
+
+
 def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float]:
     """Vote for a row being a header row.
 

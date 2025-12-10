@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
-# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-@field_meta(name="last_name", label="Last Name", dtype="string", synonyms=["last name", "surname", "family name", "lname"])
-@column_detector(field="last_name", priority=50)
+
+def register(registry):
+    registry.register_field(FieldDef(
+        name="last_name",
+        label="Last Name",
+        dtype="string",
+        synonyms=["last name", "surname", "family name", "lname"],
+    ))
+    registry.register_column_detector(detect_last_name_header, field="last_name", priority=50)
+    registry.register_column_detector(detect_last_name_values, field="last_name", priority=20)
+    registry.register_column_transform(normalize_last_name, field="last_name", priority=0)
+    registry.register_column_validator(validate_last_name, field="last_name", priority=0)
+
+
 def detect_last_name_header(ctx: ColumnDetectorContext):
     t = set((ctx.header or "").lower().replace("-", " ").split())
     if not t:
@@ -17,7 +27,6 @@ def detect_last_name_header(ctx: ColumnDetectorContext):
     return {"last_name": 0.0}
 
 
-@column_detector(field="last_name", priority=20)
 def detect_last_name_values(ctx: ColumnDetectorContext):
     sample = ctx.sample or []
     total = 0
@@ -35,7 +44,6 @@ def detect_last_name_values(ctx: ColumnDetectorContext):
     return {"last_name": score}
 
 
-@column_transform(field="last_name", priority=0)
 def normalize_last_name(ctx: TransformContext):
     return [
         {"last_name": (None if v is None else str(v).strip() or None)}
@@ -43,7 +51,6 @@ def normalize_last_name(ctx: TransformContext):
     ]
 
 
-@column_validator(field="last_name", priority=0)
 def validate_last_name(ctx: ValidateContext):
     issues = []
     for idx, v in enumerate(ctx.values):
@@ -57,3 +64,16 @@ def validate_last_name(ctx: ValidateContext):
                 "value": v,
             })
     return issues or {"passed": True}
+
+# Example cell-level helpers (commented out):
+# These run one cell at a time; prefer column-level versions above for performance
+# and when emitting multiple fields per column.
+#
+# def normalize_last_name_cell(value: object | None):
+#     return {"last_name": (None if value is None else str(value).strip() or None)}
+#
+# def validate_last_name_cell(value: object | None):
+#     text_value = "" if value is None else str(value).strip()
+#     if text_value and len(text_value) > 80:
+#         return {"passed": False, "message": "Last name too long", "value": value}
+#     return {"passed": True}

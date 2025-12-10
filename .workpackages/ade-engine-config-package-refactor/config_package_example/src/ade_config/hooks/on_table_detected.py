@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
-
-from ade_engine.registry import HookContext, HookName, hook
+from ade_engine.registry.models import HookContext, HookName
 
 
-@hook(HookName.ON_TABLE_DETECTED)
+def register(registry):
+    registry.register_hook(on_table_detected, hook_name=HookName.ON_TABLE_DETECTED, priority=0)
+
+
 def on_table_detected(ctx: HookContext) -> None:
     """Log table detection details."""
 

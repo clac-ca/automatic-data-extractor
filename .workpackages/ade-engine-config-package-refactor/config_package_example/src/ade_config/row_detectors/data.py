@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
-
-from ade_engine.registry import RowDetectorContext, RowKind, row_detector
+from ade_engine.registry.models import RowDetectorContext, RowKind
 
 
-@row_detector(row_kind=RowKind.DATA)
+def register(registry):
+    registry.register_row_detector(detect_data_row_by_density, row_kind=RowKind.DATA.value, priority=0)
+
+
 def detect_data_row_by_density(ctx: RowDetectorContext) -> dict[str, float]:
     """Vote for a row being a data row.
 

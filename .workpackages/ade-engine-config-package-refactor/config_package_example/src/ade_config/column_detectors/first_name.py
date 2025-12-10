@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
-# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-@field_meta(name="first_name", label="First Name", dtype="string", synonyms=["first name", "given name", "fname"])
-@column_detector(field="first_name", priority=50)
+
+def register(registry):
+    registry.register_field(FieldDef(
+        name="first_name",
+        label="First Name",
+        dtype="string",
+        synonyms=["first name", "given name", "fname"],
+    ))
+    registry.register_column_detector(detect_first_name_header, field="first_name", priority=50)
+    registry.register_column_detector(detect_first_name_values, field="first_name", priority=20)
+    registry.register_column_transform(normalize_first_name, field="first_name", priority=0)
+    registry.register_column_validator(validate_first_name, field="first_name", priority=0)
+
+
 def detect_first_name_header(ctx: ColumnDetectorContext):
     header_tokens = set((ctx.header or "").lower().replace("-", " ").split())
     if not header_tokens:
@@ -17,7 +27,6 @@ def detect_first_name_header(ctx: ColumnDetectorContext):
     return {"first_name": 0.0}
 
 
-@column_detector(field="first_name", priority=20)
 def detect_first_name_values(ctx: ColumnDetectorContext):
     sample = ctx.sample or []
     if not sample:
@@ -37,7 +46,6 @@ def detect_first_name_values(ctx: ColumnDetectorContext):
     return {"first_name": score}
 
 
-@column_transform(field="first_name", priority=0)
 def normalize_first_name(ctx: TransformContext):
     return [
         {"first_name": (None if v is None else str(v).strip() or None)}
@@ -45,7 +53,6 @@ def normalize_first_name(ctx: TransformContext):
     ]
 
 
-@column_validator(field="first_name", priority=0)
 def validate_first_name(ctx: ValidateContext):
     issues = []
     for idx, v in enumerate(ctx.values):
@@ -59,3 +66,16 @@ def validate_first_name(ctx: ValidateContext):
                 "value": v,
             })
     return issues or {"passed": True}
+
+# Example cell-level helpers (commented out):
+# These process a single cell at a time; prefer the column-level versions above
+# when registering for better performance and when touching multiple fields.
+#
+# def normalize_first_name_cell(value: object | None):
+#     return {"first_name": (None if value is None else str(value).strip() or None)}
+#
+# def validate_first_name_cell(value: object | None):
+#     text_value = "" if value is None else str(value).strip()
+#     if text_value and len(text_value) > 50:
+#         return {"passed": False, "message": "First name too long", "value": value}
+#     return {"passed": True}

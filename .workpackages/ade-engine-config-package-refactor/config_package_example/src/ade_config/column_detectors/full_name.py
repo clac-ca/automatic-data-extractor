@@ -2,15 +2,24 @@ from __future__ import annotations
 
 import re
 
-from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
-# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-# --- Detection --------------------------------------------------------------
-@field_meta(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"])
-@column_detector(field="full_name", priority=30)
+
+def register(registry):
+    registry.register_field(FieldDef(
+        name="full_name",
+        label="Full Name",
+        dtype="string",
+        synonyms=["full name", "name", "contact name"],
+    ))
+    registry.register_column_detector(detect_full_name_header, field="full_name", priority=30)
+    registry.register_column_detector(detect_full_name_values, field="full_name", priority=10)
+    registry.register_column_transform(normalize_full_name, field="full_name", priority=0)
+    registry.register_column_validator(validate_full_name, field="full_name", priority=0)
+
+
 def detect_full_name_header(ctx: ColumnDetectorContext):
-    """Real‑world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
+    """Real-world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
 
     header = (ctx.header or "").strip().lower()
     if header == "full name":
@@ -25,7 +34,6 @@ def detect_full_name_header(ctx: ColumnDetectorContext):
     return {"full_name": 0.0}
 
 
-@column_detector(field="full_name", priority=10)
 def detect_full_name_values(ctx: ColumnDetectorContext):
     """Look for two-part names ("First Last") or comma names ("Last, First")."""
 
@@ -54,9 +62,6 @@ def detect_full_name_values(ctx: ColumnDetectorContext):
     return {"full_name": score}
 
 
-# --- Transform -------------------------------------------------------------
-
-@column_transform(field="full_name", priority=0)
 def normalize_full_name(ctx: TransformContext):
     """Minimal normalizer that also surfaces split parts.
 
@@ -109,9 +114,6 @@ def normalize_full_name(ctx: TransformContext):
     return normalized_rows
 
 
-# --- Validation ------------------------------------------------------------
-
-@column_validator(field="full_name", priority=0)
 def validate_full_name(ctx: ValidateContext):
     """Allow letters, spaces, apostrophes, and hyphens; reject digits/symbols."""
 
@@ -132,3 +134,18 @@ def validate_full_name(ctx: ValidateContext):
             })
 
     return issues or {"passed": True}
+
+# Example cell-level helpers (commented out):
+# These show the per-cell shape; they are just wrappers that process one cell at a time.
+# Prefer the column-level transforms/validators above when you want to touch multiple
+# fields at once or keep things more performant.
+#
+# def normalize_full_name_cell(value: object | None):
+#     text_value = None if value is None else str(value).strip()
+#     return {"full_name": (text_value or None)}
+#
+# def validate_full_name_cell(value: object | None):
+#     text_value = "" if value is None else str(value).strip()
+#     if text_value and not pattern.fullmatch(text_value):
+#         return {"passed": False, "message": "Full name must be letters with spaces/hyphens/apostrophes", "value": value}
+#     return {"passed": True}

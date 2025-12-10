@@ -1,11 +1,21 @@
 from __future__ import annotations
 
-from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
+from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
-# Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
-@field_meta(name="middle_name", label="Middle Name", dtype="string", synonyms=["middle name", "mname", "middle initial"])
-@column_detector(field="middle_name", priority=40)
+
+def register(registry):
+    registry.register_field(FieldDef(
+        name="middle_name",
+        label="Middle Name",
+        dtype="string",
+        synonyms=["middle name", "mname", "middle initial"],
+    ))
+    registry.register_column_detector(detect_middle_name_header, field="middle_name", priority=40)
+    registry.register_column_detector(detect_middle_name_values, field="middle_name", priority=15)
+    registry.register_column_transform(normalize_middle_name, field="middle_name", priority=0)
+    registry.register_column_validator(validate_middle_name, field="middle_name", priority=0)
+
+
 def detect_middle_name_header(ctx: ColumnDetectorContext):
     t = set((ctx.header or "").lower().replace("-", " ").split())
     if not t:
@@ -17,7 +27,6 @@ def detect_middle_name_header(ctx: ColumnDetectorContext):
     return {"middle_name": 0.0}
 
 
-@column_detector(field="middle_name", priority=15)
 def detect_middle_name_values(ctx: ColumnDetectorContext):
     sample = ctx.sample or []
     initials = 0
@@ -35,7 +44,6 @@ def detect_middle_name_values(ctx: ColumnDetectorContext):
     return {"middle_name": score}
 
 
-@column_transform(field="middle_name", priority=0)
 def normalize_middle_name(ctx: TransformContext):
     return [
         {"middle_name": (None if v is None else str(v).strip() or None)}
@@ -43,7 +51,6 @@ def normalize_middle_name(ctx: TransformContext):
     ]
 
 
-@column_validator(field="middle_name", priority=0)
 def validate_middle_name(ctx: ValidateContext):
     issues = []
     for idx, v in enumerate(ctx.values):
@@ -57,3 +64,16 @@ def validate_middle_name(ctx: ValidateContext):
                 "value": v,
             })
     return issues or {"passed": True}
+
+# Example cell-level helpers (commented out):
+# These run per cell; use column-level variants above when possible for speed and
+# when populating multiple fields from one column.
+#
+# def normalize_middle_name_cell(value: object | None):
+#     return {"middle_name": (None if value is None else str(value).strip() or None)}
+#
+# def validate_middle_name_cell(value: object | None):
+#     text_value = "" if value is None else str(value).strip()
+#     if text_value and len(text_value) > 40:
+#         return {"passed": False, "message": "Middle name too long", "value": value}
+#     return {"passed": True}

@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry import HookContext, HookName, hook
+from ade_engine.registry.models import HookContext, HookName
 
 # Optional: set a desired canonical output order.
 # If left as None, the engine's default ordering is used.
 DESIRED_FIELD_ORDER: list[str] | None = None
 
 
-@hook(HookName.ON_TABLE_WRITTEN)
+def register(registry):
+    registry.register_hook(on_table_written, hook_name=HookName.ON_TABLE_WRITTEN, priority=0)
+
+
 def on_table_written(ctx: HookContext) -> None:
     """Called after a table has been written to the output workbook."""
 
