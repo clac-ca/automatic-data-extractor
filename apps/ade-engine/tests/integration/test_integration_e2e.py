@@ -24,7 +24,10 @@ from ade_engine.registry import row_detector, RowKind
 
 @row_detector(row_kind=RowKind.HEADER, priority=10)
 def pick_header(ctx):
-    return {"header": 1.0}
+    normalized = {str(v).strip().lower() for v in ctx.row_values or [] if v not in (None, "")}
+    if {"email", "name"}.issubset(normalized):
+        return {"header": 1.0}
+    return {}
 """,
         encoding="utf-8",
     )

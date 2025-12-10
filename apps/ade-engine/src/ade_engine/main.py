@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from fnmatch import fnmatch
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -67,6 +66,8 @@ def collect_input_files(
     """Collect all input files from explicit paths and/or a directory scan."""
     paths = list(explicit_inputs)
     include_globs = list(dict.fromkeys(include))
+    exclude_globs = list(dict.fromkeys(exclude))
+    explicit_set = set(explicit_inputs)
     supported_extensions = {
         ext.lower() if ext.startswith(".") else f".{ext.lower().lstrip('*.')}"
         for ext in settings.supported_file_extensions
@@ -74,24 +75,29 @@ def collect_input_files(
     }
 
     if input_dir:
+        excluded: set[Path] = set()
+        for pattern in exclude_globs:
+            excluded.update(p for p in input_dir.glob(pattern) if p.is_file())
+
         for path in input_dir.rglob("*"):
             if not path.is_file():
                 continue
 
-            rel = path.relative_to(input_dir).as_posix()
-
-            matches_include = bool(include_globs) and any(fnmatch(rel, pat) for pat in include_globs)
-            matches_default_ext = not supported_extensions or path.suffix.lower() in supported_extensions
-
-            if not matches_default_ext and not matches_include:
+            if path in excluded:
                 continue
-            if exclude and any(fnmatch(rel, pat) for pat in exclude):
+            if supported_extensions and path.suffix.lower() not in supported_extensions:
                 continue
 
             paths.append(path)
 
+        for pattern in include_globs:
+            for path in input_dir.glob(pattern):
+                if not path.is_file() or path in excluded:
+                    continue
+                paths.append(path)
+
     # De-duplicate and sort for deterministic behavior.
-    return sorted(set(paths))
+    return sorted(set(paths) | explicit_set)
 
 
 # ---------------------------------------------------------------------------
