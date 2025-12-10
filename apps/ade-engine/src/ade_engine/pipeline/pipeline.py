@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ade_engine.pipeline.detect_rows import detect_header_row
+from ade_engine.pipeline.detect_rows import detect_table_bounds
 from ade_engine.pipeline.detect_columns import detect_and_map_columns, build_source_columns
 from ade_engine.pipeline.transform import apply_transforms
 from ade_engine.pipeline.validate import apply_validators
@@ -67,7 +67,7 @@ class Pipeline:
         table_index: int = 0,
     ) -> TableData:
         rows: List[List[Any]] = [list(row) for row in sheet.iter_rows(values_only=True)]
-        header_idx = detect_header_row(
+        header_idx, data_start_idx, data_end_idx = detect_table_bounds(
             sheet_name=sheet.title,
             rows=rows,
             registry=self.registry,
@@ -76,7 +76,7 @@ class Pipeline:
             logger=self.logger,
         )
         header_row = rows[header_idx] if header_idx < len(rows) else []
-        data_rows = rows[header_idx + 1 :]
+        data_rows = rows[data_start_idx:data_end_idx]
 
         mapped_cols, unmapped_cols = detect_and_map_columns(
             sheet_name=sheet.title,
