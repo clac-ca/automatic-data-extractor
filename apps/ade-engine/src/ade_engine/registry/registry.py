@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Mapping
 
 from pydantic import ValidationError
 
-from ade_engine.exceptions import HookError, PipelineError
+from ade_engine.exceptions import ConfigError, HookError, PipelineError
 from ade_engine.logging import RunLogger
 from ade_engine.models import ColumnDetectorResult, RowDetectorResult
 from ade_engine.registry.invoke import call_extension
@@ -117,17 +117,15 @@ class Registry:
     # ------------------------------------------------------------------
     def register_field(self, field_def: FieldDef) -> FieldDef:
         if field_def.name in self.fields:
-            raise ValueError(f"Field '{field_def.name}' already registered")
+            raise ConfigError(f"Field '{field_def.name}' already registered")
         self.fields[field_def.name] = field_def
         return field_def
 
-    def ensure_field(self, name: str) -> FieldDef:
-        existing = self.fields.get(name)
-        if existing:
-            return existing
-        new_def = FieldDef(name=name)
-        self.fields[name] = new_def
-        return new_def
+    def _require_field(self, name: str) -> FieldDef:
+        field = self.fields.get(name)
+        if field is None:
+            raise ConfigError(f"Field '{name}' must be registered before registering detectors/transforms/validators")
+        return field
 
     # ------------------------------------------------------------------
     # Score validation
@@ -176,7 +174,7 @@ class Registry:
         )
 
     def register_column_detector(self, fn: Callable[..., Any], *, field: str, priority: int) -> None:
-        self.ensure_field(field)
+        self._require_field(field)
         self.column_detectors.append(
             RegisteredFn(
                 fn=fn,
@@ -188,7 +186,7 @@ class Registry:
         )
 
     def register_column_transform(self, fn: Callable[..., Any], *, field: str, priority: int) -> None:
-        self.ensure_field(field)
+        self._require_field(field)
         self.column_transforms.append(
             RegisteredFn(
                 fn=fn,
@@ -200,7 +198,7 @@ class Registry:
         )
 
     def register_column_validator(self, fn: Callable[..., Any], *, field: str, priority: int) -> None:
-        self.ensure_field(field)
+        self._require_field(field)
         self.column_validators.append(
             RegisteredFn(
                 fn=fn,
