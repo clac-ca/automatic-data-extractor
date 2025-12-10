@@ -131,9 +131,12 @@ Outputs/logs use the flat `<output_dir>/<input_stem>_normalized.xlsx` and matchi
 # Bundle docs as Markdown
 ade bundle --ext md --out /tmp/bundle.md docs/
 
-# Bundle with filters, no clipboard
+# Bundle with filters (skips __pycache__ automatically)
 ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
-           --exclude "**/__pycache__/**" --out /tmp/bundle.md --no-clip
+           --out /tmp/bundle.md
+
+# Copy a bundle to the clipboard (opt-in)
+ade bundle README.md apps/ade-api/AGENTS.md --clip
 
 # Bundle specific files quickly
 ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md

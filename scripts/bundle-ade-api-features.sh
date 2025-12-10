@@ -85,7 +85,7 @@ PY
 
   output_path="${generated_dir}/${feature}.md"
   echo "Bundling ${feature} -> ${output_path}"
-  ade bundle "${final_paths[@]}" --ext py --out "${output_path}" --no-clip --no-show
+  ade bundle "${final_paths[@]}" --ext py --out "${output_path}" --no-show
 done
 
 echo "Bundles written to ${generated_dir}"

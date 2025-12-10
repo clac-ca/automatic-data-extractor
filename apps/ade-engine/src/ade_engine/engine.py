@@ -102,7 +102,7 @@ class Engine:
             sys.path.insert(0, str(root_path))
 
         with registry_context(registry):
-            import_all(resolved_package)
+            import_all(resolved_package, fresh=True)
         registry.finalize()
         logger.event(
             "config.loaded",
