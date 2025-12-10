@@ -19,6 +19,7 @@ type EventFormatter = (
   timestamp: string,
 ) => WorkbenchConsoleLine;
 type PrefixFormatter = (
+  event: RunStreamEvent,
   type: string,
   payload: Record<string, unknown>,
   timestamp: string,
@@ -63,8 +64,8 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
 };
 
 const RUN_PREFIX_HANDLERS: PrefixHandler[] = [
-  { prefix: "config.", formatter: (type, payload, timestamp) => formatConfigEvent(type, payload, timestamp) },
-  { prefix: "run.transform.", formatter: (type, payload, timestamp) => formatTransformEvent(type, payload, timestamp) },
+  { prefix: "config.", formatter: (event, type, payload, timestamp) => formatConfigEvent(event, type, payload, timestamp) },
+  { prefix: "run.transform.", formatter: (event, type, payload, timestamp) => formatTransformEvent(event, type, payload, timestamp) },
 ];
 
 export function formatConsoleEvent(event: RunStreamEvent): WorkbenchConsoleLine {
@@ -106,7 +107,7 @@ export function formatBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
   return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "build" });
 }
 
-function formatBuildCompletion(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildCompletion(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const statusRaw = (payload.status as string | undefined) ?? "completed";
   const status = statusRaw === "ready" ? "succeeded" : statusRaw;
   const summary = (payload.summary as string | undefined)?.trim();
@@ -155,7 +156,7 @@ function formatBuildCompletion(payload: Record<string, unknown>, timestamp: stri
   };
 }
 
-function formatBuildQueued(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildQueued(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const reason = (payload.reason as string | undefined) ?? undefined;
   return {
     level: "info",
@@ -165,7 +166,7 @@ function formatBuildQueued(payload: Record<string, unknown>, timestamp: string):
   };
 }
 
-function formatBuildCreated(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildCreated(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const reason = (payload.reason as string | undefined) ?? "queued";
   return {
     level: "info",
@@ -175,7 +176,7 @@ function formatBuildCreated(payload: Record<string, unknown>, timestamp: string)
   };
 }
 
-function formatBuildStarted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatBuildStarted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const reason = (payload.reason as string | undefined) ?? undefined;
   return {
     level: "info",
