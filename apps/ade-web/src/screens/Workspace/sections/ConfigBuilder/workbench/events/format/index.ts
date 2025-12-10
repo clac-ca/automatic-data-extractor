@@ -54,6 +54,7 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "engine.row_classification": (event, payload, timestamp) => formatEngineRowClassification(event, payload, timestamp),
   "engine.column_detector.result": (event, payload, timestamp) => formatEngineColumnDetectorResult(event, payload, timestamp),
   "engine.column_detector.candidate": (event, payload, timestamp) => formatEngineColumnDetectorCandidate(event, payload, timestamp),
+  "engine.column_detector.summary": (event, payload, timestamp) => formatEngineColumnDetectorSummary(event, payload, timestamp),
   "engine.column_classification": (event, payload, timestamp) => formatEngineColumnClassification(event, payload, timestamp),
   "engine.config.loaded": (event, payload, timestamp) => formatEngineConfigLoaded(event, payload, timestamp),
   "engine.log": (event, payload, timestamp) => formatEngineLog(event, payload, timestamp),
@@ -536,6 +537,41 @@ function formatEngineColumnDetectorCandidate(
   ].filter(Boolean);
   const message = messageParts.join(" · ");
   return { level, message, timestamp, origin: "run" };
+}
+
+function formatEngineColumnDetectorSummary(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const mapped = Array.isArray(payload.mapped) ? (payload.mapped as Array<Record<string, unknown>>) : [];
+  const unmapped = Array.isArray(payload.unmapped_indices) ? (payload.unmapped_indices as Array<number>) : [];
+  const total = typeof payload.total_columns === "number" ? payload.total_columns : undefined;
+
+  const mappedPreview = mapped
+    .slice(0, 3)
+    .map((entry) => {
+      const field = (entry.field as string | undefined) ?? "field";
+      const header = (entry.header as string | undefined) ?? `col ${entry.source_index ?? "?"}`;
+      const score = typeof entry.score === "number" ? entry.score.toFixed(3) : undefined;
+      return `${field} ← "${header}"${score ? ` (${score})` : ""}`;
+    })
+    .join(" · ");
+
+  const mappedLine = mapped.length
+    ? `Mapped ${mapped.length}${total ? `/${total}` : ""}: ${mappedPreview || "…"}${mapped.length > 3 ? " …" : ""}`
+    : `Mapped 0${total ? `/${total}` : ""}`;
+
+  const unmappedLine = total !== undefined
+    ? `Unmapped columns: ${unmapped.length}${unmapped.length ? ` (e.g. ${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? " …" : ""})` : ""}`
+    : unmapped.length
+      ? `Unmapped columns: ${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? " …" : ""}`
+      : null;
+
+  const messageLines = [mappedLine, unmappedLine].filter(Boolean).join("\n");
+
+  return { level, message: messageLines, timestamp, origin: "run", raw: payload };
 }
 
 function formatScores(scores?: Record<string, unknown>): string | null {
