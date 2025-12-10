@@ -101,7 +101,7 @@ The output is:
 
 ## Reporting and events
 
-The engine and pipeline emit structured events via `events.emit(...)`.
+The engine and pipeline emit structured events via `logger.event(...)`.
 
 In NDJSON mode, each call becomes one JSON object on stdout (or a log file). In text mode, they are rendered into readable lines.
 

@@ -28,8 +28,7 @@ result = engine.run(RunRequest(input_file=Path("source.xlsx")))
 Key parameters (high level):
 
 - `request`: run configuration (input, outputs, config package)
-- `logger`: standard `logging.Logger` (optional)
-- `events`: object with `.emit(event, **fields)` (optional)
+- `logger`: logger instance (prefer `RunLogger` from `create_run_logger_context.logger` for structured `event` + `data` fields)
 
 Return value: `RunResult` with status, output_path, logs_dir, and optional error details.
 
@@ -56,33 +55,54 @@ RunRequest fields include:
 
 ---
 
-## Reporting API (`ade_engine.logger`)
+## Reporting API (`ade_engine.logging`)
 
-### EventEmitter
-`EventEmitter.emit(event, **fields)` writes a structured event.
+`create_run_logger_context(namespace, log_format, log_file, log_level)` builds the run-scoped logging stack (text or ndjson) and returns a `RunLogContext` with:
+- `logger`: `RunLogger` (a `LoggerAdapter`) that adds a default `event` (`<namespace>.log`) to plain log lines and wraps structured payloads under `data`. It also exposes `logger.event(name, message=None, level=..., **fields, exc=None)` for domain events.
 
-Reserved top-level fields:
-- `ts`: UTC timestamp (added automatically)
-- `event`: event name (string)
-- `message`, `level`, `stage`, `logger`
-- `data`: remaining fields
+Structured output (ndjson) uses ECS-ish keys:
+- `timestamp`, `level`, `message`
+- `event` (namespaced, e.g., `engine.run.started` or `engine.log`)
+- `data` (flexible payload)
+- `error` dictionary when exceptions are logged (`type`, `message`, `stack_trace`)
+The same shape is SSE-friendly: `event: <name>` and `data: { ... }`.
 
-Example:
+Examples:
+
+Plain log (no explicit event):
 
 ```python
-emitter.emit(
-    "table.mapped",
-    message="Mapped fields",
-    sheet_name="Sheet1",
-    table_index=0,
-    mapped_fields=12,
-)
+logger.debug("Run starting", extra={"data": {"input_file": "source.xlsx"}})
 ```
 
-### start_run_logging(log_format, log_file, log_level)
-Creates a `RunLogContext` containing:
-- a `logging.Logger` that emits structured `log` events
-- an `EventEmitter`
+```json
+{
+  "timestamp": "2025-12-09T17:30:44.726Z",
+  "level": "debug",
+  "message": "Run starting",
+  "event": "engine.log",
+  "data": {"input_file": "source.xlsx"}
+}
+```
+
+Domain event:
+
+```python
+logger.event("run.started", message="Run started", input_file="source.xlsx", config_package="default")
+```
+
+```json
+{
+  "timestamp": "...",
+  "level": "info",
+  "message": "Run started",
+  "event": "engine.run.started",
+  "data": {
+    "input_file": "source.xlsx",
+    "config_package": "default"
+  }
+}
+```
 
 ---
 
@@ -94,8 +114,7 @@ Common kwargs:
 - `run`: `RunContext` (source/output workbooks, manifest, state)
 - `state`: run state dict (mutable)
 - `manifest`: `ManifestContext`
-- `logger`: logger instance
-- `events`: structured emitter
+- `logger`: logger instance (`RunLogger` with `.event(...)`)
 - `input_file_name`: basename of the source file
 
 Plus stage-specific kwargs (examples):

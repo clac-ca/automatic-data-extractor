@@ -53,7 +53,7 @@ class Pipeline:
         sheet_index_lookup: dict[str, int],
         logger: logging.Logger | logging.LoggerAdapter | None = None,
     ) -> None:
-        emitter = invoker.events
+        emitter = logger if hasattr(logger, "event") else invoker.logger
 
         src_ws = source_wb[sheet_name]
         out_ws = output_wb.create_sheet(title=sheet_name, index=sheet_position)
@@ -64,7 +64,7 @@ class Pipeline:
             output_worksheet=out_ws,
         )
 
-        emitter.emit(
+        emitter.event(
             "sheet.started",
             message=f"Sheet started: {sheet_name}",
             sheet_name=sheet_name,
@@ -81,7 +81,7 @@ class Pipeline:
             logger=logger,
         )
         row_count = getattr(src_ws, "max_row", None) or 0
-        emitter.emit(
+        emitter.event(
             "sheet.tables_detected",
             message=f"Detected {len(regions)} table(s) in {sheet_name}",
             sheet_name=sheet_name,
@@ -131,7 +131,7 @@ class Pipeline:
         logger: logging.Logger | logging.LoggerAdapter | None = None,
     ) -> TableContext:
         sheet_name = sheet_ctx.source_worksheet.title
-        emitter = invoker.events
+        emitter = logger if hasattr(logger, "event") else invoker.logger
 
         origin = TableOrigin(
             source_path=run_ctx.source_path,
@@ -144,7 +144,7 @@ class Pipeline:
         row_count = region.max_row - region.min_row + 1
         col_count = region.max_col - region.min_col + 1
 
-        emitter.emit(
+        emitter.event(
             "table.detected",
             message=f"Table detected in {sheet_name} (#{table_index + 1})",
             sheet_name=sheet_name,
@@ -165,7 +165,7 @@ class Pipeline:
         table_ctx.extracted = extracted
 
         col_count = max(len(extracted.header), max((len(r) for r in extracted.rows), default=0))
-        emitter.emit(
+        emitter.event(
             "table.extracted",
             message=f"Extracted {len(extracted.rows)} row(s) from {sheet_name} (#{table_index + 1})",
             sheet_name=sheet_name,
@@ -180,7 +180,7 @@ class Pipeline:
         table_ctx.mapped = mapped
 
         mapped_count = sum(1 for f in mapped.mapping.fields if f.source_col is not None)
-        emitter.emit(
+        emitter.event(
             "table.mapped",
             message=f"Mapped {mapped_count}/{len(mapped.mapping.fields)} fields for {sheet_name} (#{table_index + 1})",
             sheet_name=sheet_name,
@@ -195,7 +195,7 @@ class Pipeline:
             table_ctx.mapping_patch = patch
             mapped = self.mapper.apply_patch(mapped, patch, runtime.manifest)
             table_ctx.mapped = mapped
-            emitter.emit(
+            emitter.event(
                 "table.mapping_patched",
                 message=f"Applied mapping patch for {sheet_name} (#{table_index + 1})",
                 sheet_name=sheet_name,
@@ -210,7 +210,7 @@ class Pipeline:
         for issue in issues:
             counts[issue.severity.value] = counts.get(issue.severity.value, 0) + 1
 
-        emitter.emit(
+        emitter.event(
             "table.normalized",
             message=f"Normalized {len(normalized.rows)} row(s) for {sheet_name} (#{table_index + 1})",
             sheet_name=sheet_name,
@@ -224,7 +224,7 @@ class Pipeline:
         table_ctx.placement = placement
         table_ctx.view = TableView(placement.worksheet, placement.cell_range)
 
-        emitter.emit(
+        emitter.event(
             "table.written",
             message=f"Wrote normalized table to output: {sheet_name}!{placement.cell_range.coord}",
             sheet_name=sheet_name,

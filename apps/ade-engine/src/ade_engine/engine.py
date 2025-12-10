@@ -8,8 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from ade_engine.common.events import EventLogger
-from ade_engine.common.logging import start_run_logging
+from ade_engine.logging import CONFIG_NAMESPACE, RunLogger, create_run_logger_context
 from ade_engine.config.loader import load_config_runtime
 from ade_engine.exceptions import ConfigError, HookError, InputError, PipelineError
 from ade_engine.hooks.dispatcher import HookDispatcher
@@ -61,18 +60,25 @@ class Engine:
         self,
         request: RunRequest | None = None,
         *,
-        logger: logging.Logger | logging.LoggerAdapter | None = None,
-        events: EventLogger | None = None,
+        logger: logging.Logger | logging.LoggerAdapter | RunLogger | None = None,
         **kwargs: Any,
     ) -> RunResult:
         """Execute a single run."""
         req = request or RunRequest(**kwargs)
 
-        logger = logger or logging.getLogger(__name__)
-        engine_events = events or EventLogger(logger, namespace="engine")
-        config_events = EventLogger(logger, namespace="engine.config")
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
+        if isinstance(logger, RunLogger):
+            run_logger = logger
+        elif isinstance(logger, logging.Logger):
+            run_logger = RunLogger(logger, namespace="engine")
+        else:
+            base_logger = getattr(logger, "logger", None) if logger else None
+            if not isinstance(base_logger, logging.Logger):
+                base_logger = logging.getLogger(__name__)
+            run_logger = RunLogger(base_logger, namespace="engine")
+        engine_logger = run_logger
+        config_logger = run_logger.with_namespace(CONFIG_NAMESPACE)
+        if engine_logger.isEnabledFor(logging.DEBUG):
+            engine_logger.debug(
                 "Run starting",
                 extra={
                     "data": {
@@ -95,7 +101,7 @@ class Engine:
         started_at = datetime.now(timezone.utc)
         completed_at: datetime = started_at
 
-        engine_events.emit(
+        engine_logger.event(
             "run.started",
             message="Run started",
             input_file=str(req.input_file) if req.input_file else None,
@@ -117,8 +123,8 @@ class Engine:
             output_dir.mkdir(parents=True, exist_ok=True)
             if logs_dir:
                 logs_dir.mkdir(parents=True, exist_ok=True)
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
+            if engine_logger.isEnabledFor(logging.DEBUG):
+                engine_logger.debug(
                     "Resolved run paths",
                     extra={
                         "data": {
@@ -131,7 +137,7 @@ class Engine:
                     },
                 )
 
-            engine_events.emit(
+            engine_logger.event(
                 "run.planned",
                 message="Prepared run request",
                 output_file=str(prepared.output_file),
@@ -147,7 +153,7 @@ class Engine:
                 manifest_path=prepared.request.manifest_path,
             )
 
-            engine_events.emit(
+            config_logger.event(
                 "config.loaded",
                 message="Config loaded",
                 config_package=runtime.package.__name__,
@@ -166,14 +172,13 @@ class Engine:
                     source_workbook=source_wb,
                     output_workbook=output_wb,
                     state={},
-                    logger=logger,
-                    events=config_events,
+                    logger=config_logger,
                 )
 
-                invoker = PluginInvoker(runtime=runtime, run=run_ctx, logger=logger, events=config_events)
-                hooks = HookDispatcher(runtime.hooks, invoker=invoker, logger=logger)
+                invoker = PluginInvoker(runtime=runtime, run=run_ctx, logger=config_logger)
+                hooks = HookDispatcher(runtime.hooks, invoker=invoker, logger=engine_logger)
 
-                engine_events.emit(
+                engine_logger.event(
                     "workbook.started",
                     message="Workbook processing started",
                     sheet_count=len(getattr(source_wb, "worksheets", [])),
@@ -183,8 +188,8 @@ class Engine:
 
                 sheet_names = self.workbook_io.resolve_sheet_names(source_wb, prepared.request.input_sheets)
                 sheet_index_lookup = {ws.title: idx for idx, ws in enumerate(source_wb.worksheets)}
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
+                if engine_logger.isEnabledFor(logging.DEBUG):
+                    engine_logger.debug(
                         "Processing sheets",
                         extra={
                             "data": {
@@ -206,14 +211,14 @@ class Engine:
                         sheet_name=sheet_name,
                         sheet_position=sheet_position,
                         sheet_index_lookup=sheet_index_lookup,
-                        logger=logger,
+                        logger=engine_logger,
                     )
 
                 hooks.on_workbook_before_save(run_ctx)
 
                 self.workbook_io.save_output(output_wb, prepared.output_file)
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
+                if engine_logger.isEnabledFor(logging.DEBUG):
+                    engine_logger.debug(
                         "Output workbook saved",
                         extra={
                             "data": {
@@ -236,11 +241,11 @@ class Engine:
             else:
                 code = RunErrorCode.PIPELINE_ERROR
 
-            logger.error("%s: %s", code.value, exc)
+            run_logger.error("%s: %s", code.value, exc, exc_info=exc)
             error = RunError(code=code, stage=None, message=str(exc))
 
         except Exception as exc:  # pragma: no cover - defensive
-            logger.exception("Engine run failed", exc_info=exc)
+            engine_logger.exception("Engine run failed", exc_info=exc)
             status = RunStatus.FAILED
             error = RunError(code=RunErrorCode.UNKNOWN_ERROR, stage=None, message=str(exc))
 
@@ -249,7 +254,7 @@ class Engine:
             started_at_str = started_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
             completed_at_str = completed_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
-            engine_events.emit(
+            engine_logger.event(
                 "run.completed",
                 message="Run completed",
                 status=status.value,
@@ -303,11 +308,14 @@ def run_inputs(
 ) -> list[ExecutedRun]:
     """Run the engine for multiple input files."""
 
-    default_settings = Settings()
-
-    resolved_log_format = str(log_format or default_settings.log_format or "text").strip().lower()
-    if resolved_log_format not in {"text", "ndjson"}:
-        raise ValueError("log_format must be 'text' or 'ndjson'")
+    base_settings = Settings()
+    engine_settings = Settings(
+        config_package=config_package,
+        supported_file_extensions=base_settings.supported_file_extensions,
+        log_format=log_format if log_format is not None else base_settings.log_format,
+        log_level=log_level if log_level is not None else base_settings.log_level,
+    )
+    resolved_log_format = engine_settings.log_format
 
     input_paths = [Path(path).resolve() for path in inputs]
     if not input_paths:
@@ -316,13 +324,7 @@ def run_inputs(
     resolved_output_dir = Path(output_dir or Path("output")).resolve()
     resolved_logs_dir = Path(logs_dir).resolve() if logs_dir else None
 
-    effective_log_level = log_level if log_level is not None else default_settings.log_level
-
-    engine_settings = Settings(
-        config_package=config_package,
-        log_level=effective_log_level,
-        log_format=resolved_log_format,
-    )
+    effective_log_level = engine_settings.log_level
     engine = Engine(settings=engine_settings)
 
     results: list[ExecutedRun] = []
@@ -345,7 +347,7 @@ def run_inputs(
             logs_file=logs_file,
         )
 
-        with start_run_logging(
+        with create_run_logger_context(
             log_format=resolved_log_format,
             enable_console_logging=True,
             log_file=logs_file,
@@ -366,7 +368,7 @@ def run_inputs(
                         },
                     },
                 )
-            result = engine.run(request, logger=log_ctx.logger, events=log_ctx.events)
+            result = engine.run(request, logger=log_ctx.logger)
             if log_ctx.logger.isEnabledFor(logging.DEBUG):
                 log_ctx.logger.debug(
                     "Engine run completed",

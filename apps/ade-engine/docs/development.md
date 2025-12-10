@@ -12,7 +12,7 @@ Within `apps/ade-engine/src/ade_engine`:
 - `engine.py`: orchestration and run lifecycle
 - `config/`: manifest + plugin loader/runtime
 - `pipeline/`: sheet/table stages
-- `reporting.py`: structured events + logging
+- `logging.py`: structured events + logging
 - `io/`: workbook IO and path planning
 - `types/`: dataclasses used across the system
 
@@ -52,13 +52,15 @@ def detect_email(*, header: str, column_values_sample: list[object], **_) -> flo
 ```
 
 ### Emitting custom events
-Config scripts can emit structured events:
+Config scripts can emit structured events (surfacing as `event` + `data`):
 
 ```python
-def transform(*, row_index: int, field_name: str, value: object, events, **_):
-    events.emit("config.transform.called", row_index=row_index, field=field_name)
+def transform(*, row_index: int, field_name: str, value: object, logger, **_):
+    logger.event("config.transform.called", row_index=row_index, field=field_name)
     return None
 ```
+
+Use `logger.event(...)` from the provided `RunLogger`.
 
 ---
 
@@ -77,7 +79,7 @@ The engine is designed to be testable by injecting dependencies:
 
 - `WorkbookIO` can be swapped
 - pipeline stages can be injected
-- reporting can be redirected to in-memory sinks
+- logging/events can be redirected to in-memory sinks
 
 A typical approach is to use `pytest` and build small workbooks in-memory with `openpyxl`.
 

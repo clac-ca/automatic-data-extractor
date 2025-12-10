@@ -18,13 +18,13 @@ def test_run_command_happy_path(tmp_path, monkeypatch):
     logs_dir = tmp_path / "logs"
     calls: dict[str, Path] = {}
 
-    def fake_run(self, request, logger=None, events=None, **_kwargs):
-        calls["input"] = Path(request.input_file)
-        calls["output"] = Path(request.output_file)
-        calls["logs_file"] = Path(request.logs_file)
-        output_path = Path(request.output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("ok")
+def fake_run(self, request, logger=None, **_kwargs):
+    calls["input"] = Path(request.input_file)
+    calls["output"] = Path(request.output_file)
+    calls["logs_file"] = Path(request.logs_file)
+    output_path = Path(request.output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("ok")
         return RunResult(
             status=RunStatus.SUCCEEDED,
             error=None,

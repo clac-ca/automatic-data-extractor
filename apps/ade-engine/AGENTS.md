@@ -17,9 +17,9 @@ This document is a reference for how those actors interact, what messages they e
   - build reporting (`text` or `ndjson`)
   - keep stdout clean in NDJSON mode (redirect stray prints to stderr)
 
-### 2) Reporting Agent (`ade_engine.logger`)
+### 2) Reporting Agent (`ade_engine.logging`)
 **Role:** Convert engine activity into a stream of consumable messages.
-- **Inputs:** `emit(event, **fields)` calls and standard logging records
+- **Inputs:** `logger.event(event, **fields)` calls and standard logging records
 - **Outputs:** text lines or NDJSON objects to stdout/stderr/file
 - **Responsibilities:**
   - generate timestamps
@@ -27,7 +27,7 @@ This document is a reference for how those actors interact, what messages they e
 
 ### 3) Engine Agent (`ade_engine.engine.Engine`)
 **Role:** Orchestrate a single normalization run.
-- **Inputs:** `RunRequest`, `logger`, `events`
+- **Inputs:** `RunRequest`, `logger`
 - **Outputs:** `RunResult`, normalized workbook artifact
 - **Responsibilities:**
   - path normalization and config resolution
@@ -73,7 +73,7 @@ These are “user-provided agents”:
 They operate under strict invocation rules:
 - keyword-only parameters
 - accept `**_`
-- treat `logger` / `events` as their output channel
+- treat `logger` as their output channel
 
 ---
 
@@ -85,7 +85,8 @@ An emitted event becomes a JSON object with this general shape:
 
 ```json
 {
-  "ts": "2025-12-07T12:34:56.789Z",
+  "timestamp": "2025-12-07T12:34:56.789Z",
+  "level": "info",
   "event": "table.mapped",
   "message": "Mapped 10/12 fields",
   "data": {
@@ -98,17 +99,16 @@ An emitted event becomes a JSON object with this general shape:
 ```
 
 Reserved (top-level) keys:
-- `ts`, `event`
-- `message`, `level`, `stage`, `logger`
-- `exc_type`, `exc`, `traceback`
+- `timestamp`, `level`, `event`, `message`
 - `data` (arbitrary structured payload)
+- `error` (optional, with `type`, `message`, `stack_trace`)
 
 ### Log events
 
 Standard Python logging is converted into event name `log`:
 
 ```json
-{"event":"log","level":"info","logger":"ade_engine.run","message":"..."}
+{"event":"engine.log","level":"info","message":"..."}
 ```
 
 ---
@@ -134,14 +134,14 @@ stateDiagram-v2
 sequenceDiagram
   participant API as Orchestrator (ADE API)
   participant CLI as CLI
-  participant Rep as Reporter/EventEmitter
+  participant Rep as Reporter/RunLogger
   participant Eng as Engine
   participant Pipe as Pipeline
   participant Cfg as Config callables
 
   API->>CLI: spawn ade-engine (ndjson)
-  CLI->>Rep: start_run_logging(log_format)
-  CLI->>Eng: run(request, logger, events)
+  CLI->>Rep: create_run_logger_context(log_format)
+  CLI->>Eng: run(request, logger)
   Eng->>Rep: run.started / run.planned
   Pipe->>Rep: sheet.* / table.*
   Cfg->>Rep: custom config events
@@ -174,9 +174,9 @@ Consumes as an event stream, one JSON object per line.
 ### 3) A config transformer that emits an event
 
 ```python
-def transform(*, row_index: int, field_name: str, value: object, events, **_):
+def transform(*, row_index: int, field_name: str, value: object, logger, **_):
     if field_name == "email" and value is None:
-        events.emit("config.email.missing", row_index=row_index)
+        logger.event("config.email.missing", row_index=row_index)
     return None
 ```
 
@@ -199,4 +199,4 @@ If you run `ade-engine` as a subprocess:
 - Prefer `--log-format ndjson` and read stdout line-by-line.
 - Treat each line as a complete JSON object (no framing).
 - Assume events are additive and forward-compatible (new fields may appear).
-- Keep stdout clean: avoid prints in config scripts; use logger/events instead.
+- Keep stdout clean: avoid prints in config scripts; use logger instead.

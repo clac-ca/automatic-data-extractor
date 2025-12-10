@@ -37,8 +37,8 @@ class TableNormalizer:
             logger.debug(
                 "Normalizing table",
                 extra={
-                    "stage": "normalize",
                     "data": {
+                        "stage": "normalize",
                         "sheet_name": mapped.origin.sheet_name,
                         "table_index": mapped.origin.table_index,
                         "row_count": len(mapped.extracted.rows),
@@ -135,8 +135,8 @@ class TableNormalizer:
             logger.debug(
                 "Normalization completed",
                 extra={
-                    "stage": "normalize",
                     "data": {
+                        "stage": "normalize",
                         "sheet_name": mapped.origin.sheet_name,
                         "table_index": mapped.origin.table_index,
                         "row_count": len(normalized_rows),

@@ -43,11 +43,10 @@ Implements the main Workbook → Sheet → Table flow:
 
 The pipeline emits stage-level events (sheet/table progress).
 
-### 5) Reporting (`ade_engine.logger`)
-Provides a consistent interface for:
+### 5) Reporting (`ade_engine.logging`)
+Provides run-scoped structured logging:
 
-- **structured events** via `EventEmitter.emit(event, **fields)`
-- **logs** via standard Python logging (converted to events)
+- `RunLogger` wraps stdlib logging so every line carries an `event` (default `engine.log`) plus optional `data`. It also exposes `.event(...)` for domain events and is passed into the engine/pipeline/config runtime.
 
 Reporting can write to:
 
@@ -70,8 +69,8 @@ sequenceDiagram
   participant Config as Config callables
 
   User->>CLI: run (input, config, outputs)
-  CLI->>Rep: start_run_logging(text|ndjson)
-  CLI->>Eng: engine.run(request, logger, events)
+  CLI->>Rep: create_run_logger_context(text|ndjson)
+  CLI->>Eng: engine.run(request, logger)
   Eng->>Rep: emit run.started / run.planned
   Eng->>Cfg: load_config_runtime()
   Cfg-->>Eng: ConfigRuntime (manifest + registries)
