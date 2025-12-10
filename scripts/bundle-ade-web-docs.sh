@@ -32,7 +32,7 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/vite.config.ts \
   apps/ade-web/vitest.config.ts \
   --out "${generated_dir}/bundle-config-builder-logic.md" \
-  --no-clip --show
+  --show
 
 # Config Builder UI bundle
 ade bundle apps/ade-web/README.md \
@@ -54,7 +54,7 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/vite.config.ts \
   apps/ade-web/vitest.config.ts \
   --out "${generated_dir}/bundle-config-builder-ui.md" \
-  --no-clip --show
+  --show
 
 # Shared data layer bundle
 ade bundle apps/ade-web/README.md \
@@ -72,7 +72,7 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/shared/auth/api/logout.ts \
   apps/ade-web/src/shared/auth/hooks/useAuthProvidersQuery.ts \
   --out "${generated_dir}/bundle-shared-data.md" \
-  --no-clip --show
+  --show
 
 # UI + editor primitives bundle
 ade bundle apps/ade-web/README.md \
@@ -90,7 +90,7 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/ui/Avatar/Avatar.tsx \
   apps/ade-web/src/ui/Avatar/index.ts \
   --out "${generated_dir}/bundle-ui-and-editor.md" \
-  --no-clip --show
+  --show
 
 # Workspace sections bundle
 ade bundle apps/ade-web/README.md \
@@ -117,7 +117,7 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/screens/Workspace/sections/Settings/pages/RolesSettingsPage.tsx \
   apps/ade-web/src/screens/Workspace/sections/Settings/pages/DangerSettingsPage.tsx \
   --out "${generated_dir}/bundle-workspace-sections.md" \
-  --no-clip --show
+  --show
 
 # Workspace shell bundle
 ade bundle apps/ade-web/README.md \
@@ -135,11 +135,11 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/screens/Workspaces/components/WorkspaceDirectoryLayout.tsx \
   apps/ade-web/src/screens/Workspaces/index.tsx \
   --out "${generated_dir}/bundle-workspace-shell.md" \
-  --no-clip --show
+  --show
 
 # ADE web docs bundle
 ade bundle apps/ade-web/README.md \
   --dir apps/ade-web/docs \
   --ext md \
   --out "${generated_dir}/ade-web-docs-bundle.md" \
-  --no-clip --no-show
+  --no-show

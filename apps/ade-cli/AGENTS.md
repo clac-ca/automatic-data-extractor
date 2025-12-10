@@ -86,8 +86,11 @@ ade tests
 # Bundle files for LLM review
 ade bundle --ext md --out /tmp/bundle.md docs/
 
-# Bundle mixed files with filters (no clipboard)
-ade bundle --include \"src/**\" --include \"apps/ade-api/src/ade_api/**/*.py\" --exclude \"**/__pycache__/**\" --out /tmp/bundle.md --no-clip
+# Bundle mixed files with filters (skips __pycache__ automatically)
+ade bundle --include \"src/**\" --include \"apps/ade-api/src/ade_api/**/*.py\" --out /tmp/bundle.md
+
+# Copy a bundle to the clipboard (opt-in)
+ade bundle README.md apps/ade-api/AGENTS.md --clip
 
 # Bundle a couple of specific files quickly
 ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
