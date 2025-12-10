@@ -23,17 +23,15 @@ class HookName(str, Enum):
     ON_WORKBOOK_BEFORE_SAVE = "on_workbook_before_save"
 
 
-@dataclass
+@dataclass(frozen=True)
 class FieldDef:
     name: str
     label: str | None = None
-    required: bool = False
     dtype: str | None = None
-    synonyms: list[str] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(frozen=True)
 class RowDetectorContext:
     row_index: int
     row_values: Sequence[Any]
@@ -44,7 +42,7 @@ class RowDetectorContext:
     logger: Any | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColumnDetectorContext:
     column_index: int
     header: Any
@@ -57,7 +55,7 @@ class ColumnDetectorContext:
     logger: Any | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class TransformContext:
     field_name: str
     values: Sequence[Any]
@@ -68,7 +66,7 @@ class TransformContext:
     logger: Any | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidateContext:
     field_name: str
     values: Sequence[Any]
@@ -80,7 +78,7 @@ class ValidateContext:
     logger: Any | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class HookContext:
     hook_name: HookName
     metadata: Mapping[str, Any]

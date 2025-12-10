@@ -4,5 +4,4 @@
 [ade_engine]
 append_unmapped_columns = true
 unmapped_prefix = "raw_"
-mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "drop_all"
-
+mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"

@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from ade_engine.exceptions import PipelineError
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.pipeline.transform import apply_transforms
-from ade_engine.registry import Registry
+from ade_engine.registry import FieldDef, Registry
 
 
 class SpyLogger:
@@ -31,6 +31,7 @@ def test_transform_applies_row_outputs_and_enforces_contract():
             for idx, value in enumerate(values)
         ]
 
+    registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(uppercase_transform, field="foo", priority=0)
     registry.finalize()
 
@@ -57,6 +58,7 @@ def test_transform_invalid_return_raises_pipeline_error():
     def broken_transform(*, values, **_):
         return None
 
+    registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(broken_transform, field="foo", priority=0)
     registry.finalize()
 

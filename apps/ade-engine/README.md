@@ -2,8 +2,8 @@
 
 Lightweight spreadsheet normalization engine using registry-based config packages.
 
-- Config packages are pure Python; pass `--config-package <path>` pointing to the package directory. Importing modules registers fields, detectors, transforms, validators, and hooks via decorators.
-- Settings live in `.env` / env vars / optional `ade_engine.toml` (see `apps/ade-engine/docs/ade-engine/settings.md`).
+- Config packages are pure Python; pass `--config-package <path>` pointing to the package directory. Modules register fields, detectors, transforms, validators, and hooks imperatively via `registry.register_*` inside a `register(registry)` entrypoint.
+- Settings live in `.env` / env vars / optional `settings.toml` (see `apps/ade-engine/docs/ade-engine/settings.md`).
 - Output ordering: mapped columns keep input order; unmapped columns optionally appended to the right with prefix.
 
 Install (pip):

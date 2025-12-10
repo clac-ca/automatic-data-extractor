@@ -160,7 +160,7 @@ def detect_and_map_columns(
             # keep the best-scoring column, drop the rest
             for col_idx, _ in entries_sorted[1:]:
                 unmapped_indices.add(col_idx)
-        else:  # drop_all
+        else:  # leave_unmapped
             for col_idx, _ in entries_sorted:
                 unmapped_indices.add(col_idx)
 

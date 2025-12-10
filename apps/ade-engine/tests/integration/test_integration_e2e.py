@@ -18,63 +18,69 @@ def _write_config_package(root: Path) -> None:
     pkg.mkdir(parents=True, exist_ok=True)
     (pkg / "__init__.py").write_text(
         """
-from ade_engine.registry import registry_context, import_all
-
-
 def register(registry):
-    with registry_context(registry):
-        import_all(__name__)
+    from . import rows, columns
+    rows.register(registry)
+    columns.register(registry)
 """,
         encoding="utf-8",
     )
 
     (pkg / "rows.py").write_text(
         """
-from ade_engine.registry import row_detector, RowKind
+from ade_engine.registry.models import FieldDef, RowKind
 
-@row_detector(row_kind=RowKind.HEADER, priority=10)
-def pick_header(ctx):
-    normalized = {str(v).strip().lower() for v in ctx.row_values or [] if v not in (None, "")}
+def pick_header(*, row_values, **_):
+    normalized = {str(v).strip().lower() for v in row_values or [] if v not in (None, "")}
     if {"email", "name"}.issubset(normalized):
         return {"header": 1.0}
     return {}
+
+
+def register(registry):
+    registry.register_row_detector(pick_header, row_kind=RowKind.HEADER.value, priority=10)
 """,
         encoding="utf-8",
     )
 
     (pkg / "columns.py").write_text(
         """
-from ade_engine.registry import column_detector, column_transform, column_validator
+from ade_engine.registry.models import FieldDef
 
-@column_detector(field="email", priority=20)
-def detect_email(ctx):
-    header = (ctx.header or "").strip().lower()
+def detect_email(*, header, **_):
+    header = (header or "").strip().lower()
     if header == "email":
         return {"email": 1.0}
     return None
 
-@column_detector(field="name", priority=10)
-def detect_name(ctx):
-    header = (ctx.header or "").strip().lower()
+def detect_name(*, header, **_):
+    header = (header or "").strip().lower()
     if header == "name":
         return {"name": 1.0}
     return None
 
-@column_transform(field="email")
-def normalize_email(ctx):
+def normalize_email(*, values, **_):
     results = []
-    for idx, value in enumerate(ctx.values):
+    for idx, value in enumerate(values):
         normalized = str(value).lower() if value is not None else None
         results.append({"row_index": idx, "value": {"email": normalized}})
     return results
 
-@column_validator(field="email")
-def validate_email(ctx):
+def validate_email(*, values, **_):
     issues = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         if v and "@" not in str(v):
             issues.append({"row_index": idx, "message": "invalid email"})
     return issues
+
+
+def register(registry):
+    registry.register_field(FieldDef(name="email"))
+    registry.register_field(FieldDef(name="name"))
+    registry.register_column_detector(detect_email, field="email", priority=20)
+    registry.register_column_detector(detect_name, field="name", priority=10)
+    registry.register_column_transform(normalize_email, field="email", priority=0)
+    registry.register_column_validator(validate_email, field="email", priority=0)
 """,
         encoding="utf-8",
     )
