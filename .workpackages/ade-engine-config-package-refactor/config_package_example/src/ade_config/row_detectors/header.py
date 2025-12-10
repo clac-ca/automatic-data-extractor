@@ -21,7 +21,7 @@ def register(registry):
     registry.register_row_detector(detect_header_row_by_known_words, row_kind=RowKind.HEADER.value, priority=0)
 
 
-def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float]:
+def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float] | None:
     """Vote for a row being a header row.
 
     Heuristic:

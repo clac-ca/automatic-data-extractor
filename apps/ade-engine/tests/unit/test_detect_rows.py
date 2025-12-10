@@ -3,21 +3,24 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from ade_engine.exceptions import PipelineError
 from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_bounds
 from ade_engine.registry import Registry, registry_context, row_detector
 from ade_engine.registry.models import RowKind
 
 
-def test_row_detector_decorator_normalizes_enum_row_kind_for_numeric_patch():
+def test_row_detector_decorator_normalizes_enum_row_kind_for_mapping_patch():
     reg = Registry()
 
     with registry_context(reg):
         @row_detector(row_kind=RowKind.HEADER, priority=5)
         def pick_header(ctx):
-            return 1.0
+            return {RowKind.HEADER.value: 1.0}
 
     scores, classifications = _classify_rows(
         sheet_name="Sheet1",
@@ -31,6 +34,25 @@ def test_row_detector_decorator_normalizes_enum_row_kind_for_numeric_patch():
     assert reg.row_detectors[0].row_kind == RowKind.HEADER.value
     assert classifications == [RowKind.HEADER.value]
     assert scores[0][RowKind.HEADER.value] == 1.0
+
+
+def test_row_detector_invalid_return_shape_raises():
+    reg = Registry()
+
+    with registry_context(reg):
+        @row_detector(row_kind=RowKind.HEADER, priority=5)
+        def pick_header(ctx):
+            return 1.0
+
+    with pytest.raises(PipelineError):
+        _classify_rows(
+            sheet_name="Sheet1",
+            rows=[["H1"]],
+            registry=reg,
+            state={},
+            run_metadata={},
+            logger=None,
+        )
 
 
 def test_detect_table_bounds_stops_at_next_header_without_data():

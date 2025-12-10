@@ -5,6 +5,8 @@ from collections import defaultdict
 from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
+from ade_engine.exceptions import PipelineError
+from ade_engine.models import ColumnDetectorResult
 from ade_engine.registry.models import ColumnDetectorContext
 from ade_engine.registry.registry import Registry
 from ade_engine.pipeline.models import MappedColumn, SourceColumn
@@ -53,14 +55,18 @@ def detect_and_map_columns(
         for det in registry.column_detectors:
             started = perf_counter()
             try:
-                patch = registry.normalize_patch(det.field or "", det.fn(ctx))
+                raw_patch = det.fn(ctx)
             except Exception as exc:  # pragma: no cover - defensive
-                if logger:
-                    logger.exception(
-                        "Column detector failed",
-                        extra={"data": {"column_index": col.index, "detector": det.qualname}},
-                    )
-                continue
+                raise PipelineError(
+                    f"Column detector {det.qualname} failed on column {col.index}"
+                ) from exc
+
+            patch = registry.validate_detector_scores(
+                raw_patch,
+                allow_unknown=False,
+                source=f"Column detector {det.qualname}",
+                model=ColumnDetectorResult,
+            )
 
             duration_ms = round((perf_counter() - started) * 1000, 5)
             rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
@@ -75,7 +81,7 @@ def detect_and_map_columns(
 
             if logger and logger.isEnabledFor(logging.DEBUG):
                 logger.event(
-                    "column_detector.result",
+                    "detector.column_result",
                     level=logging.DEBUG,
                     message=f"Column {col.index} detector {det.qualname} executed on {sheet_name}",
                     data={

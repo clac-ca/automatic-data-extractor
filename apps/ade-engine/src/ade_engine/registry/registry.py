@@ -1,13 +1,15 @@
 """Registry container for config callables."""
 from __future__ import annotations
 
-import math
 import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping
 
-from ade_engine.exceptions import HookError
+from pydantic import ValidationError
+
+from ade_engine.exceptions import HookError, PipelineError
 from ade_engine.logging import RunLogger
+from ade_engine.models import ColumnDetectorResult, RowDetectorResult
 from ade_engine.registry.models import FieldDef, HookContext, HookName, ScorePatch
 
 @dataclass
@@ -125,28 +127,36 @@ class Registry:
         return new_def
 
     # ------------------------------------------------------------------
-    # Score normalization
+    # Score validation
     # ------------------------------------------------------------------
-    def normalize_patch(self, current: str, patch: ScorePatch, *, allow_unknown: bool = False) -> dict[str, float]:
+    def validate_detector_scores(
+        self,
+        patch: ScorePatch,
+        *,
+        allow_unknown: bool = False,
+        source: str | None = None,
+        model: type[RowDetectorResult] | type[ColumnDetectorResult] = ColumnDetectorResult,
+    ) -> dict[str, float]:
+        """Validate detector output to a strict score map."""
+
+        source_name = source or "detector"
         if patch is None:
             return {}
-        result: dict[str, float] = {}
-        if isinstance(patch, (int, float)):
-            if math.isfinite(float(patch)):
-                return {current: float(patch)}
-            return {}
-        if isinstance(patch, dict):
-            for key, value in patch.items():
-                try:
-                    val = float(value)
-                except (TypeError, ValueError):
-                    continue
-                if not math.isfinite(val):
-                    continue
-                if not allow_unknown and key not in self.fields:
-                    continue
-                result[key] = val
-        return result
+        try:
+            validated = model.model_validate(patch)
+        except ValidationError as exc:
+            raise PipelineError(
+                f"{source_name} must return a dict[str, float] or None ({exc})"
+            ) from exc
+
+        scores = dict(validated.scores)
+        if not allow_unknown:
+            unknown_fields = [field for field in scores if field not in self.fields]
+            if unknown_fields:
+                unknown = ", ".join(sorted(unknown_fields))
+                raise PipelineError(f"{source_name} returned unknown field(s): {unknown}")
+
+        return scores
 
     # ------------------------------------------------------------------
     # Registration helpers

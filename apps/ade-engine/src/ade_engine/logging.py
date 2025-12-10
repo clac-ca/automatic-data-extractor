@@ -221,16 +221,18 @@ ENGINE_EVENT_SCHEMAS: dict[str, PayloadModel] = {
 
     # Debug/telemetry events (payloads are open/optional)
     f"{ENGINE_NAMESPACE}.settings.effective": None,
-    f"{ENGINE_NAMESPACE}.row_detector.result": RowDetectorResultPayload,
+    # Detector results
+    f"{ENGINE_NAMESPACE}.detector.row_result": RowDetectorResultPayload,
+    f"{ENGINE_NAMESPACE}.detector.column_result": ColumnDetectorResultPayload,
     f"{ENGINE_NAMESPACE}.row_detector.summary": None,
     f"{ENGINE_NAMESPACE}.row_classification": RowClassificationPayload,
-    f"{ENGINE_NAMESPACE}.column_detector.result": ColumnDetectorResultPayload,
     f"{ENGINE_NAMESPACE}.column_detector.candidate": None,
     f"{ENGINE_NAMESPACE}.column_detector.summary": None,
     f"{ENGINE_NAMESPACE}.column_classification": ColumnClassificationPayload,
-    f"{ENGINE_NAMESPACE}.transform.applied": None,
+    # Transform/validation results
+    f"{ENGINE_NAMESPACE}.transform.result": None,
+    f"{ENGINE_NAMESPACE}.validation.result": None,
     f"{ENGINE_NAMESPACE}.transform.overwrite": None,
-    f"{ENGINE_NAMESPACE}.validator.result": None,
     f"{ENGINE_NAMESPACE}.hook.start": None,
     f"{ENGINE_NAMESPACE}.hook.end": None,
 }

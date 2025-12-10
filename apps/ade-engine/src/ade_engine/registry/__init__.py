@@ -28,6 +28,14 @@ from ade_engine.registry.models import (
     ValidateContext,
     ScorePatch,
 )
+from ade_engine.models import (
+    CellTransformResult,
+    CellValidatorResult,
+    ColumnDetectorResult,
+    ColumnTransformResult,
+    ColumnValidatorResult,
+    RowDetectorResult,
+)
 from ade_engine.registry.registry import Registry, RegisteredFn
 
 __all__ = [
@@ -48,6 +56,12 @@ __all__ = [
     "TransformContext",
     "ValidateContext",
     "ScorePatch",
+    "CellTransformResult",
+    "CellValidatorResult",
+    "ColumnDetectorResult",
+    "ColumnTransformResult",
+    "ColumnValidatorResult",
+    "RowDetectorResult",
     "cell_transformer",
     "cell_validator",
     "column_detector",

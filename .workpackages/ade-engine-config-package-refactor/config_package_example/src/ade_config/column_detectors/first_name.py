@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
 
+from ade_config.column_detectors.types import ColumnTransformRow, ColumnValidatorIssue, ScoreMap
+
 
 def register(registry):
     registry.register_field(FieldDef(
@@ -16,21 +18,22 @@ def register(registry):
     registry.register_column_validator(validate_first_name, field="first_name", priority=0)
 
 
-def detect_first_name_header(ctx: ColumnDetectorContext):
-    header_tokens = set((ctx.header or "").lower().replace("-", " ").split())
+def detect_first_name_header(ctx: ColumnDetectorContext) -> ScoreMap | None:
+    header_text = "" if ctx.header in (None, "") else str(ctx.header)
+    header_tokens = set(header_text.lower().replace("-", " ").split())
     if not header_tokens:
-        return {"first_name": 0.0}
+        return None
     if "first" in header_tokens and "name" in header_tokens:
         return {"first_name": 1.0}
     if "fname" in header_tokens or "given" in header_tokens:
         return {"first_name": 0.9}
-    return {"first_name": 0.0}
+    return None
 
 
-def detect_first_name_values(ctx: ColumnDetectorContext):
+def detect_first_name_values(ctx: ColumnDetectorContext) -> ScoreMap | None:
     sample = ctx.sample or []
     if not sample:
-        return {"first_name": 0.0}
+        return None
     shortish = 0
     total = 0
     for v in sample:
@@ -41,41 +44,45 @@ def detect_first_name_values(ctx: ColumnDetectorContext):
         if 2 <= len(s) <= 20 and " " not in s:
             shortish += 1
     if total == 0:
-        return {"first_name": 0.0}
+        return None
     score = min(1.0, shortish / total)
     return {"first_name": score}
 
 
-def normalize_first_name(ctx: TransformContext):
+def normalize_first_name(ctx: TransformContext) -> list[ColumnTransformRow]:
+    """Return `[{'row_index': int, 'value': {'first_name': ...}}, ...]`."""
+
     return [
-        {"first_name": (None if v is None else str(v).strip() or None)}
-        for v in ctx.values
+        {
+            "row_index": idx,
+            "value": {"first_name": (None if v is None else str(v).strip() or None)},
+        }
+        for idx, v in enumerate(ctx.values)
     ]
 
 
-def validate_first_name(ctx: ValidateContext):
-    issues = []
+def validate_first_name(ctx: ValidateContext) -> list[ColumnValidatorIssue]:
+    """Return `[{"row_index": int, "message": str}, ...]` for failed cells."""
+
+    issues: list[ColumnValidatorIssue] = []
     for idx, v in enumerate(ctx.values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 50:
             issues.append({
-                "passed": False,
-                "message": "First name too long",
                 "row_index": idx,
-                "column_index": getattr(ctx, "column_index", None),
-                "value": v,
+                "message": "First name too long",
             })
-    return issues or {"passed": True}
+    return issues
 
 # Example cell-level helpers (commented out):
 # These process a single cell at a time; prefer the column-level versions above
 # when registering for better performance and when touching multiple fields.
 #
-# def normalize_first_name_cell(value: object | None):
-#     return {"first_name": (None if value is None else str(value).strip() or None)}
+# def normalize_first_name_cell(value: object | None) -> ColumnTransformRow:
+#     return {"row_index": 0, "value": {"first_name": (None if value is None else str(value).strip() or None)}}
 #
-# def validate_first_name_cell(value: object | None):
+# def validate_first_name_cell(value: object | None) -> ColumnValidatorIssue | None:
 #     text_value = "" if value is None else str(value).strip()
 #     if text_value and len(text_value) > 50:
-#         return {"passed": False, "message": "First name too long", "value": value}
-#     return {"passed": True}
+#         return {"row_index": 0, "message": "First name too long"}
+#     return None

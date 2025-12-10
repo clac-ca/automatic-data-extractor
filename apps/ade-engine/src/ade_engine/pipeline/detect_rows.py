@@ -4,6 +4,8 @@ import logging
 from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
+from ade_engine.exceptions import PipelineError
+from ade_engine.models import RowDetectorResult
 from ade_engine.registry.models import RowDetectorContext, RowKind
 from ade_engine.registry.registry import Registry
 from ade_engine.logging import RunLogger
@@ -36,11 +38,18 @@ def _classify_rows(
         for det in registry.row_detectors:
             started = perf_counter()
             try:
-                patch = registry.normalize_patch(det.row_kind or RowKind.UNKNOWN.value, det.fn(ctx), allow_unknown=True)
-            except Exception:
-                if logger:
-                    logger.exception("Row detector failed", extra={"data": {"row_index": row_idx, "detector": det.qualname}})
-                continue
+                raw_patch = det.fn(ctx)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise PipelineError(
+                    f"Row detector {det.qualname} failed on row {row_idx}"
+                ) from exc
+
+            patch = registry.validate_detector_scores(
+                raw_patch,
+                allow_unknown=True,
+                source=f"Row detector {det.qualname}",
+                model=RowDetectorResult,
+            )
 
             duration_ms = round((perf_counter() - started) * 1000, 5)
             rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
@@ -60,7 +69,7 @@ def _classify_rows(
                     + (f" (scores {scores_str})" if scores_str else "")
                 )
                 logger.event(
-                    "row_detector.result",
+                    "detector.row_result",
                     level=logging.DEBUG,
                     message=detector_msg,
                     data={

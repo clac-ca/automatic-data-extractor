@@ -16,7 +16,17 @@ from ade_engine.types.run import RunRequest, RunStatus
 def _write_config_package(root: Path) -> None:
     pkg = root / "ade_config"
     pkg.mkdir(parents=True, exist_ok=True)
-    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "__init__.py").write_text(
+        """
+from ade_engine.registry import registry_context, import_all
+
+
+def register(registry):
+    with registry_context(registry):
+        import_all(__name__)
+""",
+        encoding="utf-8",
+    )
 
     (pkg / "rows.py").write_text(
         """
@@ -39,24 +49,32 @@ from ade_engine.registry import column_detector, column_transform, column_valida
 @column_detector(field="email", priority=20)
 def detect_email(ctx):
     header = (ctx.header or "").strip().lower()
-    return 1.0 if header == "email" else 0.0
+    if header == "email":
+        return {"email": 1.0}
+    return None
 
 @column_detector(field="name", priority=10)
 def detect_name(ctx):
     header = (ctx.header or "").strip().lower()
-    return 1.0 if header == "name" else 0.0
+    if header == "name":
+        return {"name": 1.0}
+    return None
 
 @column_transform(field="email")
 def normalize_email(ctx):
-    return [str(v).lower() if v is not None else None for v in ctx.values]
+    results = []
+    for idx, value in enumerate(ctx.values):
+        normalized = str(value).lower() if value is not None else None
+        results.append({"row_index": idx, "value": {"email": normalized}})
+    return results
 
 @column_validator(field="email")
 def validate_email(ctx):
     issues = []
     for idx, v in enumerate(ctx.values):
         if v and "@" not in str(v):
-            issues.append({"passed": False, "row_index": idx, "message": "invalid email", "value": v})
-    return issues or {"passed": True}
+            issues.append({"row_index": idx, "message": "invalid email"})
+    return issues
 """,
         encoding="utf-8",
     )
