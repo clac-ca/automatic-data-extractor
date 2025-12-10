@@ -120,7 +120,8 @@ def detect_and_map_columns(
                 },
             )
 
-        if not scores:
+        # Ignore columns with no positive signal – treating zero/negative totals as unmapped
+        if not scores or best_score <= 0:
             continue
         # pick best field for this column
         if best_field is not None:
@@ -146,11 +147,10 @@ def detect_and_map_columns(
     for field, entries in field_competitors.items():
         if len(entries) == 1:
             continue
-        entries_sorted = sorted(entries, key=lambda e: (e[0]))  # leftmost first
+        # Highest score wins; fall back to leftmost only when scores tie
+        entries_sorted = sorted(entries, key=lambda e: (-e[1], e[0]))
         if settings.mapping_tie_resolution == "leftmost":
-            # keep first, drop others
-            for _, score in entries_sorted[1:]:
-                pass
+            # keep the best-scoring column, drop the rest
             for col_idx, _ in entries_sorted[1:]:
                 unmapped_indices.add(col_idx)
         else:  # drop_all
