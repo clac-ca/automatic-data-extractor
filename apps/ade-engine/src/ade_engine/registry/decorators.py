@@ -86,8 +86,15 @@ def cell_transformer(*, field: str, priority: int = 0):
         @wraps(fn)
         def _column_transform(ctx):
             results = []
-            for value in ctx.values:
-                res = fn(value=value, field_name=ctx.field_name, state=ctx.state, run_metadata=ctx.run_metadata, logger=ctx.logger)
+            for row_index, value in enumerate(ctx.values):
+                res = fn(
+                    value=value,
+                    row_index=row_index,
+                    field_name=ctx.field_name,
+                    state=ctx.state,
+                    run_metadata=ctx.run_metadata,
+                    logger=ctx.logger,
+                )
                 results.append(res)
             return results
 
@@ -114,8 +121,16 @@ def cell_validator(*, field: str, priority: int = 0):
         def _validator(ctx):
             results = []
             for idx, value in enumerate(ctx.values):
-                res = fn(value=value, row_index=idx, field_name=ctx.field_name, state=ctx.state, run_metadata=ctx.run_metadata, logger=ctx.logger)
-                results.append(res)
+                res = fn(
+                    value=value,
+                    row_index=idx,
+                    field_name=ctx.field_name,
+                    state=ctx.state,
+                    run_metadata=ctx.run_metadata,
+                    logger=ctx.logger,
+                )
+                if res is not None:
+                    results.append(res)
             return results
 
         return _validator

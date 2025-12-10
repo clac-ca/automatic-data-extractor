@@ -3,26 +3,49 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
+from pydantic import ValidationError
+
+from ade_engine.exceptions import PipelineError
+from ade_engine.models import ColumnValidatorResult
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.registry.models import ValidateContext
 from ade_engine.registry.registry import Registry
 from ade_engine.logging import RunLogger
 
 
-def _normalize_validation_output(raw: Any) -> List[Dict[str, Any]]:
+def _validate_validation_output(
+    *,
+    field_name: str,
+    validator_name: str,
+    raw: Any,
+    expected_len: int,
+) -> List[ColumnValidatorResult]:
+    """Validate validator output matches the strict issue contract."""
+
     if raw is None:
-        return []
-    if isinstance(raw, bool):
-        return [] if raw else [{"passed": False}]
-    if isinstance(raw, dict):
-        return [raw]
-    if isinstance(raw, list):
-        out: List[Dict[str, Any]] = []
-        for item in raw:
-            if isinstance(item, dict):
-                out.append(item)
-        return out
-    return []
+        raise PipelineError(
+            f"Validator {validator_name} for field '{field_name}' must return a list of issues (got None)"
+        )
+    if not isinstance(raw, list):
+        raise PipelineError(
+            f"Validator {validator_name} for field '{field_name}' must return a list of issues"
+        )
+
+    validated: List[ColumnValidatorResult] = []
+    for idx, item in enumerate(raw):
+        try:
+            entry = ColumnValidatorResult.model_validate(item)
+        except ValidationError as exc:
+            raise PipelineError(
+                f"Validator {validator_name} for field '{field_name}' returned an invalid issue at position {idx}: {exc}"
+            ) from exc
+        if entry.row_index >= expected_len:
+            raise PipelineError(
+                f"Validator {validator_name} for field '{field_name}' produced out-of-range row_index {entry.row_index}"
+            )
+        validated.append(entry)
+
+    return validated
 
 
 def apply_validators(
@@ -40,6 +63,7 @@ def apply_validators(
 
     for col in mapped_columns:
         values = [row.get(col.field_name) for row in transformed_rows]
+        expected_len = len(values)
         validators = validators_by_field.get(col.field_name, [])
         for val in validators:
             ctx = ValidateContext(
@@ -53,37 +77,37 @@ def apply_validators(
             )
             try:
                 raw = val.fn(ctx)
-                normalized = _normalize_validation_output(raw)
+                validated = _validate_validation_output(
+                    field_name=col.field_name,
+                    validator_name=val.qualname,
+                    raw=raw,
+                    expected_len=expected_len,
+                )
             except Exception as exc:  # pragma: no cover
-                if logger:
-                    logger.exception(
-                        "Validator failed",
-                        extra={"data": {"field": col.field_name, "validator": val.qualname}},
-                    )
-                continue
+                raise PipelineError(
+                    f"Validator {val.qualname} failed for field '{col.field_name}'"
+                ) from exc
             if logger:
                 logger.event(
-                    "validator.result",
+                    "validation.result",
                     level=logging.DEBUG,
                     data={
                         "validator": val.qualname,
                         "field": col.field_name,
                         "column_index": col.source_index,
-                        "issues_found": len([res for res in normalized if not res.get("passed", True)]),
-                        "results_sample": normalized[:5],
+                        "issues_found": len(validated),
+                        "results_sample": [issue.model_dump() for issue in validated[:5]],
                     },
                 )
-            for res in normalized:
-                passed = res.get("passed", True)
-                if not passed:
-                    issue = {
-                        "field": col.field_name,
-                        "row_index": res.get("row_index"),
-                        "column_index": res.get("column_index", col.source_index),
-                        "message": res.get("message"),
-                        "value": res.get("value"),
-                    }
-                    issues.append(issue)
+            for res in validated:
+                issue = {
+                    "field": col.field_name,
+                    "row_index": res.row_index,
+                    "column_index": col.source_index,
+                    "message": res.message,
+                    "value": values[res.row_index],
+                }
+                issues.append(issue)
     return issues
 
 
