@@ -1,5 +1,5 @@
 import type { RunSummary } from "@schema";
-import type { AdeEvent } from "@shared/runs/types";
+import type { RunStreamEvent } from "@shared/runs/types";
 
 export function RunSummaryView({ summary }: { summary: RunSummary }) {
   const counts = summary.counts;
@@ -70,7 +70,7 @@ export function RunSummaryView({ summary }: { summary: RunSummary }) {
   );
 }
 
-export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
+export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
   if (!events.length) {
     return <p className="text-xs text-slate-500">No telemetry events captured.</p>;
   }
@@ -99,7 +99,7 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
       <ul className="space-y-1">
         {recentEvents.map((event) => (
           <li
-            key={`${event.created_at}-${event.type}`}
+            key={`${event.timestamp}-${event.event}`}
             className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800"
           >
             {(() => {
@@ -108,8 +108,8 @@ export function TelemetrySummary({ events }: { events: AdeEvent[] }) {
               return (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">{event.type}</span>
-                    <span className="text-[11px] text-slate-500">{formatTimestamp(event.created_at)}</span>
+                    <span className="font-semibold">{event.event}</span>
+                    <span className="text-[11px] text-slate-500">{formatTimestamp(event.timestamp)}</span>
                   </div>
                   <p className="text-[11px] text-slate-600">
                     {message ? message : `Level: ${levelFor(event)}`}
@@ -130,14 +130,14 @@ function formatTimestamp(timestamp: string | number | Date): string {
   return date.toLocaleString();
 }
 
-function levelFor(event: AdeEvent): string {
+function levelFor(event: RunStreamEvent): string {
   const payload = payloadOf(event);
   const streamLevel = (payload.stream as string | undefined) === "stderr" ? "warning" : undefined;
   return (payload.level as string | undefined) ?? streamLevel ?? "info";
 }
 
-function payloadOf(event: AdeEvent): Record<string, unknown> {
-  const payload = event.payload;
+function payloadOf(event: RunStreamEvent): Record<string, unknown> {
+  const payload = event.data;
   if (payload && typeof payload === "object") {
     return payload as Record<string, unknown>;
   }

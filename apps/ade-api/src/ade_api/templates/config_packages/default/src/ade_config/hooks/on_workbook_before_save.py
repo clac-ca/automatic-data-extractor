@@ -1,17 +1,13 @@
-"""Final hook before saving the output workbook."""
-
 from __future__ import annotations
 
-from logging import Logger
 from typing import Any
 
-from ade_engine.types.contexts import RunContext
+from ade_engine.registry import HookContext, HookName, hook
 
 
-def run(
-    *,
-    run_ctx: RunContext,
-    logger: Logger | None = None,
-    **_: Any,
-) -> None:
-    return None
+@hook(HookName.ON_WORKBOOK_BEFORE_SAVE)
+def on_workbook_before_save(ctx: HookContext) -> None:
+    """Example finalization hook."""
+
+    if ctx.logger:
+        ctx.logger.info("Config hook: workbook before save (%s)", ctx.run_metadata.get("output_file", ""))

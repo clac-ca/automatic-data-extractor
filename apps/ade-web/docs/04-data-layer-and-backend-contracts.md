@@ -538,7 +538,7 @@ Directory creation is idempotent: `PUT` returns `201` when the folder is first c
 
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
 * `GET  /api/v1/builds/{build_id}`
-* Build logs are observed via the run event stream (`/runs/{run_id}/events?stream=true`, `console.line` with `scope:"build"`).
+* Build logs are observed via the run event stream (`/runs/{run_id}/events/stream`, `console.line` with `data.scope:"build"`).
 
 The backend may rebuild environments automatically when:
 
@@ -698,81 +698,59 @@ Benefits:
 
 ## 6. Streaming events (SSE + NDJSON archive)
 
-Run streams emit `AdeEvent` envelopes (live over SSE; persisted as NDJSON).
-
-Treat these as **ordered event streams**, not snapshot queries.
+Run streams emit **EventRecord** dictionaries (live over SSE; persisted as NDJSON). Treat these as **ordered event streams**, not snapshot queries.
 
 ### 6.1 Event envelope
 
-All events share a common envelope; only the tail `payload` varies per `type`:
+All events share the same shape; only the tail `data` varies per `event`:
 
 ```jsonc
 {
-  "type": "console.line",                // e.g. run.start, build.complete, console.line
+  "event": "console.line",            // e.g. run.start, build.complete, console.line
   "event_id": "evt_01JK3J0YRKJ...",
-  "created_at": "2025-11-26T12:00:00Z",
-  "sequence": 42,                        // monotonic within one run/build stream
-
-  "workspace_id": "ws_1",
-  "configuration_id": "cfg_1",
-  "build_id": "b_1",
-  "run_id": "run_1",
-
-  "source": "api",
-
-  "payload": {                           // type-specific payload
+  "engine_run_id": "engine-run-uuid",
+  "timestamp": "2025-11-26T12:00:00Z",
+  "level": "info",
+  "message": "Installing engine…",
+  "data": {                           // event-specific payload
+    "jobId": "run_1",
+    "workspaceId": "ws_1",
+    "configurationId": "cfg_1",
+    "buildId": "b_1",
     "scope": "run",
-    "stream": "stdout",
-    "message": "Installing engine…"
+    "stream": "stdout"
   }
 }
 ```
 
-Additive changes (new event types, optional fields) are allowed. Breaking changes require a new schema or major version.
+- Context fields are merged into `data` (camelCase: `jobId`, `workspaceId`, `configurationId`, `buildId`).
+- `message` mirrors the human-readable portion of the event when present.
 
 ### 6.2 Event taxonomy & frontend usage
 
 Key families:
 
-* **Run lifecycle (`run.*`)**
-
-  * `run.queued`, `run.start`, `run.complete`
-  * Engine telemetry is forwarded: `engine.start`, `engine.phase.start` / `engine.phase.complete`, `engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`, `engine.complete`
-
-* **Table & validation**
-
-  * `engine.table.summary` – per-table metrics
-  * `engine.validation.issue` – fine-grained issues (optional)
-  * `engine.validation.summary` – aggregated counts
-
-* **Console**
-
-  * `console.line` – ordered stdout/stderr lines; `payload.scope` distinguishes build vs run
-
-* **Build lifecycle (`build.*`)**
-
-  * `build.queued`, `build.start`, `build.complete`
-  * `build.phase.start` / `build.phase.complete`
-  * Environment reuse events also surface as `build.complete`
-
-* **Errors**
-
-  * Stream-level `error` events for transport-level failures.
+* **Run lifecycle (`run.*`)** – `run.queued`, `run.start`, `run.complete`
+* **Build lifecycle (`build.*`)** – `build.queued`, `build.start`, `build.complete`, `build.phase.*`
+* **Engine telemetry (`engine.*`)** – `engine.phase.start/complete`, `engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`, `engine.run.started`, `engine.run.completed`
+* **Console** – `console.line` with `data.scope` (`run`/`build`), `stream` (`stdout`/`stderr`), and `level`
 
 UI rules:
 
-* Use `sequence` for ordering when transport may deliver events slightly out of order.
-* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/events/download`, legacy `/runs/{id}/logs`) for offline replay.
-* Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.complete`/`engine.run.summary`.
+* Use the SSE `id` counter for ordering and replay (`Last-Event-ID`).
+* Prefer the run stream (`/runs/{id}/events/stream`) for live consoles; use the NDJSON archive (`/runs/{id}/events/download`) for offline replay.
+* Derive progress incrementally from lifecycle and validation events; `run.complete` and `engine.run.summary` remain the terminal markers.
 
 ### 6.3 Streaming helper
 
 The browser-native `EventSource` API is used for live run streams:
 
 ```ts
-const es = new EventSource(`/api/v1/runs/${runId}/events?stream=true`);
+const es = new EventSource(`/api/v1/runs/${runId}/events/stream`);
 es.onmessage = (msg) => {
-  const event = JSON.parse(msg.data); // AdeEvent envelope with payload
+  const event = JSON.parse(msg.data); // EventRecord
+  const name = event.event;           // e.g. "console.line"
+  const payload = event.data ?? {};
   // ...apply to reducer / UI
 };
 es.onerror = () => es.close();
@@ -780,9 +758,10 @@ es.onerror = () => es.close();
 
 Characteristics:
 
+* SSE frames use the standard `id: <string>` field; the API assigns a monotonic counter per stream connection.
 * Close the stream on unmount or when the user hides the console.
-* Treat `run.complete` as terminal; callers can close the stream after it arrives (after receiving `engine.run.summary` if present).
-* For post-run analysis, `events.ndjson` is available via `/runs/{run_id}/events/download` (alias: `/runs/{run_id}/logs`).
+* Treat `run.complete` as terminal; callers can close the stream after it arrives (or after `engine.run.summary` if present).
+* For post-run analysis, `events.ndjson` is available via `/runs/{run_id}/events/download`.
 
 ### 6.4 Run & build streams in practice
 
@@ -790,20 +769,20 @@ Used by:
 
 * **Configuration Builder**
 
-  * `POST /api/v1/configurations/{configuration_id}/runs` then `GET /api/v1/runs/{run_id}/events?stream=true`
-    (emits `build.*`, `console.line` with `scope`, `run.*`, `run.table.*`, `run.validation.*`)
+  * `POST /api/v1/configurations/{configuration_id}/runs` then `GET /api/v1/runs/{run_id}/events/stream`
+    (emits `build.*`, `console.line` with `data.scope`, `run.*`, and `engine.*`; SSE `id` is server-assigned per stream)
 
 * **Run consoles / details**
 
-  * `GET /api/v1/runs/{run_id}/events?stream=true`
-    (replay then live-stream `AdeEvent` envelopes; use `after_sequence` to resume)
+  * `GET /api/v1/runs/{run_id}/events/stream`
+    (replay then live-stream EventRecords; use `Last-Event-ID` to resume)
 
 Because environments are usually rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` workflows and debugging. Normal workbench/test flows rely on the run stream.
 
 UI components (e.g. workbench console, run detail):
 
 * Append console lines from `console.line` events.
-* Update status/progress from lifecycle + validation events.
+* Update status/progress from lifecycle + validation events using `event` + `data` payloads.
 
 ### 6.5 Cancellation & error UX
 

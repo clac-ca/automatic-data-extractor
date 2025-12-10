@@ -1,43 +1,54 @@
-# Default ADE Config (Script API v3)
+# ADE Config Package Template (registry-based)
 
-This starter `ade_config` is intentionally small so you can see exactly how Script API v3 works. It maps three fields (`first_name`, `last_name`, `email`) and uses simple heuristics you can tweak immediately.
+This is a **template ADE config package**. It defines a *target schema* (fields) and the logic the ADE engine uses to:
 
-## What’s inside
+1. **Detect** tables + header rows (Row Detectors)
+2. **Map** spreadsheet columns to canonical fields (Column Detectors)
+3. **Normalize** values (Column Transforms)
+4. **Report** validation issues (Column Validators)
+5. **Customize** the run (Hooks)
 
+## The big idea
+
+- You add Python files wherever you want inside `src/ade_config/`.
+- The ADE engine **imports all modules** in this package.
+- Decorators register your detectors/transforms/validators/hooks automatically.
+- No manifest lists, no manual wiring, no "switchboard" files.
+
+## Folder layout (suggested)
+
+```text
+src/ade_config/
+  columns/                 # one file per canonical field (recommended)
+  row_detectors/           # header/data row voting
+  hooks/                   # lifecycle hooks
+  utils/                   # shared helpers
 ```
-ade_config/
-  manifest.toml                # script_api_version: 3
-  row_detectors/               # decide header/data rows
-    header.py
-    data.py
-  column_detectors/            # score columns for each field
-    first_name.py
-    last_name.py
-    email.py
-  hooks/                       # optional lifecycle customization
-    on_workbook_start.py
-    on_sheet_start.py
-    on_table_detected.py
-    on_table_mapped.py
-    on_table_written.py
-    on_workbook_before_save.py
-```
 
-All script functions are keyword-only and accept `**_` for future args. ADE always passes a `logger` (standard `logging.Logger`) and an `event_emitter` (structured run events via `event_emitter.custom("type", **payload)`).
+> You can restructure freely. The registry does the discovery.
 
-## How scoring works (readable heuristics)
+## Engine settings (optional)
 
-- `first_name.py`: header keywords (“first”/“given”) return `{"first_name": 1.0, "last_name": -0.5}`; short single-token values matching common first names push the score up, while full names push it down.
-- `last_name.py`: header keywords (“last”/“surname”) return `{"last_name": 1.0, "first_name": -0.5}`; tidy single-token values or common surnames boost the score, while emails/full names reduce it.
-- `email.py`: headers or values that clearly look like emails return a strong positive for `email` and a negative nudge for the name fields so you can see cross-field intent.
+Engine runtime settings (writer options, thresholds, etc.) can be set via:
 
-Detectors return either a float or a direct dict of deltas (no `"scores"` wrapper) to keep examples first-class and obvious.
+- `ade_engine.toml` (recommended for config packages)
+- `.env` (works too)
+- environment variables
 
-## Quick start to customize
+This template includes an example `ade_engine.toml`.
 
-1. Edit `manifest.toml` to list your fields and point to matching detector modules.
-2. Open the detectors in `column_detectors/` and adjust the simple rules to match your headers/values.
-3. Tweak row detectors (`row_detectors/`) if your headers/data appear in different patterns.
-4. (Optional) Use hooks to log extra info, patch mappings, or style the workbook after tables are written.
+## Adding a new column (canonical field)
 
-For a deeper walkthrough of Script API v3, see the docs in `docs/` next to this file.***
+1. Copy an existing file in `columns/` (ex: `email.py`)
+2. Update the `FIELD = field(...)` metadata
+3. Add one or more `@column_detector(...)` functions
+4. Optionally add `@column_transform(...)` / `@column_validator(...)`
+
+That’s it.
+
+## Reordering output columns
+
+The engine **preserves input column order** for mapped columns and (optionally) appends unmapped passthrough columns on the right.
+If you need a custom order, do it in a hook (see `hooks/on_table_written.py`).
+
+---

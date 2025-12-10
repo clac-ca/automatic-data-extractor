@@ -1,19 +1,23 @@
-"""Optional mapping patch hook (LLM/manual overrides)."""
-
 from __future__ import annotations
 
-from logging import Logger
 from typing import Any
 
-from ade_engine.types.contexts import RunContext, TableContext
-from ade_engine.types.mapping import ColumnMappingPatch
+from ade_engine.registry import HookContext, HookName, hook
 
 
-def run(
-    *,
-    table_ctx: TableContext,
-    run_ctx: RunContext,
-    logger: Logger | None = None,
-    **_: Any,
-) -> ColumnMappingPatch | None:
+@hook(HookName.ON_TABLE_MAPPED)
+def on_table_mapped(ctx: HookContext):
+    """Optional mapping patch hook.
+
+    Return a ColumnMappingPatch (or None). This is the place to:
+      - call an LLM with the extracted headers
+      - propose a patch for unmapped/incorrect fields
+      - rename/drop passthrough columns
+
+    This template returns None by default.
+    """
+
+    if ctx.logger and ctx.table:
+        mapped_fields = [col.field_name for col in getattr(ctx.table, "mapped_columns", [])]
+        ctx.logger.info("Config hook: table mapped (fields=%s)", mapped_fields)
     return None

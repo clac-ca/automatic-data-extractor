@@ -93,30 +93,22 @@ function isTerminal(status: RunStatus) {
 }
 
 function mergeEvents(prevEvents: RunStreamEvent[], nextEvents: RunStreamEvent[]) {
-  const seen = new Set<number>();
-  const merged: RunStreamEvent[] = [];
-  const push = (event: RunStreamEvent) => {
-    const seq = typeof event.sequence === "number" ? event.sequence : undefined;
-    if (seq != null) {
-      if (seen.has(seq)) return;
-      seen.add(seq);
-    }
+  const seenIds = new Set(
+    prevEvents.map((event) => (typeof event.event_id === "string" ? event.event_id : null)).filter(Boolean),
+  );
+  const merged = [...prevEvents];
+  for (const event of nextEvents) {
+    const id = typeof event.event_id === "string" ? event.event_id : null;
+    if (id && seenIds.has(id)) continue;
+    if (id) seenIds.add(id);
     merged.push(event);
-  };
-  // Keep previous order, then new events.
-  prevEvents.forEach((event) => push(event));
-  nextEvents.forEach((event) => push(event));
-  merged.sort((a, b) => {
-    const seqA = typeof a.sequence === "number" ? a.sequence : 0;
-    const seqB = typeof b.sequence === "number" ? b.sequence : 0;
-    return seqA - seqB;
-  });
+  }
   return merged;
 }
 
 function reduceStatus(current: RunStatus, event: RunStreamEvent): RunStatus {
-  const type = event?.type ?? "";
-  const payload = (event?.payload ?? {}) as Record<string, unknown>;
+  const type = event?.event ?? "";
+  const payload = (event?.data ?? {}) as Record<string, unknown>;
   switch (type) {
     case "run.queued":
       return "queued";
@@ -144,7 +136,7 @@ function reduceStatus(current: RunStatus, event: RunStreamEvent): RunStatus {
 }
 
 function deriveMode(event: RunStreamEvent, prev?: RunJobMode) {
-  const payload = (event?.payload ?? {}) as Record<string, unknown>;
+  const payload = (event?.data ?? {}) as Record<string, unknown>;
   const mode = payload.mode;
   if (mode === "validation" || mode === "extraction") {
     return mode;
@@ -165,10 +157,7 @@ function handleEvents(runId: string, events: RunStreamEvent[]) {
       } satisfies RunJobState);
 
     const mergedEvents = mergeEvents(base.events, events);
-    const lastSequence = mergedEvents.reduce((max, event) => {
-      const seq = typeof event.sequence === "number" ? event.sequence : max;
-      return seq > max ? seq : max;
-    }, base.lastSequence);
+    const lastSequence = mergedEvents.length;
 
     const nextStatus = events.reduce((status, event) => reduceStatus(status, event), base.status);
     const mode = events.reduce((current, event) => deriveMode(event, current), base.mode);

@@ -51,6 +51,23 @@ class ConfigTemplatesService:
         return templates
 
     def _read_manifest(self, template_dir: Path) -> tuple[str, str | None, str | None]:
+        # Prefer pyproject metadata; fall back to legacy manifest if present.
+        pyproject = template_dir / "pyproject.toml"
+        if pyproject.exists():
+            try:
+                payload = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+                project = payload.get("project") or {}
+                name = str(project.get("name") or "").strip()
+                description = (project.get("description") or "").strip() or None
+                version = (project.get("version") or "").strip() or None
+                return name or template_dir.name, description, version
+            except Exception:
+                logger.warning(
+                    "config_templates.pyproject_read_failed",
+                    extra={"path": str(pyproject)},
+                    exc_info=True,
+                )
+
         manifest_candidates = [
             template_dir / "src" / "ade_config" / "manifest.toml",
             template_dir / "manifest.toml",

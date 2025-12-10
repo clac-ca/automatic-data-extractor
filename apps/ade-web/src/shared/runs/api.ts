@@ -1,7 +1,7 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
 import type { RunSummary, components, paths } from "@schema";
-import type { AdeEvent as RunStreamEvent } from "./types";
+import type { RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
@@ -103,7 +103,7 @@ export async function* streamRunEvents(
           continue;
         }
         yield event;
-        if (event.type === "run.complete") {
+        if (event.event === "run.complete") {
           shouldClose = true;
           break;
         }
@@ -141,21 +141,53 @@ export async function* streamRunEvents(
 
 function parseSseEvent(rawEvent: string): RunStreamEvent | null {
   const dataLines: string[] = [];
+  let sseId: string | null = null;
+  let sseEvent: string | null = null;
+
   for (const line of rawEvent.split(/\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+      continue;
+    }
+    if (line.startsWith("id:")) {
+      sseId = line.slice(3).trim();
+      continue;
+    }
+    if (line.startsWith("event:")) {
+      sseEvent = line.slice(6).trim();
+      continue;
     }
   }
+
   if (!dataLines.length) {
     return null;
   }
+
   const payload = dataLines.join("\n");
   if (!payload.trim()) {
     return null;
   }
+
   try {
-    return JSON.parse(payload) as RunStreamEvent;
+    const parsed = JSON.parse(payload) as RunStreamEvent;
+
+    // Fill in missing event/type from SSE event field if not present in payload.
+    if (sseEvent && !(parsed as Record<string, unknown>).event && !(parsed as Record<string, unknown>).type) {
+      (parsed as Record<string, unknown>).event = sseEvent;
+    }
+
+    // Attach sequence/id if absent and SSE id is numeric or non-empty.
+    if (sseId && (parsed as Record<string, unknown>).sequence === undefined) {
+      const numeric = Number(sseId);
+      if (Number.isFinite(numeric)) {
+        (parsed as Record<string, unknown>).sequence = numeric;
+      } else {
+        (parsed as Record<string, unknown>).sse_id = sseId;
+      }
+    }
+
+    return parsed;
   } catch (error) {
     console.warn("Skipping malformed run event", error, payload);
     return null;

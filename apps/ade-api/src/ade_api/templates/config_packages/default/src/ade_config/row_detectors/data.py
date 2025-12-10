@@ -1,134 +1,36 @@
-"""
-Simple, general-purpose data-row heuristics.
-
-Each `detect_*` function returns a score for the "data" label. The engine
-sums scores across detectors to decide which rows are data.
-"""
-
 from __future__ import annotations
 
-import re
 from typing import Any
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
-PHONE_RE = re.compile(r"^\s*(\+?\d[\d\-\s().]{7,}\d)\s*$")  # loose NA/E.164-ish
-AGG_WORDS = {"total", "subtotal", "grand total", "summary", "average", "avg"}
+from ade_engine.registry import RowDetectorContext, RowKind, row_detector
 
 
-# Quick shape of inputs (Script API v3):
-#   run.run_id → "3f2b..."         run.paths.input_file → Path("input.xlsx")
-#   row_index → 6  (1-based)
-#   row_values → ["Alice", "Smith", "alice@example.com"]
-#   input_file_name → "input.xlsx"
-#   manifest.columns.order → ["first_name", "last_name", "email"]
-#   state → dict shared across detectors/transforms (cache and reuse hints)
-#   logger/event_emitter → standard logger + optional config telemetry
+@row_detector(row_kind=RowKind.DATA)
+def detect_data_row_by_density(ctx: RowDetectorContext) -> dict[str, float]:
+    """Vote for a row being a data row.
 
-def detect_mixed_text_and_numbers(
-    *,
-    run: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
-    row_index: int,
-    row_values: list[Any],
-    manifest: Any | None = None,
-    input_file_name: str | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,
-    **_: Any,
-) -> float | dict[str, float]:
+    Heuristic:
+      - data rows have more non-empty cells
+      - data rows often contain numerics/dates mixed in
     """
-    Data rows often contain both text and numbers.
+    values = ctx.row_values or []
+    if not values:
+        return {"data": 0.0}
 
-    Args:
-        run: metadata for the current run (IDs, workspace, sheet info)
-        state: shared dict persisted across detectors/transforms for caching
-        row_index: 1-based stream index for this row
-        row_values: raw values from the spreadsheet row
-        logger: run-scoped logger for diagnostics
-    """
-    non_blank = [v for v in row_values if v not in (None, "")]
-    if not non_blank:
-        return 0.0
+    non_empty = [v for v in values if v not in (None, "") and not (isinstance(v, str) and not v.strip())]
+    density = len(non_empty) / max(len(values), 1)
 
-    def looks_number_like(x: Any) -> bool:
-        if isinstance(x, (int, float)):
-            return True
-        if isinstance(x, str):
-            s = x.strip()
-            if not s:
-                return False
-            s = s.replace(",", "").replace("$", "").replace("£", "").replace("€", "")
-            if s.startswith("(") and s.endswith(")"):
-                s = "-" + s[1:-1]
-            s = s.replace(".", "", 1).lstrip("-")
-            return s.isdigit()
-        return False
+    numericish = 0
+    for v in non_empty:
+        if isinstance(v, (int, float)):
+            numericish += 1
+        elif isinstance(v, str):
+            s = v.strip()
+            # crude: if it contains a digit, count as numeric-ish
+            if any(ch.isdigit() for ch in s):
+                numericish += 1
 
-    has_text = any(isinstance(v, str) for v in non_blank)
-    has_number = any(looks_number_like(v) for v in non_blank)
+    num_ratio = numericish / max(len(non_empty), 1)
+    score = min(1.0, density * 0.5 + num_ratio * 0.5)
 
-    if has_text and has_number:
-        return 0.40
-    if has_number:
-        return 0.20
-    if has_text:
-        return 0.10
-    return 0.0
-
-
-def detect_value_patterns(
-    *,
-    run: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
-    row_index: int,
-    row_values: list[Any],
-    manifest: Any | None = None,
-    input_file_name: str | None = None,
-    logger: Any | None = None,
-    event_emitter: Any | None = None,
-    **_: Any,
-) -> float | dict[str, float]:
-    """
-    Look for concrete value shapes common in data rows:
-      - email addresses
-      - phone numbers
-      - valid 9-digit SIN (Luhn)
-
-    Args:
-        run: metadata for the current run (IDs, workspace, sheet info)
-        state: shared dict persisted across detectors/transforms for caching
-        row_index: 1-based stream index for this row
-        row_values: raw values from the spreadsheet row
-        logger: run-scoped logger for diagnostics
-    """
-    non_blank = [v for v in row_values if v not in (None, "")]
-    if not non_blank:
-        return 0.0
-
-    has_email = any(isinstance(v, str) and EMAIL_RE.match(v.strip()) for v in non_blank)
-    has_phone = any(isinstance(v, str) and PHONE_RE.match(v) for v in non_blank)
-
-    def looks_valid_sin(x: Any) -> bool:
-        s = "".join(ch for ch in str(x) if ch.isdigit())
-        if len(s) != 9 or len(set(s)) == 1:
-            return False
-        total = 0
-        for i, ch in enumerate(reversed(s), start=1):
-            d = int(ch)
-            if i % 2 == 0:
-                d *= 2
-                if d > 9:
-                    d -= 9
-            total += d
-        return total % 10 == 0
-
-    has_sin = any(looks_valid_sin(v) for v in non_blank)
-
-    hits = sum([has_email, has_phone, has_sin])
-    if hits == 0:
-        return 0.0
-    if hits == 1:
-        return 0.35
-    if hits == 2:
-        return 0.45
-    return 0.55
+    return {"data": score, "header": -score * 0.2}

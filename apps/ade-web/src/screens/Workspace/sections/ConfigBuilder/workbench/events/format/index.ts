@@ -1,5 +1,5 @@
-import { eventTimestamp, isAdeEvent } from "@shared/runs/types";
-import type { AdeEvent as RunStreamEvent } from "@shared/runs/types";
+import { eventName, eventTimestamp, isEventRecord } from "@shared/runs/types";
+import type { RunStreamEvent } from "@shared/runs/types";
 
 import type { WorkbenchConsoleLine } from "../../types";
 import {
@@ -13,8 +13,16 @@ import {
   timestampLabel,
 } from "./common";
 
-type EventFormatter = (event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string) => WorkbenchConsoleLine;
-type PrefixFormatter = (type: string, payload: Record<string, unknown>, timestamp: string) => WorkbenchConsoleLine;
+type EventFormatter = (
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+) => WorkbenchConsoleLine;
+type PrefixFormatter = (
+  type: string,
+  payload: Record<string, unknown>,
+  timestamp: string,
+) => WorkbenchConsoleLine;
 type PrefixHandler = { prefix: string; formatter: PrefixFormatter };
 
 const BUILD_EVENT_HANDLERS: Record<string, EventFormatter> = {
@@ -29,19 +37,26 @@ const BUILD_EVENT_HANDLERS: Record<string, EventFormatter> = {
 
 const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "run.queued": (event, payload, timestamp) => formatRunQueued(event, payload, timestamp),
-  "run.waiting_for_build": (_event, payload, timestamp) => formatRunWaitingForBuild(payload, timestamp),
-  "run.start": (_event, payload, timestamp) => formatRunStarted(payload, timestamp),
-  "engine.start": (_event, payload, timestamp) => formatRunStarted(payload, timestamp),
-  "engine.phase.start": (_event, payload, timestamp) => formatRunPhaseStarted(payload, timestamp),
-  "engine.phase.complete": (_event, payload, timestamp) => formatRunPhaseCompleted(payload, timestamp),
-  "engine.table.summary": (_event, payload, timestamp) => formatRunTableSummary(payload, timestamp),
-  "engine.detector.column.score": (_event, payload, timestamp) => formatColumnDetectorScore(payload, timestamp),
-  "engine.detector.row.score": (_event, payload, timestamp) => formatRowDetectorScore(payload, timestamp),
-  "engine.file.summary": (_event, payload, timestamp) => formatFileSummary(payload, timestamp),
-  "engine.sheet.summary": (_event, payload, timestamp) => formatSheetSummary(payload, timestamp),
-  "engine.validation.issue": (_event, payload, timestamp) => formatValidationIssue(payload, timestamp),
-  "engine.validation.summary": (_event, payload, timestamp) => formatValidationSummary(payload, timestamp),
-  "run.error": (_event, payload, timestamp) => formatRunError(payload, timestamp),
+  "run.waiting_for_build": (event, payload, timestamp) => formatRunWaitingForBuild(event, payload, timestamp),
+  "run.start": (event, payload, timestamp) => formatRunStarted(event, payload, timestamp),
+  "engine.start": (event, payload, timestamp) => formatRunStarted(event, payload, timestamp),
+  "engine.phase.start": (event, payload, timestamp) => formatRunPhaseStarted(event, payload, timestamp),
+  "engine.phase.complete": (event, payload, timestamp) => formatRunPhaseCompleted(event, payload, timestamp),
+  "engine.table.summary": (event, payload, timestamp) => formatRunTableSummary(event, payload, timestamp),
+  "engine.detector.column.score": (event, payload, timestamp) => formatColumnDetectorScore(event, payload, timestamp),
+  "engine.detector.row.score": (event, payload, timestamp) => formatRowDetectorScore(event, payload, timestamp),
+  "engine.file.summary": (event, payload, timestamp) => formatFileSummary(event, payload, timestamp),
+  "engine.sheet.summary": (event, payload, timestamp) => formatSheetSummary(event, payload, timestamp),
+  "engine.validation.issue": (event, payload, timestamp) => formatValidationIssue(event, payload, timestamp),
+  "engine.validation.summary": (event, payload, timestamp) => formatValidationSummary(event, payload, timestamp),
+  "engine.row_detector.result": (event, payload, timestamp) => formatEngineRowDetectorResult(event, payload, timestamp),
+  "engine.row_classification": (event, payload, timestamp) => formatEngineRowClassification(event, payload, timestamp),
+  "engine.column_detector.result": (event, payload, timestamp) => formatEngineColumnDetectorResult(event, payload, timestamp),
+  "engine.column_classification": (event, payload, timestamp) => formatEngineColumnClassification(event, payload, timestamp),
+  "engine.config.loaded": (event, payload, timestamp) => formatEngineConfigLoaded(event, payload, timestamp),
+  "engine.log": (event, payload, timestamp) => formatEngineLog(event, payload, timestamp),
+  "engine.table.written": (event, payload, timestamp) => formatEngineTableWritten(event, payload, timestamp),
+  "run.error": (event, payload, timestamp) => formatRunError(event, payload, timestamp),
   "run.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.run.summary": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
@@ -63,12 +78,12 @@ export { formatConsoleTimestamp } from "./common";
 // --------------------------------------------------------------------------- //
 
 export function formatBuildEvent(event: RunStreamEvent): WorkbenchConsoleLine {
-  if (!isAdeEvent(event)) {
+  if (!isEventRecord(event)) {
     return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
   }
   const payload = payloadOf(event);
   const ts = timestampLabel(event);
-  const type = event.type;
+  const type = eventName(event);
 
   if (type === "console.line") {
     return withRaw(event, formatConsole(event, payload, ts, "build"));
@@ -200,12 +215,12 @@ function formatBuildPhaseCompleted(payload: Record<string, unknown>, timestamp: 
 // --------------------------------------------------------------------------- //
 
 export function formatRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
-  if (!isAdeEvent(event)) {
+  if (!isEventRecord(event)) {
     return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: "", origin: "raw" });
   }
   const payload = payloadOf(event);
   const ts = formatConsoleTimestamp(eventTimestamp(event));
-  const type = event.type;
+  const type = eventName(event);
 
   if (isConsoleLine(event)) {
     return withRaw(
@@ -233,7 +248,10 @@ export function formatRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
 
 function formatRunQueued(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const mode = (payload.mode as string | undefined) ?? undefined;
-  const runId = event.run_id ?? "";
+  const runId =
+    (payload.jobId as string | undefined) ??
+    (payload.run_id as string | undefined) ??
+    "";
   const suffix = mode ? ` (${mode})` : "";
   return {
     level: "info",
@@ -243,7 +261,7 @@ function formatRunQueued(event: RunStreamEvent, payload: Record<string, unknown>
   };
 }
 
-function formatRunWaitingForBuild(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunWaitingForBuild(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const reason = (payload.reason as string | undefined) ?? undefined;
   const buildId = (payload.build_id as string | undefined) ?? undefined;
   const reasonPart = reason ? ` (${reason})` : "";
@@ -256,7 +274,7 @@ function formatRunWaitingForBuild(payload: Record<string, unknown>, timestamp: s
   };
 }
 
-function formatRunStarted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunStarted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const mode = (payload.mode as string | undefined) ?? undefined;
   const env = (payload.env as { reused?: boolean; reason?: string } | undefined) ?? undefined;
   const envNote = env?.reused ? " (reused environment)" : env?.reason ? ` (${env.reason})` : "";
@@ -268,7 +286,7 @@ function formatRunStarted(payload: Record<string, unknown>, timestamp: string): 
   };
 }
 
-function formatRunPhaseStarted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunPhaseStarted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "progress";
   const message = (payload.message as string | undefined) ?? `Phase: ${phase}`;
   const level = normalizeLevel((payload.level as string | undefined) ?? "info");
@@ -280,7 +298,7 @@ function formatRunPhaseStarted(payload: Record<string, unknown>, timestamp: stri
   };
 }
 
-function formatRunPhaseCompleted(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunPhaseCompleted(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const phase = (payload.phase as string | undefined) ?? "phase";
   const status = (payload.status as string | undefined) ?? "completed";
   const duration = formatDurationMs(payload.duration_ms);
@@ -297,14 +315,14 @@ function formatRunPhaseCompleted(payload: Record<string, unknown>, timestamp: st
   };
 }
 
-function formatRunTableSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatRunTableSummary(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   if (isAdeSummary(payload, "table")) {
     return formatTableSummary(payload, timestamp);
   }
   return formatLegacyTableSummary(payload, timestamp);
 }
 
-function formatValidationIssue(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatValidationIssue(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const sev = (payload.severity as string | undefined) ?? "info";
   return {
     level: sev === "error" ? "error" : sev === "warning" ? "warning" : "info",
@@ -314,7 +332,7 @@ function formatValidationIssue(payload: Record<string, unknown>, timestamp: stri
   };
 }
 
-function formatValidationSummary(payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+function formatValidationSummary(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const total = (payload.issues_total as number | undefined) ?? 0;
   const maxSeverity = (payload.max_severity as string | undefined) ?? undefined;
   const level: WorkbenchConsoleLine["level"] =
@@ -385,7 +403,10 @@ function formatRunCompletion(event: RunStreamEvent, payload: Record<string, unkn
   const base = failureMessage || summaryMessage || `Run ${status}`;
   const exitPart = typeof exit === "number" ? ` (exit code ${exit})` : "";
   const headline = `${base}${exitPart}${durationText ? ` in ${durationText}` : ""}.`;
-  const runId = event.run_id ?? null;
+  const runId =
+    (payload.jobId as string | undefined) ??
+    (payload.run_id as string | undefined) ??
+    null;
   const parsedOutput = outputPath
     ? {
         path: outputPath,
@@ -405,6 +426,103 @@ function formatRunCompletion(event: RunStreamEvent, payload: Record<string, unkn
     timestamp,
     origin: "run",
   };
+}
+
+function formatEngineConfigLoaded(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const pkg = (payload.config_package as string | undefined) ?? "config";
+  const fields = Array.isArray(payload.fields) ? payload.fields.length : undefined;
+  const message = fields !== undefined ? `Config loaded (${pkg}, fields=${fields})` : `Config loaded (${pkg})`;
+  return { level: "info", message, timestamp, origin: "run", raw: payload };
+}
+
+function formatEngineLog(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const level = normalizeLevel((payload.level as string | undefined) ?? (event.level as string | undefined) ?? "info");
+  const msgFromPayload = typeof payload.message === "string" ? payload.message.trim() : "";
+  const msgFromEvent = typeof event.message === "string" ? event.message.trim() : "";
+  const message = msgFromPayload || msgFromEvent || "Engine log";
+  return { level, message, timestamp, origin: "run", raw: event };
+}
+
+function formatEngineTableWritten(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
+  const tableIndex = typeof payload.table_index === "number" ? payload.table_index : null;
+  const output = (payload.output_range as string | undefined) ?? undefined;
+  const message = `Table${tableIndex !== null ? ` #${tableIndex}` : ""} written on ${sheet}${output ? ` (${output})` : ""}`;
+  return { level: "info", message, timestamp, origin: "run", raw: payload };
+}
+
+function formatEngineRowDetectorResult(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
+  const rowIndex = payload.row_index as number | undefined;
+  const detector = (payload.detector as Record<string, unknown> | undefined) ?? {};
+  const name = (detector.name as string | undefined) ?? "detector";
+  const scores = formatScores(detector.scores as Record<string, unknown> | undefined);
+  const message = scores
+    ? `Row ${rowIndex ?? "?"} detector ${name} on ${sheet} (${scores})`
+    : `Row ${rowIndex ?? "?"} detector ${name} on ${sheet}`;
+  return { level, message, timestamp, origin: "run" };
+}
+
+function formatEngineRowClassification(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
+  const rowIndex = payload.row_index as number | undefined;
+  const classification = (payload.classification as Record<string, unknown> | undefined) ?? {};
+  const kind = (classification.row_kind as string | undefined) ?? "unknown";
+  const score = typeof classification.score === "number" ? classification.score : undefined;
+  const message = `Row ${rowIndex ?? "?"} → ${kind}${score !== undefined ? ` (${score.toFixed(3)})` : ""} on ${sheet}`;
+  return { level, message, timestamp, origin: "run" };
+}
+
+function formatEngineColumnDetectorResult(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
+  const columnIndex = payload.column_index as number | undefined;
+  const detector = (payload.detector as Record<string, unknown> | undefined) ?? {};
+  const name = (detector.name as string | undefined) ?? "detector";
+  const scores = formatScores(detector.scores as Record<string, unknown> | undefined);
+  const message = scores
+    ? `Column ${columnIndex ?? "?"} detector ${name} on ${sheet} (${scores})`
+    : `Column ${columnIndex ?? "?"} detector ${name} on ${sheet}`;
+  return { level, message, timestamp, origin: "run" };
+}
+
+function formatEngineColumnClassification(
+  event: RunStreamEvent,
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const level = normalizeLevel(event.level ?? "info");
+  const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
+  const columnIndex = payload.column_index as number | undefined;
+  const classification = (payload.classification as Record<string, unknown> | undefined) ?? {};
+  const field = (classification.field as string | undefined) ?? "unknown";
+  const score = typeof classification.score === "number" ? classification.score : undefined;
+  const message = `Column ${columnIndex ?? "?"} classified as ${field}${score !== undefined ? ` (score=${score.toFixed(3)})` : ""} on ${sheet}`;
+  return { level, message, timestamp, origin: "run" };
+}
+
+function formatScores(scores?: Record<string, unknown>): string | null {
+  if (!scores || typeof scores !== "object") return null;
+  const entries = Object.entries(scores).filter(([, value]) => typeof value === "number");
+  if (!entries.length) return null;
+  return entries
+    .slice(0, 3)
+    .map(([key, value]) => `${key}=${(value as number).toFixed(3)}`)
+    .join(", ");
 }
 
 function withRaw(event: RunStreamEvent, line: WorkbenchConsoleLine): WorkbenchConsoleLine {
