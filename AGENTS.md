@@ -76,54 +76,31 @@ Options:
       --help                     Show this message and exit.
 ```
 
-## Engine CLI smoke tests (revamped)
+## Engine CLI quick runs
 
-`apps/ade-engine/src/ade_engine/cli/app.py` is a Typer CLI invoked as `python -m ade_engine ...`. It resolves inputs, drops most implicit defaults, and writes artifacts into explicit `--output-dir`/`--logs-dir` roots (defaults: `./output`, `./logs`).
-
-- Inputs: combine `--input` (repeatable) and `--input-dir` with `--include/--exclude` (defaults to `*.xlsx, *.csv` when not provided).
-- Outputs: always land in `<output_dir>/<input_stem>_normalized.xlsx`.
-- Logs: `--log-format text|ndjson` (default text). Log files are written under `--logs-dir` as `<input_stem>_engine.log` (text) or `<input_stem>_engine_events.ndjson` (ndjson). A one-line summary always prints in text mode.
-- Metadata: `--meta KEY=VALUE` attaches to every emitted event.
-
-### Quick text-mode run (good sanity check)
-
-Use the template config package shipped in the repo and a sample input:
+Invoke via `python -m ade_engine run` (defaults: `--output-dir ./output`, `--logs-dir ./logs`; outputs named `<output_dir>/<input_stem>_normalized.xlsx`; logs named `<input_stem>_engine.{log|ndjson}`).
 
 ```bash
+# Single file (text logs)
 python -m ade_engine run \
   --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
   --config-package data/templates/config_packages/default \
-  --output-dir data/samples-output \
-  --logs-dir data/samples-output
-```
+  --output-dir ./output --logs-dir ./logs
 
-Expected: output at `data/samples-output/CaressantWRH_251130__ORIGINAL_normalized.xlsx`, logs at `data/samples-output/CaressantWRH_251130__ORIGINAL_engine.log`, and a one-line summary on stdout.
-
-### NDJSON stream run (for API-style validation)
-
-```bash
+# Single file (NDJSON + debug)
 python -m ade_engine run \
   --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
   --config-package data/templates/config_packages/default \
-  --log-format ndjson \
-  --output-dir /tmp/ade-engine/ndjson-smoke \
-  --logs-dir /tmp/ade-engine/ndjson-smoke
-```
+  --log-format ndjson --debug \
+  --output-dir ./output --logs-dir ./logs
 
-Expected: NDJSON events in `/tmp/ade-engine/ndjson-smoke/CaressantWRH_251130__ORIGINAL_engine_events.ndjson` with output at `/tmp/ade-engine/ndjson-smoke/CaressantWRH_251130__ORIGINAL_normalized.xlsx`.
-
-### Batch multiple inputs
-
-```bash
+# Batch directory
 python -m ade_engine run \
   --input-dir data/samples \
-  --config-package data/templates/config_packages/default \
   --include "*.xlsx" --exclude "detector-pass*" \
-  --output-dir /tmp/ade-engine/batch \
-  --logs-dir /tmp/ade-engine/batch
+  --config-package data/templates/config_packages/default \
+  --output-dir ./output --logs-dir ./logs
 ```
-
-Outputs/logs use the flat `<output_dir>/<input_stem>_normalized.xlsx` and matching log names; choose unique output/log roots when processing many files.
 
 ## Bundle examples
 

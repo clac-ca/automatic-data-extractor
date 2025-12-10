@@ -14,7 +14,31 @@ def _context_values(ctx: Any) -> dict[str, Any]:
 
 
 def call_extension(fn: Callable[..., Any], ctx: Any, *, label: str) -> Any:
-    """Invoke an extension function using keyword/positional args sourced from context fields."""
+    """
+    Invoke an extension by mapping context fields to the function’s parameters.
+
+    Instead of calling something opaque like:
+        detect_email_header(ctx)
+
+    We expand the context and call it the way config authors expect:
+
+        detect_email_header(
+            column_index=3,
+            header="Email",
+            values=["a@x.com", "b@y.com", None],
+            values_sample=["a@x.com", "b@y.com"],
+            sheet_name="Sheet1",
+            metadata={...},
+            state={...},
+            input_file_name="input.xlsx",
+            logger=...
+        )
+
+    Because:
+        • Config authors should NOT need to understand the full internal ctx object.
+        • Config code should be explicit about what data it uses.
+
+    """
 
     sig = inspect.signature(fn)
     params = list(sig.parameters.values())
