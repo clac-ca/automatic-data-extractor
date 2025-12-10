@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.main import collect_input_files
+from ade_engine.cli.common import collect_input_files
 from ade_engine.settings import Settings
 
 
@@ -19,7 +19,13 @@ def test_collect_input_files_includes_supported_nested_inputs(tmp_path):
     supported.write_text("data")
     (nested / "ignore.txt").write_text("skip")
 
-    collected = collect_input_files([], input_dir, include=[], exclude=[], settings=Settings())
+    collected = collect_input_files(
+        input_dir=input_dir,
+        include=[],
+        exclude=[],
+        explicit_inputs=[],
+        settings=Settings(),
+    )
 
     assert collected == [supported]
 
@@ -35,11 +41,32 @@ def test_collect_input_files_allows_user_include_globs(tmp_path):
     notes.write_text("extra")
 
     collected = collect_input_files(
-        [],
-        input_dir,
-        include=["reports/**/*.txt"],
+        input_dir=input_dir,
+        include=["*.xlsm"],
         exclude=[],
+        explicit_inputs=[],
         settings=Settings(),
     )
 
-    assert set(collected) == {excel, notes}
+    assert collected == [excel]
+
+
+def test_collect_input_files_excludes_recursively(tmp_path):
+    input_dir = tmp_path / "inputs"
+    nested = input_dir / "nested"
+    nested.mkdir(parents=True)
+
+    keep = nested / "keep.xlsx"
+    keep.write_text("data")
+    drop = nested / "data_raw.csv"
+    drop.write_text("skip")
+
+    collected = collect_input_files(
+        input_dir=input_dir,
+        include=[],
+        exclude=["*_raw.*"],
+        explicit_inputs=[],
+        settings=Settings(),
+    )
+
+    assert collected == [keep]
