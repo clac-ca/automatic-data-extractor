@@ -14,7 +14,6 @@ class PluginInvoker:
     runtime: ConfigRuntime
     run: RunContext
     logger: Any
-    events: Any
 
     def base_kwargs(self) -> dict[str, Any]:
         input_file_name = self.run.source_path.name
@@ -24,9 +23,6 @@ class PluginInvoker:
             "state": self.run.state,
             "manifest": self.runtime.manifest,
             "logger": self.logger,
-            "events": self.events,
-            # Backwards compatibility for existing config callables
-            "event_emitter": self.events,
             "input_file_name": input_file_name,
         }
 

@@ -19,7 +19,7 @@ from typer import BadParameter
 
 from ade_engine import __version__
 from ade_engine.engine import run_inputs
-from ade_engine.settings import Settings
+from ade_engine.settings import DEFAULT_CONFIG_PACKAGE, Settings
 from ade_engine.types.run import RunStatus
 
 app = typer.Typer(
@@ -174,7 +174,7 @@ def run_command(
         "--config-package",
         help=(
             "Config package to load (module name) or path to a config package directory. "
-            f"Defaults to {Settings.config_package!r}."
+            f"Defaults to {DEFAULT_CONFIG_PACKAGE!r}."
         ),
     ),
 ) -> None:

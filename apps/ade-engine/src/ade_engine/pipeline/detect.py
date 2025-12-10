@@ -153,8 +153,8 @@ class TableDetector:
             logger.debug(
                 "Scored rows for detection",
                 extra={
-                    "stage": "detect",
                     "data": {
+                        "stage": "detect",
                         "row_count": len(scored_rows),
                         "header_threshold": self.header_threshold,
                         "data_threshold": self.data_threshold,
@@ -176,8 +176,8 @@ class TableDetector:
             logger.debug(
                 "Detected table regions",
                 extra={
-                    "stage": "detect",
                     "data": {
+                        "stage": "detect",
                         "sheet_name": worksheet.title,
                         "regions": [
                             {"min_row": r.min_row, "max_row": r.max_row, "min_col": r.min_col, "max_col": r.max_col}

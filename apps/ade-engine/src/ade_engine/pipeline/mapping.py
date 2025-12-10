@@ -97,8 +97,8 @@ class ColumnMapper:
             logger.debug(
                 "Mapping columns",
                 extra={
-                    "stage": "mapping",
                     "data": {
+                        "stage": "mapping",
                         "sheet_name": extracted.origin.sheet_name,
                         "table_index": extracted.origin.table_index,
                         "candidate_count": len(candidates),
@@ -179,8 +179,8 @@ class ColumnMapper:
             logger.debug(
                 "Column mapping decisions",
                 extra={
-                    "stage": "mapping",
                     "data": {
+                        "stage": "mapping",
                         "sheet_name": extracted.origin.sheet_name,
                         "table_index": extracted.origin.table_index,
                         "assignments": assignments,

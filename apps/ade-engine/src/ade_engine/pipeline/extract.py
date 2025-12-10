@@ -41,8 +41,8 @@ class TableExtractor:
             logger.debug(
                 "Extracted table region",
                 extra={
-                    "stage": "extract",
                     "data": {
+                        "stage": "extract",
                         "sheet_name": origin.sheet_name,
                         "table_index": origin.table_index,
                         "header_columns": len(header),

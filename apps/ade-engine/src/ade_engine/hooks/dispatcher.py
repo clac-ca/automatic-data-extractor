@@ -41,9 +41,9 @@ class HookDispatcher(BaseHooks):
                 "Invoking hooks for %s",
                 stage_name,
                 extra={
-                    "stage": "hooks",
                     "data": {
-                        "stage": stage_name,
+                        "stage": "hooks",
+                        "hook_stage": stage_name,
                         "hook_count": len(callables),
                         "hooks": [_hook_name(hook) for hook in callables],
                     },

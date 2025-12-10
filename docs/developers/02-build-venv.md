@@ -177,7 +177,7 @@ Body:
 ```
 
 * `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Progress is emitted as run events (see below).
-* `stream: true` — execute inline and stream `AdeEvent` envelopes (`build.*` + `console.line` with `scope:"build"`) over SSE.
+* `stream: true` — execute inline and stream `EventRecord` dictionaries (`build.*` + `console.line` with `scope:"build"`) over SSE.
 
 ### List build history
 
@@ -200,10 +200,10 @@ Returns the persisted `Build` resource including timestamps, status, and exit me
 Build activity is part of the run stream. After creating a run, attach to:
 
 ```
-GET /api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>
+GET /api/v1/runs/{run_id}/events/stream?after_sequence=<cursor>
 ```
 
-This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build lifecycle + `console.line` + subsequent run events). Use `after_sequence` to resume.
+This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `id:` counter per event (build lifecycle + `console.line scope=build` + subsequent run events). Use `after_sequence` or `Last-Event-ID` to resume; the cursor maps to the SSE `id` field.
 
 > **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configuration_id}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
 
