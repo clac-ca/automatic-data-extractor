@@ -29,6 +29,13 @@ ade-engine = "ade_engine.main:app"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-data]
+ade_engine = [
+  "templates/config_packages/default/**/*",
+  "templates/config_packages/default/**",
+  "templates/config_packages/default/*",
+]
+
 [tool.setuptools.package-dir]
 "" = "src"
 

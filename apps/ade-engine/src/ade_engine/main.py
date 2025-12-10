@@ -1,240 +1,62 @@
 """CLI entrypoint for :mod:`ade_engine`.
 
-Exposes the ADE engine runtime CLI with:
+Exposes the ADE engine CLI with:
 
-- `run`     Execute the engine for one or more inputs.
-- `version` Print the engine version.
+- `process` - normalize inputs (subcommands: `file`, `batch`).
+- `config`  - create and validate config packages (subcommands: `init`, `validate`).
+- `version` - print the engine version.
 """
 
 from __future__ import annotations
 
-import logging
-from enum import Enum
-from pathlib import Path
-from typing import Iterable, List, Optional
-
 import typer
-from typer import BadParameter
 
 from ade_engine import __version__
-from ade_engine.engine import run_inputs
-from ade_engine.settings import Settings
-from ade_engine.types.run import RunStatus
+from ade_engine.cli.config import app as config_app
+from ade_engine.cli.process import app as process_app
+
 
 app = typer.Typer(
     help=(
-        "ADE engine runtime CLI.\n\n"
-        "- **run** - execute the engine\n"
-        "- **version** - show engine version"
+        "ADE Engine — Automatic Data Extraction CLI.\n\n"
+        "Process documents and directories using ADE's extraction engine, and manage config packages.\n\n"
+        "## Quick Start Workflow\n\n"
+        "### 1. Create a new config package\n"
+        "```bash\n"
+        "ade-engine config init my-config --package-name ade_config\n"
+        "```\n\n"
+        "### 2. Validate the config package\n"
+        "```bash\n"
+        "ade-engine config validate --config-package my-config\n"
+        "```\n\n"
+        "### 3. Process a single file\n"
+        "```bash\n"
+        "ade-engine process file \\\n"
+        "    --input invoice.xlsx \\\n"
+        "    --output extracted/invoice.json \\\n"
+        "    --config-package my-config\n"
+        "```\n\n"
+        "### 4. Process an entire directory\n"
+        "```bash\n"
+        "ade-engine process batch \\\n"
+        "    --input-dir incoming/ \\\n"
+        "    --output-dir extracted/ \\\n"
+        "    --config-package my-config\n"
+        "```\n"
     ),
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
 
-class LogFormat(str, Enum):
-    """Supported log output formats."""
-
-    text = "text"
-    ndjson = "ndjson"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def resolve_log_level(log_level: Optional[str], default_level: int) -> int:
-    """Resolve a string log level to a logging level constant."""
-    if not log_level:
-        return default_level
-
-    mapping = logging.getLevelNamesMapping()
-    resolved = mapping.get(str(log_level).upper())
-    if isinstance(resolved, int):
-        return resolved
-
-    raise BadParameter(f"Invalid log level: {log_level}", param_hint="log_level")
-
-
-def collect_input_files(
-    explicit_inputs: Iterable[Path],
-    input_dir: Optional[Path],
-    include: List[str],
-    exclude: List[str],
-    settings: Settings,
-) -> List[Path]:
-    """Collect all input files from explicit paths and/or a directory scan."""
-    paths = list(explicit_inputs)
-    include_globs = list(dict.fromkeys(include))
-    exclude_globs = list(dict.fromkeys(exclude))
-    explicit_set = set(explicit_inputs)
-    supported_extensions = {
-        ext.lower() if ext.startswith(".") else f".{ext.lower().lstrip('*.')}"
-        for ext in settings.supported_file_extensions
-        if ext
-    }
-
-    if input_dir:
-        excluded: set[Path] = set()
-        for pattern in exclude_globs:
-            excluded.update(p for p in input_dir.glob(pattern) if p.is_file())
-
-        for path in input_dir.rglob("*"):
-            if not path.is_file():
-                continue
-
-            if path in excluded:
-                continue
-            if supported_extensions and path.suffix.lower() not in supported_extensions:
-                continue
-
-            paths.append(path)
-
-        for pattern in include_globs:
-            for path in input_dir.glob(pattern):
-                if not path.is_file() or path in excluded:
-                    continue
-                paths.append(path)
-
-    # De-duplicate and sort for deterministic behavior.
-    return sorted(set(paths) | explicit_set)
-
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
-
-
-@app.command("run")
-def run_command(
-    inputs: List[Path] = typer.Option(
-        [],
-        "--input",
-        "-i",
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        resolve_path=True,
-        help="Input file(s). Repeatable; may be combined with --input-dir.",
-    ),
-    input_dir: Optional[Path] = typer.Option(
-        None,
-        "--input-dir",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-        help="Recurse this directory for input files; may be combined with --input.",
-    ),
-    include: List[str] = typer.Option(
-        [],
-        "--include",
-        help=(
-            "Extra glob patterns for --input-dir (defaults already include supported extensions). "
-            "Examples: --include '*.xls', --include 'receipts/**', --include '*_raw.*'."
-        ),
-    ),
-    exclude: List[str] = typer.Option(
-        [],
-        "--exclude",
-        help="Glob pattern(s) for files under --input-dir to exclude.",
-    ),
-    input_sheet: List[str] = typer.Option(
-        [],
-        "--input-sheet",
-        "-s",
-        help="Optional worksheet(s) to ingest; defaults to all visible sheets.",
-    ),
-    output_dir: Optional[Path] = typer.Option(
-        None,
-        "--output-dir",
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-        help="Directory for generated outputs.",
-    ),
-    logs_dir: Optional[Path] = typer.Option(
-        None,
-        "--logs-dir",
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-        help="Directory for per-run log files.",
-    ),
-    log_format: Optional[LogFormat] = typer.Option(
-        None,
-        "--log-format",
-        case_sensitive=False,
-        help="Log output format.",
-    ),
-    log_level: Optional[str] = typer.Option(
-        None,
-        "--log-level",
-        case_sensitive=False,
-        help="Log level (debug, info, warning, error, critical).",
-    ),
-    debug: bool = typer.Option(
-        False,
-        "--debug",
-        help="Enable debug logging and verbose diagnostics.",
-    ),
-    quiet: bool = typer.Option(
-        False,
-        "--quiet",
-        help="Reduce output to warnings and errors.",
-    ),
-    config_package: Path = typer.Option(
-        ...,
-        "--config-package",
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        resolve_path=True,
-        help="Path to the config package directory (e.g., <workspace>/config_packages/<id>/src/ade_config or its root).",
-    ),
-) -> None:
-    """Execute the engine for one or more inputs."""
-
-    if (include or exclude) and not input_dir:
-        raise BadParameter("--include/--exclude require --input-dir.", param_hint="input_dir")
-
-    settings = Settings()
-    all_inputs = collect_input_files(inputs, input_dir, include, exclude, settings)
-    if not all_inputs:
-        raise BadParameter("No inputs found. Provide --input and/or --input-dir.")
-
-    effective_log_format = log_format.value if log_format else settings.log_format
-
-    effective_log_level = resolve_log_level(log_level, settings.log_level)
-    if debug:
-        effective_log_level = logging.DEBUG
-    if quiet:
-        effective_log_level = logging.WARNING
-
-    executed = run_inputs(
-        all_inputs,
-        config_package=config_package,
-        output_dir=output_dir,
-        logs_dir=logs_dir,
-        log_format=effective_log_format,
-        log_level=effective_log_level,
-        input_sheets=input_sheet or None,
-    )
-
-    any_failed = any(report.result.status != RunStatus.SUCCEEDED for report in executed)
-
-    raise typer.Exit(code=1 if any_failed else 0)
+# Subcommand groups
+app.add_typer(process_app, name="process")
+app.add_typer(config_app, name="config")
 
 
 @app.command("version")
 def version_command() -> None:
     """Print the engine version."""
     typer.echo(__version__)
-
-
-# ---------------------------------------------------------------------------
-# Module entrypoint
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:
