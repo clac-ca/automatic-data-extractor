@@ -66,7 +66,7 @@ class Pipeline:
         run_metadata: dict,
         table_index: int = 0,
     ) -> TableData:
-        rows: List[List[Any]] = [list(row) for row in sheet.iter_rows(values_only=True)]
+        rows: List[List[Any]] = self._materialize_rows(sheet)
         header_idx, data_start_idx, data_end_idx = detect_table_bounds(
             sheet_name=sheet.title,
             rows=rows,
@@ -155,6 +155,75 @@ class Pipeline:
             table=table,
         )
         return table
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _materialize_rows(self, sheet: Worksheet) -> List[List[Any]]:
+        """Stream rows, trim width, and stop after long empty runs."""
+
+        rows: List[List[Any]] = []
+        empty_row_run = 0
+        max_empty_rows = self.settings.max_empty_rows_run
+        max_empty_cols = self.settings.max_empty_cols_run
+        row_limit_hit = False
+
+        for row_index, row in enumerate(sheet.iter_rows(values_only=True)):
+            last_value_idx = -1
+            empty_col_run = 0
+            truncated_cols = False
+
+            for idx, cell in enumerate(row):
+                if cell not in (None, ""):
+                    last_value_idx = idx
+                    empty_col_run = 0
+                else:
+                    empty_col_run += 1
+                    if (
+                        max_empty_cols is not None
+                        and last_value_idx >= 0
+                        and empty_col_run >= max_empty_cols
+                    ):
+                        truncated_cols = True
+                        break
+
+            if truncated_cols:
+                self.logger.warning(
+                    "Truncated row after long empty column run",
+                    extra={
+                        "data": {
+                            "sheet_name": sheet.title,
+                            "row_index": row_index,
+                            "max_empty_cols_run": max_empty_cols,
+                        }
+                    },
+                )
+
+            if last_value_idx == -1:
+                empty_row_run += 1
+                if max_empty_rows is not None and empty_row_run >= max_empty_rows:
+                    row_limit_hit = True
+                    break
+                rows.append([])
+                continue
+
+            empty_row_run = 0
+            trimmed = list(row[: last_value_idx + 1])
+            rows.append(trimmed)
+
+        if row_limit_hit:
+            self.logger.warning(
+                "Stopped scanning sheet after long empty row run",
+                extra={
+                    "data": {
+                        "sheet_name": sheet.title,
+                        "rows_emitted": len(rows),
+                        "max_empty_rows_run": max_empty_rows,
+                    }
+                },
+            )
+
+        return rows
 
 
 __all__ = ["Pipeline"]

@@ -83,9 +83,24 @@ class Settings(BaseSettings):
     log_format: Literal["text", "ndjson"] = Field(default="text")
     log_level: int = Field(default=logging.INFO)
 
+    # Scan limits
+    max_empty_rows_run: int | None = Field(
+        default=1000,
+        description="Stop scanning a sheet after this many consecutive empty rows. None disables the guard.",
+        ge=1,
+    )
+    max_empty_cols_run: int | None = Field(
+        default=500,
+        description=(
+            "When reading a row, stop after this many consecutive empty cells once past the last non-empty "
+            "cell seen. Helps avoid huge trailing empty columns. None disables the guard."
+        ),
+        ge=1,
+    )
+
     # File discovery
     supported_file_extensions: tuple[str, ...] = Field(
-        default=("*.xlsx", "*.xlsm", "*.csv", "*.xls"),
+        default=("*.xlsx", "*.xlsm", "*.csv"),
         description="Glob patterns considered when scanning directories for inputs.",
     )
 

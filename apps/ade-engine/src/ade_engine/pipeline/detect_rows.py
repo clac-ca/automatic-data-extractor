@@ -22,6 +22,7 @@ def _classify_rows(
 
     scores: Dict[int, Dict[str, float]] = {}
     classifications: List[str] = []
+
     for row_idx, row_values in enumerate(rows):
         detectors_run: list[dict[str, Any]] = []
         ctx = RowDetectorContext(
@@ -144,10 +145,11 @@ def detect_table_bounds(
         run_metadata=run_metadata,
         logger=logger,
     )
+    total_rows = len(classifications)
 
     header_idx = None
     header_inferred_from_data = False
-    data_end_idx = len(rows)
+    data_end_idx = total_rows
 
     for idx, kind in enumerate(classifications):
         if header_idx is None:
@@ -171,7 +173,7 @@ def detect_table_bounds(
     if header_idx is None:
         best_index = 0
         best_score = float("-inf")
-        for idx in range(len(rows)):
+        for idx in range(total_rows):
             header_score = scores.get(idx, {}).get(RowKind.HEADER.value, 0.0)
             if header_score > best_score:
                 best_score = header_score
@@ -180,12 +182,13 @@ def detect_table_bounds(
 
         # If still no positive signal, choose first non-empty row.
         if best_score <= 0.0:
-            for idx, row in enumerate(rows):
+            for idx in range(total_rows):
+                row = rows[idx]
                 if any(cell not in (None, "") for cell in row):
                     header_idx = idx
                     break
 
-    data_start_idx = min(header_idx + 1, len(rows))
+    data_start_idx = min(header_idx + 1, total_rows)
 
     if logger:
         logger.event(
