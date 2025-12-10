@@ -2,24 +2,30 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from ade_engine.registry.models import FieldDef
 
 
 def register(registry):
-    registry.register_field(FieldDef(
-        name="last_name",
-        label="Last Name",
-        dtype="string",
-        synonyms=["last name", "surname", "family name", "lname"],
-    ))
+    registry.register_field(FieldDef(name="last_name", label="Last Name", dtype="string", synonyms=["last name", "surname", "family name", "lname"]))
     registry.register_column_detector(detect_last_name_header, field="last_name", priority=50)
     registry.register_column_detector(detect_last_name_values, field="last_name", priority=20)
     registry.register_column_transform(normalize_last_name, field="last_name", priority=0)
     registry.register_column_validator(validate_last_name, field="last_name", priority=0)
 
 
-def detect_last_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    header_text = "" if ctx.header in (None, "") else str(ctx.header)
+def detect_last_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    header_text = "" if header in (None, "") else str(header)
     t = set(header_text.lower().replace("-", " ").split())
     if not t:
         return None
@@ -30,11 +36,22 @@ def detect_last_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | No
     return None
 
 
-def detect_last_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    sample = ctx.sample or []
+def detect_last_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    values_sample = values_sample or []
     total = 0
     longish = 0
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -47,7 +64,7 @@ def detect_last_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | No
     return {"last_name": score}
 
 
-def normalize_last_name(ctx: TransformContext) -> list[Dict[str, Any]]:
+def normalize_last_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {"last_name": ...}}, ...]`."""
 
     return [
@@ -57,15 +74,15 @@ def normalize_last_name(ctx: TransformContext) -> list[Dict[str, Any]]:
                 "last_name": (None if v is None else str(v).strip() or None),
             },
         }
-        for idx, v in enumerate(ctx.values)
+        for idx, v in enumerate(values)
     ]
 
 
-def validate_last_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
+def validate_last_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for invalid cells."""
 
     issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 80:
             issues.append({

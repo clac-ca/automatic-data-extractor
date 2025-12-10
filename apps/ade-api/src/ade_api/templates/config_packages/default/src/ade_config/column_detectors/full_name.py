@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
 @field_meta(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"])
@@ -12,10 +11,21 @@ from ade_engine.registry.models import ColumnDetectorContext, TransformContext, 
 # --- Detection --------------------------------------------------------------
 
 @column_detector(field="full_name", priority=30)
-def detect_full_name_header(ctx: ColumnDetectorContext):
+def detect_full_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
     """Real‑world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
 
-    header = (ctx.header or "").strip().lower()
+    header = (header or "").strip().lower()
     if header == "full name":
         return {
             "full_name": 1.0,
@@ -29,17 +39,28 @@ def detect_full_name_header(ctx: ColumnDetectorContext):
 
 
 @column_detector(field="full_name", priority=10)
-def detect_full_name_values(ctx: ColumnDetectorContext):
+def detect_full_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
     """Look for two-part names ("First Last") or comma names ("Last, First")."""
 
-    sample = ctx.sample or []
+    values_sample = values_sample or []
     comma_pattern = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
     space_pattern = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
 
     matches = 0
     total = 0
 
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -60,7 +81,16 @@ def detect_full_name_values(ctx: ColumnDetectorContext):
 # --- Transform -------------------------------------------------------------
 
 @column_transform(field="full_name", priority=0)
-def normalize_full_name(ctx: TransformContext):
+def normalize_full_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    input_file_name,
+    logger,
+):
     """Minimal normalizer that also surfaces split parts.
 
     Supported shapes:
@@ -72,13 +102,16 @@ def normalize_full_name(ctx: TransformContext):
 
     normalized_rows = []
 
-    for raw_value in ctx.values:
+    for idx, raw_value in enumerate(values):
         text_value = None if raw_value is None else str(raw_value).strip()
         if not text_value:
             normalized_rows.append({
-                "full_name": None,
-                "first_name": None,
-                "last_name": None,
+                "row_index": idx,
+                "value": {
+                    "full_name": None,
+                    "first_name": None,
+                    "last_name": None,
+                },
             })
             continue
 
@@ -95,18 +128,24 @@ def normalize_full_name(ctx: TransformContext):
                 first_name, last_name = parts
             else:
                 normalized_rows.append({
-                    "full_name": text_value,
-                    "first_name": None,
-                    "last_name": None,
+                    "row_index": idx,
+                    "value": {
+                        "full_name": text_value,
+                        "first_name": None,
+                        "last_name": None,
+                    },
                 })
                 continue
 
         full_name = f"{first_name} {last_name}".strip()
 
         normalized_rows.append({
-            "full_name": full_name,
-            "first_name": first_name,
-            "last_name": last_name,
+            "row_index": idx,
+            "value": {
+                "full_name": full_name,
+                "first_name": first_name,
+                "last_name": last_name,
+            },
         })
 
     return normalized_rows
@@ -115,23 +154,30 @@ def normalize_full_name(ctx: TransformContext):
 # --- Validation ------------------------------------------------------------
 
 @column_validator(field="full_name", priority=0)
-def validate_full_name(ctx: ValidateContext):
+def validate_full_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    column_index,
+    input_file_name,
+    logger,
+):
     """Allow letters, spaces, apostrophes, and hyphens; reject digits/symbols."""
 
     issues = []
     pattern = re.compile(r"^[A-Za-z][A-Za-z '\-]*$")
 
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if not s:
             continue
         if not pattern.fullmatch(s):
             issues.append({
-                "passed": False,
-                "message": "Full name must be letters with spaces/hyphens/apostrophes",
                 "row_index": idx,
-                "column_index": getattr(ctx, "column_index", None),
-                "value": v,
+                "message": "Full name must be letters with spaces/hyphens/apostrophes",
             })
 
-    return issues or {"passed": True}
+    return issues

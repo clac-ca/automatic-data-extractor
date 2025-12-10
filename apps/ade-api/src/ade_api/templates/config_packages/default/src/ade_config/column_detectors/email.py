@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
 @field_meta(name="email", label="Email", required=True, dtype="string", synonyms=["email", "email address", "e-mail"])
@@ -16,8 +15,19 @@ def _norm(text: object | None) -> str:
 
 
 @column_detector(field="email", priority=60)
-def detect_email_header(ctx: ColumnDetectorContext):
-    header = _norm(ctx.header)
+def detect_email_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    header = _norm(header)
     if not header:
         return {"email": 0.0}
     if "email" in header or "e-mail" in header:
@@ -26,11 +36,22 @@ def detect_email_header(ctx: ColumnDetectorContext):
 
 
 @column_detector(field="email", priority=30)
-def detect_email_values(ctx: ColumnDetectorContext):
-    sample = ctx.sample or []
+def detect_email_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    values_sample = values_sample or []
     hits = 0
     total = 0
-    for v in sample:
+    for v in values_sample:
         s = _norm(v)
         if not s:
             continue
@@ -44,26 +65,45 @@ def detect_email_values(ctx: ColumnDetectorContext):
 
 
 @column_transform(field="email", priority=0)
-def normalize_email(ctx: TransformContext):
+def normalize_email(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    input_file_name,
+    logger,
+):
     return [
-        {"email": (_norm(v) or None)}
-        for v in ctx.values
+        {
+            "row_index": idx,
+            "value": {"email": (_norm(v) or None)},
+        }
+        for idx, v in enumerate(values)
     ]
 
 
 @column_validator(field="email", priority=0)
-def validate_email(ctx: ValidateContext):
+def validate_email(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    column_index,
+    input_file_name,
+    logger,
+):
     issues = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = _norm(v)
         if not s:
             continue
         if not EMAIL_RE.match(s):
             issues.append({
-                "passed": False,
-                "message": f"Invalid email: {v}",
                 "row_index": idx,
-                "column_index": getattr(ctx, "column_index", None),
-                "value": v,
+                "message": f"Invalid email: {v}",
             })
-    return issues or {"passed": True}
+    return issues

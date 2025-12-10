@@ -3,25 +3,31 @@ from __future__ import annotations
 import re
 from typing import Any, Dict
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from ade_engine.registry.models import FieldDef
 
 def register(registry):
-    registry.register_field(FieldDef(
-        name="full_name",
-        label="Full Name",
-        dtype="string",
-        synonyms=["full name", "name", "contact name"],
-    ))
+    registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string", synonyms=["full name", "name", "contact name"]))
     registry.register_column_detector(detect_full_name_header, field="full_name", priority=30)
     registry.register_column_detector(detect_full_name_values, field="full_name", priority=10)
     registry.register_column_transform(normalize_full_name, field="full_name", priority=0)
     registry.register_column_validator(validate_full_name, field="full_name", priority=0)
 
 
-def detect_full_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
+def detect_full_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
     """Real-world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
 
-    header = ("" if ctx.header in (None, "") else str(ctx.header)).strip().lower()
+    header = ("" if header in (None, "") else str(header)).strip().lower()
     if header == "full name":
         return {"full_name": 1.0}
     if header == "name":
@@ -29,17 +35,28 @@ def detect_full_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | No
     return None
 
 
-def detect_full_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
+def detect_full_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
     """Look for two-part names ("First Last") or comma names ("Last, First")."""
 
-    sample = ctx.sample or []
+    values_sample = values_sample or []
     comma_pattern = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
     space_pattern = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
 
     matches = 0
     total = 0
 
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -57,7 +74,7 @@ def detect_full_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | No
     return {"full_name": score}
 
 
-def normalize_full_name(ctx: TransformContext) -> list[Dict[str, Any]]:
+def normalize_full_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {...}}, ...]`, splitting full names where possible.
 
     Supported shapes:
@@ -69,7 +86,7 @@ def normalize_full_name(ctx: TransformContext) -> list[Dict[str, Any]]:
 
     normalized_rows: list[Dict[str, Any]] = []
 
-    for idx, raw_value in enumerate(ctx.values):
+    for idx, raw_value in enumerate(values):
         text_value = None if raw_value is None else str(raw_value).strip()
         if not text_value:
             normalized_rows.append({
@@ -118,13 +135,13 @@ def normalize_full_name(ctx: TransformContext) -> list[Dict[str, Any]]:
     return normalized_rows
 
 
-def validate_full_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
+def validate_full_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` when names include invalid symbols."""
 
     issues: list[Dict[str, Any]] = []
     pattern = re.compile(r"^[A-Za-z][A-Za-z '\-]*$")
 
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if not s:
             continue

@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.registry.invoke import call_extension
 from ade_engine.models import ColumnValidatorResult
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.registry.models import ValidateContext
@@ -54,7 +55,8 @@ def apply_validators(
     transformed_rows: List[Dict[str, Any]],
     registry: Registry,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> List[Dict[str, Any]]:
     issues: List[Dict[str, Any]] = []
@@ -71,12 +73,13 @@ def apply_validators(
                 values=values,
                 mapping=mapping_lookup,
                 state=state,
-                run_metadata=run_metadata,
+                metadata=metadata,
                 column_index=col.source_index,
+                input_file_name=input_file_name,
                 logger=logger,
             )
             try:
-                raw = val.fn(ctx)
+                raw = call_extension(val.fn, ctx, label=f"Validator {val.qualname}")
                 validated = _validate_validation_output(
                     field_name=col.field_name,
                     validator_name=val.qualname,

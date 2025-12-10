@@ -2,24 +2,30 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from ade_engine.registry.models import FieldDef
 
 
 def register(registry):
-    registry.register_field(FieldDef(
-        name="middle_name",
-        label="Middle Name",
-        dtype="string",
-        synonyms=["middle name", "mname", "middle initial"],
-    ))
+    registry.register_field(FieldDef(name="middle_name", label="Middle Name", dtype="string", synonyms=["middle name", "mname", "middle initial"]))
     registry.register_column_detector(detect_middle_name_header, field="middle_name", priority=40)
     registry.register_column_detector(detect_middle_name_values, field="middle_name", priority=15)
     registry.register_column_transform(normalize_middle_name, field="middle_name", priority=0)
     registry.register_column_validator(validate_middle_name, field="middle_name", priority=0)
 
 
-def detect_middle_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    header_text = "" if ctx.header in (None, "") else str(ctx.header)
+def detect_middle_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    header_text = "" if header in (None, "") else str(header)
     t = set(header_text.lower().replace("-", " ").split())
     if not t:
         return None
@@ -31,11 +37,22 @@ def detect_middle_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | 
     return None
 
 
-def detect_middle_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    sample = ctx.sample or []
+def detect_middle_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    values_sample = values_sample or []
     initials = 0
     total = 0
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -48,7 +65,7 @@ def detect_middle_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | 
     return {"middle_name": score}
 
 
-def normalize_middle_name(ctx: TransformContext) -> list[Dict[str, Any]]:
+def normalize_middle_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {"middle_name": ...}}, ...]`."""
 
     return [
@@ -58,15 +75,15 @@ def normalize_middle_name(ctx: TransformContext) -> list[Dict[str, Any]]:
                 "middle_name": (None if v is None else str(v).strip() or None),
             },
         }
-        for idx, v in enumerate(ctx.values)
+        for idx, v in enumerate(values)
     ]
 
 
-def validate_middle_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
+def validate_middle_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for failing cells."""
 
     issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if len(s) > 40:
             issues.append({

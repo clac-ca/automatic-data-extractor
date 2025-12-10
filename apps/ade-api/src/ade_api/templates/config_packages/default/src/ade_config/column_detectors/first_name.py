@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
 @field_meta(name="first_name", label="First Name", dtype="string", synonyms=["first name", "given name", "fname"])
 
 
 @column_detector(field="first_name", priority=50)
-def detect_first_name_header(ctx: ColumnDetectorContext):
-    header_tokens = set((ctx.header or "").lower().replace("-", " ").split())
+def detect_first_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    header_tokens = set((header or "").lower().replace("-", " ").split())
     if not header_tokens:
         return {"first_name": 0.0}
     if "first" in header_tokens and "name" in header_tokens:
@@ -20,13 +30,24 @@ def detect_first_name_header(ctx: ColumnDetectorContext):
 
 
 @column_detector(field="first_name", priority=20)
-def detect_first_name_values(ctx: ColumnDetectorContext):
-    sample = ctx.sample or []
-    if not sample:
+def detect_first_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    values_sample = values_sample or []
+    if not values_sample:
         return {"first_name": 0.0}
     shortish = 0
     total = 0
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -40,24 +61,43 @@ def detect_first_name_values(ctx: ColumnDetectorContext):
 
 
 @column_transform(field="first_name", priority=0)
-def normalize_first_name(ctx: TransformContext):
+def normalize_first_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    input_file_name,
+    logger,
+):
     return [
-        {"first_name": (None if v is None else str(v).strip() or None)}
-        for v in ctx.values
+        {
+            "row_index": idx,
+            "value": {"first_name": (None if v is None else str(v).strip() or None)},
+        }
+        for idx, v in enumerate(values)
     ]
 
 
 @column_validator(field="first_name", priority=0)
-def validate_first_name(ctx: ValidateContext):
+def validate_first_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    column_index,
+    input_file_name,
+    logger,
+):
     issues = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 50:
             issues.append({
-                "passed": False,
-                "message": "First name too long",
                 "row_index": idx,
-                "column_index": getattr(ctx, "column_index", None),
-                "value": v,
+                "message": "First name too long",
             })
-    return issues or {"passed": True}
+    return issues

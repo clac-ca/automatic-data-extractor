@@ -92,7 +92,8 @@ def cell_transformer(*, field: str, priority: int = 0):
                     row_index=row_index,
                     field_name=ctx.field_name,
                     state=ctx.state,
-                    run_metadata=ctx.run_metadata,
+                    metadata=ctx.metadata,
+                    input_file_name=ctx.input_file_name,
                     logger=ctx.logger,
                 )
                 results.append(res)
@@ -126,7 +127,8 @@ def cell_validator(*, field: str, priority: int = 0):
                     row_index=idx,
                     field_name=ctx.field_name,
                     state=ctx.state,
-                    run_metadata=ctx.run_metadata,
+                    metadata=ctx.metadata,
+                    input_file_name=ctx.input_file_name,
                     logger=ctx.logger,
                 )
                 if res is not None:

@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from ade_engine.exceptions import HookError, PipelineError
 from ade_engine.logging import RunLogger
 from ade_engine.models import ColumnDetectorResult, RowDetectorResult
+from ade_engine.registry.invoke import call_extension
 from ade_engine.registry.models import FieldDef, HookContext, HookName, ScorePatch
 
 @dataclass
@@ -65,11 +66,12 @@ class Registry:
         hook_name: HookName,
         *,
         state: dict,
-        run_metadata: Mapping[str, Any],
+        metadata: Mapping[str, Any],
         logger: RunLogger,
         workbook=None,
         sheet=None,
         table=None,
+        input_file_name: str | None = None,
     ) -> None:
         hooks = self.hooks.get(hook_name, [])
         if not hooks:
@@ -78,11 +80,12 @@ class Registry:
         hook_stage = hook_name.value if hasattr(hook_name, "value") else str(hook_name)
         ctx = HookContext(
             hook_name=hook_name,
-            run_metadata=run_metadata,
+            metadata=metadata,
             state=state,
             workbook=workbook,
             sheet=sheet,
             table=table,
+            input_file_name=input_file_name,
             logger=logger,
         )
         for hook_def in hooks:
@@ -95,7 +98,7 @@ class Registry:
                 },
             )
             try:
-                hook_def.fn(ctx)
+                call_extension(hook_def.fn, ctx, label=f"Hook {hook_def.qualname}")
             except Exception as exc:
                 message = f"Hook {hook_def.qualname} failed during {hook_stage}"
                 logger.exception(message, exc_info=exc)

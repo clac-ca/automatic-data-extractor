@@ -8,7 +8,7 @@
 - `ON_TABLE_WRITTEN`
 - `ON_WORKBOOK_BEFORE_SAVE`
 
-Hooks receive `HookContext` (run_metadata, state, workbook/sheet/table, logger) and mutate in place.
+Hooks receive `HookContext` (metadata, state, workbook/sheet/table, input_file_name, logger) and mutate in place.
 
 **Manual reorder**: Do it in `ON_TABLE_MAPPED` by sorting `ctx.table.mapped_columns`.
 

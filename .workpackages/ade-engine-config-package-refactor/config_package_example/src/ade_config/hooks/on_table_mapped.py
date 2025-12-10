@@ -1,13 +1,23 @@
 from __future__ import annotations
 
-from ade_engine.registry.models import HookContext, HookName
+from ade_engine.registry.models import HookName
 
 
 def register(registry):
     registry.register_hook(on_table_mapped, hook_name=HookName.ON_TABLE_MAPPED, priority=0)
 
 
-def on_table_mapped(ctx: HookContext):
+def on_table_mapped(
+    *,
+    hook_name,
+    metadata,
+    state,
+    workbook,
+    sheet,
+    table,
+    input_file_name,
+    logger,
+):
     """Optional mapping patch hook.
 
     Return a ColumnMappingPatch (or None). This is the place to:
@@ -18,7 +28,7 @@ def on_table_mapped(ctx: HookContext):
     This template returns None by default.
     """
 
-    if ctx.logger and ctx.table:
-        mapped_fields = [col.field_name for col in getattr(ctx.table, "mapped_columns", [])]
-        ctx.logger.info("Config hook: table mapped (fields=%s)", mapped_fields)
+    if logger and table:
+        mapped_fields = [col.field_name for col in getattr(table, "mapped_columns", [])]
+        logger.info("Config hook: table mapped (fields=%s)", mapped_fields)
     return None

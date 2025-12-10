@@ -7,8 +7,18 @@ def register(registry):
     registry.register_hook(on_workbook_before_save, hook_name=HookName.ON_WORKBOOK_BEFORE_SAVE, priority=0)
 
 
-def on_workbook_before_save(ctx: HookContext) -> None:
+def on_workbook_before_save(
+    *,
+    hook_name,
+    metadata,
+    state,
+    workbook,
+    sheet,
+    table,
+    input_file_name,
+    logger,
+) -> None:
     """Example finalization hook."""
 
-    if ctx.logger:
-        ctx.logger.info("Config hook: workbook before save (%s)", ctx.run_metadata.get("output_file", ""))
+    if logger:
+        logger.info("Config hook: workbook before save (%s)", metadata.get("output_file", ""))

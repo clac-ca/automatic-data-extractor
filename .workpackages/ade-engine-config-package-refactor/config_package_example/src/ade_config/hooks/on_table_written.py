@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ade_engine.registry.models import HookContext, HookName
+from ade_engine.registry.models import HookName
 
 # Optional: set a desired canonical output order.
 # If left as None, the engine's default ordering is used.
@@ -13,18 +13,28 @@ def register(registry):
     registry.register_hook(on_table_written, hook_name=HookName.ON_TABLE_WRITTEN, priority=0)
 
 
-def on_table_written(ctx: HookContext) -> None:
+def on_table_written(
+    *,
+    hook_name,
+    metadata,
+    state,
+    workbook,
+    sheet,
+    table,
+    input_file_name,
+    logger,
+) -> None:
     """Called after a table has been written to the output workbook."""
 
-    if ctx.logger and ctx.table:
-        ctx.logger.info(
+    if logger and table:
+        logger.info(
             "Config hook: table written (rows=%d, issues=%d)",
-            len(getattr(ctx.table, "rows", []) or []),
-            len(getattr(ctx.table, "issues", []) or []),
+            len(getattr(table, "rows", []) or []),
+            len(getattr(table, "issues", []) or []),
         )
 
     if DESIRED_FIELD_ORDER:
-        reorder_table_columns_in_place(ctx.sheet, DESIRED_FIELD_ORDER)
+        reorder_table_columns_in_place(sheet, DESIRED_FIELD_ORDER)
 
 
 def reorder_table_columns_in_place(sheet: Any, desired_headers: list[str]) -> None:

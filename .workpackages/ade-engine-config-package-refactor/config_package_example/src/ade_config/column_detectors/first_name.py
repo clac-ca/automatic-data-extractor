@@ -2,24 +2,30 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ade_engine.registry.models import ColumnDetectorContext, FieldDef, TransformContext, ValidateContext
+from ade_engine.registry.models import FieldDef
 
 
 def register(registry):
-    registry.register_field(FieldDef(
-        name="first_name",
-        label="First Name",
-        dtype="string",
-        synonyms=["first name", "given name", "fname"],
-    ))
+    registry.register_field(FieldDef(name="first_name", label="First Name", dtype="string", synonyms=["first name", "given name", "fname"]))
     registry.register_column_detector(detect_first_name_header, field="first_name", priority=50)
     registry.register_column_detector(detect_first_name_values, field="first_name", priority=20)
     registry.register_column_transform(normalize_first_name, field="first_name", priority=0)
     registry.register_column_validator(validate_first_name, field="first_name", priority=0)
 
 
-def detect_first_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    header_text = "" if ctx.header in (None, "") else str(ctx.header)
+def detect_first_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    header_text = "" if header in (None, "") else str(header)
     header_tokens = set(header_text.lower().replace("-", " ").split())
     if not header_tokens:
         return None
@@ -30,13 +36,24 @@ def detect_first_name_header(ctx: ColumnDetectorContext) -> dict[str, float] | N
     return None
 
 
-def detect_first_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | None:
-    sample = ctx.sample or []
-    if not sample:
+def detect_first_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
+    values_sample = values_sample or []
+    if not values_sample:
         return None
     shortish = 0
     total = 0
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -49,7 +66,7 @@ def detect_first_name_values(ctx: ColumnDetectorContext) -> dict[str, float] | N
     return {"first_name": score}
 
 
-def normalize_first_name(ctx: TransformContext) -> list[Dict[str, Any]]:
+def normalize_first_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "value": {"first_name": ...}}, ...]`."""
 
     return [
@@ -59,15 +76,15 @@ def normalize_first_name(ctx: TransformContext) -> list[Dict[str, Any]]:
                 "first_name": (None if v is None else str(v).strip() or None),
             },
         }
-        for idx, v in enumerate(ctx.values)
+        for idx, v in enumerate(values)
     ]
 
 
-def validate_first_name(ctx: ValidateContext) -> list[Dict[str, Any]]:
+def validate_first_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` for failed cells."""
 
     issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 50:
             issues.append({

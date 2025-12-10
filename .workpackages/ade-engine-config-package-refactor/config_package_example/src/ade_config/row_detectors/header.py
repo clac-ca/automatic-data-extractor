@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ade_engine.registry.models import RowDetectorContext, RowKind
+from ade_engine.registry.models import RowKind
 
 
 COMMON_HEADER_TOKENS = {
@@ -21,14 +21,23 @@ def register(registry):
     registry.register_row_detector(detect_header_row_by_known_words, row_kind=RowKind.HEADER.value, priority=0)
 
 
-def detect_header_row_by_known_words(ctx: RowDetectorContext) -> dict[str, float] | None:
+def detect_header_row_by_known_words(
+    *,
+    row_index,
+    row_values,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
     """Vote for a row being a header row.
 
     Heuristic:
       - header rows contain lots of short text labels
       - header rows often include common schema words (email, name, hours, etc.)
     """
-    values = ctx.row_values or []
+    values = row_values or []
     if not values:
         return {"header": 0.0}
 

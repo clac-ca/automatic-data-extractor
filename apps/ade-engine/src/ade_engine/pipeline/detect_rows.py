@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.registry.invoke import call_extension
 from ade_engine.models import RowDetectorResult
 from ade_engine.registry.models import RowDetectorContext, RowKind
 from ade_engine.registry.registry import Registry
@@ -17,7 +18,8 @@ def _classify_rows(
     rows: List[List[Any]],
     registry: Registry,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> Tuple[Dict[int, Dict[str, float]], List[str]]:
     """Run row detectors and return per-row scores and winning classification."""
@@ -31,14 +33,15 @@ def _classify_rows(
             row_index=row_idx,
             row_values=row_values,
             sheet_name=sheet_name,
-            run_metadata=run_metadata,
+            metadata=metadata,
             state=state,
+            input_file_name=input_file_name,
             logger=logger,
         )
         for det in registry.row_detectors:
             started = perf_counter()
             try:
-                raw_patch = det.fn(ctx)
+                raw_patch = call_extension(det.fn, ctx, label=f"Row detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
                 raise PipelineError(
                     f"Row detector {det.qualname} failed on row {row_idx}"
@@ -133,7 +136,8 @@ def detect_table_bounds(
     rows: List[List[Any]],
     registry: Registry,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> Tuple[int, int, int]:
     """Locate header row and data bounds using row classification sequence.
@@ -151,7 +155,8 @@ def detect_table_bounds(
         rows=rows,
         registry=registry,
         state=state,
-        run_metadata=run_metadata,
+        metadata=metadata,
+        input_file_name=input_file_name,
         logger=logger,
     )
     total_rows = len(classifications)
@@ -222,7 +227,8 @@ def detect_header_row(
     rows: List[List[Any]],
     registry: Registry,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> int:
     """Backward-compatible helper returning only the header index."""
@@ -231,7 +237,8 @@ def detect_header_row(
         rows=rows,
         registry=registry,
         state=state,
-        run_metadata=run_metadata,
+        metadata=metadata,
+        input_file_name=input_file_name,
         logger=logger,
     )
     return header_idx

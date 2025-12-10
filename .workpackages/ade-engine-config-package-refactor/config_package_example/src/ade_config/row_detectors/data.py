@@ -1,20 +1,29 @@
 from __future__ import annotations
 
-from ade_engine.registry.models import RowDetectorContext, RowKind
+from ade_engine.registry.models import RowKind
 
 
 def register(registry):
     registry.register_row_detector(detect_data_row_by_density, row_kind=RowKind.DATA.value, priority=0)
 
 
-def detect_data_row_by_density(ctx: RowDetectorContext) -> dict[str, float] | None:
+def detect_data_row_by_density(
+    *,
+    row_index,
+    row_values,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+) -> dict[str, float] | None:
     """Vote for a row being a data row.
 
     Heuristic:
       - data rows have more non-empty cells
       - data rows often contain numerics/dates mixed in
     """
-    values = ctx.row_values or []
+    values = row_values or []
     if not values:
         return {"data": 0.0}
 
