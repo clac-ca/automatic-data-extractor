@@ -11,4 +11,4 @@
 9) **Render**: mapped columns keep input order; unmapped appended if enabled.
 10) **Hook** `ON_TABLE_WRITTEN` / `ON_WORKBOOK_BEFORE_SAVE` before save.
 
-Shared `state` dict flows through all contexts; run_metadata holds input/output identifiers.
+Shared `state` dict flows through all contexts; metadata holds input/output identifiers and `input_file_name`.

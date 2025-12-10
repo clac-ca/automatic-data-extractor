@@ -21,9 +21,9 @@ def _mapped_column() -> MappedColumn:
 def test_validator_returns_issue_list():
     registry = Registry()
 
-    def validator(ctx):
+    def validator(*, values, **_):
         issues = []
-        for idx, value in enumerate(ctx.values):
+        for idx, value in enumerate(values):
             if value == "bad":
                 issues.append({"row_index": idx, "message": "bad value"})
         return issues
@@ -39,7 +39,8 @@ def test_validator_returns_issue_list():
         transformed_rows=transformed_rows,
         registry=registry,
         state={},
-        run_metadata={},
+        metadata={},
+        input_file_name=None,
         logger=None,
     )
 
@@ -51,7 +52,7 @@ def test_validator_returns_issue_list():
 def test_validator_invalid_shape_raises():
     registry = Registry()
 
-    def bad_validator(ctx):
+    def bad_validator(*, values, **_):
         return {"row_index": 0, "message": "oops"}
 
     registry.register_column_validator(bad_validator, field="foo", priority=0)
@@ -66,6 +67,7 @@ def test_validator_invalid_shape_raises():
             transformed_rows=transformed_rows,
             registry=registry,
             state={},
-            run_metadata={},
+            metadata={},
+            input_file_name=None,
             logger=None,
         )

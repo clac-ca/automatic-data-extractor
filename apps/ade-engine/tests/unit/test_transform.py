@@ -25,11 +25,11 @@ class SpyLogger:
 def test_transform_applies_row_outputs_and_enforces_contract():
     registry = Registry()
 
-    def uppercase_transform(ctx):
-        results = []
-        for idx, value in enumerate(ctx.values):
-            results.append({"row_index": idx, "value": {"foo": str(value).upper() if value is not None else None}})
-        return results
+    def uppercase_transform(*, values, **_):
+        return [
+            {"row_index": idx, "value": {"foo": str(value).upper() if value is not None else None}}
+            for idx, value in enumerate(values)
+        ]
 
     registry.register_column_transform(uppercase_transform, field="foo", priority=0)
     registry.finalize()
@@ -41,7 +41,8 @@ def test_transform_applies_row_outputs_and_enforces_contract():
         mapped_columns=mapped,
         registry=registry,
         state={},
-        run_metadata={},
+        metadata={},
+        input_file_name=None,
         logger=logger,
     )
 
@@ -53,7 +54,7 @@ def test_transform_applies_row_outputs_and_enforces_contract():
 def test_transform_invalid_return_raises_pipeline_error():
     registry = Registry()
 
-    def broken_transform(ctx):
+    def broken_transform(*, values, **_):
         return None
 
     registry.register_column_transform(broken_transform, field="foo", priority=0)
@@ -66,6 +67,7 @@ def test_transform_invalid_return_raises_pipeline_error():
             mapped_columns=mapped,
             registry=registry,
             state={},
-            run_metadata={},
+            metadata={},
+            input_file_name=None,
             logger=None,
         )

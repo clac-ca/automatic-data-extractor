@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.registry.invoke import call_extension
 from ade_engine.models import ColumnDetectorResult
 from ade_engine.registry.models import ColumnDetectorContext
 from ade_engine.registry.registry import Registry
@@ -31,7 +32,8 @@ def detect_and_map_columns(
     registry: Registry,
     settings: Settings,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> tuple[List[MappedColumn], List[SourceColumn]]:
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
@@ -46,16 +48,17 @@ def detect_and_map_columns(
             column_index=col.index,
             header=col.header,
             values=col.values,
-            sample=col.values[:5],
+            values_sample=col.values[:5],
             sheet_name=sheet_name,
-            run_metadata=run_metadata,
+            metadata=metadata,
             state=state,
+            input_file_name=input_file_name,
             logger=logger,
         )
         for det in registry.column_detectors:
             started = perf_counter()
             try:
-                raw_patch = det.fn(ctx)
+                raw_patch = call_extension(det.fn, ctx, label=f"Column detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
                 raise PipelineError(
                     f"Column detector {det.qualname} failed on column {col.index}"

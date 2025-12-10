@@ -159,9 +159,10 @@ class Engine:
                 data={"settings": self._settings_snapshot()},
             )
 
-            run_metadata = {
+            metadata = {
                 "input_file": str(prepared.request.input_file),
                 "output_file": str(prepared.output_file),
+                "input_file_name": prepared.request.input_file.name if prepared.request.input_file else None,
             }
             status = RunStatus.RUNNING
             error: RunError | None = None
@@ -180,10 +181,11 @@ class Engine:
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_START,
                         state=state,
-                        run_metadata=run_metadata,
+                        metadata=metadata,
                         workbook=source_wb,
                         sheet=None,
                         table=None,
+                        input_file_name=prepared.request.input_file.name if prepared.request.input_file else None,
                         logger=run_logger,
                     )
 
@@ -195,10 +197,11 @@ class Engine:
                         registry.run_hooks(
                             HookName.ON_SHEET_START,
                             state=state,
-                            run_metadata=run_metadata,
+                            metadata=metadata,
                             workbook=source_wb,
                             sheet=sheet,
                             table=None,
+                            input_file_name=prepared.request.input_file.name if prepared.request.input_file else None,
                             logger=run_logger,
                         )
 
@@ -206,16 +209,18 @@ class Engine:
                             sheet=sheet,
                             output_sheet=out_sheet,
                             state=state,
-                            run_metadata=run_metadata,
+                            metadata=metadata,
+                            input_file_name=prepared.request.input_file.name if prepared.request.input_file else None,
                         )
 
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_BEFORE_SAVE,
                         state=state,
-                        run_metadata=run_metadata,
+                        metadata=metadata,
                         workbook=output_wb,
                         sheet=None,
                         table=None,
+                        input_file_name=prepared.request.input_file.name if prepared.request.input_file else None,
                         logger=run_logger,
                     )
                     output_wb.save(prepared.output_file)

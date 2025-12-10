@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from ade_engine.exceptions import PipelineError
 from ade_engine.models import ColumnTransformResult
+from ade_engine.registry.invoke import call_extension
 from ade_engine.registry.models import TransformContext
 from ade_engine.registry.registry import Registry
 from ade_engine.pipeline.models import MappedColumn
@@ -81,7 +82,8 @@ def apply_transforms(
     mapped_columns: List[MappedColumn],
     registry: Registry,
     state: dict,
-    run_metadata: dict,
+    metadata: dict,
+    input_file_name: str | None,
     logger: RunLogger,
 ) -> List[Dict[str, Any]]:
     if not mapped_columns:
@@ -106,11 +108,12 @@ def apply_transforms(
                 values=current_values,
                 mapping=mapping_lookup,
                 state=state,
-                run_metadata=run_metadata,
+                metadata=metadata,
+                input_file_name=input_file_name,
                 logger=logger,
             )
             try:
-                raw_out = tf.fn(ctx)
+                raw_out = call_extension(tf.fn, ctx, label=f"Transform {tf.qualname}")
                 validated = _validate_transform_output(
                     field_name=col.field_name,
                     transform_name=tf.qualname,

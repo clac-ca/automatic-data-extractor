@@ -38,8 +38,9 @@ class RowDetectorContext:
     row_index: int
     row_values: Sequence[Any]
     sheet_name: str
-    run_metadata: Mapping[str, Any]
+    metadata: Mapping[str, Any]
     state: dict[str, Any]
+    input_file_name: str | None = None
     logger: Any | None = None
 
 
@@ -48,10 +49,11 @@ class ColumnDetectorContext:
     column_index: int
     header: Any
     values: Sequence[Any]
-    sample: Sequence[Any]
+    values_sample: Sequence[Any]
     sheet_name: str
-    run_metadata: Mapping[str, Any]
+    metadata: Mapping[str, Any]
     state: dict[str, Any]
+    input_file_name: str | None = None
     logger: Any | None = None
 
 
@@ -61,7 +63,8 @@ class TransformContext:
     values: Sequence[Any]
     mapping: Mapping[str, int | None]
     state: dict[str, Any]
-    run_metadata: Mapping[str, Any]
+    metadata: Mapping[str, Any]
+    input_file_name: str | None = None
     logger: Any | None = None
 
 
@@ -71,19 +74,21 @@ class ValidateContext:
     values: Sequence[Any]
     mapping: Mapping[str, int | None]
     state: dict[str, Any]
-    run_metadata: Mapping[str, Any]
+    metadata: Mapping[str, Any]
     column_index: int | None = None
+    input_file_name: str | None = None
     logger: Any | None = None
 
 
 @dataclass
 class HookContext:
     hook_name: HookName
-    run_metadata: Mapping[str, Any]
+    metadata: Mapping[str, Any]
     state: dict[str, Any]
     workbook: Any | None = None
     sheet: Any | None = None
     table: Any | None = None
+    input_file_name: str | None = None
     logger: Any | None = None
 
 

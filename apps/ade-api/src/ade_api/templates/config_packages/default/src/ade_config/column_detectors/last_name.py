@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 from ade_engine.registry.decorators import column_detector, column_transform, column_validator, field_meta
-from ade_engine.registry.models import ColumnDetectorContext, TransformContext, ValidateContext
 
 # Optional metadata helper; safe to remove if you don't need custom label/required/dtype/synonyms.
 @field_meta(name="last_name", label="Last Name", dtype="string", synonyms=["last name", "surname", "family name", "lname"])
 
 @column_detector(field="last_name", priority=50)
-def detect_last_name_header(ctx: ColumnDetectorContext):
-    t = set((ctx.header or "").lower().replace("-", " ").split())
+def detect_last_name_header(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    t = set((header or "").lower().replace("-", " ").split())
     if not t:
         return {"last_name": 0.0}
     if ("last" in t and "name" in t) or "surname" in t or "family" in t:
@@ -19,11 +29,22 @@ def detect_last_name_header(ctx: ColumnDetectorContext):
 
 
 @column_detector(field="last_name", priority=20)
-def detect_last_name_values(ctx: ColumnDetectorContext):
-    sample = ctx.sample or []
+def detect_last_name_values(
+    *,
+    column_index,
+    header,
+    values,
+    values_sample,
+    sheet_name,
+    metadata,
+    state,
+    input_file_name,
+    logger,
+):
+    values_sample = values_sample or []
     total = 0
     longish = 0
-    for v in sample:
+    for v in values_sample:
         s = ("" if v is None else str(v)).strip()
         if not s:
             continue
@@ -37,24 +58,43 @@ def detect_last_name_values(ctx: ColumnDetectorContext):
 
 
 @column_transform(field="last_name", priority=0)
-def normalize_last_name(ctx: TransformContext):
+def normalize_last_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    input_file_name,
+    logger,
+):
     return [
-        {"last_name": (None if v is None else str(v).strip() or None)}
-        for v in ctx.values
+        {
+            "row_index": idx,
+            "value": {"last_name": (None if v is None else str(v).strip() or None)},
+        }
+        for idx, v in enumerate(values)
     ]
 
 
 @column_validator(field="last_name", priority=0)
-def validate_last_name(ctx: ValidateContext):
+def validate_last_name(
+    *,
+    field_name,
+    values,
+    mapping,
+    state,
+    metadata,
+    column_index,
+    input_file_name,
+    logger,
+):
     issues = []
-    for idx, v in enumerate(ctx.values):
+    for idx, v in enumerate(values):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 80:
             issues.append({
-                "passed": False,
-                "message": "Last name too long",
                 "row_index": idx,
-                "column_index": getattr(ctx, "column_index", None),
-                "value": v,
+                "message": "Last name too long",
             })
-    return issues or {"passed": True}
+    return issues

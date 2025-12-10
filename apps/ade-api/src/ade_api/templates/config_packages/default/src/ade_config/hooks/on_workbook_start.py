@@ -6,9 +6,19 @@ from ade_engine.registry import HookContext, HookName, hook
 
 
 @hook(HookName.ON_WORKBOOK_START)
-def on_workbook_start(ctx: HookContext) -> None:
+def on_workbook_start(
+    *,
+    hook_name,
+    metadata,
+    state,
+    workbook,
+    sheet,
+    table,
+    input_file_name,
+    logger,
+) -> None:
     """Seed shared run state."""
 
-    ctx.state.setdefault("notes", [])
-    if ctx.logger:
-        ctx.logger.info("Config hook: workbook start (%s)", ctx.run_metadata.get("input_file", ""))
+    state.setdefault("notes", [])
+    if logger:
+        logger.info("Config hook: workbook start (%s)", metadata.get("input_file", ""))

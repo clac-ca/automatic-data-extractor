@@ -6,8 +6,18 @@ from ade_engine.registry import HookContext, HookName, hook
 
 
 @hook(HookName.ON_WORKBOOK_BEFORE_SAVE)
-def on_workbook_before_save(ctx: HookContext) -> None:
+def on_workbook_before_save(
+    *,
+    hook_name,
+    metadata,
+    state,
+    workbook,
+    sheet,
+    table,
+    input_file_name,
+    logger,
+) -> None:
     """Example finalization hook."""
 
-    if ctx.logger:
-        ctx.logger.info("Config hook: workbook before save (%s)", ctx.run_metadata.get("output_file", ""))
+    if logger:
+        logger.info("Config hook: workbook before save (%s)", metadata.get("output_file", ""))

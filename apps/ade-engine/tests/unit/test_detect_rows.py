@@ -19,7 +19,7 @@ def test_row_detector_decorator_normalizes_enum_row_kind_for_mapping_patch():
 
     with registry_context(reg):
         @row_detector(row_kind=RowKind.HEADER, priority=5)
-        def pick_header(ctx):
+        def pick_header(*, row_index, **_):
             return {RowKind.HEADER.value: 1.0}
 
     scores, classifications = _classify_rows(
@@ -27,7 +27,8 @@ def test_row_detector_decorator_normalizes_enum_row_kind_for_mapping_patch():
         rows=[["H1"]],
         registry=reg,
         state={},
-        run_metadata={},
+        metadata={},
+        input_file_name=None,
         logger=None,
     )
 
@@ -41,7 +42,7 @@ def test_row_detector_invalid_return_shape_raises():
 
     with registry_context(reg):
         @row_detector(row_kind=RowKind.HEADER, priority=5)
-        def pick_header(ctx):
+        def pick_header(*, row_index, **_):
             return 1.0
 
     with pytest.raises(PipelineError):
@@ -50,7 +51,8 @@ def test_row_detector_invalid_return_shape_raises():
             rows=[["H1"]],
             registry=reg,
             state={},
-            run_metadata={},
+            metadata={},
+            input_file_name=None,
             logger=None,
         )
 
@@ -58,10 +60,10 @@ def test_row_detector_invalid_return_shape_raises():
 def test_detect_table_bounds_stops_at_next_header_without_data():
     reg = Registry()
 
-    def detector(ctx):
-        if ctx.row_index in (0, 1):
+    def detector(*, row_index, **_):
+        if row_index in (0, 1):
             return {RowKind.HEADER.value: 1.0}
-        if ctx.row_index == 2:
+        if row_index == 2:
             return {RowKind.DATA.value: 1.0}
         return {}
 
@@ -76,7 +78,8 @@ def test_detect_table_bounds_stops_at_next_header_without_data():
         ],
         registry=reg,
         state={},
-        run_metadata={},
+        metadata={},
+        input_file_name=None,
         logger=None,
     )
 

@@ -30,7 +30,8 @@ class Pipeline:
         sheet: Worksheet,
         output_sheet: Worksheet,
         state: dict,
-        run_metadata: dict,
+        metadata: dict,
+        input_file_name: str | None = None,
         table_index: int = 0,
     ) -> TableData:
         rows: List[List[Any]] = self._materialize_rows(sheet)
@@ -39,7 +40,8 @@ class Pipeline:
             rows=rows,
             registry=self.registry,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
         header_row = rows[header_idx] if header_idx < len(rows) else []
@@ -52,7 +54,8 @@ class Pipeline:
             registry=self.registry,
             settings=self.settings,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
 
@@ -68,10 +71,11 @@ class Pipeline:
         self.registry.run_hooks(
             HookName.ON_TABLE_DETECTED,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
             workbook=None,
             sheet=sheet,
             table=table,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
 
@@ -79,10 +83,11 @@ class Pipeline:
         self.registry.run_hooks(
             HookName.ON_TABLE_MAPPED,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
             workbook=None,
             sheet=sheet,
             table=table,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
 
@@ -90,7 +95,8 @@ class Pipeline:
             mapped_columns=table.mapped_columns,
             registry=self.registry,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
         table.rows = transformed_rows
@@ -100,7 +106,8 @@ class Pipeline:
             transformed_rows=transformed_rows,
             registry=self.registry,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
         table.issues = issues
@@ -117,10 +124,11 @@ class Pipeline:
         self.registry.run_hooks(
             HookName.ON_TABLE_WRITTEN,
             state=state,
-            run_metadata=run_metadata,
+            metadata=metadata,
             workbook=output_sheet.parent,
             sheet=output_sheet,
             table=table,
+            input_file_name=input_file_name,
             logger=self.logger,
         )
         return table
