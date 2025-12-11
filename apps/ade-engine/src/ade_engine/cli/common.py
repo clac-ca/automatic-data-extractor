@@ -167,19 +167,6 @@ def collect_input_files(
 
 
 # ---------------------------------------------------------------------------
-# Defaults
-# ---------------------------------------------------------------------------
-
-
-def default_output_dir() -> Path:
-    return Path.cwd() / "output"
-
-
-def default_logs_dir() -> Path:
-    return Path.cwd() / "logs"
-
-
-# ---------------------------------------------------------------------------
 # Common reusable Typer options (optional convenience)
 # ---------------------------------------------------------------------------
 
@@ -198,7 +185,7 @@ LOGS_DIR_OPTION = typer.Option(
     file_okay=False,
     dir_okay=True,
     resolve_path=True,
-    help="Directory for per-run log files (default: ./logs).",
+    help="Directory for per-run log files (default: alongside outputs).",
 )
 
 LOG_FORMAT_OPTION = typer.Option(
@@ -233,8 +220,6 @@ __all__ = [
     "collect_input_files",
     "resolve_config_package",
     "resolve_logging",
-    "default_output_dir",
-    "default_logs_dir",
     "CONFIG_PACKAGE_OPTION",
     "LOGS_DIR_OPTION",
     "LOG_FORMAT_OPTION",

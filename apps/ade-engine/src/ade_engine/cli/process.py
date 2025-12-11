@@ -21,8 +21,6 @@ from .common import (
     LOGS_DIR_OPTION,
     QUIET_OPTION,
     collect_input_files,
-    default_logs_dir,
-    default_output_dir,
     resolve_config_package,
     resolve_logging,
 )
@@ -54,7 +52,10 @@ def process_file(
         "--output",
         "-o",
         resolve_path=False,
-        help="Output file path (default: <output-dir>/<input_stem>_normalized.xlsx).",
+        help=(
+            "Output file path. If omitted, defaults to <input_parent>/<input_stem>_normalized.xlsx"
+            " unless --output-dir is provided."
+        ),
     ),
     output_dir: Optional[Path] = typer.Option(
         None,
@@ -62,7 +63,7 @@ def process_file(
         file_okay=False,
         dir_okay=True,
         resolve_path=True,
-        help="Directory for generated output when --output is not provided (default: ./output).",
+        help="Directory for generated output when --output is not provided (default: input file's directory).",
     ),
     logs_dir: Optional[Path] = LOGS_DIR_OPTION,
     input_sheet: List[str] = typer.Option(
@@ -99,24 +100,20 @@ def process_file(
     if not resolved_input.is_file():
         raise BadParameter(f"Input file not found: {resolved_input}", param_hint="input")
 
-    resolved_logs_dir = (logs_dir or default_logs_dir()).expanduser().resolve()
-
-    # We always provide output_dir because the engine requires it.
+    # Determine output destination
     if output is not None:
-        # Treat --output as a *file path*. Ensure the engine creates the parent directory by
-        # setting output_dir to the output's directory and output_file to just the file name.
-        output = output.expanduser()
-
-        if output.is_absolute():
-            resolved_output_dir = output.parent.resolve()
-        else:
-            # output is relative to CWD; output.parent may be '.' or a relative directory.
-            resolved_output_dir = (Path.cwd() / output.parent).resolve()
-
-        request_output_file: Optional[Path] = Path(output.name)
+        target = (Path.cwd() / output).expanduser().resolve() if not output.is_absolute() else output.expanduser().resolve()
+        resolved_output_dir = target.parent
+        request_output_file: Optional[Path] = Path(target.name)
+    elif output_dir is not None:
+        resolved_output_dir = output_dir.expanduser().resolve()
+        request_output_file = None  # use default name
     else:
-        resolved_output_dir = (output_dir or default_output_dir()).expanduser().resolve()
-        request_output_file = None
+        resolved_output_dir = resolved_input.parent
+        request_output_file = None  # use default name
+
+    # Logs default to the output directory unless overridden
+    resolved_logs_dir = (logs_dir or resolved_output_dir).expanduser().resolve()
 
     result = engine.run(
         RunRequest(
@@ -202,8 +199,8 @@ def process_batch(
     if not batch_inputs:
         raise BadParameter("No inputs found under --input-dir after filters.", param_hint="input_dir")
 
-    resolved_logs_dir = (logs_dir or default_logs_dir()).expanduser().resolve()
     resolved_output_dir = output_dir.expanduser().resolve()
+    resolved_logs_dir = (logs_dir or resolved_output_dir).expanduser().resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     any_failed = False
