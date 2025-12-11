@@ -54,7 +54,7 @@ def process_file(
         resolve_path=False,
         help=(
             "Output file path. If omitted, defaults to <input_parent>/<input_stem>_normalized.xlsx"
-            " unless --output-dir is provided."
+            " unless --output-dir is provided. Must end with .xlsx."
         ),
     ),
     output_dir: Optional[Path] = typer.Option(
@@ -103,6 +103,8 @@ def process_file(
     # Determine output destination
     if output is not None:
         target = (Path.cwd() / output).expanduser().resolve() if not output.is_absolute() else output.expanduser().resolve()
+        if target.suffix.lower() != ".xlsx":
+            raise BadParameter("--output must end with .xlsx", param_hint="output")
         resolved_output_dir = target.parent
         request_output_file: Optional[Path] = Path(target.name)
     elif output_dir is not None:
