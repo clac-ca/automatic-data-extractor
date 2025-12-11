@@ -33,7 +33,7 @@ app = typer.Typer(
         "```bash\n"
         "ade-engine process file \\\n"
         "    --input invoice.xlsx \\\n"
-        "    --output extracted/invoice.json \\\n"
+        "    --output extracted/invoice.xlsx \\\n"
         "    --config-package my-config\n"
         "```\n\n"
         "### 4. Process an entire directory\n"
