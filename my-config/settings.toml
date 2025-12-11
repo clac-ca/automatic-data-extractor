@@ -1,7 +1,0 @@
-# ADE engine runtime settings (optional)
-# The engine will load this file if present (otherwise it uses safe defaults).
-
-[ade_engine]
-append_unmapped_columns = true
-unmapped_prefix = "raw_"
-mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
