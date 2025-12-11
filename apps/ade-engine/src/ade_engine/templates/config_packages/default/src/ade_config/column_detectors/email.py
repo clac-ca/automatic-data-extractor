@@ -53,7 +53,7 @@ def detect_email_values(
     hits = 0
     total = 0
     for v in values_sample:
-        s = _norm(v)
+        s = "" if v is None else str(v).strip().lower()
         if not s:
             continue
         total += 1
@@ -72,7 +72,7 @@ def normalize_email(*, field_name, values, mapping, state, metadata, input_file_
         {
             "row_index": idx,
             "value": {
-                "email": (_norm(v) or None),
+                "email": ("" if v is None else str(v).strip().lower()) or None,
             },
         }
         for idx, v in enumerate(values)
@@ -84,7 +84,7 @@ def validate_email(*, field_name, values, mapping, state, metadata, column_index
 
     issues: list[Dict[str, Any]] = []
     for idx, v in enumerate(values):
-        s = _norm(v)
+        s = "" if v is None else str(v).strip().lower()
         if not s:
             continue
         if not EMAIL_RE.match(s):
@@ -100,11 +100,12 @@ def validate_email(*, field_name, values, mapping, state, metadata, column_index
 #
 # def normalize_email_cell(value: object | None) -> Dict[str, Any]:
 #     """Return a single normalized email dict for one cell."""
-#     return {"row_index": 0, "value": {"email": (_norm(value) or None)}}
+#     text_value = "" if value is None else str(value).strip().lower()
+#     return {"row_index": 0, "value": {"email": (text_value or None)}}
 #
 # def validate_email_cell(value: object | None) -> Dict[str, Any] | None:
 #     """Validate one email cell; return a single issue or None."""
-#     text_value = _norm(value)
+#     text_value = "" if value is None else str(value).strip().lower()
 #     if text_value and not EMAIL_RE.match(text_value):
 #         return {"row_index": 0, "message": f"Invalid email: {value}"}
 #     return None

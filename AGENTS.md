@@ -59,47 +59,44 @@ Commands:
 ```
 
 ```bash
-$ python -m ade_engine run --help
-Usage: python -m ade_engine run [OPTIONS]
+$ python -m ade_engine --help
+Usage: python -m ade_engine [OPTIONS] COMMAND [ARGS]...
 
-Options:
-  -i, --input PATH               Source file(s) (repeatable)
-      --input-dir PATH           Recurse for inputs
-      --include TEXT             Glob applied under --input-dir
-      --exclude TEXT             Glob to skip under --input-dir
-  -s, --input-sheet TEXT         Optional worksheet(s)
-      --output-dir PATH          Output directory (default: ./output)
-      --logs-dir PATH            Logs directory (default: ./logs)
-      --log-format [text|ndjson] Log output format
-      --meta TEXT                KEY=VALUE metadata (repeatable)
-      --config-package TEXT      Config package name or path
-      --help                     Show this message and exit.
+Commands:
+  process  Process inputs with the ADE engine (file/batch)
+  config   Create and validate config packages
+  version  Show engine version
 ```
 
-## Engine CLI quick runs
+## Engine CLI quick runs (current)
 
-Invoke via `python -m ade_engine run` (defaults: `--output-dir ./output`, `--logs-dir ./logs`; outputs named `<output_dir>/<input_stem>_normalized.xlsx`; logs named `<input_stem>_engine.{log|ndjson}`).
+- Entrypoint: `python -m ade_engine process ...` or `ade-engine process ...`
+- Output defaults (file mode): if no flags, writes `<input_parent>/<input_stem>_normalized.xlsx` and logs beside it. `--output` must be a `.xlsx` file. `--output-dir` changes only the directory. Batch mode always requires `--output-dir`; logs default beside outputs.
 
 ```bash
-# Single file (text logs)
-python -m ade_engine run \
-  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output --logs-dir ./logs
+# 1) Scaffold a config package from the bundled template
+ade-engine config init my-config --package-name ade_config
 
-# Single file (NDJSON + debug)
-python -m ade_engine run \
-  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
-  --config-package data/templates/config_packages/default \
-  --log-format ndjson --debug \
-  --output-dir ./output --logs-dir ./logs
+# 2) Validate the config package can be imported/registered
+ade-engine config validate --config-package my-config
 
-# Batch directory
-python -m ade_engine run \
+# 3) Process a single file (defaults output next to input)
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --config-package my-config
+
+# 3b) Single file with explicit output dir
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --output-dir ./output \
+  --config-package my-config
+
+# 4) Process a batch directory (output dir required)
+ade-engine process batch \
   --input-dir data/samples \
-  --include "*.xlsx" --exclude "detector-pass*" \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output --logs-dir ./logs
+  --output-dir ./output/batch \
+  --include "*.xlsx" \
+  --config-package my-config
 ```
 
 ## Bundle examples
