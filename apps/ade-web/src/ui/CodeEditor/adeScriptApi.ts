@@ -95,9 +95,12 @@ def detect_\${1:value_shape}(
     **_,
 ) -> dict[str, float] | None:
     """\${2:Describe your heuristic for this field.}"""
+    target_field = "\${3:field_name}"
     header_text = "" if header is None else str(header).strip().lower()
-    if "email" in header_text:
-        return {"email": 1.0}
+    if not header_text:
+        return None
+    if target_field.replace("_", " ") in header_text:
+        return {target_field: 1.0}
     return None
 `.trim(),
   parameters: [
@@ -146,8 +149,9 @@ def transform(
     """\${1:Normalize or expand the values for this column.}"""
     results: list[dict] = []
     for idx, value in enumerate(values):
-        normalized = "" if value is None else str(value).strip()
-        results.append({"row_index": idx, "value": {field_name: normalized or None}})
+        text = "" if value is None else str(value).strip()
+        normalized = text.title() if text else None
+        results.append({"row_index": idx, "value": {field_name: normalized}})
     return results
 `.trim(),
   parameters: ["field_name", "values", "mapping", "state", "metadata", "input_file_name", "logger"],
@@ -188,11 +192,10 @@ def validate(
     """\${1:Return validation issues for this column.}"""
     issues: list[dict] = []
     for idx, value in enumerate(values):
-        if value in (None, ""):
-            continue
-        text = str(value).strip()
-        if "@" not in text:
-            issues.append({"row_index": idx, "message": f"{field_name} looks invalid: {value}"})
+        text = "" if value is None else str(value).strip()
+        if metadata and metadata.get("required") and not text:
+            issues.append({"row_index": idx, "message": f"{field_name} is required"})
+        # Add custom checks here (e.g., regex, enum membership).
     return issues
 `.trim(),
   parameters: [
@@ -462,32 +465,7 @@ export const ADE_FUNCTIONS: AdeFunctionSpec[] = [
   hookWorkbookBeforeSaveSpec,
 ];
 
-export type AdeFileScope = "row_detectors" | "column_detectors" | "hooks" | "other";
-
-function normalizePath(filePath: string | undefined): string {
-  if (!filePath) {
-    return "";
-  }
-  return filePath.replace(/\\/g, "/").toLowerCase();
-}
-
-export function getFileScope(filePath: string | undefined): AdeFileScope {
-  const normalized = normalizePath(filePath);
-  if (normalized.includes("/row_detectors/")) {
-    return "row_detectors";
-  }
-  if (normalized.includes("/column_detectors/")) {
-    return "column_detectors";
-  }
-  if (normalized.includes("/hooks/")) {
-    return "hooks";
-  }
-  return "other";
-}
-
-export function isAdeConfigFile(filePath: string | undefined): boolean {
-  return getFileScope(filePath) !== "other";
-}
+export type AdeFileScope = "any";
 
 const hookSpecsByName = new Map<string, AdeFunctionSpec>([
   [hookWorkbookStartSpec.name, hookWorkbookStartSpec],
@@ -498,41 +476,22 @@ const hookSpecsByName = new Map<string, AdeFunctionSpec>([
   [hookWorkbookBeforeSaveSpec.name, hookWorkbookBeforeSaveSpec],
 ]);
 
-export function getHoverSpec(word: string, filePath: string | undefined): AdeFunctionSpec | undefined {
-  const scope = getFileScope(filePath);
+export function getHoverSpec(word: string, _filePath?: string): AdeFunctionSpec | undefined {
   if (!word) {
     return undefined;
   }
-  if (scope === "row_detectors" && word.startsWith("detect_")) {
-    return rowDetectorSpec;
+  if (word.startsWith("detect_")) {
+    return columnDetectorSpec; // default to column shape; row users can still insert snippets
   }
-  if (scope === "column_detectors") {
-    if (word.startsWith("detect_")) {
-      return columnDetectorSpec;
-    }
-    if (word === columnTransformSpec.name) {
-      return columnTransformSpec;
-    }
-    if (word === columnValidatorSpec.name) {
-      return columnValidatorSpec;
-    }
+  if (word === columnTransformSpec.name) {
+    return columnTransformSpec;
   }
-  if (scope === "hooks") {
-    return hookSpecsByName.get(word);
+  if (word === columnValidatorSpec.name) {
+    return columnValidatorSpec;
   }
-  return undefined;
+  return hookSpecsByName.get(word);
 }
 
-export function getSnippetSpecs(filePath: string | undefined): AdeFunctionSpec[] {
-  const scope = getFileScope(filePath);
-  if (scope === "row_detectors") {
-    return [rowDetectorSpec];
-  }
-  if (scope === "column_detectors") {
-    return [columnDetectorSpec, columnTransformSpec, columnValidatorSpec];
-  }
-  if (scope === "hooks") {
-    return Array.from(hookSpecsByName.values());
-  }
-  return [];
+export function getSnippetSpecs(_filePath?: string): AdeFunctionSpec[] {
+  return ADE_FUNCTIONS;
 }
