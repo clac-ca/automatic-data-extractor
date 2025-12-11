@@ -26,7 +26,8 @@ from ade_api.core.models import Build, BuildStatus, Configuration
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.configs.storage import ConfigStorage, compute_config_digest
+from ade_api.features.configs.deps import compute_dependency_digest
+from ade_api.features.configs.storage import ConfigStorage
 from ade_api.infra.storage import (
     build_venv_marker_path,
     build_venv_path,
@@ -1059,7 +1060,7 @@ class BuildsService:
             workspace_id=workspace_id,
             configuration_id=configuration.id,
         )
-        config_digest = compute_config_digest(config_path)
+        config_digest = compute_dependency_digest(config_path)
         configuration.content_digest = config_digest
         python_interpreter = self._resolve_python_interpreter()
         python_version = await self._python_version(python_interpreter)
@@ -1144,138 +1145,76 @@ class BuildsService:
         allow_inflight: bool,
         reason: str | None,
     ) -> _BuildResolution:
-        if options.force:
-            ready_build = None
-        else:
+        # 1) Fast path: reuse ready build with matching fingerprint unless forced.
+        if not options.force:
             ready_build = await self._find_ready_build_match(
                 configuration=configuration,
                 fingerprint=spec.fingerprint,
             )
-        if ready_build:
-            await self._sync_active_pointer(configuration, ready_build, spec.fingerprint)
-            return _BuildResolution(
-                build=ready_build,
-                decision=BuildDecision.REUSE_READY,
-                spec=spec,
-                reason=reason,
-                reuse_summary="Reused existing build",
-            )
-
-        inflight = None
-        if not options.force:
-            inflight = await self._builds.get_inflight_by_fingerprint(
-                configuration_id=configuration.id,
-                fingerprint=spec.fingerprint,
-            )
-            if inflight and self._is_stale(inflight):
-                await self._fail_stale_build(inflight)
-                inflight = None
-        if inflight:
-            if options.wait:
-                logger.debug(
-                    "build.prepare.wait_existing",
-                    extra=log_context(
-                        workspace_id=spec.workspace_id,
-                        configuration_id=configuration.id,
-                        build_id=inflight.id,
-                        fingerprint=spec.fingerprint,
-                    ),
-                )
-                await self._wait_for_build(
-                    workspace_id=spec.workspace_id,
-                    configuration_id=configuration.id,
-                    fingerprint=spec.fingerprint,
-                )
-                return await self._resolve_build(
-                    configuration=configuration,
+            if ready_build:
+                await self._sync_active_pointer(configuration, ready_build, spec.fingerprint)
+                return _BuildResolution(
+                    build=ready_build,
+                    decision=BuildDecision.REUSE_READY,
                     spec=spec,
-                    options=BuildCreateOptions(force=options.force, wait=False),
-                    allow_inflight=allow_inflight,
                     reason=reason,
+                    reuse_summary="Reused existing build",
                 )
-            if not allow_inflight:
-                logger.warning(
-                    "build.prepare.already_in_progress",
-                    extra=log_context(
-                        workspace_id=spec.workspace_id,
-                        configuration_id=configuration.id,
-                        build_status=str(inflight.status),
-                        build_id=inflight.id,
-                        fingerprint=spec.fingerprint,
-                    ),
-                )
-                raise BuildAlreadyInProgressError(
-                    "Build in progress for "
-                    f"workspace={spec.workspace_id} configuration={configuration.id}"
-                )
-            # If the inflight build is still queued, take ownership and start it.
+
+        # 2) If a matching inflight build exists, either join it or claim it.
+        inflight = await self._builds.get_inflight_by_fingerprint(
+            configuration_id=configuration.id,
+            fingerprint=spec.fingerprint,
+        )
+        if inflight and self._is_stale(inflight):
+            await self._fail_stale_build(inflight)
+            inflight = None
+        if inflight:
             decision = (
                 BuildDecision.START_NEW
                 if inflight.status is BuildStatus.QUEUED
                 else BuildDecision.JOIN_INFLIGHT
             )
+            if not allow_inflight and decision is BuildDecision.JOIN_INFLIGHT:
+                raise BuildAlreadyInProgressError(
+                    "Build in progress for "
+                    f"workspace={spec.workspace_id} configuration={configuration.id}"
+                )
             return _BuildResolution(
                 build=inflight,
                 decision=decision,
                 spec=spec,
                 reason=reason,
-                reuse_summary="Joined inflight build" if decision is BuildDecision.JOIN_INFLIGHT else None,
+                reuse_summary=(
+                    "Joined inflight build" if decision is BuildDecision.JOIN_INFLIGHT else None
+                ),
             )
 
-        # Forced rebuilds still need to honor the single in-flight build per configuration.
-        inflight_any = await self._builds.get_latest_inflight(configuration_id=configuration.id)
-        if inflight_any and self._is_stale(inflight_any):
-            await self._fail_stale_build(inflight_any)
-            inflight_any = None
-        if inflight_any:
-            if allow_inflight and inflight_any.status is BuildStatus.QUEUED:
-                return _BuildResolution(
-                    build=inflight_any,
-                    decision=BuildDecision.START_NEW,
-                    spec=spec,
-                    reason=reason,
-                    reuse_summary="Claimed existing queued build",
+        # 3) If another inflight build exists with a different fingerprint, block unless allowed.
+        inflight_other = await self._builds.get_latest_inflight(configuration_id=configuration.id)
+        if inflight_other and self._is_stale(inflight_other):
+            await self._fail_stale_build(inflight_other)
+            inflight_other = None
+        if inflight_other and inflight_other.fingerprint != spec.fingerprint:
+            if not allow_inflight:
+                raise BuildAlreadyInProgressError(
+                    "Build in progress for "
+                    f"workspace={spec.workspace_id} configuration={configuration.id}"
                 )
-
-            if options.wait:
-                await self._wait_for_build(
-                    workspace_id=spec.workspace_id,
-                    configuration_id=configuration.id,
-                )
-                return await self._resolve_build(
-                    configuration=configuration,
-                    spec=spec,
-                    options=BuildCreateOptions(force=options.force, wait=False),
-                    allow_inflight=allow_inflight,
-                    reason=reason,
-                )
-            raise BuildAlreadyInProgressError(
-                "Build in progress for "
-                f"workspace={spec.workspace_id} configuration={configuration.id}"
+            # Otherwise join the existing inflight build rather than spawning another.
+            return _BuildResolution(
+                build=inflight_other,
+                decision=(
+                    BuildDecision.START_NEW
+                    if inflight_other.status is BuildStatus.QUEUED
+                    else BuildDecision.JOIN_INFLIGHT
+                ),
+                spec=spec,
+                reason=reason,
+                reuse_summary="Joined inflight build",
             )
 
-        other_inflight = await self._builds.get_latest_inflight(configuration_id=configuration.id)
-        if other_inflight and self._is_stale(other_inflight):
-            await self._fail_stale_build(other_inflight)
-            other_inflight = None
-        if other_inflight and other_inflight.fingerprint != spec.fingerprint:
-            if options.wait or allow_inflight:
-                await self._wait_for_build(
-                    workspace_id=spec.workspace_id,
-                    configuration_id=configuration.id,
-                )
-                return await self._resolve_build(
-                    configuration=configuration,
-                    spec=spec,
-                    options=BuildCreateOptions(force=options.force, wait=False),
-                    allow_inflight=allow_inflight,
-                    reason=reason,
-                )
-            raise BuildAlreadyInProgressError(
-                "Build in progress for "
-                f"workspace={spec.workspace_id} configuration={configuration.id}"
-            )
-
+        # 4) Otherwise create a fresh build record.
         build = await self._create_build(
             configuration=configuration,
             spec=spec,
@@ -1508,51 +1447,17 @@ class BuildsService:
         configuration_id: UUID,
         fingerprint: str | None = None,
     ) -> None:
-        deadline = self._now() + self._settings.build_ensure_wait
+        # Simplified orchestration: no blocking waits; callers decide whether to
+        # allow inflight builds. This hook is kept for compatibility/logging.
         logger.debug(
-            "build.wait_for_existing.start",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                deadline=deadline.isoformat(),
-                fingerprint=fingerprint,
-            ),
-        )
-        while self._now() < deadline:
-            inflight = (
-                await self._builds.get_inflight_by_fingerprint(
-                    configuration_id=configuration_id,
-                    fingerprint=fingerprint,
-                )
-                if fingerprint
-                else await self._builds.get_latest_inflight(configuration_id=configuration_id)
-            )
-            if inflight is None or inflight.status not in (
-                BuildStatus.QUEUED,
-                BuildStatus.BUILDING,
-            ):
-                logger.debug(
-                    "build.wait_for_existing.complete",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        configuration_id=configuration_id,
-                        final_status=str(inflight.status) if inflight else "none",
-                        fingerprint=fingerprint,
-                    ),
-                )
-                return
-            await asyncio.sleep(1)
-        logger.warning(
-            "build.wait_for_existing.timeout",
+            "build.wait_for_existing.skip",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 fingerprint=fingerprint,
             ),
         )
-        raise BuildAlreadyInProgressError(
-            f"Build still in progress for workspace={workspace_id} configuration={configuration_id}"
-        )
+        return None
 
     def _resolve_engine_version(self, spec: str) -> str | None:
         path = Path(spec)
@@ -1723,6 +1628,8 @@ class BuildsService:
         if marker_build_id != build.id:
             return False
         if build.fingerprint and payload.get("fingerprint") != build.fingerprint:
+            return False
+        if build.engine_version and payload.get("engine_version") != build.engine_version:
             return False
         return True
 

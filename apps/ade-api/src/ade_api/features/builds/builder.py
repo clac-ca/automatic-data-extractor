@@ -188,6 +188,7 @@ class VirtualEnvironmentBuilder:
                     "pip",
                     "install",
                     "--no-input",
+                    "-e",
                     str(config_path),
                 ],
                 timeout=timeout,
