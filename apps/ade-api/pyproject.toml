@@ -62,7 +62,6 @@ include = ["ade_api*"]
   "py.typed",
   "openapi.json",
   "web/**/*",
-  "templates/config_packages/**/*",
 ]
 
 # ---- Tooling configs ----

@@ -8,29 +8,14 @@ pip install -e apps/ade-api[dev]
 
 See the repository root `README.md` for full setup instructions.
 
-## Bundled config templates
+## Config scaffolding
 
-The API ships with two installable `ade_config` templates under `src/ade_api/templates/config_packages/`:
+The API no longer bundles or syncs template folders. When you create a configuration from the UI/API, it shells out to the ade-engine CLI:
 
-- **default** – mirrors the reference manifest shape described in `apps/ade-engine/docs/02-config-and-manifest.md` and includes the detectors/hooks used in engine integration tests.
-- **sandbox** – a minimal smoke-test template that matches the engine end-to-end fixtures (row + column detectors, a simple note hook, and a v1 manifest with relative module paths).
+- `ade-engine config init <workspace>/<config_id>` – lays down the built-in starter template that ships with the engine package.
+- `ade-engine config validate --config-package <path>` – checks that the generated/edited package imports and registers correctly.
 
-On startup the API copies bundled templates from `ADE_CONFIG_TEMPLATES_SOURCE_DIR` (defaults to the packaged `src/ade_api/templates/config_packages`) into `ADE_CONFIG_TEMPLATES_DIR` (defaults to `./data/templates/config_packages`). Bundled template folders are replaced on each start; any additional user-provided templates left under `ADE_CONFIG_TEMPLATES_DIR` are preserved.
-
-You can materialize either template through the `ConfigurationsService` endpoint when creating a configuration:
-
-```http
-POST /api/v1/workspaces/{workspace_id}/configurations
-{
-  "display_name": "Sandbox Config",
-  "source": {
-    "type": "template",
-    "template_id": "sandbox"
-  }
-}
-```
-
-The backend copies the requested template into `./data/workspaces/{workspace_id}/config_packages/{config_id}/`, ready for editing and activation. After activation, runs will build a virtual environment for the template and execute the engine with the manifest and detectors bundled in that directory. Use the **sandbox** template for a quick start on new environments; switch to **default** when you need the fuller set of detectors demonstrated in the engine docs.
+Configurations are still stored under `./data/workspaces/{workspace_id}/config_packages/{config_id}/` by default, and you can clone/import existing configs as before. The `source.type="template"` payload is retained for backward compatibility; the `template_id` is ignored because the engine currently ships a single starter template.
 
 ## Logging
 

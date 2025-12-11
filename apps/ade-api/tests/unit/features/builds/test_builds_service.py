@@ -166,12 +166,7 @@ version = "1.6.1"
                 "engine_spec": str(engine_dir),
             }
         )
-        templates_root = tmp_path / "templates"
-        templates_root.mkdir(parents=True, exist_ok=True)
-        storage = ConfigStorage(
-            templates_root=templates_root,
-            settings=settings,
-        )
+        storage = ConfigStorage(settings=settings)
         builder = builder or FakeBuilder(events=[])
         event_storage = BuildEventStorage(settings=settings)
         event_dispatcher = BuildEventDispatcher(storage=event_storage)

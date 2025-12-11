@@ -14,7 +14,7 @@ from ade_api.core.models import ConfigurationStatus
 
 
 class ConfigSourceTemplate(BaseSchema):
-    """Reference to a bundled template."""
+    """Request to scaffold a config from the engine's built-in template (template_id kept for compatibility)."""
 
     type: Literal["template"]
     template_id: str = Field(min_length=1, max_length=100)

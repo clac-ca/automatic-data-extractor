@@ -1,5 +1,7 @@
 # WP0 — Preflight: Embed Templates
 
+> Deprecated: templates now ship with the ade-engine CLI (`ade-engine config init`) and are no longer bundled or synced by the API.
+
 ## Goal
 Guarantee ADE ships built-in config-package templates straight from the backend so later work packages can assume the templates live beside the API code.
 

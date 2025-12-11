@@ -1,5 +1,7 @@
 # WP‑1 — Create Config (copy → draft) + Validate (digest + checks)
 
+> Status note: templates now come from the ade-engine CLI (`ade-engine config init`); the API no longer ships embedded template folders. This document describes the older flow where templates lived under `apps/ade-api/src/ade_api/templates/config_packages/`.
+
 ## What we’re doing (in one paragraph)
 
 A config package is a folder the engine imports (`ade_config`). To create one, we **copy** an existing folder—either a backend‑embedded **template** or a **clone** of another config by its **ULID**—into the workspace, validate its minimal shape, and publish it as a **draft** by an **atomic rename**. Drafts are editable via file endpoints (later work). **Validate** recomputes a deterministic **content digest** and returns issues; for WP‑1 every **build** simply re-runs validate first instead of relying on stored metadata. **Activate** locks the config and enforces “one active per workspace” (later WP).

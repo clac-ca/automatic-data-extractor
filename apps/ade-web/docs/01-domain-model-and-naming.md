@@ -30,7 +30,7 @@ When you add or touch code, copy, or routes, keep these aligned:
 * **Build** – UI: *Build* – field: `buildId`
 * **Run** – UI: *Run* – field: `runId`
 * **Document** – UI: *Document* – field: `documentId`
-* **Config template** – UI: *Config template* – TS type `ConfigTemplate` – field: `templateId`
+* **Config template** – baked into the ade-engine CLI (`ade-engine config init`); no longer listed as an API resource.
 
 **Routes**
 
@@ -130,7 +130,7 @@ The rest of this doc just pins down the **canonical names** for each box in this
 | Build                 | Build           | `Build`                    | `buildId`, `configurationId`     | `.venv/<configuration_id>/ade-runtime/build.json`      |
 | Run                   | Run             | `Run`                      | `runId`                          | `runs/<run_id>/…`                                      |
 | Document              | Document        | `Document`                 | `documentId`, `workspaceId`      | `documents/<document_id>.<ext>`                        |
-| Config template       | Config template | `ConfigTemplate`           | `templateId`                     | `templates/config_packages/…` (backend repo structure) |
+| Config template       | Config template | *(built-in engine template)* | n/a (engine-managed)             | Provided by `ade-engine config init`; no API storage    |
 
 > OpenAPI-generated types live under `@schema`. In app code we alias them to clean domain names instead of using the raw generated names everywhere.
 
@@ -448,16 +448,12 @@ Examples:
 **What it is**
 
 * A **template** used to bootstrap new configuration packages.
-* Backend templates live under something like:
-  `apps/ade-api/src/ade_api/templates/config_packages/`
+* The starter template now ships with the ade-engine CLI (`ade-engine config init`) and is not listed by the API.
 
 **Naming**
 
-* UI label: **Config template**
-* TS type: `ConfigTemplate`
-* ID: `templateId`
-
-Use this when you’re presenting choices for “Create new configuration from template”.
+* UI label: **Config template** (if you surface a choice, it will likely be a single “Default” option).
+* No dedicated API type/ID; treat it as an engine capability rather than an API resource.
 
 ---
 

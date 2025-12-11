@@ -7,7 +7,6 @@ import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 import { PageState } from "@ui/PageState";
-import { Select } from "@ui/Select";
 
 import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
 import {
@@ -15,7 +14,6 @@ import {
   useCreateConfigurationMutation,
   useImportConfigurationMutation,
 } from "@shared/configurations";
-import { useConfigTemplatesQuery } from "@shared/config-templates";
 import { buildLastSelectionStorageKey, createLastSelectionStorage, persistLastSelection, type LastSelection } from "./storage";
 
 const buildConfigDetailPath = (workspaceId: string, configId: string) =>
@@ -24,25 +22,17 @@ const buildConfigDetailPath = (workspaceId: string, configId: string) =>
 export const handle = { workspaceSectionId: "config-builder" } as const;
 
 export default function WorkspaceConfigsIndexRoute() {
+  const DEFAULT_TEMPLATE = { value: "default", label: "Default template" };
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const storageKey = useMemo(() => buildLastSelectionStorageKey(workspace.id), [workspace.id]);
   const storage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
-  const configTemplatesQuery = useConfigTemplatesQuery();
-  const templateOptions = useMemo(
-    () =>
-      (configTemplatesQuery.data ?? []).map((template) => ({
-        value: template.id,
-        label: template.name || template.id,
-      })),
-    [configTemplatesQuery.data],
-  );
   const createConfig = useCreateConfigurationMutation(workspace.id);
   const importConfig = useImportConfigurationMutation(workspace.id);
 
   const [displayName, setDisplayName] = useState(() => `${workspace.name} Config`);
-  const [templateId, setTemplateId] = useState<string>(templateOptions[0]?.value ?? "");
+  const [templateId, setTemplateId] = useState<string>(DEFAULT_TEMPLATE.value);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importDisplayName, setImportDisplayName] = useState(() => `${workspace.name} Import`);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -85,7 +75,7 @@ export default function WorkspaceConfigsIndexRoute() {
 
     if (idChanged) {
       setDisplayName(`${workspace.name} Config`);
-      setTemplateId(templateOptions[0]?.value ?? "");
+      setTemplateId(DEFAULT_TEMPLATE.value);
       setValidationError(null);
       setImportDisplayName(`${workspace.name} Import`);
       setImportFile(null);
@@ -100,17 +90,13 @@ export default function WorkspaceConfigsIndexRoute() {
       setDisplayName((current) => (current === `${previous?.name ?? ""} Config` ? `${workspace.name} Config` : current));
       setImportDisplayName((current) => (current === `${previous?.name ?? ""} Import` ? `${workspace.name} Import` : current));
     }
-  }, [templateOptions, workspace.id, workspace.name]);
+  }, [workspace.id, workspace.name]);
 
   useEffect(() => {
-    if (templateOptions.length === 0) {
-      return;
+    if (templateId !== DEFAULT_TEMPLATE.value) {
+      setTemplateId(DEFAULT_TEMPLATE.value);
     }
-    if (!templateOptions.some((option) => option.value === templateId)) {
-      setTemplateId(templateOptions[0].value);
-      setValidationError((current) => (current === "Select a template." ? null : current));
-    }
-  }, [templateId, templateOptions]);
+  }, [templateId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -215,29 +201,7 @@ export default function WorkspaceConfigsIndexRoute() {
   const canImport = importDisplayName.trim().length > 0 && Boolean(importFile) && !importConfig.isPending;
   const renderTemplateField = (disabled: boolean) => (
     <FormField label="Template">
-      <Select
-        value={templateId}
-        onChange={(event) => {
-          setTemplateId(event.target.value);
-          setValidationError(null);
-        }}
-        disabled={disabled || configTemplatesQuery.isLoading}
-      >
-        {templateOptions.length === 0 ? (
-          <option value="" disabled>
-            {configTemplatesQuery.isLoading ? "Loading templates..." : "No templates available"}
-          </option>
-        ) : (
-          templateOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))
-        )}
-      </Select>
-      {configTemplatesQuery.isError ? (
-        <p className="mt-1 text-xs font-medium text-danger-600">Unable to load templates.</p>
-      ) : null}
+      <Input value={DEFAULT_TEMPLATE.label} readOnly disabled={disabled} />
     </FormField>
   );
 

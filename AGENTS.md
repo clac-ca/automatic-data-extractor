@@ -29,7 +29,7 @@ Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives
 - `ade start` — serve API + built SPA. `ade build` — build frontend assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
 - `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
-- Config templates: `apps/ade-api/src/ade_api/templates/config_packages`; workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
+- Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
 
 ### Help snapshots (truncated)
 

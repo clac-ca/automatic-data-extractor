@@ -102,13 +102,14 @@ function registerCompletionProvider(
       }
 
       const lineNumber = position.lineNumber;
-      const word = model.getWordUntilPosition(position);
-
-      // If there's a current word, replace just that; otherwise replace from the caret.
-      const range =
-        word && word.word
-          ? new monaco.Range(lineNumber, word.startColumn, lineNumber, word.endColumn)
-          : new monaco.Range(lineNumber, position.column, lineNumber, position.column);
+      const prefix = model.getValueInRange(
+        new monaco.Range(lineNumber, 1, lineNumber, position.column),
+      );
+      const identMatch = /[A-Za-z_][\w]*$/.exec(prefix);
+      const replaceStartCol = identMatch
+        ? position.column - identMatch[0].length
+        : position.column;
+      const range = new monaco.Range(lineNumber, replaceStartCol, lineNumber, position.column);
 
       const suggestions = specs.map((spec, index) =>
         createSnippetSuggestion(monaco, spec, range, index),

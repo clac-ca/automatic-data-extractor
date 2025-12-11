@@ -20,28 +20,28 @@ There are three main moving parts:
 
 ### How to test run the ADE Engine locally
 
-Use the module entrypoint: `python -m ade_engine run`.
+Use the module entrypoint: `python -m ade_engine process`.
 
 ```bash
-# Single file (text logs)
-python -m ade_engine run \
-  --input data/samples/example.xlsx \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output --logs-dir ./logs
+# Scaffold a fresh config package from the built-in template
+ade-engine config init ./tmp/my-config --package-name ade_config
+ade-engine config validate --config-package ./tmp/my-config
 
-# Single file (NDJSON + debug)
-python -m ade_engine run \
+# Single file (NDJSON logs + debug)
+python -m ade_engine process file \
   --input data/samples/example.xlsx \
-  --config-package data/templates/config_packages/default \
+  --config-package apps/ade-engine/src/ade_engine/templates/config_packages/default \
   --log-format ndjson --debug \
-  --output-dir ./output --logs-dir ./logs
+  --output-dir ./output \
+  --logs-dir ./logs
 
 # Batch a directory
-python -m ade_engine run \
+python -m ade_engine process batch \
   --input-dir data/samples \
-  --include "*.xlsx" \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output --logs-dir ./logs
+  --include \"*.xlsx\" \
+  --config-package ./tmp/my-config \
+  --output-dir ./output/batch \
+  --logs-dir ./logs
 ```
 
 Flags you might actually use:
