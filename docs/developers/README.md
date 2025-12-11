@@ -57,7 +57,7 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
-Bundled ADE config templates ship under `apps/ade-api/src/ade_api/templates/config_packages/`; on startup the API copies them into `ADE_CONFIG_TEMPLATES_DIR` (default `./data/templates/config_packages`), replacing bundled template folders while leaving any user-added templates in place.
+Config packages are scaffolded via the ade-engine CLI (`ade-engine config init <dir>`), which carries the built-in starter template. The API no longer ships or syncs its own template copies.
 
 Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
 

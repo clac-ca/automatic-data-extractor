@@ -64,12 +64,6 @@ def get_documents_service(session: SessionDep, settings: SettingsDep):
     return DocumentsService(session=session, settings=settings)
 
 
-def get_config_templates_service(settings: SettingsDep):
-    from ade_api.features.config_templates.service import ConfigTemplatesService
-
-    return ConfigTemplatesService(settings=settings)
-
-
 def get_health_service(session: SessionDep, settings: SettingsDep):
     from ade_api.features.health.service import HealthService
     from ade_api.features.system_settings.service import SafeModeService
@@ -169,7 +163,6 @@ __all__ = [
     "get_auth_service",
     "get_system_settings_service",
     "get_documents_service",
-    "get_config_templates_service",
     "get_health_service",
     "get_safe_mode_service",
     "get_configurations_service",

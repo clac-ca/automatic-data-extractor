@@ -1305,6 +1305,13 @@ class RunsService:
         if not snapshot.events_path:
             candidate = run_dir / "logs" / "events.ndjson"
             snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
+        if not snapshot.events_path:
+            logs_dir = run_dir / "logs"
+            if logs_dir.exists():
+                for path in sorted(logs_dir.glob("*_engine_events.ndjson")):
+                    snapshot.events_path = self._run_relative_hint(path, run_dir=run_dir)
+                    if snapshot.events_path:
+                        break
 
         # Output path: if not provided, infer from <run_dir>/output.
         if not snapshot.output_path:
@@ -1455,12 +1462,13 @@ class RunsService:
             configuration_id=context.configuration_id,
         )
 
-        command = [str(python), "-m", "ade_engine", "run"]
+        command = [str(python), "-m", "ade_engine", "process", "file"]
+        command.extend(["--input", str(staged_input)])
+        command.extend(["--output-dir", str(output_dir)])
+        command.extend(["--logs-dir", str(logs_dir)])
         command.extend(["--config-package", str(config_path)])
         command.extend(["--log-format", "ndjson"])
         command.append("--debug")
-        command.extend(["--input", str(staged_input)])
-        command.extend(["--output-dir", str(output_dir)])
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
@@ -1471,9 +1479,11 @@ class RunsService:
         )
 
         # We expect API-level events to be written under <run>/logs/events.ndjson
+        log_suffix = "engine_events.ndjson"
+        output_filename = f"{staged_input.stem}_normalized.xlsx"
         paths_snapshot = RunPathsSnapshot(
-            events_path=str(logs_dir / "events.ndjson"),
-            output_path=str(output_dir / "normalized.xlsx"),
+            events_path=str(logs_dir / f"{staged_input.stem}_{log_suffix}"),
+            output_path=str(output_dir / output_filename),
             processed_file=staged_input.name,
         )
 

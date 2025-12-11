@@ -5210,42 +5210,6 @@
         ]
       }
     },
-    "/api/v1/config-templates": {
-      "get": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "List configuration templates",
-        "operationId": "list_config_templates_api_v1_config_templates_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ConfigTemplate"
-                  },
-                  "type": "array",
-                  "title": "Response List Config Templates Api V1 Config Templates Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
       "get": {
         "tags": [
@@ -6179,65 +6143,6 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/summary": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run Summary Endpoint",
-        "operationId": "get_run_summary_endpoint_api_v1_runs__run_id__summary_get",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunSummary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Run summary not found"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/runs/{run_id}/events": {
       "get": {
         "tags": [
@@ -6460,59 +6365,6 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/logs": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Download Run Logs File Endpoint",
-        "operationId": "download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Logs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/runs/{run_id}/output": {
       "get": {
         "tags": [
@@ -6627,128 +6479,6 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/outputs": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "List Run Outputs Legacy",
-        "operationId": "list_run_outputs_legacy_api_v1_runs__run_id__outputs_get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunOutputFile"
-                  },
-                  "title": "Response List Run Outputs Legacy Api V1 Runs  Run Id  Outputs Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Download Run Output Legacy Endpoint",
-        "operationId": "download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          },
-          {
-            "name": "output_path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Legacy output path",
-              "title": "Output Path"
-            },
-            "description": "Legacy output path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/system/safe-mode": {
       "get": {
         "tags": [
@@ -6829,108 +6559,6 @@
   },
   "components": {
     "schemas": {
-      "AdeEventV1": {
-        "properties": {
-          "schema_id": {
-            "type": "string",
-            "const": "ade.events.v1",
-            "title": "Schema Id",
-            "default": "ade.events.v1"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type"
-          },
-          "event_id": {
-            "type": "string",
-            "title": "Event Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "api",
-              "engine"
-            ],
-            "title": "Source"
-          },
-          "workspace_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Workspace Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "configuration_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Configuration Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id"
-          },
-          "build_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
-          },
-          "origin_event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Event Id"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "type",
-          "event_id",
-          "sequence",
-          "created_at",
-          "source",
-          "workspace_id",
-          "configuration_id"
-        ],
-        "title": "AdeEventV1",
-        "description": "API-owned canonical ADE event envelope."
-      },
       "ApiKeyCreateRequest": {
         "properties": {
           "label": {
@@ -7613,7 +7241,8 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEventV1"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "array",
             "title": "Items"
@@ -7832,90 +7461,6 @@
         "title": "BuildStatus",
         "description": "Lifecycle states for API-facing build resources."
       },
-      "ColumnCounts": {
-        "properties": {
-          "physical_total": {
-            "type": "integer",
-            "title": "Physical Total",
-            "default": 0
-          },
-          "physical_empty": {
-            "type": "integer",
-            "title": "Physical Empty",
-            "default": 0
-          },
-          "physical_non_empty": {
-            "type": "integer",
-            "title": "Physical Non Empty",
-            "default": 0
-          },
-          "distinct_headers": {
-            "type": "integer",
-            "title": "Distinct Headers",
-            "default": 0
-          },
-          "distinct_headers_mapped": {
-            "type": "integer",
-            "title": "Distinct Headers Mapped",
-            "default": 0
-          },
-          "distinct_headers_unmapped": {
-            "type": "integer",
-            "title": "Distinct Headers Unmapped",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ColumnCounts",
-        "description": "Column-level counts."
-      },
-      "ColumnSummaryDistinct": {
-        "properties": {
-          "header": {
-            "type": "string",
-            "title": "Header"
-          },
-          "header_normalized": {
-            "type": "string",
-            "title": "Header Normalized"
-          },
-          "occurrences": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Occurrences"
-          },
-          "mapped": {
-            "type": "boolean",
-            "title": "Mapped",
-            "default": false
-          },
-          "mapped_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Mapped Fields"
-          },
-          "mapped_fields_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Mapped Fields Counts"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "header",
-          "header_normalized"
-        ],
-        "title": "ColumnSummaryDistinct",
-        "description": "Distinct header summary for aggregate scopes."
-      },
       "ConfigSourceClone": {
         "properties": {
           "type": {
@@ -7961,48 +7506,6 @@
         ],
         "title": "ConfigSourceTemplate",
         "description": "Reference to a bundled template."
-      },
-      "ConfigTemplate": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "ConfigTemplate",
-        "description": "Metadata for an available configuration template."
       },
       "ConfigValidationIssue": {
         "properties": {
@@ -8247,65 +7750,6 @@
         ],
         "title": "ConfigurationValidateResponse",
         "description": "Result of running validation."
-      },
-      "Counts": {
-        "properties": {
-          "files": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Files"
-          },
-          "sheets": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sheets"
-          },
-          "tables": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tables"
-          },
-          "rows": {
-            "$ref": "#/components/schemas/RowCounts"
-          },
-          "columns": {
-            "$ref": "#/components/schemas/ColumnCounts"
-          },
-          "fields": {
-            "$ref": "#/components/schemas/FieldCounts"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "Counts",
-        "description": "Aggregate counts for a summary scope."
       },
       "DirectoryWriteResponse": {
         "properties": {
@@ -8657,124 +8101,6 @@
         "type": "object",
         "title": "EffectivePermissions",
         "description": "Effective permission sets for the current principal."
-      },
-      "FieldCounts": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
-          },
-          "required": {
-            "type": "integer",
-            "title": "Required",
-            "default": 0
-          },
-          "mapped": {
-            "type": "integer",
-            "title": "Mapped",
-            "default": 0
-          },
-          "unmapped": {
-            "type": "integer",
-            "title": "Unmapped",
-            "default": 0
-          },
-          "required_mapped": {
-            "type": "integer",
-            "title": "Required Mapped",
-            "default": 0
-          },
-          "required_unmapped": {
-            "type": "integer",
-            "title": "Required Unmapped",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "FieldCounts",
-        "description": "Canonical field counts."
-      },
-      "FieldSummaryAggregate": {
-        "properties": {
-          "field": {
-            "type": "string",
-            "title": "Field"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "required": {
-            "type": "boolean",
-            "title": "Required",
-            "default": false
-          },
-          "mapped": {
-            "type": "boolean",
-            "title": "Mapped",
-            "default": false
-          },
-          "max_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Score"
-          },
-          "tables_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tables Mapped"
-          },
-          "sheets_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sheets Mapped"
-          },
-          "files_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Files Mapped"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "field"
-        ],
-        "title": "FieldSummaryAggregate",
-        "description": "Field status at aggregate scopes (sheet/file/run)."
       },
       "FileCapabilities": {
         "properties": {
@@ -9904,29 +9230,6 @@
         "title": "RoleUpdate",
         "description": "Payload for updating an existing role."
       },
-      "RowCounts": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
-          },
-          "empty": {
-            "type": "integer",
-            "title": "Empty",
-            "default": 0
-          },
-          "non_empty": {
-            "type": "integer",
-            "title": "Non Empty",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RowCounts",
-        "description": "Row-level counts."
-      },
       "RunCreateOptions": {
         "properties": {
           "dry_run": {
@@ -10010,7 +9313,8 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEventV1"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "array",
             "title": "Items"
@@ -10142,10 +9446,6 @@
             "type": "string",
             "title": "Self"
           },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
           "events": {
             "type": "string",
             "title": "Events"
@@ -10187,7 +9487,6 @@
         "type": "object",
         "required": [
           "self",
-          "summary",
           "events",
           "events_stream",
           "events_download",
@@ -10284,69 +9583,6 @@
         "type": "object",
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
-      },
-      "RunOutputFile": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Path"
-          },
-          "byte_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Byte Size"
-          },
-          "content_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Type"
-          },
-          "download_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Download Url"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunOutputFile",
-        "description": "Deprecated collection wrapper for legacy output listings."
       },
       "RunPage": {
         "properties": {
@@ -10635,75 +9871,6 @@
         ],
         "title": "RunStatus",
         "description": "Lifecycle states for ADE runs."
-      },
-      "RunSummary": {
-        "properties": {
-          "schema_id": {
-            "type": "string",
-            "title": "Schema Id",
-            "default": "ade.summary"
-          },
-          "schema_version": {
-            "type": "string",
-            "title": "Schema Version",
-            "default": "1.0.0"
-          },
-          "scope": {
-            "type": "string",
-            "const": "run",
-            "title": "Scope",
-            "default": "run"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "parent_ids": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Parent Ids"
-          },
-          "source": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Source"
-          },
-          "counts": {
-            "$ref": "#/components/schemas/Counts"
-          },
-          "fields": {
-            "items": {
-              "$ref": "#/components/schemas/FieldSummaryAggregate"
-            },
-            "type": "array",
-            "title": "Fields"
-          },
-          "columns": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnSummaryDistinct"
-            },
-            "type": "array",
-            "title": "Columns"
-          },
-          "validation": {
-            "$ref": "#/components/schemas/ValidationSummary"
-          },
-          "details": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Details"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "counts"
-        ],
-        "title": "RunSummary",
-        "description": "Run-level summary aggregated across files within a run."
       },
       "SafeModeStatus": {
         "properties": {
@@ -11207,56 +10374,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "ValidationSummary": {
-        "properties": {
-          "rows_evaluated": {
-            "type": "integer",
-            "title": "Rows Evaluated",
-            "default": 0
-          },
-          "issues_total": {
-            "type": "integer",
-            "title": "Issues Total",
-            "default": 0
-          },
-          "issues_by_severity": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Severity"
-          },
-          "issues_by_code": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Code"
-          },
-          "issues_by_field": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Field"
-          },
-          "max_severity": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Severity"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ValidationSummary",
-        "description": "Validation counts for a summary scope."
       },
       "VersionsResponse": {
         "properties": {

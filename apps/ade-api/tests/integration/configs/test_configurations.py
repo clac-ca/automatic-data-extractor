@@ -75,8 +75,10 @@ async def test_create_configuration_and_validate(
 
     config_path = _config_path(workspace_id, record["id"])
     assert config_path.exists()
-    manifest = config_path / "src" / "ade_config" / "manifest.toml"
-    assert manifest.exists()
+    init_file = config_path / "src" / "ade_config" / "__init__.py"
+    settings_file = config_path / "settings.toml"
+    assert init_file.exists()
+    assert settings_file.exists()
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/validate",
@@ -117,10 +119,10 @@ async def test_clone_configuration_creates_copy(
     assert clone["display_name"] == "Cloned Config"
     clone_path = _config_path(workspace_id, clone["id"])
     assert clone_path.exists()
-    assert (clone_path / "src" / "ade_config" / "manifest.toml").exists()
+    assert (clone_path / "src" / "ade_config" / "__init__.py").exists()
 
 
-async def test_validate_reports_issues_when_manifest_missing(
+async def test_validate_reports_issues_when_package_missing(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
 ) -> None:
@@ -134,13 +136,10 @@ async def test_validate_reports_issues_when_manifest_missing(
         workspace_id=workspace_id,
         headers=headers,
     )
-    manifest_path = (
-        _config_path(workspace_id, record["id"])
-        / "src"
-        / "ade_config"
-        / "manifest.toml"
+    package_path = (
+        _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
     )
-    manifest_path.unlink()
+    package_path.unlink()
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/validate",
@@ -148,30 +147,8 @@ async def test_validate_reports_issues_when_manifest_missing(
     )
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["issues"], "Expected issues when manifest is missing"
+    assert payload["issues"], "Expected issues when package import is broken"
     assert payload.get("content_digest") is None
-
-
-async def test_create_missing_template_returns_not_found(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    workspace_id = seed_identity["workspace_id"]
-    owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
-
-    response = await async_client.post(
-        f"/api/v1/workspaces/{workspace_id}/configurations",
-        headers=headers,
-        json={
-            "display_name": "Bad Template",
-            "source": {"type": "template", "template_id": "missing-template"},
-        },
-    )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "source_not_found"
 
 
 async def test_validate_missing_config_returns_not_found(
@@ -308,7 +285,7 @@ async def test_file_editor_endpoints(
     )
     assert resp.status_code == 200
     with zipfile.ZipFile(io.BytesIO(resp.content)) as archive:
-        assert "src/ade_config/manifest.toml" in archive.namelist()
+        assert "src/ade_config/__init__.py" in archive.namelist()
 
 
 async def test_editing_non_draft_rejected(
@@ -448,13 +425,10 @@ async def test_activate_returns_422_when_validation_fails(
         workspace_id=workspace_id,
         headers=headers,
     )
-    manifest_path = (
-        _config_path(workspace_id, record["id"])
-        / "src"
-        / "ade_config"
-        / "manifest.toml"
+    package_path = (
+        _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
     )
-    manifest_path.unlink()
+    package_path.unlink()
 
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{record['id']}/publish",

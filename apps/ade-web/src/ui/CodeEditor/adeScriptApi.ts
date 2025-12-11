@@ -3,10 +3,12 @@ export type AdeFunctionKind =
   | "column_detector"
   | "column_transform"
   | "column_validator"
-  | "hook_on_run_start"
-  | "hook_after_mapping"
-  | "hook_before_save"
-  | "hook_on_run_end";
+  | "hook_workbook_start"
+  | "hook_sheet_start"
+  | "hook_table_detected"
+  | "hook_table_mapped"
+  | "hook_table_written"
+  | "hook_workbook_before_save";
 
 export interface AdeFunctionSpec {
   kind: AdeFunctionKind;
@@ -25,33 +27,37 @@ const rowDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    run,",
-    "    state,",
     "    row_index: int,",
     "    row_values: list,",
+    "    sheet_name: str | None,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    input_file_name: str | None,",
     "    logger,",
     "    **_,",
-    ") -> float | dict:",
+    ") -> dict[str, float] | None:",
   ].join("\n"),
-  doc: "Row detector entrypoint: return tiny score deltas to help the engine classify streamed rows as header/data.",
+  doc: "Row detector entrypoint: vote for row kinds (e.g., header vs data). Return a mapping of RowKind→score deltas or None.",
   snippet: `
-DEFAULT_LABEL = "\${1:header}"
-
 def detect_\${2:name}(
     *,
-    run,
-    state,
     row_index: int,
     row_values: list,
+    sheet_name: str | None,
+    metadata: dict | None,
+    state: dict,
+    input_file_name: str | None,
     logger,
     **_,
-) -> float | dict:
+) -> dict[str, float] | None:
     """\${3:Explain what this detector scores.}"""
-    score = 0.0
-    # Return a float to apply to DEFAULT_LABEL, or a dict to touch multiple labels.
-    return score
+    values = row_values or []
+    non_empty = [v for v in values if v not in (None, \"\") and not (isinstance(v, str) and not v.strip())]
+    density = len(non_empty) / max(len(values), 1) if values else 0.0
+    score = min(1.0, density)
+    return {"data": score, "header": -score * 0.2}
 `.trim(),
-  parameters: ["run", "state", "row_index", "row_values", "logger"],
+  parameters: ["row_index", "row_values", "sheet_name", "metadata", "state", "input_file_name", "logger"],
 };
 
 const columnDetectorSpec: AdeFunctionSpec = {
@@ -61,50 +67,48 @@ const columnDetectorSpec: AdeFunctionSpec = {
   signature: [
     "def detect_*(",
     "    *,",
-    "    run,",
-    "    state,",
-    "    field_name: str,",
-    "    field_meta: dict,",
-    "    header: str | None,",
-    "    column_values_sample: list,",
-    "    column_values: tuple,",
-    "    table: dict,",
     "    column_index: int,",
+    "    header,",
+    "    values,",
+    "    values_sample,",
+    "    sheet_name: str | None,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    input_file_name: str | None,",
     "    logger,",
     "    **_,",
-    ") -> float | dict:",
+    ") -> dict[str, float] | None:",
   ].join("\n"),
-  doc: "Column detector entrypoint: score how likely the current raw column maps to this canonical field.",
+  doc: "Column detector entrypoint: score how likely the current raw column maps to a canonical field.",
   snippet: `
 def detect_\${1:value_shape}(
     *,
-    run,
-    state,
-    field_name: str,
-    field_meta: dict,
-    header: str | None,
-    column_values_sample: list,
-    column_values: tuple,
-    table: dict,
     column_index: int,
+    header,
+    values,
+    values_sample,
+    sheet_name: str | None,
+    metadata: dict | None,
+    state: dict,
+    input_file_name: str | None,
     logger,
     **_,
-) -> float | dict:
+) -> dict[str, float] | None:
     """\${2:Describe your heuristic for this field.}"""
-    score = 0.0
-    # TODO: inspect header, column_values_sample, etc.
-    return {field_name: score}
+    header_text = "" if header is None else str(header).strip().lower()
+    if "email" in header_text:
+        return {"email": 1.0}
+    return None
 `.trim(),
   parameters: [
-    "run",
-    "state",
-    "field_name",
-    "field_meta",
-    "header",
-    "column_values_sample",
-    "column_values",
-    "table",
     "column_index",
+    "header",
+    "values",
+    "values_sample",
+    "sheet_name",
+    "metadata",
+    "state",
+    "input_file_name",
     "logger",
   ],
 };
@@ -116,36 +120,37 @@ const columnTransformSpec: AdeFunctionSpec = {
   signature: [
     "def transform(",
     "    *,",
-    "    run,",
-    "    state,",
-    "    row_index: int,",
     "    field_name: str,",
-    "    value,",
-    "    row: dict,",
+    "    values,",
+    "    mapping,",
+    "    state: dict,",
+    "    metadata: dict | None,",
+    "    input_file_name: str | None,",
     "    logger,",
     "    **_,",
-    ") -> dict | None:",
+    ") -> list[dict]:",
   ].join("\n"),
-  doc: "Column transform: normalize the mapped value or populate additional canonical fields for this row.",
+  doc: "Column transform: normalize column values and emit row-indexed results. Return a list of {row_index, value}.",
   snippet: `
 def transform(
     *,
-    run,
-    state,
-    row_index: int,
     field_name: str,
-    value,
-    row: dict,
+    values,
+    mapping,
+    state: dict,
+    metadata: dict | None,
+    input_file_name: str | None,
     logger,
     **_,
-) -> dict | None:
-    """\${1:Normalize or expand the value for this row.}"""
-    if value in (None, ""):
-        return None
-    normalized = value
-    return {field_name: normalized}
+) -> list[dict]:
+    """\${1:Normalize or expand the values for this column.}"""
+    results: list[dict] = []
+    for idx, value in enumerate(values):
+        normalized = "" if value is None else str(value).strip()
+        results.append({"row_index": idx, "value": {field_name: normalized or None}})
+    return results
 `.trim(),
-  parameters: ["run", "state", "row_index", "field_name", "value", "row", "logger"],
+  parameters: ["field_name", "values", "mapping", "state", "metadata", "input_file_name", "logger"],
 };
 
 const columnValidatorSpec: AdeFunctionSpec = {
@@ -155,179 +160,293 @@ const columnValidatorSpec: AdeFunctionSpec = {
   signature: [
     "def validate(",
     "    *,",
-    "    run,",
-    "    state,",
-    "    row_index: int,",
     "    field_name: str,",
-    "    value,",
-    "    row: dict,",
-    "    field_meta: dict | None,",
+    "    values,",
+    "    mapping,",
+    "    state: dict,",
+    "    metadata: dict | None,",
+    "    column_index: int,",
+    "    input_file_name: str | None,",
     "    logger,",
     "    **_,",
     ") -> list[dict]:",
   ].join("\n"),
-  doc: "Column validator: emit structured issues for the current row after transforms run.",
+  doc: "Column validator: emit structured issues for a column. Return a list of {row_index, message, ...}.",
   snippet: `
 def validate(
     *,
-    run,
-    state,
-    row_index: int,
     field_name: str,
-    value,
-    row: dict,
-    field_meta: dict | None,
+    values,
+    mapping,
+    state: dict,
+    metadata: dict | None,
+    column_index: int,
+    input_file_name: str | None,
     logger,
     **_,
 ) -> list[dict]:
-    """\${1:Return validation issues for this field/row.}"""
+    """\${1:Return validation issues for this column.}"""
     issues: list[dict] = []
-    if field_meta and field_meta.get("required") and value in (None, ""):
-        issues.append({
-            "row_index": row_index,
-            "code": "required_missing",
-            "severity": "error",
-            "message": f"{field_name} is required.",
-        })
+    for idx, value in enumerate(values):
+        if value in (None, ""):
+            continue
+        text = str(value).strip()
+        if "@" not in text:
+            issues.append({"row_index": idx, "message": f"{field_name} looks invalid: {value}"})
     return issues
 `.trim(),
   parameters: [
-    "run",
-    "state",
-    "row_index",
     "field_name",
-    "value",
-    "row",
-    "field_meta",
+    "values",
+    "mapping",
+    "state",
+    "metadata",
+    "column_index",
+    "input_file_name",
     "logger",
   ],
 };
 
-const hookOnRunStartSpec: AdeFunctionSpec = {
-  kind: "hook_on_run_start",
-  name: "on_run_start",
-  label: "ADE hook: on_run_start",
+const hookWorkbookStartSpec: AdeFunctionSpec = {
+  kind: "hook_workbook_start",
+  name: "on_workbook_start",
+  label: "ADE hook: on_workbook_start",
   signature: [
-    "def on_run_start(",
+    "def on_workbook_start(",
     "    *,",
-    "    run_id: str,",
-    "    manifest: dict,",
-    "    env: dict | None = None,",
-    "    artifact: dict | None = None,",
-    "    logger=None,",
-    "    **_,",
-    ") -> None:",
-  ].join("\n"),
-  doc: "Hook called once before detectors run. Use it for logging or lightweight setup.",
-  snippet: `
-def on_run_start(
-    *,
-    run_id: str,
-    manifest: dict,
-    env: dict | None = None,
-    artifact: dict | None = None,
-    logger=None,
-    **_,
-) -> None:
-    """\${1:Log or hydrate state before the run starts.}"""
-    if logger:
-        logger.info("run_start id=%s", run_id)
-    return None
-`.trim(),
-  parameters: ["run_id", "manifest", "env", "artifact", "logger"],
-};
-
-const hookAfterMappingSpec: AdeFunctionSpec = {
-  kind: "hook_after_mapping",
-  name: "after_mapping",
-  label: "ADE hook: after_mapping",
-  signature: [
-    "def after_mapping(",
-    "    *,",
-    "    table: dict,",
-    "    manifest: dict,",
-    "    env: dict | None = None,",
-    "    logger=None,",
-    "    **_,",
-    ") -> dict:",
-  ].join("\n"),
-  doc: "Hook to tweak the materialized table after column mapping but before transforms/validators.",
-  snippet: `
-def after_mapping(
-    *,
-    table: dict,
-    manifest: dict,
-    env: dict | None = None,
-    logger=None,
-    **_,
-) -> dict:
-    """\${1:Adjust headers/rows before transforms run.}"""
-    # Example: rename a header
-    table["headers"] = [h if h != "Work Email" else "Email" for h in table["headers"]]
-    return table
-`.trim(),
-  parameters: ["table", "manifest", "env", "logger"],
-};
-
-const hookBeforeSaveSpec: AdeFunctionSpec = {
-  kind: "hook_before_save",
-  name: "before_save",
-  label: "ADE hook: before_save",
-  signature: [
-    "def before_save(",
-    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
     "    workbook,",
-    "    artifact: dict | None = None,",
-    "    logger=None,",
-    "    **_,",
-    ") -> object:",
-  ].join("\n"),
-  doc: "Hook to polish the OpenPyXL workbook before it is written to disk.",
-  snippet: `
-def before_save(
-    *,
-    workbook,
-    artifact: dict | None = None,
-    logger=None,
-    **_,
-):
-    """\${1:Style or summarize the workbook before it is saved.}"""
-    ws = workbook.active
-    ws.title = "Normalized"
-    if logger:
-        logger.info("before_save: rows=%s", ws.max_row)
-    return workbook
-`.trim(),
-  parameters: ["workbook", "artifact", "logger"],
-};
-
-const hookOnRunEndSpec: AdeFunctionSpec = {
-  kind: "hook_on_run_end",
-  name: "on_run_end",
-  label: "ADE hook: on_run_end",
-  signature: [
-    "def on_run_end(",
-    "    *,",
-    "    artifact: dict | None = None,",
-    "    logger=None,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
     "    **_,",
     ") -> None:",
   ].join("\n"),
-  doc: "Hook called once after the run completes. Inspect the artifact for summary metrics.",
+  doc: "Called once per workbook before any sheets/tables are processed.",
   snippet: `
-def on_run_end(
+def on_workbook_start(
     *,
-    artifact: dict | None = None,
-    logger=None,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
     **_,
 ) -> None:
-    """\${1:Log a completion summary.}"""
+    """\${1:Seed shared state or log workbook info.}"""
+    state.setdefault("notes", [])
     if logger:
-        total_sheets = len((artifact or {}).get("sheets", []))
-        logger.info("run_end: sheets=%s", total_sheets)
+        logger.info("workbook start: %s", input_file_name or "")
     return None
 `.trim(),
-  parameters: ["artifact", "logger"],
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
+};
+
+const hookSheetStartSpec: AdeFunctionSpec = {
+  kind: "hook_sheet_start",
+  name: "on_sheet_start",
+  label: "ADE hook: on_sheet_start",
+  signature: [
+    "def on_sheet_start(",
+    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    workbook,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
+    "    **_,",
+    ") -> None:",
+  ].join("\n"),
+  doc: "Called when a sheet is selected for processing (before detectors run).",
+  snippet: `
+def on_sheet_start(
+    *,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
+    **_,
+) -> None:
+    """\${1:Sheet-level logging or state init.}"""
+    if logger and sheet:
+        logger.info("sheet start: %s", getattr(sheet, "title", ""))
+    return None
+`.trim(),
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
+};
+
+const hookTableDetectedSpec: AdeFunctionSpec = {
+  kind: "hook_table_detected",
+  name: "on_table_detected",
+  label: "ADE hook: on_table_detected",
+  signature: [
+    "def on_table_detected(",
+    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    workbook,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
+    "    **_,",
+    ") -> None:",
+  ].join("\n"),
+  doc: "Called after a table is detected. Inspect table metadata or log.",
+  snippet: `
+def on_table_detected(
+    *,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
+    **_,
+) -> None:
+    """\${1:Log detection details or tweak state.}"""
+    if logger and table:
+        logger.info("table detected: sheet=%s header_row=%s", getattr(table, "sheet_name", ""), getattr(table, "header_row_index", None))
+    return None
+`.trim(),
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
+};
+
+const hookTableMappedSpec: AdeFunctionSpec = {
+  kind: "hook_table_mapped",
+  name: "on_table_mapped",
+  label: "ADE hook: on_table_mapped",
+  signature: [
+    "def on_table_mapped(",
+    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    workbook,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
+    "    **_,",
+    ") -> dict | None:",
+  ].join("\n"),
+  doc: "Called after mapping; return a ColumnMappingPatch or None.",
+  snippet: `
+def on_table_mapped(
+    *,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
+    **_,
+) -> dict | None:
+    """\${1:Propose mapping tweaks or log mapped columns.}"""
+    if logger and table:
+        mapped = [col.field_name for col in getattr(table, "mapped_columns", [])]
+        logger.info("table mapped fields=%s", mapped)
+    return None
+`.trim(),
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
+};
+
+const hookTableWrittenSpec: AdeFunctionSpec = {
+  kind: "hook_table_written",
+  name: "on_table_written",
+  label: "ADE hook: on_table_written",
+  signature: [
+    "def on_table_written(",
+    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    workbook,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
+    "    **_,",
+    ") -> None:",
+  ].join("\n"),
+  doc: "Called after a table is written to the output workbook.",
+  snippet: `
+def on_table_written(
+    *,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
+    **_,
+) -> None:
+    """\${1:Finalize sheet formatting or log counts.}"""
+    if logger and table:
+        logger.info("table written rows=%s", len(getattr(table, "rows", []) or []))
+    return None
+`.trim(),
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
+};
+
+const hookWorkbookBeforeSaveSpec: AdeFunctionSpec = {
+  kind: "hook_workbook_before_save",
+  name: "on_workbook_before_save",
+  label: "ADE hook: on_workbook_before_save",
+  signature: [
+    "def on_workbook_before_save(",
+    "    *,",
+    "    hook_name,",
+    "    metadata: dict | None,",
+    "    state: dict,",
+    "    workbook,",
+    "    sheet,",
+    "    table,",
+    "    input_file_name: str | None,",
+    "    logger,",
+    "    **_,",
+    ") -> None:",
+  ].join("\n"),
+  doc: "Called once before the output workbook is saved to disk.",
+  snippet: `
+def on_workbook_before_save(
+    *,
+    hook_name,
+    metadata: dict | None,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    input_file_name: str | None,
+    logger,
+    **_,
+) -> None:
+    """\${1:Style workbook or attach summaries before save.}"""
+    if logger:
+        logger.info("workbook before save: %s", input_file_name or "")
+    return None
+`.trim(),
+  parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],
 };
 
 export const ADE_FUNCTIONS: AdeFunctionSpec[] = [
@@ -335,10 +454,12 @@ export const ADE_FUNCTIONS: AdeFunctionSpec[] = [
   columnDetectorSpec,
   columnTransformSpec,
   columnValidatorSpec,
-  hookOnRunStartSpec,
-  hookAfterMappingSpec,
-  hookBeforeSaveSpec,
-  hookOnRunEndSpec,
+  hookWorkbookStartSpec,
+  hookSheetStartSpec,
+  hookTableDetectedSpec,
+  hookTableMappedSpec,
+  hookTableWrittenSpec,
+  hookWorkbookBeforeSaveSpec,
 ];
 
 export type AdeFileScope = "row_detectors" | "column_detectors" | "hooks" | "other";
@@ -369,10 +490,12 @@ export function isAdeConfigFile(filePath: string | undefined): boolean {
 }
 
 const hookSpecsByName = new Map<string, AdeFunctionSpec>([
-  [hookOnRunStartSpec.name, hookOnRunStartSpec],
-  [hookAfterMappingSpec.name, hookAfterMappingSpec],
-  [hookBeforeSaveSpec.name, hookBeforeSaveSpec],
-  [hookOnRunEndSpec.name, hookOnRunEndSpec],
+  [hookWorkbookStartSpec.name, hookWorkbookStartSpec],
+  [hookSheetStartSpec.name, hookSheetStartSpec],
+  [hookTableDetectedSpec.name, hookTableDetectedSpec],
+  [hookTableMappedSpec.name, hookTableMappedSpec],
+  [hookTableWrittenSpec.name, hookTableWrittenSpec],
+  [hookWorkbookBeforeSaveSpec.name, hookWorkbookBeforeSaveSpec],
 ]);
 
 export function getHoverSpec(word: string, filePath: string | undefined): AdeFunctionSpec | undefined {

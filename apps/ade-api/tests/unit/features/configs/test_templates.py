@@ -11,17 +11,9 @@ from ade_api.features.configs.storage import ConfigStorage
 @pytest.mark.asyncio
 async def test_templates_materialize_and_load(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     template_id: str,
 ) -> None:
-    templates_root = (
-        Path(__file__).resolve().parents[4]
-        / "src"
-        / "ade_api"
-        / "templates"
-        / "config_packages"
-    )
-    storage = ConfigStorage(templates_root=templates_root, configs_root=tmp_path / "configs")
+    storage = ConfigStorage(configs_root=tmp_path / "configs")
 
     await storage.materialize_from_template(
         workspace_id="ws",
