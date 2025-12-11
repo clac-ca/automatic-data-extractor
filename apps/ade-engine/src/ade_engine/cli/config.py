@@ -78,7 +78,8 @@ def init_config(
 
     # Copy template package tree from bundled templates
     template_root = resources.files("ade_engine.templates.config_packages.default")
-    shutil.copytree(template_root, target_dir, dirs_exist_ok=True)
+    with resources.as_file(template_root) as template_path:
+        shutil.copytree(template_path, target_dir, dirs_exist_ok=True)
 
     # Adjust package name and layout
     src_pkg_dir = target_dir / "src" / "ade_config"

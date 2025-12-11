@@ -1,76 +1,54 @@
-# ade-engine (registry refactor)
+# ADE Engine (CLI)
 
-Lightweight spreadsheet normalization engine using registry-based config packages.
+Lightweight, configurable engine for normalizing Excel/CSV workbooks. This README is a fast path to install, scaffold a config package, and run single/batch jobs.
 
-- Config packages are pure Python; pass `--config-package <path>` pointing to the package directory. Modules register fields, detectors, transforms, validators, and hooks imperatively via `registry.register_*` inside a `register(registry)` entrypoint.
-- Settings live in `.env` / env vars / optional `settings.toml` (see `apps/ade-engine/docs/ade-engine/settings.md`).
-- Output ordering: mapped columns keep input order; unmapped columns optionally appended to the right with prefix.
+## Install
 
-Install (pip):
-```
-# Main
+```bash
+# Stable
 pip install "git+https://github.com/clac-ca/automatic-data-extractor.git#subdirectory=apps/ade-engine"
 
 # Development branch
 pip install "git+https://github.com/clac-ca/automatic-data-extractor@development#subdirectory=apps/ade-engine"
 ```
 
-Quick start:
-```
-python -m ade_engine run \
-  --input data/samples/example.xlsx \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output
-```
+## Quickstart
 
-Tip: the CLI is also exposed as `ade-engine`, so `ade-engine run ...` is equivalent to `python -m ade_engine run ...`.
+```bash
+# 1) Create a starter config package (uses bundled template)
+ade-engine config init my-config --package-name ade_config
 
-CLI help:
-```
-python -m ade_engine run --help
-ade-engine run --help  # shorthand
+# 2) Validate the config package
+ade-engine config validate --config-package my-config
 
- Usage: python -m ade_engine run [OPTIONS]
-
- Execute the engine for one or more inputs.
-
-Options:
-  -i, --input FILE                Input file(s). Repeatable; can mix with --input-dir.
-      --input-dir DIRECTORY       Recurse a directory for inputs; can mix with --input.
-      --include TEXT              Extra glob(s) for --input-dir (defaults already cover xlsx/csv).
-      --exclude TEXT              Glob(s) under --input-dir to skip.
-  -s, --input-sheet TEXT          Sheet(s) to ingest; defaults to all visible sheets.
-      --output-dir DIRECTORY      Output directory (default: ./output).
-      --logs-dir DIRECTORY        Log directory (default: ./logs).
-      --log-format [text|ndjson]  Log output format (default: text).
-      --log-level TEXT            Log level: debug, info, warning, error, critical.
-      --debug                     Enable debug logging and verbose diagnostics.
-      --quiet                     Reduce output to warnings/errors.
-      --config-package DIRECTORY  Path to the config package (required).
-      --help                      Show this message and exit.
-```
-
-Examples:
-```
-# Default text logs (writes to ./output and ./logs)
-python -m ade_engine run \
+# 3) Process a single file
+ade-engine process file \
   --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
-  --config-package data/templates/config_packages/default \
-  --output-dir ./output --logs-dir ./logs
+  --output-dir output \
+  --config-package my-config
 
-# NDJSON event stream (good for API validation)
-python -m ade_engine run \
-  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
-  --config-package data/templates/config_packages/default \
-  --log-format ndjson \
-  --output-dir /tmp/ade-engine/ndjson --logs-dir /tmp/ade-engine/ndjson
-
-# Batch a directory with include/exclude globs
-python -m ade_engine run \
+# 4) Process an entire directory
+ade-engine process batch \
   --input-dir data/samples \
-  --config-package data/templates/config_packages/default \
-  --include "*.xlsx" --exclude "detector-pass*" \
-  --output-dir /tmp/ade-engine/batch --logs-dir /tmp/ade-engine/batch
+  --output-dir output/batch \
+  --config-package my-config
 ```
 
-Docs live under `apps/ade-engine/docs/ade-engine/`.
+Notes:
+- `--config-package` can point to your generated folder (e.g., `my-config`) or any config package path; it is required unless set via `ADE_ENGINE_CONFIG_PACKAGE` or `settings.toml`.
+- `process batch --include` acts as an allowlist; if provided, only matching files run. `--exclude` patterns always prune recursively.
+- `process file` requires either `--output` or `--output-dir` (mutually exclusive).
+
+## Commands
+
+- `ade-engine process file` – run the engine on one input file.
+- `ade-engine process batch` – recurse a directory of inputs.
+- `ade-engine config init` – scaffold a config package from the bundled template.
+- `ade-engine config validate` – import and register a config package to ensure it’s wired correctly.
+- `ade-engine version` – print the CLI version.
+
+## Tips
+
+- Logs and outputs default to `./logs` and `./output` when not provided.
+- To change defaults globally, set environment variables with the `ADE_ENGINE_` prefix or add a `settings.toml` alongside your runs.
+- Need types for the web app? From the repo root, run `ade types` (if working in the full monorepo).
