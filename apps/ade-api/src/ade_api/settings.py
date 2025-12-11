@@ -72,7 +72,6 @@ DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = timedelta(seconds=600)
-DEFAULT_BUILD_ENSURE_WAIT = timedelta(seconds=30)
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
@@ -299,7 +298,6 @@ class Settings(BaseSettings):
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
     python_bin: str | None = Field(default=None)
     build_timeout: timedelta = Field(default=DEFAULT_BUILD_TIMEOUT)
-    build_ensure_wait: timedelta = Field(default=DEFAULT_BUILD_ENSURE_WAIT)
     build_ttl: timedelta | None = Field(default=None)
 
     # Database
@@ -444,7 +442,7 @@ class Settings(BaseSettings):
     def _v_durations(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
 
-    @field_validator("build_timeout", "build_ensure_wait", mode="before")
+    @field_validator("build_timeout", mode="before")
     @classmethod
     def _v_build_required(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)

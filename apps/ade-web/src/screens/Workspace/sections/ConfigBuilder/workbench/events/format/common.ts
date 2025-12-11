@@ -63,6 +63,7 @@ export function formatConsole(
   const level = (payload.level as string | undefined) ?? (stream === "stderr" ? "warning" : "info");
   const message =
     (event.message as string | undefined) ??
+    (typeof payload.message === "string" ? payload.message : undefined) ??
     (typeof payload.text === "string" ? payload.text : JSON.stringify(payload));
   const scope = (payload.scope as string | undefined) ?? undefined;
   const origin: WorkbenchConsoleLine["origin"] =

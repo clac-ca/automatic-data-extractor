@@ -19,11 +19,11 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.features.builds.event_dispatcher import BuildEventDispatcher, BuildEventStorage
 from ade_api.features.builds.exceptions import BuildAlreadyInProgressError
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision, BuildsService
 from ade_api.features.configs.storage import ConfigStorage
+from ade_api.features.runs.event_stream import RunEventStreamRegistry
 from ade_api.infra.db import Base
 from ade_api.infra.db.mixins import generate_uuid7
 from ade_api.infra.storage import build_venv_root
@@ -168,15 +168,13 @@ version = "1.6.1"
         )
         storage = ConfigStorage(settings=settings)
         builder = builder or FakeBuilder(events=[])
-        event_storage = BuildEventStorage(settings=settings)
-        event_dispatcher = BuildEventDispatcher(storage=event_storage)
+        event_streams = RunEventStreamRegistry()
         return BuildsService(
             session=session,
             settings=settings,
             storage=storage,
             builder=builder,
-            event_dispatcher=event_dispatcher,
-            event_storage=event_storage,
+            event_streams=event_streams,
         )
 
     return _factory
@@ -293,8 +291,8 @@ async def test_prepare_build_join_inflight_when_allowed(
     )
 
     assert build.id == inflight.id
-    assert context.decision is BuildDecision.JOIN_INFLIGHT
-    assert context.reuse_summary == "Joined inflight build"
+    assert context.decision is BuildDecision.START_NEW
+    assert context.reuse_summary is None
 
 
 @pytest.mark.asyncio()
@@ -331,10 +329,9 @@ async def test_prepare_build_blocks_matching_inflight_when_disallowed(
 
 
 @pytest.mark.asyncio()
-async def test_prepare_build_waits_for_inflight_then_reuses(
+async def test_prepare_build_returns_queued_inflight_when_wait_requested(
     session: AsyncSession,
     service_factory,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace, configuration = await _create_configuration(session)
     service = service_factory(session, builder=FakeBuilder(events=[]))
@@ -356,13 +353,6 @@ async def test_prepare_build_waits_for_inflight_then_reuses(
     session.add(inflight)
     await session.commit()
 
-    async def fake_wait_for_build(*, workspace_id, configuration_id, fingerprint=None):
-        inflight.status = BuildStatus.READY
-        inflight.finished_at = utc_now()
-        await session.commit()
-
-    monkeypatch.setattr(service, "_wait_for_build", fake_wait_for_build)
-
     build, context = await service.prepare_build(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
@@ -370,7 +360,7 @@ async def test_prepare_build_waits_for_inflight_then_reuses(
     )
 
     assert build.id == inflight.id
-    assert context.decision is BuildDecision.REUSE_READY
+    assert context.decision is BuildDecision.START_NEW
 
 
 @pytest.mark.asyncio()
@@ -403,10 +393,9 @@ async def test_prepare_build_blocks_other_inflight_when_disallowed(
 
 
 @pytest.mark.asyncio()
-async def test_prepare_build_allows_new_when_other_inflight_allowed(
+async def test_prepare_build_conflicting_inflight_can_be_joined_when_allowed(
     session: AsyncSession,
     service_factory,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace, configuration = await _create_configuration(session)
     service = service_factory(session, builder=FakeBuilder(events=[]))
@@ -421,21 +410,18 @@ async def test_prepare_build_allows_new_when_other_inflight_allowed(
         fingerprint=f"{spec.fingerprint}-other",
         config_digest="other",
     )
-    async def fake_latest_inflight(*, configuration_id: str):
-        return other_inflight
+    session.add(other_inflight)
+    await session.commit()
 
-    monkeypatch.setattr(service._builds, "get_latest_inflight", fake_latest_inflight)
-
-    new_build, context = await service.prepare_build(
+    build, context = await service.prepare_build(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
         options=BuildCreateOptions(force=False, wait=False),
         allow_inflight=True,
     )
 
-    assert new_build.id != other_inflight.id
-    assert context.decision is BuildDecision.START_NEW
-    assert new_build.fingerprint == spec.fingerprint
+    assert build.id == other_inflight.id
+    assert context.decision is BuildDecision.JOIN_INFLIGHT
 
 
 @pytest.mark.asyncio()
@@ -525,12 +511,12 @@ async def test_stream_build_success(
     assert refreshed.status is BuildStatus.READY
     assert refreshed.summary == "Build succeeded"
     console_messages = [
-        evt.payload_dict().get("message")
+        (evt.get("data") or {}).get("message")
         for evt in events
-        if getattr(evt, "type", "") == "console.line"
+        if evt.get("event") == "console.line"
     ]
     assert console_messages == ["log 1", "log 2"]
-    assert any(getattr(evt, "type", "") == "build.complete" for evt in events)
+    assert any(evt.get("event") == "build.complete" for evt in events)
 
 
 @pytest.mark.asyncio()
@@ -579,8 +565,8 @@ async def test_stream_build_reuse_short_circuits_and_reports_summary(
             options=BuildCreateOptions(force=False, wait=False),
         )
     ]
-    payloads = [getattr(evt, "payload", None) for evt in events if evt.type == "build.complete"]
-    assert payloads and getattr(payloads[-1], "summary", None) == "Reused existing build"
+    payloads = [evt.get("data") for evt in events if evt.get("event") == "build.complete"]
+    assert payloads and payloads[-1].get("summary") == "Reused existing build"
     assert builder.invocations == 0
 
 
@@ -606,20 +592,22 @@ async def test_stream_build_join_replays_existing_and_live_events(
     session.add(inflight)
     await session.commit()
 
-    dispatcher = service._event_dispatcher  # type: ignore[attr-defined]
-    await dispatcher.emit(
-        type="build.queued",
+    stream = service.event_log_reader(
         workspace_id=workspace.id,
         configuration_id=configuration.id,
         build_id=inflight.id,
-        payload={"status": "queued"},
     )
-    await dispatcher.emit(
-        type="build.start",
-        workspace_id=workspace.id,
-        configuration_id=configuration.id,
-        build_id=inflight.id,
-        payload={"status": "building"},
+    await stream.append(
+        {
+            "event": "build.queued",
+            "payload": {"status": "queued"},
+        }
+    )
+    await stream.append(
+        {
+            "event": "build.start",
+            "payload": {"status": "building"},
+        }
     )
 
     _, context = await service.prepare_build(
@@ -631,19 +619,17 @@ async def test_stream_build_join_replays_existing_and_live_events(
 
     async def emit_live_events():
         await asyncio.sleep(0)
-        await dispatcher.emit(
-            type="console.line",
-            workspace_id=workspace.id,
-            configuration_id=configuration.id,
-            build_id=inflight.id,
-            payload={"message": "log", "stream": "stdout", "scope": "build"},
+        await stream.append(
+            {
+                "event": "console.line",
+                "payload": {"message": "log", "stream": "stdout", "scope": "build"},
+            }
         )
-        await dispatcher.emit(
-            type="build.complete",
-            workspace_id=workspace.id,
-            configuration_id=configuration.id,
-            build_id=inflight.id,
-            payload={"status": "ready", "exit_code": 0},
+        await stream.append(
+            {
+                "event": "build.complete",
+                "payload": {"status": "ready", "exit_code": 0},
+            }
         )
 
     producer = asyncio.create_task(emit_live_events())
@@ -656,7 +642,7 @@ async def test_stream_build_join_replays_existing_and_live_events(
     ]
     await producer
 
-    event_types = [evt.type for evt in events]
+    event_types = [evt.get("event") for evt in events]
     assert event_types[0] == "build.queued"
     assert "build.start" in event_types
     assert event_types[-1] == "build.complete"
@@ -693,7 +679,11 @@ async def test_ensure_local_env_uses_marker_when_ids_are_strings(
     )
     marker_path = venv_root / ".venv" / "ade_build.json"
     marker_path.parent.mkdir(parents=True, exist_ok=True)
-    marker_payload = {"build_id": str(build.id), "fingerprint": build.fingerprint}
+    marker_payload = {
+        "build_id": str(build.id),
+        "fingerprint": build.fingerprint,
+        "engine_version": build.engine_version,
+    }
     marker_path.write_text(json.dumps(marker_payload), encoding="utf-8")
 
     resolved = await service.ensure_local_env(build=build)
