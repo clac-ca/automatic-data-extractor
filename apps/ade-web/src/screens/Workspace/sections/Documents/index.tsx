@@ -1648,7 +1648,7 @@ function RunExtractionDrawerContent({
     setErrorMessage(null);
     setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
-    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false } as const;
+    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false, debug: false } as const;
     const runOptions =
       sheetList.length > 0
         ? { ...baseRunOptions, input_sheet_names: sheetList }

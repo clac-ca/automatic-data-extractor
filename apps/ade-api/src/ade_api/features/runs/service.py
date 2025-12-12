@@ -1468,6 +1468,8 @@ class RunsService:
         command.extend(["--logs-dir", str(logs_dir)])
         command.extend(["--config-package", str(config_path)])
         command.extend(["--log-format", "ndjson"])
+        if options.debug:
+            command.append("--debug")
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
