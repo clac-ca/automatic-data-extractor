@@ -37,6 +37,10 @@ class RunCreateOptions(BaseSchema):
         default=False,
         description="If true, rebuild the configuration environment before running.",
     )
+    debug: bool = Field(
+        default=False,
+        description="Enable verbose engine logging (passes --debug to ade_engine).",
+    )
     input_document_id: UUIDStr | None = Field(
         default=None,
         description="Document identifier to ingest.",

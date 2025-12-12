@@ -15,6 +15,7 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
   force_rebuild: false,
+  debug: false,
 };
 
 export async function createRun(

@@ -63,6 +63,12 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "run.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.complete": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
   "engine.run.summary": (event, payload, timestamp) => formatRunCompletionOrSummary(event, payload, timestamp),
+  "engine.detector.column_result": (_event, payload, timestamp) => formatDetectorColumnResult(payload, timestamp),
+  "engine.validation.result": (_event, payload, timestamp) => formatValidationResult(payload, timestamp),
+  "engine.transform.result": (_event, payload, timestamp) => formatTransformResult(payload, timestamp),
+  "engine.transform.overwrite": (_event, payload, timestamp) => formatTransformOverwrite(payload, timestamp),
+  "engine.hook.start": (_event, payload, timestamp) => formatHookEvent(payload, timestamp, "start"),
+  "engine.hook.end": (_event, payload, timestamp) => formatHookEvent(payload, timestamp, "end"),
 };
 
 const RUN_PREFIX_HANDLERS: PrefixHandler[] = [
@@ -446,6 +452,21 @@ function formatEngineLog(event: RunStreamEvent, payload: Record<string, unknown>
   return { level, message, timestamp, origin: "run", raw: event };
 }
 
+function formatHookEvent(
+  payload: Record<string, unknown>,
+  timestamp: string,
+  phase: "start" | "end",
+): WorkbenchConsoleLine {
+  const hookName = (payload.hook_name as string | undefined) ?? undefined;
+  const hookLabel = (payload.hook as string | undefined) ?? "hook";
+  const verb = phase === "start" ? "Starting" : "Finished";
+  const message = hookName
+    ? `${verb} hook ${hookLabel} (${hookName}).`
+    : `${verb} hook ${hookLabel}.`;
+
+  return { level: "debug", message, timestamp, origin: "run", raw: payload };
+}
+
 function formatEngineTableWritten(_event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
   const sheet = (payload.sheet_name as string | undefined) ?? "sheet";
   const tableIndex = typeof payload.table_index === "number" ? payload.table_index : null;
@@ -501,6 +522,18 @@ function formatEngineColumnDetectorResult(
     ? `Column ${columnIndex ?? "?"} detector ${name} on ${sheet} (${scores})`
     : `Column ${columnIndex ?? "?"} detector ${name} on ${sheet}`;
   return { level, message, timestamp, origin: "run" };
+}
+
+function formatDetectorColumnResult(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  // Legacy alias: delegate to the canonical column detector formatter
+  return formatEngineColumnDetectorResult(
+    { level: (payload.level as string | undefined) ?? "debug" } as RunStreamEvent,
+    payload,
+    timestamp,
+  );
 }
 
 function formatEngineColumnClassification(
@@ -966,6 +999,65 @@ function formatRowDetectorScore(
   return {
     level,
     message: [primary, secondary, tertiary, sample && contribPreview ? sample : ""].filter(Boolean).join("\n"),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatValidationResult(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const validator = (payload.validator as string | undefined) ?? "validator";
+  const field = (payload.field as string | undefined) ?? "field";
+  const columnIndex = asNumber(payload.column_index);
+  const issuesFound = asNumber(payload.issues_found);
+  const level: WorkbenchConsoleLine["level"] =
+    issuesFound !== undefined && issuesFound > 0 ? "warning" : "info";
+  const messageParts = [
+    `Validation ${validator} on ${field}`,
+    columnIndex !== undefined ? `(col ${columnIndex})` : null,
+    issuesFound !== undefined ? `→ ${issuesFound} issue${issuesFound === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+
+  return {
+    level,
+    message: messageParts.join(" "),
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatTransformResult(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const transform = (payload.transform as string | undefined) ?? "transform";
+  const field = (payload.field as string | undefined) ?? "field";
+  const inputLen = asNumber(payload.input_len);
+  const outputLen = asNumber(payload.output_len);
+  const message = `Transform ${transform} on ${field}${inputLen !== undefined && outputLen !== undefined ? ` (${outputLen}/${inputLen})` : ""}`;
+  return {
+    level: "info",
+    message,
+    timestamp,
+    origin: "run",
+    raw: payload,
+  };
+}
+
+function formatTransformOverwrite(
+  payload: Record<string, unknown>,
+  timestamp: string,
+): WorkbenchConsoleLine {
+  const field = (payload.field as string | undefined) ?? "field";
+  const rowIndex = asNumber(payload.row_index);
+  const message = `Transform overwrite for ${field}${rowIndex !== undefined ? ` at row ${rowIndex}` : ""}`;
+  return {
+    level: "debug",
+    message,
     timestamp,
     origin: "run",
     raw: payload,

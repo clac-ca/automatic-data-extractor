@@ -81,7 +81,14 @@ def test_run_create_request_serializes_minimal_options() -> None:
     request = RunCreateRequest()
     payload = request.model_dump()
 
-    assert payload == {"options": {"dry_run": False, "validate_only": False, "force_rebuild": False}}
+    assert payload == {
+        "options": {
+            "dry_run": False,
+            "validate_only": False,
+            "force_rebuild": False,
+            "debug": False,
+        }
+    }
 
 
 @pytest.mark.parametrize("cursor", [9, None])
