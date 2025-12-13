@@ -11,7 +11,7 @@ Context fields you can accept:
 - `metadata: Mapping[str, Any]` — from Engine (filenames, etc.)
 - `state: dict` — mutable run-scoped state
 - `input_file_name: str | None`
-- `logger: RunLogger | None`
+- `logger: RunLogger` (may be `NullLogger` in tests)
 
 Register with: `registry.register_row_detector(fn, row_kind="header"|"data"|..., priority=int)`
 
@@ -79,7 +79,7 @@ Context fields:
 - `sheet: Worksheet | None`
 - `table: TableData | None`
 - `input_file_name: str | None`
-- `logger: RunLogger | None`
+- `logger: RunLogger` (may be `NullLogger` in tests)
 
 Return: `None`. Raise to fail the run (wrapped as `HookError` with the stage name).
 

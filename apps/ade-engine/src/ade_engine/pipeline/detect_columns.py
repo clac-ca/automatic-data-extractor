@@ -82,7 +82,7 @@ def detect_and_map_columns(
 
             detectors_run.append(detector_payload)
 
-            if logger and logger.isEnabledFor(logging.DEBUG):
+            if logger.isEnabledFor(logging.DEBUG):
                 logger.event(
                     "detector.column_result",
                     level=logging.DEBUG,
@@ -109,42 +109,40 @@ def detect_and_map_columns(
 
         considered_fields = sorted(logged_scores) if logged_scores else []
 
-        if logger:
-            logger.event(
-                "column_classification",
-                level=logging.DEBUG,
-                message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
-                data={
-                    "sheet_name": sheet_name,
-                    "column_index": col.index,
-                    "detectors": detectors_run,
-                    "scores": logged_scores,
-                    "classification": {
-                        "field": best_field,
-                        "score": round(best_score, 6),
-                        "considered_fields": considered_fields,
-                    },
+        logger.event(
+            "column_classification",
+            level=logging.DEBUG,
+            message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
+            data={
+                "sheet_name": sheet_name,
+                "column_index": col.index,
+                "detectors": detectors_run,
+                "scores": logged_scores,
+                "classification": {
+                    "field": best_field,
+                    "score": round(best_score, 6),
+                    "considered_fields": considered_fields,
                 },
-            )
+            },
+        )
 
         # Ignore columns with no positive signal – treating zero/negative totals as unmapped
         if not scores or best_score <= 0:
             continue
         # pick best field for this column
         if best_field is not None:
-            if logger:
-                logger.event(
-                    "column_detector.candidate",
-                    level=logging.DEBUG,
-                    data={
-                        "column_index": col.index,
-                        "header": col.header,
-                        "best_field": best_field,
-                        "best_score": best_score,
-                        "scores": scores,
-                        "contributions": contributions.get(best_field, []),
-                    },
-                )
+            logger.event(
+                "column_detector.candidate",
+                level=logging.DEBUG,
+                data={
+                    "column_index": col.index,
+                    "header": col.header,
+                    "best_field": best_field,
+                    "best_score": best_score,
+                    "scores": scores,
+                    "contributions": contributions.get(best_field, []),
+                },
+            )
             mapping_candidates[col.index] = (best_field, best_score)
             field_competitors[best_field].append((col.index, best_score))
             contributions_by_column[col.index] = contributions
@@ -188,25 +186,24 @@ def detect_and_map_columns(
     mapped_cols.sort(key=lambda c: c.source_index)
     unmapped.sort(key=lambda c: c.index)
 
-    if logger:
-        logger.event(
-            "column_detector.summary",
-            level=logging.DEBUG,
-            data={
-                "mapped": [
-                    {
-                        "field": m.field_name,
-                        "source_index": m.source_index,
-                        "header": m.header,
-                        "score": m.score,
-                        "contributions": contributions_by_column.get(m.source_index, {}).get(m.field_name, []),
-                    }
-                    for m in mapped_cols
-                ],
-                "unmapped_indices": sorted(unmapped_indices),
-                "total_columns": len(source_columns),
-            },
-        )
+    logger.event(
+        "column_detector.summary",
+        level=logging.DEBUG,
+        data={
+            "mapped": [
+                {
+                    "field": m.field_name,
+                    "source_index": m.source_index,
+                    "header": m.header,
+                    "score": m.score,
+                    "contributions": contributions_by_column.get(m.source_index, {}).get(m.field_name, []),
+                }
+                for m in mapped_cols
+            ],
+            "unmapped_indices": sorted(unmapped_indices),
+            "total_columns": len(source_columns),
+        },
+    )
 
     return mapped_cols, unmapped
 

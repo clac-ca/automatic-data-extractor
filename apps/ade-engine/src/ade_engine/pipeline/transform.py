@@ -124,19 +124,18 @@ def apply_transforms(
                 raise PipelineError(
                     f"Transform {tf.qualname} failed for field '{col.field_name}'"
                 ) from exc
-            if logger:
-                logger.event(
-                    "transform.result",
-                    level=logging.DEBUG,
-                    data={
-                        "transform": tf.qualname,
-                        "field": col.field_name,
-                        "input_len": expected_len,
-                        "output_len": len(validated),
-                        "sample_before": before_sample,
-                        "sample_after": [entry.value for entry in validated[:3]],
-                    },
-                )
+            logger.event(
+                "transform.result",
+                level=logging.DEBUG,
+                data={
+                    "transform": tf.qualname,
+                    "field": col.field_name,
+                    "input_len": expected_len,
+                    "output_len": len(validated),
+                    "sample_before": before_sample,
+                    "sample_after": [entry.value for entry in validated[:3]],
+                },
+            )
             working = validated
             current_values = [entry.value for entry in working]
 
@@ -149,7 +148,7 @@ def apply_transforms(
             if col.field_name not in value_payload:
                 value_payload[col.field_name] = None
             for key, value in value_payload.items():
-                if key in output_rows[row_index] and output_rows[row_index][key] != value and logger:
+                if key in output_rows[row_index] and output_rows[row_index][key] != value:
                     logger.event(
                         "transform.overwrite",
                         level=logging.DEBUG,

@@ -5,24 +5,12 @@ from openpyxl import Workbook
 from ade_engine.pipeline.pipeline import Pipeline
 from ade_engine.registry import Registry
 from ade_engine.settings import Settings
-from ade_engine.logging import RunLogger
-
-
-class DummyLogger(RunLogger):
-    def __init__(self):
-        import logging
-
-        dummy = logging.getLogger("dummy")
-        dummy.disabled = True
-        super().__init__(logger=dummy)
-
-    def event(self, *args, **kwargs):
-        pass
+from ade_engine.logging import NullLogger
 
 
 def _make_pipeline(**settings_kwargs):
     settings = Settings(**settings_kwargs)
-    return Pipeline(registry=Registry(), settings=settings, logger=DummyLogger())
+    return Pipeline(registry=Registry(), settings=settings, logger=NullLogger())
 
 
 def test_materialize_rows_trims_to_populated_extent():

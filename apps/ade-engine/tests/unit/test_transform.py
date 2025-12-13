@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.logging import NullLogger
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.pipeline.transform import apply_transforms
 from ade_engine.registry import FieldDef, Registry
@@ -54,6 +55,7 @@ def test_transform_applies_row_outputs_and_enforces_contract():
 
 def test_transform_invalid_return_raises_pipeline_error():
     registry = Registry()
+    logger = NullLogger()
 
     def broken_transform(*, values, **_):
         return None
@@ -71,5 +73,5 @@ def test_transform_invalid_return_raises_pipeline_error():
             state={},
             metadata={},
             input_file_name=None,
-            logger=None,
+            logger=logger,
         )
