@@ -90,18 +90,17 @@ def apply_validators(
                 raise PipelineError(
                     f"Validator {val.qualname} failed for field '{col.field_name}'"
                 ) from exc
-            if logger:
-                logger.event(
-                    "validation.result",
-                    level=logging.DEBUG,
-                    data={
-                        "validator": val.qualname,
-                        "field": col.field_name,
-                        "column_index": col.source_index,
-                        "issues_found": len(validated),
-                        "results_sample": [issue.model_dump() for issue in validated[:5]],
-                    },
-                )
+            logger.event(
+                "validation.result",
+                level=logging.DEBUG,
+                data={
+                    "validator": val.qualname,
+                    "field": col.field_name,
+                    "column_index": col.source_index,
+                    "issues_found": len(validated),
+                    "results_sample": [issue.model_dump() for issue in validated[:5]],
+                },
+            )
             for res in validated:
                 issue = {
                     "field": col.field_name,

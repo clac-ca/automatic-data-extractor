@@ -500,6 +500,28 @@ class RunLogger(logging.LoggerAdapter):
         self.log(level, message or full_name, extra=extra, exc_info=exc_info)
 
 
+class NullLogger(RunLogger):
+    """A RunLogger implementation that discards all log/event output."""
+
+    def __init__(
+        self,
+        *,
+        namespace: str = ENGINE_NAMESPACE,
+        engine_run_id: str = "null",
+    ) -> None:
+        base_logger = logging.Logger("ade_engine.null")
+        base_logger.addHandler(logging.NullHandler())
+        base_logger.propagate = False
+        base_logger.disabled = True
+        super().__init__(base_logger, namespace=namespace, engine_run_id=engine_run_id)
+
+    def with_namespace(self, namespace: str) -> "NullLogger":
+        return NullLogger(namespace=namespace, engine_run_id=self._engine_run_id)
+
+    def __bool__(self) -> bool:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # RunLogContext
 # ---------------------------------------------------------------------------
@@ -577,6 +599,7 @@ __all__ = [
     "NdjsonFormatter",
     "TextFormatter",
     "RunLogger",
+    "NullLogger",
     "RunLogContext",
     "create_run_logger_context",
     "normalize_dotpath",

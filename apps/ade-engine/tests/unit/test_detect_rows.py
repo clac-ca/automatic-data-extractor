@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.logging import NullLogger
 from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_bounds
 from ade_engine.registry import Registry
 from ade_engine.registry.models import RowKind
@@ -16,6 +17,7 @@ from ade_engine.registry.models import RowKind
 
 def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():
     reg = Registry()
+    logger = NullLogger()
 
     def pick_header(*, row_index, **_):
         return {RowKind.HEADER.value: 1.0}
@@ -29,7 +31,7 @@ def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():
         state={},
         metadata={},
         input_file_name=None,
-        logger=None,
+        logger=logger,
     )
 
     assert reg.row_detectors[0].row_kind == RowKind.HEADER.value
@@ -39,6 +41,7 @@ def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():
 
 def test_row_detector_invalid_return_shape_raises():
     reg = Registry()
+    logger = NullLogger()
 
     def pick_header(*, row_index, **_):
         return 1.0
@@ -53,12 +56,13 @@ def test_row_detector_invalid_return_shape_raises():
             state={},
             metadata={},
             input_file_name=None,
-            logger=None,
+            logger=logger,
         )
 
 
 def test_detect_table_bounds_stops_at_next_header_without_data():
     reg = Registry()
+    logger = NullLogger()
 
     def detector(*, row_index, **_):
         if row_index in (0, 1):
@@ -80,7 +84,7 @@ def test_detect_table_bounds_stops_at_next_header_without_data():
         state={},
         metadata={},
         input_file_name=None,
-        logger=None,
+        logger=logger,
     )
 
     assert header_idx == 0

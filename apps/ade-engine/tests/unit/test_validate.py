@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.exceptions import PipelineError
+from ade_engine.logging import NullLogger
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.pipeline.validate import apply_validators
 from ade_engine.registry import FieldDef, Registry
@@ -20,6 +21,7 @@ def _mapped_column() -> MappedColumn:
 
 def test_validator_returns_issue_list():
     registry = Registry()
+    logger = NullLogger()
 
     def validator(*, values, **_):
         issues = []
@@ -42,7 +44,7 @@ def test_validator_returns_issue_list():
         state={},
         metadata={},
         input_file_name=None,
-        logger=None,
+        logger=logger,
     )
 
     assert issues == [
@@ -52,6 +54,7 @@ def test_validator_returns_issue_list():
 
 def test_validator_invalid_shape_raises():
     registry = Registry()
+    logger = NullLogger()
 
     def bad_validator(*, values, **_):
         return {"row_index": 0, "message": "oops"}
@@ -71,5 +74,5 @@ def test_validator_invalid_shape_raises():
             state={},
             metadata={},
             input_file_name=None,
-            logger=None,
+            logger=logger,
         )

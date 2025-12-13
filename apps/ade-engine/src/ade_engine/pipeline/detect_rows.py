@@ -65,7 +65,7 @@ def _classify_rows(
 
             detectors_run.append(detector_payload)
 
-            if logger and logger.isEnabledFor(logging.DEBUG):
+            if logger.isEnabledFor(logging.DEBUG):
                 scores_str = ", ".join(f"{k}={v:.3f}" for k, v in rounded_patch.items())
                 detector_msg = (
                     f"Row {row_idx} detector {det.qualname} on {sheet_name}"
@@ -90,17 +90,16 @@ def _classify_rows(
                 row_score[kind] = row_score.get(kind, 0.0) + delta
 
         # Emit one aggregated row classification event per row (all detectors + final scores).
-        if logger:
-            row_score = scores.get(row_idx, {})
-            if row_score:
-                classification_type, classification_score = max(row_score.items(), key=lambda kv: kv[1])
-            else:
-                classification_type, classification_score = "unknown", 0.0
+        row_score = scores.get(row_idx, {})
+        if row_score:
+            classification_type, classification_score = max(row_score.items(), key=lambda kv: kv[1])
+        else:
+            classification_type, classification_score = "unknown", 0.0
 
+        if logger.isEnabledFor(logging.DEBUG):
             logged_scores = {k: round(v, 6) for k, v in row_score.items()}
             logged_classification_score = round(classification_score, 6)
             considered_row_kinds = sorted(logged_scores) if logged_scores else []
-
             logger.event(
                 "row_classification",
                 level=logging.DEBUG,
@@ -117,13 +116,6 @@ def _classify_rows(
                     },
                 },
             )
-        else:
-            # still track classification even when not logging
-            row_score = scores.get(row_idx, {})
-            if row_score:
-                classification_type, _ = max(row_score.items(), key=lambda kv: kv[1])
-            else:
-                classification_type = "unknown"
 
         classifications.append(classification_type)
 
@@ -204,7 +196,7 @@ def detect_table_bounds(
 
     data_start_idx = min(header_idx + 1, total_rows)
 
-    if logger:
+    if logger.isEnabledFor(logging.DEBUG):
         logger.event(
             "row_detector.summary",
             level=logging.DEBUG,
