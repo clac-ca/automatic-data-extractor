@@ -40,11 +40,13 @@ class FakeBuildsService:
     def __init__(
         self,
         *,
+        session,
         build: Build,
         context: BuildExecutionContext | None,
         events: list[EventRecord] | None,
         venv_path: Path,
     ) -> None:
+        self._session = session
         self.build = build
         self.context = context
         self.events = events or []
@@ -68,6 +70,7 @@ class FakeBuildsService:
             yield event
         self.build.status = BuildStatus.READY
         self.build.exit_code = 0
+        await self._session.commit()
 
     async def stream_build_events(
         self,
@@ -80,6 +83,7 @@ class FakeBuildsService:
             yield event
         build.status = BuildStatus.READY
         build.exit_code = 0
+        await self._session.commit()
 
     async def launch_build_if_needed(
         self,
@@ -211,6 +215,7 @@ async def _build_service(
         safe_mode_service=safe_mode_service,
     )
     fake_builds = FakeBuildsService(
+        session=session,
         build=build,
         context=build_ctx,
         events=build_events,
@@ -230,10 +235,9 @@ async def test_prepare_run_emits_queued_event(session, tmp_path: Path) -> None:
     )
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
-    assert Path(context.venv_path).name == ".venv"
     assert fake_builds.force_calls == [False]
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
@@ -256,7 +260,8 @@ async def test_execute_engine_sets_config_package_flag(
         build_status=BuildStatus.READY,
     )
     options = RunCreateOptions(input_document_id=str(document.id))
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
+    context = await service._execution_context_for_run(run.id)
 
     captured_command: list[str] | None = None
 
@@ -334,11 +339,11 @@ async def test_stream_run_waits_for_build_and_forwards_events(
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     options = RunCreateOptions(input_document_id=str(document.id), force_rebuild=True)
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.WAITING_FOR_BUILD
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
     event_types = [event["event"] for event in events]
 
     assert "build.start" in event_types
@@ -402,9 +407,9 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
 
     assert observed_flags == [False]
     assert events[-1]["event"] == "run.complete"
@@ -424,9 +429,9 @@ async def test_validate_only_short_circuits_and_persists_summary(
         build_status=BuildStatus.READY,
     )
     options = RunCreateOptions(input_document_id=str(document.id), validate_only=True)
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
     event_types = [event["event"] for event in events]
 
     assert event_types[0] == "run.queued"

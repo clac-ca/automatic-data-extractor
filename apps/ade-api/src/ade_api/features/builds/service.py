@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.events import (
     EventRecord,
-    ensure_event_context,
     new_event_record,
 )
 from ade_api.common.ids import generate_uuid7
@@ -42,7 +41,6 @@ from ade_api.infra.storage import (
     build_venv_marker_path,
     build_venv_path,
     build_venv_root,
-    workspace_run_root,
 )
 from ade_api.models import Build, BuildStatus, Configuration
 from ade_api.settings import Settings
@@ -264,12 +262,6 @@ class BuildsService:
                 python_bin=spec.python_bin,
                 run_id=run_id,
             )
-            if resolution.decision is BuildDecision.START_NEW:
-                await self.launch_build_if_needed(
-                    build=resolution.build,
-                    reason=decision_reason,
-                    run_id=run_id,
-                )
         return resolution.build, context
 
     async def ensure_build_for_run(
@@ -281,7 +273,7 @@ class BuildsService:
         run_id: UUID | None = None,
         reason: str = "on_demand",
     ) -> tuple[Build, BuildExecutionContext]:
-        """Non-blocking build ensure used by run creation."""
+        """Ensure a build record exists for a run (does not execute the build)."""
 
         options = BuildCreateOptions(force=force_rebuild, wait=False)
         return await self.prepare_build(
@@ -800,20 +792,6 @@ class BuildsService:
             build_id=build.id,
         ).iter_persisted(after_sequence=after_sequence)
 
-    def _run_event_stream_for_run(
-        self,
-        *,
-        workspace_id: UUID,
-        run_id: UUID,
-    ) -> RunEventStream:
-        run_dir = workspace_run_root(self._settings, workspace_id, run_id)
-        path = run_dir / "logs" / "events.ndjson"
-        context = RunEventContext(
-            job_id=str(run_id),
-            workspace_id=str(workspace_id),
-        )
-        return self._event_streams.get_stream(path=path, context=context)
-
     async def launch_build_if_needed(
         self,
         *,
@@ -987,22 +965,6 @@ class BuildsService:
         )
         appended = await stream.append(event)
         self._log_event_debug(appended, origin="build")
-
-        # Fan-out into the associated run's event stream (if provided) so run SSE always
-        # includes build lifecycle/logs even when the run orchestrator is down.
-        if run_id:
-            run_stream = self._run_event_stream_for_run(
-                workspace_id=build.workspace_id,
-                run_id=run_id,
-            )
-            enriched = ensure_event_context(
-                appended,
-                job_id=str(run_id),
-                workspace_id=str(build.workspace_id),
-                build_id=str(build.id),
-                configuration_id=str(build.configuration_id),
-            )
-            await run_stream.append(enriched)
         return appended
 
     async def _ensure_build_queued_event(

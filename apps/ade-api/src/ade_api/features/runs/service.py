@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,6 @@ from ade_api.features.system_settings.service import (
     SafeModeService,
 )
 from ade_api.infra.storage import (
-    build_venv_path,
     workspace_documents_root,
     workspace_run_root,
 )
@@ -76,9 +75,6 @@ from .schemas import (
     RunResource,
 )
 from .supervisor import RunExecutionSupervisor
-
-if TYPE_CHECKING:
-    from ade_api.features.builds.service import BuildExecutionContext
 
 __all__ = [
     "RunExecutionContext",
@@ -136,42 +132,12 @@ class RunPathsSnapshot:
 
 @dataclass(slots=True, frozen=True)
 class RunExecutionContext:
-    """Minimal data required to execute a run outside the request scope."""
+    """Minimal identifiers required to execute a run."""
 
     run_id: UUID
     configuration_id: UUID
     workspace_id: UUID
-    venv_path: str
     build_id: UUID
-    runs_dir: str | None = None
-    build_context: BuildExecutionContext | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "run_id": str(self.run_id),
-            "configuration_id": str(self.configuration_id),
-            "workspace_id": str(self.workspace_id),
-            "venv_path": self.venv_path,
-            "build_id": str(self.build_id),
-            "runs_dir": self.runs_dir or "",
-            "build_context": self.build_context.as_dict() if self.build_context else None,
-        }
-
-    @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> RunExecutionContext:
-        return cls(
-            run_id=UUID(str(payload["run_id"])),
-            configuration_id=UUID(str(payload["configuration_id"])),
-            workspace_id=UUID(str(payload["workspace_id"])),
-            venv_path=payload["venv_path"],
-            build_id=UUID(str(payload["build_id"])),
-            runs_dir=payload.get("runs_dir") or None,
-            build_context=(
-                BuildExecutionContext.from_dict(payload["build_context"])
-                if payload.get("build_context")
-                else None
-            ),
-        )
 
 
 # --------------------------------------------------------------------------- #
@@ -238,8 +204,8 @@ class RunsService:
         *,
         configuration_id: UUID,
         options: RunCreateOptions,
-    ) -> tuple[Run, RunExecutionContext]:
-        """Create the queued run row and return its execution context."""
+    ) -> Run:
+        """Create the queued run row and persist initial events."""
 
         logger.debug(
             "run.prepare.start",
@@ -264,7 +230,7 @@ class RunsService:
 
         run_id = self._generate_run_id()
 
-        build, build_ctx = await self._builds_service.ensure_build_for_run(
+        build, _ = await self._builds_service.ensure_build_for_run(
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             force_rebuild=options.force_rebuild,
@@ -272,12 +238,6 @@ class RunsService:
             reason="on_demand",
         )
         build_id = build.id
-        venv_path = build_venv_path(
-            self._settings,
-            configuration.workspace_id,
-            configuration.id,
-            build_id,
-        )
         run_status = (
             RunStatus.WAITING_FOR_BUILD
             if build.status is not BuildStatus.READY
@@ -306,17 +266,6 @@ class RunsService:
         await self._session.flush()
         await self._session.commit()
         await self._session.refresh(run)
-
-        runs_root = workspace_run_root(self._settings, configuration.workspace_id)
-        context = RunExecutionContext(
-            run_id=run.id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            venv_path=str(venv_path),
-            build_id=build_id,
-            runs_dir=str(runs_root),
-            build_context=build_ctx if (build.status is not BuildStatus.READY) else None,
-        )
 
         mode_literal = "validate" if options.validate_only else "execute"
         await self._emit_api_event(
@@ -351,12 +300,23 @@ class RunsService:
                 force_rebuild=options.force_rebuild,
             ),
         )
-        return run, context
+        return run
+
+    async def _execution_context_for_run(self, run_id: UUID) -> RunExecutionContext:
+        run = await self._require_run(run_id)
+        if run.build_id is None:
+            raise RuntimeError(f"Run {run_id} is missing build metadata")
+        return RunExecutionContext(
+            run_id=run.id,
+            configuration_id=run.configuration_id,
+            workspace_id=run.workspace_id,
+            build_id=run.build_id,
+        )
 
     async def run_to_completion(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
     ) -> None:
         """Execute the run, exhausting the event stream."""
@@ -364,21 +324,17 @@ class RunsService:
         logger.info(
             "run.execute.start",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                run_id=run_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
         )
-        async for _ in self.stream_run(context=context, options=options):
+        async for _ in self.stream_run(run_id=run_id, options=options):
             pass
         logger.info(
             "run.execute.completed",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                run_id=run_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
@@ -387,11 +343,12 @@ class RunsService:
     async def stream_run(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
     ) -> AsyncIterator[RunStreamFrame]:
         """Iterate through run events while executing the engine."""
 
+        context = await self._execution_context_for_run(run_id)
         logger.debug(
             "run.stream.start",
             extra=log_context(
@@ -433,17 +390,14 @@ class RunsService:
         if queued_event:
             yield queued_event
 
-        if context.build_context:
-            build_context = context.build_context
-            # Ensure the build is actually executing; if it's queued or building but idle,
-            # launch it in the background. This decouples build execution from the run stream.
-            build = await self._builds_service.get_build_or_raise(
-                build_context.build_id,
-                workspace_id=build_context.workspace_id,
-            )
+        build = await self._builds_service.get_build_or_raise(
+            context.build_id,
+            workspace_id=context.workspace_id,
+        )
+        if build.status is not BuildStatus.READY:
             await self._builds_service.launch_build_if_needed(
                 build=build,
-                reason=build_context.reason or "run_requested",
+                reason="run_requested",
                 run_id=run.id,
             )
 
@@ -457,17 +411,14 @@ class RunsService:
                     event,
                     job_id=str(run.id),
                     workspace_id=str(run.workspace_id),
-                    build_id=str(build_context.build_id),
+                    build_id=str(context.build_id),
                     configuration_id=str(run.configuration_id),
                 )
                 forwarded = await run_stream.append(enriched)
                 self._log_event_debug(forwarded, origin="build")
                 yield forwarded
 
-            build = await self._builds_service.get_build_or_raise(
-                build_context.build_id,
-                workspace_id=build_context.workspace_id,
-            )
+            await self._session.refresh(build)
             if build.status is not BuildStatus.READY:
                 error_message = build.error_message or (
                     f"Configuration {build.configuration_id} build failed"
@@ -509,7 +460,6 @@ class RunsService:
                 )
                 return
 
-            venv_path = await self._builds_service.ensure_local_env(build=build)
             build_done_message = "Configuration build completed; starting ADE run."
             yield await self._emit_api_event(
                 run=run,
@@ -520,15 +470,6 @@ class RunsService:
                     "level": "info",
                     "message": build_done_message,
                 },
-            )
-            context = RunExecutionContext(
-                run_id=context.run_id,
-                configuration_id=context.configuration_id,
-                workspace_id=context.workspace_id,
-                venv_path=str(venv_path),
-                build_id=context.build_id,
-                runs_dir=context.runs_dir,
-                build_context=None,
             )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
@@ -647,18 +588,20 @@ class RunsService:
     async def handle_background_failure(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
         error: Exception,
     ) -> AsyncIterator[EventRecord]:
         """Surface background task failures via console + completion events."""
 
-        async for event in self._handle_stream_failure(
-            context=context,
-            options=options,
-            error=error,
-        ):
-            yield event
+        try:
+            context = await self._execution_context_for_run(run_id)
+        except Exception:
+            return
+
+        async for event in self._handle_stream_failure(context=context, options=options, error=error):
+            if isinstance(event, dict):
+                yield event
 
     # --------------------------------------------------------------------- #
     # Public read APIs (runs, summaries, events, outputs)
@@ -1430,12 +1373,7 @@ class RunsService:
             input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
         )
 
-        runs_root = (
-            Path(context.runs_dir)
-            if context.runs_dir
-            else workspace_run_root(self._settings, context.workspace_id)
-        )
-        run_dir = runs_root / str(run.id)
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
