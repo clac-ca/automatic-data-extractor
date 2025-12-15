@@ -1,36 +1,7 @@
 import { resolveApiUrl } from "@shared/api/client";
 
 import type { RunStreamOptions } from "@shared/runs/api";
-
-export type JobStreamMetaEvent = {
-  readonly id?: number;
-  readonly ts?: string;
-  readonly scope?: string;
-  readonly level?: string;
-  readonly text?: string;
-  readonly details?: Record<string, unknown>;
-};
-
-export type JobStreamDoneEvent = {
-  readonly id?: number;
-  readonly ts?: string;
-  readonly scope?: string;
-  readonly level?: string;
-  readonly text?: string;
-  readonly details?: Record<string, unknown>;
-};
-
-export type JobStreamLogLine = {
-  readonly scope: "run" | "build";
-  readonly level: "debug" | "info" | "warning" | "error" | "success";
-  readonly ts: string;
-  readonly message: string;
-};
-
-export type JobStreamMessage =
-  | { readonly type: "meta"; readonly event: JobStreamMetaEvent }
-  | { readonly type: "log"; readonly line: JobStreamLogLine }
-  | { readonly type: "done"; readonly event: JobStreamDoneEvent };
+import type { RunStreamEvent } from "@shared/runs/types";
 
 function buildJobStreamUrl(configurationId: string, options: RunStreamOptions): string {
   const params = new URLSearchParams();
@@ -49,139 +20,140 @@ function buildJobStreamUrl(configurationId: string, options: RunStreamOptions): 
   return query ? `${base}?${query}` : base;
 }
 
-function parseLogPayload(raw: string): JobStreamLogLine | null {
-  const first = raw.indexOf("\t");
-  if (first < 0) return null;
-  const second = raw.indexOf("\t", first + 1);
-  if (second < 0) return null;
-  const third = raw.indexOf("\t", second + 1);
-  if (third < 0) return null;
-
-  const scopeRaw = raw.slice(0, first).trim().toLowerCase();
-  const levelRaw = raw.slice(first + 1, second).trim().toLowerCase();
-  const ts = raw.slice(second + 1, third).trim();
-  const message = raw.slice(third + 1);
-
-  const scope: JobStreamLogLine["scope"] = scopeRaw === "build" ? "build" : "run";
-  const level: JobStreamLogLine["level"] =
-    levelRaw === "debug" || levelRaw === "warning" || levelRaw === "error" || levelRaw === "success"
-      ? (levelRaw as JobStreamLogLine["level"])
-      : "info";
-
-  if (!ts || !message.trim()) return null;
-  return { scope, level, ts, message };
-}
-
-export async function* streamConfigurationJob(
+export async function* streamConfigurationJobEvents(
   configurationId: string,
   options: RunStreamOptions,
   signal?: AbortSignal,
-): AsyncGenerator<JobStreamMessage> {
+): AsyncGenerator<RunStreamEvent> {
+  const url = buildJobStreamUrl(configurationId, options);
+  yield* streamSseJsonEvents(url, signal);
+}
+
+async function* streamSseJsonEvents(url: string, signal?: AbortSignal): AsyncGenerator<RunStreamEvent> {
   const abortError =
     typeof DOMException !== "undefined"
       ? new DOMException("Aborted", "AbortError")
       : Object.assign(new Error("Aborted"), { name: "AbortError" });
 
-  const url = buildJobStreamUrl(configurationId, options);
-  const queue: JobStreamMessage[] = [];
-  let done = false;
-  let failure: unknown = null;
-  let pendingResolve: ((value: IteratorResult<JobStreamMessage>) => void) | null = null;
+  const controller = new AbortController();
+  const abortHandler = () => controller.abort();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-  const es = new EventSource(url, { withCredentials: true });
-
-  const close = (error?: unknown) => {
-    if (done) return;
-    done = true;
-    failure = error ?? null;
-    try {
-      es.close();
-    } catch {
-      // ignore close errors
-    }
-    if (pendingResolve) {
-      const resolve = pendingResolve;
-      pendingResolve = null;
-      resolve({ value: undefined as unknown as JobStreamMessage, done: true });
-    }
-  };
-
-  const abortHandler = () => close(abortError);
   if (signal?.aborted) {
-    close(abortError);
+    controller.abort();
   } else if (signal) {
     signal.addEventListener("abort", abortHandler);
   }
 
-  const enqueue = (msg: JobStreamMessage) => {
-    if (pendingResolve) {
-      const resolve = pendingResolve;
-      pendingResolve = null;
-      resolve({ value: msg, done: false });
-      return;
-    }
-    queue.push(msg);
-  };
-
-  es.addEventListener("meta", (evt) => {
-    const raw = typeof (evt as MessageEvent).data === "string" ? (evt as MessageEvent).data : "";
-    if (!raw.trim()) return;
-    try {
-      enqueue({ type: "meta", event: JSON.parse(raw) as JobStreamMetaEvent });
-    } catch {
-      // ignore malformed meta
-    }
-  });
-
-  es.addEventListener("log", (evt) => {
-    const raw = typeof (evt as MessageEvent).data === "string" ? (evt as MessageEvent).data : "";
-    if (!raw.trim()) return;
-    const parsed = parseLogPayload(raw);
-    if (!parsed) return;
-    enqueue({ type: "log", line: parsed });
-  });
-
-  es.addEventListener("done", (evt) => {
-    const raw = typeof (evt as MessageEvent).data === "string" ? (evt as MessageEvent).data : "";
-    if (!raw.trim()) return;
-    try {
-      enqueue({ type: "done", event: JSON.parse(raw) as JobStreamDoneEvent });
-      close();
-    } catch {
-      // ignore malformed done
-    }
-  });
-
-  es.onerror = () => {
-    // Treat errors as terminal for now; this stream is one-shot and intentionally
-    // does not attempt automatic resume.
-    close(new Error("Job stream disconnected."));
-  };
-
   try {
-    while (true) {
-      if (queue.length) {
-        yield queue.shift()!;
-        continue;
-      }
-      if (done) {
-        if (failure) throw failure;
-        return;
-      }
-      const result = await new Promise<IteratorResult<JobStreamMessage>>((resolve) => {
-        pendingResolve = resolve;
-      });
-      if (result.done) {
-        if (failure) throw failure;
-        return;
-      }
-      yield result.value;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "text/event-stream" },
+      signal: controller.signal,
+    });
+
+    if (!response.body || !response.ok) {
+      throw new Error("Job event stream unavailable.");
     }
+
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const event = parseSseEvent(part);
+        if (!event) continue;
+        yield event;
+      }
+
+      if (done) {
+        const finalEvent = parseSseEvent(buffer);
+        if (finalEvent) {
+          yield finalEvent;
+        }
+        return;
+      }
+    }
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw abortError;
+    }
+    throw error;
   } finally {
-    close();
     if (signal) {
       signal.removeEventListener("abort", abortHandler);
     }
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore cancellation failures
+      }
+    }
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  }
+}
+
+function parseSseEvent(rawEvent: string): RunStreamEvent | null {
+  const dataLines: string[] = [];
+  let sseId: string | null = null;
+  let sseEvent: string | null = null;
+
+  for (const line of rawEvent.split(/\n/)) {
+    if (line.startsWith("data:")) {
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+      continue;
+    }
+    if (line.startsWith("id:")) {
+      sseId = line.slice(3).trim();
+      continue;
+    }
+    if (line.startsWith("event:")) {
+      sseEvent = line.slice(6).trim();
+      continue;
+    }
+  }
+
+  if (!dataLines.length) {
+    return null;
+  }
+
+  const payload = dataLines.join("\n");
+  if (!payload.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payload) as RunStreamEvent;
+    (parsed as Record<string, unknown>)._raw = payload;
+
+    if (sseEvent && !(parsed as Record<string, unknown>).event && !(parsed as Record<string, unknown>).type) {
+      (parsed as Record<string, unknown>).event = sseEvent;
+    }
+
+    if (sseId && (parsed as Record<string, unknown>).sequence === undefined) {
+      const numeric = Number(sseId);
+      if (Number.isFinite(numeric)) {
+        (parsed as Record<string, unknown>).sequence = numeric;
+      } else {
+        (parsed as Record<string, unknown>).sse_id = sseId;
+      }
+    }
+
+    return parsed;
+  } catch {
+    return null;
   }
 }
 
