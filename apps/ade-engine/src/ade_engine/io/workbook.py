@@ -68,26 +68,7 @@ def resolve_sheet_names(workbook: Workbook, requested: list[str] | None) -> list
     return sorted(unique_requested, key=lambda n: order_index[n])
 
 
-class WorkbookIO:
-    """Adapter for workbook operations (open/save)."""
-
-    def open_source(self, path: Path):
-        return open_source_workbook(path)
-
-    def create_output(self) -> Workbook:
-        return create_output_workbook()
-
-    def save_output(self, workbook: Workbook, path: Path) -> None:
-        workbook.save(path)
-        with suppress(Exception):
-            workbook.close()
-
-    def resolve_sheet_names(self, workbook: Workbook, requested: list[str] | None) -> list[str]:
-        return resolve_sheet_names(workbook, requested)
-
-
 __all__ = [
-    "WorkbookIO",
     "create_output_workbook",
     "load_source_workbook",
     "open_source_workbook",

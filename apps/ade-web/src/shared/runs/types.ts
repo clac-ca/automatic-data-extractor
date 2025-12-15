@@ -12,6 +12,7 @@ export type EventRecord = {
   readonly error?: Record<string, unknown> | null;
   readonly sequence?: number;
   readonly sse_id?: string;
+  readonly _raw?: string;
 };
 
 export type RunStreamEvent = EventRecord;

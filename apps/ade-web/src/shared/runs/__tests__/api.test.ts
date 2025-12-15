@@ -86,7 +86,7 @@ describe("streamRunEvents", () => {
 
     const result = await pending;
     expect(result.done).toBe(false);
-    expect(result.value).toEqual(runEvent);
+    expect(result.value).toMatchObject(runEvent);
 
     await iterator.return?.(undefined);
     sse.close();
@@ -107,11 +107,11 @@ describe("streamRunEvents", () => {
     };
 
     sse.emit(startEvent);
-    expect((await first).value).toEqual(startEvent);
+    expect((await first).value).toMatchObject(startEvent);
 
     const second = iterator.next();
     sse.emit(completedEvent);
-    expect((await second).value).toEqual(completedEvent);
+    expect((await second).value).toMatchObject(completedEvent);
 
     sse.close();
     const done = await iterator.next();
@@ -157,7 +157,8 @@ describe("streamRun", () => {
       body: { options: { dry_run: true, validate_only: false, force_rebuild: false, debug: false } },
       signal: undefined,
     });
-    expect(events).toEqual([runEvent]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject(runEvent);
     sse.close();
   });
 
@@ -198,7 +199,7 @@ describe("runEventsUrl helpers", () => {
     const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
     sse.emit(runEvent);
     const result = await pending;
-    expect(result.value).toEqual(runEvent);
+    expect(result.value).toMatchObject(runEvent);
     await iterator.return?.(undefined);
     sse.close();
   });

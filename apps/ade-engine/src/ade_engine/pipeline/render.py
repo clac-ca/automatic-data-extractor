@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, List
+from dataclasses import dataclass
+from typing import Any, List, Sequence
 
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
@@ -10,17 +11,31 @@ from ade_engine.settings import Settings
 from ade_engine.logging import RunLogger
 
 
-def _next_append_row(worksheet: Worksheet) -> int:
-    current = getattr(worksheet, "_current_row", None)
-    if isinstance(current, int) and current >= 0:
-        return current + 1
-    return max(int(getattr(worksheet, "max_row", 0)), 0) + 1
+@dataclass
+class SheetWriter:
+    """Simple worksheet writer that tracks an explicit row cursor.
+
+    openpyxl's ``Worksheet.append`` advances an internal cursor even when appending
+    an empty row; ``max_row`` does not. Tracking our own cursor keeps output ranges
+    accurate without relying on openpyxl internals.
+    """
+
+    worksheet: Worksheet
+    row: int = 0  # last written row index (1-based); 0 means "nothing written yet"
+
+    def write_row(self, values: Sequence[Any]) -> int:
+        self.worksheet.append(list(values))
+        self.row += 1
+        return self.row
+
+    def blank_row(self) -> int:
+        return self.write_row([])
 
 
 def render_table(
     *,
     table: TableData,
-    worksheet: Worksheet,
+    writer: SheetWriter,
     settings: Settings,
     field_order: list[str] | None = None,
     logger: RunLogger,
@@ -30,7 +45,7 @@ def render_table(
     mapped_cols: List[MappedColumn] = table.mapped_columns
     unmapped_cols: List[SourceColumn] = table.unmapped_columns if settings.append_unmapped_columns else []
 
-    start_row = _next_append_row(worksheet)
+    start_row = writer.row + 1
 
     # Headers
     canonical_fields = field_order or [col.field_name for col in mapped_cols]
@@ -40,7 +55,7 @@ def render_table(
         header = str(col.header) if col.header not in (None, "") else f"col_{col.index + 1}"
         headers.append(f"{prefix}{header}")
 
-    worksheet.append(headers)
+    writer.write_row(headers)
 
     # Include unmapped columns when determining how many data rows to emit; otherwise
     # sheets with only unmapped columns would collapse to a header-only table.
@@ -53,7 +68,7 @@ def render_table(
             row_values.append(col[row_idx] if col is not None and row_idx < len(col) else None)
         for col in unmapped_cols:
             row_values.append(col.values[row_idx] if row_idx < len(col.values) else None)
-        worksheet.append(row_values)
+        writer.write_row(row_values)
 
     rows_written = 1 + row_count
     col_count = len(headers)
@@ -68,11 +83,11 @@ def render_table(
         "table.written",
         message=f"Rendered table with {len(canonical_fields)} canonical columns and {len(unmapped_cols)} unmapped",
         data={
-            "sheet_name": worksheet.title,
+            "sheet_name": writer.worksheet.title,
             "table_index": table.table_index,
             "output_range": output_range,
         },
     )
 
 
-__all__ = ["render_table"]
+__all__ = ["SheetWriter", "render_table"]

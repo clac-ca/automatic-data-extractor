@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, UIEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import type { UIEvent } from "react";
 import clsx from "clsx";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
+import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { RunStreamStatus } from "../state/runStream";
 import { formatConsoleTimestamp } from "../events/format";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
 import { renderConsoleMessage, resolveSeverity } from "./consoleFormatting";
 
 interface ConsoleTabProps {
-  readonly consoleLines: readonly WorkbenchConsoleLine[];
+  readonly console: WorkbenchConsoleStore;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
   readonly runStatus?: RunStreamStatus;
@@ -19,59 +21,52 @@ type ConsoleFilters = {
   readonly level: "all" | WorkbenchConsoleLine["level"];
 };
 
-type RenderableConsoleLine = WorkbenchConsoleLine & {
-  readonly key: string;
-  readonly rendered: ReactNode;
-};
-
-export function ConsoleTab({
-  consoleLines,
-  latestRun,
-  onClearConsole,
-  runStatus,
-}: ConsoleTabProps) {
+export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
   const [viewMode, setViewMode] = useState<"parsed" | "raw">("parsed");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const filteredLines = useMemo(() => {
+  const snapshot = useSyncExternalStore(console.subscribe.bind(console), console.getSnapshot, console.getSnapshot);
+  const totalLines = snapshot.length;
+
+  const filteredIndices = useMemo(() => {
     const filterSeverity = resolveSeverity(filters.level);
-    return consoleLines.filter((line) => {
+    const indices: number[] = [];
+
+    for (let index = 0; index < snapshot.length; index += 1) {
+      const line = console.getLine(index);
+      if (!line) continue;
+
       const originMatches = filters.origin === "all" || (line.origin ?? "run") === filters.origin;
       const severity = resolveSeverity(line.level);
       const levelMatches = filters.level === "all" || severity >= filterSeverity;
-      return originMatches && levelMatches;
-    });
-  }, [consoleLines, filters]);
+      if (originMatches && levelMatches) {
+        indices.push(index);
+      }
+    }
 
-  const renderableLines: RenderableConsoleLine[] = useMemo(
-    () =>
-      filteredLines.map((line, index) => ({
-        ...line,
-        key: line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${index}`,
-        rendered: viewMode === "raw" ? renderRawEvent(line.raw ?? line.message) : renderConsoleMessage(line.message),
-      })),
-    [filteredLines, viewMode],
-  );
-  const copyContent = useMemo(
-    () => filteredLines.map((line) => formatLineForCopy(line, viewMode)).join("\n"),
-    [filteredLines, viewMode],
-  );
-  const clipboardAvailable = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
-  const canCopy = Boolean(copyContent);
+    return indices;
+  }, [console, snapshot, filters]);
 
-  const hasConsoleLines = renderableLines.length > 0;
-  const hasAnyConsoleLines = consoleLines.length > 0;
+  const hasConsoleLines = filteredIndices.length > 0;
+  const hasAnyConsoleLines = totalLines > 0;
   const statusLabel = runStatus && runStatus !== "idle" ? runStatus : null;
+  const clipboardAvailable = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
+
+  const rowVirtualizer = useVirtualizer({
+    count: filteredIndices.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 22,
+    overscan: 16,
+  });
 
   useEffect(() => {
     if (!follow) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [renderableLines, follow]);
+    if (filteredIndices.length === 0) return;
+    rowVirtualizer.scrollToIndex(filteredIndices.length - 1, { align: "end" });
+  }, [follow, filteredIndices.length, snapshot, rowVirtualizer]);
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
@@ -86,10 +81,7 @@ export function ConsoleTab({
 
   const enableFollow = () => {
     setFollow(true);
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
+    rowVirtualizer.scrollToIndex(filteredIndices.length - 1, { align: "end" });
   };
 
   const copyToClipboard = useCallback(async (text: string) => {
@@ -121,8 +113,14 @@ export function ConsoleTab({
   }, []);
 
   const handleCopy = async () => {
-    if (!canCopy) return;
-    const copiedSuccessfully = await copyToClipboard(copyContent);
+    if (!hasConsoleLines) return;
+    const lines: string[] = [];
+    for (const index of filteredIndices) {
+      const line = console.getLine(index);
+      if (!line) continue;
+      lines.push(formatLineForCopy(line, viewMode));
+    }
+    const copiedSuccessfully = await copyToClipboard(lines.join("\n"));
     setCopied(copiedSuccessfully);
     if (copiedSuccessfully) {
       window.setTimeout(() => setCopied(false), 1500);
@@ -134,20 +132,22 @@ export function ConsoleTab({
       <div className="flex flex-col border-b border-[#2a2a2a] bg-gradient-to-r from-[#1f1f1f] to-[#232323]">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2">
           <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-[#9da5b4]">
-            <span className="font-semibold tracking-[0.3em] text-[#d4d4d4]">Terminal</span>
-            <span className="text-[10px] tracking-[0.3em] text-emerald-400">live</span>
+            <span className="font-semibold tracking-[0.3em] text-slate-200">ADE</span>
+            <span className="text-slate-400">Terminal</span>
             {statusLabel ? (
-              <span className="rounded-full border border-[#3a3a3a] bg-[#2b2b2b] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4d4d4]">
+              <span className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-slate-200">
                 {statusLabel}
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
-            <label className="flex items-center gap-1 text-slate-400" title="Filter by event origin">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+            <label className="flex items-center gap-1 text-slate-400" title="Filter logs by scope">
               Origin
               <select
                 value={filters.origin}
-                onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value as ConsoleFilters["origin"] }))}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, origin: event.target.value as ConsoleFilters["origin"] }))
+                }
                 className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500"
               >
                 <option value="all">All</option>
@@ -160,7 +160,9 @@ export function ConsoleTab({
               Level
               <select
                 value={filters.level}
-                onChange={(event) => setFilters((prev) => ({ ...prev, level: event.target.value as ConsoleFilters["level"] }))}
+                onChange={(event) =>
+                  setFilters((prev) => ({ ...prev, level: event.target.value as ConsoleFilters["level"] }))
+                }
                 className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500"
               >
                 <option value="all">All</option>
@@ -170,15 +172,16 @@ export function ConsoleTab({
                 <option value="success">Success</option>
               </select>
             </label>
-            <div className="flex items-center rounded border border-slate-600 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200" title="Toggle between parsed view and raw JSON events">
+            <div
+              className="flex items-center rounded border border-slate-600 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200"
+              title="Toggle between parsed view and raw JSON events"
+            >
               <button
                 type="button"
                 onClick={() => setViewMode("parsed")}
                 className={clsx(
                   "px-2 py-[6px] transition",
-                  viewMode === "parsed"
-                    ? "bg-slate-700 text-white"
-                    : "hover:bg-[#0f0f0f] text-slate-300",
+                  viewMode === "parsed" ? "bg-slate-700 text-white" : "hover:bg-[#0f0f0f] text-slate-300",
                 )}
               >
                 Parsed
@@ -188,9 +191,7 @@ export function ConsoleTab({
                 onClick={() => setViewMode("raw")}
                 className={clsx(
                   "px-2 py-[6px] border-l border-slate-600 transition",
-                  viewMode === "raw"
-                    ? "bg-slate-700 text-white"
-                    : "hover:bg-[#0f0f0f] text-slate-300",
+                  viewMode === "raw" ? "bg-slate-700 text-white" : "hover:bg-[#0f0f0f] text-slate-300",
                 )}
               >
                 Raw
@@ -212,17 +213,17 @@ export function ConsoleTab({
             <button
               type="button"
               onClick={handleCopy}
-          className={clsx(
-            "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
-            copied
-              ? "border-emerald-600/60 bg-transparent text-emerald-200"
-              : "border border-slate-600 bg-transparent text-slate-200 hover:border-slate-400",
-          )}
-          disabled={!canCopy}
-          title={clipboardAvailable ? "Copy visible console output" : "Copy may be blocked by browser permissions"}
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
+              className={clsx(
+                "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
+                copied
+                  ? "border-emerald-600/60 bg-transparent text-emerald-200"
+                  : "border border-slate-600 bg-transparent text-slate-200 hover:border-slate-400",
+              )}
+              disabled={!hasConsoleLines}
+              title={clipboardAvailable ? "Copy visible console output" : "Copy may be blocked by browser permissions"}
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
             <button
               type="button"
               onClick={() => onClearConsole?.()}
@@ -258,42 +259,62 @@ export function ConsoleTab({
         style={{ scrollbarColor: "#2f2f2f #111111" }}
       >
         {hasConsoleLines ? (
-          <ul className="bg-[#1e1e1e]">
-            {renderableLines.map((line) => (
-              <li
-                key={line.key}
-                className="flex items-start gap-3 border-b border-[#1a1a1a] px-3 py-[2px] transition hover:bg-[#232323] last:border-b-0"
-              >
-                <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                  {renderTimestamp(line.timestamp)}
-                  <span className="shrink-0 w-12 text-right font-mono text-[11px] leading-snug text-[#606674]">
-                    {originLabel(line.origin)}
-                  </span>
-                  <span className={clsx("shrink-0 w-14 text-right font-mono text-[11px] leading-snug", prefixTone(line.level))}>
-                    {levelBadge(line.level)}
-                  </span>
-                  <div
-                    className={clsx(
-                      "min-w-0 whitespace-pre-wrap break-words text-[13px] leading-snug",
-                      consoleMessageClass(line.level),
-                    )}
-                  >
-                    {line.rendered}
+          <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const lineIndex = filteredIndices[virtualRow.index];
+              const line = typeof lineIndex === "number" ? console.getLine(lineIndex) : undefined;
+              if (!line) return null;
+
+              const key = line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${lineIndex}`;
+              const rendered =
+                viewMode === "raw"
+                  ? renderRawEvent(line.raw ?? line.message)
+                  : renderConsoleMessage(line.message);
+
+              return (
+                <div
+                  key={key}
+                  data-index={virtualRow.index}
+                  ref={rowVirtualizer.measureElement}
+                  className="flex items-start gap-3 border-b border-[#1a1a1a] px-3 py-[2px] transition hover:bg-[#232323] last:border-b-0"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                    {renderTimestamp(line.timestamp)}
+                    <span className="shrink-0 w-12 text-right font-mono text-[11px] leading-snug text-[#606674]">
+                      {originLabel(line.origin)}
+                    </span>
+                    <span
+                      className={clsx(
+                        "shrink-0 w-14 text-right font-mono text-[11px] leading-snug",
+                        prefixTone(line.level),
+                      )}
+                    >
+                      {levelBadge(line.level)}
+                    </span>
+                    <div
+                      className={clsx(
+                        "min-w-0 whitespace-pre-wrap break-words text-[13px] leading-snug",
+                        consoleMessageClass(line.level),
+                      )}
+                    >
+                      {rendered}
+                    </div>
                   </div>
                 </div>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         ) : hasAnyConsoleLines ? (
-          <EmptyState
-            title="No console output matches these filters."
-            description="Adjust origin or level filters to see more."
-          />
+          <EmptyState title="No console output matches these filters." description="Adjust origin or level filters to see more." />
         ) : (
-          <EmptyState
-            title="Waiting for ADE output…"
-            description="Run validation or a test to stream logs into this terminal."
-          />
+          <EmptyState title="Waiting for ADE output…" description="Run validation or a test to stream logs into this terminal." />
         )}
       </div>
     </div>
@@ -366,11 +387,7 @@ function renderTimestamp(timestamp?: string) {
       </span>
     );
   }
-  return (
-    <span className="shrink-0 tabular-nums text-[11px] leading-snug text-[#7a8090]">
-      [{formatted}]
-    </span>
-  );
+  return <span className="shrink-0 tabular-nums text-[11px] leading-snug text-[#7a8090]">[{formatted}]</span>;
 }
 
 function levelBadge(level: WorkbenchConsoleLine["level"]) {
@@ -409,21 +426,19 @@ function displayTimestamp(value?: string | null) {
 
 function renderRawEvent(raw: unknown) {
   if (typeof raw === "string") {
+    const pretty = prettyJsonString(raw);
     return (
-      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">
-        {raw}
-      </pre>
+      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">{pretty ?? raw}</pre>
     );
   }
   if (raw && typeof raw === "object") {
     return (
-      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">
-        {JSON.stringify(raw, null, 2)}
-      </pre>
+      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">{JSON.stringify(raw, null, 2)}</pre>
     );
   }
   return null;
 }
+
 function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw") {
   const ts = displayTimestamp(line.timestamp);
   const origin = originLabel(line.origin);
@@ -446,12 +461,7 @@ function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw
     }
   }
   if (viewMode === "raw") {
-    const rawString =
-      typeof line.raw === "string"
-        ? line.raw
-        : line.raw
-          ? JSON.stringify(line.raw, null, 2)
-          : line.message ?? "";
+    const rawString = typeof line.raw === "string" ? prettyJsonString(line.raw) ?? line.raw : line.message ?? "";
     return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${rawString}`.trim();
   }
   return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${line.message ?? ""}`.trim();
@@ -497,4 +507,16 @@ function formatRunDuration(valueMs: number): string {
   const minutes = Math.floor(valueMs / 60_000);
   const seconds = Math.round((valueMs % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
+}
+
+function prettyJsonString(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return null;
+  }
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return null;
+  }
 }

@@ -83,8 +83,9 @@ def process_file(
     if output is not None and output_dir is not None:
         raise BadParameter("--output and --output-dir are mutually exclusive; choose one.", param_hint="output")
 
-    settings = Settings()
-    config_path = resolve_config_package(config_package, settings)
+    bootstrap_settings = Settings.load()
+    config_path = resolve_config_package(config_package, bootstrap_settings)
+    settings = Settings.load(config_package_dir=config_path)
     effective_format, effective_level = resolve_logging(
         log_format=log_format,
         log_level=log_level,
@@ -101,29 +102,29 @@ def process_file(
         raise BadParameter(f"Input file not found: {resolved_input}", param_hint="input")
 
     # Determine output destination
+    request_output_dir: Optional[Path] = None
+    request_output_path: Optional[Path] = None
     if output is not None:
         target = (Path.cwd() / output).expanduser().resolve() if not output.is_absolute() else output.expanduser().resolve()
         if target.suffix.lower() != ".xlsx":
             raise BadParameter("--output must end with .xlsx", param_hint="output")
-        resolved_output_dir = target.parent
-        request_output_file: Optional[Path] = Path(target.name)
+        request_output_path = target
     elif output_dir is not None:
-        resolved_output_dir = output_dir.expanduser().resolve()
-        request_output_file = None  # use default name
+        request_output_dir = output_dir.expanduser().resolve()
     else:
-        resolved_output_dir = resolved_input.parent
-        request_output_file = None  # use default name
+        request_output_dir = None
+        request_output_path = None
 
     # Logs default to the output directory unless overridden
-    resolved_logs_dir = (logs_dir or resolved_output_dir).expanduser().resolve()
+    resolved_logs_dir = logs_dir.expanduser().resolve() if logs_dir is not None else None
 
     result = engine.run(
         RunRequest(
             config_package=config_path,
             input_file=resolved_input,
             input_sheets=input_sheet or None,
-            output_dir=resolved_output_dir,
-            output_file=request_output_file,
+            output_dir=request_output_dir,
+            output_path=request_output_path,
             logs_dir=resolved_logs_dir,
         )
     )
@@ -178,8 +179,9 @@ def process_batch(
 ) -> None:
     """Process a batch of files from a directory scan."""
 
-    settings = Settings()
-    config_path = resolve_config_package(config_package, settings)
+    bootstrap_settings = Settings.load()
+    config_path = resolve_config_package(config_package, bootstrap_settings)
+    settings = Settings.load(config_package_dir=config_path)
     effective_format, effective_level = resolve_logging(
         log_format=log_format,
         log_level=log_level,
@@ -202,7 +204,7 @@ def process_batch(
         raise BadParameter("No inputs found under --input-dir after filters.", param_hint="input_dir")
 
     resolved_output_dir = output_dir.expanduser().resolve()
-    resolved_logs_dir = (logs_dir or resolved_output_dir).expanduser().resolve()
+    resolved_logs_dir = logs_dir.expanduser().resolve() if logs_dir is not None else resolved_output_dir
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
     any_failed = False

@@ -121,8 +121,9 @@ async def test_build_stream_formats_replayed_events_without_hanging() -> None:
     assert len(payload) == 2
     first_lines = payload[0].splitlines()
     assert first_lines[0] == "id: 1"
-    assert first_lines[1] == "event: build.queued"
-    assert first_lines[2].startswith("data: ")
+    assert first_lines[1].startswith("data: ")
+    data_obj = json.loads(first_lines[1].removeprefix("data: ").strip())
+    assert data_obj["event"] == "build.queued"
     assert "build.complete" in payload[1]
     assert "exit_code" in payload[1]
 
@@ -156,7 +157,7 @@ async def test_run_stream_respects_resume_cursor_header() -> None:
     assert len(payload) == 1  # resumed at id 1, so only the second event should stream
     lines = payload[0].splitlines()
     assert lines[0] == "id: 2"
-    assert lines[1] == "event: run.complete"
-    assert lines[2].startswith("data: ")
-    data_obj = json.loads(lines[2].removeprefix("data: "))
+    assert lines[1].startswith("data: ")
+    data_obj = json.loads(lines[1].removeprefix("data: ").strip())
+    assert data_obj["event"] == "run.complete"
     assert data_obj["data"]["status"] == "succeeded"

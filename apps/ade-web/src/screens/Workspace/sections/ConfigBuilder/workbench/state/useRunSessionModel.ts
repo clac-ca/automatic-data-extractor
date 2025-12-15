@@ -42,6 +42,7 @@ export function useRunSessionModel({
 }: UseRunSessionModelOptions) {
   const {
     stream,
+    console,
     runResource,
     runMetadata,
     runStartedAt,
@@ -60,7 +61,6 @@ export function useRunSessionModel({
     maxConsoleLines,
   });
 
-  const consoleLines = stream.consoleLines;
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
   const lastCompletedRunRef = useRef<string | null>(null);
 
@@ -221,7 +221,7 @@ export function useRunSessionModel({
       runMode,
       runInProgress,
       validation,
-      consoleLines,
+      console,
       latestRun,
       appendConsoleLine,
       clearConsole,
@@ -233,7 +233,7 @@ export function useRunSessionModel({
       runMode,
       runInProgress,
       validation,
-      consoleLines,
+      console,
       latestRun,
       appendConsoleLine,
       clearConsole,

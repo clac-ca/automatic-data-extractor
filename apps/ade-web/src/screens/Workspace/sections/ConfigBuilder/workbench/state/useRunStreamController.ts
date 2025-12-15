@@ -8,6 +8,8 @@ import {
   type RunStreamState,
   type RunStreamStatus,
 } from "./runStream";
+import { WorkbenchConsoleStore } from "./consoleStore";
+import { formatConsoleEvent } from "../events/format";
 import type {
   WorkbenchConsoleLine,
   WorkbenchValidationMessage,
@@ -21,7 +23,7 @@ import {
   type RunResource,
   type RunStreamOptions,
 } from "@shared/runs/api";
-import { eventTimestamp } from "@shared/runs/types";
+import { eventTimestamp, type RunStreamEvent } from "@shared/runs/types";
 
 export interface RunStreamMetadata {
   readonly mode: "validation" | "extraction";
@@ -52,10 +54,11 @@ export function useRunStreamController({
   runId,
   onRunIdChange,
   seed,
-  maxConsoleLines = 400,
+  maxConsoleLines = 5000,
   onError,
 }: UseRunStreamControllerOptions): {
   readonly stream: RunStreamState;
+  readonly console: WorkbenchConsoleStore;
   readonly runResource?: RunResource | null;
   readonly runMetadata?: RunStreamMetadata | null;
   readonly runStartedAt?: string | null;
@@ -72,10 +75,7 @@ export function useRunStreamController({
   ) => Promise<{ runId: string; startedAt: string } | null>;
 } {
   const initialState = useMemo<RunStreamState>(() => {
-    const base = createRunStreamState(
-      maxConsoleLines,
-      seed?.console ? [...seed.console].slice(-maxConsoleLines) : undefined,
-    );
+    const base = createRunStreamState();
     if (seed?.validation?.length) {
       return {
         ...base,
@@ -84,14 +84,19 @@ export function useRunStreamController({
       };
     }
     return base;
-  }, [maxConsoleLines, seed?.console, seed?.validation]);
+  }, [seed?.validation]);
   const [stream, dispatch] = useReducer(runStreamReducer, initialState);
   const streamRef = useRef<RunStreamState>(stream);
+  const consoleStoreRef = useRef<WorkbenchConsoleStore>(
+    new WorkbenchConsoleStore(maxConsoleLines, seed?.console ? [...seed.console].slice(-maxConsoleLines) : undefined),
+  );
   const runResourceRef = useRef<RunResource | null>(null);
   const runMetadataRef = useRef<RunStreamMetadata | null>(null);
   const runStartedAtRef = useRef<string | null>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const startInFlightRef = useRef(false);
+  const pendingEventsRef = useRef<RunStreamEvent[]>([]);
+  const flushScheduledRef = useRef(false);
 
   useEffect(() => {
     streamRef.current = stream;
@@ -116,13 +121,13 @@ export function useRunStreamController({
   }, [runId, stopStreaming]);
 
   const appendConsoleLine = useCallback(
-    (line: WorkbenchConsoleLine) => dispatch({ type: "APPEND_LINE", line }),
-    [dispatch],
+    (line: WorkbenchConsoleLine) => consoleStoreRef.current.append(line),
+    [],
   );
 
   const clearConsole = useCallback(() => {
-    dispatch({ type: "CLEAR_CONSOLE" });
-  }, [dispatch]);
+    consoleStoreRef.current.clear();
+  }, []);
 
   const pushError = useCallback(
     (error: unknown) => {
@@ -146,6 +151,24 @@ export function useRunStreamController({
       dispatch({ type: "ATTACH_RUN", runId: runResource.id, runMode: metadata?.mode });
       const controller = new AbortController();
       streamControllerRef.current = controller;
+
+      const scheduleFlush = () => {
+        if (flushScheduledRef.current) return;
+        flushScheduledRef.current = true;
+        const flush = () => {
+          flushScheduledRef.current = false;
+          const batch = pendingEventsRef.current;
+          if (!batch.length) return;
+          pendingEventsRef.current = [];
+          dispatch({ type: "EVENTS", events: batch });
+        };
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(flush);
+        } else {
+          setTimeout(flush, 0);
+        }
+      };
+
       try {
         for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
           if (event?.event === "run.start" || event?.event === "run.started" || event?.event === "engine.start") {
@@ -153,7 +176,15 @@ export function useRunStreamController({
             const startedAt = typeof payload.started_at === "string" ? payload.started_at : eventTimestamp(event);
             runStartedAtRef.current = startedAt;
           }
-          dispatch({ type: "EVENT", event });
+
+          const raw =
+            typeof (event as Record<string, unknown>)._raw === "string"
+              ? ((event as Record<string, unknown>)._raw as string)
+              : JSON.stringify(event);
+          consoleStoreRef.current.append({ ...formatConsoleEvent(event), raw });
+
+          pendingEventsRef.current.push(event);
+          scheduleFlush();
         }
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -190,7 +221,8 @@ export function useRunStreamController({
       }
 
       const startedAt = new Date();
-      dispatch({ type: "RESET", runId: null, initialLines: [] });
+      consoleStoreRef.current.clear();
+      dispatch({ type: "RESET", runId: null });
 
       startInFlightRef.current = true;
       try {
@@ -219,6 +251,7 @@ export function useRunStreamController({
 
   return {
     stream,
+    console: consoleStoreRef.current,
     runResource: runResourceRef.current,
     runMetadata: runMetadataRef.current,
     runStartedAt: runStartedAtRef.current,

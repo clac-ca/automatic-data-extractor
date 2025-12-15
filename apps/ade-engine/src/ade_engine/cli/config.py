@@ -133,8 +133,9 @@ def validate_config(
 ) -> None:
     """Validate that a config package can be imported and registered."""
 
-    settings = Settings()
-    config_path = resolve_config_package(config_package, settings)
+    bootstrap_settings = Settings.load()
+    config_path = resolve_config_package(config_package, bootstrap_settings)
+    settings = Settings.load(config_package_dir=config_path)
     effective_format, effective_level = resolve_logging(
         log_format=log_format,
         log_level=log_level,
@@ -152,7 +153,7 @@ def validate_config(
             log_level=effective_level,
             log_file=None,
         ) as log_ctx:
-            registry = engine._load_registry(config_package=config_path, logger=log_ctx.logger)
+            registry = engine.load_registry(config_package=config_path, logger=log_ctx.logger)
     except (ConfigError, ModuleNotFoundError) as exc:
         typer.echo(f"Config package INVALID: {exc}")
         raise typer.Exit(code=1)

@@ -39,11 +39,12 @@ def detect_and_map_columns(
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
     field_competitors: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
     contributions_by_column: Dict[int, Dict[str, List[Dict[str, float]]]] = {}
+    debug = logger.isEnabledFor(logging.DEBUG)
 
     for col in source_columns:
         scores: Dict[str, float] = {}
-        contributions: Dict[str, List[Dict[str, float]]] = {}
-        detectors_run: list[dict[str, Any]] = []
+        contributions: Dict[str, List[Dict[str, float]]] = {} if debug else {}
+        detectors_run: list[dict[str, Any]] = [] if debug else []
         ctx = ColumnDetectorContext(
             column_index=col.index,
             header=col.header,
@@ -56,7 +57,7 @@ def detect_and_map_columns(
             logger=logger,
         )
         for det in registry.column_detectors:
-            started = perf_counter()
+            started = perf_counter() if debug else 0.0
             try:
                 raw_patch = call_extension(det.fn, ctx, label=f"Column detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
@@ -71,18 +72,17 @@ def detect_and_map_columns(
                 model=ColumnDetectorResult,
             )
 
-            duration_ms = round((perf_counter() - started) * 1000, 5)
-            rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
+            if debug:
+                duration_ms = round((perf_counter() - started) * 1000, 5)
+                rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
 
-            detector_payload = {
-                "name": det.qualname,
-                "scores": rounded_patch,
-                "duration_ms": duration_ms,
-            }
+                detector_payload = {
+                    "name": det.qualname,
+                    "scores": rounded_patch,
+                    "duration_ms": duration_ms,
+                }
 
-            detectors_run.append(detector_payload)
-
-            if logger.isEnabledFor(logging.DEBUG):
+                detectors_run.append(detector_payload)
                 logger.event(
                     "detector.column_result",
                     level=logging.DEBUG,
@@ -95,9 +95,10 @@ def detect_and_map_columns(
                 )
             for field, delta in patch.items():
                 scores[field] = scores.get(field, 0.0) + delta
-                contributions.setdefault(field, []).append({"detector": det.qualname, "delta": delta})
+                if debug:
+                    contributions.setdefault(field, []).append({"detector": det.qualname, "delta": delta})
 
-        logged_scores = {k: round(v, 6) for k, v in scores.items()}
+        logged_scores = {k: round(v, 6) for k, v in scores.items()} if debug else {}
 
         if scores:
             best_field, best_score = None, float("-inf")
@@ -107,45 +108,48 @@ def detect_and_map_columns(
         else:
             best_field, best_score = "unknown", 0.0
 
-        considered_fields = sorted(logged_scores) if logged_scores else []
+        if debug:
+            considered_fields = sorted(logged_scores) if logged_scores else []
 
-        logger.event(
-            "column_classification",
-            level=logging.DEBUG,
-            message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
-            data={
-                "sheet_name": sheet_name,
-                "column_index": col.index,
-                "detectors": detectors_run,
-                "scores": logged_scores,
-                "classification": {
-                    "field": best_field,
-                    "score": round(best_score, 6),
-                    "considered_fields": considered_fields,
+            logger.event(
+                "column_classification",
+                level=logging.DEBUG,
+                message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
+                data={
+                    "sheet_name": sheet_name,
+                    "column_index": col.index,
+                    "detectors": detectors_run,
+                    "scores": logged_scores,
+                    "classification": {
+                        "field": best_field,
+                        "score": round(best_score, 6),
+                        "considered_fields": considered_fields,
+                    },
                 },
-            },
-        )
+            )
 
         # Ignore columns with no positive signal – treating zero/negative totals as unmapped
         if not scores or best_score <= 0:
             continue
         # pick best field for this column
         if best_field is not None:
-            logger.event(
-                "column_detector.candidate",
-                level=logging.DEBUG,
-                data={
-                    "column_index": col.index,
-                    "header": col.header,
-                    "best_field": best_field,
-                    "best_score": best_score,
-                    "scores": scores,
-                    "contributions": contributions.get(best_field, []),
-                },
-            )
+            if debug:
+                logger.event(
+                    "column_detector.candidate",
+                    level=logging.DEBUG,
+                    data={
+                        "column_index": col.index,
+                        "header": col.header,
+                        "best_field": best_field,
+                        "best_score": best_score,
+                        "scores": scores,
+                        "contributions": contributions.get(best_field, []),
+                    },
+                )
             mapping_candidates[col.index] = (best_field, best_score)
             field_competitors[best_field].append((col.index, best_score))
-            contributions_by_column[col.index] = contributions
+            if debug:
+                contributions_by_column[col.index] = contributions
 
     # resolve duplicates across columns mapping to same field
     unmapped_indices: set[int] = set()
@@ -186,24 +190,25 @@ def detect_and_map_columns(
     mapped_cols.sort(key=lambda c: c.source_index)
     unmapped.sort(key=lambda c: c.index)
 
-    logger.event(
-        "column_detector.summary",
-        level=logging.DEBUG,
-        data={
-            "mapped": [
-                {
-                    "field": m.field_name,
-                    "source_index": m.source_index,
-                    "header": m.header,
-                    "score": m.score,
-                    "contributions": contributions_by_column.get(m.source_index, {}).get(m.field_name, []),
-                }
-                for m in mapped_cols
-            ],
-            "unmapped_indices": sorted(unmapped_indices),
-            "total_columns": len(source_columns),
-        },
-    )
+    if debug:
+        logger.event(
+            "column_detector.summary",
+            level=logging.DEBUG,
+            data={
+                "mapped": [
+                    {
+                        "field": m.field_name,
+                        "source_index": m.source_index,
+                        "header": m.header,
+                        "score": m.score,
+                        "contributions": contributions_by_column.get(m.source_index, {}).get(m.field_name, []),
+                    }
+                    for m in mapped_cols
+                ],
+                "unmapped_indices": sorted(unmapped_indices),
+                "total_columns": len(source_columns),
+            },
+        )
 
     return mapped_cols, unmapped
 
