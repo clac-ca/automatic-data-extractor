@@ -2,7 +2,8 @@ import clsx from "clsx";
 
 import type { WorkbenchPane } from "../state/workbenchSearchParams";
 import type { RunStreamStatus } from "../state/runStream";
-import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
+import type { WorkbenchConsoleStore } from "../state/consoleStore";
+import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
@@ -11,7 +12,7 @@ import { ProblemsTab } from "./ProblemsTab";
 
 interface BottomPanelProps {
   readonly height: number;
-  readonly consoleLines: readonly WorkbenchConsoleLine[];
+  readonly console: WorkbenchConsoleStore;
   readonly validation: WorkbenchValidationState;
   readonly activePane: WorkbenchPane;
   readonly onPaneChange: (pane: WorkbenchPane) => void;
@@ -24,7 +25,7 @@ interface BottomPanelProps {
 
 export function BottomPanel({
   height,
-  consoleLines,
+  console,
   validation,
   activePane,
   onPaneChange,
@@ -99,7 +100,7 @@ export function BottomPanel({
 
         <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col">
           <ConsoleTab
-            consoleLines={consoleLines}
+            console={console}
             latestRun={latestRun}
             onClearConsole={onClearConsole}
             runStatus={runStatus}

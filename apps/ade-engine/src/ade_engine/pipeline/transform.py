@@ -32,6 +32,7 @@ def _apply_values_patch(
     row_count: int,
     logger: RunLogger,
 ) -> None:
+    debug = logger.isEnabledFor(logging.DEBUG)
     for field, vec in values_patch.items():
         if field == owner_field:
             columns[field] = vec
@@ -74,11 +75,12 @@ def _apply_values_patch(
 
             raise PipelineError(f"Unknown derived_write_mode: {mode}")
 
-        logger.event(
-            "transform.derived_merge",
-            level=logging.DEBUG,
-            data={"field": field, "mode": mode},
-        )
+        if debug:
+            logger.event(
+                "transform.derived_merge",
+                level=logging.DEBUG,
+                data={"field": field, "mode": mode},
+            )
 
 
 def apply_transforms(
@@ -108,6 +110,7 @@ def apply_transforms(
 
     mapped_fields = [col.field_name for col in mapped_columns]
     mapped_set = set(mapped_fields)
+    debug = logger.isEnabledFor(logging.DEBUG)
 
     def run_field_chain(field_name: str) -> None:
         transforms = transforms_by_field.get(field_name, [])
@@ -119,7 +122,7 @@ def apply_transforms(
             mapping.setdefault(field_name, None)
 
         for tf in transforms:
-            before_sample = columns[field_name][:3]
+            before_sample = columns[field_name][:3] if debug else None
             ctx = TransformContext(
                 field_name=field_name,
                 column=list(columns[field_name]),
@@ -151,19 +154,20 @@ def apply_transforms(
             merge_issues_patch(issues_patch, patch.issues)
             meta.update(patch.meta)
 
-            logger.event(
-                "transform.result",
-                level=logging.DEBUG,
-                data={
-                    "transform": tf.qualname,
-                    "field": field_name,
-                    "row_count": row_count,
-                    "sample_before": before_sample,
-                    "sample_after": columns[field_name][:3],
-                    "emitted_fields": sorted(patch.values.keys()),
-                    "emitted_issue_fields": sorted(patch.issues.keys()),
-                },
-            )
+            if debug:
+                logger.event(
+                    "transform.result",
+                    level=logging.DEBUG,
+                    data={
+                        "transform": tf.qualname,
+                        "field": field_name,
+                        "row_count": row_count,
+                        "sample_before": before_sample,
+                        "sample_after": columns[field_name][:3],
+                        "emitted_fields": sorted(patch.values.keys()),
+                        "emitted_issue_fields": sorted(patch.issues.keys()),
+                    },
+                )
 
     # Phase 1: mapped fields in source order.
     for field_name in mapped_fields:
@@ -190,4 +194,3 @@ def apply_transforms(
 
 
 __all__ = ["apply_transforms"]
-

@@ -63,7 +63,7 @@ const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const COLLAPSED_CONSOLE_BAR_HEIGHT = 40;
-const MAX_CONSOLE_LINES = 400;
+const MAX_CONSOLE_LINES = 10_000;
 const OUTPUT_HANDLE_THICKNESS = 10; // matches thicker PanelResizeHandle hit target
 const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
@@ -193,7 +193,7 @@ export function Workbench({
     runMode: derivedRunMode,
     runInProgress,
     validation: validationState,
-    consoleLines,
+    console,
     latestRun,
     clearConsole,
     startRun,
@@ -1504,7 +1504,7 @@ export function Workbench({
             ) : (
               <BottomPanel
                 height={Math.max(0, liveConsoleHeight)}
-                consoleLines={consoleLines}
+                console={console}
                 validation={validationState}
                 activePane={pane}
                 onPaneChange={setPane}

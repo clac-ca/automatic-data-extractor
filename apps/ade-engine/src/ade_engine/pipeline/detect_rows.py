@@ -35,9 +35,10 @@ def _classify_rows(
 
     scores: dict[int, dict[str, float]] = {}
     classifications: list[str] = []
+    debug = logger.isEnabledFor(logging.DEBUG)
 
     for row_idx, row_values in enumerate(rows):
-        detectors_run: list[dict[str, Any]] = []
+        detectors_run: list[dict[str, Any]] = [] if debug else []
         ctx = RowDetectorContext(
             row_index=row_idx,
             row_values=row_values,
@@ -48,7 +49,7 @@ def _classify_rows(
             logger=logger,
         )
         for det in registry.row_detectors:
-            started = perf_counter()
+            started = perf_counter() if debug else 0.0
             try:
                 raw_patch = call_extension(det.fn, ctx, label=f"Row detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
@@ -63,18 +64,18 @@ def _classify_rows(
                 model=RowDetectorResult,
             )
 
-            duration_ms = round((perf_counter() - started) * 1000, 5)
-            rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
+            if debug:
+                duration_ms = round((perf_counter() - started) * 1000, 5)
+                rounded_patch = {k: round(v, 6) for k, v in (patch or {}).items()}
 
-            detector_payload = {
-                "name": det.qualname,
-                "scores": rounded_patch,
-                "duration_ms": duration_ms,
-            }
+                detector_payload = {
+                    "name": det.qualname,
+                    "scores": rounded_patch,
+                    "duration_ms": duration_ms,
+                }
 
-            detectors_run.append(detector_payload)
+                detectors_run.append(detector_payload)
 
-            if logger.isEnabledFor(logging.DEBUG):
                 scores_str = ", ".join(f"{k}={v:.3f}" for k, v in rounded_patch.items())
                 detector_msg = (
                     f"Row {row_idx} detector {det.qualname} on {sheet_name}"
@@ -105,7 +106,7 @@ def _classify_rows(
         else:
             classification_type, classification_score = "unknown", 0.0
 
-        if logger.isEnabledFor(logging.DEBUG):
+        if debug:
             logged_scores = {k: round(v, 6) for k, v in row_score.items()}
             logged_classification_score = round(classification_score, 6)
             considered_row_kinds = sorted(logged_scores) if logged_scores else []

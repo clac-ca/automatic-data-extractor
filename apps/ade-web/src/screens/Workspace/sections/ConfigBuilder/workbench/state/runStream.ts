@@ -1,6 +1,4 @@
-import { formatConsoleEvent } from "../events/format";
 import type {
-  WorkbenchConsoleLine,
   WorkbenchValidationMessage,
   WorkbenchValidationState,
 } from "../types";
@@ -46,38 +44,28 @@ export interface RunStreamState {
   readonly status: RunStreamStatus;
   readonly buildPhases: Record<string, PhaseState>;
   readonly runPhases: Record<string, PhaseState>;
-  readonly consoleLines: WorkbenchConsoleLine[];
   readonly validationSummary: ValidationSummary | null;
   readonly completedPayload: Record<string, unknown> | null;
-  readonly maxConsoleLines: number;
 }
 
 export type RunStreamAction =
   | {
       type: "RESET";
       runId?: string | null;
-      initialLines?: WorkbenchConsoleLine[];
     }
   | { type: "ATTACH_RUN"; runId: string | null; runMode?: "validation" | "extraction" }
-  | { type: "CLEAR_CONSOLE" }
-  | { type: "APPEND_LINE"; line: WorkbenchConsoleLine }
-  | { type: "EVENT"; event: RunStreamEvent };
+  | { type: "EVENTS"; events: RunStreamEvent[] };
 
 export function createRunStreamState(
-  maxConsoleLines: number,
-  initialLines?: readonly WorkbenchConsoleLine[],
 ): RunStreamState {
-  const seededLines = assignLineIds(clampConsoleLines(initialLines ?? [], maxConsoleLines), "initial");
   return {
     runId: null,
     runMode: undefined,
     status: "idle",
     buildPhases: {},
     runPhases: {},
-    consoleLines: seededLines,
     validationSummary: null,
     completedPayload: null,
-    maxConsoleLines,
   };
 }
 
@@ -85,7 +73,7 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
   switch (action.type) {
     case "RESET": {
       return {
-        ...createRunStreamState(state.maxConsoleLines, action.initialLines),
+        ...createRunStreamState(),
         runId: action.runId ?? null,
       };
     }
@@ -95,17 +83,13 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
         runId: action.runId,
         runMode: action.runMode ?? state.runMode,
       };
-    case "CLEAR_CONSOLE":
-      return { ...state, consoleLines: [] };
-    case "APPEND_LINE": {
-      const consoleLines = clampConsoleLines(
-        [...state.consoleLines, withLineId(action.line, state.consoleLines.length)],
-        state.maxConsoleLines,
-      );
-      return { ...state, consoleLines };
+    case "EVENTS": {
+      let next = state;
+      for (const event of action.events) {
+        next = applyEventToState(next, event);
+      }
+      return next;
     }
-    case "EVENT":
-      return applyEventToState(state, action.event);
     default:
       return state;
   }
@@ -115,12 +99,6 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
   const payload = eventPayload(event);
   const type = eventName(event);
   const eventMessage = typeof event.message === "string" ? event.message : undefined;
-
-  const line = formatConsoleEvent(event);
-  const consoleLines = clampConsoleLines(
-    [...state.consoleLines, withLineId(line, state.consoleLines.length)],
-    state.maxConsoleLines,
-  );
 
   let buildPhases = state.buildPhases;
   const buildPhaseKey = typeof payload.phase === "string" ? payload.phase : null;
@@ -203,7 +181,6 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     runMode,
     buildPhases,
     runPhases,
-    consoleLines,
     validationSummary,
     completedPayload,
   };
@@ -372,41 +349,6 @@ export function deriveValidationStateFromStream(
     lastRunAt: lastRunAt ?? undefined,
     error,
     digest: summary?.content_digest ?? null,
-  };
-}
-
-function clampConsoleLines(
-  lines: readonly WorkbenchConsoleLine[],
-  maxConsoleLines: number,
-): WorkbenchConsoleLine[] {
-  if (lines.length <= maxConsoleLines) {
-    return lines.slice();
-  }
-  return lines.slice(lines.length - maxConsoleLines);
-}
-
-function assignLineIds(
-  lines: readonly WorkbenchConsoleLine[],
-  seed: string,
-): WorkbenchConsoleLine[] {
-  return lines.map((line, index) => withLineId(line, index, seed));
-}
-
-function withLineId(
-  line: WorkbenchConsoleLine,
-  index: number,
-  seed = "line",
-): WorkbenchConsoleLine {
-  if (line.id) return line;
-  const random =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : Math.random().toString(16).slice(2);
-  const origin = line.origin ?? "run";
-  const timestamp = line.timestamp ?? "ts";
-  return {
-    ...line,
-    id: `${seed}-${origin}-${timestamp}-${index}-${random}`,
   };
 }
 

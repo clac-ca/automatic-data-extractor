@@ -60,6 +60,123 @@ export async function* streamRunEvents(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
+  if (typeof EventSource !== "undefined") {
+    yield* streamRunEventsViaEventSource(url, signal);
+    return;
+  }
+  yield* streamRunEventsViaFetch(url, signal);
+}
+
+async function* streamRunEventsViaEventSource(
+  url: string,
+  signal?: AbortSignal,
+): AsyncGenerator<RunStreamEvent> {
+  const abortError =
+    typeof DOMException !== "undefined"
+      ? new DOMException("Aborted", "AbortError")
+      : Object.assign(new Error("Aborted"), { name: "AbortError" });
+
+  const queue: RunStreamEvent[] = [];
+  let done = false;
+  let failure: unknown = null;
+  let pendingResolve: ((value: IteratorResult<RunStreamEvent>) => void) | null = null;
+
+  const es = new EventSource(url, { withCredentials: true });
+
+  const close = (error?: unknown) => {
+    if (done) return;
+    done = true;
+    failure = error ?? null;
+    try {
+      es.close();
+    } catch {
+      // ignore close errors
+    }
+    if (pendingResolve) {
+      const resolve = pendingResolve;
+      pendingResolve = null;
+      resolve({ value: undefined as unknown as RunStreamEvent, done: true });
+    }
+  };
+
+  const abortHandler = () => close(abortError);
+  if (signal?.aborted) {
+    close(abortError);
+  } else if (signal) {
+    signal.addEventListener("abort", abortHandler);
+  }
+
+  es.onmessage = (msg) => {
+    const raw = typeof msg.data === "string" ? msg.data : "";
+    if (!raw.trim()) return;
+    try {
+      const parsed = JSON.parse(raw) as RunStreamEvent;
+      (parsed as Record<string, unknown>)._raw = raw;
+
+      const sseId = typeof msg.lastEventId === "string" ? msg.lastEventId : null;
+      if (sseId && (parsed as Record<string, unknown>).sequence === undefined) {
+        const numeric = Number(sseId);
+        if (Number.isFinite(numeric)) {
+          (parsed as Record<string, unknown>).sequence = numeric;
+        } else {
+          (parsed as Record<string, unknown>).sse_id = sseId;
+        }
+      }
+
+      if (pendingResolve) {
+        const resolve = pendingResolve;
+        pendingResolve = null;
+        resolve({ value: parsed, done: false });
+      } else {
+        queue.push(parsed);
+      }
+      if (parsed.event === "run.complete") {
+        close();
+      }
+    } catch (error) {
+      console.warn("Skipping malformed run event", error, raw);
+    }
+  };
+
+  es.onerror = () => {
+    // EventSource will automatically retry; keep the generator open.
+  };
+
+  try {
+    while (true) {
+      if (queue.length) {
+        yield queue.shift()!;
+        continue;
+      }
+      if (done) {
+        if (failure) {
+          throw failure;
+        }
+        return;
+      }
+      const result = await new Promise<IteratorResult<RunStreamEvent>>((resolve) => {
+        pendingResolve = resolve;
+      });
+      if (result.done) {
+        if (failure) {
+          throw failure;
+        }
+        return;
+      }
+      yield result.value;
+    }
+  } finally {
+    close();
+    if (signal) {
+      signal.removeEventListener("abort", abortHandler);
+    }
+  }
+}
+
+async function* streamRunEventsViaFetch(
+  url: string,
+  signal?: AbortSignal,
+): AsyncGenerator<RunStreamEvent> {
   const abortError =
     typeof DOMException !== "undefined"
       ? new DOMException("Aborted", "AbortError")
@@ -172,6 +289,7 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
 
   try {
     const parsed = JSON.parse(payload) as RunStreamEvent;
+    (parsed as Record<string, unknown>)._raw = payload;
 
     // Fill in missing event/type from SSE event field if not present in payload.
     if (sseEvent && !(parsed as Record<string, unknown>).event && !(parsed as Record<string, unknown>).type) {

@@ -64,6 +64,7 @@ def apply_validators(
 
     registry_fields = set(registry.fields.keys())
     validators_by_field = registry.column_validators_by_field
+    debug = logger.isEnabledFor(logging.DEBUG)
 
     issues_patch: IssuesPatch = {}
     if initial_issues:
@@ -102,15 +103,16 @@ def apply_validators(
             )
             merge_issues_patch(issues_patch, patch.issues)
 
-            logger.event(
-                "validation.result",
-                level=logging.DEBUG,
-                data={
-                    "validator": val.qualname,
-                    "field": field_name,
-                    "issues_emitted_fields": sorted(patch.issues.keys()),
-                },
-            )
+            if debug:
+                logger.event(
+                    "validation.result",
+                    level=logging.DEBUG,
+                    data={
+                        "validator": val.qualname,
+                        "field": field_name,
+                        "issues_emitted_fields": sorted(patch.issues.keys()),
+                    },
+                )
 
     # Phase 1: mapped fields in source order.
     for field_name in mapped_fields:
@@ -124,11 +126,16 @@ def apply_validators(
             continue
         run_field_validators(field_name)
 
-    logger.event(
-        "validation.summary",
-        level=logging.DEBUG,
-        data={"issues_total": sum(1 for field in issues_patch for cell in issues_patch[field] if cell is not None)},
-    )
+    if debug:
+        logger.event(
+            "validation.summary",
+            level=logging.DEBUG,
+            data={
+                "issues_total": sum(
+                    1 for field in issues_patch for cell in issues_patch[field] if cell is not None
+                )
+            },
+        )
 
     return issues_patch
 

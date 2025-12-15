@@ -2,7 +2,7 @@
 
 from importlib import metadata
 
-from ade_engine.engine import Engine, ExecutedRun, run_inputs
+from ade_engine.engine import Engine
 from ade_engine.registry import (
     FieldDef,
     HookName,
@@ -18,12 +18,10 @@ except metadata.PackageNotFoundError:  # pragma: no cover - source checkout / ed
 
 __all__ = [
     "Engine",
-    "ExecutedRun",
     "RunRequest",
     "RunResult",
     "RunStatus",
     "Settings",
-    "run_inputs",
     "FieldDef",
     "HookName",
     "RowKind",

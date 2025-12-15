@@ -6,21 +6,20 @@ import { createRunStreamState, runStreamReducer } from "../runStream";
 
 describe("runStreamReducer", () => {
   it("sets queued status and records run id", () => {
-    const state = createRunStreamState(5);
+    const state = createRunStreamState();
     const event: RunStreamEvent = {
       event: "run.queued",
       timestamp: "2024-01-01T00:00:00Z",
       data: { jobId: "018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10", status: "queued" },
     };
 
-    const next = runStreamReducer(state, { type: "EVENT", event });
+    const next = runStreamReducer(state, { type: "EVENTS", events: [event] });
     expect(next.status).toBe("queued");
     expect(next.runId).toBe("018f9c38-0b3f-7c1b-b9f5-5d4c4a8f3d10");
-    expect(next.consoleLines.length).toBe(1);
   });
 
-  it("moves through build and run lifecycle and clamps console lines", () => {
-    const state = createRunStreamState(2);
+  it("moves through build and run lifecycle", () => {
+    const state = createRunStreamState();
     const events: RunStreamEvent[] = [
       { event: "build.start", timestamp: "2024-01-01T00:00:01Z", data: {} },
       { event: "run.start", timestamp: "2024-01-01T00:00:02Z", data: {} },
@@ -31,36 +30,33 @@ describe("runStreamReducer", () => {
       },
     ];
 
-    const finalState = events.reduce(
-      (current, event) => runStreamReducer(current, { type: "EVENT", event }),
-      state,
-    );
+    const finalState = runStreamReducer(state, { type: "EVENTS", events });
 
     expect(finalState.status).toBe("succeeded");
-    expect(finalState.consoleLines.length).toBe(2);
   });
 
   it("tracks validation summaries", () => {
-    const state = createRunStreamState(3);
+    const state = createRunStreamState();
     const event: RunStreamEvent = {
       event: "run.validation.summary",
       timestamp: "2024-01-01T00:00:02Z",
       data: { issues_total: 2, max_severity: "warning" },
     };
 
-    const next = runStreamReducer(state, { type: "EVENT", event });
-    expect(next.validationSummary).toEqual(event.data);
+    const next = runStreamReducer(state, { type: "EVENTS", events: [event] });
+    expect(next.validationSummary?.issues_total).toBe(2);
+    expect(next.validationSummary?.max_severity).toBe("warning");
   });
 
   it("captures run mode hints from events", () => {
-    const state = createRunStreamState(4);
+    const state = createRunStreamState();
     const event: RunStreamEvent = {
       event: "run.start",
       timestamp: "2024-01-01T00:00:04Z",
       data: { mode: "validation" },
     };
 
-    const next = runStreamReducer(state, { type: "EVENT", event });
+    const next = runStreamReducer(state, { type: "EVENTS", events: [event] });
     expect(next.runMode).toBe("validation");
   });
 });

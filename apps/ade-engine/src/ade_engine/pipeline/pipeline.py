@@ -8,7 +8,7 @@ from ade_engine.pipeline.detect_rows import TableRegion, detect_table_regions
 from ade_engine.pipeline.detect_columns import detect_and_map_columns, build_source_columns
 from ade_engine.pipeline.transform import apply_transforms
 from ade_engine.pipeline.validate import apply_validators, flatten_issues_patch
-from ade_engine.pipeline.render import render_table
+from ade_engine.pipeline.render import SheetWriter, render_table
 from ade_engine.pipeline.models import TableData
 from ade_engine.registry.models import HookName
 from ade_engine.registry.registry import Registry
@@ -34,6 +34,7 @@ class Pipeline:
         input_file_name: str | None = None,
     ) -> list[TableData]:
         rows: List[List[Any]] = self._materialize_rows(sheet)
+        writer = SheetWriter(output_sheet)
 
         table_regions = detect_table_regions(
             sheet_name=sheet.title,
@@ -48,11 +49,11 @@ class Pipeline:
         tables: list[TableData] = []
         for table_index, region in enumerate(table_regions):
             if table_index > 0:
-                output_sheet.append([])
+                writer.blank_row()
             tables.append(
                 self._process_table(
                     sheet=sheet,
-                    output_sheet=output_sheet,
+                    writer=writer,
                     rows=rows,
                     region=region,
                     state=state,
@@ -68,7 +69,7 @@ class Pipeline:
         self,
         *,
         sheet: Worksheet,
-        output_sheet: Worksheet,
+        writer: SheetWriter,
         rows: List[List[Any]],
         region: TableRegion,
         state: dict,
@@ -175,7 +176,7 @@ class Pipeline:
 
         render_table(
             table=table,
-            worksheet=output_sheet,
+            writer=writer,
             settings=self.settings,
             field_order=field_order,
             logger=self.logger,
@@ -186,8 +187,8 @@ class Pipeline:
             HookName.ON_TABLE_WRITTEN,
             state=state,
             metadata=metadata,
-            workbook=output_sheet.parent,
-            sheet=output_sheet,
+            workbook=writer.worksheet.parent,
+            sheet=writer.worksheet,
             table=table,
             input_file_name=input_file_name,
             logger=self.logger,
