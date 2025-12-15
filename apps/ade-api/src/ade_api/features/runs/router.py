@@ -57,7 +57,6 @@ from .schemas import (
 )
 from .service import (
     DEFAULT_EVENTS_PAGE_LIMIT,
-    RunExecutionContext,
     RunsService,
 )
 
@@ -140,7 +139,7 @@ async def create_run_endpoint(
     """Create a run for ``configuration_id`` and enqueue execution."""
 
     try:
-        run, _context = await service.prepare_run(
+        run = await service.prepare_run(
             configuration_id=configuration_id,
             options=payload.options,
         )
