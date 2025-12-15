@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
-import { renderConsoleMessage, resolveSeverity } from "./consoleFormatting";
+import { formatConsoleLineNdjson, renderConsoleLine, resolveSeverity } from "./consoleFormatting";
 
 interface ConsoleTabProps {
   readonly console: WorkbenchConsoleStore;
@@ -20,10 +20,13 @@ type ConsoleFilters = {
   readonly level: "all" | WorkbenchConsoleLine["level"];
 };
 
+type ConsoleViewMode = "parsed" | "ndjson";
+
 export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: ConsoleTabProps) {
   const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [viewMode, setViewMode] = useState<ConsoleViewMode>("parsed");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const snapshot = useSyncExternalStore(console.subscribe.bind(console), console.getSnapshot, console.getSnapshot);
@@ -113,11 +116,11 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   const handleCopy = async () => {
     if (!hasConsoleLines) return;
     const lines: string[] = [];
-	    for (const index of filteredIndices) {
-	      const line = console.getLine(index);
-	      if (!line) continue;
-	      lines.push(formatLineForCopy(line));
-	    }
+    for (const index of filteredIndices) {
+      const line = console.getLine(index);
+      if (!line) continue;
+      lines.push(formatLineForCopy(line, viewMode));
+    }
     const copiedSuccessfully = await copyToClipboard(lines.join("\n"));
     setCopied(copiedSuccessfully);
     if (copiedSuccessfully) {
@@ -163,15 +166,16 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500"
               >
                 <option value="all">All</option>
+                <option value="debug">Debug</option>
                 <option value="info">Info</option>
                 <option value="warning">Warning</option>
                 <option value="error">Error</option>
                 <option value="success">Success</option>
               </select>
-	            </label>
-	            <button
-	              type="button"
-	              onClick={() => (follow ? setFollow(false) : enableFollow())}
+            </label>
+            <button
+              type="button"
+              onClick={() => (follow ? setFollow(false) : enableFollow())}
               className={clsx(
                 "rounded px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 follow
@@ -182,6 +186,41 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
             >
               {follow ? "Following" : "Follow"}
             </button>
+            <div
+              role="radiogroup"
+              aria-label="Console view mode"
+              className="flex items-center rounded border border-slate-600 bg-[#0f0f0f] p-[2px]"
+              title="Toggle between parsed view and raw NDJSON"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === "parsed"}
+                onClick={() => setViewMode("parsed")}
+                className={clsx(
+                  "rounded px-2 py-[5px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-emerald-500",
+                  viewMode === "parsed"
+                    ? "bg-[#151515] text-slate-100"
+                    : "text-slate-300 hover:text-slate-100",
+                )}
+              >
+                Parsed
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={viewMode === "ndjson"}
+                onClick={() => setViewMode("ndjson")}
+                className={clsx(
+                  "rounded px-2 py-[5px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-emerald-500",
+                  viewMode === "ndjson"
+                    ? "bg-[#151515] text-slate-100"
+                    : "text-slate-300 hover:text-slate-100",
+                )}
+              >
+                NDJSON
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleCopy}
@@ -238,7 +277,14 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               if (!line) return null;
 
               const key = line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${lineIndex}`;
-              const rendered = renderConsoleMessage(line.message);
+              const rendered =
+                viewMode === "ndjson" ? (
+                  <span className="whitespace-pre-wrap break-words">
+                    {formatConsoleLineNdjson(line) ?? line.message}
+                  </span>
+                ) : (
+                  renderConsoleLine(line)
+                );
 
               return (
                 <div
@@ -399,11 +445,13 @@ function displayTimestamp(value?: string | null) {
   return raw.length > 0 ? raw : "";
 }
 
-function formatLineForCopy(line: WorkbenchConsoleLine) {
+function formatLineForCopy(line: WorkbenchConsoleLine, mode: ConsoleViewMode) {
   const ts = displayTimestamp(line.timestamp);
   const origin = originLabel(line.origin);
   const level = consoleLevelLabel(line.level).toLowerCase();
-  return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${line.message ?? ""}`.trim();
+  const msg =
+    mode === "ndjson" ? formatConsoleLineNdjson(line) ?? line.message ?? "" : line.message ?? "";
+  return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${msg}`.trim();
 }
 
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {

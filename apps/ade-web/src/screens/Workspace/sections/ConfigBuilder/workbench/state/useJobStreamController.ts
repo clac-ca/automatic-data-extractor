@@ -3,8 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkbenchConsoleStore } from "./consoleStore";
 import type { WorkbenchConsoleLine } from "../types";
 
-import { streamConfigurationJob } from "@shared/jobs/api";
+import { streamConfigurationJobEvents } from "@shared/jobs/api";
 import type { RunStreamOptions } from "@shared/runs/api";
+import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@shared/runs/types";
 
 export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
 
@@ -92,6 +93,63 @@ export function useJobStreamController({
     [onError],
   );
 
+  const pushEvent = useCallback(
+    (evt: RunStreamEvent) => {
+      const name = eventName(evt);
+
+      if (name === "meta") {
+        const details = (evt as unknown as { readonly details?: Record<string, unknown> }).details ?? {};
+        const nextId = typeof details.jobId === "string" ? details.jobId : null;
+        if (nextId) {
+          setJobId((prev) => prev ?? nextId);
+          onJobIdChange?.(nextId);
+        }
+        return;
+      }
+
+      const payload = eventPayload(evt);
+      const scopeRaw =
+        name.startsWith("build.")
+          ? "build"
+          : name === "console.line" && typeof payload.scope === "string"
+            ? payload.scope
+            : "run";
+      const scope = scopeRaw === "build" ? "build" : "run";
+
+      const levelRaw = typeof evt.level === "string" ? evt.level.toLowerCase() : "info";
+      const level: WorkbenchConsoleLine["level"] =
+        levelRaw === "debug" || levelRaw === "warning" || levelRaw === "error" || levelRaw === "success"
+          ? (levelRaw as WorkbenchConsoleLine["level"])
+          : "info";
+
+      const msg = typeof evt.message === "string" ? evt.message : "";
+      const message = msg.trim() ? msg : name;
+
+      const line: WorkbenchConsoleLine = {
+        id: typeof evt.event_id === "string" ? evt.event_id : undefined,
+        level,
+        message,
+        timestamp: eventTimestamp(evt),
+        origin: scope,
+        raw: evt,
+      };
+      consoleStoreRef.current.append(line);
+
+      if (name === "run.complete") {
+        setCompletedDetails(payload);
+        const status = typeof payload.status === "string" ? payload.status.toLowerCase() : "";
+        if (status === "succeeded" || status === "success") {
+          setJobStatus("succeeded");
+        } else if (status === "cancelled" || status === "canceled") {
+          setJobStatus("cancelled");
+        } else {
+          setJobStatus("failed");
+        }
+      }
+    },
+    [onJobIdChange],
+  );
+
   const startJob = useCallback(
     async (
       options: RunStreamOptions,
@@ -120,41 +178,19 @@ export function useJobStreamController({
 
       let resolvedJobId: string | null = null;
       try {
-        for await (const msg of streamConfigurationJob(configId, options, controller.signal)) {
-          if (msg.type === "meta") {
-            const nextId = typeof msg.event.details?.jobId === "string" ? msg.event.details.jobId : null;
+        for await (const evt of streamConfigurationJobEvents(configId, options, controller.signal)) {
+          pushEvent(evt);
+          const name = eventName(evt);
+          if (name === "meta") {
+            const details = (evt as unknown as { readonly details?: Record<string, unknown> }).details ?? {};
+            const nextId = typeof details.jobId === "string" ? details.jobId : null;
             if (nextId && !resolvedJobId) {
               resolvedJobId = nextId;
               setJobId(nextId);
               onJobIdChange?.(nextId);
             }
-            continue;
           }
-
-          if (msg.type === "log") {
-            const line: WorkbenchConsoleLine = {
-              level: msg.line.level,
-              message: msg.line.message,
-              timestamp: msg.line.ts,
-              origin: msg.line.scope === "build" ? "build" : "run",
-            };
-            consoleStoreRef.current.append(line);
-            continue;
-          }
-
-          if (msg.type === "done") {
-            const details = msg.event.details ?? {};
-            setCompletedDetails(details);
-            const status = typeof details.status === "string" ? details.status.toLowerCase() : "";
-            if (status === "succeeded" || status === "success") {
-              setJobStatus("succeeded");
-            } else if (status === "cancelled" || status === "canceled") {
-              setJobStatus("cancelled");
-            } else if (status) {
-              setJobStatus("failed");
-            } else {
-              setJobStatus("failed");
-            }
+          if (name === "run.complete") {
             break;
           }
         }
@@ -176,7 +212,7 @@ export function useJobStreamController({
         }
       }
     },
-    [clearConsole, configId, jobInProgress, onJobIdChange, pushError, stopStreaming],
+    [clearConsole, configId, jobInProgress, onJobIdChange, pushError, pushEvent, stopStreaming],
   );
 
   return useMemo(
@@ -193,4 +229,3 @@ export function useJobStreamController({
     [jobId, jobMode, jobStatus, jobInProgress, completedDetails, clearConsole, startJob],
   );
 }
-
