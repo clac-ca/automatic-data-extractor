@@ -4,8 +4,7 @@ import clsx from "clsx";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
-import type { RunStreamStatus } from "../state/runStream";
-import { formatConsoleTimestamp } from "../events/format";
+import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
 import { renderConsoleMessage, resolveSeverity } from "./consoleFormatting";
 
@@ -13,11 +12,11 @@ interface ConsoleTabProps {
   readonly console: WorkbenchConsoleStore;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly runStatus?: RunStreamStatus;
+  readonly runStatus?: JobStreamStatus;
 }
 
 type ConsoleFilters = {
-  readonly origin: "all" | "run" | "build" | "raw";
+  readonly origin: "all" | "run" | "build";
   readonly level: "all" | WorkbenchConsoleLine["level"];
 };
 
@@ -25,7 +24,6 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [viewMode, setViewMode] = useState<"parsed" | "raw">("parsed");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const snapshot = useSyncExternalStore(console.subscribe.bind(console), console.getSnapshot, console.getSnapshot);
@@ -115,11 +113,11 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   const handleCopy = async () => {
     if (!hasConsoleLines) return;
     const lines: string[] = [];
-    for (const index of filteredIndices) {
-      const line = console.getLine(index);
-      if (!line) continue;
-      lines.push(formatLineForCopy(line, viewMode));
-    }
+	    for (const index of filteredIndices) {
+	      const line = console.getLine(index);
+	      if (!line) continue;
+	      lines.push(formatLineForCopy(line));
+	    }
     const copiedSuccessfully = await copyToClipboard(lines.join("\n"));
     setCopied(copiedSuccessfully);
     if (copiedSuccessfully) {
@@ -150,11 +148,10 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 }
                 className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500"
               >
-                <option value="all">All</option>
-                <option value="run">Run</option>
-                <option value="build">Build</option>
-                <option value="raw">Raw</option>
-              </select>
+	                <option value="all">All</option>
+	                <option value="run">Run</option>
+	                <option value="build">Build</option>
+	              </select>
             </label>
             <label className="flex items-center gap-1 text-slate-400" title="Filter by severity">
               Level
@@ -171,35 +168,10 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 <option value="error">Error</option>
                 <option value="success">Success</option>
               </select>
-            </label>
-            <div
-              className="flex items-center rounded border border-slate-600 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-200"
-              title="Toggle between parsed view and raw JSON events"
-            >
-              <button
-                type="button"
-                onClick={() => setViewMode("parsed")}
-                className={clsx(
-                  "px-2 py-[6px] transition",
-                  viewMode === "parsed" ? "bg-slate-700 text-white" : "hover:bg-[#0f0f0f] text-slate-300",
-                )}
-              >
-                Parsed
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("raw")}
-                className={clsx(
-                  "px-2 py-[6px] border-l border-slate-600 transition",
-                  viewMode === "raw" ? "bg-slate-700 text-white" : "hover:bg-[#0f0f0f] text-slate-300",
-                )}
-              >
-                Raw
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => (follow ? setFollow(false) : enableFollow())}
+	            </label>
+	            <button
+	              type="button"
+	              onClick={() => (follow ? setFollow(false) : enableFollow())}
               className={clsx(
                 "rounded px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 follow
@@ -266,10 +238,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               if (!line) return null;
 
               const key = line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${lineIndex}`;
-              const rendered =
-                viewMode === "raw"
-                  ? renderRawEvent(line.raw ?? line.message)
-                  : renderConsoleMessage(line.message);
+              const rendered = renderConsoleMessage(line.message);
 
               return (
                 <div
@@ -375,7 +344,7 @@ function isCancelledStatus(status?: WorkbenchRunSummary["status"]) {
 }
 
 function originLabel(origin?: WorkbenchConsoleLine["origin"]) {
-  return origin === "build" ? "[build]" : origin === "raw" ? "[raw]" : "[run]";
+  return origin === "build" ? "[build]" : "[run]";
 }
 
 function renderTimestamp(timestamp?: string) {
@@ -418,70 +387,23 @@ function prefixTone(level: WorkbenchConsoleLine["level"]) {
 
 function displayTimestamp(value?: string | null) {
   if (!value) return "";
-  const formatted = formatConsoleTimestamp(value);
-  if (formatted && formatted.trim().length > 0) return formatted;
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
   const raw = value.trim();
   return raw.length > 0 ? raw : "";
 }
 
-function renderRawEvent(raw: unknown) {
-  if (typeof raw === "string") {
-    const pretty = prettyJsonString(raw);
-    return (
-      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">{pretty ?? raw}</pre>
-    );
-  }
-  if (raw && typeof raw === "object") {
-    return (
-      <pre className="whitespace-pre-wrap break-words text-[12px] leading-snug text-[#d4d4d4]">{JSON.stringify(raw, null, 2)}</pre>
-    );
-  }
-  return null;
-}
-
-function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw") {
+function formatLineForCopy(line: WorkbenchConsoleLine) {
   const ts = displayTimestamp(line.timestamp);
   const origin = originLabel(line.origin);
   const level = consoleLevelLabel(line.level).toLowerCase();
-  if (viewMode === "parsed") {
-    const parsed = parseStructuredMessage(line.message);
-    if (parsed?.type === "ade.console.run_complete") {
-      const headline = parsed.headline ?? "";
-      const output = isRecord(parsed.output) ? parsed.output : null;
-      const outputLabel =
-        output
-          ? (typeof output.label === "string" && output.label.trim()) ||
-            (typeof output.path === "string" && output.path.trim()) ||
-            null
-          : null;
-      const outputsText = outputLabel ? ` Output: ${outputLabel}` : "";
-      const eventsText =
-        typeof parsed.eventsPath === "string" && parsed.eventsPath.trim() ? ` Events: ${parsed.eventsPath}` : "";
-      return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${headline}${outputsText}${eventsText}`.trim();
-    }
-  }
-  if (viewMode === "raw") {
-    const rawString = typeof line.raw === "string" ? prettyJsonString(line.raw) ?? line.raw : line.message ?? "";
-    return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${rawString}`.trim();
-  }
   return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${line.message ?? ""}`.trim();
-}
-
-function parseStructuredMessage(message?: string) {
-  if (!message) return null;
-  try {
-    const parsed = JSON.parse(message);
-    if (parsed && typeof parsed === "object") {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
 }
 
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
@@ -507,16 +429,4 @@ function formatRunDuration(valueMs: number): string {
   const minutes = Math.floor(valueMs / 60_000);
   const seconds = Math.round((valueMs % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
-}
-
-function prettyJsonString(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-    return null;
-  }
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return null;
-  }
 }

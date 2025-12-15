@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import re
 
-from ade_engine.registry.models import RowKind
-
-
 COMMON_HEADER_TOKENS = {
     # identity
     "name", "first", "last", "middle", "email", "phone",
@@ -18,7 +15,7 @@ COMMON_HEADER_TOKENS = {
 
 
 def register(registry):
-    registry.register_row_detector(detect_header_row_by_known_words, row_kind=RowKind.HEADER.value, priority=0)
+    registry.register_row_detector(detect_header_row_by_known_words, row_kind="header", priority=0)
 
 
 def detect_header_row_by_known_words(
