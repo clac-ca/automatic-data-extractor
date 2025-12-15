@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from uuid import uuid4
-from typing import AsyncIterator
 
 import pytest
-from ade_api.schemas.events import AdeEvent
 
+from ade_api.common.events import EventRecord, new_event_record
 from ade_api.common.time import utc_now
-from ade_api.core.models import (
+from ade_api.db.mixins import generate_uuid7
+from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
+from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.runs.schemas import RunCreateOptions
+from ade_api.features.runs.service import (
+    RunExecutionContext,
+    RunExecutionResult,
+    RunPathsSnapshot,
+    RunsService,
+)
+from ade_api.features.system_settings.service import SafeModeService
+from ade_api.infra.storage import workspace_config_root, workspace_documents_root
+from ade_api.models import (
     Build,
     BuildStatus,
     Configuration,
@@ -20,18 +31,6 @@ from ade_api.core.models import (
     RunStatus,
     Workspace,
 )
-from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
-from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.runs.service import (
-    RunExecutionContext,
-    RunExecutionResult,
-    RunPathsSnapshot,
-    RunsService,
-)
-from ade_api.features.runs.schemas import RunCreateOptions
-from ade_api.features.system_settings.service import SafeModeService
-from ade_api.infra.db.mixins import generate_uuid7
-from ade_api.infra.storage import workspace_config_root, workspace_documents_root
 from ade_api.settings import Settings
 
 
@@ -41,11 +40,13 @@ class FakeBuildsService:
     def __init__(
         self,
         *,
+        session,
         build: Build,
         context: BuildExecutionContext | None,
-        events: list[AdeEvent] | None,
+        events: list[EventRecord] | None,
         venv_path: Path,
     ) -> None:
+        self._session = session
         self.build = build
         self.context = context
         self.events = events or []
@@ -64,18 +65,46 @@ class FakeBuildsService:
         self.force_calls.append(bool(force_rebuild))
         return self.build, self.context
 
-    async def stream_build(self, *, context, options) -> AsyncIterator[AdeEvent]:
+    async def stream_build(self, *, context, options) -> AsyncIterator[EventRecord]:
         for event in self.events:
             yield event
         self.build.status = BuildStatus.READY
         self.build.exit_code = 0
+        await self._session.commit()
+
+    async def stream_build_events(
+        self,
+        *,
+        build: Build,
+        start_sequence: int | None = None,  # noqa: ARG002
+        timeout_seconds: float | None = None,  # noqa: ARG002
+    ) -> AsyncIterator[EventRecord]:
+        for event in self.events:
+            yield event
+        build.status = BuildStatus.READY
+        build.exit_code = 0
+        await self._session.commit()
+
+    async def launch_build_if_needed(
+        self,
+        *,
+        build: Build,  # noqa: ARG002
+        reason: str | None = None,  # noqa: ARG002
+        run_id=None,  # noqa: ANN001,ARG002
+    ) -> None:
+        return None
 
     async def get_build_or_raise(self, build_id: str, workspace_id: str | None = None) -> Build:
         return self.build
 
     async def ensure_local_env(self, *, build: Build) -> Path:
+        from ade_api.infra.venv import venv_python_path
+
         self.venv_path.parent.mkdir(parents=True, exist_ok=True)
         self.venv_path.mkdir(parents=True, exist_ok=True)
+        python_path = venv_python_path(self.venv_path, must_exist=False)
+        python_path.parent.mkdir(parents=True, exist_ok=True)
+        python_path.write_text("", encoding="utf-8")
         return self.venv_path
 
     def event_log_reader(self, *_, **__):
@@ -97,7 +126,7 @@ async def _build_service(
     safe_mode: bool = False,
     build_status: BuildStatus = BuildStatus.READY,
     build_decision: BuildDecision = BuildDecision.START_NEW,
-    build_events: list[AdeEvent] | None = None,
+    build_events: list[EventRecord] | None = None,
 ) -> tuple[RunsService, Configuration, Document, FakeBuildsService, Settings]:
     data_root = tmp_path / "data"
     settings = Settings(
@@ -186,6 +215,7 @@ async def _build_service(
         safe_mode_service=safe_mode_service,
     )
     fake_builds = FakeBuildsService(
+        session=session,
         build=build,
         context=build_ctx,
         events=build_events,
@@ -205,19 +235,64 @@ async def test_prepare_run_emits_queued_event(session, tmp_path: Path) -> None:
     )
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
-    assert Path(context.venv_path).name == ".venv"
     assert fake_builds.force_calls == [False]
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
 
     events, _ = await service.get_run_events(run_id=run.id, limit=5)
-    assert events and events[0].type == "run.queued"
-    queued_payload = events[0].payload
-    queued_options = queued_payload.options if queued_payload else None  # type: ignore[attr-defined]
-    assert queued_options and queued_options.get("input_document_id") == str(document.id)
+    assert events and events[0]["event"] == "run.queued"
+    queued_options = events[0].get("data", {}).get("options") or {}
+    assert queued_options.get("input_document_id") == str(document.id)
+
+
+@pytest.mark.asyncio()
+async def test_execute_engine_sets_config_package_flag(
+    session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, configuration, document, _fake_builds, settings = await _build_service(
+        session,
+        tmp_path,
+        build_status=BuildStatus.READY,
+    )
+    options = RunCreateOptions(input_document_id=str(document.id))
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
+    context = await service._execution_context_for_run(run.id)
+
+    captured_command: list[str] | None = None
+
+    class FakeRunner:
+        def __init__(self, *, command, env) -> None:  # noqa: ARG002
+            nonlocal captured_command
+            captured_command = command
+            self.returncode = 0
+
+        async def stream(self):
+            if False:  # pragma: no cover
+                yield None
+
+    monkeypatch.setattr("ade_api.features.runs.service.EngineSubprocessRunner", FakeRunner)
+
+    frames = [
+        frame
+        async for frame in service._execute_engine(
+            run=run,
+            context=context,
+            options=options,
+            safe_mode_enabled=False,
+        )
+    ]
+
+    assert captured_command is not None
+    assert "--config-package" in captured_command
+    idx = captured_command.index("--config-package")
+    expected = workspace_config_root(settings, configuration.workspace_id, configuration.id)
+    assert captured_command[idx + 1] == str(expected)
+    assert any(isinstance(frame, RunExecutionResult) for frame in frames)
 
 
 @pytest.mark.asyncio()
@@ -226,17 +301,9 @@ async def test_stream_run_waits_for_build_and_forwards_events(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    build_event = AdeEvent(
-        type="build.start",
-        event_id="evt_1",
-        created_at=utc_now(),
-        sequence=1,
-        source="api",
-        workspace_id=uuid4(),
-        configuration_id=uuid4(),
-        run_id=uuid4(),
-        build_id=uuid4(),
-        payload={"status": "building"},
+    build_event = new_event_record(
+        event="build.start",
+        data={"status": "building"},
     )
     service, configuration, document, fake_builds, _ = await _build_service(
         session,
@@ -272,18 +339,17 @@ async def test_stream_run_waits_for_build_and_forwards_events(
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     options = RunCreateOptions(input_document_id=str(document.id), force_rebuild=True)
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.WAITING_FOR_BUILD
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
-    event_types = [event.type for event in events]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
+    event_types = [event["event"] for event in events]
 
     assert "build.start" in event_types
     assert any(
-        evt.type == "console.line"
-        and hasattr(evt, "payload")
-        and getattr(evt.payload, "message", "").startswith("Configuration build completed")
+        evt.get("event") == "console.line"
+        and (evt.get("data", {}).get("message") or "").startswith("Configuration build completed")
         for evt in events
     )
     assert event_types[-1] == "run.complete"
@@ -341,12 +407,12 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     options = RunCreateOptions(input_document_id=str(document.id))
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
 
     assert observed_flags == [False]
-    assert events[-1].type == "run.complete"
+    assert events[-1]["event"] == "run.complete"
     completed = await service.get_run(run.id)
     assert completed is not None
     assert completed.status is RunStatus.SUCCEEDED
@@ -363,22 +429,17 @@ async def test_validate_only_short_circuits_and_persists_summary(
         build_status=BuildStatus.READY,
     )
     options = RunCreateOptions(input_document_id=str(document.id), validate_only=True)
-    run, context = await service.prepare_run(configuration_id=configuration.id, options=options)
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(context=context, options=options)]
-    event_types = [event.type for event in events]
+    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
+    event_types = [event["event"] for event in events]
 
     assert event_types[0] == "run.queued"
     assert event_types[-1] == "run.complete"
-    completed_payload = events[-1].payload
+    completed_payload = events[-1].get("data", {})
     assert completed_payload is not None
-    payload_dict = (
-        completed_payload.model_dump()
-        if hasattr(completed_payload, "model_dump")
-        else dict(completed_payload)
-    )
-    assert payload_dict.get("summary") is None
-    failure = payload_dict.get("failure")
+    assert completed_payload.get("summary") is None
+    failure = completed_payload.get("failure")
     assert failure and failure.get("message") == "Validation-only execution"
 
     refreshed = await service.get_run(run.id)

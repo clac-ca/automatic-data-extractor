@@ -10,9 +10,9 @@ from fastapi import Depends, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.infra.db.engine import get_engine
-from ade_api.infra.db.mixins import generate_uuid7
-from ade_api.infra.db.session import get_session
+from ade_api.db.engine import get_engine
+from ade_api.db.mixins import generate_uuid7
+from ade_api.db.session import get_session
 
 
 @pytest.mark.asyncio

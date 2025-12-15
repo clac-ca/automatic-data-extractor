@@ -23,12 +23,10 @@ def _create_token(
     issued_at = _now()
     expires_at = issued_at + timedelta(seconds=ttl_seconds)
     claims = dict(payload)
-    claims.update(
-        {
-            "iat": int(issued_at.timestamp()),
-            "exp": int(expires_at.timestamp()),
-        }
-    )
+    claims.update({
+        "iat": int(issued_at.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    })
     return jwt.encode(claims, secret, algorithm=algorithm)
 
 

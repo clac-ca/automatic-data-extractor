@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.6
 
 # Base versions (override at build time if needed)
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.11
 ARG NODE_VERSION=20
 
 # =============================================================================

@@ -7,8 +7,8 @@ so callers don't re-implement them in multiple places.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from collections.abc import Mapping
+from pathlib import Path
 
 __all__ = [
     "venv_bin_dir",

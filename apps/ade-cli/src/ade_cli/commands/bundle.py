@@ -27,6 +27,25 @@ LANGUAGE_HINTS: dict[str, str] = {
     ".txt": "",
 }
 
+DEFAULT_EXCLUDE_PATTERNS: tuple[str, ...] = (
+    "__pycache__/**",
+    "**/__pycache__/**",
+    "*.egg-info/**",
+    "**/*.egg-info/**",
+    ".pytest_cache/**",
+    "**/.pytest_cache/**",
+    ".mypy_cache/**",
+    "**/.mypy_cache/**",
+    ".venv/**",
+    "**/.venv/**",
+    "build/**",
+    "**/build/**",
+    "dist/**",
+    "**/dist/**",
+    "node_modules/**",
+    "**/node_modules/**",
+)
+
 
 def language_from_suffix(path: Path) -> str:
     """Return a language hint for code fences based on the file extension."""
@@ -289,7 +308,10 @@ def collect_bundle_files(
         ext.lower().lstrip(".") for ext in (extensions or []) if ext
     }
     include_list: list[str] = [pat for pat in (include_patterns or []) if pat]
-    exclude_list: list[str] = [pat for pat in (exclude_patterns or []) if pat]
+    exclude_list: list[str] = [
+        *DEFAULT_EXCLUDE_PATTERNS,
+        *[pat for pat in (exclude_patterns or []) if pat],
+    ]
 
     explicit_files: list[Path] = []
     dir_roots: list[Path] = []
@@ -402,7 +424,7 @@ def run_bundle(
     head: int | None = None,
     tail: int | None = None,
     out: Path | None = None,
-    clip: bool = True,
+    clip: bool = False,
     print_output: bool = True,
     include_tree: bool = True,
     allow_truncate: bool = False,
@@ -501,7 +523,7 @@ def register(app: typer.Typer) -> None:
         name="bundle",
         help=(
             "Bundle code from files and directories, format it for LLMs, "
-            "and copy/print it."
+            "and print it (optionally copy to clipboard)."
         ),
     )
     def bundle(
@@ -597,9 +619,10 @@ def register(app: typer.Typer) -> None:
             help="Write the bundle to this file.",
         ),
         clip: bool = typer.Option(
-            True,
-            "--clip/--no-clip",
-            help="Copy the bundle to the clipboard.",
+            False,
+            "--clip",
+            help="Copy the bundle to the clipboard (opt-in).",
+            is_flag=True,
         ),
         show: bool = typer.Option(
             True,

@@ -36,7 +36,7 @@ All relevant code lives under `apps/ade-web/src`:
 apps/ade-web/
   src/
     app/              # App shell: providers, global layout, top-level routing
-    screens/          # Screen/feature slices (aliased as "@features")
+    screens/          # Screen/feature slices (aliased as "@screens")
     ui/               # Reusable presentational components
     shared/           # Cross-cutting hooks, utilities, and API modules (no UI)
     schema/           # Hand-written domain models / schemas
@@ -44,7 +44,7 @@ apps/ade-web/
     test/             # Vitest setup and shared testing helpers
 ````
 
-> Screen folders live in `src/screens` and are imported via `@features/*` (historical alias). There is no `src/features` directory.
+> Screen folders live in `src/screens` and are imported via `@screens/*`. There is no `src/features` directory.
 
 At a high level:
 
@@ -64,7 +64,7 @@ We treat the codebase as layered, with imports flowing “down” only:
 ```text
         app
         ↑
-     screens (@features)
+     screens (@screens)
      ↑          ↑
     ui        shared
       ↑         ↑
@@ -136,7 +136,7 @@ What does **not** belong here:
 
 ## 5. `screens/` – screen/feature slices
 
-**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@features/*` alias.
+**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@screens/*` alias.
 
 Example structure:
 
@@ -438,7 +438,7 @@ Tests for a specific component or hook live alongside that code (e.g. `RunsScree
 We use a small set of TS/Vite aliases to keep imports readable:
 
 * `@app` → `src/app`
-* `@features` → `src/screens`
+* `@screens` → `src/screens`
 * `@ui` → `src/ui`
 * `@shared` → `src/shared`
 * `@schema` → `src/schema`
@@ -451,7 +451,7 @@ Guidelines:
 
   ```ts
   // Good
-  import { WorkspaceShellScreen } from "@features/workspace-shell/WorkspaceShellScreen";
+  import { WorkspaceShellScreen } from "@screens/workspace-shell/WorkspaceShellScreen";
   import { GlobalTopBar } from "@ui/global/GlobalTopBar";
   import { listWorkspaceRuns } from "@shared/api/runsApi";
   import { RunSummary } from "@schema/run";

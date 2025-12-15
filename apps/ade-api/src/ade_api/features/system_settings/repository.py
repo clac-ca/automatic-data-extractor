@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.core.models import SystemSetting
+from ade_api.models import SystemSetting
 
 
 class SystemSettingsRepository:
@@ -22,20 +22,15 @@ class SystemSettingsRepository:
         return result.scalar_one_or_none()
 
     async def get_for_update(self, key: str) -> SystemSetting | None:
-        stmt = (
-            select(SystemSetting)
-            .where(SystemSetting.key == key)
-            .with_for_update(nowait=False)
-        )
+        stmt = select(SystemSetting).where(SystemSetting.key == key).with_for_update(nowait=False)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create(
-        self, *, key: str, value: Mapping[str, object] | None = None
-    ) -> SystemSetting:
+    async def create(self, *, key: str, value: Mapping[str, object] | None = None) -> SystemSetting:
         setting = SystemSetting(key=key, value=dict(value or {}))
         self._session.add(setting)
         await self._session.flush()
         return setting
+
 
 __all__ = ["SystemSettingsRepository"]

@@ -1,221 +1,268 @@
-"""Sheet/Table orchestration for Engine."""
-
 from __future__ import annotations
 
-import logging
-from typing import Callable
+from typing import Any, List
 
-from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 
-from ade_engine.config.loader import ConfigRuntime
-from ade_engine.hooks.dispatcher import HookDispatcher
-from ade_engine.pipeline.detect import TableDetector
-from ade_engine.pipeline.extract import TableExtractor
-from ade_engine.pipeline.layout import SheetLayout
-from ade_engine.pipeline.mapping import ColumnMapper
-from ade_engine.pipeline.normalize import TableNormalizer
-from ade_engine.pipeline.render import TableRenderer
-from ade_engine.runtime import PluginInvoker, StageTracker
-from ade_engine.types.contexts import RunContext, TableContext, TableView, WorksheetContext
-from ade_engine.types.origin import TableOrigin, TableRegion
-from ade_engine.types.issues import Severity
+from ade_engine.pipeline.detect_rows import TableRegion, detect_table_regions
+from ade_engine.pipeline.detect_columns import detect_and_map_columns, build_source_columns
+from ade_engine.pipeline.transform import apply_transforms
+from ade_engine.pipeline.validate import apply_validators, flatten_issues_patch
+from ade_engine.pipeline.render import SheetWriter, render_table
+from ade_engine.pipeline.models import TableData
+from ade_engine.registry.models import HookName
+from ade_engine.registry.registry import Registry
+from ade_engine.settings import Settings
+from ade_engine.logging import RunLogger
 
 
 class Pipeline:
-    """Coordinates detection → extraction → mapping → normalization → rendering."""
+    """Orchestrates sheet-level processing using the registry."""
 
-    def __init__(
-        self,
-        *,
-        detector: TableDetector | None = None,
-        extractor: TableExtractor | None = None,
-        mapper: ColumnMapper | None = None,
-        normalizer: TableNormalizer | None = None,
-        renderer_factory: Callable[[], TableRenderer] | None = None,
-    ) -> None:
-        self.detector = detector or TableDetector()
-        self.extractor = extractor or TableExtractor()
-        self.mapper = mapper or ColumnMapper()
-        self.normalizer = normalizer or TableNormalizer()
-        self.renderer_factory = renderer_factory or (lambda: TableRenderer(layout=SheetLayout()))
+    def __init__(self, *, registry: Registry, settings: Settings, logger: RunLogger) -> None:
+        self.registry = registry
+        self.settings = settings
+        self.logger = logger
 
     def process_sheet(
         self,
         *,
-        runtime: ConfigRuntime,
-        run_ctx: RunContext,
-        hook_dispatcher: HookDispatcher,
-        invoker: PluginInvoker,
-        stage: StageTracker,
-        source_wb: Workbook,
-        output_wb: Workbook,
-        sheet_name: str,
-        sheet_position: int,
-        sheet_index_lookup: dict[str, int],
-        logger: logging.Logger | None = None,
-    ) -> None:
-        stage.set(f"sheet[{sheet_name}]")
-        emitter = invoker.event_emitter
+        sheet: Worksheet,
+        output_sheet: Worksheet,
+        state: dict,
+        metadata: dict,
+        input_file_name: str | None = None,
+    ) -> list[TableData]:
+        rows: List[List[Any]] = self._materialize_rows(sheet)
+        writer = SheetWriter(output_sheet)
 
-        src_ws = source_wb[sheet_name]
-        out_ws = output_wb.create_sheet(title=sheet_name, index=sheet_position)
-        sheet_ctx = WorksheetContext(
-            run=run_ctx,
-            sheet_index=sheet_index_lookup.get(sheet_name, sheet_position),
-            source_worksheet=src_ws,
-            output_worksheet=out_ws,
+        table_regions = detect_table_regions(
+            sheet_name=sheet.title,
+            rows=rows,
+            registry=self.registry,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            logger=self.logger,
         )
 
-        emitter.emit(
-            "sheet.started",
-            message=f"Sheet started: {sheet_name}",
-            sheet_name=sheet_name,
-            sheet_index=sheet_ctx.sheet_index,
-        )
-        hook_dispatcher.on_sheet_start(sheet_ctx)
-
-        stage.set(f"detect[{sheet_name}]")
-        regions = self.detector.detect(
-            source_path=run_ctx.source_path,
-            worksheet=src_ws,
-            runtime=runtime,
-            run_ctx=run_ctx,
-            invoker=invoker,
-            logger=logger,
-        )
-        emitter.emit(
-            "sheet.tables_detected",
-            message=f"Detected {len(regions)} table(s) in {sheet_name}",
-            sheet_name=sheet_name,
-            table_count=len(regions),
-        )
-
-        renderer = self.renderer_factory()
-        for table_index, region in enumerate(regions):
-            self.process_table(
-                runtime=runtime,
-                run_ctx=run_ctx,
-                hook_dispatcher=hook_dispatcher,
-                invoker=invoker,
-                stage=stage,
-                sheet_ctx=sheet_ctx,
-                region=region,
-                table_index=table_index,
-                renderer=renderer,
-                logger=logger,
+        tables: list[TableData] = []
+        for table_index, region in enumerate(table_regions):
+            if table_index > 0:
+                writer.blank_row()
+            tables.append(
+                self._process_table(
+                    sheet=sheet,
+                    writer=writer,
+                    rows=rows,
+                    region=region,
+                    state=state,
+                    metadata=metadata,
+                    input_file_name=input_file_name,
+                    table_index=table_index,
+                )
             )
 
-    def process_table(
+        return tables
+
+    def _process_table(
         self,
         *,
-        runtime: ConfigRuntime,
-        run_ctx: RunContext,
-        hook_dispatcher: HookDispatcher,
-        invoker: PluginInvoker,
-        stage: StageTracker,
-        sheet_ctx: WorksheetContext,
+        sheet: Worksheet,
+        writer: SheetWriter,
+        rows: List[List[Any]],
         region: TableRegion,
+        state: dict,
+        metadata: dict,
+        input_file_name: str | None,
         table_index: int,
-        renderer: TableRenderer,
-        logger: logging.Logger | None = None,
-    ) -> TableContext:
-        sheet_name = sheet_ctx.source_worksheet.title
-        emitter = invoker.event_emitter
+    ) -> TableData:
+        header_row = rows[region.header_row_index] if region.header_row_index < len(rows) else []
+        data_rows = rows[region.data_start_row_index:region.data_end_row_index]
 
-        origin = TableOrigin(
-            source_path=run_ctx.source_path,
-            sheet_name=sheet_name,
-            sheet_index=sheet_ctx.sheet_index,
-            table_index=table_index,
-        )
-        table_ctx = TableContext(sheet=sheet_ctx, origin=origin, region=region)
-
-        emitter.emit(
-            "table.detected",
-            message=f"Table detected in {sheet_name} (#{table_index + 1})",
-            sheet_name=sheet_name,
-            sheet_index=sheet_ctx.sheet_index,
-            table_index=table_index,
-            region={"min_row": region.min_row, "max_row": region.max_row, "min_col": region.min_col, "max_col": region.max_col},
+        source_cols = build_source_columns(header_row, data_rows)
+        mapped_cols, unmapped_cols = detect_and_map_columns(
+            sheet_name=sheet.title,
+            source_columns=source_cols,
+            registry=self.registry,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            logger=self.logger,
         )
 
-        stage.set(f"extract[{sheet_name}:{table_index}]")
-        extracted = self.extractor.extract(sheet_ctx.source_worksheet, origin, region)
-        table_ctx.extracted = extracted
-
-        col_count = max(len(extracted.header), max((len(r) for r in extracted.rows), default=0))
-        emitter.emit(
-            "table.extracted",
-            message=f"Extracted {len(extracted.rows)} row(s) from {sheet_name} (#{table_index + 1})",
-            sheet_name=sheet_name,
+        table = TableData(
+            sheet_name=sheet.title,
+            header_row_index=region.header_row_index,
+            source_columns=source_cols,
             table_index=table_index,
-            row_count=len(extracted.rows),
-            col_count=col_count,
+            mapped_columns=mapped_cols,
+            unmapped_columns=unmapped_cols,
         )
 
-        hook_dispatcher.on_table_detected(table_ctx)
-
-        stage.set(f"map[{sheet_name}:{table_index}]")
-        mapped = self.mapper.map(extracted, runtime, run_ctx, invoker=invoker, logger=logger)
-        table_ctx.mapped = mapped
-
-        mapped_count = sum(1 for f in mapped.mapping.fields if f.source_col is not None)
-        emitter.emit(
-            "table.mapped",
-            message=f"Mapped {mapped_count}/{len(mapped.mapping.fields)} fields for {sheet_name} (#{table_index + 1})",
-            sheet_name=sheet_name,
-            table_index=table_index,
-            mapped_fields=mapped_count,
-            total_fields=len(mapped.mapping.fields),
-            passthrough_fields=len(mapped.mapping.passthrough),
+        # Hook: table detected
+        self.registry.run_hooks(
+            HookName.ON_TABLE_DETECTED,
+            state=state,
+            metadata=metadata,
+            workbook=None,
+            sheet=sheet,
+            table=table,
+            input_file_name=input_file_name,
+            logger=self.logger,
         )
 
-        patch = hook_dispatcher.on_table_mapped(table_ctx)
-        if patch:
-            table_ctx.mapping_patch = patch
-            mapped = self.mapper.apply_patch(mapped, patch, runtime.manifest)
-            table_ctx.mapped = mapped
-            emitter.emit(
-                "table.mapping_patched",
-                message=f"Applied mapping patch for {sheet_name} (#{table_index + 1})",
-                sheet_name=sheet_name,
-                table_index=table_index,
+        # Hook: allow mapping reorder/patch
+        self.registry.run_hooks(
+            HookName.ON_TABLE_MAPPED,
+            state=state,
+            metadata=metadata,
+            workbook=None,
+            sheet=sheet,
+            table=table,
+            input_file_name=input_file_name,
+            logger=self.logger,
+        )
+
+        row_count = len(data_rows)
+        table.row_count = row_count
+        table.columns = {col.field_name: list(col.values) for col in table.mapped_columns}
+        table.mapping = {col.field_name: col.source_index for col in table.mapped_columns}
+
+        transform_patch = apply_transforms(
+            mapped_columns=table.mapped_columns,
+            columns=table.columns,
+            mapping=table.mapping,
+            registry=self.registry,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            logger=self.logger,
+            row_count=row_count,
+        )
+        table.issues_patch = transform_patch.issues
+
+        issues_patch = apply_validators(
+            mapped_columns=table.mapped_columns,
+            columns=table.columns,
+            mapping=table.mapping,
+            registry=self.registry,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            logger=self.logger,
+            row_count=row_count,
+            initial_issues=transform_patch.issues,
+        )
+        table.issues_patch = issues_patch
+        table.issues = flatten_issues_patch(
+            issues_patch=issues_patch,
+            columns=table.columns,
+            mapping=table.mapping,
+        )
+
+        mapped_fields = [col.field_name for col in table.mapped_columns]
+        derived_fields: list[str] = []
+        if self.settings.render_derived_fields:
+            mapped_set = set(mapped_fields)
+            for field in self.registry.fields.keys():
+                if field in mapped_set:
+                    continue
+                if field in table.columns:
+                    derived_fields.append(field)
+        field_order = [*mapped_fields, *derived_fields]
+
+        render_table(
+            table=table,
+            writer=writer,
+            settings=self.settings,
+            field_order=field_order,
+            logger=self.logger,
+        )
+
+        # Hook after write
+        self.registry.run_hooks(
+            HookName.ON_TABLE_WRITTEN,
+            state=state,
+            metadata=metadata,
+            workbook=writer.worksheet.parent,
+            sheet=writer.worksheet,
+            table=table,
+            input_file_name=input_file_name,
+            logger=self.logger,
+        )
+        return table
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _materialize_rows(self, sheet: Worksheet) -> List[List[Any]]:
+        """Stream rows, trim width, and stop after long empty runs."""
+
+        rows: List[List[Any]] = []
+        empty_row_run = 0
+        max_empty_rows = self.settings.max_empty_rows_run
+        max_empty_cols = self.settings.max_empty_cols_run
+        row_limit_hit = False
+
+        for row_index, row in enumerate(sheet.iter_rows(values_only=True)):
+            last_value_idx = -1
+            empty_col_run = 0
+            truncated_cols = False
+
+            for idx, cell in enumerate(row):
+                if cell not in (None, ""):
+                    last_value_idx = idx
+                    empty_col_run = 0
+                else:
+                    empty_col_run += 1
+                    if (
+                        max_empty_cols is not None
+                        and last_value_idx >= 0
+                        and empty_col_run >= max_empty_cols
+                    ):
+                        truncated_cols = True
+                        break
+
+            if truncated_cols:
+                self.logger.warning(
+                    "Truncated row after long empty column run",
+                    extra={
+                        "data": {
+                            "sheet_name": sheet.title,
+                            "row_index": row_index,
+                            "max_empty_cols_run": max_empty_cols,
+                        }
+                    },
+                )
+
+            if last_value_idx == -1:
+                empty_row_run += 1
+                if max_empty_rows is not None and empty_row_run >= max_empty_rows:
+                    row_limit_hit = True
+                    break
+                rows.append([])
+                continue
+
+            empty_row_run = 0
+            trimmed = list(row[: last_value_idx + 1])
+            rows.append(trimmed)
+
+        if row_limit_hit:
+            self.logger.warning(
+                "Stopped scanning sheet after long empty row run",
+                extra={
+                    "data": {
+                        "sheet_name": sheet.title,
+                        "rows_emitted": len(rows),
+                        "max_empty_rows_run": max_empty_rows,
+                    }
+                },
             )
 
-        stage.set(f"normalize[{sheet_name}:{table_index}]")
-        normalized = self.normalizer.normalize(mapped, runtime, run_ctx, invoker=invoker, logger=logger)
-        table_ctx.normalized = normalized
-
-        issues = normalized.issues or []
-        counts = {sev.value: 0 for sev in Severity}
-        for issue in issues:
-            counts[issue.severity.value] = counts.get(issue.severity.value, 0) + 1
-
-        emitter.emit(
-            "table.normalized",
-            message=f"Normalized {len(normalized.rows)} row(s) for {sheet_name} (#{table_index + 1})",
-            sheet_name=sheet_name,
-            table_index=table_index,
-            row_count=len(normalized.rows),
-            issue_count=len(issues),
-            issues_by_severity=counts,
-        )
-
-        stage.set(f"render[{sheet_name}:{table_index}]")
-        placement = renderer.write_table(sheet_ctx.output_worksheet, normalized)
-        table_ctx.placement = placement
-        table_ctx.view = TableView(placement.worksheet, placement.cell_range)
-
-        emitter.emit(
-            "table.written",
-            message=f"Wrote normalized table to output: {sheet_name}!{placement.cell_range.coord}",
-            sheet_name=sheet_name,
-            table_index=table_index,
-            output_range=placement.cell_range.coord,
-        )
-
-        hook_dispatcher.on_table_written(table_ctx)
-        return table_ctx
+        return rows
 
 
 __all__ = ["Pipeline"]

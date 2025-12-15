@@ -1,6 +1,8 @@
 import type { WorkbenchConsoleLine } from "../types";
+import type { ReactElement } from "react";
 
 export function resolveSeverity(level: WorkbenchConsoleLine["level"] | "all"): number {
+  if (level === "debug") return 0;
   if (level === "error") return 3;
   if (level === "warning") return 2;
   if (level === "success") return 1;
@@ -54,7 +56,7 @@ function safeParseJson(value: string) {
 function highlightJson(text: string) {
   const regex =
     /("(?:\\.|[^"])*"(?=:)|"(?:\\.|[^"])*")|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|\b(true|false|null)\b/g;
-  const parts: Array<string | JSX.Element> = [];
+  const parts: Array<string | ReactElement> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;
@@ -88,7 +90,6 @@ function formatStructuredEvent(event: Record<string, unknown>) {
   const status = typeof payload.status === "string" ? payload.status : undefined;
   const reason = typeof payload.reason === "string" ? payload.reason : undefined;
   const step = typeof payload.step === "string" ? payload.step : undefined;
-  const message = typeof payload.message === "string" ? payload.message : undefined;
   const durationMs =
     typeof payload.duration_ms === "number" && Number.isFinite(payload.duration_ms)
       ? payload.duration_ms
@@ -171,14 +172,14 @@ function formatStructuredEvent(event: Record<string, unknown>) {
       return `Build ${status ?? "completed"}.`;
     case "build.phase.start":
     case "build.phase.started":
-      return `Starting ${typeof payload.phase === "string" ? payload.phase : "build"}${message ? ` · ${message}` : ""}`;
+      return `Starting ${typeof payload.phase === "string" ? payload.phase : "build"}`;
     case "build.phase.complete":
     case "build.phase.completed": {
       const phase = typeof payload.phase === "string" ? payload.phase : "build";
       return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
     }
     case "build.progress":
-      return message ?? (step ? `Build: ${step}` : "Build progress");
+      return step ? `Build: ${step}` : "Build progress";
     default:
       if (type.startsWith("run.phase.") || type.startsWith("engine.phase.")) {
         const phase = typeof payload.phase === "string" ? payload.phase : "phase";
@@ -186,7 +187,7 @@ function formatStructuredEvent(event: Record<string, unknown>) {
           return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
         }
         if (type.endsWith(".started") || type.endsWith(".start")) {
-          return `Starting ${phase}${message ? ` · ${message}` : ""}`;
+          return `Starting ${phase}`;
         }
       }
       if (type.startsWith("build.phase.")) {
@@ -195,7 +196,7 @@ function formatStructuredEvent(event: Record<string, unknown>) {
           return `${phase} ${status ?? "completed"}${durationMs ? ` in ${formatDuration(durationMs)}` : ""}.`;
         }
         if (type.endsWith(".started") || type.endsWith(".start")) {
-          return `Starting ${phase}${message ? ` · ${message}` : ""}`;
+          return `Starting ${phase}`;
         }
       }
       return null;

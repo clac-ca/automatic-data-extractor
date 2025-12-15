@@ -11,7 +11,7 @@ import {
   type WorkspaceMember,
   type WorkspaceMemberPage,
   type WorkspaceMemberCreatePayload,
-} from "@features/Workspace/api/workspaces-api";
+} from "@shared/workspaces";
 import type { User } from "@schema";
 
 const MEMBERS_PAGE_SIZE = MAX_PAGE_SIZE;

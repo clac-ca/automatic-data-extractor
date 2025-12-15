@@ -17,6 +17,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_api.core.models import Configuration, ConfigurationStatus
+from ade_api.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
 from .exceptions import (
@@ -74,7 +75,7 @@ class ConfigurationsService:
         self._repo = ConfigurationsRepository(session)
         self._storage = storage
 
-    async def list_configurations(self, *, workspace_id: str) -> list[Configuration]:
+    async def list_configurations(self, *, workspace_id: UUID) -> list[Configuration]:
         logger.debug(
             "config.list.start",
             extra=log_context(workspace_id=workspace_id),
@@ -89,8 +90,8 @@ class ConfigurationsService:
     async def get_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
             "config.get.start",
@@ -113,7 +114,7 @@ class ConfigurationsService:
     async def create_configuration(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         display_name: str,
         source: ConfigSource,
     ) -> Configuration:
@@ -185,8 +186,8 @@ class ConfigurationsService:
     async def clone_configuration(
         self,
         *,
-        workspace_id: str,
-        source_configuration_id: str,
+        workspace_id: UUID,
+        source_configuration_id: UUID,
         display_name: str,
     ) -> Configuration:
         logger.debug(
@@ -217,7 +218,7 @@ class ConfigurationsService:
     async def import_configuration_from_archive(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         display_name: str,
         archive: bytes,
     ) -> Configuration:
@@ -269,8 +270,8 @@ class ConfigurationsService:
     async def validate_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> ValidationResult:
         logger.debug(
             "config.validate.start",
@@ -297,8 +298,8 @@ class ConfigurationsService:
     async def activate_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
             "config.activate.start",
@@ -357,8 +358,8 @@ class ConfigurationsService:
     async def publish_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
             "config.publish.start",
@@ -411,8 +412,8 @@ class ConfigurationsService:
     async def deactivate_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
             "config.deactivate.start",
@@ -450,8 +451,8 @@ class ConfigurationsService:
     async def replace_configuration_from_archive(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         archive: bytes,
         if_match: str | None,
     ) -> Configuration:
@@ -497,8 +498,8 @@ class ConfigurationsService:
     async def list_files(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         prefix: str,
         depth: str,
         include: list[str] | None,
@@ -599,8 +600,8 @@ class ConfigurationsService:
     async def read_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         include_content: bool = True,
     ) -> dict:
@@ -641,8 +642,8 @@ class ConfigurationsService:
     async def write_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         content: bytes,
         parents: bool,
@@ -712,8 +713,8 @@ class ConfigurationsService:
     async def delete_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         if_match: str | None,
     ) -> None:
@@ -752,8 +753,8 @@ class ConfigurationsService:
     async def create_directory(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
     ) -> tuple[Path, bool]:
         configuration = await self._require_configuration(
@@ -795,8 +796,8 @@ class ConfigurationsService:
     async def delete_directory(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         recursive: bool,
     ) -> None:
@@ -852,8 +853,8 @@ class ConfigurationsService:
     async def rename_entry(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         source_path: str,
         dest_path: str,
         overwrite: bool,
@@ -993,8 +994,8 @@ class ConfigurationsService:
     async def export_zip(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> bytes:
         logger.debug(
             "config.export_zip.start",
@@ -1016,8 +1017,8 @@ class ConfigurationsService:
     async def _materialize_source(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         source: ConfigSource,
     ) -> None:
         if isinstance(source, ConfigSourceTemplate):
@@ -1026,13 +1027,11 @@ class ConfigurationsService:
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    template_id=source.template_id,
                 ),
             )
             await self._storage.materialize_from_template(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                template_id=source.template_id,
             )
             return
 
@@ -1062,7 +1061,7 @@ class ConfigurationsService:
         )
         raise ConfigSourceNotFoundError("Unsupported source reference")
 
-    async def _demote_active(self, workspace_id: str, exclude: str) -> None:
+    async def _demote_active(self, workspace_id: UUID, exclude: UUID) -> None:
         existing = await self._repo.get_active(workspace_id)
         if existing is None or existing.id == exclude:
             return
@@ -1084,8 +1083,8 @@ class ConfigurationsService:
     async def _require_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         configuration = await self._repo.get(
             workspace_id=workspace_id,

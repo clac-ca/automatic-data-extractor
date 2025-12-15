@@ -1,142 +1,164 @@
-## Work Package Checklist
-
-* [ ] **Write + land the ADE Event Spec v1** (envelope fields, naming conventions, versioning rules, payload rules).
-* [ ] **Add `schemas/events/*` in BOTH ade-engine + ade-api** (vendored/duplicated code) with:
-
-  * base envelope (shared core)
-  * engine catalog (engine-emitted event payloads)
-  * api catalog (api-emitted event payloads)
-  * registry + validators
-* [ ] **Refactor ADE-ENGINE emission** to write **BaseEvent v1** (strict) NDJSON with `event_id` UUID + `type_version`, using typed payload helpers only.
-* [ ] **Refactor ADE-API ingestion + dispatcher** to:
-
-  * accept engine BaseEvent v1 (and legacy forms during migration),
-  * upgrade/enrich to **ApiEvent v1** (adds sequence + context + source),
-  * validate again before persisting/streaming.
-* [ ] **Refactor ADE-API lifecycle emitters** (`run.*`, `build.*`) to only emit **ApiEvent v1** via helpers—no ad-hoc dict payloads.
-* [ ] **Update SSE/Frontend contracts + docs** to treat **ApiEvent v1** as canonical (and document which fields are always present).
-* [ ] **Add conformance + regression tests** (golden NDJSON, schema strictness, legacy-compat parsing, stream end conditions).
+> **Agent instruction (read first):**
+>
+> * Treat this workpackage as the **single source of truth** for this task.
+> * Keep the checklist below up to date: change `[ ]` → `[x]` as you complete tasks, and add new items when you discover more work.
+> * Update placeholders (`{{LIKE_THIS}}`) with concrete details as you learn them.
+> * Prefer small, incremental commits aligned to checklist items.
+> * If you must change the plan, **update this document first**, then the code.
 
 ---
 
-# Revamp ADE Event System: Vendored Schemas + Engine BaseEvent → API ApiEvent (v1)
+## Work Package Checklist
+
+### Core: unify event envelope + sinks
+
+* [x] Define a single AD API event envelope matching engine `EventRecord` (dict-based; Pydantic optional only for strict API events).
+* [x] Implement `RunEventStream` (append-to-file + SSE subscribers) as the single run event sink.
+* [x] Implement `stream_engine_events()` to read NDJSON `EventRecord` lines from engine **stderr**.
+* [x] Assign a per-run monotonic `sequence` in the API on every append (engine/build/API events) and persist it.
+
+### Runs: remove AdeEvent plumbing
+
+* [x] Update run orchestration to use engine stderr NDJSON instead of `engine-logs/events.ndjson`.
+* [x] Remove RunEventDispatcher usage (emit/sequence/event_id wrapping).
+* [x] Remove RunEventStorage and RunEventLogReader usage in run streaming + replay.
+* [x] Update run SSE endpoint to stream `EventRecord` dicts (use `sequence` as SSE id; honor Last-Event-ID replay).
+
+### Builds: keep build streaming consistent with the run stream (build config change)
+
+* [x] Refactor `BuildsService.stream_build` to emit `EventRecord` dicts (not AdeEvent).
+* [x] Ensure build events in run stream remain first-class and consistent (same envelope).
+* [x] Replace build event dispatcher/storage/reader by reusing `RunEventStream` as a “build-only run” (no alternate/legacy stream).
+* [x] Update build SSE endpoint `/builds/{build_id}/events/stream` to stream `EventRecord` dicts.
+
+### Cleanup / deletion
+
+* [x] Delete AdeEvent envelope types and payload schemas in AD API that become unused.
+* [x] Remove engine telemetry file tailing logic (engine-logs directory creation, tailer tasks).
+* [x] Remove legacy event_id-based pagination/cursoring; use `sequence` for SSE/replay.
+* [x] Update docs/comments to reflect new unified pipeline. — docs/events-v1, ade-web docs, api/build notes refreshed
+
+Agent note: docs updates completed to match the EventRecord pipeline.
+
+> **Agent note:**
+> Add or remove checklist items as needed. Keep brief status notes inline, e.g.:
+> `- [x] {{CHECK_TASK_1_SUMMARY}} — {{SHORT_STATUS_OR_COMMIT_REF}}`
+
+---
+
+# Simplify AD API event pipeline (Runs + Builds) using engine NDJSON console stream
 
 ## 1. Objective
 
 **Goal:**
-Make ADE events **strict, versioned, and consistent** across the ADE engine and ADE API—without creating build-time or runtime coupling between the repos/packages.
+Simplify the AD API event system by making the ADE engine’s NDJSON `EventRecord` output the canonical event stream, and having the AD API:
+
+1. run the engine with NDJSON console logging,
+2. capture NDJSON events from stderr,
+3. enrich events with API context (jobId, workspaceId, buildId, configId),
+4. assign a per-run monotonic `sequence` to every event in the API,
+5. persist the unified stream to a single per-run `logs/events.ndjson`,
+6. stream the same events over SSE (SSE `id` = `sequence`; Last-Event-ID replay),
+7. keep build streaming consistent by emitting build events in the *same* envelope and including them in the run SSE stream.
 
 You will:
 
-* Introduce a **duplicated (vendored)** `schemas/events/*` tree in **both** `ade-engine` and `ade-api`.
-* Define a **shared “base” envelope** that both sides implement identically.
-* Define an **engine BaseEvent v1** (lightweight) and an **API ApiEvent v1** (enriched) that the frontend consumes.
-* Refactor emitters and ingestors so **every emitted event conforms to the spec** and every event is **validated** at the boundary (engine write, API ingest/persist).
+* Remove AdeEvent and associated envelope complexity in the API.
+* Remove dispatcher/storage/reader layers for runs.
+* Adjust build streaming so build events appear in the run SSE stream in the same EventRecord structure.
+* Preserve build-only streaming endpoints, but simplify them to reuse the same event format (and preferably the same streaming machinery).
 
 The result should:
 
-* Prevent schema drift via `extra="forbid"` + a registry for `(type, type_version)` validation.
-* Keep the console UX intact: **one run stream** containing lifecycle + console lines + engine telemetry (single subscription for ADE console).
+* One consistent event shape everywhere (engine/run/build/API events).
+* A single per-run NDJSON file owned by the API.
+* SSE stream produced by forwarding EventRecord dictionaries, with minimal transformation.
+* Significant code deletion: no redundant event wrapping and no duplicate log stores.
 
 ---
 
 ## 2. Context (What you are starting from)
 
-### Existing structure
+The ADE Engine emits structured telemetry as NDJSON. Historically, the AD API created its own event abstraction (`AdeEvent`) and a dispatcher/storage/reader pipeline to:
 
-* ADE has an event system today where:
+* re-wrap engine events,
+* assign sequence numbers,
+* store events in separate per-run logs,
+* replay events and support SSE.
 
-  * engine emits NDJSON events,
-  * API ingests and re-emits/stamps/streams via SSE,
-  * frontend consumes SSE.
-* Event payloads are currently permissive in several places (dict payloads, “allow” extras), which makes it easy to drift.
+Builds also produce a streamed event structure, and those build events are included in the run SSE stream today. Build event streaming currently uses similar dispatcher/storage/reader abstractions and the AdeEvent envelope.
 
-### Current behavior / expectations
-
-* **Single run stream** is the desired UX contract: a user subscribes once and sees build/run phases, console output, summaries, completion.
-* API currently stamps ordering (`sequence`) and uses that as SSE `id`.
-* Engine produces events high-frequency (`console.line`, detector scores, summaries) which must remain streamable.
-
-### Known issues / pain points
-
-* Schema drift is too easy (ad-hoc dicts, inconsistent payload shapes).
-* Confusion about “what is the canonical event spec”: engine and API evolve separately and can diverge.
-* Completion events and artifacts have historically drifted in shape (`artifacts` blocks, different “execution” structures, etc).
-
-### Hard constraints
-
-* **No shared artifact generation** (no shared package, no codegen required).
-* **OK with code duplication** across ade-api and ade-engine (base changes are rare).
-* Must retain the ability to stream **console lines + diagnostic telemetry** to the ADE console.
-* Events need to carry a **version stamp**, and API and engine should be able to evolve independently (per-type versioning).
+We want to remove this API-side event system and instead treat the engine’s NDJSON output as canonical. The API should behave as a thin adapter that enriches, persists, and streams events with minimal additional structure.
 
 ---
 
 ## 3. Target architecture / structure (ideal)
 
-**High-level:**
+### 3.1 One canonical envelope: EventRecord (dict)
 
-* Engine writes **BaseEvent v1** (minimal envelope + typed payload + versions).
-* API reads BaseEvent (and legacy), validates, upgrades to **ApiEvent v1** with context + ordering + source, persists + streams.
-* Frontend treats **ApiEvent v1** as canonical.
+Engine and API events share the same top-level keys:
 
-> “Two streams?”
-> No. We keep **one stream**. Logs are “events” (`console.line`). High-volume events remain as event types; consumers filter by `type` / `payload.scope` / etc.
+```jsonc
+{
+  "event_id": "<uuid4 hex>",
+  "engine_run_id": "<uuid4 hex>" | "",
+  "timestamp": "<RFC3339 UTC>",
+  "level": "info" | "debug" | "warning" | "error" | "critical",
+  "event": "<namespaced.event.name>",
+  "message": "<human-readable message>",
+  "data": { ... },
+  "error": { ... optional ... }
+}
+```
 
-### File tree (duplicated in BOTH ade-engine and ade-api)
+> API adds a monotonically increasing `sequence` to each EventRecord when appending to the run stream; the engine never emits it.
+
+### 3.2 One canonical sink per run: `logs/events.ndjson`
+
+For each job/run, AD API owns:
+
+```
+<runs_root>/<workspace_id>/<job_id>/logs/events.ndjson
+```
+
+This file contains the unified event stream in order:
+
+1. API-origin run events (`api.run.queued`, `api.run.completed`, etc.)
+2. Build events (`build.*`, `console.line` with `data.scope="build"`), if build streaming is enabled
+3. Engine events (`engine.*`, `console.line` with `data.scope="engine"` if desired)
+
+### 3.3 Event stream plumbing
+
+* `RunEventStream`:
+
+  * append-to-file
+  * in-memory subscribers for SSE
+  * assign and stamp a per-run monotonic `sequence` field on every appended event
+* `stream_engine_events()`:
+
+  * read NDJSON lines from engine stderr
+  * yield dict events
+* Build streaming:
+
+  * `BuildsService.stream_build` emits EventRecord dicts.
+  * Those events are appended to the run’s `RunEventStream` (so they appear in the run SSE stream) and receive the next `sequence` values before engine events.
+  * Build-only endpoints stream the same EventRecord format using the same RunEventStream abstraction (no parallel dispatcher/reader for compatibility).
+
+> **Agent instruction:**
+>
+> * Keep this section in sync with reality.
+> * If the design changes while coding, update this section and the file tree below.
 
 ```text
-automatic-data-extractor/
-  apps/
-    ade-engine/
-      src/ade_engine/
-        schemas/
-          events/
-            __init__.py
-            base/
-              __init__.py
-              envelope.py          # BaseEvent v1 (core envelope)
-              primitives.py        # enums/common types (levels, streams, ids)
-              payloads.py          # events shared by both (console.line)
-            engine/
-              __init__.py
-              payloads.py          # engine.* payload models
-              catalog.py           # registry registrations (engine)
-            registry.py            # (type, type_version) -> payload model
-            factory.py             # build/validate BaseEvent
-    ade-api/
-      src/ade_api/
-        schemas/
-          events/
-            __init__.py
-            base/                  # identical to ade-engine base/
-              __init__.py
-              envelope.py
-              primitives.py
-              payloads.py
-            engine/                # identical structure; validates engine events
-              __init__.py
-              payloads.py
-              catalog.py
-            api/
-              __init__.py
-              envelope.py          # ApiEvent v1 extends BaseEvent
-              payloads.py          # run.* + build.* payload models
-              catalog.py           # registry registrations (api)
-            registry.py
-            factory.py             # build/validate ApiEvent
-        infra/events/
-          dispatcher.py            # validate + stamp seq + persist + publish
-        features/
-          runs/emitters.py
-          builds/emitters.py
-  tests/
-    test_events_spec_conformance.py
-    test_events_ingest_upgrade_legacy.py
-    test_run_stream_sse_end.py
-    fixtures/
-      golden_engine_events.ndjson
-      golden_api_events.ndjson
+apps/ade-api/
+  src/ade_api/features/runs/
+    service.py                        # orchestration: build events + engine events → RunEventStream
+    router.py                         # SSE endpoint streams EventRecord dicts
+    runner.py                         # subprocess runner reads engine stderr NDJSON (stream_engine_events)
+    event_stream.py                   # NEW: RunEventStream + helpers (append, subscribe)
+  src/ade_api/features/builds/
+    service.py                        # emits EventRecord dicts (no AdeEvent)
+    router.py                         # streams EventRecord dicts (SSE/NDJSON)
 ```
 
 ---
@@ -145,276 +167,202 @@ automatic-data-extractor/
 
 ### 4.1 Design goals
 
-* **Clarity:** One obvious envelope for engine (“BaseEvent”) and one for frontend (“ApiEvent”).
-* **Maintainability:** Event types + payloads live in catalogs with strict registries; adding a new event is “add payload model + register”.
-* **Scalability:** Single stream supports both UX console and structured telemetry; per-type versioning avoids breaking consumers.
+* **One event shape everywhere**: engine, builds, API events all use EventRecord.
+* **Minimal moving parts**: no dispatcher/storage/reader stacks.
+* **Build config change support**: build events remain included in run SSE stream and remain consistent.
+* **Keep developer ergonomics**: build-only endpoints still exist but are thinner.
+* **SSE-friendly**: SSE `id` uses the per-run `sequence`; `event_id` remains opaque for dedupe only.
 
 ### 4.2 Key components / modules
 
-* **`schemas/events/base/envelope.py`** — BaseEvent v1: minimal required fields (`schema`, `schema_version`, `type`, `type_version`, `event_id`, `created_at`, `payload`)
-* **`schemas/events/api/envelope.py`** — ApiEvent v1: BaseEvent + `sequence`, `source`, and context IDs (`workspace_id`, `run_id`, etc.)
-* **`schemas/events/registry.py`** — maps `(type, type_version)` to payload models; validates payload; rejects unknown keys (`extra="forbid"`)
-* **`factory.py`** — helpers for emitting & validating events (engine + api each have their own copy, same structure)
+* `RunEventStream` — the only run event sink:
+
+  * append NDJSON to file
+  * fan out to SSE subscribers
+
+* `stream_engine_events` — engine stderr NDJSON consumer:
+
+  * parse JSON per line
+  * yield EventRecord dicts
+
+* `BuildsService.stream_build` — build event producer:
+
+  * emits EventRecord dicts (build.* + console.line scope=build)
 
 ### 4.3 Key flows / pipelines
 
-#### Flow 1 — Engine emits → API enriches → Frontend consumes (single stream)
+#### Run orchestration
 
-1. **Engine** constructs `BaseEvent` with:
+1. Create `RunEventStream` for `<run_dir>/logs/events.ndjson`.
+2. Append API-origin `api.run.queued` event.
+3. If build streaming enabled:
 
-   * `schema="ade.event"`, `schema_version=1`
-   * `type="console.line"` etc
-   * `type_version=1`
-   * `event_id=str(uuid4())`
-   * `created_at=utcnow()`
-   * `payload` validated from registry
-2. Engine writes to NDJSON (`events.ndjson`) line-delimited JSON.
-3. **API** tails NDJSON, parses `BaseEvent`:
+   * call `BuildsService.stream_build()` and append each build event to the run stream (sequence assigned on append, precedes engine events).
+4. Start engine subprocess:
 
-   * validates `(type, type_version)` payload
-   * upgrades to `ApiEvent` by adding:
+   * read `stderr` NDJSON events via `stream_engine_events`.
+   * enrich with `jobId`, `workspaceId`, etc.
+   * append to run stream (sequence assigned on append).
+5. Append API-origin `api.run.completed`.
 
-     * `source="engine"`
-     * context IDs (workspace_id/run_id/config/build) from run context already in scope
-     * `sequence` (monotonic per run stream)
-4. API persists ApiEvent to run’s canonical events log and streams via SSE.
-5. **Frontend** consumes only ApiEvent fields; uses `sequence` for ordering/resume and `type` to route UI behavior.
+#### Build-only streaming
 
-#### Flow 2 — API lifecycle emission (run/build events)
-
-1. API constructs `ApiEvent` directly (not via BaseEvent):
-
-   * event_id uuid
-   * created_at utcnow
-   * type/type_version
-   * source="api"
-   * sequence assigned by dispatcher
-   * payload validated
-2. Same persistence + SSE.
+* Build events are streamed in the same EventRecord format using `RunEventStream` (treat build-only streaming as a build-only run; do not add a fallback BuildEventStream). Sequence numbers still come from the same per-run counter.
 
 ### 4.4 Open questions / decisions
 
-* **Decision: one stream; no mandatory dual subscription.**
-  We keep a single run event stream. Logs are `console.line` events, and verbose engine telemetry remains as event types. Consumers can filter by `type` and/or payload fields.
+* Cursoring:
 
-* **Decision: event_id is producer-generated UUID everywhere.**
-  Engine-generated events and API-generated events both use UUID strings for `event_id`. API does not rewrite `event_id`; it only adds `sequence`.
+  * `sequence` is mandatory and monotonically increasing per run; SSE `id` uses `sequence`.
+  * Replays use Last-Event-ID: skip `sequence <= last_event_id`, replay the rest from disk, then stream live.
 
-* **Decision: envelope versioning + per-type versioning.**
+* Build-only persistence:
 
-  * `schema_version` changes only when envelope changes (rare).
-  * `type_version` changes when a payload changes (more common; type-by-type).
-
-* **Decision: tolerate legacy engine NDJSON during migration.**
-  API ingest path supports:
-
-  * BaseEvent v1 (new format)
-  * Legacy lines (best-effort parsing/upgrading) for a transition period (bounded by a config flag + tests).
-    New engine emissions MUST be BaseEvent v1.
+  * Preferred: reuse run logs or reuse RunEventStream design.
+  * Decide how build-only endpoints locate the file (build log file path vs run log path).
 
 ---
 
 ## 5. Implementation & notes for agents
 
-### 5.1 Event spec: canonical fields + naming rules (write first)
+### 5.1 Engine stderr NDJSON is canonical for engine events
 
-**Envelope: BaseEvent v1 (Engine → API boundary)**
-Required fields:
+* Run engine with ndjson formatting (stderr).
+* Treat each stderr line as a single JSON record; ignore malformed lines.
 
-* `schema`: `"ade.event"`
-* `schema_version`: `1`
-* `type`: string, lower snake/dot (`run.complete`, `console.line`, `engine.phase.start`)
-* `type_version`: int (default 1)
-* `event_id`: UUID string
-* `created_at`: RFC3339 UTC datetime
-* `payload`: object (typed per registry; may be `{}` for payload-less events)
+### 5.2 Event enrichment happens only in the API
 
-**Envelope: ApiEvent v1 (API → Frontend)**
-BaseEvent + required:
+* Add `jobId`, `workspaceId`, and optionally `buildId`/`configurationId` into `data`.
+* Do not re-wrap events into a new envelope.
+* Assign `sequence` in the API when appending to the run stream (engine/build/API events).
 
-* `sequence`: int (monotonic within run stream; used as SSE `id`)
-* `source`: `"api" | "engine" | "web"`
-* Context IDs (required when in scope; typically always by the time it hits frontend):
+### 5.3 API-origin events
 
-  * `workspace_id`, `configuration_id`, `run_id`, `build_id` (nullable allowed, but API should populate wherever possible)
+Emit API events using the same EventRecord structure:
 
-**Naming conventions**
+* `api.run.queued`
+* `api.run.completed`
+* optionally `api.build.reused`, etc.
 
-* Event type namespace:
+### 5.4 Build streaming consistency
 
-  * `run.*` — API-owned run lifecycle
-  * `build.*` — API-owned build lifecycle
-  * `engine.*` — engine telemetry/progress
-  * `console.line` — console output/log line
-* All keys in envelope + payload are `snake_case`.
+* Build events should use:
 
-**Versioning conventions**
+  * `event` names like `build.started`, `build.completed`, etc. (or `api.build.*` if you prefer)
+  * `console.line` with `data.scope="build"` (preferred)
 
-* Bump `type_version` when:
+Build events must appear in the run SSE stream before engine events when builds are executed as part of run preparation.
+* Build events get the next `sequence` values from the run stream counter so they can be replayed/resumed like engine/API events.
 
-  * required/optional fields change, type changes, semantics change
-* Never change the meaning of an existing `(type, type_version)`—introduce a new version.
+### 5.5 Replay / resume semantics
+
+* SSE `Last-Event-ID` contains the last seen `sequence`.
+* On connect, read `<run_dir>/logs/events.ndjson`, skip events where `sequence <= Last-Event-ID`, emit the rest in order, then attach to the live subscriber queue for new events.
+* The same replay flow applies to build-only streaming (read the same log, same cursor rules).
 
 ---
 
-### 5.2 Step-by-step implementation plan (incremental commits)
+# 6. Detailed overview of everything that needs to be removed / deleted / simplified
 
-#### Commit A — Add duplicated `schemas/events/*` scaffolding in both packages
+## 6.1 Remove AdeEvent envelope and associated models
 
-* Create directories + `__init__.py`
-* Add base envelope models (identical in both)
-* Add `console.line` payload model (base payload shared)
-* Add registry mechanism with strict validation (`extra="forbid"`)
+Delete or stop using any AD API-only event wrapper types that include fields like:
 
-Acceptance
+* `sequence` (old AdeEvent envelope; new sequencing happens directly on EventRecords at append time)
+* `created_at`
+* `source`
+* `payload`
+* `run_id`/`build_id` in the envelope rather than in `data`
 
-* Unit tests proving unknown envelope keys fail
-* Unit tests proving `console.line` unknown payload keys fail
+Any place that does `AdeEvent.model_validate_json(...)` should be replaced with `json.loads(...)` returning an EventRecord dict.
 
-#### Commit B — Define engine event payload catalog (engine side + api copy)
+## 6.2 Remove run dispatcher/storage/reader system
 
-Engine catalog includes payload models for the current engine emitted types (at minimum):
+Remove these responsibilities and code paths:
 
-* `engine.start`
-* `engine.phase.start`
-* `engine.complete`
-* `engine.detector.row.score`
-* `engine.detector.column.score`
-* `engine.(file|sheet|table|run).summary` (or whatever set is currently emitted)
-* `console.line` (already base)
+* assigning `sequence` inside dispatcher/storage layers (RunEventStream owns sequencing on append)
+* creating “API NDJSON log” distinct from engine log
+* subscription mechanisms tied to dispatcher emitters
+* log re-readers tied to AdeEvent parsing
 
-Implementation
+Replace with:
 
-* Create `schemas/events/engine/payloads.py` (strict models)
-* Register them in `schemas/events/engine/catalog.py` for both engine and api copies
+* `RunEventStream.append(event_dict)` (stamps `sequence`, enriches with run/build/API context)
+* `RunEventStream.subscribe()`
 
-Acceptance
+## 6.3 Remove engine telemetry file tailing and engine-logs directory
 
-* Registry validates every engine event type under test fixtures
+Eliminate any run startup logic that:
 
-#### Commit C — Refactor ADE-ENGINE to emit BaseEvent v1 everywhere
+* creates `engine-logs/`
+* passes `--logs-dir` solely to support API telemetry
+* tails `engine-logs/events.ndjson` to capture engine events
 
-* Introduce a local `EventFactory` in engine:
+Replace with:
 
-  * generates event_id UUID
-  * validates payload via registry
-  * writes NDJSON line of BaseEvent
-* Replace ad-hoc dict writes with typed payload helper usage
+* capturing engine stderr NDJSON directly.
 
-Acceptance
+## 6.4 Simplify run SSE endpoint
 
-* Engine produces NDJSON that validates line-by-line as BaseEvent v1
-* No absolute FS paths leak in payloads unless explicitly allowed (use run-relative where possible)
+Replace AdeEvent SSE formatting with EventRecord formatting:
 
-#### Commit D — Refactor ADE-API ingestion to parse BaseEvent v1 and upgrade to ApiEvent v1
+```
+id: <sequence>
+event: ade.event
+data: <EventRecord JSON>
+```
 
-* Add `ApiEvent` envelope model in `schemas/events/api/envelope.py`
-* Add upgrade function:
+Replay should read `logs/events.ndjson` directly, skip any events where `sequence <= Last-Event-ID`, then continue with new events from the live subscriber queue.
 
-  * take BaseEvent + run context → produce ApiEvent
-  * assign `sequence`
-  * set `source="engine"`
-  * attach IDs (workspace_id, run_id, etc.)
-* Add legacy parser:
+## 6.5 Build streaming simplification (build config change)
 
-  * if `schema` missing, attempt to map legacy keys into BaseEvent then upgrade
-  * gate behind config flag `ADE_EVENTS_ACCEPT_LEGACY=true` (default true for one release, then false)
+Build streaming currently reuses the same event envelope/dispatcher paradigm as runs. We are removing that as well.
 
-Acceptance
+### Remove build dispatcher/storage/reader
 
-* API can ingest both new engine events and legacy events (with tests)
-* Persisted/streamed events are always ApiEvent v1
+Delete or stop using:
 
-#### Commit E — Refactor ADE-API lifecycle emitters to emit ApiEvent v1 only
+* BuildEventDispatcher (sequence + persist + subscribe)
+* BuildEventStorage
+* build event log readers tied to AdeEvent
 
-* Create `schemas/events/api/payloads.py` for:
+### Refactor BuildsService.stream_build
 
-  * `run.queued`, `run.start`, `run.complete`
-  * `build.created`, `build.started`, `build.phase.start`, `build.completed`
-* Force all emitters to construct typed payloads and dispatch `ApiEvent`
-* Remove bespoke top-level fields; no ad-hoc dict payloads
+* Emit EventRecord dicts instead of AdeEvents.
+* For build console output:
 
-Acceptance
+  * emit `console.line` with `data.scope="build"`.
 
-* `run.complete` payload shape is stable and spec-conformant
-* API-only events validate via registry
+### Ensure build events remain in the run SSE stream
 
-#### Commit F — Update SSE rules + frontend + docs
+* RunsService should append build EventRecords into the run stream before engine events.
 
-* Ensure SSE continues:
+### Build-only endpoints
 
-  * `id: sequence`
-  * `event: type`
-  * `data: <ApiEvent json>`
-* Update frontend type definitions to match ApiEvent v1
-* Replace/remove legacy schema doc that doesn’t match reality; document new spec
+* `/builds/{build_id}/events` should serve EventRecord lines (NDJSON / JSON list).
+* `/builds/{build_id}/events/stream` should SSE-stream EventRecord dicts using the same SSE serializer (`id` = `sequence`).
 
-Acceptance
-
-* Frontend compiles against new types
-* A full run streams without UI regressions
-
-#### Commit G — Conformance + regression tests
-
-Add tests:
-
-* `test_events_spec_conformance.py`
-
-  * unknown envelope keys rejected
-  * unknown payload keys rejected
-  * registry rejects unknown `(type, type_version)`
-* `test_events_ingest_upgrade_legacy.py`
-
-  * legacy → BaseEvent → ApiEvent upgrade
-* `test_run_stream_sse_end.py`
-
-  * stream terminates on API `run.complete` and contains ordered `sequence`
-
-Acceptance
-
-* CI green
-* Golden fixtures validate against schemas
+* Treat build-only streaming as a “build-only run” and reuse `RunEventStream` (no fallback BuildEventStream or legacy path).
+* Replay for build-only endpoints follows the same Last-Event-ID + file replay semantics as runs.
 
 ---
 
-### 5.3 Implementation details (how to keep complexity low)
+## 7. Acceptance criteria
 
-#### No interdependence
+* Run SSE stream contains (in order):
 
-* Duplicate the same modules in both packages.
-* No imports across package boundaries.
-* Base changes are manual in both places (rare), optionally protected by a “base files identical” test.
+  1. `api.run.queued`
+  2. build events (`build.*` and `console.line scope=build`) if build streaming enabled
+  3. engine events (`engine.*`)
+  4. `api.run.completed`
 
-#### Strictness defaults
+* Only one canonical run log exists: `<run_dir>/logs/events.ndjson`.
 
-* Envelope: `extra="forbid"`
-* Payload models: `extra="forbid"`
-  Exception only for intentionally “open” payloads (must be explicit and documented).
+* All streamed/persisted events follow the EventRecord envelope and include an API-assigned `sequence`.
 
-#### Payload size / console streaming
+* AdeEvent is no longer used in runs or builds.
 
-* Keep one stream.
-* If some payloads are huge (e.g. a full column list), that’s allowed *if it’s required for console UX*, but it must still be typed and versioned.
-* If payloads become too large, add an API policy later (soft limit + truncation markers), but do NOT introduce a second stream as part of this work package.
+* Dispatcher/storage/reader stacks are removed or reduced to thin utilities; RunEventStream owns sequencing, append, subscribe.
 
----
-
-### 5.4 Coding standards / style
-
-* Prefer Pydantic v2 (`model_validate`, `model_dump(mode="json")`)
-* Always `exclude_none=True` when writing NDJSON
-* Use `uuid4()` for `event_id`
-* Always UTC timestamps
-
-### 5.5 Testing requirements
-
-* Golden NDJSON fixtures for both engine output and API output
-* Ensure both event trees validate those fixtures
-* Integration test that runs a minimal pipeline and validates the resulting run stream
-
-### 5.6 Security / performance notes
-
-* Do not emit absolute filesystem paths in any payload fields unless explicitly required and approved; prefer run-relative paths or API links.
-* API ingest should be resilient:
-
-  * if legacy parsing fails, log + drop the line (or emit a `console.line` warning) rather than crashing the run.
+* Build-only SSE and events endpoints still work and stream EventRecord dicts.
+* SSE `id` equals `sequence`; Last-Event-ID resumes after the last seen sequence (replay from file then live).

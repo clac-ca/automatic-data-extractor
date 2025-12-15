@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func
 
 from ade_api.common.sql import nulls_last
-from ade_api.core.models import User
+from ade_api.models import User
 
 SORT_FIELDS = {
     "id": (User.id.asc(), User.id.desc()),

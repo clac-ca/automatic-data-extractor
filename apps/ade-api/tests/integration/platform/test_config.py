@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Iterator
 from datetime import timedelta
-import tempfile
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.settings import (
-    DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR,
     Settings,
     get_settings,
     reload_settings,
 )
-from ade_api.app.lifecycles import ensure_runtime_dirs
 
 
 @pytest.fixture(autouse=True)
@@ -33,8 +32,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_WORKSPACES_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
-        "ADE_CONFIG_TEMPLATES_DIR",
-        "ADE_CONFIG_TEMPLATES_SOURCE_DIR",
         "ADE_VENVS_DIR",
         "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",
@@ -97,13 +94,10 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.jwt_refresh_ttl == timedelta(days=14)
     expected_root = (tmp_path / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
-    expected_templates = (expected_root / "templates" / "config_packages").resolve()
     expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
     assert settings.workspaces_dir == expected_workspaces
     assert settings.documents_dir == expected_workspaces
     assert settings.configs_dir == expected_workspaces
-    assert settings.config_templates_source_dir == DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR.resolve()
-    assert settings.config_templates_dir == expected_templates
     assert settings.venvs_dir == expected_venvs
     assert settings.runs_dir == expected_workspaces
     assert settings.pip_cache_dir == (expected_root / "cache" / "pip").resolve()
@@ -227,8 +221,6 @@ def test_storage_directories_resolve_relative_env_values(
     monkeypatch.setenv("ADE_WORKSPACES_DIR", "./store/workspaces")
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", "./store/documents")
     monkeypatch.setenv("ADE_CONFIGS_DIR", "./store/configs")
-    monkeypatch.setenv("ADE_CONFIG_TEMPLATES_DIR", "./store/templates")
-    monkeypatch.setenv("ADE_CONFIG_TEMPLATES_SOURCE_DIR", "./store/templates-src")
     monkeypatch.setenv("ADE_VENVS_DIR", "./store/venvs")
     monkeypatch.setenv("ADE_RUNS_DIR", "./store/runs")
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", "./cache/pip")
@@ -239,8 +231,6 @@ def test_storage_directories_resolve_relative_env_values(
     assert settings.workspaces_dir == (tmp_path / "store" / "workspaces").resolve()
     assert settings.documents_dir == (tmp_path / "store" / "documents").resolve()
     assert settings.configs_dir == (tmp_path / "store" / "configs").resolve()
-    assert settings.config_templates_dir == (tmp_path / "store" / "templates").resolve()
-    assert settings.config_templates_source_dir == (tmp_path / "store" / "templates-src").resolve()
     assert settings.venvs_dir == (tmp_path / "store" / "venvs").resolve()
     assert settings.runs_dir == (tmp_path / "store" / "runs").resolve()
     assert settings.pip_cache_dir == (tmp_path / "cache" / "pip").resolve()
@@ -252,7 +242,6 @@ def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.Mo
     workspaces_dir = tmp_path / "workspaces-root"
     documents_dir = tmp_path / "docs-root"
     configs_dir = tmp_path / "config-root"
-    templates_dir = tmp_path / "templates-root" / "config_packages"
     venvs_dir = tmp_path / "venv-root"
     runs_dir = tmp_path / "runs-root"
     pip_cache_dir = tmp_path / "cache-root"
@@ -260,7 +249,6 @@ def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setenv("ADE_WORKSPACES_DIR", str(workspaces_dir))
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
     monkeypatch.setenv("ADE_CONFIGS_DIR", str(configs_dir))
-    monkeypatch.setenv("ADE_CONFIG_TEMPLATES_DIR", str(templates_dir))
     monkeypatch.setenv("ADE_VENVS_DIR", str(venvs_dir))
     monkeypatch.setenv("ADE_RUNS_DIR", str(runs_dir))
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", str(pip_cache_dir))
@@ -271,7 +259,6 @@ def test_global_storage_directory_created(tmp_path: Path, monkeypatch: pytest.Mo
     assert workspaces_dir.exists()
     assert documents_dir.exists()
     assert configs_dir.exists()
-    assert templates_dir.exists()
     assert venvs_dir.exists()
     assert runs_dir.exists()
     assert pip_cache_dir.exists()
@@ -282,7 +269,6 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     documents_dir = tmp_path / "alt-documents"
     configs_dir = tmp_path / "alt-configs"
-    templates_dir = tmp_path / "alt-templates"
     venvs_dir = tmp_path / "alt-venvs"
     runs_dir = tmp_path / "alt-runs"
     pip_cache_dir = tmp_path / "alt-cache" / "pip"
@@ -291,7 +277,6 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("ADE_WORKSPACES_DIR", str(workspaces_dir))
     monkeypatch.setenv("ADE_DOCUMENTS_DIR", str(documents_dir))
     monkeypatch.setenv("ADE_CONFIGS_DIR", str(configs_dir))
-    monkeypatch.setenv("ADE_CONFIG_TEMPLATES_DIR", str(templates_dir))
     monkeypatch.setenv("ADE_VENVS_DIR", str(venvs_dir))
     monkeypatch.setenv("ADE_RUNS_DIR", str(runs_dir))
     monkeypatch.setenv("ADE_PIP_CACHE_DIR", str(pip_cache_dir))
@@ -302,7 +287,6 @@ def test_storage_directory_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert settings.workspaces_dir == workspaces_dir.resolve()
     assert settings.documents_dir == documents_dir.resolve()
     assert settings.configs_dir == configs_dir.resolve()
-    assert settings.config_templates_dir == templates_dir.resolve()
     assert settings.venvs_dir == venvs_dir.resolve()
     assert settings.runs_dir == runs_dir.resolve()
     assert settings.pip_cache_dir == pip_cache_dir.resolve()

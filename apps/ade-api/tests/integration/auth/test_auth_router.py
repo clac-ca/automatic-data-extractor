@@ -9,9 +9,9 @@ import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
 
-from ade_api.core.models import User
-from ade_api.infra.db.engine import ensure_database_ready, reset_database_state
-from ade_api.infra.db.session import reset_session_state
+from ade_api.db.engine import ensure_database_ready, reset_database_state
+from ade_api.db.session import reset_session_state
+from ade_api.models import User
 from ade_api.settings import get_settings
 from tests.utils import login
 

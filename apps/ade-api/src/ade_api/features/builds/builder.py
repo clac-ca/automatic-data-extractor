@@ -112,7 +112,6 @@ class VirtualEnvironmentBuilder:
             raise BuildExecutionError("Build finished without artifacts", build_id=build_id)
         return artifacts
 
-
     async def build_stream(
         self,
         *,
@@ -188,6 +187,7 @@ class VirtualEnvironmentBuilder:
                     "pip",
                     "install",
                     "--no-input",
+                    "-e",
                     str(config_path),
                 ],
                 timeout=timeout,

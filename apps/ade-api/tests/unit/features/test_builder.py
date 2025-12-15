@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -52,7 +52,7 @@ async def test_builder_installs_dependencies(
         build_id: str,
     ) -> str:
         if "sys.version_info" in command[-1]:
-            return "3.14.0"
+            return "3.11.0"
         return "1.6.1"
 
     async def _write_metadata(target: Path, payload: dict[str, str | None]) -> None:  # noqa: D401

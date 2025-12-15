@@ -1,127 +1,61 @@
-# Architecture
+# ADE Engine Architecture
 
-This document describes the main components of `ade-engine`, how they are wired, and where custom behavior plugs in.
+ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into a small number of focused components that cooperate during a single run:
 
----
+- **Engine** (`ade_engine.engine.Engine`) — orchestrates a run: loads settings, prepares output/log paths, loads the config package into a Registry, iterates sheets, fires hooks, and saves the workbook.
+- **Pipeline** (`ade_engine.pipeline.Pipeline`) — sheet-level processing: detect the table region, map columns, transform values, validate issues, render the normalized table, and emit lifecycle hooks.
+- **Registry** (`ade_engine.registry.Registry`) — in-memory container populated by config-package calls to `registry.register_*`. Holds fields plus registered detectors, transforms, validators, and hooks ordered by priority.
+- **IO helpers** (`ade_engine.io`) — normalize paths, open source workbooks (CSV/XLSX), create empty output workbooks, and resolve sheet selection.
+- **Logging** (`ade_engine.logging.RunLogger`) — structured log/event stream with text or NDJSON output for every run.
+- **Settings** (`ade_engine.settings.Settings`) — runtime toggles for mapping, output ordering, logging, scan guards, and supported extensions.
 
-## Component map
+## End-to-end flow
 
-### 1) CLI (`ade_engine.cli`)
-- Parses CLI flags.
-- Plans outputs (output workbook path, logs path).
-- Builds **reporting** (`text` or `ndjson`) and injects it into the engine.
-- Runs one or more inputs and summarizes results.
+1. **Prepare run**  
+   `Engine.run` takes a `RunRequest` (CLI constructs this) and resolves paths via `plan_run` (`ade_engine.io.paths`). Output/log directories are created if they do not exist. If a log file path is not provided, the engine derives a per-input log filename automatically.
 
-### 2) Engine (`ade_engine.engine.Engine`)
-High-level orchestration:
+2. **Start logging**  
+   A `RunLogger` is created with the configured format/level (`text` or `ndjson`). All engine events flow through this logger, including structured detector/transform/validator telemetry.
 
-- normalizes the `RunRequest`
-- loads the config runtime (manifest + module registries)
-- opens the source workbook and creates the output workbook
-- delegates sheet/table work to the `Pipeline`
-- handles error classification + final run result
-- emits run-level events (`run.started`, `run.completed`, …)
+3. **Load config package into the Registry**  
+   - The config package path is resolved to an importable package name (supports bare package dir, `src/<package>`, or a root containing `ade_config`).
+   - The package **must** expose `register(registry)`, and that function should call `registry.register_*` for every detector/transform/validator/hook/field it provides. The CLI (or your app) loads runtime settings from `settings.toml` / `.env` / env vars via `Settings.load(...)`.
+   - Loading is done with a scoped `sys.path` insertion and a module purge to avoid cross-run contamination when multiple packages share the same name (common with `ade_config`).
+   - After registration, `registry.finalize()` sorts callables by priority and groups transforms/validators by field.
 
-### 3) Config runtime (`ade_engine.config.*`)
-Responsible for loading and validating:
+4. **Process workbook**  
+   The source workbook is opened (CSV files are converted to an in-memory workbook). Visible sheets are chosen either from the source order or filtered by `--input-sheet`. A shared `state` dict and `metadata` (input/output filenames) travel through hooks and pipeline stages.
 
-- `manifest.toml` → `ManifestContext` (validated via Pydantic)
-- column modules (`ColumnRegistry`)
-- hook modules (`HooksRuntime`)
-- row detector modules (`discover_row_detectors`)
+5. **Sheet pipeline**  
+   For each sheet, `Pipeline.process_sheet` performs:
+   - `detect_table_regions`: run row detectors to classify each row and segment the sheet into one or more table regions.
+   - For each table region:
+     - `detect_and_map_columns`: map source columns to registered fields, resolve duplicates per `mapping_tie_resolution`, and split mapped vs. unmapped columns.
+     - Hooks: `on_table_detected` then `on_table_mapped`.
+     - `apply_transforms`: run column transforms for each mapped field, enforcing the strict row-output contract.
+     - `apply_validators`: run column validators to collect issue payloads.
+     - `render_table`: write headers + rows to the output sheet, optionally appending unmapped columns.
+     - Hook: `on_table_written`.
 
-Config callables are required to be **keyword-only** and accept `**_` for forward compatibility.
+6. **Finalize workbook**  
+   Hook `on_workbook_before_save` fires with the output workbook, then the workbook is saved to `<output_dir>/<input_stem>_normalized.xlsx` (or a caller-specified path).
 
-### 4) Pipeline (`ade_engine.pipeline.*`)
-Implements the main Workbook → Sheet → Table flow:
+7. **Result**  
+   `RunResult` reports status, error (if any), output path, logs dir, and processed filename.
 
-- `TableDetector`: find table regions on a sheet
-- `TableExtractor`: slice region into header + rows
-- `ColumnMapper`: match source columns to canonical fields
-- `TableNormalizer`: apply transforms + validators
-- `TableRenderer`: write normalized tables into output workbook
+## Execution model & limitations
 
-The pipeline emits stage-level events (sheet/table progress).
+- Processing is **per-run, per-sheet**, and a sheet may contain **multiple tables** (segmented by header detection).
+- Input formats: `.xlsx`, `.xlsm`, `.csv` (configurable via `Settings.supported_file_extensions`).
+- Sheets are read with `openpyxl` (`read_only=True` for XLSX). `_materialize_rows` guards against runaway empty rows/columns using `max_empty_rows_run` and `max_empty_cols_run`.
+- A shared `state` dict lets hooks, detectors, transforms, and validators pass data across stages and sheets; mutating it is safe within a single run.
+- Failures in hooks or pipeline stages surface as `RunError` with stage-specific codes (`config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`).
 
-### 5) Reporting (`ade_engine.reporting`)
-Provides a consistent interface for:
+## Key extension points
 
-- **structured events** via `EventEmitter.emit(event, **fields)`
-- **logs** via standard Python logging (converted to events)
+- **Detectors** vote on header/data rows and column-to-field mapping.
+- **Transforms** normalize per-field values and can emit additional columns by returning extra keys in the row payload.
+- **Validators** emit structured issues; the engine does not stop on validation failures—it records them in `TableData.issues`.
+- **Hooks** wrap workbook and table lifecycle moments for custom side effects (telemetry, reordering, extra worksheets, etc.).
 
-Reporting can write to:
-
-- stdout (ndjson mode)
-- stderr (text mode)
-- an explicit file
-
----
-
-## Data and control flow
-
-```mermaid
-sequenceDiagram
-  participant User as User/Orchestrator
-  participant CLI as CLI
-  participant Rep as Reporting
-  participant Eng as Engine
-  participant Cfg as Config runtime
-  participant Pipe as Pipeline
-  participant Config as Config callables
-
-  User->>CLI: run (input, config, outputs)
-  CLI->>Rep: build_reporting(text|ndjson, meta)
-  CLI->>Eng: engine.run(request, logger, event_emitter)
-  Eng->>Rep: emit run.started / run.planned
-  Eng->>Cfg: load_config_runtime()
-  Cfg-->>Eng: ConfigRuntime (manifest + registries)
-  Eng->>Pipe: process_sheet(...)
-  Pipe->>Rep: emit sheet.started / table.*
-  Pipe->>Config: invoke detectors/transforms/validators/hooks
-  Eng->>Rep: emit run.completed
-  Eng-->>CLI: RunResult
-  CLI-->>User: exit code + optional summary
-```
-
----
-
-## Extension points
-
-### Config package layout
-
-A typical config package is importable as `ade_config`:
-
-```
-ade_config/
-  manifest.toml
-  column_detectors/
-    email.py
-    first_name.py
-  row_detectors/
-    header.py
-    data.py
-  hooks/
-    table_patch.py
-```
-
-### Column detector modules
-For each canonical field, provide a module with:
-
-- `detect_*` functions
-- optional `transform`
-- optional `validate`
-
-### Row detectors
-Row detector functions (named `detect_*`) score rows as header/data.
-
-### Hooks
-Hook modules are wired via `manifest.toml` and can run at lifecycle stages.
-
----
-
-## Error handling
-
-The engine uses a `StageTracker` to record the current stage. When an error happens:
-
-- it is classified into a structured `RunError` (`config_error`, `input_error`, `hook_error`, `pipeline_error`, `unknown_error`)
-- a `run.completed` event is emitted with stage + error details
+Use `apps/ade-engine/docs/callable-contracts.md` for the exact signatures and return contracts of each extension type.

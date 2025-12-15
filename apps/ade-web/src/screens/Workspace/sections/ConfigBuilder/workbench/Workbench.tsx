@@ -45,7 +45,7 @@ import { configurationKeys } from "@shared/configurations/keys";
 import { exportConfiguration, readConfigurationFileJson } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
-import type { ConfigBuilderConsole } from "@app/nav/urlState";
+import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@shared/api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -63,7 +63,7 @@ const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const COLLAPSED_CONSOLE_BAR_HEIGHT = 40;
-const MAX_CONSOLE_LINES = 400;
+const MAX_CONSOLE_LINES = 2_000;
 const OUTPUT_HANDLE_THICKNESS = 10; // matches thicker PanelResizeHandle hit target
 const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
@@ -95,7 +95,7 @@ const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
 interface ConsolePanelPreferences {
   readonly version: 2;
   readonly fraction: number;
-  readonly state: ConfigBuilderConsole;
+  readonly state: WorkbenchConsoleState;
 }
 
 type SideBounds = {
@@ -193,7 +193,7 @@ export function Workbench({
     runMode: derivedRunMode,
     runInProgress,
     validation: validationState,
-    consoleLines,
+    console,
     latestRun,
     clearConsole,
     startRun,
@@ -206,6 +206,7 @@ export function Workbench({
     onRunComplete: handleRunComplete,
   });
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [forceRun, setForceRun] = useState(false);
 
   const tabPersistence = useMemo(
     () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
@@ -249,7 +250,6 @@ export function Workbench({
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [testMenu, setTestMenu] = useState<{ x: number; y: number } | null>(null);
-  const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -1231,16 +1231,6 @@ export function Workbench({
     const disabled = !canRunExtraction;
     return [
       {
-        id: "test-default",
-        label: "Test",
-        disabled,
-        onSelect: () => {
-          setForceRun(false);
-          setRunDialogOpen(true);
-          setTestMenu(null);
-        },
-      },
-      {
         id: "test-force",
         label: "Force build and test",
         disabled,
@@ -1514,7 +1504,7 @@ export function Workbench({
             ) : (
               <BottomPanel
                 height={Math.max(0, liveConsoleHeight)}
-                consoleLines={consoleLines}
+                console={console}
                 validation={validationState}
                 activePane={pane}
                 onPaneChange={setPane}
@@ -1850,7 +1840,12 @@ interface RunExtractionDialogProps {
   }) => void;
 }
 
-function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractionDialogProps) {
+function RunExtractionDialog({
+  open,
+  workspaceId,
+  onClose,
+  onRun,
+}: RunExtractionDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const documentsQuery = useQuery<DocumentRecord[]>({
     queryKey: ["builder-documents", workspaceId],

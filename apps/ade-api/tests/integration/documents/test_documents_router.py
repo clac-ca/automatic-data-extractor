@@ -8,13 +8,13 @@ import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
-from ade_api.core.models import Document, User
+from ade_api.common.encoding import json_dumps
+from ade_api.db.session import get_sessionmaker
 from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.service import DocumentsService
-from ade_api.common.encoding import json_dumps
-from ade_api.settings import get_settings
-from ade_api.infra.db.session import get_sessionmaker
 from ade_api.infra.storage import workspace_documents_root
+from ade_api.models import Document, User
+from ade_api.settings import get_settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -60,9 +60,7 @@ async def test_upload_list_download_document(
     assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
-    detail = await async_client.get(
-        f"{workspace_base}/documents/{document_id}", headers=headers
-    )
+    detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["id"] == document_id
 
@@ -72,7 +70,7 @@ async def test_upload_list_download_document(
     assert download.status_code == 200
     assert download.content == b"hello world"
     assert download.headers["content-type"].startswith("text/plain")
-    assert 'attachment; filename="example.txt"' in download.headers['content-disposition']
+    assert 'attachment; filename="example.txt"' in download.headers["content-disposition"]
 
 
 async def test_upload_document_ignores_blank_metadata(
@@ -151,9 +149,7 @@ async def test_delete_document_marks_deleted(
     )
     assert delete_response.status_code == 204, delete_response.text
 
-    detail = await async_client.get(
-        f"{workspace_base}/documents/{document_id}", headers=headers
-    )
+    detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 404
 
     session_factory = get_sessionmaker()
@@ -298,7 +294,7 @@ async def test_list_documents_uploader_me_filters(
 
 
 async def test_stream_document_handles_missing_file_mid_stream(
-    seed_identity: dict[str, object]
+    seed_identity: dict[str, object],
 ) -> None:
     """Document streaming should surface a domain error when the file disappears."""
 

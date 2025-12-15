@@ -74,7 +74,7 @@ runs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: |
             apps/ade-cli/pyproject.toml
@@ -159,10 +159,10 @@ runs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.11'
 
       - name: Determine project version
         id: versions
@@ -306,7 +306,7 @@ runs:
 ```
 # syntax=docker/dockerfile:1.6
 
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.11
 ARG NODE_VERSION=20
 
 # -----------------------------------------------------------------------------
@@ -456,7 +456,7 @@ automatic-data-extractor/
 
 </details>
 
-Bundled ADE config templates live under `apps/ade-api/src/ade_api/templates/config_packages/` inside the backend package; startup copies them into `ADE_CONFIG_TEMPLATES_DIR` (default `./data/templates/config_packages`), replacing the bundled folders but keeping any extra templates you place there.
+Config packages are now initialized via the ade-engine CLI (`ade-engine config init <dir>`), which bundles the starter template inside the engine package; the API no longer syncs template folders at startup.
 
 Everything ADE produces (documents, configs, venvs, runs, cache, …) lands under `./data/workspaces/<workspace_id>/...` by default. Use `ADE_WORKSPACES_DIR` to move the workspace root, or override `ADE_DOCUMENTS_DIR`, `ADE_CONFIGS_DIR`, `ADE_VENVS_DIR`, or `ADE_RUNS_DIR` to place a specific storage type elsewhere—ADE always nests the workspace ID under the override.
 

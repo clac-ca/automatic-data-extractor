@@ -7,7 +7,7 @@ cd "${repo_root}"
 source .venv/bin/activate
 
 features_dir="apps/ade-api/src/ade_api/features"
-core_models_dir="apps/ade-api/src/ade_api/core/models"
+models_dir="apps/ade-api/src/ade_api/models"
 generated_dir="apps/ade-api/.generated"
 
 if [[ ! -d "${features_dir}" ]]; then
@@ -45,11 +45,11 @@ for path in feature_dir.rglob("*.py"):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 name = alias.name
-                if name.startswith(("ade_api.core", "ade_api.common")):
+                if name.startswith(("ade_api.api", "ade_api.core", "ade_api.common", "ade_api.db", "ade_api.models")):
                     targets.add(name)
         elif isinstance(node, ast.ImportFrom):
             mod = node.module
-            if mod and mod.startswith(("ade_api.core", "ade_api.common")):
+            if mod and mod.startswith(("ade_api.api", "ade_api.core", "ade_api.common", "ade_api.db", "ade_api.models")):
                 targets.add(mod)
 
 paths: list[Path] = []
@@ -70,7 +70,7 @@ PY
 
   bundle_paths=(
     "${feature_path}"
-    "${core_models_dir}"
+    "${models_dir}"
   )
 
   declare -A seen=()
@@ -85,7 +85,7 @@ PY
 
   output_path="${generated_dir}/${feature}.md"
   echo "Bundling ${feature} -> ${output_path}"
-  ade bundle "${final_paths[@]}" --ext py --out "${output_path}" --no-clip --no-show
+  ade bundle "${final_paths[@]}" --ext py --out "${output_path}" --no-show
 done
 
 echo "Bundles written to ${generated_dir}"

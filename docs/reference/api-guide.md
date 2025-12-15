@@ -107,7 +107,7 @@ Provision isolated virtual environments for configurations. Builds are configura
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}/builds` – list build history for a configuration (filters: `status`, pagination, optional totals).
 - `GET /builds/{build_id}` – fetch a build snapshot (status, timestamps, exit code, engine/python metadata).
 
-> Build console output is emitted as `AdeEvent` envelopes; attach to `/runs/{run_id}/events?stream=true` after submitting a run or use streaming build creation (`stream: true`) to receive events inline.
+> Build console output is emitted as `EventRecord` entries (`console.line` with `data.scope="build"`) in the same stream used for run events. Attach to `/runs/{run_id}/events/stream` after submitting a run or use streaming build creation (`stream: true`) to receive the same EventRecords inline.
 
 ## Error handling
 

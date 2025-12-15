@@ -3,7 +3,13 @@ from uuid import uuid4
 
 import pytest
 
-from ade_api.core.models import (
+from ade_api.common.sorting import resolve_sort
+from ade_api.db import generate_uuid7
+from ade_api.db.session import get_sessionmaker
+from ade_api.features.documents.filters import DocumentFilters
+from ade_api.features.documents.service import DocumentsService
+from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
+from ade_api.models import (
     Configuration,
     ConfigurationStatus,
     Document,
@@ -15,13 +21,7 @@ from ade_api.core.models import (
     User,
     Workspace,
 )
-from ade_api.features.documents.filters import DocumentFilters
-from ade_api.features.documents.service import DocumentsService
-from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_api.settings import get_settings
-from ade_api.infra.db import generate_uuid7
-from ade_api.infra.db.session import get_sessionmaker
-from ade_api.common.sorting import resolve_sort
 
 pytestmark = pytest.mark.asyncio
 
@@ -267,16 +267,12 @@ async def test_list_documents_includes_last_run_summary() -> None:
             actor=uploader,
         )
 
-        processed_record = next(
-            item for item in result.items if str(item.id) == str(processed.id)
-        )
+        processed_record = next(item for item in result.items if str(item.id) == str(processed.id))
         assert processed_record.last_run is not None
         assert str(processed_record.last_run.run_id) == str(run.id)
         assert processed_record.last_run.status == RunStatus.FAILED
         assert processed_record.last_run.message == "Request failed with status 404"
         assert processed_record.last_run.run_at == run.finished_at
 
-        uploaded_record = next(
-            item for item in result.items if str(item.id) == str(uploaded.id)
-        )
+        uploaded_record = next(item for item in result.items if str(item.id) == str(uploaded.id))
         assert uploaded_record.last_run is None

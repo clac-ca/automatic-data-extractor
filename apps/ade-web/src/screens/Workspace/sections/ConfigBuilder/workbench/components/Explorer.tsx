@@ -934,7 +934,6 @@ function CreateEntryRow({
     <div
       className="rounded-md border px-2 py-1"
       style={{ backgroundColor: bg, borderColor: border }}
-      onClick={(event) => event.stopPropagation()}
     >
       <div className="flex items-center gap-2">
         <span className="inline-flex w-4 justify-center text-[#4fc1ff]">{icon ?? <MenuIconNewFile />}</span>

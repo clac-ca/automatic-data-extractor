@@ -15,10 +15,10 @@ from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
 from ade_api.common.time import utc_now
 from ade_api.common.types import OrderBy
-from ade_api.core.models import User
 from ade_api.core.security.hashing import hash_password
 from ade_api.features.api_keys.service import ApiKeyService
 from ade_api.features.rbac import RbacService
+from ade_api.models import User
 from ade_api.settings import Settings
 
 from .filters import UserFilters, apply_user_filters
@@ -154,14 +154,14 @@ class UsersService:
         updates = payload.model_dump(exclude_unset=True, exclude_none=False)
         if not updates:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Provide at least one field to update.",
             )
         if "is_active" in updates and updates["is_active"] is None:
             raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="is_active must be true or false when provided.",
-        )
+            )
 
         repo_kwargs = {}
         if "display_name" in updates:

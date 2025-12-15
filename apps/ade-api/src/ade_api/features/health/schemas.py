@@ -26,9 +26,7 @@ class HealthComponentStatus(BaseSchema):
 class HealthCheckResponse(BaseSchema):
     """Top-level payload returned by the `/health` endpoint."""
 
-    status: Literal["ok", "error"] = Field(
-        ..., description="Overall system health indicator."
-    )
+    status: Literal["ok", "error"] = Field(..., description="Overall system health indicator.")
     timestamp: datetime = Field(..., description="UTC timestamp for when the check executed.")
     components: list[HealthComponentStatus] = Field(
         default_factory=list,

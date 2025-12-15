@@ -19,12 +19,14 @@ vi.mock("@shared/auth/context/SessionContext", () => ({
   }),
 }));
 
-vi.mock("@features/Workspace/api/workspaces-api", () => ({
+vi.mock("@shared/workspaces", () => ({
+  getDefaultWorkspacePath: (workspaceId: string) => `/workspaces/${workspaceId}/documents`,
   useWorkspacesQuery: (...args: unknown[]) => mockUseWorkspacesQuery(...args),
   useSetDefaultWorkspaceMutation: () => mockUseSetDefaultWorkspaceMutation(),
+  writePreferredWorkspaceId: () => undefined,
 }));
 
-vi.mock("@features/Workspaces/components/WorkspaceDirectoryLayout", () => ({
+vi.mock("@screens/Workspaces/components/WorkspaceDirectoryLayout", () => ({
   WorkspaceDirectoryLayout: ({ children }: { readonly children: ReactNode }) => (
     <div data-testid="workspace-layout">{children}</div>
   ),

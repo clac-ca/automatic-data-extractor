@@ -29,7 +29,7 @@ Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives
 - `ade start` — serve API + built SPA. `ade build` — build frontend assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
 - `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
-- Config templates: `apps/ade-api/src/ade_api/templates/config_packages`; workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
+- Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
 
 ### Help snapshots (truncated)
 
@@ -59,72 +59,45 @@ Commands:
 ```
 
 ```bash
-$ python -m ade_engine run --help
-Usage: python -m ade_engine run [OPTIONS]
+$ python -m ade_engine --help
+Usage: python -m ade_engine [OPTIONS] COMMAND [ARGS]...
 
-Options:
-  -i, --input PATH               Source file(s) (repeatable)
-      --input-dir PATH           Recurse for inputs
-      --include TEXT             Glob applied under --input-dir
-      --exclude TEXT             Glob to skip under --input-dir
-  -s, --input-sheet TEXT         Optional worksheet(s)
-      --output-dir PATH          Output directory (auto-nests per input when multiple)
-      --output-file PATH         Output file (default: <input>_normalized.xlsx)
-      --logs-dir PATH            Logs directory (auto-nests per input when multiple)
-      --logs-file PATH           Log output file path
-      --log-format [text|ndjson] Log output format
-      --meta TEXT                KEY=VALUE metadata (repeatable)
-      --config-package TEXT      Config package name or path
-      --help                     Show this message and exit.
+Commands:
+  process  Process inputs with the ADE engine (file/batch)
+  config   Create and validate config packages
+  version  Show engine version
 ```
 
-## Engine CLI smoke tests (revamped)
+## Engine CLI quick runs (current)
 
-`apps/ade-engine/src/ade_engine/cli/app.py` is a Typer CLI invoked as `python -m ade_engine ...`. It now plans per-input outputs/logs, supports `--input-dir` globs, and defaults to clean stdout/stderr behavior.
-
-- Inputs: combine `--input` (repeatable) and `--input-dir` with `--include/--exclude` (defaults to `*.xlsx, *.csv` when not provided).
-- Outputs: if no flags are set, output lands in `<input_dir>/output/<input_stem>_normalized.xlsx`. When multiple inputs are provided, `--output-dir`/`--logs-dir` are nested per input stem to avoid collisions.
-- Logs: `--log-format text|ndjson` (default text). Text mode writes readable lines to stderr and prints a summary to stdout; NDJSON mode streams to stdout unless `--logs-file/--logs-dir` is set, in which case it writes `engine_events.ndjson`. Text logs default to `engine.log`.
-- Metadata: `--meta KEY=VALUE` attaches to every emitted event.
-
-### Quick text-mode run (good sanity check)
-
-Use the template config package shipped in the repo and a sample input:
+- Entrypoint: `python -m ade_engine process ...` or `ade-engine process ...`
+- Output defaults (file mode): if no flags, writes `<input_parent>/<input_stem>_normalized.xlsx` and logs beside it. `--output` must be a `.xlsx` file. `--output-dir` changes only the directory. Batch mode always requires `--output-dir`; logs default beside outputs.
 
 ```bash
-python -m ade_engine run \
-  --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
-  --config-package data/templates/config_packages/default \
-  --output-dir data/samples/output/cli-smoke \
-  --logs-dir data/samples/output/cli-smoke
+# 1) Scaffold a config package from the bundled template
+ade-engine config init my-config --package-name ade_config
+
+# 2) Validate the config package can be imported/registered
+ade-engine config validate --config-package my-config
+
+# 3) Process a single file (defaults output next to input)
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --config-package my-config
+
+# 3b) Single file with explicit output dir
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --output-dir ./output \
+  --config-package my-config
+
+# 4) Process a batch directory (output dir required)
+ade-engine process batch \
+  --input-dir data/samples \
+  --output-dir ./output/batch \
+  --include "*.xlsx" \
+  --config-package my-config
 ```
-
-Expected: output at `data/samples/output/cli-smoke/z_pass6_synthetic_contacts_net_normalized.xlsx`, logs at `data/samples/output/cli-smoke/engine.log`, and a one-line summary on stdout.
-
-### NDJSON stream run (for API-style validation)
-
-```bash
-python -m ade_engine run \
-  --input data/samples/input/z_pass6_synthetic_contacts_net.xlsx \
-  --config-package data/templates/config_packages/default \
-  --log-format ndjson \
-  --output-dir /tmp/ade-engine/ndjson-smoke
-```
-
-Expected: NDJSON events on stdout (kept clean via `protect_stdout`), with output at `/tmp/ade-engine/ndjson-smoke/z_pass6_synthetic_contacts_net_normalized.xlsx`. Add `--logs-dir /tmp/ade-engine/ndjson-smoke` to also persist `engine_events.ndjson`.
-
-### Batch multiple inputs
-
-```bash
-python -m ade_engine run \
-  --input-dir data/samples/input \
-  --config-package data/templates/config_packages/default \
-  --include "*.xlsx" --exclude "detector-pass*" \
-  --output-dir /tmp/ade-engine/batch \
-  --logs-dir /tmp/ade-engine/batch
-```
-
-Outputs/logs are automatically split under `/tmp/ade-engine/batch/<input_stem>/...` so each file gets its own folder.
 
 ## Bundle examples
 
@@ -132,9 +105,12 @@ Outputs/logs are automatically split under `/tmp/ade-engine/batch/<input_stem>/.
 # Bundle docs as Markdown
 ade bundle --ext md --out /tmp/bundle.md docs/
 
-# Bundle with filters, no clipboard
+# Bundle with filters (skips __pycache__ automatically)
 ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
-           --exclude "**/__pycache__/**" --out /tmp/bundle.md --no-clip
+           --out /tmp/bundle.md
+
+# Copy a bundle to the clipboard (opt-in)
+ade bundle README.md apps/ade-api/AGENTS.md --clip
 
 # Bundle specific files quickly
 ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md

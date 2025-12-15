@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { client } from "@shared/api/client";
 import { runEventsUrl, streamRun, streamRunEvents, streamRunEventsForRun } from "@shared/runs/api";
 import type { RunResource } from "@shared/runs/api";
-import type { AdeEvent } from "@shared/runs/types";
+import type { RunStreamEvent } from "@shared/runs/types";
 
 const encoder = new TextEncoder();
 
@@ -17,9 +17,9 @@ function createSseStream() {
   });
   return {
     stream,
-    emit(event: AdeEvent) {
+    emit(event: RunStreamEvent) {
       if (closed) return;
-      const payload = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+      const payload = `event: ${event.event}\ndata: ${JSON.stringify(event)}\n\n`;
       controller?.enqueue(encoder.encode(payload));
     },
     close() {
@@ -53,16 +53,20 @@ const sampleRunResource = {
   created_at: "2025-01-01T00:00:00Z",
   links: {
     self: "/api/v1/runs/run-123",
-    summary: "/api/v1/runs/run-123/summary",
     events: "/api/v1/runs/run-123/events",
     events_stream: "/api/v1/runs/run-123/events/stream",
+    events_download: "/api/v1/runs/run-123/events/download",
     logs: "/api/v1/runs/run-123/logs",
-    outputs: "/api/v1/runs/run-123/outputs",
+    input: "/api/v1/runs/run-123/input",
+    input_download: "/api/v1/runs/run-123/input/download",
+    output: "/api/v1/runs/run-123/output",
+    output_download: "/api/v1/runs/run-123/output/download",
+    output_metadata: "/api/v1/runs/run-123/output/metadata",
   },
 } satisfies RunResource;
 
 type CreateRunPostResponse = Awaited<
-  ReturnType<typeof client.POST<"/api/v1/configurations/{configuration_id}/runs">>
+  ReturnType<typeof client.POST>
 >;
 
 afterEach(() => {
@@ -77,12 +81,12 @@ describe("streamRunEvents", () => {
     const pending = iterator.next();
     await Promise.resolve();
 
-    const runEvent: AdeEvent = { type: "engine.phase.start", created_at: "2025-01-01T00:00:00Z" };
+    const runEvent: RunStreamEvent = { event: "engine.phase.start", timestamp: "2025-01-01T00:00:00Z" };
     sse.emit(runEvent);
 
     const result = await pending;
     expect(result.done).toBe(false);
-    expect(result.value).toEqual(runEvent);
+    expect(result.value).toMatchObject(runEvent);
 
     await iterator.return?.(undefined);
     sse.close();
@@ -95,19 +99,19 @@ describe("streamRunEvents", () => {
     const first = iterator.next();
     await Promise.resolve();
 
-    const startEvent: AdeEvent = { type: "run.start", created_at: "2025-01-01T00:00:00Z" };
-    const completedEvent: AdeEvent = {
-      type: "run.complete",
-      created_at: "2025-01-01T00:05:00Z",
-      payload: { status: "succeeded" },
+    const startEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
+    const completedEvent: RunStreamEvent = {
+      event: "run.complete",
+      timestamp: "2025-01-01T00:05:00Z",
+      data: { status: "succeeded" },
     };
 
     sse.emit(startEvent);
-    expect((await first).value).toEqual(startEvent);
+    expect((await first).value).toMatchObject(startEvent);
 
     const second = iterator.next();
     sse.emit(completedEvent);
-    expect((await second).value).toEqual(completedEvent);
+    expect((await second).value).toMatchObject(completedEvent);
 
     sse.close();
     const done = await iterator.next();
@@ -118,17 +122,16 @@ describe("streamRunEvents", () => {
 describe("streamRun", () => {
   it("creates a run via the typed client and streams events", async () => {
     const { sse, fetchMock } = mockSseFetch();
-    const runEvent: AdeEvent = {
-      type: "run.complete",
-      created_at: "2025-01-01T00:05:00Z",
-      run_id: "run-123",
+    const runEvent: RunStreamEvent = {
+      event: "run.complete",
+      timestamp: "2025-01-01T00:05:00Z",
+      data: { jobId: "run-123" },
     };
-    const events: AdeEvent[] = [];
-    const postResponse: CreateRunPostResponse = {
+    const events: RunStreamEvent[] = [];
+    const postResponse = {
       data: sampleRunResource,
-      error: undefined,
       response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
-    };
+    } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     const stream = streamRun("config-123", { dry_run: true });
@@ -151,19 +154,19 @@ describe("streamRun", () => {
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/configurations/{configuration_id}/runs", {
       params: { path: { configuration_id: "config-123" } },
-      body: { options: { dry_run: true, validate_only: false, force_rebuild: false } },
+      body: { options: { dry_run: true, validate_only: false, force_rebuild: false, debug: false } },
       signal: undefined,
     });
-    expect(events).toEqual([runEvent]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject(runEvent);
     sse.close();
   });
 
   it("throws when run creation does not return data", async () => {
-    const postResponse: CreateRunPostResponse = {
-      data: undefined,
-      error: undefined,
+    const postResponse = {
+      error: {},
       response: new Response(null, { status: 200 }),
-    };
+    } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     await expect(streamRun("config-123").next()).rejects.toThrow("Expected run creation response.");
@@ -193,10 +196,10 @@ describe("runEventsUrl helpers", () => {
     expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
     expect(String(url)).toContain("after_sequence=3");
 
-    const runEvent: AdeEvent = { type: "run.start", created_at: "2025-01-01T00:00:00Z" };
+    const runEvent: RunStreamEvent = { event: "run.start", timestamp: "2025-01-01T00:00:00Z" };
     sse.emit(runEvent);
     const result = await pending;
-    expect(result.value).toEqual(runEvent);
+    expect(result.value).toMatchObject(runEvent);
     await iterator.return?.(undefined);
     sse.close();
   });

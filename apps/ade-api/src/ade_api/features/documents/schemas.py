@@ -11,7 +11,7 @@ from pydantic import Field, field_validator
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
-from ade_api.core.models import DocumentSource, DocumentStatus, RunStatus
+from ade_api.models import DocumentSource, DocumentStatus, RunStatus
 
 
 class UploaderOut(BaseSchema):

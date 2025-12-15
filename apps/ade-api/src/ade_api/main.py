@@ -6,13 +6,13 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
+from .api.v1.router import api_router
 from .app.lifecycles import create_application_lifespan
 from .common.exceptions import http_exception_handler, unhandled_exception_handler
 from .common.logging import log_context, setup_logging
 from .common.middleware import register_middleware
 from .common.openapi import configure_openapi
 from .core.http.errors import register_auth_exception_handlers
-from .routers import api_router
 from .settings import Settings, get_settings
 from .web.spa import mount_spa
 

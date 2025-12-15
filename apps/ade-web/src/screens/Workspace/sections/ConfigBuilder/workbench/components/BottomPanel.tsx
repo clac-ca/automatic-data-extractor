@@ -1,8 +1,9 @@
 import clsx from "clsx";
 
-import type { ConfigBuilderPane } from "@app/nav/urlState";
-import type { RunStreamStatus } from "../state/runStream";
-import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
+import type { WorkbenchPane } from "../state/workbenchSearchParams";
+import type { JobStreamStatus } from "../state/useJobStreamController";
+import type { WorkbenchConsoleStore } from "../state/consoleStore";
+import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
@@ -11,20 +12,20 @@ import { ProblemsTab } from "./ProblemsTab";
 
 interface BottomPanelProps {
   readonly height: number;
-  readonly consoleLines: readonly WorkbenchConsoleLine[];
+  readonly console: WorkbenchConsoleStore;
   readonly validation: WorkbenchValidationState;
-  readonly activePane: ConfigBuilderPane;
-  readonly onPaneChange: (pane: ConfigBuilderPane) => void;
+  readonly activePane: WorkbenchPane;
+  readonly onPaneChange: (pane: WorkbenchPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly runStatus?: RunStreamStatus;
+  readonly runStatus?: JobStreamStatus;
   readonly onToggleCollapse?: () => void;
   readonly appearance?: "light" | "dark";
 }
 
 export function BottomPanel({
   height,
-  consoleLines,
+  console,
   validation,
   activePane,
   onPaneChange,
@@ -56,7 +57,7 @@ export function BottomPanel({
     >
       <TabsRoot
         value={activePane}
-        onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}
+        onValueChange={(value) => onPaneChange(value as WorkbenchPane)}
       >
         <div
           className={clsx("flex flex-none items-center justify-between border-b px-3 py-1.5", theme.header)}
@@ -99,7 +100,7 @@ export function BottomPanel({
 
         <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col">
           <ConsoleTab
-            consoleLines={consoleLines}
+            console={console}
             latestRun={latestRun}
             onClearConsole={onClearConsole}
             runStatus={runStatus}

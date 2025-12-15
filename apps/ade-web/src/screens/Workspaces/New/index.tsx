@@ -9,10 +9,9 @@ import { ApiError } from "@shared/api";
 import type { UserSummary } from "@shared/users/api";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useCreateWorkspaceMutation } from "./hooks/useCreateWorkspaceMutation";
-import { useWorkspacesQuery, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import { getDefaultWorkspacePath, useCreateWorkspaceMutation } from "@shared/workspaces";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "@features/Workspaces/components/WorkspaceDirectoryLayout";
+import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";
@@ -32,7 +31,7 @@ const workspaceSchema = z.object({
 
 type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
-export default function WorkspaceCreateRoute() {
+export default function WorkspaceCreateScreen() {
   return (
     <RequireSession>
       <WorkspaceCreateContent />
@@ -43,7 +42,6 @@ export default function WorkspaceCreateRoute() {
 function WorkspaceCreateContent() {
   const navigate = useNavigate();
   const session = useSession();
-  const workspacesQuery = useWorkspacesQuery();
   const createWorkspace = useCreateWorkspaceMutation();
 
   const normalizedPermissions = useMemo(
@@ -119,9 +117,8 @@ function WorkspaceCreateContent() {
         owner_user_id: canSelectOwner ? values.ownerUserId || undefined : undefined,
       },
       {
-        onSuccess(workspace: WorkspaceProfile) {
-          workspacesQuery.refetch();
-          navigate(`/workspaces/${workspace.id}`);
+        onSuccess(workspace) {
+          navigate(getDefaultWorkspacePath(workspace.id));
         },
         onError(error: unknown) {
           if (error instanceof ApiError) {

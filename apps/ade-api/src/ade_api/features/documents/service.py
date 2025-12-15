@@ -8,7 +8,8 @@ import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
+from uuid import UUID
 
 import openpyxl
 from fastapi import UploadFile
@@ -20,8 +21,8 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
 from ade_api.common.types import OrderBy
-from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, User
 from ade_api.infra.storage import workspace_documents_root
+from ade_api.models import Document, DocumentSource, DocumentStatus, Run, User
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -57,7 +58,7 @@ class DocumentsService:
     async def create_document(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         upload: UploadFile,
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
@@ -65,7 +66,7 @@ class DocumentsService:
     ) -> DocumentOut:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.create.start",
             extra=log_context(
@@ -121,7 +122,7 @@ class DocumentsService:
             "document.create.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                document_id=str(document_id),
+                document_id=document_id,
                 user_id=actor_id,
                 content_type=document.content_type,
                 byte_size=document.byte_size,
@@ -134,7 +135,7 @@ class DocumentsService:
     async def list_documents(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         page: int,
         page_size: int,
         include_total: bool,
@@ -144,7 +145,7 @@ class DocumentsService:
     ) -> DocumentPage:
         """Return paginated documents with the shared envelope."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.list.start",
             extra=log_context(
@@ -157,10 +158,7 @@ class DocumentsService:
             ),
         )
 
-        stmt = (
-            self._repository.base_query(workspace_id)
-            .where(Document.deleted_at.is_(None))
-        )
+        stmt = self._repository.base_query(workspace_id).where(Document.deleted_at.is_(None))
         stmt = apply_document_filters(stmt, filters, actor=actor)
 
         page_result = await paginate_sql(
@@ -197,7 +195,7 @@ class DocumentsService:
             total=page_result.total,
         )
 
-    async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentOut:
+    async def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
         logger.debug(
@@ -222,8 +220,8 @@ class DocumentsService:
     async def list_document_sheets(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
     ) -> list[DocumentSheet]:
         """Return worksheet descriptors for ``document_id``."""
 
@@ -317,8 +315,8 @@ class DocumentsService:
     async def stream_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
     ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
 
@@ -382,13 +380,13 @@ class DocumentsService:
     async def delete_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
         actor: User | None = None,
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.delete.start",
             extra=log_context(
@@ -418,7 +416,7 @@ class DocumentsService:
             ),
         )
 
-    async def _get_document(self, workspace_id: str, document_id: str) -> Document:
+    async def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
         document = await self._repository.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -436,7 +434,7 @@ class DocumentsService:
 
     async def _attach_last_runs(
         self,
-        workspace_id: str,
+        workspace_id: UUID,
         documents: Sequence[DocumentOut],
     ) -> None:
         """Populate ``last_run`` on each document using recent run data."""
@@ -449,18 +447,17 @@ class DocumentsService:
             documents=documents,
         )
         for document in documents:
-            doc_id = str(document.id)
-            document.last_run = last_runs.get(doc_id)
+            document.last_run = last_runs.get(document.id)
             if document.last_run and document.last_run.run_at:
                 document.last_run_at = document.last_run.run_at
 
     async def _latest_stream_runs(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         documents: Sequence[DocumentOut],
-    ) -> dict[str, DocumentLastRun]:
-        doc_ids = [str(doc.id) for doc in documents]
+    ) -> dict[UUID, DocumentLastRun]:
+        doc_ids = [doc.id for doc in documents]
         if not doc_ids:
             return {}
 
@@ -493,8 +490,11 @@ class DocumentsService:
         stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
         result = await self._session.execute(stmt)
 
-        latest: dict[str, DocumentLastRun] = {}
+        latest: dict[UUID, DocumentLastRun] = {}
         for row in result.mappings():
+            document_id = row["document_id"]
+            if not isinstance(document_id, UUID):
+                document_id = UUID(str(document_id))
             run_at = self._ensure_utc(
                 row.get("finished_at") or row.get("started_at") or row.get("created_at")
             )
@@ -502,7 +502,7 @@ class DocumentsService:
                 error_message=row.get("error_message"),
                 summary=row.get("summary"),
             )
-            latest[str(row["document_id"])] = DocumentLastRun(
+            latest[document_id] = DocumentLastRun(
                 run_id=row.get("run_id"),
                 status=row.get("status"),
                 run_at=run_at,
@@ -577,9 +577,7 @@ class DocumentsService:
 
         # Strip control characters (including newlines) to avoid header injection and
         # other control sequence issues when the filename is rendered in responses.
-        filtered = "".join(
-            ch for ch in candidate if unicodedata.category(ch)[0] != "C"
-        ).strip()
+        filtered = "".join(ch for ch in candidate if unicodedata.category(ch)[0] != "C").strip()
 
         if not filtered:
             return _FALLBACK_FILENAME
@@ -636,7 +634,7 @@ class DocumentsService:
 
         document.attributes["worksheets"] = [sheet.model_dump() for sheet in sheets]
 
-    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
 

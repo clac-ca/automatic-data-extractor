@@ -19,6 +19,10 @@ const textEncoder = new TextEncoder();
 type ListConfigurationsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}"]["delete"]["parameters"]["query"];
+type ImportConfigurationBody =
+  paths["/api/v1/workspaces/{workspace_id}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
+type ReplaceConfigurationBody =
+  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
 
 export interface ListConfigurationsOptions {
   readonly page?: number;
@@ -359,7 +363,7 @@ export async function importConfiguration(
 
   const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/configurations/import", {
     params: { path: { workspace_id: workspaceId } },
-    body: formData,
+    body: formData as unknown as ImportConfigurationBody,
     bodySerializer: () => formData,
   });
   if (!data) {
@@ -386,7 +390,7 @@ export async function replaceConfigurationFromArchive(
     {
       params: { path: { workspace_id: workspaceId, configuration_id: configId } },
       headers: payload.ifMatch ? { "If-Match": payload.ifMatch } : undefined,
-      body: formData,
+      body: formData as unknown as ReplaceConfigurationBody,
       bodySerializer: () => formData,
     },
   );
@@ -397,7 +401,7 @@ export async function replaceConfigurationFromArchive(
 }
 
 export type ConfigurationSourceInput =
-  | { readonly type: "template"; readonly templateId: string }
+  | { readonly type: "template" }
   | { readonly type: "clone"; readonly configurationId: string };
 
 export interface CreateConfigurationPayload {
@@ -409,7 +413,6 @@ function serializeConfigurationSource(source: ConfigurationSourceInput) {
   if (source.type === "template") {
     return {
       type: "template" as const,
-      template_id: source.templateId.trim(),
     };
   }
   return {

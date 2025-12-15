@@ -9,7 +9,7 @@ import { ApiError } from "@shared/api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
-export default function AuthCallbackRoute() {
+export default function AuthCallbackScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();

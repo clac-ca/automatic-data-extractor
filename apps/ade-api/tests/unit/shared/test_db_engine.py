@@ -3,14 +3,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from ade_api.settings import Settings
-from ade_api.infra.db import engine as db_engine
-from ade_api.infra.db.engine import (
+from ade_api.db import engine as db_engine
+from ade_api.db.engine import (
     _AZURE_SQL_SCOPE,
     _SQL_COPT_SS_ACCESS_TOKEN,
     _managed_identity_injector,
     build_database_url,
 )
+from ade_api.settings import Settings
 
 
 def test_build_database_url_removes_sql_credentials_for_managed_identity() -> None:
@@ -31,9 +31,7 @@ def test_build_database_url_removes_sql_credentials_for_managed_identity() -> No
 
 def test_managed_identity_injector_sets_access_token_and_strips_auth() -> None:
     token_bytes = "token-value".encode("utf-16-le")
-    injector = _managed_identity_injector(
-        lambda: struct.pack("<I", len(token_bytes)) + token_bytes
-    )
+    injector = _managed_identity_injector(lambda: struct.pack("<I", len(token_bytes)) + token_bytes)
     cparams = {
         "user": "alice",
         "password": "secret",
@@ -50,7 +48,9 @@ def test_managed_identity_injector_sets_access_token_and_strips_auth() -> None:
     assert "Authentication" not in cparams
 
 
-def test_managed_identity_token_provider_returns_utf16le_token(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_managed_identity_token_provider_returns_utf16le_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     captured: dict[str, str | None] = {}
 
     def _fake_default_credential(*, managed_identity_client_id=None):

@@ -688,23 +688,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List editable files and directories */
-        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/import": {
         parameters: {
             query?: never;
@@ -737,27 +720,6 @@ export type paths = {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Config File */
-        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get"];
-        /** Upsert Config File */
-        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put"];
-        post?: never;
-        /** Delete Config File */
-        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete"];
-        options?: never;
-        /** Head Config File */
-        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head"];
-        /** Rename or move a file */
-        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch"];
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
@@ -845,6 +807,44 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List editable files and directories */
+        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Config File */
+        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get"];
+        /** Upsert Config File */
+        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put"];
+        post?: never;
+        /** Delete Config File */
+        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete"];
+        options?: never;
+        /** Head Config File */
+        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head"];
+        /** Rename or move a file */
+        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
         parameters: {
             query?: never;
@@ -858,23 +858,6 @@ export type paths = {
         post?: never;
         /** Delete Config Directory */
         delete: operations["delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configuration templates */
-        get: operations["list_config_templates_api_v1_config_templates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1038,23 +1021,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run Summary Endpoint */
-        get: operations["get_run_summary_endpoint_api_v1_runs__run_id__summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -1106,26 +1072,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Run Logs File Endpoint
-         * @deprecated
-         */
-        get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{run_id}/output": {
         parameters: {
             query?: never;
@@ -1152,46 +1098,6 @@ export type paths = {
         };
         /** Download run output file */
         get: operations["download_run_output_endpoint_api_v1_runs__run_id__output_download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/outputs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Run Outputs Legacy
-         * @deprecated
-         */
-        get: operations["list_run_outputs_legacy_api_v1_runs__run_id__outputs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Run Output Legacy Endpoint
-         * @deprecated
-         */
-        get: operations["download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1228,56 +1134,6 @@ export type paths = {
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
-        /**
-         * AdeEventV1
-         * @description API-owned canonical ADE event envelope.
-         */
-        AdeEventV1: {
-            /**
-             * Schema Id
-             * @default ade.events.v1
-             * @constant
-             */
-            schema_id: "ade.events.v1";
-            /** Type */
-            type: string;
-            /** Event Id */
-            event_id: string;
-            /** Sequence */
-            sequence: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "api" | "engine";
-            /**
-             * Workspace Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            workspace_id: string;
-            /**
-             * Configuration Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            configuration_id: string;
-            /** Run Id */
-            run_id?: string | null;
-            /** Build Id */
-            build_id?: string | null;
-            /** Origin Event Id */
-            origin_event_id?: string | null;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
-        };
         /**
          * ApiKeyCreateRequest
          * @description Request payload to create a new API key.
@@ -1619,7 +1475,9 @@ export type components = {
          */
         BuildEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEventV1"][];
+            items: {
+                [key: string]: unknown;
+            }[];
             /** Next After Sequence */
             next_after_sequence?: number | null;
         };
@@ -1713,67 +1571,6 @@ export type components = {
          */
         BuildStatus: "queued" | "building" | "ready" | "failed" | "cancelled";
         /**
-         * ColumnCounts
-         * @description Column-level counts.
-         */
-        ColumnCounts: {
-            /**
-             * Physical Total
-             * @default 0
-             */
-            physical_total: number;
-            /**
-             * Physical Empty
-             * @default 0
-             */
-            physical_empty: number;
-            /**
-             * Physical Non Empty
-             * @default 0
-             */
-            physical_non_empty: number;
-            /**
-             * Distinct Headers
-             * @default 0
-             */
-            distinct_headers: number;
-            /**
-             * Distinct Headers Mapped
-             * @default 0
-             */
-            distinct_headers_mapped: number;
-            /**
-             * Distinct Headers Unmapped
-             * @default 0
-             */
-            distinct_headers_unmapped: number;
-        };
-        /**
-         * ColumnSummaryDistinct
-         * @description Distinct header summary for aggregate scopes.
-         */
-        ColumnSummaryDistinct: {
-            /** Header */
-            header: string;
-            /** Header Normalized */
-            header_normalized: string;
-            /** Occurrences */
-            occurrences?: {
-                [key: string]: number;
-            };
-            /**
-             * Mapped
-             * @default false
-             */
-            mapped: boolean;
-            /** Mapped Fields */
-            mapped_fields?: string[];
-            /** Mapped Fields Counts */
-            mapped_fields_counts?: {
-                [key: string]: number;
-            };
-        };
-        /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
          */
@@ -1792,7 +1589,7 @@ export type components = {
         };
         /**
          * ConfigSourceTemplate
-         * @description Reference to a bundled template.
+         * @description Request to scaffold a config from the engine's built-in template.
          */
         ConfigSourceTemplate: {
             /**
@@ -1800,22 +1597,6 @@ export type components = {
              * @enum {string}
              */
             type: "template";
-            /** Template Id */
-            template_id: string;
-        };
-        /**
-         * ConfigTemplate
-         * @description Metadata for an available configuration template.
-         */
-        ConfigTemplate: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /** Version */
-            version?: string | null;
         };
         /**
          * ConfigValidationIssue
@@ -1929,27 +1710,6 @@ export type components = {
             content_digest?: string | null;
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
-        };
-        /**
-         * Counts
-         * @description Aggregate counts for a summary scope.
-         */
-        Counts: {
-            /** Files */
-            files?: {
-                [key: string]: number;
-            } | null;
-            /** Sheets */
-            sheets?: {
-                [key: string]: number;
-            } | null;
-            /** Tables */
-            tables?: {
-                [key: string]: number;
-            } | null;
-            rows?: components["schemas"]["RowCounts"];
-            columns?: components["schemas"]["ColumnCounts"];
-            fields?: components["schemas"]["FieldCounts"];
         };
         /** DirectoryWriteResponse */
         DirectoryWriteResponse: {
@@ -2111,70 +1871,6 @@ export type components = {
             workspaces?: {
                 [key: string]: string[];
             };
-        };
-        /**
-         * FieldCounts
-         * @description Canonical field counts.
-         */
-        FieldCounts: {
-            /**
-             * Total
-             * @default 0
-             */
-            total: number;
-            /**
-             * Required
-             * @default 0
-             */
-            required: number;
-            /**
-             * Mapped
-             * @default 0
-             */
-            mapped: number;
-            /**
-             * Unmapped
-             * @default 0
-             */
-            unmapped: number;
-            /**
-             * Required Mapped
-             * @default 0
-             */
-            required_mapped: number;
-            /**
-             * Required Unmapped
-             * @default 0
-             */
-            required_unmapped: number;
-        };
-        /**
-         * FieldSummaryAggregate
-         * @description Field status at aggregate scopes (sheet/file/run).
-         */
-        FieldSummaryAggregate: {
-            /** Field */
-            field: string;
-            /** Label */
-            label?: string | null;
-            /**
-             * Required
-             * @default false
-             */
-            required: boolean;
-            /**
-             * Mapped
-             * @default false
-             */
-            mapped: boolean;
-            /** Max Score */
-            max_score?: number | null;
-            /** Tables Mapped */
-            tables_mapped?: number | null;
-            /** Sheets Mapped */
-            sheets_mapped?: number | null;
-            /** Files Mapped */
-            files_mapped?: number | null;
         };
         /** FileCapabilities */
         FileCapabilities: {
@@ -2706,27 +2402,6 @@ export type components = {
             permissions?: string[] | null;
         };
         /**
-         * RowCounts
-         * @description Row-level counts.
-         */
-        RowCounts: {
-            /**
-             * Total
-             * @default 0
-             */
-            total: number;
-            /**
-             * Empty
-             * @default 0
-             */
-            empty: number;
-            /**
-             * Non Empty
-             * @default 0
-             */
-            non_empty: number;
-        };
-        /**
          * RunCreateOptions
          * @description Optional execution toggles for ADE runs.
          */
@@ -2747,6 +2422,12 @@ export type components = {
              * @default false
              */
             force_rebuild: boolean;
+            /**
+             * Debug
+             * @description Enable verbose engine logging (passes --debug to ade_engine).
+             * @default false
+             */
+            debug: boolean;
             /**
              * Input Document Id
              * @description Document identifier to ingest.
@@ -2778,7 +2459,9 @@ export type components = {
          */
         RunEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEventV1"][];
+            items: {
+                [key: string]: unknown;
+            }[];
             /** Next After Sequence */
             next_after_sequence?: number | null;
         };
@@ -2811,8 +2494,6 @@ export type components = {
         RunLinks: {
             /** Self */
             self: string;
-            /** Summary */
-            summary: string;
             /** Events */
             events: string;
             /** Events Stream */
@@ -2859,22 +2540,6 @@ export type components = {
             output_path?: string | null;
             /** Processed File */
             processed_file?: string | null;
-        };
-        /**
-         * RunOutputFile
-         * @description Deprecated collection wrapper for legacy output listings.
-         */
-        RunOutputFile: {
-            /** Name */
-            name?: string | null;
-            /** Path */
-            path?: string | null;
-            /** Byte Size */
-            byte_size?: number | null;
-            /** Content Type */
-            content_type?: string | null;
-            /** Download Url */
-            download_url?: string | null;
         };
         /**
          * RunPage
@@ -2969,48 +2634,6 @@ export type components = {
          * @enum {string}
          */
         RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
-        /**
-         * RunSummary
-         * @description Run-level summary aggregated across files within a run.
-         */
-        RunSummary: {
-            /**
-             * Schema Id
-             * @default ade.summary
-             */
-            schema_id: string;
-            /**
-             * Schema Version
-             * @default 1.0.0
-             */
-            schema_version: string;
-            /**
-             * Scope
-             * @default run
-             * @constant
-             */
-            scope: "run";
-            /** Id */
-            id: string;
-            /** Parent Ids */
-            parent_ids?: {
-                [key: string]: string;
-            };
-            /** Source */
-            source?: {
-                [key: string]: unknown;
-            };
-            counts: components["schemas"]["Counts"];
-            /** Fields */
-            fields?: components["schemas"]["FieldSummaryAggregate"][];
-            /** Columns */
-            columns?: components["schemas"]["ColumnSummaryDistinct"][];
-            validation?: components["schemas"]["ValidationSummary"];
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            };
-        };
         /**
          * SafeModeStatus
          * @description Represents the current safe mode state.
@@ -3273,36 +2896,6 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /**
-         * ValidationSummary
-         * @description Validation counts for a summary scope.
-         */
-        ValidationSummary: {
-            /**
-             * Rows Evaluated
-             * @default 0
-             */
-            rows_evaluated: number;
-            /**
-             * Issues Total
-             * @default 0
-             */
-            issues_total: number;
-            /** Issues By Severity */
-            issues_by_severity?: {
-                [key: string]: number;
-            };
-            /** Issues By Code */
-            issues_by_code?: {
-                [key: string]: number;
-            };
-            /** Issues By Field */
-            issues_by_field?: {
-                [key: string]: number;
-            };
-            /** Max Severity */
-            max_severity?: string | null;
         };
         /**
          * VersionsResponse
@@ -3810,7 +3403,9 @@ export interface operations {
     create_my_api_key_api_v1_me_api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3857,7 +3452,9 @@ export interface operations {
     revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 api_key_id: string;
             };
@@ -3958,7 +3555,9 @@ export interface operations {
     create_api_key_api_v1_api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4064,7 +3663,9 @@ export interface operations {
     revoke_api_key_api_v1_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 api_key_id: string;
             };
@@ -4165,7 +3766,9 @@ export interface operations {
     create_user_api_key_api_v1_users__user_id__api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 user_id: string;
             };
@@ -4221,7 +3824,9 @@ export interface operations {
     revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 user_id: string;
                 api_key_id: string;
@@ -4363,7 +3968,9 @@ export interface operations {
     update_user_api_v1_users__user_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier. */
                 user_id: string;
@@ -4418,7 +4025,9 @@ export interface operations {
     deactivate_user_api_v1_users__user_id__deactivate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier. */
                 user_id: string;
@@ -4541,7 +4150,9 @@ export interface operations {
     create_role_api_v1_rbac_roles_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4606,7 +4217,9 @@ export interface operations {
     delete_role_api_v1_rbac_roles__role_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Role identifier */
                 role_id: string;
@@ -4636,7 +4249,9 @@ export interface operations {
     update_role_api_v1_rbac_roles__role_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Role identifier */
                 role_id: string;
@@ -4747,7 +4362,9 @@ export interface operations {
     assign_user_role_api_v1_users__user_id__roles__role_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier */
                 user_id: string;
@@ -4781,7 +4398,9 @@ export interface operations {
     remove_user_role_api_v1_users__user_id__roles__role_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier */
                 user_id: string;
@@ -5023,7 +4642,9 @@ export interface operations {
     create_workspace_api_v1_workspaces_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5135,7 +4756,9 @@ export interface operations {
     delete_workspace_api_v1_workspaces__workspace_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5186,7 +4809,9 @@ export interface operations {
     update_workspace_api_v1_workspaces__workspace_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5248,7 +4873,9 @@ export interface operations {
     set_default_workspace_api_v1_workspaces__workspace_id__default_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5332,7 +4959,9 @@ export interface operations {
     add_workspace_member_api_v1_workspaces__workspace_id__members_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5368,7 +4997,9 @@ export interface operations {
     update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5406,7 +5037,9 @@ export interface operations {
     remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5497,7 +5130,9 @@ export interface operations {
     upload_document_api_v1_workspaces__workspace_id__documents_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5616,7 +5251,9 @@ export interface operations {
     delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5799,7 +5436,9 @@ export interface operations {
     create_configuration_api_v1_workspaces__workspace_id__configurations_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5866,53 +5505,12 @@ export interface operations {
             };
         };
     };
-    list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
-        parameters: {
-            query?: {
-                prefix?: string;
-                depth?: "0" | "1" | "infinity";
-                include?: string[] | null;
-                exclude?: string[] | null;
-                limit?: number;
-                page_token?: string | null;
-                sort?: "path" | "name" | "mtime" | "size";
-                order?: "asc" | "desc";
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileListing"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5948,7 +5546,9 @@ export interface operations {
     validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5966,6 +5566,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationValidateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ConfigurationActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
+        parameters: {
+            query?: {
+                prefix?: string;
+                depth?: "0" | "1" | "infinity";
+                include?: string[] | null;
+                exclude?: string[] | null;
+                limit?: number;
+                page_token?: string | null;
+                sort?: "path" | "name" | "mtime" | "size";
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileListing"];
                 };
             };
             /** @description Validation Error */
@@ -6038,7 +5874,9 @@ export interface operations {
             query?: {
                 parents?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6082,7 +5920,9 @@ export interface operations {
     delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6150,7 +5990,9 @@ export interface operations {
     rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6186,195 +6028,12 @@ export interface operations {
             };
         };
     };
-    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ConfigurationActivateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get: {
-        parameters: {
-            query?: {
-                format?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                    "application/zip": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6420,7 +6079,9 @@ export interface operations {
             query?: {
                 recursive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6446,26 +6107,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_config_templates_api_v1_config_templates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigTemplate"][];
                 };
             };
         };
@@ -6515,7 +6156,9 @@ export interface operations {
     create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6693,7 +6336,9 @@ export interface operations {
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Configuration identifier */
                 configuration_id: string;
@@ -6860,45 +6505,6 @@ export interface operations {
             };
         };
     };
-    get_run_summary_endpoint_api_v1_runs__run_id__summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunSummary"];
-                };
-            };
-            /** @description Run summary not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_run_events_endpoint_api_v1_runs__run_id__events_get: {
         parameters: {
             query?: {
@@ -7006,43 +6612,6 @@ export interface operations {
             };
         };
     };
-    download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Logs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get: {
         parameters: {
             query?: never;
@@ -7126,70 +6695,6 @@ export interface operations {
             };
         };
     };
-    list_run_outputs_legacy_api_v1_runs__run_id__outputs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOutputFile"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-                /** @description Legacy output path */
-                output_path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     read_safe_mode_api_v1_system_safe_mode_get: {
         parameters: {
             query?: never;
@@ -7213,7 +6718,9 @@ export interface operations {
     update_safe_mode_api_v1_system_safe_mode_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

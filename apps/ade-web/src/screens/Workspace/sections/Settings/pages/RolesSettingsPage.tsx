@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
@@ -13,7 +13,7 @@ import {
   useUpdateWorkspaceRoleMutation,
   useWorkspaceRolesQuery,
 } from "../hooks/useWorkspaceRoles";
-import type { PermissionDefinition, RoleDefinition } from "@features/Workspace/api/workspaces-api";
+import type { PermissionDefinition, RoleDefinition } from "@shared/workspaces";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";
@@ -463,24 +463,30 @@ function RoleDrawer({
               {filteredPermissions.length === 0 ? (
                 <p className="text-xs text-slate-500">No permissions match this filter.</p>
               ) : (
-                filteredPermissions.map((permission) => (
-                  <label
-                    key={permission.key}
-                    className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-slate-300"
-                      checked={values.permissions.includes(permission.key)}
-                      onChange={(event) => togglePermission(permission.key, event.target.checked)}
-                      disabled={isSaving || !canEditRole}
-                    />
-                    <span>
-                      <span className="block font-semibold">{permission.label}</span>
-                      <span className="block text-xs text-slate-500">{permission.description}</span>
-                    </span>
-                  </label>
-                ))
+                filteredPermissions.map((permission) => {
+                  const checkboxId = `permission-${permission.key.replaceAll(".", "-")}`;
+                  return (
+                    <label
+                      key={permission.key}
+                      htmlFor={checkboxId}
+                      aria-label={permission.label}
+                      className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                    >
+                      <input
+                        id={checkboxId}
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                        checked={values.permissions.includes(permission.key)}
+                        onChange={(event) => togglePermission(permission.key, event.target.checked)}
+                        disabled={isSaving || !canEditRole}
+                      />
+                      <span>
+                        <span className="block font-semibold">{permission.label}</span>
+                        <span className="block text-xs text-slate-500">{permission.description}</span>
+                      </span>
+                    </label>
+                  );
+                })
               )}
             </div>
           </div>
