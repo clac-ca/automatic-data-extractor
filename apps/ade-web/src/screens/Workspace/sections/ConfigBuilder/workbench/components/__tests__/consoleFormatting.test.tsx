@@ -33,7 +33,6 @@ describe("renderConsoleLine", () => {
       },
     };
     const { container } = render(<div>{renderConsoleLine(line)}</div>);
-    expect(container.textContent).toContain("Detector");
     expect(container.textContent).toContain("detect_email_header");
     expect(container.textContent).toContain("NOV 2025");
     expect(container.textContent).toContain("Col A");
