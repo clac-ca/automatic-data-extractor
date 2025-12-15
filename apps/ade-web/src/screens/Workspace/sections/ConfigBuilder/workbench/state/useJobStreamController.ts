@@ -97,8 +97,8 @@ export function useJobStreamController({
     (evt: RunStreamEvent) => {
       const name = eventName(evt);
 
-      if (name === "meta") {
-        const details = (evt as unknown as { readonly details?: Record<string, unknown> }).details ?? {};
+      if (name === "job.meta") {
+        const details = eventPayload(evt);
         const nextId = typeof details.jobId === "string" ? details.jobId : null;
         if (nextId) {
           setJobId((prev) => prev ?? nextId);
@@ -181,8 +181,8 @@ export function useJobStreamController({
         for await (const evt of streamConfigurationJobEvents(configId, options, controller.signal)) {
           pushEvent(evt);
           const name = eventName(evt);
-          if (name === "meta") {
-            const details = (evt as unknown as { readonly details?: Record<string, unknown> }).details ?? {};
+          if (name === "job.meta") {
+            const details = eventPayload(evt);
             const nextId = typeof details.jobId === "string" ? details.jobId : null;
             if (nextId && !resolvedJobId) {
               resolvedJobId = nextId;

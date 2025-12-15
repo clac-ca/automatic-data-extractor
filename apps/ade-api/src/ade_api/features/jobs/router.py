@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Security, 
 from fastapi.responses import StreamingResponse
 
 from ade_api.api.deps import get_runs_service
-from ade_api.common.events import utc_rfc3339_now
+from ade_api.common.events import new_event_record
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated
 from ade_api.features.runs.schemas import RunCreateOptions
@@ -62,21 +62,19 @@ async def stream_configuration_job_endpoint(
         fallback_id = 0
         run = await service.prepare_run(configuration_id=configuration_id, options=options)
 
-        meta = {
-            "id": 0,
-            "ts": utc_rfc3339_now(),
-            "scope": "meta",
-            "level": "info",
-            "text": "connected",
-            "details": {
+        meta = new_event_record(
+            event="job.meta",
+            level="info",
+            message="connected",
+            data={
                 "jobId": str(run.id),
                 "runId": str(run.id),
                 "workspaceId": str(run.workspace_id),
                 "configurationId": str(run.configuration_id),
                 "buildId": str(run.build_id) if run.build_id else None,
             },
-        }
-        yield sse_json("meta", meta, event_id=0)
+        )
+        yield sse_json("job.meta", meta, event_id=0)
 
         async for frame in service.stream_run(run_id=run.id, options=options):
             if await request.is_disconnected():
@@ -116,21 +114,19 @@ async def stream_job_events_endpoint(
 
     async def event_stream():
         fallback_id = 0
-        meta = {
-            "id": 0,
-            "ts": utc_rfc3339_now(),
-            "scope": "meta",
-            "level": "info",
-            "text": "connected",
-            "details": {
+        meta = new_event_record(
+            event="job.meta",
+            level="info",
+            message="connected",
+            data={
                 "jobId": str(run.id),
                 "runId": str(run.id),
                 "workspaceId": str(run.workspace_id),
                 "configurationId": str(run.configuration_id),
                 "buildId": str(getattr(run, "build_id", None)) if getattr(run, "build_id", None) else None,
             },
-        }
-        yield sse_json("meta", meta, event_id=0)
+        )
+        yield sse_json("job.meta", meta, event_id=0)
 
         async with service.subscribe_to_events(run) as subscription:
             async for event in subscription:

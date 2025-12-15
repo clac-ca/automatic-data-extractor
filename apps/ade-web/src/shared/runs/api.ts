@@ -343,6 +343,11 @@ export function runLogsUrl(run: RunResource): string | null {
   return link ? resolveApiUrl(link) : null;
 }
 
+export function runInputUrl(run: RunResource): string | null {
+  const link = run.links?.input_download ?? run.links?.input;
+  return link ? resolveApiUrl(link) : null;
+}
+
 function resolveRunLink(link: string, options?: { appendQuery?: string }) {
   const hasQuery = link.includes("?");
   const appended = options?.appendQuery

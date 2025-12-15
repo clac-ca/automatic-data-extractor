@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.events import (
     EventRecord,
     coerce_event_record,
-    ensure_event_context,
     new_event_record,
 )
 from ade_api.common.ids import generate_uuid7
@@ -407,14 +406,7 @@ class RunsService:
                 start_sequence=None,
                 timeout_seconds=float(self._settings.build_timeout.total_seconds()),
             ):
-                enriched = ensure_event_context(
-                    event,
-                    job_id=str(run.id),
-                    workspace_id=str(run.workspace_id),
-                    build_id=str(context.build_id),
-                    configuration_id=str(run.configuration_id),
-                )
-                forwarded = await run_stream.append(enriched)
+                forwarded = await run_stream.append(event)
                 self._log_event_debug(forwarded, origin="build")
                 yield forwarded
 

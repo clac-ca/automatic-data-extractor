@@ -714,18 +714,20 @@ This stream is intentionally **live-only**:
 
 ### 6.2 SSE event types
 
-The server uses **standard SSE `event:` dispatch** and keeps high-volume output as plain text.
+The server uses **standard SSE `event:` dispatch** where each SSE message carries a single JSON
+`EventRecord` payload (the same envelope used by the engine’s NDJSON logs).
 
-* `event: meta` (JSON) – emitted once at connect time
+* `event: job.meta` (JSON `EventRecord`) – emitted once at connect time
+
+  `data` contains stream-level context. These identifiers are **not repeated** on every event.
 
   ```jsonc
   {
-    "id": 0,
-    "ts": "2025-12-15T19:45:05.637Z",
-    "scope": "meta",
+    "event": "job.meta",
+    "timestamp": "2025-12-15T19:45:05.637Z",
     "level": "info",
-    "text": "connected",
-    "details": {
+    "message": "connected",
+    "data": {
       "jobId": "019b238b-8836-767d-a452-094a81a917eb",
       "workspaceId": "019b2334-e5e8-75c5-b342-734630c9531a",
       "configurationId": "019b2380-78bf-76ee-8b22-60ba3d86062c",
@@ -734,23 +736,17 @@ The server uses **standard SSE `event:` dispatch** and keeps high-volume output 
   }
   ```
 
-* `event: log` (plain text) – high-volume console output
+* `event: <event_name>` (JSON `EventRecord`) – all subsequent build/run/engine events
 
-  Data is tab-separated to avoid JSON parsing overhead:
+  Examples: `build.phase.start`, `console.line`, `engine.detector.column_result`, `run.complete`.
 
-  ```
-  <scope>\t<level>\t<ts>\t<message>
-  ```
+  Each SSE message uses:
 
-  Example:
+  * `id:` = the run stream `sequence` number (monotonic within the job)
+  * `event:` = the EventRecord `event` name
+  * `data:` = compact JSON `EventRecord`
 
-  ```
-  build\tinfo\t2025-12-15T19:45:08.287Z\tCollecting pip
-  ```
-
-* `event: done` (JSON) – emitted once when the job completes
-
-  `details` contains the final run completion payload (status, execution timing, artifacts).
+  Completion is indicated by `event: run.complete` (final event).
 
 ### 6.3 NDJSON archive
 

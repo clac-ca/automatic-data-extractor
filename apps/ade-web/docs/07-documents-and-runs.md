@@ -494,7 +494,9 @@ Data hooks:
 * `useJobLogsStream(jobId)` → `/api/v1/jobs/{job_id}/events/stream`:
 
   * Live-only tail (no replay/resume).
-  * Uses standard SSE `event:` dispatch with a high-volume `log` event that is **plain text** (tab-separated fields).
+  * Uses standard SSE `event:` dispatch where each SSE message contains a JSON `EventRecord`.
+  * Stream-level context is emitted once as `event: job.meta` (an `EventRecord` with identifiers in `data`).
+  * Completion is indicated by `event: run.complete`.
   * For schema details, see `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` §6.
 
 If a backend also exposes workspace‑scoped detail endpoints, we may add a `useWorkspaceRunQuery(workspaceId, runId)`; the global `useRunQuery(runId)` remains the canonical entry point.
