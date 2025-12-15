@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from ade_api.api.deps import get_builds_service
 from ade_api.common.encoding import json_bytes
+from ade_api.common.events import strip_sequence
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -229,10 +230,10 @@ async def stream_build_events_endpoint(
                     last_sequence = seq
                 else:
                     last_sequence += 1
-                    event["sequence"] = last_sequence
+                payload = strip_sequence(event)
                 yield sse_json(
                     str(event.get("event") or "message"),
-                    event,
+                    payload,
                     event_id=last_sequence,
                 )
                 if event.get("event") in {"build.complete", "build.failed"}:
@@ -254,10 +255,10 @@ async def stream_build_events_endpoint(
                     last_sequence = seq
                 else:
                     last_sequence += 1
-                    live_event["sequence"] = last_sequence
+                payload = strip_sequence(live_event)
                 yield sse_json(
                     str(live_event.get("event") or "message"),
-                    live_event,
+                    payload,
                     event_id=last_sequence,
                 )
                 if live_event.get("event") in {"build.complete", "build.failed"}:
