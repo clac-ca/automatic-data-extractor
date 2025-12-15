@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import mimetypes
 from collections.abc import AsyncIterator
@@ -26,10 +25,12 @@ from ade_api.api.deps import (
     get_runs_service,
 )
 from ade_api.common.downloads import build_content_disposition
+from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import PageParams
+from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.db.session import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -76,17 +77,7 @@ async def resolve_run_filters(
 
 
 def _event_bytes(event: EventRecord) -> bytes:
-    return json.dumps(event, default=str).encode("utf-8") + b"\n"
-
-
-def _sse_event_bytes(event: EventRecord, *, event_id: int) -> bytes:
-    """Format an EventRecord for SSE with server-generated IDs."""
-
-    data = json.dumps(event, default=str)
-    lines = data.splitlines() or [""]
-    parts: list[str] = [f"id: {event_id}", f"event: {event.get('event', 'ade.event')}"]
-    parts.extend(f"data: {line}" for line in lines)
-    return "\n".join(parts).encode("utf-8") + b"\n\n"
+    return json_bytes(event) + b"\n"
 
 
 async def _execute_run_background(
@@ -319,31 +310,49 @@ async def stream_run_events_endpoint(
     start_sequence = start_sequence or 0
 
     async def event_stream() -> AsyncIterator[bytes]:
-        cursor = start_sequence
-        last_event: EventRecord | None = None
-
-        for event in service.iter_events(run=run, after_sequence=start_sequence):
-            cursor += 1
-            last_event = event
-            yield _sse_event_bytes(event, event_id=cursor)
-
-        terminal_replayed = last_event and last_event.get("event") == "run.complete"
-        run_already_finished = run.status in {
-            RunStatus.SUCCEEDED,
-            RunStatus.FAILED,
-            RunStatus.CANCELLED,
-        }
-        if terminal_replayed or run_already_finished:
-            return
+        last_sequence = start_sequence
 
         async with service.subscribe_to_events(run) as subscription:
+            for event in service.iter_events(run=run, after_sequence=start_sequence):
+                seq = event.get("sequence")
+                if isinstance(seq, int):
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                    event["sequence"] = last_sequence
+                yield sse_json(event, event_id=last_sequence)
+                if event.get("event") == "run.complete":
+                    return
+
+            run_already_finished = run.status in {
+                RunStatus.SUCCEEDED,
+                RunStatus.FAILED,
+                RunStatus.CANCELLED,
+            }
+            if run_already_finished:
+                return
+
             async for live_event in subscription:
-                cursor += 1
-                yield _sse_event_bytes(live_event, event_id=cursor)
+                seq = live_event.get("sequence")
+                if isinstance(seq, int):
+                    if seq <= last_sequence:
+                        continue
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                    live_event["sequence"] = last_sequence
+                yield sse_json(live_event, event_id=last_sequence)
                 if live_event.get("event") == "run.complete":
                     break
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

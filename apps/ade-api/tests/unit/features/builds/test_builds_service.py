@@ -510,7 +510,7 @@ async def test_stream_build_success(
             BuilderStepEvent(step=BuildStep.INSTALL_ENGINE, message="install"),
             BuilderLogEvent(message="log 2"),
             BuilderArtifactsEvent(
-                artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.6.1")
+                artifacts=BuildArtifacts(python_version="3.11.0", engine_version="1.6.1")
             ),
         ]
     )

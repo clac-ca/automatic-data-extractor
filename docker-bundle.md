@@ -74,7 +74,7 @@ runs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: |
             apps/ade-cli/pyproject.toml
@@ -159,10 +159,10 @@ runs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.11'
 
       - name: Determine project version
         id: versions
@@ -306,7 +306,7 @@ runs:
 ```
 # syntax=docker/dockerfile:1.6
 
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.11
 ARG NODE_VERSION=20
 
 # -----------------------------------------------------------------------------
