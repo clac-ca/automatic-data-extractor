@@ -801,6 +801,7 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
+          debug: true,
         },
         {
           mode: "extraction",
@@ -1998,8 +1999,8 @@ function RunExtractionDialog({
                     </div>
                   </div>
                 </Alert>
-              ) : sheetsAvailable ? (
-                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+	              ) : sheetsAvailable ? (
+	                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <p className="text-sm font-medium text-slate-700">Worksheets</p>
@@ -2039,12 +2040,12 @@ function RunExtractionDialog({
                     })}
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-500">This file will be ingested directly.</p>
-              )}
-            </div>
-          </div>
-        )}
+	              ) : (
+	                <p className="text-sm text-slate-500">This file will be ingested directly.</p>
+	              )}
+	            </div>
+	          </div>
+	        )}
 
         <footer className="mt-6 flex items-center justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
@@ -2055,14 +2056,14 @@ function RunExtractionDialog({
               if (!selectedDocument) {
                 return;
               }
-              onRun({
-                documentId: selectedDocument.id,
-                documentName: selectedDocument.name,
-                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-              });
-            }}
-            disabled={runDisabled}
-          >
+	              onRun({
+	                documentId: selectedDocument.id,
+	                documentName: selectedDocument.name,
+	                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+	              });
+	            }}
+	            disabled={runDisabled}
+	          >
             Start test run
           </Button>
         </footer>

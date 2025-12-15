@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
-import { renderConsoleMessage, resolveSeverity } from "./consoleFormatting";
+import { formatConsoleLineNdjson, renderConsoleLine, resolveSeverity } from "./consoleFormatting";
 
 interface ConsoleTabProps {
   readonly console: WorkbenchConsoleStore;
@@ -20,10 +20,34 @@ type ConsoleFilters = {
   readonly level: "all" | WorkbenchConsoleLine["level"];
 };
 
+type ConsoleViewMode = "parsed" | "ndjson";
+
+const CONSOLE_LEVEL_STORAGE_KEY = "ade.ui.workbench.console.levelFilter.v1";
+
 export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: ConsoleTabProps) {
-  const [filters, setFilters] = useState<ConsoleFilters>({ origin: "all", level: "all" });
+  const [filters, setFilters] = useState<ConsoleFilters>(() => {
+    const defaultFilters: ConsoleFilters = { origin: "all", level: "info" };
+    if (typeof window === "undefined") return defaultFilters;
+    try {
+      const stored = window.localStorage.getItem(CONSOLE_LEVEL_STORAGE_KEY);
+      if (
+        stored === "all" ||
+        stored === "debug" ||
+        stored === "info" ||
+        stored === "warning" ||
+        stored === "error" ||
+        stored === "success"
+      ) {
+        return { ...defaultFilters, level: stored };
+      }
+    } catch {
+      // ignore localStorage failures
+    }
+    return defaultFilters;
+  });
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [viewMode, setViewMode] = useState<ConsoleViewMode>("parsed");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const snapshot = useSyncExternalStore(console.subscribe.bind(console), console.getSnapshot, console.getSnapshot);
@@ -65,6 +89,15 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
     if (filteredIndices.length === 0) return;
     rowVirtualizer.scrollToIndex(filteredIndices.length - 1, { align: "end" });
   }, [follow, filteredIndices.length, snapshot, rowVirtualizer]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(CONSOLE_LEVEL_STORAGE_KEY, filters.level);
+    } catch {
+      // ignore localStorage failures
+    }
+  }, [filters.level]);
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
@@ -113,11 +146,11 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   const handleCopy = async () => {
     if (!hasConsoleLines) return;
     const lines: string[] = [];
-	    for (const index of filteredIndices) {
-	      const line = console.getLine(index);
-	      if (!line) continue;
-	      lines.push(formatLineForCopy(line));
-	    }
+    for (const index of filteredIndices) {
+      const line = console.getLine(index);
+      if (!line) continue;
+      lines.push(formatLineForCopy(line, viewMode));
+    }
     const copiedSuccessfully = await copyToClipboard(lines.join("\n"));
     setCopied(copiedSuccessfully);
     if (copiedSuccessfully) {
@@ -163,15 +196,16 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 className="rounded border border-slate-700 bg-[#151515] px-2 py-1 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500"
               >
                 <option value="all">All</option>
+                <option value="debug">Debug</option>
                 <option value="info">Info</option>
                 <option value="warning">Warning</option>
                 <option value="error">Error</option>
                 <option value="success">Success</option>
               </select>
-	            </label>
-	            <button
-	              type="button"
-	              onClick={() => (follow ? setFollow(false) : enableFollow())}
+            </label>
+            <button
+              type="button"
+              onClick={() => (follow ? setFollow(false) : enableFollow())}
               className={clsx(
                 "rounded px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 follow
@@ -182,6 +216,39 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
             >
               {follow ? "Following" : "Follow"}
             </button>
+            <div className="flex items-center gap-2" title="Toggle between parsed view and raw NDJSON">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">View</span>
+              <div role="radiogroup" aria-label="Console view mode" className="flex items-center gap-1">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === "parsed"}
+                  onClick={() => setViewMode("parsed")}
+                  className={clsx(
+                    "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-emerald-500",
+                    viewMode === "parsed"
+                      ? "border-emerald-600/70 text-emerald-200"
+                      : "border-slate-600 text-slate-200 hover:border-slate-400",
+                  )}
+                >
+                  Parsed
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === "ndjson"}
+                  onClick={() => setViewMode("ndjson")}
+                  className={clsx(
+                    "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-emerald-500",
+                    viewMode === "ndjson"
+                      ? "border-emerald-600/70 text-emerald-200"
+                      : "border-slate-600 text-slate-200 hover:border-slate-400",
+                  )}
+                >
+                  NDJSON
+                </button>
+              </div>
+            </div>
             <button
               type="button"
               onClick={handleCopy}
@@ -221,6 +288,27 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 <span className="text-slate-600">· {formatRunDuration(latestRun.durationMs)}</span>
               ) : null}
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Downloads</span>
+              <RunArtifactLink
+                href={latestRun.outputUrl}
+                label={latestRun.outputFilename ? `Output (${latestRun.outputFilename})` : "Output"}
+                disabledLabel="Output (not ready)"
+                disabledReason="Output is not available for this run."
+              />
+              <RunArtifactLink
+                href={latestRun.logsUrl}
+                label="Events (NDJSON)"
+                disabledLabel="Events"
+                disabledReason="Events log is not available."
+              />
+              <RunArtifactLink
+                href={latestRun.inputUrl}
+                label="Input"
+                disabledLabel="Input"
+                disabledReason="Input file download is not available."
+              />
+            </div>
           </div>
         ) : null}
       </div>
@@ -238,7 +326,14 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               if (!line) return null;
 
               const key = line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${lineIndex}`;
-              const rendered = renderConsoleMessage(line.message);
+              const rendered =
+                viewMode === "ndjson" ? (
+                  <span className="whitespace-pre-wrap break-words">
+                    {formatConsoleLineNdjson(line) ?? line.message}
+                  </span>
+                ) : (
+                  renderConsoleLine(line)
+                );
 
               return (
                 <div
@@ -399,11 +494,13 @@ function displayTimestamp(value?: string | null) {
   return raw.length > 0 ? raw : "";
 }
 
-function formatLineForCopy(line: WorkbenchConsoleLine) {
+function formatLineForCopy(line: WorkbenchConsoleLine, mode: ConsoleViewMode) {
   const ts = displayTimestamp(line.timestamp);
   const origin = originLabel(line.origin);
   const level = consoleLevelLabel(line.level).toLowerCase();
-  return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${line.message ?? ""}`.trim();
+  const msg =
+    mode === "ndjson" ? formatConsoleLineNdjson(line) ?? line.message ?? "" : line.message ?? "";
+  return `${ts ? `[${ts}] ` : ""}${origin} ${level} ${msg}`.trim();
 }
 
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {
@@ -429,4 +526,57 @@ function formatRunDuration(valueMs: number): string {
   const minutes = Math.floor(valueMs / 60_000);
   const seconds = Math.round((valueMs % 60_000) / 1000);
   return `${minutes}m ${seconds}s`;
+}
+
+function RunArtifactLink({
+  href,
+  label,
+  disabledLabel,
+  disabledReason,
+}: {
+  readonly href?: string;
+  readonly label: string;
+  readonly disabledLabel: string;
+  readonly disabledReason: string;
+}) {
+  const available = typeof href === "string" && href.trim().length > 0;
+  const base =
+    "inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition";
+  const enabledClass = "border-slate-700 bg-[#101010] text-slate-200 hover:border-slate-500";
+  const disabledClass = "border-slate-800 bg-[#0f0f0f] text-slate-600 cursor-not-allowed";
+
+  if (!available) {
+    return (
+      <span className={clsx(base, disabledClass)} title={disabledReason}>
+        {disabledLabel}
+      </span>
+    );
+  }
+
+  return (
+    <a className={clsx(base, enabledClass)} href={href} title={label}>
+      <DownloadIcon />
+      <span className="truncate">{label}</span>
+    </a>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-300" fill="none" aria-hidden>
+      <path
+        d="M10 3v8m0 0 3-3m-3 3-3-3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 13.5v2A1.5 1.5 0 0 0 5.5 17h9A1.5 1.5 0 0 0 16 15.5v-2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }

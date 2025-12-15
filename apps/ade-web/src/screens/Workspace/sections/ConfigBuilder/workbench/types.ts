@@ -73,6 +73,7 @@ export interface WorkbenchRunSummary {
   readonly runId: string;
   readonly status: RunStatus;
   readonly outputUrl?: string;
+  readonly inputUrl?: string;
   readonly outputReady?: boolean;
   readonly outputFilename?: string | null;
   readonly outputPath?: string | null;

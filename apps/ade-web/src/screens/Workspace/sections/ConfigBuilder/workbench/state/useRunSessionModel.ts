@@ -5,6 +5,7 @@ import type { WorkbenchDataSeed, WorkbenchRunSummary, WorkbenchValidationState }
 
 import {
   fetchRun,
+  runInputUrl,
   runLogsUrl,
   runOutputUrl,
   type RunStreamOptions,
@@ -126,6 +127,7 @@ export function useRunSessionModel({
       runId: resolvedRunId,
       status,
       outputUrl: undefined,
+      inputUrl: undefined,
       outputReady: outputPath ? true : undefined,
       outputFilename: outputPath ? basename(outputPath) : null,
       outputPath,
@@ -151,6 +153,7 @@ export function useRunSessionModel({
         const resource = await fetchRun(resolvedRunId);
         const outputUrl = runOutputUrl(resource) ?? undefined;
         const logsUrl = runLogsUrl(resource) ?? undefined;
+        const inputUrl = runInputUrl(resource) ?? undefined;
         setLatestRun((prev) =>
           prev && prev.runId === resolvedRunId
             ? {
@@ -158,6 +161,7 @@ export function useRunSessionModel({
                 outputUrl: outputUrl ?? prev.outputUrl,
                 outputReady: outputUrl ? true : prev.outputReady,
                 logsUrl: logsUrl ?? prev.logsUrl,
+                inputUrl: inputUrl ?? prev.inputUrl,
                 outputLoaded: true,
               }
             : prev,
