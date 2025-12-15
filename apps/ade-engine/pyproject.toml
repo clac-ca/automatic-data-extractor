@@ -7,7 +7,7 @@ name = "ade-engine"
 version = "1.6.6"
 description = "Deterministic workbook normalization engine (detect → extract → map → normalize → render)."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 dependencies = [
@@ -15,7 +15,6 @@ dependencies = [
   "pydantic==2.12.5",
   "pydantic-settings==2.12.0",
   "typer==0.20.0",
-  "tomli==2.3.0",
 ]
 
 [project.optional-dependencies]

@@ -72,6 +72,7 @@ class RunEventStream:
         self._context = context or RunEventContext()
         self._lock = asyncio.Lock()
         self._subscribers: set[asyncio.Queue[EventRecord | None]] = set()
+        self._sequence = EventRecordLog(str(self._path)).last_cursor()
 
     @property
     def path(self) -> Path:
@@ -101,7 +102,6 @@ class RunEventStream:
         if record is None:
             raise ValueError("Unable to append non-event payload to RunEventStream")
 
-        record.pop("sequence", None)
         record = ensure_event_context(
             record,
             job_id=self._context.job_id,
@@ -111,6 +111,8 @@ class RunEventStream:
         )
 
         async with self._lock:
+            self._sequence += 1
+            record["sequence"] = self._sequence
             serialized = json.dumps(
                 record,
                 separators=(",", ":"),

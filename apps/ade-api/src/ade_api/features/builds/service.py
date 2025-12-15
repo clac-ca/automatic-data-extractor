@@ -1412,10 +1412,7 @@ class BuildsService:
                 data = pyproject.read_text(encoding="utf-8")
             except OSError:
                 return None
-            try:
-                import tomllib
-            except ModuleNotFoundError:  # pragma: no cover - py<3.11 guard
-                return None
+            import tomllib
             parsed = tomllib.loads(data)
             return parsed.get("project", {}).get("version")
         if "==" in spec:

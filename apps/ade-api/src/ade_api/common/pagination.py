@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from itertools import islice
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import Field, conint
 from sqlalchemy import func, select, text
@@ -12,6 +12,8 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from ade_api.common.schema import BaseSchema
 from ade_api.settings import COUNT_STATEMENT_TIMEOUT_MS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+
+T = TypeVar("T")
 
 
 class PageParams(BaseSchema):
@@ -25,7 +27,7 @@ class PageParams(BaseSchema):
     include_total: bool = Field(False, description="Include total item count for the query")
 
 
-class Page[T](BaseSchema):
+class Page(BaseSchema, Generic[T]):
     """Uniform response envelope for list endpoints."""
 
     items: Sequence[T]
@@ -36,7 +38,7 @@ class Page[T](BaseSchema):
     total: int | None = None
 
 
-async def paginate_sql[T](
+async def paginate_sql(
     session: AsyncSession,
     stmt: Select,
     *,
@@ -81,7 +83,7 @@ async def paginate_sql[T](
     )
 
 
-def paginate_sequence[T](
+def paginate_sequence(
     iterable: Iterable[T],
     *,
     page: int,

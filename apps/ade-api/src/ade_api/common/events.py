@@ -115,6 +115,8 @@ class EventRecordLog:
                     cursor += 1
                     if cursor <= skip:
                         continue
+                    if not isinstance(parsed.get("sequence"), int):
+                        parsed["sequence"] = cursor
                     yield parsed
         except FileNotFoundError:
             return

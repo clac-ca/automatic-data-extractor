@@ -159,7 +159,7 @@ async def test_background_build_executes_to_completion(
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderLogEvent(message="background log"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.11.0", engine_version="1.2.3")
         ),
     ]
 
@@ -214,7 +214,7 @@ async def test_list_builds_with_filters_and_limits(
     StubBuilder.events = [
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.11.0", engine_version="1.2.3")
         ),
     ]
     first_response = await async_client.post(
