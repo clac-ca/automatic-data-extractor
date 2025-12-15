@@ -12,14 +12,15 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
 ## End-to-end flow
 
 1. **Prepare run**  
-   `Engine.run` takes a `RunRequest` (CLI constructs this) and resolves paths via `prepare_run_request`. Output/log directories are created if they do not exist. When only `--logs-dir` is provided, a per-input log filename is derived automatically.
+   `Engine.run` takes a `RunRequest` (CLI constructs this) and resolves paths via `plan_run` (`ade_engine.io.paths`). Output/log directories are created if they do not exist. If a log file path is not provided, the engine derives a per-input log filename automatically.
 
 2. **Start logging**  
    A `RunLogger` is created with the configured format/level (`text` or `ndjson`). All engine events flow through this logger, including structured detector/transform/validator telemetry.
 
 3. **Load config package into the Registry**  
-   - The config package path is coerced to an importable package name (supports bare package dir, `src/<package>`, or a root containing `ade_config`).
-   - The package **must** expose `register(registry)`, and that function should call `registry.register_*` for every detector/transform/validator/hook/field it provides. Engine settings can optionally come from `settings.toml` or `.env`.
+   - The config package path is resolved to an importable package name (supports bare package dir, `src/<package>`, or a root containing `ade_config`).
+   - The package **must** expose `register(registry)`, and that function should call `registry.register_*` for every detector/transform/validator/hook/field it provides. The CLI (or your app) loads runtime settings from `settings.toml` / `.env` / env vars via `Settings.load(...)`.
+   - Loading is done with a scoped `sys.path` insertion and a module purge to avoid cross-run contamination when multiple packages share the same name (common with `ade_config`).
    - After registration, `registry.finalize()` sorts callables by priority and groups transforms/validators by field.
 
 4. **Process workbook**  

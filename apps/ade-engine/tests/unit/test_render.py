@@ -3,7 +3,7 @@ from __future__ import annotations
 from openpyxl import Workbook
 
 from ade_engine.pipeline.models import MappedColumn, SourceColumn, TableData
-from ade_engine.pipeline.render import render_table
+from ade_engine.pipeline.render import SheetWriter, render_table
 from ade_engine.settings import Settings
 
 
@@ -30,7 +30,7 @@ def test_render_includes_unmapped_rows_when_no_mapped_columns():
 
     render_table(
         table=table,
-        worksheet=ws,
+        writer=SheetWriter(ws),
         settings=Settings(),
         logger=DummyLogger(),
     )
@@ -67,7 +67,7 @@ def test_render_row_count_uses_longest_of_mapped_and_unmapped():
 
     render_table(
         table=table,
-        worksheet=ws,
+        writer=SheetWriter(ws),
         settings=Settings(),
         logger=DummyLogger(),
     )
