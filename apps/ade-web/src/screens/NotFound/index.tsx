@@ -1,6 +1,6 @@
 import { Link } from "@app/nav/Link";
 
-export default function NotFoundRoute() {
+export default function NotFoundScreen() {
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16 text-center">
       <div className="space-y-4">

@@ -100,7 +100,10 @@ export function useRunSessionModel({
     const artifactProcessedFile = extractProcessedFile(artifacts) ?? extractProcessedFile(completedDetails);
 
     const normalizedStatus = normalizeRunStatusValue(payloadStatus);
-    const completionStatus: RunStatus = normalizedStatus;
+    const completionStatus: RunStatus =
+      normalizedStatus === "succeeded" || normalizedStatus === "failed" || normalizedStatus === "cancelled"
+        ? normalizedStatus
+        : runStatus;
     const resolvedMode: "validation" | "extraction" = runMode ?? runMetadata?.mode ?? "extraction";
     const startedAtIso =
       payloadStartedAt ?? payloadSourceStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;

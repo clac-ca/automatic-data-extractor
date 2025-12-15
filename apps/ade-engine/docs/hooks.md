@@ -24,7 +24,7 @@ Hooks let config packages run code at specific points in the Engine lifecycle. R
 
 5. `on_table_written` — after transforms/validators and after the table is rendered to the output worksheet.
    - `sheet`: output worksheet
-   - `table.rows` contains normalized data; `table.issues` holds validation issues.
+   - `table.columns` contains the canonical column store; `table.issues_patch` contains vector-aligned issues; `table.issues` is the flattened issues list.
    - Use cases: write summaries, create additional sheets, append totals, reorder output columns.
 
 6. `on_workbook_before_save` — final hook, receives the output workbook just before `save()`.

@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import type { ConfigBuilderPane } from "@app/nav/urlState";
+import type { WorkbenchPane } from "../state/workbenchSearchParams";
 import type { RunStreamStatus } from "../state/runStream";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
@@ -13,8 +13,8 @@ interface BottomPanelProps {
   readonly height: number;
   readonly consoleLines: readonly WorkbenchConsoleLine[];
   readonly validation: WorkbenchValidationState;
-  readonly activePane: ConfigBuilderPane;
-  readonly onPaneChange: (pane: ConfigBuilderPane) => void;
+  readonly activePane: WorkbenchPane;
+  readonly onPaneChange: (pane: WorkbenchPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
   readonly runStatus?: RunStreamStatus;
@@ -56,7 +56,7 @@ export function BottomPanel({
     >
       <TabsRoot
         value={activePane}
-        onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}
+        onValueChange={(value) => onPaneChange(value as WorkbenchPane)}
       >
         <div
           className={clsx("flex flex-none items-center justify-between border-b px-3 py-1.5", theme.header)}

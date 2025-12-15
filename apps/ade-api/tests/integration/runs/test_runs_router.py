@@ -6,8 +6,8 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.time import utc_now
-from ade_api.core.models import Configuration, ConfigurationStatus, Run, RunStatus
 from ade_api.infra.storage import workspace_run_root
+from ade_api.models import Configuration, ConfigurationStatus, Run, RunStatus
 from ade_api.settings import get_settings
 from tests.utils import login
 

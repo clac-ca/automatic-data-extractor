@@ -14,7 +14,7 @@ import {
   type RoleListPage,
   type RoleCreatePayload,
   type RoleUpdatePayload,
-} from "@features/Workspace/api/workspaces-api";
+} from "@shared/workspaces";
 
 const ROLE_PAGE_SIZE = MAX_PAGE_SIZE;
 const PERMISSION_PAGE_SIZE = MAX_PAGE_SIZE;

@@ -2,7 +2,7 @@
   "include": ["src/**/*"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["node", "vite/client"],
+    "types": ["node", "vite/client", "react", "react-dom"],
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
@@ -10,7 +10,7 @@
     "baseUrl": "src",
     "paths": {
       "@app/*": ["app/*"],
-      "@features/*": ["screens/*"],
+      "@screens/*": ["screens/*"],
       "@ui/*": ["ui/*"],
       "@shared/*": ["shared/*"],
       "@schema": ["schema"],

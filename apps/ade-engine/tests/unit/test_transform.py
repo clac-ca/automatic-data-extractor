@@ -13,6 +13,7 @@ from ade_engine.logging import NullLogger
 from ade_engine.pipeline.models import MappedColumn
 from ade_engine.pipeline.transform import apply_transforms
 from ade_engine.registry import FieldDef, Registry
+from ade_engine.settings import Settings
 
 
 class SpyLogger:
@@ -26,11 +27,8 @@ class SpyLogger:
 def test_transform_applies_row_outputs_and_enforces_contract():
     registry = Registry()
 
-    def uppercase_transform(*, values, **_):
-        return [
-            {"row_index": idx, "value": {"foo": str(value).upper() if value is not None else None}}
-            for idx, value in enumerate(values)
-        ]
+    def uppercase_transform(*, column, **_):
+        return [str(value).upper() if value is not None else None for value in column]
 
     registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(uppercase_transform, field="foo", priority=0)
@@ -39,39 +37,87 @@ def test_transform_applies_row_outputs_and_enforces_contract():
     mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=["a", "b"])]
     logger = SpyLogger()
 
-    result = apply_transforms(
+    columns = {"foo": ["a", "b"]}
+    mapping = {"foo": 0}
+    patch = apply_transforms(
         mapped_columns=mapped,
+        columns=columns,
+        mapping=mapping,
         registry=registry,
+        settings=Settings(),
         state={},
         metadata={},
         input_file_name=None,
         logger=logger,
+        row_count=2,
     )
 
-    assert result == [{"foo": "A"}, {"foo": "B"}]
+    assert columns == {"foo": ["A", "B"]}
+    assert patch.issues == {}
     assert len(logger.events) == 1
-    assert logger.events[0]["kwargs"]["data"]["output_len"] == 2
+    assert logger.events[0]["kwargs"]["data"]["row_count"] == 2
 
 
 def test_transform_invalid_return_raises_pipeline_error():
     registry = Registry()
     logger = NullLogger()
 
-    def broken_transform(*, values, **_):
-        return None
+    def broken_transform(*, column, **_):
+        return column[:1]
 
     registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(broken_transform, field="foo", priority=0)
     registry.finalize()
 
     mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=[1, 2])]
+    columns = {"foo": [1, 2]}
+    mapping = {"foo": 0}
 
     with pytest.raises(PipelineError):
         apply_transforms(
             mapped_columns=mapped,
+            columns=columns,
+            mapping=mapping,
             registry=registry,
+            settings=Settings(),
             state={},
             metadata={},
             input_file_name=None,
             logger=logger,
+            row_count=2,
         )
+
+
+def test_transform_chain_passes_scalar_values_and_accumulates_patches():
+    registry = Registry()
+
+    def add_derived_field(*, column, **_):
+        return {"bar": [f"{value}-derived" if value is not None else None for value in column]}
+
+    def uppercase_transform(*, column, **_):
+        return [str(value).upper() if value is not None else None for value in column]
+
+    registry.register_field(FieldDef(name="foo"))
+    registry.register_field(FieldDef(name="bar"))
+    registry.register_column_transform(add_derived_field, field="foo", priority=10)
+    registry.register_column_transform(uppercase_transform, field="foo", priority=0)
+    registry.finalize()
+
+    mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=["a", "b"])]
+    columns = {"foo": ["a", "b"]}
+    mapping = {"foo": 0}
+
+    apply_transforms(
+        mapped_columns=mapped,
+        columns=columns,
+        mapping=mapping,
+        registry=registry,
+        settings=Settings(),
+        state={},
+        metadata={},
+        input_file_name=None,
+        logger=NullLogger(),
+        row_count=2,
+    )
+
+    assert columns == {"foo": ["A", "B"], "bar": ["a-derived", "b-derived"]}

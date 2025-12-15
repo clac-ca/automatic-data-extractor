@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
-from ade_api.app.dependencies import get_auth_service
+from ade_api.api.deps import get_auth_service
 from ade_api.common.time import utc_now
 from ade_api.core.auth.principal import PrincipalType
 from ade_api.core.security.tokens import decode_token
@@ -213,9 +213,7 @@ def _decode_access_snapshot(token: str, settings: Settings) -> SessionSnapshot:
     principal_type_raw = str(payload.get("pt") or PrincipalType.USER.value).lower()
     principal_types = {pt.value for pt in PrincipalType}
     principal_type = (
-        principal_type_raw
-        if principal_type_raw in principal_types
-        else PrincipalType.USER.value
+        principal_type_raw if principal_type_raw in principal_types else PrincipalType.USER.value
     )
 
     exp = payload.get("exp")

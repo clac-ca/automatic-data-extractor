@@ -40,7 +40,7 @@ interface SetupFormValues {
   confirmPassword: string;
 }
 
-export default function SetupRoute() {
+export default function SetupScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

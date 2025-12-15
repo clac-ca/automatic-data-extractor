@@ -18,8 +18,7 @@ __all__ = ["RunExecutionSupervisor"]
 
 
 class _RunGenerator(Protocol):
-    async def __call__(self) -> AsyncIterator[RunStreamFrame]:
-        ...
+    async def __call__(self) -> AsyncIterator[RunStreamFrame]: ...
 
 
 @dataclass(slots=True)
@@ -70,9 +69,7 @@ class RunExecutionSupervisor:
                 extra=log_context(run_id=run_id),
             )
 
-    async def _ensure_handle(
-        self, run_id: UUID, generator: _RunGenerator
-    ) -> _RunHandle:
+    async def _ensure_handle(self, run_id: UUID, generator: _RunGenerator) -> _RunHandle:
         async with self._lock:
             existing = self._handles.get(run_id)
             if existing is not None:

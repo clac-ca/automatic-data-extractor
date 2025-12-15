@@ -177,25 +177,6 @@ function registerSignatureProvider(
   });
 }
 
-/* ---------- Shared helpers ---------- */
-
-function getModelPath(model: Monaco.editor.ITextModel | undefined): string | undefined {
-  if (!model) return undefined;
-  const uri = model.uri;
-  if (!uri) return undefined;
-
-  const rawPath = uri.path || uri.toString();
-  if (!rawPath) return undefined;
-
-  const normalized = rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
-
-  if (import.meta.env?.DEV) {
-    console.debug("[ade] getModelPath", { rawPath, normalized });
-  }
-
-  return normalized;
-}
-
 function computeActiveParameter(prefix: string): number {
   const parenIndex = prefix.lastIndexOf("(");
   if (parenIndex === -1) return 0;

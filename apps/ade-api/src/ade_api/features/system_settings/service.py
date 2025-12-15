@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.logging import log_context
-from ade_api.core.models import SystemSetting
+from ade_api.models import SystemSetting
 from ade_api.settings import Settings
 
 from .schemas import SafeModeStatus

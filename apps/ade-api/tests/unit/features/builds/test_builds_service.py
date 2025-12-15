@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ade_api.common.time import utc_now
-from ade_api.core.models import Build, BuildStatus, Configuration, ConfigurationStatus, Workspace
+from ade_api.db import Base
+from ade_api.db.mixins import generate_uuid7
 from ade_api.features.builds.builder import (
     BuildArtifacts,
     BuilderArtifactsEvent,
@@ -24,9 +26,8 @@ from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision, BuildsService
 from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.runs.event_stream import RunEventStreamRegistry
-from ade_api.infra.db import Base
-from ade_api.infra.db.mixins import generate_uuid7
 from ade_api.infra.storage import build_venv_root
+from ade_api.models import Build, BuildStatus, Configuration, ConfigurationStatus, Workspace
 from ade_api.settings import Settings
 
 
@@ -66,7 +67,6 @@ class FakeBuilder:
 
         assert artifacts is not None
         return artifacts
-
 
     async def build_stream(
         self,
@@ -199,9 +199,7 @@ async def _create_configuration(
     return workspace, configuration
 
 
-async def _prepare_spec(
-    service: BuildsService, workspace: Workspace, configuration: Configuration
-):
+async def _prepare_spec(service: BuildsService, workspace: Workspace, configuration: Configuration):
     config_path = service.storage.config_path(workspace.id, configuration.id)
     (config_path / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
     (config_path / "pyproject.toml").write_text(
@@ -212,6 +210,35 @@ async def _prepare_spec(
         configuration=configuration,
         workspace_id=workspace.id,
     )
+
+
+@pytest.mark.asyncio()
+async def test_is_stale_handles_naive_datetimes(
+    session: AsyncSession,
+    service_factory,
+) -> None:
+    workspace, configuration = await _create_configuration(session)
+    service = service_factory(session, builder=FakeBuilder(events=[]))
+
+    fixed_now = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    service._now = lambda: fixed_now  # type: ignore[assignment]
+
+    timeout = service.settings.build_timeout
+
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        status=BuildStatus.QUEUED,
+        created_at=(fixed_now - timeout - timedelta(seconds=1)).replace(tzinfo=None),
+    )
+    assert service._is_stale(build) is True
+
+    build.created_at = (fixed_now - timeout + timedelta(seconds=1)).replace(tzinfo=None)
+    assert service._is_stale(build) is False
+
+    build.started_at = (fixed_now - timeout - timedelta(seconds=1)).replace(tzinfo=None)
+    assert service._is_stale(build) is True
 
 
 @pytest.mark.asyncio()
@@ -462,9 +489,7 @@ async def test_prepare_build_force_rebuild_creates_new_row(
         options=BuildCreateOptions(force=True, wait=False),
     )
 
-    total_builds = (
-        await session.execute(select(func.count()).select_from(Build))
-    ).scalar_one()
+    total_builds = (await session.execute(select(func.count()).select_from(Build))).scalar_one()
 
     assert new_build.id != existing.id
     assert new_build.status is BuildStatus.QUEUED
@@ -597,18 +622,14 @@ async def test_stream_build_join_replays_existing_and_live_events(
         configuration_id=configuration.id,
         build_id=inflight.id,
     )
-    await stream.append(
-        {
-            "event": "build.queued",
-            "payload": {"status": "queued"},
-        }
-    )
-    await stream.append(
-        {
-            "event": "build.start",
-            "payload": {"status": "building"},
-        }
-    )
+    await stream.append({
+        "event": "build.queued",
+        "payload": {"status": "queued"},
+    })
+    await stream.append({
+        "event": "build.start",
+        "payload": {"status": "building"},
+    })
 
     _, context = await service.prepare_build(
         workspace_id=workspace.id,
@@ -619,18 +640,14 @@ async def test_stream_build_join_replays_existing_and_live_events(
 
     async def emit_live_events():
         await asyncio.sleep(0)
-        await stream.append(
-            {
-                "event": "console.line",
-                "payload": {"message": "log", "stream": "stdout", "scope": "build"},
-            }
-        )
-        await stream.append(
-            {
-                "event": "build.complete",
-                "payload": {"status": "ready", "exit_code": 0},
-            }
-        )
+        await stream.append({
+            "event": "console.line",
+            "payload": {"message": "log", "stream": "stdout", "scope": "build"},
+        })
+        await stream.append({
+            "event": "build.complete",
+            "payload": {"status": "ready", "exit_code": 0},
+        })
 
     producer = asyncio.create_task(emit_live_events())
     events = [
@@ -674,9 +691,7 @@ async def test_ensure_local_env_uses_marker_when_ids_are_strings(
     session.add(build)
     await session.commit()
 
-    venv_root = build_venv_root(
-        service.settings, workspace.id, configuration.id, build.id
-    )
+    venv_root = build_venv_root(service.settings, workspace.id, configuration.id, build.id)
     marker_path = venv_root / ".venv" / "ade_build.json"
     marker_path.parent.mkdir(parents=True, exist_ok=True)
     marker_payload = {

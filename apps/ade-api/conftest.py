@@ -17,15 +17,15 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from ade_api.core.models import Role, User, UserCredential, Workspace, WorkspaceMembership
+from ade_api.models import Role, User, UserCredential, Workspace, WorkspaceMembership
 from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.hashing import hash_password
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.settings import Settings, get_settings, reload_settings
 from ade_api.app.lifecycles import ensure_runtime_dirs
-from ade_api.infra.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from ade_api.infra.db.session import get_sessionmaker
+from ade_api.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from ade_api.db.session import get_sessionmaker
 
 
 @pytest.fixture(scope="session")

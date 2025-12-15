@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import secrets
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.core.models.user import User
-from ade_api.infra.db.session import get_session as get_db_session
+from ade_api.db.session import get_session as get_db_session
+from ade_api.models.user import User
 from ade_api.settings import Settings, get_settings
 
 from ..auth import (
@@ -24,16 +26,7 @@ from ..rbac.service_interface import RbacService as RbacServiceInterface
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
-
-class _NoopApiKeyAuthenticator:
-    async def authenticate(self, _raw_token: str) -> AuthenticatedPrincipal | None:
-        return None
-
-
-class _NoopSessionAuthenticator:
-    async def authenticate(self, _request: Request) -> AuthenticatedPrincipal | None:
-        return None
-
+PermissionDependency = Callable[..., Awaitable[User]]
 
 class _RbacAdapter(RbacServiceInterface):
     """Bridge the RBAC feature service to the interface expected by dependencies."""
@@ -132,12 +125,9 @@ def get_api_key_authenticator(
 ) -> ApiKeyAuthenticator:
     """Provide the API key authenticator."""
 
-    try:
-        from ade_api.features.api_keys.service import ApiKeyService
+    from ade_api.features.api_keys.service import ApiKeyService
 
-        return ApiKeyService(session=db, settings=settings)
-    except Exception:
-        return _NoopApiKeyAuthenticator()
+    return ApiKeyService(session=db, settings=settings)
 
 
 def get_session_authenticator(
@@ -146,10 +136,7 @@ def get_session_authenticator(
 ) -> SessionAuthenticator:
     """Authenticate bearer tokens issued by the auth feature."""
 
-    try:
-        from ade_api.features.auth.service import AuthService
-    except Exception:
-        return _NoopSessionAuthenticator()
+    from ade_api.features.auth.service import AuthService
 
     class _BearerSessionAuthenticator:
         async def authenticate(self, request: Request) -> AuthenticatedPrincipal | None:
@@ -223,7 +210,7 @@ def require_permission(
     permission_key: str,
     *,
     workspace_param: str | None = None,
-):
+) -> PermissionDependency:
     """Return a dependency enforcing a specific permission."""
 
     async def dependency(
@@ -231,7 +218,7 @@ def require_permission(
         principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
         db: SessionDep,
         rbac: Annotated[RbacServiceInterface, Depends(get_rbac_service)],
-    ) -> AuthenticatedPrincipal:
+    ) -> User:
         workspace_id = None
         if workspace_param:
             candidate = request.path_params.get(workspace_param)
@@ -261,15 +248,53 @@ def require_permission(
     return dependency
 
 
-def require_global(permission_key: str):
+def require_global(permission_key: str) -> PermissionDependency:
     return require_permission(permission_key, workspace_param=None)
 
 
-def require_workspace(permission_key: str, workspace_param: str = "workspace_id"):
+def require_workspace(
+    permission_key: str, workspace_param: str = "workspace_id"
+) -> PermissionDependency:
     return require_permission(permission_key, workspace_param=workspace_param)
 
 
-async def require_csrf() -> None:
-    """No-op CSRF guard placeholder (to be implemented with session auth)."""
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
-    return None
+
+async def require_csrf(
+    request: Request,
+    settings: SettingsDep,
+    csrf_token: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+) -> None:
+    """Enforce double-submit CSRF protection for cookie-authenticated requests.
+
+    CSRF is required when the browser automatically attaches the session cookie.
+    Requests authenticated via bearer tokens or API keys skip this guard.
+    """
+
+    if request.method.upper() in _SAFE_METHODS:
+        return
+
+    auth_header = request.headers.get("authorization") or ""
+    scheme, _, token = auth_header.partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return
+
+    if (request.headers.get("x-api-key") or "").strip():
+        return
+
+    session_cookie = (request.cookies.get(settings.session_cookie_name) or "").strip()
+    if not session_cookie:
+        return
+
+    cookie_csrf = (request.cookies.get(settings.session_csrf_cookie_name) or "").strip()
+    header_csrf = (csrf_token or "").strip()
+
+    if not cookie_csrf or not header_csrf or not secrets.compare_digest(cookie_csrf, header_csrf):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "csrf_failed",
+                "message": "CSRF token missing or invalid.",
+            },
+        )

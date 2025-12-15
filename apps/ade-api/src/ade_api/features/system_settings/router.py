@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, Security, status
 
-from ade_api.app.dependencies import get_safe_mode_service
+from ade_api.api.deps import get_safe_mode_service
 from ade_api.core.http import require_authenticated, require_csrf, require_global
 
 from .schemas import SafeModeStatus, SafeModeUpdateRequest

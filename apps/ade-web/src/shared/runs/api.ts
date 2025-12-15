@@ -1,6 +1,6 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummary, components, paths } from "@schema";
+import type { components, paths } from "@schema";
 import type { RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
@@ -320,33 +320,6 @@ export async function fetchRun(
   return data as RunResource;
 }
 
-export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummary | null> {
-  // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
-  try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
-      params: { path: { run_id: runId } },
-      signal,
-    });
-    if (data) return data as RunSummary;
-  } catch (error) {
-    // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
-    console.warn("Falling back to embedded run summary", error);
-  }
-
-  const run = await fetchRun(runId, signal);
-  const summary = (run as { summary?: RunSummary | string | null })?.summary;
-  if (!summary) return null;
-  if (typeof summary === "string") {
-    try {
-      return JSON.parse(summary) as RunSummary;
-    } catch (error) {
-      console.warn("Unable to parse run summary", { error });
-      return null;
-    }
-  }
-  return summary as RunSummary;
-}
-
 export function runOutputUrl(run: RunResource): string | null {
   const output = run.output;
   const ready = output?.ready;
@@ -373,5 +346,4 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
-  summary: (runId: string) => ["run-summary", runId] as const,
 };

@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
-from ade_api.core.models.user import User, UserCredential
 from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.hashing import hash_password, verify_password
 from ade_api.core.security.tokens import (
@@ -21,6 +20,7 @@ from ade_api.core.security.tokens import (
     decode_token,
 )
 from ade_api.features.rbac import RbacService
+from ade_api.models.user import User, UserCredential
 from ade_api.settings import Settings
 
 from .schemas import (
@@ -39,7 +39,6 @@ class SessionTokens:
     refresh_token: str
     access_expires_at: datetime
     refresh_expires_at: datetime
-
 
 
 def _normalize_email(value: str) -> str:

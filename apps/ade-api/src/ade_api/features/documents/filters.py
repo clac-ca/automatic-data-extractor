@@ -11,7 +11,7 @@ from sqlalchemy.sql import Select
 from ade_api.common.filters import FilterBase
 from ade_api.common.ids import UUIDStr
 from ade_api.common.validators import normalize_utc, parse_csv_or_repeated
-from ade_api.core.models import (
+from ade_api.models import (
     DOCUMENT_SOURCE_VALUES,
     DOCUMENT_STATUS_VALUES,
     Document,

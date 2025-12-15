@@ -7,11 +7,11 @@ import io
 import secrets
 import shutil
 import subprocess
+import sys
 import zipfile
 from collections.abc import Iterable
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-import sys
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
@@ -83,7 +83,6 @@ class ConfigStorage:
         *,
         workspace_id: UUID,
         configuration_id: UUID,
-        template_id: str,
     ) -> None:
         workspace_root = self.workspace_root(workspace_id)
         destination = workspace_root / str(configuration_id)
@@ -117,9 +116,7 @@ class ConfigStorage:
         source_path = self.config_path(workspace_id, source_configuration_id)
         exists = await run_in_threadpool(source_path.is_dir)
         if not exists:
-            raise ConfigSourceNotFoundError(
-                f"Configuration '{source_configuration_id}' not found"
-            )
+            raise ConfigSourceNotFoundError(f"Configuration '{source_configuration_id}' not found")
         await self._materialize_from_source(
             source=source_path,
             workspace_id=workspace_id,
@@ -130,9 +127,7 @@ class ConfigStorage:
         path = self.config_path(workspace_id, configuration_id)
         exists = await run_in_threadpool(path.is_dir)
         if not exists:
-            raise ConfigStorageNotFoundError(
-                f"Configuration files missing for {configuration_id}"
-            )
+            raise ConfigStorageNotFoundError(f"Configuration files missing for {configuration_id}")
         return path
 
     async def import_archive(
@@ -264,8 +259,8 @@ class ConfigStorage:
         self,
         *,
         source: Path,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> None:
         workspace_root = self.workspace_root(workspace_id)
         destination = workspace_root / str(configuration_id)
@@ -304,9 +299,7 @@ class ConfigStorage:
     async def _publish_stage(self, staging: Path, destination: Path) -> None:
         def _publish() -> None:
             if destination.exists():
-                raise ConfigPublishConflictError(
-                    f"Destination '{destination}' already exists"
-                )
+                raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
             staging.replace(destination)
 
         await run_in_threadpool(_publish)
@@ -334,9 +327,7 @@ class ConfigStorage:
         if result.returncode != 0:
             message_src = result.stderr.strip() or result.stdout.strip()
             message = message_src.splitlines()[0] if message_src else "Config init failed"
-            raise ConfigSourceInvalidError(
-                [ConfigValidationIssue(path=".", message=message)]
-            )
+            raise ConfigSourceInvalidError([ConfigValidationIssue(path=".", message=message)])
 
 
 def _calculate_digest(root: Path) -> str:
@@ -440,6 +431,8 @@ def _normalize_archive_member(name: str) -> PurePosixPath | None:
 
 
 __all__ = ["ConfigStorage", "compute_config_digest"]
+
+
 def compute_config_digest(root: Path) -> str:
     """Public helper to hash a configuration source tree (excluding .venv)."""
 

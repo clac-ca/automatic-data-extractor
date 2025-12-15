@@ -64,25 +64,13 @@ def detect_last_name_values(
     return {"last_name": score}
 
 
-def normalize_last_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "value": {"last_name": ...}}, ...]`."""
-
-    return [
-        {
-            "row_index": idx,
-            "value": {
-                "last_name": (None if v is None else str(v).strip() or None),
-            },
-        }
-        for idx, v in enumerate(values)
-    ]
+def normalize_last_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Any]:
+    return [(None if v is None else str(v).strip() or None) for v in column]
 
 
-def validate_last_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "message": str}, ...]` for invalid cells."""
-
+def validate_last_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(values):
+    for idx, v in enumerate(column):
         s = "" if v is None else str(v).strip()
         if s and len(s) > 80:
             issues.append({

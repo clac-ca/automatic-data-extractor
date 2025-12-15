@@ -4,10 +4,10 @@ from typing import Any, List
 
 from openpyxl.worksheet.worksheet import Worksheet
 
-from ade_engine.pipeline.detect_rows import detect_table_bounds
+from ade_engine.pipeline.detect_rows import TableRegion, detect_table_regions
 from ade_engine.pipeline.detect_columns import detect_and_map_columns, build_source_columns
 from ade_engine.pipeline.transform import apply_transforms
-from ade_engine.pipeline.validate import apply_validators
+from ade_engine.pipeline.validate import apply_validators, flatten_issues_patch
 from ade_engine.pipeline.render import render_table
 from ade_engine.pipeline.models import TableData
 from ade_engine.registry.models import HookName
@@ -32,10 +32,10 @@ class Pipeline:
         state: dict,
         metadata: dict,
         input_file_name: str | None = None,
-        table_index: int = 0,
-    ) -> TableData:
+    ) -> list[TableData]:
         rows: List[List[Any]] = self._materialize_rows(sheet)
-        header_idx, data_start_idx, data_end_idx = detect_table_bounds(
+
+        table_regions = detect_table_regions(
             sheet_name=sheet.title,
             rows=rows,
             registry=self.registry,
@@ -44,8 +44,40 @@ class Pipeline:
             input_file_name=input_file_name,
             logger=self.logger,
         )
-        header_row = rows[header_idx] if header_idx < len(rows) else []
-        data_rows = rows[data_start_idx:data_end_idx]
+
+        tables: list[TableData] = []
+        for table_index, region in enumerate(table_regions):
+            if table_index > 0:
+                output_sheet.append([])
+            tables.append(
+                self._process_table(
+                    sheet=sheet,
+                    output_sheet=output_sheet,
+                    rows=rows,
+                    region=region,
+                    state=state,
+                    metadata=metadata,
+                    input_file_name=input_file_name,
+                    table_index=table_index,
+                )
+            )
+
+        return tables
+
+    def _process_table(
+        self,
+        *,
+        sheet: Worksheet,
+        output_sheet: Worksheet,
+        rows: List[List[Any]],
+        region: TableRegion,
+        state: dict,
+        metadata: dict,
+        input_file_name: str | None,
+        table_index: int,
+    ) -> TableData:
+        header_row = rows[region.header_row_index] if region.header_row_index < len(rows) else []
+        data_rows = rows[region.data_start_row_index:region.data_end_row_index]
 
         source_cols = build_source_columns(header_row, data_rows)
         mapped_cols, unmapped_cols = detect_and_map_columns(
@@ -61,8 +93,9 @@ class Pipeline:
 
         table = TableData(
             sheet_name=sheet.title,
-            header_row_index=header_idx,
+            header_row_index=region.header_row_index,
             source_columns=source_cols,
+            table_index=table_index,
             mapped_columns=mapped_cols,
             unmapped_columns=unmapped_cols,
         )
@@ -91,32 +124,60 @@ class Pipeline:
             logger=self.logger,
         )
 
-        transformed_rows = apply_transforms(
-            mapped_columns=table.mapped_columns,
-            registry=self.registry,
-            state=state,
-            metadata=metadata,
-            input_file_name=input_file_name,
-            logger=self.logger,
-        )
-        table.rows = transformed_rows
+        row_count = len(data_rows)
+        table.row_count = row_count
+        table.columns = {col.field_name: list(col.values) for col in table.mapped_columns}
+        table.mapping = {col.field_name: col.source_index for col in table.mapped_columns}
 
-        issues = apply_validators(
+        transform_patch = apply_transforms(
             mapped_columns=table.mapped_columns,
-            transformed_rows=transformed_rows,
+            columns=table.columns,
+            mapping=table.mapping,
+            registry=self.registry,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            logger=self.logger,
+            row_count=row_count,
+        )
+        table.issues_patch = transform_patch.issues
+
+        issues_patch = apply_validators(
+            mapped_columns=table.mapped_columns,
+            columns=table.columns,
+            mapping=table.mapping,
             registry=self.registry,
             state=state,
             metadata=metadata,
             input_file_name=input_file_name,
             logger=self.logger,
+            row_count=row_count,
+            initial_issues=transform_patch.issues,
         )
-        table.issues = issues
+        table.issues_patch = issues_patch
+        table.issues = flatten_issues_patch(
+            issues_patch=issues_patch,
+            columns=table.columns,
+            mapping=table.mapping,
+        )
+
+        mapped_fields = [col.field_name for col in table.mapped_columns]
+        derived_fields: list[str] = []
+        if self.settings.render_derived_fields:
+            mapped_set = set(mapped_fields)
+            for field in self.registry.fields.keys():
+                if field in mapped_set:
+                    continue
+                if field in table.columns:
+                    derived_fields.append(field)
+        field_order = [*mapped_fields, *derived_fields]
 
         render_table(
             table=table,
             worksheet=output_sheet,
             settings=self.settings,
-            table_index=table_index,
+            field_order=field_order,
             logger=self.logger,
         )
 

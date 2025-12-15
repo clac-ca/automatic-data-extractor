@@ -4,7 +4,7 @@ import { useNavigate } from "@app/nav/history";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 
 import { useConfigurationQuery } from "@shared/configurations";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";

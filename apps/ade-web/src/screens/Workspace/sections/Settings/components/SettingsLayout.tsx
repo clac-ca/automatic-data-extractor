@@ -107,7 +107,7 @@ export function SettingsLayout({
                   <p className="px-1 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-slate-400">
                     {group.label}
                   </p>
-                  <ul className="space-y-1" role="list">
+                  <ul className="space-y-1">
                     {group.items.map((item) => {
                       const isActive = item.id === activeSectionId;
                       const toneClasses =

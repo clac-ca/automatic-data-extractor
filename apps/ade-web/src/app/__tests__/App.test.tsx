@@ -3,15 +3,15 @@ import { render, screen } from "@test/test-utils";
 
 import { ScreenSwitch, normalizePathname } from "../App";
 
-vi.mock("@features/Home", () => ({ default: () => <div data-testid="home-screen">home</div> }));
-vi.mock("@features/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));
-vi.mock("@features/AuthCallback", () => ({ default: () => <div data-testid="auth-callback-screen">auth</div> }));
-vi.mock("@features/Setup", () => ({ default: () => <div data-testid="setup-screen">setup</div> }));
-vi.mock("@features/Workspaces", () => ({ default: () => <div data-testid="workspaces-screen">workspaces</div> }));
-vi.mock("@features/Workspaces/New", () => ({ default: () => <div data-testid="workspace-new-screen">new</div> }));
-vi.mock("@features/Workspace", () => ({ default: () => <div data-testid="workspace-screen">workspace</div> }));
-vi.mock("@features/Logout", () => ({ default: () => <div data-testid="logout-screen">logout</div> }));
-vi.mock("@features/NotFound", () => ({ default: () => <div data-testid="not-found-screen">not-found</div> }));
+vi.mock("@screens/Home", () => ({ default: () => <div data-testid="home-screen">home</div> }));
+vi.mock("@screens/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));
+vi.mock("@screens/AuthCallback", () => ({ default: () => <div data-testid="auth-callback-screen">auth</div> }));
+vi.mock("@screens/Setup", () => ({ default: () => <div data-testid="setup-screen">setup</div> }));
+vi.mock("@screens/Workspaces", () => ({ default: () => <div data-testid="workspaces-screen">workspaces</div> }));
+vi.mock("@screens/Workspaces/New", () => ({ default: () => <div data-testid="workspace-new-screen">new</div> }));
+vi.mock("@screens/Workspace", () => ({ default: () => <div data-testid="workspace-screen">workspace</div> }));
+vi.mock("@screens/Logout", () => ({ default: () => <div data-testid="logout-screen">logout</div> }));
+vi.mock("@screens/NotFound", () => ({ default: () => <div data-testid="not-found-screen">not-found</div> }));
 
 function renderAt(path: string) {
   window.history.replaceState(null, "", path);

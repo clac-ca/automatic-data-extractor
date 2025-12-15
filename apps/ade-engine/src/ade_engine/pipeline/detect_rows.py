@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from ade_engine.exceptions import PipelineError
 from ade_engine.registry.invoke import call_extension
@@ -12,20 +13,28 @@ from ade_engine.registry.registry import Registry
 from ade_engine.logging import RunLogger
 
 
+@dataclass(frozen=True)
+class TableRegion:
+    header_row_index: int
+    data_start_row_index: int
+    data_end_row_index: int
+    header_inferred: bool = False
+
+
 def _classify_rows(
     *,
     sheet_name: str,
-    rows: List[List[Any]],
+    rows: list[list[Any]],
     registry: Registry,
     state: dict,
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> Tuple[Dict[int, Dict[str, float]], List[str]]:
+) -> tuple[dict[int, dict[str, float]], list[str]]:
     """Run row detectors and return per-row scores and winning classification."""
 
-    scores: Dict[int, Dict[str, float]] = {}
-    classifications: List[str] = []
+    scores: dict[int, dict[str, float]] = {}
+    classifications: list[str] = []
 
     for row_idx, row_values in enumerate(rows):
         detectors_run: list[dict[str, Any]] = []
@@ -122,25 +131,60 @@ def _classify_rows(
     return scores, classifications
 
 
-def detect_table_bounds(
+def _is_row_empty(row: list[Any]) -> bool:
+    return not any(cell not in (None, "") for cell in row)
+
+
+def _pick_best_header_row_index(
+    *,
+    rows: list[list[Any]],
+    scores: dict[int, dict[str, float]],
+    classifications: list[str],
+) -> int:
+    total_rows = len(classifications)
+    if total_rows == 0:
+        return 0
+
+    best_index = 0
+    best_score = float("-inf")
+    for idx in range(total_rows):
+        header_score = scores.get(idx, {}).get(RowKind.HEADER.value, 0.0)
+        if header_score > best_score:
+            best_score = header_score
+            best_index = idx
+
+    # If still no positive signal, choose first non-empty row.
+    if best_score <= 0.0:
+        for idx in range(total_rows):
+            if not _is_row_empty(rows[idx]):
+                return idx
+
+    return best_index
+
+
+def detect_table_regions(
     *,
     sheet_name: str,
-    rows: List[List[Any]],
+    rows: list[list[Any]],
     registry: Registry,
     state: dict,
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> Tuple[int, int, int]:
-    """Locate header row and data bounds using row classification sequence.
+) -> list[TableRegion]:
+    """Detect all table regions in a sheet.
 
-    Rules:
-    - Use existing scoring/classification per row.
-    - The first encountered header marks the header row; if a data row arrives
-      before any header, assume the row immediately above is the header.
-    - Data extends from the header row + 1 until the next header row (exclusive),
-      or the end of the sheet if no subsequent header is found.
+    A table is defined as:
+    - a header row (detected or inferred),
+    - followed by rows until the next header (exclusive) or end of sheet.
     """
+
+    if not rows:
+        return []
+
+    # If the sheet contains only empty rows, treat it as having no tables.
+    if all(_is_row_empty(row) for row in rows):
+        return []
 
     scores, classifications = _classify_rows(
         sheet_name=sheet_name,
@@ -151,11 +195,26 @@ def detect_table_bounds(
         input_file_name=input_file_name,
         logger=logger,
     )
-    total_rows = len(classifications)
 
-    header_idx = None
+    total_rows = len(classifications)
+    tables: list[TableRegion] = []
+
+    header_idx: int | None = None
     header_inferred_from_data = False
-    data_end_idx = total_rows
+
+    def close_table(*, end_idx: int) -> None:
+        nonlocal header_idx, header_inferred_from_data
+        if header_idx is None:
+            return
+        data_start_idx = min(header_idx + 1, total_rows)
+        tables.append(
+            TableRegion(
+                header_row_index=header_idx,
+                data_start_row_index=data_start_idx,
+                data_end_row_index=end_idx,
+                header_inferred=header_inferred_from_data,
+            )
+        )
 
     for idx, kind in enumerate(classifications):
         if header_idx is None:
@@ -163,77 +222,67 @@ def detect_table_bounds(
                 header_idx = idx
                 header_inferred_from_data = False
             elif kind == RowKind.DATA.value and idx > 0:
-                header_idx = idx - 1
+                inferred_header = idx - 1
+                # Avoid inferring an empty header row; fall back to treating the
+                # current row as the header when the row above is empty.
+                header_idx = inferred_header if not _is_row_empty(rows[inferred_header]) else idx
                 header_inferred_from_data = True
-        else:
-            if kind == RowKind.HEADER.value and idx > header_idx:
-                if header_inferred_from_data:
-                    # Upgrade to a concrete header and restart data tracking.
-                    header_idx = idx
-                    header_inferred_from_data = False
-                    continue
-                data_end_idx = idx
-                break
+            continue
 
-    # Fallback: use best header score (original heuristic) if we still don't have a header.
-    if header_idx is None:
-        best_index = 0
-        best_score = float("-inf")
-        for idx in range(total_rows):
-            header_score = scores.get(idx, {}).get(RowKind.HEADER.value, 0.0)
-            if header_score > best_score:
-                best_score = header_score
-                best_index = idx
-        header_idx = best_index
+        if kind == RowKind.HEADER.value and idx > header_idx:
+            if header_inferred_from_data:
+                # Upgrade to a concrete header and restart data tracking.
+                header_idx = idx
+                header_inferred_from_data = False
+                continue
 
-        # If still no positive signal, choose first non-empty row.
-        if best_score <= 0.0:
-            for idx in range(total_rows):
-                row = rows[idx]
-                if any(cell not in (None, "") for cell in row):
-                    header_idx = idx
-                    break
+            close_table(end_idx=idx)
+            header_idx = idx
+            header_inferred_from_data = False
 
-    data_start_idx = min(header_idx + 1, total_rows)
+    if header_idx is not None:
+        close_table(end_idx=total_rows)
+
+    if not tables:
+        header_idx = _pick_best_header_row_index(rows=rows, scores=scores, classifications=classifications)
+        data_start_idx = min(header_idx + 1, total_rows)
+        tables.append(
+            TableRegion(
+                header_row_index=header_idx,
+                data_start_row_index=data_start_idx,
+                data_end_row_index=total_rows,
+                header_inferred=False,
+            )
+        )
 
     if logger.isEnabledFor(logging.DEBUG):
+        sheet_index = int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0
+        input_file = str(metadata.get("input_file") or "") if isinstance(metadata, dict) else ""
         logger.event(
-            "row_detector.summary",
+            "sheet.tables_detected",
             level=logging.DEBUG,
             data={
                 "sheet_name": sheet_name,
-                "header_row_index": header_idx,
-                "header_score": scores.get(header_idx, {}).get(RowKind.HEADER.value, 0.0),
-                "data_start_index": data_start_idx,
-                "data_end_index": data_end_idx,
-                "scores": {idx: patch for idx, patch in scores.items() if patch},
+                "sheet_index": sheet_index,
+                "input_file": input_file,
+                "row_count": total_rows,
+                "table_count": len(tables),
+                "tables": [
+                    {
+                        "table_index": i,
+                        "region": {
+                            "header_row_index": t.header_row_index,
+                            "data_start_row_index": t.data_start_row_index,
+                            "data_end_row_index": t.data_end_row_index,
+                            "header_inferred": t.header_inferred,
+                        },
+                    }
+                    for i, t in enumerate(tables)
+                ],
             },
         )
 
-    return header_idx, data_start_idx, data_end_idx
+    return tables
 
 
-def detect_header_row(
-    *,
-    sheet_name: str,
-    rows: List[List[Any]],
-    registry: Registry,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger: RunLogger,
-) -> int:
-    """Backward-compatible helper returning only the header index."""
-    header_idx, _, _ = detect_table_bounds(
-        sheet_name=sheet_name,
-        rows=rows,
-        registry=registry,
-        state=state,
-        metadata=metadata,
-        input_file_name=input_file_name,
-        logger=logger,
-    )
-    return header_idx
-
-
-__all__ = ["detect_header_row", "detect_table_bounds"]
+__all__ = ["TableRegion", "detect_table_regions"]

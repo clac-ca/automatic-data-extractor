@@ -224,23 +224,30 @@ export function GlobalSearchField({
               type="search"
               value={query}
               onChange={(event) => handleSearchChange(event.target.value)}
-            onFocus={() => {
-              setIsFocused(true);
-              onFocus?.();
-              // keep highlight stable if no suggestions
-              if (!hasSuggestions) {
-                setHighlightedSuggestion(0);
+              role="combobox"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              onFocus={() => {
+                setIsFocused(true);
+                onFocus?.();
+                if (!hasSuggestions) {
+                  setHighlightedSuggestion(0);
                 }
               }}
-            onBlur={() => {
-              setIsFocused(false);
-              onBlur?.();
-            }}
+              onBlur={() => {
+                setIsFocused(false);
+                onBlur?.();
+              }}
               onKeyDown={handleSearchKeyDown}
               placeholder={placeholder}
               className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none"
               aria-expanded={showDropdown}
               aria-controls={showDropdown ? suggestionsListId : undefined}
+              aria-activedescendant={
+                showDropdown && hasSuggestions
+                  ? `${suggestionsListId}-option-${highlightedSuggestion}`
+                  : undefined
+              }
             />
           </div>
           <div className="flex items-center gap-1">
@@ -281,6 +288,7 @@ export function GlobalSearchField({
                 return (
                   <li key={suggestion.id}>
                     <button
+                      id={`${suggestionsListId}-option-${index}`}
                       type="button"
                       role="option"
                       aria-selected={active}

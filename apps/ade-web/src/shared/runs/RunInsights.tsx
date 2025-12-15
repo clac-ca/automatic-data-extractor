@@ -1,20 +1,21 @@
 import type { RunSummary } from "@schema";
 import type { RunStreamEvent } from "@shared/runs/types";
 
-export function RunSummaryView({ summary }: { summary: RunSummary }) {
+export function RunSummaryView({ summary }: { summary: Partial<RunSummary> }) {
   const counts = summary.counts;
-  const totalIssues = summary.validation.issues_total;
+  const totalIssues = summary.validation?.issues_total;
   const fields = summary.fields ?? [];
   const columns = summary.columns ?? [];
   const topFields = fields.slice(0, 6);
   const topColumns = columns.slice(0, 5);
+  const issuesIntent = typeof totalIssues === "number" ? (totalIssues > 0 ? "warn" : "ok") : "default";
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Metric label="Tables" value={counts.tables?.total ?? "—"} />
-        <Metric label="Rows" value={counts.rows.total ?? "—"} />
-        <Metric label="Mapped fields" value={counts.fields.mapped} />
-        <Metric label="Issues" value={totalIssues} intent={totalIssues > 0 ? "warn" : "ok"} />
+        <Metric label="Tables" value={counts?.tables?.total ?? "—"} />
+        <Metric label="Rows" value={counts?.rows?.total ?? "—"} />
+        <Metric label="Mapped fields" value={counts?.fields?.mapped ?? "—"} />
+        <Metric label="Issues" value={totalIssues ?? "—"} intent={issuesIntent} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded border border-slate-200 bg-white px-3 py-2">
@@ -62,7 +63,8 @@ export function RunSummaryView({ summary }: { summary: RunSummary }) {
             </ul>
           )}
           <div className="mt-2 text-[11px] text-slate-600">
-            Distinct headers mapped: {counts.columns.distinct_headers_mapped} / {counts.columns.distinct_headers}
+            Distinct headers mapped: {counts?.columns?.distinct_headers_mapped ?? "—"} /{" "}
+            {counts?.columns?.distinct_headers ?? "—"}
           </div>
         </div>
       </div>
@@ -103,13 +105,14 @@ export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
             className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800"
           >
             {(() => {
-              const payload = payloadOf(event);
               const message = typeof event.message === "string" ? event.message.trim() : undefined;
               return (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{event.event}</span>
-                    <span className="text-[11px] text-slate-500">{formatTimestamp(event.timestamp)}</span>
+                    <span className="text-[11px] text-slate-500">
+                      {formatTimestamp(event.timestamp ?? event.created_at ?? "unknown")}
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-600">
                     {message ? message : `Level: ${levelFor(event)}`}

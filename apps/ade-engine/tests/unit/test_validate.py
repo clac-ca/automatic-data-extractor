@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from ade_engine.exceptions import PipelineError
 from ade_engine.logging import NullLogger
 from ade_engine.pipeline.models import MappedColumn
-from ade_engine.pipeline.validate import apply_validators
+from ade_engine.pipeline.validate import apply_validators, flatten_issues_patch
 from ade_engine.registry import FieldDef, Registry
 
 
@@ -23,9 +23,9 @@ def test_validator_returns_issue_list():
     registry = Registry()
     logger = NullLogger()
 
-    def validator(*, values, **_):
+    def validator(*, column, **_):
         issues = []
-        for idx, value in enumerate(values):
+        for idx, value in enumerate(column):
             if value == "bad":
                 issues.append({"row_index": idx, "message": "bad value"})
         return issues
@@ -35,20 +35,33 @@ def test_validator_returns_issue_list():
     registry.finalize()
 
     mapped = [_mapped_column()]
-    transformed_rows = [{"foo": "ok"}, {"foo": "bad"}]
+    columns = {"foo": ["ok", "bad"]}
+    mapping = {"foo": 0}
 
-    issues = apply_validators(
+    issues_patch = apply_validators(
         mapped_columns=mapped,
-        transformed_rows=transformed_rows,
+        columns=columns,
+        mapping=mapping,
         registry=registry,
         state={},
         metadata={},
         input_file_name=None,
         logger=logger,
+        row_count=2,
     )
 
+    issues = flatten_issues_patch(issues_patch=issues_patch, columns=columns, mapping=mapping)
     assert issues == [
-        {"field": "foo", "row_index": 1, "column_index": 0, "message": "bad value", "value": "bad"}
+        {
+            "field": "foo",
+            "row_index": 1,
+            "message": "bad value",
+            "severity": None,
+            "code": None,
+            "meta": None,
+            "value": "bad",
+            "column_index": 0,
+        }
     ]
 
 
@@ -56,7 +69,7 @@ def test_validator_invalid_shape_raises():
     registry = Registry()
     logger = NullLogger()
 
-    def bad_validator(*, values, **_):
+    def bad_validator(*, column, **_):
         return {"row_index": 0, "message": "oops"}
 
     registry.register_field(FieldDef(name="foo"))
@@ -64,15 +77,18 @@ def test_validator_invalid_shape_raises():
     registry.finalize()
 
     mapped = [_mapped_column()]
-    transformed_rows = [{"foo": "ok"}, {"foo": "bad"}]
+    columns = {"foo": ["ok", "bad"]}
+    mapping = {"foo": 0}
 
     with pytest.raises(PipelineError):
         apply_validators(
             mapped_columns=mapped,
-            transformed_rows=transformed_rows,
+            columns=columns,
+            mapping=mapping,
             registry=registry,
             state={},
             metadata={},
             input_file_name=None,
             logger=logger,
+            row_count=2,
         )

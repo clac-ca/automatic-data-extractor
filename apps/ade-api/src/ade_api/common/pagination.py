@@ -22,9 +22,7 @@ class PageParams(BaseSchema):
         DEFAULT_PAGE_SIZE,
         description=f"Items per page (max {MAX_PAGE_SIZE})",
     )
-    include_total: bool = Field(
-        False, description="Include total item count for the query"
-    )
+    include_total: bool = Field(False, description="Include total item count for the query")
 
 
 class Page[T](BaseSchema):
@@ -59,21 +57,15 @@ async def paginate_sql[T](
             and getattr(session.bind.dialect, "name", None) == "postgresql"
         ):
             await session.execute(
-                text(
-                    f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}"
-                )
+                text(f"SET LOCAL statement_timeout = {int(COUNT_STATEMENT_TIMEOUT_MS)}")
             )
         count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
         total = (await session.execute(count_stmt)).scalar_one()
-        result = await session.execute(
-            ordered_stmt.limit(page_size).offset(offset)
-        )
+        result = await session.execute(ordered_stmt.limit(page_size).offset(offset))
         rows = result.scalars().all()
         has_next = (page * page_size) < total
     else:
-        result = await session.execute(
-            ordered_stmt.limit(page_size + 1).offset(offset)
-        )
+        result = await session.execute(ordered_stmt.limit(page_size + 1).offset(offset))
         rows = result.scalars().all()
         has_next = len(rows) > page_size
         rows = rows[:page_size]

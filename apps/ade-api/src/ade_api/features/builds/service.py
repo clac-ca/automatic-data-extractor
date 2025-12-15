@@ -7,7 +7,7 @@ import json
 import logging
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,32 +18,33 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.events import (
+    EventRecord,
+    ensure_event_context,
+    new_event_record,
+)
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
-from ade_api.core.models import Build, BuildStatus, Configuration
+from ade_api.common.validators import normalize_utc
 from ade_api.features.builds.fingerprint import compute_build_fingerprint
+from ade_api.features.configs.deps import compute_dependency_digest
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.configs.deps import compute_dependency_digest
 from ade_api.features.configs.storage import ConfigStorage
+from ade_api.features.runs.event_stream import (
+    RunEventContext,
+    RunEventStream,
+    RunEventStreamRegistry,
+)
 from ade_api.infra.storage import (
     build_venv_marker_path,
     build_venv_path,
     build_venv_root,
     workspace_run_root,
 )
-from ade_api.features.runs.event_stream import (
-    RunEventContext,
-    RunEventStream,
-    RunEventStreamRegistry,
-)
-from ade_api.schemas.event_record import (
-    EventRecord,
-    ensure_event_context,
-    new_event_record,
-)
+from ade_api.models import Build, BuildStatus, Configuration
 from ade_api.settings import Settings
 
 from .builder import (
@@ -178,7 +179,7 @@ class BuildsService:
         settings: Settings,
         storage: ConfigStorage,
         builder: VirtualEnvironmentBuilder | None = None,
-        now: callable[[], datetime] = utc_now,
+        now: Callable[[], datetime] = utc_now,
         event_streams: RunEventStreamRegistry | None = None,
     ) -> None:
         self._session = session
@@ -298,9 +299,8 @@ class BuildsService:
         context: BuildExecutionContext,
         options: BuildCreateOptions,
     ) -> AsyncIterator[EventRecord]:
-        timeout_seconds = (
-            context.timeout_seconds
-            or float(self._settings.build_timeout.total_seconds())
+        timeout_seconds = context.timeout_seconds or float(
+            self._settings.build_timeout.total_seconds()
         )
         decision = context.decision
         logger.debug(
@@ -518,7 +518,7 @@ class BuildsService:
                     ),
                     run_id=context.run_id,
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             build = await self._require_build(context.build_id)
             timeout_message = f"Build timed out after {timeout_seconds:.0f}s"
             await self._handle_failure(
@@ -706,14 +706,11 @@ class BuildsService:
                 config_path=config_path,
                 engine_spec=build.engine_spec or self._settings.engine_spec,
                 pip_cache_dir=(
-                    Path(self._settings.pip_cache_dir)
-                    if self._settings.pip_cache_dir
-                    else None
+                    Path(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None
                 ),
                 python_bin=build.python_interpreter or self._resolve_python_interpreter(),
                 timeout=float(self._settings.build_timeout.total_seconds()),
                 fingerprint=build.fingerprint or "",
-
             )
 
             logger.info(
@@ -730,9 +727,7 @@ class BuildsService:
     async def get_build(self, build_id: UUID) -> Build | None:
         return await self._builds.get(build_id)
 
-    async def get_build_or_raise(
-        self, build_id: UUID, workspace_id: UUID | None = None
-    ) -> Build:
+    async def get_build_or_raise(self, build_id: UUID, workspace_id: UUID | None = None) -> Build:
         build = await self._builds.get(build_id)
         if build is None:
             logger.warning(
@@ -841,8 +836,8 @@ class BuildsService:
                 return
 
         async def _run_detached() -> None:
+            from ade_api.db.session import get_sessionmaker
             from ade_api.features.configs.storage import ConfigStorage
-            from ade_api.infra.db.session import get_sessionmaker
 
             session_factory = get_sessionmaker(settings=self._settings)
             async with session_factory() as session:
@@ -1126,10 +1121,15 @@ class BuildsService:
             ),
             python_bin=build.python_interpreter or self._resolve_python_interpreter(),
             engine_spec=build.engine_spec or self._settings.engine_spec,
-            engine_version_hint=build.engine_version or self._resolve_engine_version(self._settings.engine_spec),
-            pip_cache_dir=str(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None,
+            engine_version_hint=build.engine_version
+            or self._resolve_engine_version(self._settings.engine_spec),
+            pip_cache_dir=str(self._settings.pip_cache_dir)
+            if self._settings.pip_cache_dir
+            else None,
             timeout_seconds=float(self._settings.build_timeout.total_seconds()),
-            decision=BuildDecision.START_NEW if build.status is BuildStatus.QUEUED else BuildDecision.JOIN_INFLIGHT,
+            decision=BuildDecision.START_NEW
+            if build.status is BuildStatus.QUEUED
+            else BuildDecision.JOIN_INFLIGHT,
             fingerprint=build.fingerprint,
             reason=reason,
             run_id=run_id,
@@ -1257,7 +1257,9 @@ class BuildsService:
             return
 
         timeout_ctx = (
-            asyncio.timeout(timeout_seconds) if timeout_seconds and timeout_seconds > 0 else nullcontext()
+            asyncio.timeout(timeout_seconds)
+            if timeout_seconds and timeout_seconds > 0
+            else nullcontext()
         )
         async with timeout_ctx:
             async with self.subscribe_to_events(build) as subscription:
@@ -1440,25 +1442,6 @@ class BuildsService:
         )
         return build
 
-    async def _wait_for_build(
-        self,
-        *,
-        workspace_id: UUID,
-        configuration_id: UUID,
-        fingerprint: str | None = None,
-    ) -> None:
-        # Simplified orchestration: no blocking waits; callers decide whether to
-        # allow inflight builds. This hook is kept for compatibility/logging.
-        logger.debug(
-            "build.wait_for_existing.skip",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                fingerprint=fingerprint,
-            ),
-        )
-        return None
-
     def _resolve_engine_version(self, spec: str) -> str | None:
         path = Path(spec)
         if path.exists() and path.is_dir():
@@ -1517,9 +1500,8 @@ class BuildsService:
         run_id: UUID | None,
     ) -> BuildExecutionContext:
         spec = resolution.spec
-        reuse_summary = (
-            resolution.reuse_summary
-            or ("Reused existing build" if resolution.decision is BuildDecision.REUSE_READY else None)
+        reuse_summary = resolution.reuse_summary or (
+            "Reused existing build" if resolution.decision is BuildDecision.REUSE_READY else None
         )
 
         return BuildExecutionContext(
@@ -1538,7 +1520,9 @@ class BuildsService:
             python_bin=spec.python_bin,
             engine_spec=spec.engine_spec,
             engine_version_hint=spec.engine_version_hint,
-            pip_cache_dir=str(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None,
+            pip_cache_dir=str(self._settings.pip_cache_dir)
+            if self._settings.pip_cache_dir
+            else None,
             timeout_seconds=float(self._settings.build_timeout.total_seconds()),
             decision=resolution.decision,
             fingerprint=spec.fingerprint,
@@ -1582,11 +1566,13 @@ class BuildsService:
     def _is_stale(self, build: Build) -> bool:
         """Return True if a build has exceeded the configured timeout window."""
 
-        horizon = self._now() - self._settings.build_timeout
-        started_or_created = build.started_at or build.created_at
+        horizon = normalize_utc(self._now()) - self._settings.build_timeout
+        started_or_created = normalize_utc(build.started_at or build.created_at)
         return started_or_created < horizon if started_or_created else False
 
-    async def _fail_stale_build(self, build: Build, *, reason: str = "Stale build timed out") -> None:
+    async def _fail_stale_build(
+        self, build: Build, *, reason: str = "Stale build timed out"
+    ) -> None:
         if build.status not in (BuildStatus.QUEUED, BuildStatus.BUILDING):
             return
         if not self._is_stale(build):
@@ -1609,7 +1595,8 @@ class BuildsService:
     def _epoch_seconds(self, dt: datetime | None) -> int | None:
         if dt is None:
             return None
-        return int(dt.timestamp())
+        normalized = normalize_utc(dt)
+        return int(normalized.timestamp()) if normalized else None
 
     @staticmethod
     def _hydration_key(build: Build) -> tuple[UUID, UUID, UUID]:

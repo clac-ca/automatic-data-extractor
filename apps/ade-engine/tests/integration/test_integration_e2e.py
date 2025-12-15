@@ -59,16 +59,12 @@ def detect_name(*, header, **_):
         return {"name": 1.0}
     return None
 
-def normalize_email(*, values, **_):
-    results = []
-    for idx, value in enumerate(values):
-        normalized = str(value).lower() if value is not None else None
-        results.append({"row_index": idx, "value": {"email": normalized}})
-    return results
+def normalize_email(*, column, **_):
+    return [str(value).lower() if value is not None else None for value in column]
 
-def validate_email(*, values, **_):
+def validate_email(*, column, **_):
     issues = []
-    for idx, v in enumerate(values):
+    for idx, v in enumerate(column):
         if v and "@" not in str(v):
             issues.append({"row_index": idx, "message": "invalid email"})
     return issues

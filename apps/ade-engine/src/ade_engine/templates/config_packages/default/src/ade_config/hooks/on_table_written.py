@@ -27,9 +27,10 @@ def on_table_written(
     """Called after a table has been written to the output workbook."""
 
     if logger and table:
+        row_count = getattr(table, "row_count", None)
         logger.info(
             "Config hook: table written (rows=%d, issues=%d)",
-            len(getattr(table, "rows", []) or []),
+            row_count or 0,
             len(getattr(table, "issues", []) or []),
         )
 

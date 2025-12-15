@@ -65,25 +65,13 @@ def detect_email_values(
     return {"email": score}
 
 
-def normalize_email(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "value": {"email": ...}}, ...]`."""
-
-    return [
-        {
-            "row_index": idx,
-            "value": {
-                "email": ("" if v is None else str(v).strip().lower()) or None,
-            },
-        }
-        for idx, v in enumerate(values)
-    ]
+def normalize_email(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Any]:
+    return [("" if v is None else str(v).strip().lower()) or None for v in column]
 
 
-def validate_email(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "message": str}, ...]` for invalid cells."""
-
+def validate_email(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(values):
+    for idx, v in enumerate(column):
         s = "" if v is None else str(v).strip().lower()
         if not s:
             continue

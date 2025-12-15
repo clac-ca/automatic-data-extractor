@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth.principal import AuthenticatedPrincipal, PrincipalType
-from ade_api.core.models import User, Workspace, WorkspaceMembership
-from ade_api.core.models.rbac import ScopeType, UserRoleAssignment
 from ade_api.core.rbac.registry import PERMISSION_REGISTRY
 from ade_api.core.rbac.service_interface import RbacService
+from ade_api.core.rbac.types import ScopeType
+from ade_api.models import User, UserRoleAssignment, Workspace, WorkspaceMembership
 
 from .schemas import (
     EffectivePermissions,
@@ -91,9 +91,7 @@ class MeService:
     ) -> EffectivePermissions:
         """Return the full effective permission sets for the principal."""
 
-        global_permissions = sorted(
-            await self.rbac.get_global_permissions(principal=principal)
-        )
+        global_permissions = sorted(await self.rbac.get_global_permissions(principal=principal))
 
         access = await self._resolve_workspace_access(principal)
         workspace_permissions: dict[str, list[str]] = {}
@@ -118,7 +116,7 @@ class MeService:
 
         if not payload.permissions:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="permissions must contain at least one permission key.",
             )
 
@@ -138,10 +136,8 @@ class MeService:
 
         if workspace_keys and workspace_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    "workspace_id is required when checking workspace-scoped permissions."
-                ),
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=("workspace_id is required when checking workspace-scoped permissions."),
             )
 
         global_perms = await self.rbac.get_global_permissions(principal=principal)
@@ -202,9 +198,7 @@ class MeService:
                 detail="Workspace not found.",
             )
 
-    async def _resolve_workspace_access(
-        self, principal: AuthenticatedPrincipal
-    ) -> WorkspaceAccess:
+    async def _resolve_workspace_access(self, principal: AuthenticatedPrincipal) -> WorkspaceAccess:
         """Return all workspaces visible to the principal (memberships + assignments)."""
 
         membership_stmt = (
@@ -234,9 +228,7 @@ class MeService:
             .distinct()
         )
         assignments_result = await self.session.execute(assignments_stmt)
-        assigned_ids = {
-            row[0] for row in assignments_result.all() if row[0] is not None
-        }
+        assigned_ids = {row[0] for row in assignments_result.all() if row[0] is not None}
         missing_ids = [ws_id for ws_id in assigned_ids if ws_id not in workspace_map]
 
         if missing_ids:

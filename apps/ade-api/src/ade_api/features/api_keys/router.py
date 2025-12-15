@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
 
-from ade_api.app.dependencies import get_api_keys_service
+from ade_api.api.deps import get_api_keys_service
 from ade_api.common.pagination import Page as GenericPage
 from ade_api.common.pagination import PageParams
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, require_csrf, require_global
-from ade_api.core.models import ApiKey
+from ade_api.models import ApiKey
 
 from .schemas import (
     ApiKeyCreateRequest,
@@ -189,9 +189,7 @@ async def revoke_my_api_key(
     summary="List API keys across the tenant (admin)",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Requires api_keys.read_all global permission."
-        },
+        status.HTTP_403_FORBIDDEN: {"description": "Requires api_keys.read_all global permission."},
     },
 )
 async def list_api_keys(
@@ -266,9 +264,7 @@ async def create_api_key(
     summary="Retrieve a single API key (admin)",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Requires api_keys.read_all global permission."
-        },
+        status.HTTP_403_FORBIDDEN: {"description": "Requires api_keys.read_all global permission."},
         status.HTTP_404_NOT_FOUND: {"description": "API key not found."},
     },
 )
@@ -326,9 +322,7 @@ async def revoke_api_key(
     summary="List API keys for a specific user (admin)",
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Authentication required."},
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Requires api_keys.read_all global permission."
-        },
+        status.HTTP_403_FORBIDDEN: {"description": "Requires api_keys.read_all global permission."},
     },
 )
 async def list_user_api_keys(

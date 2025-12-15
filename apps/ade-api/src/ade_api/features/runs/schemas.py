@@ -7,11 +7,11 @@ from typing import Literal
 
 from pydantic import Field
 
+from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
-from ade_api.core.models import RunStatus
-from ade_api.schemas.event_record import EventRecord
+from ade_api.models import RunStatus
 
 RunObjectType = Literal["ade.run"]
 

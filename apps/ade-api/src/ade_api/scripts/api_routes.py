@@ -27,7 +27,7 @@ def _load_schema() -> tuple[dict[str, Any], dict[tuple[str, str], str]]:
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        for method in (route.methods or []):
+        for method in route.methods or []:
             key = (route.path, method.lower())
             handler_lookup[key] = f"{route.endpoint.__module__}:{route.endpoint.__qualname__}"
 

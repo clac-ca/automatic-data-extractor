@@ -42,10 +42,7 @@ def hash_password(password: str) -> str:
         p=_SCRYPT_P,
         dklen=_KEY_LEN,
     )
-    return (
-        f"scrypt${n_factor}${_SCRYPT_R}${_SCRYPT_P}$"
-        f"{_encode(salt)}${_encode(key)}"
-    )
+    return f"scrypt${n_factor}${_SCRYPT_R}${_SCRYPT_P}${_encode(salt)}${_encode(key)}"
 
 
 def verify_password(password: str, hashed: str) -> bool:
@@ -74,4 +71,3 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
     return secrets.compare_digest(candidate, expected)
-

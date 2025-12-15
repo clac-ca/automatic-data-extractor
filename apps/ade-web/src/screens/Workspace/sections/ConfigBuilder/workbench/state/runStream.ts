@@ -5,8 +5,7 @@ import type {
   WorkbenchValidationState,
 } from "../types";
 
-import type { RunStreamEvent } from "@shared/runs/types";
-import type { RunStatus } from "@shared/runs/types";
+import { eventName, eventPayload, type RunStatus, type RunStreamEvent } from "@shared/runs/types";
 
 export type PhaseStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
@@ -34,7 +33,7 @@ export interface ValidationIssue {
 }
 
 export interface ValidationSummary {
-  readonly issues?: ValidationIssue[];
+  readonly issues?: readonly ValidationIssue[];
   readonly issues_total?: number;
   readonly max_severity?: ValidationIssue["level"];
   readonly content_digest?: string | null;
@@ -113,8 +112,8 @@ export function runStreamReducer(state: RunStreamState, action: RunStreamAction)
 }
 
 function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStreamState {
-  const payload = extractPayload(event);
-  const type = typeof event.event === "string" ? event.event : "";
+  const payload = eventPayload(event);
+  const type = eventName(event);
   const eventMessage = typeof event.message === "string" ? event.message : undefined;
 
   const line = formatConsoleEvent(event);
@@ -123,39 +122,45 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
     state.maxConsoleLines,
   );
 
-  const buildPhases: Record<string, PhaseState> =
-    type === "build.phase.started" || type === "build.phase.start"
-      ? {
-          ...state.buildPhases,
-          [payload.phase as string]: { status: "running", message: eventMessage },
-        }
-      : type === "build.phase.completed" || type === "build.phase.complete"
-        ? {
-            ...state.buildPhases,
-            [payload.phase as string]: {
-              status: normalizePhaseStatus(payload.status),
-              durationMs: asNumber(payload.duration_ms),
-              message: eventMessage,
-            },
-          }
-        : state.buildPhases;
+  let buildPhases = state.buildPhases;
+  const buildPhaseKey = typeof payload.phase === "string" ? payload.phase : null;
+  if (buildPhaseKey) {
+    if (type === "build.phase.started" || type === "build.phase.start") {
+      buildPhases = {
+        ...buildPhases,
+        [buildPhaseKey]: { status: "running", message: eventMessage },
+      };
+    } else if (type === "build.phase.completed" || type === "build.phase.complete") {
+      buildPhases = {
+        ...buildPhases,
+        [buildPhaseKey]: {
+          status: normalizePhaseStatus(payload.status),
+          durationMs: asNumber(payload.duration_ms),
+          message: eventMessage,
+        },
+      };
+    }
+  }
 
-  const runPhases: Record<string, PhaseState> =
-    type === "run.phase.started" || type === "run.phase.start" || type === "engine.phase.start"
-      ? {
-          ...state.runPhases,
-          [payload.phase as string]: { status: "running", message: eventMessage },
-        }
-      : type === "run.phase.completed" || type === "run.phase.complete" || type === "engine.phase.complete"
-        ? {
-            ...state.runPhases,
-            [payload.phase as string]: {
-              status: normalizePhaseStatus(payload.status),
-              durationMs: asNumber(payload.duration_ms),
-              message: eventMessage,
-            },
-          }
-        : state.runPhases;
+  let runPhases = state.runPhases;
+  const runPhaseKey = typeof payload.phase === "string" ? payload.phase : null;
+  if (runPhaseKey) {
+    if (type === "run.phase.started" || type === "run.phase.start" || type === "engine.phase.start") {
+      runPhases = {
+        ...runPhases,
+        [runPhaseKey]: { status: "running", message: eventMessage },
+      };
+    } else if (type === "run.phase.completed" || type === "run.phase.complete" || type === "engine.phase.complete") {
+      runPhases = {
+        ...runPhases,
+        [runPhaseKey]: {
+          status: normalizePhaseStatus(payload.status),
+          durationMs: asNumber(payload.duration_ms),
+          message: eventMessage,
+        },
+      };
+    }
+  }
 
   let validationSummary: ValidationSummary | null = state.validationSummary;
   if (type === "run.validation.issue" || type === "engine.validation.issue") {
@@ -177,13 +182,12 @@ function applyEventToState(state: RunStreamState, event: RunStreamEvent): RunStr
         : state.completedPayload;
 
   const status = resolveStatus(state.status, type, payload);
-  const data = (event.data ?? {}) as Record<string, unknown>;
   const runId =
     state.runId ??
-    (typeof data.jobId === "string"
-      ? data.jobId
-      : typeof data.run_id === "string"
-        ? data.run_id
+    (typeof payload.jobId === "string"
+      ? payload.jobId
+      : typeof payload.run_id === "string"
+        ? payload.run_id
         : null);
   const runMode =
     typeof payload.mode === "string"
@@ -255,7 +259,9 @@ export function isRunStatusInProgress(status?: RunStatus | RunStreamStatus | nul
   );
 }
 
-export function isRunStatusTerminal(status?: RunStatus | RunStreamStatus | null): boolean {
+export function isRunStatusTerminal(
+  status?: RunStatus | RunStreamStatus | null,
+): status is Extract<RunStatus | RunStreamStatus, "succeeded" | "failed" | "cancelled"> {
   const normalized = normalizeRunStatusValue(status);
   return normalized === "succeeded" || normalized === "failed" || normalized === "cancelled";
 }
@@ -276,14 +282,6 @@ function normalizePhaseStatus(value: unknown): PhaseStatus {
   return "pending";
 }
 
-function extractPayload(event: RunStreamEvent): Record<string, unknown> {
-  const payload = event?.data;
-  if (payload && typeof payload === "object") {
-    return payload as Record<string, unknown>;
-  }
-  return {};
-}
-
 function toValidationIssue(payload: Record<string, unknown>, eventMessage?: string): ValidationIssue | null {
   const severity = (payload.severity as string | undefined) ?? (payload.level as string | undefined);
   const level: ValidationIssue["level"] =
@@ -301,46 +299,37 @@ function normalizeValidationSummary(
   payload: Record<string, unknown>,
   current?: ValidationSummary | null,
 ): ValidationSummary {
-  const next: ValidationSummary = { ...(current ?? {}) };
+  const base = current ?? {};
+
   const rawIssues = payload.issues;
-  if (Array.isArray(rawIssues)) {
-    const issues = rawIssues
-      .map((issue) =>
-        issue && typeof issue === "object"
-          ? toValidationIssue(issue as Record<string, unknown>)
-          : null,
-      )
-      .filter(Boolean) as ValidationIssue[];
-    next.issues = issues;
-  }
+  const issues = Array.isArray(rawIssues)
+    ? (rawIssues
+        .map((issue) =>
+          issue && typeof issue === "object"
+            ? toValidationIssue(issue as Record<string, unknown>)
+            : null,
+        )
+        .filter(Boolean) as ValidationIssue[])
+    : base.issues;
 
-  if ("issues_total" in payload) {
-    const total = asNumber(payload.issues_total);
-    if (typeof total === "number") {
-      next.issues_total = total;
-    }
-  }
+  const total = "issues_total" in payload ? asNumber(payload.issues_total) : base.issues_total;
+  const maxSeverity = "max_severity" in payload ? normalizeValidationSeverity(payload.max_severity) : base.max_severity;
+  const contentDigest =
+    "content_digest" in payload
+      ? typeof payload.content_digest === "string"
+        ? payload.content_digest
+        : null
+      : base.content_digest;
+  const error = "error" in payload ? (typeof payload.error === "string" ? payload.error : null) : base.error;
 
-  if ("max_severity" in payload) {
-    const severity = normalizeValidationSeverity(payload.max_severity);
-    if (severity) {
-      next.max_severity = severity;
-    }
-  }
-
-  if ("content_digest" in payload) {
-    const contentDigest = typeof payload.content_digest === "string" ? payload.content_digest : null;
-    if (contentDigest !== undefined) {
-      next.content_digest = contentDigest;
-    }
-  }
-
-  if ("error" in payload) {
-    const error = typeof payload.error === "string" ? payload.error : null;
-    next.error = error;
-  }
-
-  return next;
+  return {
+    ...base,
+    issues,
+    issues_total: total,
+    max_severity: maxSeverity ?? undefined,
+    content_digest: contentDigest,
+    error,
+  };
 }
 
 export function deriveValidationStateFromStream(

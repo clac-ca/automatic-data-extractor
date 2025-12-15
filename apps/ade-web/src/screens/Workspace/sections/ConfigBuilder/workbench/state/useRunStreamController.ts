@@ -71,7 +71,7 @@ export function useRunStreamController({
     extras?: StartRunExtras,
   ) => Promise<{ runId: string; startedAt: string } | null>;
 } {
-  const initialState = useMemo(() => {
+  const initialState = useMemo<RunStreamState>(() => {
     const base = createRunStreamState(
       maxConsoleLines,
       seed?.console ? [...seed.console].slice(-maxConsoleLines) : undefined,

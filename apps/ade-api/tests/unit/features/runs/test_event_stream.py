@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from ade_api.common.events import new_event_record
 from ade_api.features.runs.event_stream import RunEventContext, RunEventStream
-from ade_api.schemas.event_record import new_event_record
 
 pytestmark = pytest.mark.asyncio()
 
@@ -23,7 +23,7 @@ def _stream(tmp_path: Path) -> RunEventStream:
 
 async def test_append_assigns_sequence_and_persists(tmp_path: Path) -> None:
     stream = _stream(tmp_path)
-    event = await stream.append(new_event_record(event="run.queued", data={"status": "queued"}))
+    await stream.append(new_event_record(event="run.queued", data={"status": "queued"}))
 
     saved = (tmp_path / "events.ndjson").read_text(encoding="utf-8").strip().splitlines()
     assert len(saved) == 1

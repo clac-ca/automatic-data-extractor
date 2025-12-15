@@ -27,13 +27,14 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
 
 5. **Sheet pipeline**  
    For each sheet, `Pipeline.process_sheet` performs:
-   - `detect_table_bounds`: run row detectors to classify each row and pick the header row plus data range (header row + following rows until the next header or end).
-   - `detect_and_map_columns`: run column detectors to map source columns to registered fields, resolve duplicates per `mapping_tie_resolution`, and split mapped vs. unmapped columns.
-   - Hooks: `on_table_detected` then `on_table_mapped`.
-   - `apply_transforms`: run column transforms for each mapped field, enforcing the strict row-output contract.
-   - `apply_validators`: run column validators to collect issue payloads.
-   - `render_table`: write headers + rows to the output sheet, optionally appending unmapped columns.
-   - Hook: `on_table_written`.
+   - `detect_table_regions`: run row detectors to classify each row and segment the sheet into one or more table regions.
+   - For each table region:
+     - `detect_and_map_columns`: map source columns to registered fields, resolve duplicates per `mapping_tie_resolution`, and split mapped vs. unmapped columns.
+     - Hooks: `on_table_detected` then `on_table_mapped`.
+     - `apply_transforms`: run column transforms for each mapped field, enforcing the strict row-output contract.
+     - `apply_validators`: run column validators to collect issue payloads.
+     - `render_table`: write headers + rows to the output sheet, optionally appending unmapped columns.
+     - Hook: `on_table_written`.
 
 6. **Finalize workbook**  
    Hook `on_workbook_before_save` fires with the output workbook, then the workbook is saved to `<output_dir>/<input_stem>_normalized.xlsx` (or a caller-specified path).
@@ -43,7 +44,7 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
 
 ## Execution model & limitations
 
-- Processing is **per-run, per-sheet** and currently **one table per sheet**. The pipeline stops after the first detected table region (see `src/ade_engine/pipeline/README.md` for the multi-table roadmap).
+- Processing is **per-run, per-sheet**, and a sheet may contain **multiple tables** (segmented by header detection).
 - Input formats: `.xlsx`, `.xlsm`, `.csv` (configurable via `Settings.supported_file_extensions`).
 - Sheets are read with `openpyxl` (`read_only=True` for XLSX). `_materialize_rows` guards against runaway empty rows/columns using `max_empty_rows_run` and `max_empty_cols_run`.
 - A shared `state` dict lets hooks, detectors, transforms, and validators pass data across stages and sheets; mutating it is safe within a single run.

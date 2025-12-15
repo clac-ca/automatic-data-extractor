@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import HTTPException
 
+from ade_api.common.sorting import parse_sort, resolve_sort
 from ade_api.features.documents.filters import (
     DOCUMENT_SOURCE_VALUES,
     DOCUMENT_STATUS_VALUES,
@@ -12,7 +13,6 @@ from ade_api.features.documents.filters import (
     DocumentStatus,
 )
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.common.sorting import parse_sort, resolve_sort
 
 
 def test_document_filters_normalise_sets_and_strings() -> None:

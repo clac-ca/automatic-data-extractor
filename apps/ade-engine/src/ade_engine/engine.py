@@ -190,14 +190,15 @@ class Engine:
                     )
 
                     sheet_names = resolve_sheet_names(source_wb, prepared.request.input_sheets)
-                    for sheet_name in sheet_names:
+                    for sheet_index, sheet_name in enumerate(sheet_names):
                         sheet = source_wb[sheet_name]
                         out_sheet = output_wb.create_sheet(title=sheet_name)
+                        sheet_metadata = {**metadata, "sheet_index": sheet_index}
 
                         registry.run_hooks(
                             HookName.ON_SHEET_START,
                             state=state,
-                            metadata=metadata,
+                            metadata=sheet_metadata,
                             workbook=source_wb,
                             sheet=sheet,
                             table=None,
@@ -209,7 +210,7 @@ class Engine:
                             sheet=sheet,
                             output_sheet=out_sheet,
                             state=state,
-                            metadata=metadata,
+                            metadata=sheet_metadata,
                             input_file_name=prepared.request.input_file.name if prepared.request.input_file else None,
                         )
 

@@ -114,4 +114,3 @@ class FilesystemStorage(StorageAdapter):
                 return
 
         await run_in_threadpool(_remove)
-

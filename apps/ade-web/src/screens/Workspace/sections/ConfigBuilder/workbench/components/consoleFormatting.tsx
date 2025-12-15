@@ -1,4 +1,5 @@
 import type { WorkbenchConsoleLine } from "../types";
+import type { ReactElement } from "react";
 
 export function resolveSeverity(level: WorkbenchConsoleLine["level"] | "all"): number {
   if (level === "debug") return 0;
@@ -55,7 +56,7 @@ function safeParseJson(value: string) {
 function highlightJson(text: string) {
   const regex =
     /("(?:\\.|[^"])*"(?=:)|"(?:\\.|[^"])*")|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|\b(true|false|null)\b/g;
-  const parts: Array<string | JSX.Element> = [];
+  const parts: Array<string | ReactElement> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;

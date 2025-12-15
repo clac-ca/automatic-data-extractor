@@ -1,15 +1,14 @@
 # Pipeline overview
 
-## Current limitation: one table per sheet
+## Multi-table per sheet
 
-The pipeline currently processes **exactly one table per worksheet**. `Pipeline.process_sheet`:
+The pipeline processes **multiple tables per worksheet**. `Pipeline.process_sheet`:
 
-- materializes rows, runs `detect_table_bounds()` once, and takes the first header/data region it finds,
-- builds a single `TableData` from that region,
-- runs hooks/transforms/validators/render once, then returns.
+- materializes rows once (`Pipeline._materialize_rows`),
+- runs `detect_table_regions()` to segment the sheet into table regions,
+- processes each table region independently (hooks → mapping → transforms → validators → render),
+- renders tables sequentially into the same output worksheet, inserting a blank row between tables.
 
-`detect_table_bounds()` treats a table as the header row plus all subsequent rows **until the next detected header or end of data**. However, the pipeline stops after the first table and does not continue scanning for additional tables in the same sheet. Extra tables are effectively ignored once the first table’s end is reached.
+## Table definition
 
-## Planned refactor
-
-We intend to extend the pipeline to iterate over sheets and detect **multiple tables per sheet**, using the same definition (header + following rows until the next header or sheet end). That will require looping detection/rendering per table and tracking output placements; this README exists to make the current single-table behavior explicit until that change lands.
+`detect_table_regions()` treats a table as the header row plus all subsequent rows **until the next detected header or end of data**. Header rows come from the row detector classifier; if a data row appears before any header, the row above is treated as an inferred header (unless that row is empty, in which case the current row is treated as the header).
