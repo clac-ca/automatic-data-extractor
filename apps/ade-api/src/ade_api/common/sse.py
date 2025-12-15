@@ -25,9 +25,9 @@ def sse_bytes(
 
     parts: list[bytes] = []
     if event_id is not None:
-        parts.append(f"id: {event_id}\n".encode("utf-8"))
+        parts.append(f"id: {event_id}\n".encode())
     if event is not None:
-        parts.append(f"event: {event}\n".encode("utf-8"))
+        parts.append(f"event: {event}\n".encode())
     for line in payload.split(b"\n"):
         parts.append(b"data: ")
         parts.append(line)

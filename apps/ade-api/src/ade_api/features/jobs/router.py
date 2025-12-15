@@ -15,6 +15,7 @@ SSE event dispatch model.
 
 from __future__ import annotations
 
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Security, status
@@ -52,8 +53,8 @@ def _as_sse_id(event: dict[str, Any], fallback: int) -> int:
 @router.get("/configurations/{configuration_id}/jobs/stream")
 async def stream_configuration_job_endpoint(
     request: Request,
-    configuration_id: UUID = Path(description="Configuration identifier"),
-    options: RunCreateOptions = Depends(),
+    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
+    options: Annotated[RunCreateOptions, Depends()],
     service: RunsService = runs_service_dependency,
 ) -> StreamingResponse:
     """Create and execute a job while streaming EventRecords over SSE (live only)."""
@@ -103,7 +104,7 @@ async def stream_configuration_job_endpoint(
 @router.get("/jobs/{job_id}/events/stream")
 async def stream_job_events_endpoint(
     request: Request,
-    job_id: UUID = Path(description="Job identifier (run id)"),
+    job_id: Annotated[UUID, Path(description="Job identifier (run id)")],
     service: RunsService = runs_service_dependency,
 ) -> StreamingResponse:
     """Tail a job's events as SSE (live only, no replay/resume)."""
@@ -114,6 +115,7 @@ async def stream_job_events_endpoint(
 
     async def event_stream():
         fallback_id = 0
+        build_id = getattr(run, "build_id", None)
         meta = new_event_record(
             event="job.meta",
             level="info",
@@ -123,7 +125,7 @@ async def stream_job_events_endpoint(
                 "runId": str(run.id),
                 "workspaceId": str(run.workspace_id),
                 "configurationId": str(run.configuration_id),
-                "buildId": str(getattr(run, "build_id", None)) if getattr(run, "build_id", None) else None,
+                "buildId": str(build_id) if build_id else None,
             },
         )
         yield sse_json("job.meta", meta, event_id=0)
