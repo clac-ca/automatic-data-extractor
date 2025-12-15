@@ -1,4 +1,4 @@
 export type BuildStatus = "queued" | "building" | "ready" | "failed" | "cancelled";
 
-// Build streaming now uses the unified AdeEvent envelope. Helpers live in
-// @shared/runs/types (AdeEvent + type guards). This file keeps the status union.
+// Build streaming reuses the unified EventRecord envelope. Helpers live in
+// @shared/runs/types; this file only keeps the status union.

@@ -6,7 +6,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
-import monacoEditorPlugin from "vite-plugin-monaco-editor";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
@@ -17,15 +16,12 @@ const appVersion = packageJson.version ?? "unknown";
 const frontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
 const backendPort = process.env.DEV_BACKEND_PORT ?? "8000";
 
-// The plugin ships as CJS, so the default import resolves to an object in ESM.
-const monacoPlugin = (monacoEditorPlugin as { default?: typeof monacoEditorPlugin }).default ?? monacoEditorPlugin;
-
 export default defineConfig({
-  plugins: [tailwindcss(), react(), tsconfigPaths(), monacoPlugin({})],
+  plugins: [tailwindcss(), react(), tsconfigPaths()],
   resolve: {
     alias: {
       "@app": resolveSrc("app"),
-      "@features": resolveSrc("screens"),
+      "@screens": resolveSrc("screens"),
       "@ui": resolveSrc("ui"),
       "@shared": resolveSrc("shared"),
       "@schema": resolveSrc("schema"),

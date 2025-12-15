@@ -3,9 +3,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
-import { useUpdateWorkspaceMutation } from "../hooks/useUpdateWorkspaceMutation";
-import { useSetDefaultWorkspaceMutation } from "@features/Workspace/api/workspaces-api";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useSetDefaultWorkspaceMutation, useUpdateWorkspaceMutation } from "@shared/workspaces";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { UnsavedChangesPrompt } from "../components/UnsavedChangesPrompt";
 import { FormField } from "@ui/FormField";

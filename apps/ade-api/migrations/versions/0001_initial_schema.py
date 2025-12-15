@@ -1,7 +1,7 @@
 """Initial ADE schema with UUID primary keys and simplified RBAC.
 
 Designed for UUIDv7 identifiers generated in the application layer using
-Python 3.14's :func:`uuid.uuid7`.
+:func:`ade_api.common.ids.generate_uuid7` (RFC 9562).
 """
 
 from __future__ import annotations
@@ -225,9 +225,7 @@ def _uuid_pk(name: str = "id") -> sa.Column:
     """UUID primary key column.
 
     There is intentionally *no* server-side default here. IDs are expected
-    to be generated in the application layer using uuid.uuid7() (Python 3.14+),
-    which implements UUIDv7 from RFC 9562 with a millisecond timestamp and
-    monotonic counter for portability. 
+    to be generated in the application layer as UUIDv7 identifiers (RFC 9562).
     """
     return sa.Column(
         name,

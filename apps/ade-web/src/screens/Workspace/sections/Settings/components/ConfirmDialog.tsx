@@ -88,47 +88,51 @@ export function ConfirmDialog({
         };
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4"
-      onClick={onCancel}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-        ref={dialogRef}
-      >
-        <div className="space-y-2">
-          <p
-            className={clsx(
-              "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
-              toneStyles.badge,
-            )}
-          >
-            Confirm
-          </p>
-          <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
-          {description ? <p className="text-sm text-slate-600">{description}</p> : null}
-        </div>
+    <div className="fixed inset-0 z-50 px-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={onCancel}
+        aria-label="Close dialog"
+      />
+      <div className="relative flex min-h-full items-center justify-center">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          ref={dialogRef}
+        >
+          <div className="space-y-2">
+            <p
+              className={clsx(
+                "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em]",
+                toneStyles.badge,
+              )}
+            >
+              Confirm
+            </p>
+            <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
+            {description ? <p className="text-sm text-slate-600">{description}</p> : null}
+          </div>
 
-        {children ? <div className="mt-4 space-y-3">{children}</div> : null}
+          {children ? <div className="mt-4 space-y-3">{children}</div> : null}
 
-        <div className="mt-6 flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel} disabled={isConfirming}>
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            variant={toneStyles.confirmVariant}
-            onClick={onConfirm}
-            isLoading={isConfirming}
-            disabled={confirmDisabled || isConfirming}
-            className={tone === "danger" ? "hover:bg-danger-600" : undefined}
-          >
-            {confirmLabel}
-          </Button>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={isConfirming}>
+              {cancelLabel}
+            </Button>
+            <Button
+              type="button"
+              variant={toneStyles.confirmVariant}
+              onClick={onConfirm}
+              isLoading={isConfirming}
+              disabled={confirmDisabled || isConfirming}
+              className={tone === "danger" ? "hover:bg-danger-600" : undefined}
+            >
+              {confirmLabel}
+            </Button>
+          </div>
         </div>
       </div>
     </div>,

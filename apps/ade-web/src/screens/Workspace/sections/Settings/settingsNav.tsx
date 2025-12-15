@@ -121,13 +121,11 @@ export function buildSettingsNav(
       if (!section) {
         return groups;
       }
-      const group = groups[section.group] ?? {
-        id: section.group,
-        label: GROUP_LABELS[section.group],
-        items: [],
-      };
-      group.items = [...group.items, item];
-      groups[section.group] = group;
+      const existing = groups[section.group];
+      const next: WorkspaceSettingsNavGroup = existing
+        ? { ...existing, items: [...existing.items, item] }
+        : { id: section.group, label: GROUP_LABELS[section.group], items: [item] };
+      groups[section.group] = next;
       return groups;
     }, {} as Record<SettingsGroupId, WorkspaceSettingsNavGroup>),
   );

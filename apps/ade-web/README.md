@@ -286,7 +286,7 @@ ADE Web is a React + TypeScript SPA built with Vite and React Query.
 High-level layout (under `apps/ade-web/src`):
 
 - `app/` – application shell, providers, and top-level routing.
-- `screens/` (aliased as `@features`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
+- `screens/` (aliased as `@screens`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
 - `ui/` – presentational component library (buttons, forms, top bar, search, tabs, context menus, code editor).
 - `shared/` – cross-cutting utilities and API modules (HTTP client, nav helpers, URL state, NDJSON streaming, permissions).
 - `schema/` – handwritten domain models and mapping from generated types.

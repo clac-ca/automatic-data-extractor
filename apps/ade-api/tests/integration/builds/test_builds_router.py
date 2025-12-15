@@ -11,6 +11,8 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
+from ade_api.db.mixins import generate_uuid7
+from ade_api.db.session import get_sessionmaker
 from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
@@ -20,11 +22,9 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.core.models import Configuration, ConfigurationStatus
-from ade_api.settings import Settings
-from ade_api.infra.db.mixins import generate_uuid7
-from ade_api.infra.db.session import get_sessionmaker
 from ade_api.infra.storage import workspace_config_root
+from ade_api.models import Configuration, ConfigurationStatus
+from ade_api.settings import Settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -52,13 +52,11 @@ class StubBuilder:
         timeout: float,
         fingerprint: str | None = None,
     ) -> AsyncIterator[BuilderEvent]:
-        json_dumps(
-            {
-                "build_id": build_id,
-                "workspace_id": workspace_id,
-                "configuration_id": configuration_id,
-            }
-        )
+        json_dumps({
+            "build_id": build_id,
+            "workspace_id": workspace_id,
+            "configuration_id": configuration_id,
+        })
         venv_root.mkdir(parents=True, exist_ok=True)
         for event in self._events:
             yield event
@@ -161,7 +159,7 @@ async def test_background_build_executes_to_completion(
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderLogEvent(message="background log"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.11.0", engine_version="1.2.3")
         ),
     ]
 
@@ -216,7 +214,7 @@ async def test_list_builds_with_filters_and_limits(
     StubBuilder.events = [
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),
         BuilderArtifactsEvent(
-            artifacts=BuildArtifacts(python_version="3.14.0", engine_version="1.2.3")
+            artifacts=BuildArtifacts(python_version="3.11.0", engine_version="1.2.3")
         ),
     ]
     first_response = await async_client.post(

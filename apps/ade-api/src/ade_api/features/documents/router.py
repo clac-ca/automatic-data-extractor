@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -17,13 +18,13 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from ade_api.app.dependencies import get_documents_service
+from ade_api.api.deps import get_documents_service
+from ade_api.common.downloads import build_content_disposition
 from ade_api.common.pagination import PageParams
 from ade_api.common.sorting import make_sort_dependency
 from ade_api.common.types import OrderBy
-from ade_api.common.downloads import build_content_disposition
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.core.models import User
+from ade_api.models import User
 
 from .exceptions import (
     DocumentFileMissingError,
@@ -45,16 +46,14 @@ router = APIRouter(
 
 
 WorkspacePath = Annotated[
-    str,
+    UUID,
     Path(
-        min_length=1,
         description="Workspace identifier",
     ),
 ]
 DocumentPath = Annotated[
-    str,
+    UUID,
     Path(
-        min_length=1,
         description="Document identifier",
     ),
 ]
@@ -100,9 +99,7 @@ _FILTER_KEYS = {
 def get_document_filters(request: Request) -> DocumentFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
-    extras = sorted(
-        {key for key in request.query_params.keys() if key not in allowed_with_shared}
-    )
+    extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
     if extras:
         detail = [
             {

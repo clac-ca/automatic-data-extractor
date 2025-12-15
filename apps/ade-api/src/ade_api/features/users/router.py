@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Path, Security, status
 
-from ade_api.app.dependencies import get_users_service
+from ade_api.api.deps import get_users_service
 from ade_api.common.pagination import PageParams
 from ade_api.common.sorting import make_sort_dependency
 from ade_api.common.types import OrderBy
 from ade_api.core.http import require_authenticated, require_csrf, require_global
-from ade_api.core.models import User
+from ade_api.models import User
 
 from .filters import UserFilters
 from .schemas import UserOut, UserPage, UserUpdate
@@ -106,7 +106,7 @@ async def get_user(
         status.HTTP_404_NOT_FOUND: {
             "description": "User not found.",
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "No valid fields were provided for update.",
         },
     },

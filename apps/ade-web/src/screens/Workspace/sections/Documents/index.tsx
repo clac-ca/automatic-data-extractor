@@ -1,5 +1,3 @@
-// route.tsx — Workspace Documents (polished, compact UI)
-
 import {
   useCallback,
   useEffect,
@@ -16,19 +14,18 @@ import clsx from "clsx";
 import { useSearchParams } from "@app/nav/urlState";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useConfigurationsQuery } from "@shared/configurations";
 import { client } from "@shared/api/client";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
-import type { components } from "@schema";
+import type { components, RunSummary } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 import {
   fetchRun,
-  fetchRunSummary,
   fetchRunTelemetry,
   runLogsUrl,
   runOutputUrl,
@@ -36,6 +33,7 @@ import {
   type RunResource,
   type RunStatus,
 } from "@shared/runs/api";
+import type { RunStreamEvent } from "@shared/runs/types";
 
 import { Alert } from "@ui/Alert";
 import { Select } from "@ui/Select";
@@ -847,7 +845,6 @@ function DocumentsHeader({
   return (
     <section
       className="rounded-xl border border-slate-200 bg-white/95 p-3 sm:p-4"
-      role="region"
       aria-label="Documents header and filters"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1500,16 +1497,6 @@ function RunExtractionDrawerContent({
     },
   });
 
-  const summaryQuery = useQuery({
-    queryKey: activeRunId ? runQueryKeys.summary(activeRunId) : ["run-summary", "none"],
-    queryFn: ({ signal }) =>
-      activeRunId ? fetchRunSummary(activeRunId, signal) : Promise.reject(new Error("No run selected")),
-    enabled:
-      Boolean(activeRunId) &&
-      (runQuery.data?.status === "succeeded" || runQuery.data?.status === "failed"),
-    staleTime: 5_000,
-  });
-
   const telemetryQuery = useQuery({
     queryKey: activeRunId ? runQueryKeys.telemetry(activeRunId) : ["run-telemetry", "none"],
     queryFn: ({ signal }) => {
@@ -1578,8 +1565,11 @@ function RunExtractionDrawerContent({
   const outputUrl = currentRun ? runOutputUrl(currentRun) : null;
   const outputPath = currentRun?.output?.output_path ?? null;
   const logsUrl = currentRun ? runLogsUrl(currentRun) : null;
-  const summary = summaryQuery.data ?? null;
   const telemetryEvents = telemetryQuery.data ?? [];
+  const summary = useMemo(
+    () => extractRunSummaryFromTelemetry(telemetryQuery.data ?? []),
+    [telemetryQuery.data],
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -1648,7 +1638,7 @@ function RunExtractionDrawerContent({
     setErrorMessage(null);
     setActiveRunId(null);
     const sheetList = normalizedSheetSelection;
-    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false } as const;
+    const baseRunOptions = { dry_run: false, validate_only: false, force_rebuild: false, debug: false } as const;
     const runOptions =
       sheetList.length > 0
         ? { ...baseRunOptions, input_sheet_names: sheetList }
@@ -1877,19 +1867,19 @@ function RunExtractionDrawerContent({
                   ) : (
                     <p className="text-xs text-slate-500">Output will appear here after the run completes.</p>
                   )}
-                </div>
-                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Run summary</p>
-                  {summaryQuery.isLoading ? (
-                    <p className="text-xs text-slate-500">Loading summary…</p>
-                  ) : summaryQuery.isError ? (
-                    <p className="text-xs text-rose-600">Unable to load run summary.</p>
-                  ) : summary ? (
-                    <RunSummaryView summary={summary} />
-                  ) : (
-                    <p className="text-xs text-slate-500">Summary not available.</p>
-                  )}
-                </div>
+	                </div>
+	                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
+	                  <p className="text-xs font-semibold text-slate-700">Run summary</p>
+	                  {telemetryQuery.isLoading ? (
+	                    <p className="text-xs text-slate-500">Loading summary…</p>
+	                  ) : telemetryQuery.isError ? (
+	                    <p className="text-xs text-rose-600">Unable to load run summary.</p>
+	                  ) : summary ? (
+	                    <RunSummaryView summary={summary} />
+	                  ) : (
+	                    <p className="text-xs text-slate-500">Summary not available.</p>
+	                  )}
+	                </div>
                 <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
                   <p className="text-xs font-semibold text-slate-700">Telemetry summary</p>
                   {telemetryQuery.isLoading ? (
@@ -2087,6 +2077,21 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
       <Button onClick={onUploadClick} className="w-full sm:w-auto">Upload</Button>
     </div>
   );
+}
+
+function extractRunSummaryFromTelemetry(events: RunStreamEvent[]): Partial<RunSummary> | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    const name = typeof event.event === "string" ? event.event : typeof event.type === "string" ? event.type : null;
+    if (name !== "engine.run.summary") {
+      continue;
+    }
+    const payload = event.data;
+    if (payload && typeof payload === "object") {
+      return payload as Partial<RunSummary>;
+    }
+  }
+  return null;
 }
 
 /* ------------------------------ Run status chip ------------------------------ */

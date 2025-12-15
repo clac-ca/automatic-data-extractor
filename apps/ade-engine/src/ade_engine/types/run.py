@@ -1,4 +1,9 @@
-"""Run-level types for the engine."""
+"""Run-level types for the engine.
+
+These types are intentionally small and explicit:
+- ``RunRequest`` is user-provided input/options (may include relative paths).
+- The engine normalizes paths internally before executing.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Mapping
-from uuid import UUID
 
 
 class RunStatus(str, Enum):
@@ -30,18 +33,24 @@ class RunErrorCode(str, Enum):
 
 @dataclass
 class RunRequest:
-    """Configuration for a single engine run."""
+    """Inputs and options for a single engine run."""
 
-    run_id: UUID | None = None
-    config_package: str = "ade_config"
-    manifest_path: Path | None = None
-    input_file: Path | None = None
+    config_package: Path
+    input_file: Path
     input_sheets: list[str] | None = None
+
+    # Output planning:
+    # - If output_path is provided, it wins.
+    # - Else, if output_dir is provided, write <output_dir>/<input_stem>_normalized.xlsx
+    # - Else, write alongside the input file.
     output_dir: Path | None = None
-    output_file: Path | None = None
+    output_path: Path | None = None
+
+    # Logging:
+    # - logs_dir defaults to output_dir (or input dir when output_dir is not provided).
+    # - logs_path defaults to <logs_dir>/<input_stem>_engine.log|engine_events.ndjson (based on log_format).
     logs_dir: Path | None = None
-    logs_file: Path | None = None
-    metadata: Mapping[str, Any] | None = None
+    logs_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -59,9 +68,8 @@ class RunResult:
 
     status: RunStatus
     error: RunError | None
-    run_id: UUID
     output_path: Path | None
-    logs_dir: Path
+    logs_dir: Path | None
     processed_file: str | None
     started_at: datetime | None = None
     completed_at: datetime | None = None

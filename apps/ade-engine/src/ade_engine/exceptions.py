@@ -18,6 +18,10 @@ class InputError(AdeEngineError):
 class HookError(AdeEngineError):
     """Raised when hooks fail during execution."""
 
+    def __init__(self, message: str, *, stage: str | None = None) -> None:
+        super().__init__(message)
+        self.stage = stage
+
 
 class PipelineError(AdeEngineError):
     """Raised for unexpected pipeline failures."""

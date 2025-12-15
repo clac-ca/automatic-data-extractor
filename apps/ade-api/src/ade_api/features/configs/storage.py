@@ -6,7 +6,8 @@ import fnmatch
 import io
 import secrets
 import shutil
-import tomllib
+import subprocess
+import sys
 import zipfile
 from collections.abc import Iterable
 from hashlib import sha256
@@ -52,17 +53,11 @@ class ConfigStorage:
     def __init__(
         self,
         *,
-        templates_root: Path | None = None,
         configs_root: Path | None = None,
         settings: Settings | None = None,
     ) -> None:
         if configs_root is None and settings is None:
             raise ValueError("ConfigStorage requires settings or configs_root")
-        if templates_root is None:
-            if settings is None:
-                raise ValueError("ConfigStorage requires settings or templates_root")
-            templates_root = settings.config_templates_dir
-        self._templates_root = templates_root.expanduser().resolve()
         if configs_root is None:
             assert settings is not None
             base_root = settings.configs_dir
@@ -70,10 +65,6 @@ class ConfigStorage:
             base_root = configs_root
         self._configs_root = base_root.expanduser().resolve()
         self._settings = settings
-
-    @property
-    def templates_root(self) -> Path:
-        return self._templates_root
 
     @property
     def configs_root(self) -> Path:
@@ -92,20 +83,28 @@ class ConfigStorage:
         *,
         workspace_id: UUID,
         configuration_id: UUID,
-        template_id: str,
     ) -> None:
-        template_path = (self._templates_root / template_id).resolve()
-        if not template_path.is_dir():
-            raise ConfigSourceNotFoundError(f"Template '{template_id}' not found")
+        workspace_root = self.workspace_root(workspace_id)
+        destination = workspace_root / str(configuration_id)
+        staging = workspace_root / f".init-{configuration_id}-{secrets.token_hex(4)}"
+
+        await run_in_threadpool(workspace_root.mkdir, parents=True, exist_ok=True)
+
+        def _clear_stage() -> None:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+
+        await run_in_threadpool(_clear_stage)
+
         try:
-            template_path.relative_to(self._templates_root)
-        except ValueError as exc:
-            raise ConfigSourceNotFoundError(f"Template '{template_id}' not found") from exc
-        await self._materialize_from_source(
-            source=template_path,
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
+            await run_in_threadpool(self._run_engine_config_init, staging)
+            issues, _ = await self.validate_path(staging)
+            if issues:
+                raise ConfigSourceInvalidError(issues)
+            await self._publish_stage(staging, destination)
+        except Exception:
+            await self._remove_path(staging)
+            raise
 
     async def materialize_from_clone(
         self,
@@ -117,9 +116,7 @@ class ConfigStorage:
         source_path = self.config_path(workspace_id, source_configuration_id)
         exists = await run_in_threadpool(source_path.is_dir)
         if not exists:
-            raise ConfigSourceNotFoundError(
-                f"Configuration '{source_configuration_id}' not found"
-            )
+            raise ConfigSourceNotFoundError(f"Configuration '{source_configuration_id}' not found")
         await self._materialize_from_source(
             source=source_path,
             workspace_id=workspace_id,
@@ -130,9 +127,7 @@ class ConfigStorage:
         path = self.config_path(workspace_id, configuration_id)
         exists = await run_in_threadpool(path.is_dir)
         if not exists:
-            raise ConfigStorageNotFoundError(
-                f"Configuration files missing for {configuration_id}"
-            )
+            raise ConfigStorageNotFoundError(f"Configuration files missing for {configuration_id}")
         return path
 
     async def import_archive(
@@ -190,50 +185,29 @@ class ConfigStorage:
         path: Path,
     ) -> tuple[list[ConfigValidationIssue], str | None]:
         def _validate() -> tuple[list[ConfigValidationIssue], str | None]:
+            command = [
+                sys.executable,
+                "-m",
+                "ade_engine",
+                "config",
+                "validate",
+                "--config-package",
+                str(path),
+                "--log-format",
+                "text",
+            ]
+            result = subprocess.run(command, capture_output=True, text=True)
             issues: list[ConfigValidationIssue] = []
-            pyproject = path / "pyproject.toml"
-            manifest = path / "src" / "ade_config" / "manifest.toml"
-
-            if not pyproject.is_file():
+            if result.returncode != 0:
+                message_src = result.stderr.strip() or result.stdout.strip()
+                message = message_src.splitlines()[0] if message_src else "Config validation failed"
                 issues.append(
                     ConfigValidationIssue(
-                        path="pyproject.toml",
-                        message="pyproject.toml is required",
+                        path=".",
+                        message=message,
                     )
                 )
-            else:
-                try:
-                    tomllib.loads(pyproject.read_text(encoding="utf-8"))
-                except (tomllib.TOMLDecodeError, OSError) as exc:
-                    issues.append(
-                        ConfigValidationIssue(
-                            path="pyproject.toml",
-                            message=f"pyproject.toml is invalid: {exc}",
-                        )
-                    )
-
-            if not manifest.is_file():
-                issues.append(
-                    ConfigValidationIssue(
-                        path="src/ade_config/manifest.toml",
-                        message="manifest.toml is required within src/ade_config",
-                    )
-                )
-            else:
-                try:
-                    tomllib.loads(manifest.read_text(encoding="utf-8"))
-                except (tomllib.TOMLDecodeError, OSError) as exc:
-                    issues.append(
-                        ConfigValidationIssue(
-                            path="src/ade_config/manifest.toml",
-                            message=f"manifest.toml is invalid: {exc}",
-                        )
-                    )
-
-            if issues:
-                return issues, None
-
-            digest = _calculate_digest(path)
+            digest = None if issues else _calculate_digest(path)
             return issues, digest
 
         return await run_in_threadpool(_validate)
@@ -285,8 +259,8 @@ class ConfigStorage:
         self,
         *,
         source: Path,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> None:
         workspace_root = self.workspace_root(workspace_id)
         destination = workspace_root / str(configuration_id)
@@ -325,9 +299,7 @@ class ConfigStorage:
     async def _publish_stage(self, staging: Path, destination: Path) -> None:
         def _publish() -> None:
             if destination.exists():
-                raise ConfigPublishConflictError(
-                    f"Destination '{destination}' already exists"
-                )
+                raise ConfigPublishConflictError(f"Destination '{destination}' already exists")
             staging.replace(destination)
 
         await run_in_threadpool(_publish)
@@ -337,6 +309,25 @@ class ConfigStorage:
             shutil.rmtree(path, ignore_errors=True)
 
         await run_in_threadpool(_remove)
+
+    def _run_engine_config_init(self, target_dir: Path) -> None:
+        command = [
+            sys.executable,
+            "-m",
+            "ade_engine",
+            "config",
+            "init",
+            str(target_dir),
+            "--package-name",
+            "ade_config",
+            "--layout",
+            "src",
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            message_src = result.stderr.strip() or result.stdout.strip()
+            message = message_src.splitlines()[0] if message_src else "Config init failed"
+            raise ConfigSourceInvalidError([ConfigValidationIssue(path=".", message=message)])
 
 
 def _calculate_digest(root: Path) -> str:
@@ -440,6 +431,8 @@ def _normalize_archive_member(name: str) -> PurePosixPath | None:
 
 
 __all__ = ["ConfigStorage", "compute_config_digest"]
+
+
 def compute_config_digest(root: Path) -> str:
     """Public helper to hash a configuration source tree (excluding .venv)."""
 

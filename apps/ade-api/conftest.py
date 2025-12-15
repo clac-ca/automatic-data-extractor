@@ -17,15 +17,15 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from ade_api.core.models import Role, User, UserCredential, Workspace, WorkspaceMembership
+from ade_api.models import Role, User, UserCredential, Workspace, WorkspaceMembership
 from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.hashing import hash_password
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
 from ade_api.settings import Settings, get_settings, reload_settings
 from ade_api.app.lifecycles import ensure_runtime_dirs
-from ade_api.infra.db.engine import ensure_database_ready, render_sync_url, reset_database_state
-from ade_api.infra.db.session import get_sessionmaker
+from ade_api.db.engine import ensure_database_ready, render_sync_url, reset_database_state
+from ade_api.db.session import get_sessionmaker
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +45,6 @@ def _configure_database(
 
     data_dir = tmp_path_factory.mktemp("api-app-data")
     workspaces_dir = data_dir / "workspaces"
-    templates_dir = data_dir / "templates" / "config_packages"
     venvs_dir = data_dir / "venvs"
     pip_cache_dir = data_dir / "cache" / "pip"
 
@@ -53,7 +52,6 @@ def _configure_database(
     os.environ["ADE_WORKSPACES_DIR"] = str(workspaces_dir)
     os.environ["ADE_DOCUMENTS_DIR"] = str(workspaces_dir)
     os.environ["ADE_CONFIGS_DIR"] = str(workspaces_dir)
-    os.environ["ADE_CONFIG_TEMPLATES_DIR"] = str(templates_dir)
     os.environ["ADE_VENVS_DIR"] = str(venvs_dir)
     os.environ["ADE_RUNS_DIR"] = str(workspaces_dir)
     os.environ["ADE_PIP_CACHE_DIR"] = str(pip_cache_dir)
@@ -90,8 +88,6 @@ def _configure_database(
         "ADE_WORKSPACES_DIR",
         "ADE_DOCUMENTS_DIR",
         "ADE_CONFIGS_DIR",
-        "ADE_CONFIG_TEMPLATES_DIR",
-        "ADE_CONFIG_TEMPLATES_SOURCE_DIR",
         "ADE_VENVS_DIR",
         "ADE_RUNS_DIR",
         "ADE_PIP_CACHE_DIR",

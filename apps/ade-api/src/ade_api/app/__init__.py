@@ -1,3 +1,3 @@
-"""Application-level wiring (lifecycles, dependency factories)."""
+"""Application-level wiring (lifecycles)."""
 
-__all__ = ["dependencies", "lifecycles"]
+__all__ = ["lifecycles"]

@@ -1,25 +1,25 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useNavigate } from "@app/nav/history";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import {
+  getDefaultWorkspacePath,
   useSetDefaultWorkspaceMutation,
   useWorkspacesQuery,
+  writePreferredWorkspaceId,
   type WorkspaceProfile,
-} from "@features/Workspace/api/workspaces-api";
+} from "@shared/workspaces";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
-import { defaultWorkspaceSection } from "@features/Workspace/components/workspace-navigation";
-import { WorkspaceDirectoryLayout } from "@features/Workspaces/components/WorkspaceDirectoryLayout";
+import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { GlobalSearchField } from "@app/shell/GlobalSearchField";
-import { writePreferredWorkspace } from "@features/Workspace/state/workspace-preferences";
 import { Alert } from "@ui/Alert";
 
-export default function WorkspacesIndexRoute() {
+export default function WorkspacesScreen() {
   return (
     <RequireSession>
       <WorkspacesIndexContent />
@@ -60,7 +60,7 @@ function WorkspacesIndexContent() {
     });
   }, [workspaces, normalizedSearch]);
   const goToWorkspace = useCallback(
-    (workspaceId: string) => navigate(`/workspaces/${workspaceId}/${defaultWorkspaceSection.path}`),
+    (workspaceId: string) => navigate(getDefaultWorkspacePath(workspaceId)),
     [navigate],
   );
 
@@ -103,7 +103,7 @@ function WorkspacesIndexContent() {
       setPendingWorkspaceId(workspace.id);
       try {
         await setDefaultWorkspaceMutation.mutateAsync(workspace.id);
-        writePreferredWorkspace(workspace);
+        writePreferredWorkspaceId(workspace.id);
       } catch (error) {
         console.warn("workspaces.set_default.failed", error);
         setSetDefaultError("Unable to set the default workspace. Please try again.");
@@ -112,16 +112,6 @@ function WorkspacesIndexContent() {
       }
     },
     [setDefaultWorkspaceMutation],
-  );
-
-  const handleWorkspaceKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>, workspaceId: string) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        goToWorkspace(workspaceId);
-      }
-    },
-    [goToWorkspace],
   );
 
   const directorySearch = {
@@ -215,21 +205,28 @@ function WorkspacesIndexContent() {
             const isUpdatingDefault =
               setDefaultWorkspaceMutation.isPending && pendingWorkspaceId === workspace.id;
             return (
-              <article
+              <div
                 key={workspace.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => goToWorkspace(workspace.id)}
-                onKeyDown={(event: KeyboardEvent<HTMLDivElement>) =>
-                  handleWorkspaceKeyDown(event, workspace.id)
-                }
-                className="group rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                className="group relative rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 focus-within:ring-offset-white"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
-                    <p className="text-sm text-slate-500">Slug: {workspace.slug}</p>
+                <button
+                  type="button"
+                  onClick={() => goToWorkspace(workspace.id)}
+                  className="w-full text-left focus-visible:outline-none"
+                  aria-label={`Open workspace ${workspace.name}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 pr-24">
+                      <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
+                      <p className="text-sm text-slate-500">Slug: {workspace.slug}</p>
+                    </div>
                   </div>
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Permissions</p>
+                  <p className="text-sm text-slate-600">
+                    {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
+                  </p>
+                </button>
+                <div className="absolute right-5 top-5">
                   {workspace.is_default ? (
                     <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-600">Default</span>
                   ) : (
@@ -238,20 +235,13 @@ function WorkspacesIndexContent() {
                       size="sm"
                       isLoading={isUpdatingDefault}
                       disabled={isUpdatingDefault}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleSetDefaultWorkspace(workspace);
-                      }}
+                      onClick={() => void handleSetDefaultWorkspace(workspace)}
                     >
                       Set as default
                     </Button>
                   )}
                 </div>
-                <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Permissions</p>
-                <p className="text-sm text-slate-600">
-                  {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
-                </p>
-              </article>
+              </div>
             );
           })}
         </section>

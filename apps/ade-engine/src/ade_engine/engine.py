@@ -1,244 +1,194 @@
-"""Engine orchestration using the Workbook → Sheet → Table pipeline."""
-
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
-from uuid import UUID, uuid4
+from typing import Any
 
-from ade_engine.config.loader import load_config_runtime
-from ade_engine.events import NULL_EVENT_EMITTER
 from ade_engine.exceptions import ConfigError, HookError, InputError, PipelineError
-from ade_engine.hooks.dispatcher import HookDispatcher
-from ade_engine.io.paths import prepare_run_request
-from ade_engine.io.workbook import WorkbookIO
-from ade_engine.pipeline import (
-    ColumnMapper,
-    Pipeline,
-    SheetLayout,
-    TableDetector,
-    TableExtractor,
-    TableNormalizer,
-    TableRenderer,
+from ade_engine.config_package import import_and_register
+from ade_engine.io.workbook import (
+    create_output_workbook,
+    open_source_workbook,
+    resolve_sheet_names,
 )
-from ade_engine.runtime import PluginInvoker, StageTracker
+from ade_engine.logging import create_run_logger_context
+from ade_engine.pipeline import Pipeline
+from ade_engine.registry import Registry
+from ade_engine.registry.models import HookName
 from ade_engine.settings import Settings
-from ade_engine.types.contexts import RunContext
 from ade_engine.types.run import RunError, RunErrorCode, RunRequest, RunResult, RunStatus
+from ade_engine.io.paths import RunPlan, plan_run
+from ade_engine.logging import RunLogger
 
 
-_PIPELINE_STAGE_PREFIXES = ("detect[", "extract[", "map[", "normalize[", "render[", "sheet[")
-
-
-def _classify_unknown(stage: str) -> RunErrorCode:
-    if stage.startswith("hooks."):
-        return RunErrorCode.HOOK_ERROR
-    if stage.startswith(_PIPELINE_STAGE_PREFIXES):
-        return RunErrorCode.PIPELINE_ERROR
-    return RunErrorCode.UNKNOWN_ERROR
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Engine:
-    """High-level orchestration for normalization runs."""
+    """High-level orchestrator for a single normalization run."""
 
-    def __init__(
-        self,
-        *,
-        detector: TableDetector | None = None,
-        extractor: TableExtractor | None = None,
-        mapper: ColumnMapper | None = None,
-        normalizer: TableNormalizer | None = None,
-        renderer_factory: Callable[[], TableRenderer] | None = None,
-        pipeline: Pipeline | None = None,
-        workbook_io: WorkbookIO | None = None,
-        settings: Settings | None = None,
-    ) -> None:
+    def __init__(self, *, settings: Settings | None = None) -> None:
         self.settings = settings or Settings()
 
-        renderer_factory = renderer_factory or (lambda: TableRenderer(layout=SheetLayout()))
-        self.pipeline = pipeline or Pipeline(
-            detector=detector or TableDetector(),
-            extractor=extractor or TableExtractor(),
-            mapper=mapper or ColumnMapper(),
-            normalizer=normalizer or TableNormalizer(),
-            renderer_factory=renderer_factory,
+    def _settings_snapshot(self) -> dict[str, Any]:
+        """Return a JSON-serializable snapshot of the current settings."""
+
+        def _jsonify(val: Any) -> Any:
+            if isinstance(val, dict):
+                return {k: _jsonify(v) for k, v in val.items()}
+            if isinstance(val, (list, tuple, set)):
+                return [_jsonify(v) for v in val]
+            if isinstance(val, Path):
+                return str(val)
+            return val
+
+        raw = self.settings.model_dump(mode="python", exclude_none=True)
+        return _jsonify(raw)
+
+    # ------------------------------------------------------------------
+    def load_registry(self, *, config_package: Path, logger: RunLogger) -> Registry:
+        """Create a Registry and populate it using a config package entrypoint."""
+
+        registry = Registry()
+        entrypoint = import_and_register(config_package, registry=registry)
+        registry.finalize()
+        logger.event(
+            "config.loaded",
+            message="Config package loaded",
+            data={
+                "config_package": str(Path(config_package).expanduser().resolve()),
+                "entrypoint": entrypoint,
+                "fields": list(registry.fields.keys()),
+                "settings": self._settings_snapshot(),
+            },
         )
-        self.workbook_io = workbook_io or WorkbookIO()
+        return registry
 
-    def run(
-        self,
-        request: RunRequest | None = None,
-        *,
-        logger: logging.Logger | None = None,
-        event_emitter: Any | None = None,
-        **kwargs: Any,
-    ) -> RunResult:
-        req = request or RunRequest(**kwargs)
-        run_id: UUID = req.run_id or uuid4()
+    # ------------------------------------------------------------------
+    def run(self, request: RunRequest, *, logger: RunLogger | None = None) -> RunResult:
+        started_at = _utc_now()
 
-        logger_obj = logger or logging.getLogger(__name__)
-        emitter = event_emitter or NULL_EVENT_EMITTER
-        stage = StageTracker("prepare")
+        plan: RunPlan = plan_run(request, log_format=self.settings.log_format)
+        plan.output_dir.mkdir(parents=True, exist_ok=True)
+        plan.logs_dir.mkdir(parents=True, exist_ok=True)
+
+        metadata = {
+            "input_file": str(plan.request.input_file),
+            "output_file": str(plan.output_path),
+            "input_file_name": plan.request.input_file.name,
+        }
 
         status = RunStatus.RUNNING
         error: RunError | None = None
+        state: dict[str, Any] = {}
 
-        output_path: Path | None = None
-        processed_file: str | None = None
-        output_dir: Path | None = None
-        logs_dir: Path | None = None
+        def _execute(run_logger: RunLogger) -> None:
+            nonlocal status, error
 
-        started_at = datetime.utcnow()
-        completed_at: datetime | None = None
-
-        emitter.emit(
-            "run.started",
-            message="Run started",
-            input_file=str(req.input_file) if req.input_file else None,
-            config_package=req.config_package,
-        )
-
-        try:
-            stage.set("prepare_request")
-            prepared = prepare_run_request(req, default_config_package=self.settings.config_package)
-
-            output_dir = prepared.output_dir
-            logs_dir = prepared.logs_dir
-            processed_file = prepared.request.input_file.name
-            output_path = prepared.output_file
-
-            output_dir.mkdir(parents=True, exist_ok=True)
-            if logs_dir:
-                logs_dir.mkdir(parents=True, exist_ok=True)
-
-            emitter.emit(
-                "run.planned",
-                message="Prepared run request",
-                output_file=str(prepared.output_file),
-                output_dir=str(prepared.output_dir),
-                logs_file=str(prepared.logs_file) if prepared.logs_file else None,
-                logs_dir=str(prepared.logs_dir) if prepared.logs_dir else None,
+            run_logger.event(
+                "settings.effective",
+                message="Effective engine settings",
+                level=logging.DEBUG,
+                data={"settings": self._settings_snapshot()},
             )
 
-            prepared.resolved_config.ensure_on_sys_path()
-
-            stage.set("load_config")
-            runtime = load_config_runtime(
-                package=prepared.resolved_config,
-                manifest_path=prepared.request.manifest_path,
-            )
-
-            emitter.emit(
-                "config.loaded",
-                message="Config loaded",
-                config_package=runtime.package.__name__,
-                manifest_version=runtime.manifest.model.version,
-                manifest_schema=runtime.manifest.model.schema,
-                script_api_version=runtime.manifest.model.script_api_version,
-            )
-
-            stage.set("open_workbook")
-            with self.workbook_io.open_source(Path(prepared.request.input_file)) as source_wb:
-                output_wb = self.workbook_io.create_output()
-
-                run_meta = dict(prepared.request.metadata or {})
-                run_ctx = RunContext(
-                    source_path=prepared.request.input_file,
-                    output_path=prepared.output_file,
-                    manifest=runtime.manifest,
-                    source_workbook=source_wb,
-                    output_workbook=output_wb,
-                    state=dict(run_meta),  # backwards-compatible seed
-                    meta=run_meta,
-                    logger=logger_obj,
-                    event_emitter=emitter,
+            try:
+                registry = self.load_registry(
+                    config_package=plan.request.config_package,
+                    logger=run_logger,
                 )
+                pipeline = Pipeline(registry=registry, settings=self.settings, logger=run_logger)
 
-                invoker = PluginInvoker(runtime=runtime, run=run_ctx, logger=logger_obj, event_emitter=emitter)
-                hooks = HookDispatcher(runtime.hooks, invoker=invoker, stage=stage, logger=logger_obj)
+                with open_source_workbook(plan.request.input_file) as source_wb:
+                    output_wb = create_output_workbook()
 
-                emitter.emit(
-                    "workbook.started",
-                    message="Workbook processing started",
-                    sheet_count=len(getattr(source_wb, "worksheets", [])),
-                )
-
-                stage.set("hooks.on_workbook_start")
-                hooks.on_workbook_start(run_ctx)
-
-                stage.set("resolve_sheets")
-                sheet_names = self.workbook_io.resolve_sheet_names(source_wb, prepared.request.input_sheets)
-                sheet_index_lookup = {ws.title: idx for idx, ws in enumerate(source_wb.worksheets)}
-
-                for sheet_position, sheet_name in enumerate(sheet_names):
-                    self.pipeline.process_sheet(
-                        runtime=runtime,
-                        run_ctx=run_ctx,
-                        hook_dispatcher=hooks,
-                        invoker=invoker,
-                        stage=stage,
-                        source_wb=source_wb,
-                        output_wb=output_wb,
-                        sheet_name=sheet_name,
-                        sheet_position=sheet_position,
-                        sheet_index_lookup=sheet_index_lookup,
-                        logger=logger_obj,
+                    registry.run_hooks(
+                        HookName.ON_WORKBOOK_START,
+                        state=state,
+                        metadata=metadata,
+                        workbook=source_wb,
+                        sheet=None,
+                        table=None,
+                        input_file_name=plan.request.input_file.name,
+                        logger=run_logger,
                     )
 
-                stage.set("hooks.on_workbook_before_save")
-                hooks.on_workbook_before_save(run_ctx)
+                    sheet_names = resolve_sheet_names(source_wb, plan.request.input_sheets)
+                    for sheet_index, sheet_name in enumerate(sheet_names):
+                        sheet = source_wb[sheet_name]
+                        out_sheet = output_wb.create_sheet(title=sheet_name)
+                        sheet_metadata = {**metadata, "sheet_index": sheet_index}
 
-                stage.set("save_output")
-                self.workbook_io.save_output(output_wb, prepared.output_file)
+                        registry.run_hooks(
+                            HookName.ON_SHEET_START,
+                            state=state,
+                            metadata=sheet_metadata,
+                            workbook=source_wb,
+                            sheet=sheet,
+                            table=None,
+                            input_file_name=plan.request.input_file.name,
+                            logger=run_logger,
+                        )
 
-            status = RunStatus.SUCCEEDED
+                        pipeline.process_sheet(
+                            sheet=sheet,
+                            output_sheet=out_sheet,
+                            state=state,
+                            metadata=sheet_metadata,
+                            input_file_name=plan.request.input_file.name,
+                        )
 
-        except (ConfigError, InputError, HookError, PipelineError) as exc:
-            status = RunStatus.FAILED
-            code = RunErrorCode.UNKNOWN_ERROR
-            if isinstance(exc, ConfigError):
-                code = RunErrorCode.CONFIG_ERROR
-            elif isinstance(exc, InputError):
-                code = RunErrorCode.INPUT_ERROR
-            elif isinstance(exc, HookError):
-                code = RunErrorCode.HOOK_ERROR
-            elif isinstance(exc, PipelineError):
-                code = RunErrorCode.PIPELINE_ERROR
-            logger_obj.error("%s at stage=%s: %s", code.value, stage.value, exc)
-            error = RunError(code=code, stage=stage.value, message=str(exc))
+                    registry.run_hooks(
+                        HookName.ON_WORKBOOK_BEFORE_SAVE,
+                        state=state,
+                        metadata=metadata,
+                        workbook=output_wb,
+                        sheet=None,
+                        table=None,
+                        input_file_name=plan.request.input_file.name,
+                        logger=run_logger,
+                    )
+                    output_wb.save(plan.output_path)
 
-        except Exception as exc:
-            logger_obj.exception("Engine run failed at stage=%s", stage.value, exc_info=exc)
-            status = RunStatus.FAILED
-            error = RunError(code=_classify_unknown(stage.value), stage=stage.value, message=str(exc))
+                status = RunStatus.SUCCEEDED
+            except (ConfigError, InputError, HookError, PipelineError) as exc:
+                status = RunStatus.FAILED
+                code_lookup = {
+                    ConfigError: RunErrorCode.CONFIG_ERROR,
+                    InputError: RunErrorCode.INPUT_ERROR,
+                    HookError: RunErrorCode.HOOK_ERROR,
+                    PipelineError: RunErrorCode.PIPELINE_ERROR,
+                }
+                code = next(
+                    (val for exc_type, val in code_lookup.items() if isinstance(exc, exc_type)),
+                    RunErrorCode.PIPELINE_ERROR,
+                )
+                error = RunError(code=code, stage=getattr(exc, "stage", None), message=str(exc))
+                run_logger.exception("Run failed", exc_info=exc)
+            except Exception as exc:  # pragma: no cover - defensive
+                status = RunStatus.FAILED
+                error = RunError(code=RunErrorCode.UNKNOWN_ERROR, stage=None, message=str(exc))
+                run_logger.exception("Run failed", exc_info=exc)
 
-        finally:
-            completed_at = datetime.utcnow()
-            emitter.emit(
-                "run.completed",
-                message="Run completed",
-                status=status.value,
-                stage=stage.value,
-                output_path=str(output_path) if output_path else None,
-                error=(
-                    {"code": error.code.value, "stage": error.stage, "message": error.message}
-                    if error
-                    else None
-                ),
-                started_at=started_at.isoformat() + "Z",
-                completed_at=completed_at.isoformat() + "Z",
-            )
+        if logger is not None:
+            _execute(logger)
+        else:
+            with create_run_logger_context(
+                log_format=self.settings.log_format,
+                log_level=self.settings.log_level,
+                log_file=plan.logs_path,
+            ) as log_ctx:
+                _execute(log_ctx.logger)
 
-        result_logs_dir = logs_dir or output_dir or Path(".")
+        completed_at = _utc_now()
         return RunResult(
             status=status,
             error=error,
-            run_id=run_id,
-            output_path=output_path,
-            logs_dir=result_logs_dir,
-            processed_file=processed_file,
+            output_path=plan.output_path if status == RunStatus.SUCCEEDED else None,
+            logs_dir=plan.logs_dir,
+            processed_file=plan.request.input_file.name,
             started_at=started_at,
             completed_at=completed_at,
         )

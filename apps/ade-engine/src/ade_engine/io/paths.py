@@ -1,84 +1,89 @@
-"""Request normalization and output path planning."""
-
+"""Run request normalization and path planning."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from ade_engine.config.loader import ResolvedConfigPackage, resolve_config_package
 from ade_engine.exceptions import InputError
 from ade_engine.types.run import RunRequest
 
 
 @dataclass(frozen=True)
-class PreparedRun:
-    """Resolved inputs/outputs for a run request."""
-
+class RunPlan:
     request: RunRequest
-    resolved_config: ResolvedConfigPackage
     output_dir: Path
-    output_file: Path
-    logs_dir: Path | None
-    logs_file: Path | None
-    config_sys_path: Path | None
+    output_path: Path
+    logs_dir: Path
+    logs_path: Path | None
 
 
-def prepare_run_request(request: RunRequest, *, default_config_package: str | None = None) -> PreparedRun:
-    """Normalize paths, resolve the config package, and fill defaults.
+def plan_run(request: RunRequest, *, log_format: str) -> RunPlan:
+    """Resolve a :class:`~ade_engine.types.run.RunRequest` into absolute paths."""
 
-    Rules:
-    - ``input_file`` is required.
-    - If ``output_dir`` is omitted, output is written to ``<input_dir>/output``.
-    - If ``output_file`` is omitted, it defaults to ``<input_stem>_normalized.xlsx`` under ``output_dir``.
-    - If ``output_file`` is provided as a bare filename, it is treated as relative to ``output_dir``.
-    - If ``logs_file`` is provided as a bare filename, it is treated as relative to ``logs_dir``.
-    """
+    config_package = Path(request.config_package).expanduser().resolve()
+    if not config_package.exists():
+        raise InputError(f"Config package path does not exist: {config_package}")
+    if config_package.is_file():
+        raise InputError(f"Config package path must be a directory: {config_package}")
 
-    resolved_config = resolve_config_package(request.config_package or default_config_package)
+    input_file = Path(request.input_file).expanduser().resolve()
+    if not input_file.exists():
+        raise InputError(f"Input file not found: {input_file}")
+    if input_file.is_dir():
+        raise InputError(f"Input file must be a file, not a directory: {input_file}")
 
-    if request.input_file is None:
-        raise InputError("RunRequest must include input_file")
-
-    input_file = Path(request.input_file).resolve()
-    output_dir = Path(request.output_dir).resolve() if request.output_dir else (input_file.parent / "output")
-
-    if request.output_file:
-        candidate = Path(request.output_file)
-        if not candidate.is_absolute() and candidate.parent == Path("."):
-            candidate = output_dir / candidate
-        output_file = candidate.resolve()
+    if request.output_path is not None:
+        output_path = (
+            request.output_path.expanduser().resolve()
+            if request.output_path.is_absolute()
+            else (Path.cwd() / request.output_path).expanduser().resolve()
+        )
+        output_dir = output_path.parent
     else:
-        output_file = (output_dir / f"{input_file.stem}_normalized.xlsx").resolve()
+        output_dir = (
+            request.output_dir.expanduser().resolve()
+            if request.output_dir is not None
+            else input_file.parent
+        )
+        output_path = (output_dir / f"{input_file.stem}_normalized.xlsx").resolve()
 
-    logs_dir = Path(request.logs_dir).resolve() if request.logs_dir else None
-    if request.logs_file:
-        candidate = Path(request.logs_file)
-        if logs_dir and not candidate.is_absolute() and candidate.parent == Path("."):
-            candidate = logs_dir / candidate
-        logs_file = candidate.resolve()
+    if output_path.suffix.lower() != ".xlsx":
+        raise InputError(f"Output path must end with .xlsx: {output_path}")
+
+    logs_dir = (
+        request.logs_dir.expanduser().resolve()
+        if request.logs_dir is not None
+        else output_dir
+    )
+
+    if request.logs_path is not None:
+        logs_path = (
+            request.logs_path.expanduser().resolve()
+            if request.logs_path.is_absolute()
+            else (logs_dir / request.logs_path).expanduser().resolve()
+        )
     else:
-        logs_file = (logs_dir / "engine_events.ndjson").resolve() if logs_dir else None
+        fmt = (log_format or "text").strip().lower()
+        suffix = "engine_events.ndjson" if fmt in {"ndjson", "json"} else "engine.log"
+        logs_path = (logs_dir / f"{input_file.stem}_{suffix}").resolve()
 
     normalized = RunRequest(
-        run_id=request.run_id,
-        config_package=resolved_config.package,
-        manifest_path=Path(request.manifest_path).resolve() if request.manifest_path else None,
+        config_package=config_package,
         input_file=input_file,
         input_sheets=list(request.input_sheets) if request.input_sheets else None,
         output_dir=output_dir,
-        output_file=output_file,
+        output_path=output_path,
         logs_dir=logs_dir,
-        logs_file=logs_file,
-        metadata=dict(request.metadata) if request.metadata else {},
+        logs_path=logs_path,
     )
 
-    return PreparedRun(
+    return RunPlan(
         request=normalized,
-        resolved_config=resolved_config,
         output_dir=output_dir,
-        output_file=output_file,
+        output_path=output_path,
         logs_dir=logs_dir,
-        logs_file=logs_file,
-        config_sys_path=resolved_config.sys_path,
+        logs_path=logs_path,
     )
-__all__ = ["PreparedRun", "prepare_run_request"]
+
+
+__all__ = ["RunPlan", "plan_run"]

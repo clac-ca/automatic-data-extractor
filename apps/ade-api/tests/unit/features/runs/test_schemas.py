@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 
-from ade_api.core.models import RunStatus
 from ade_api.features.runs.schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -13,6 +12,7 @@ from ade_api.features.runs.schemas import (
     RunLinks,
     RunResource,
 )
+from ade_api.models import RunStatus
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def run_identifiers() -> dict[str, UUID]:
 
 @pytest.fixture
 def timestamp() -> datetime:
-    return datetime(2024, 1, 1, tzinfo=timezone.utc)
+    return datetime(2024, 1, 1, tzinfo=UTC)
 
 
 def _links_for(run_id: UUID) -> RunLinks:
@@ -81,7 +81,14 @@ def test_run_create_request_serializes_minimal_options() -> None:
     request = RunCreateRequest()
     payload = request.model_dump()
 
-    assert payload == {"options": {"dry_run": False, "validate_only": False, "force_rebuild": False}}
+    assert payload == {
+        "options": {
+            "dry_run": False,
+            "validate_only": False,
+            "force_rebuild": False,
+            "debug": False,
+        }
+    }
 
 
 @pytest.mark.parametrize("cursor", [9, None])

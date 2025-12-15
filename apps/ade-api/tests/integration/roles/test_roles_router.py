@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import Any
+
 import pytest
 from httpx import AsyncClient
 
-from ade_api.core.models import User
+from ade_api.models import User
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -130,9 +131,7 @@ async def test_workspace_member_listing_admin(
     assert response.status_code == 200
     payload = response.json()
     members = _items(payload)
-    assert any(
-        str(m["user_id"]) == str(seed_identity["workspace_owner"]["id"]) for m in members
-    )
+    assert any(str(m["user_id"]) == str(seed_identity["workspace_owner"]["id"]) for m in members)
 
 
 async def test_workspace_member_listing_excludes_inactive_by_default(

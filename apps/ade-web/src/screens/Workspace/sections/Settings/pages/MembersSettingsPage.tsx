@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsDrawer } from "../components/SettingsDrawer";
@@ -14,7 +14,7 @@ import {
   useWorkspaceMembersQuery,
 } from "../hooks/useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition, WorkspaceMember } from "@features/Workspace/api/workspaces-api";
+import type { RoleDefinition, WorkspaceMember } from "@shared/workspaces";
 import type { UserSummary } from "@shared/users/api";
 import { Alert } from "@ui/Alert";
 import { Avatar } from "@ui/Avatar";

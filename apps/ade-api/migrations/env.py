@@ -11,8 +11,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 from ade_api.settings import get_settings
-from ade_api.infra.db import metadata
-from ade_api.infra.db.engine import attach_managed_identity, render_sync_url
+from ade_api.db import metadata
+from ade_api.db.engine import attach_managed_identity, render_sync_url
 
 config = context.config
 
@@ -23,7 +23,7 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
 
 
 def _import_models() -> None:
-    import ade_api.core.models  # noqa: F401
+    import ade_api.models  # noqa: F401
 
 
 _import_models()

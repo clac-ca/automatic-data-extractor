@@ -33,4 +33,4 @@ logging_paths+=("${logging_files[@]}")
 
 ade bundle "${logging_paths[@]}" \
   --out "${generated_dir}/ade-api-logging.md" \
-  --no-clip --no-show
+  --no-show

@@ -1,62 +1,51 @@
-# ADE Events v1 – Engine Frames → API Envelope
+# ADE Events v1 – Unified EventRecord streams
 
-ADE now standardizes run/build telemetry on a single canonical stream owned by the API. The engine emits lightweight frames to stdout; the API ingests them, stamps IDs/sequence, persists `events.ndjson`, and streams to clients (SSE/NDJSON download).
+ADE standardises run/build telemetry on a single canonical stream owned by the API. The engine emits NDJSON `EventRecord` objects to **stderr**; the API ingests them, enriches context, persists `events.ndjson`, and fans out over SSE.
 
-## Wire formats
+## EventRecord envelope
 
-### Engine frame (stdout)
-`apps/ade-engine/src/ade_engine/schemas/events/v1/frame.py`
-
-```jsonc
-{
-  "schema_id": "ade.engine.events.v1",
-  "type": "engine.table.summary",
-  "event_id": "uuid",          // engine-local UUID
-  "created_at": "2025-01-01T00:00:00Z",
-  "payload": { /* engine payload */ }
-}
-```
-
-- Strict (`extra="forbid"`); payload is a dict.
-- Only emitted to stdout (stderr is reserved for human-readable logs).
-- `event_id` is preserved as `origin_event_id` by the API.
-
-### API envelope (canonical)
-`apps/ade-api/src/ade_api/schemas/events/v1/envelope.py`
+Top-level keys match the engine schema; the API only adds optional context inside `data`:
 
 ```jsonc
 {
-  "schema_id": "ade.events.v1",
-  "type": "engine.table.summary",
-  "event_id": "evt_<uuid7>",    // stamped by API
-  "sequence": 42,               // monotonic per run
-  "created_at": "2025-01-01T00:00:00Z",
-  "source": "engine",           // or "api"
-  "workspace_id": "<uuid>",
-  "configuration_id": "<uuid>",
-  "run_id": "<uuid>",
-  "build_id": "<uuid|null>",
-  "origin_event_id": "<uuid|null>",
-  "payload": { /* validated payload */ }
+  "event_id": "uuid",               // engine-supplied or generated
+  "engine_run_id": "uuid",          // engine correlation
+  "timestamp": "2025-01-01T00:00:00Z",
+  "level": "info",
+  "event": "engine.table.summary",  // namespaced event name
+  "message": "Workbook processing started",
+  "data": {
+    "jobId": "<run_id>",
+    "workspaceId": "<workspace_id>",
+    "buildId": "<build_id>",
+    "configurationId": "<configuration_id>",
+    "...": "source-specific payload"
+  },
+  "error": { "...": "optional" }
 }
 ```
 
-- Strict envelope; payloads are typed where stabilized (run.*, console.line, engine.* summaries).
-- Persisted as `logs/events.ndjson` by the API dispatcher and streamed via SSE/NDJSON download.
+- Context (`jobId`, `workspaceId`, `buildId`, `configurationId`) is merged into `data` when present.
+- `event` names are dot-delimited (`run.complete`, `build.start`, `engine.phase.start`, `console.line`).
+
+## Sources
+- **Engine NDJSON stderr** – primary source; each line is a JSON object with an `event` field.
+- **API-origin events** – orchestration emits `run.*`, `build.*`, and `console.line` records using the same envelope.
+- **Console fallback** – non-JSON stdout/stderr lines are wrapped as `console.line` events with `data.scope` = `run` or `build`.
 
 ## Flow (happy path)
-1. API creates run → emits `run.queued`/`run.start` (source="api").
-2. API spawns engine with `stdout=PIPE`, `stderr=PIPE`.
-3. Engine writes `EngineEventFrameV1` lines to stdout; stderr lines become `console.line` events.
-4. API parses frames → `AdeEventV1` with `origin_event_id`, stamps `event_id` + `sequence`, persists, and streams.
-5. API emits `run.complete` with a RunResource snapshot when execution finishes.
+1. API creates a `RunEventStream` for `<runs_root>/<workspace>/<run_id>/logs/events.ndjson`.
+2. API emits `run.queued` (and `run.waiting_for_build` when applicable).
+3. If a build is required, `BuildsService.stream_build` emits `build.*` + `console.line scope=build` events **into the same stream** before engine events.
+4. API spawns the engine with NDJSON stderr; each parsed line becomes an EventRecord, enriched with run/build/workspace IDs, persisted, and streamed to subscribers with server-generated SSE IDs.
+5. API emits `run.complete` once supervision finishes (success, failure, or cancellation).
+
+## Persistence, replay, and SSE
+- **Run logs**: `<runs_root>/<workspace>/<run_id>/logs/events.ndjson` (single canonical stream per run).
+- **Build-only logs**: `<venvs_root>/<workspace>/<configuration>/<build>/logs/events.ndjson` reuse the same EventRecord format.
+- SSE frames always prefix `id: <string>`; the API assigns a monotonically increasing counter per stream and uses it for `Last-Event-ID` resume.
+- Replay reads the NDJSON log in order, skips entries until the SSE cursor (`Last-Event-ID`) is reached, then continues live on the same stream.
 
 ## Naming & versioning
-- `schema_id` discriminators: `ade.engine.events.v1` (frames) and `ade.events.v1` (canonical).
-- Event types are dot-delimited (`run.complete`, `console.line`, `engine.phase.start`).
-- New payload shapes should be added as versioned event types (introduce new `type` or payload fields; avoid breaking changes).
-
-## Testing expectations
-- Engine stdout contains only valid frames; flushing per line keeps UI responsive.
-- API dispatcher enforces monotonic `sequence` per run and preserves `origin_event_id` for traceability.
-- Frontend consumes only the API envelope; resume/replay uses `sequence` and `event_id`.
+- Envelope name stays `EventRecord`; add new fields under `data` to avoid breaking changes.
+- `event` values are dot-delimited; prefer new event names over changing payload structure.

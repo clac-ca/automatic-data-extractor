@@ -1,123 +1,54 @@
-# ade-engine
+# ADE Engine (CLI)
 
-`ade-engine` is a small, deterministic **spreadsheet normalization engine**. It takes an input workbook (XLSX or CSV), detects tables, maps source columns to a canonical schema, applies transforms + validation, and writes a normalized workbook.
-
-It is designed to run in two environments:
-
-- **Local / CLI:** human-friendly logging to the console and optional log files.
-- **Service / API:** structured **NDJSON** events on stdout (or a file) so an orchestrator can stream progress to a UI.
-
----
-
-## Key features
-
-- **Workbook → Sheet → Table pipeline** with clear stages:
-  detection → extraction → mapping → normalization → rendering
-- **Manifest-driven configuration** (`manifest.toml`) for schema + hook wiring
-- **Pluggable detectors/transformers/validators** implemented as plain Python callables
-- **Hooks** for lifecycle customization (e.g., table patching, post-processing)
-- **Reporting modes**
-  - `text`: readable lines (default)
-  - `ndjson`: newline-delimited JSON events for machines
-
----
+Lightweight, configurable engine for normalizing Excel/CSV workbooks. This README is a fast path to install, scaffold a config package, and run single/batch jobs.
 
 ## Install
 
-This repository is often used as a monorepo. Pick one:
-
 ```bash
-# If you have a wheel/sdist for ade-engine
-pip install ade-engine
-```
-
-```bash
-# From source (editable), from repo root:
-pip install -e apps/ade-engine
-```
-
-```bash
-# Install just the ade-engine package from GitHub (no local clone needed):
+# Stable
 pip install "git+https://github.com/clac-ca/automatic-data-extractor.git#subdirectory=apps/ade-engine"
+
+# Development branch
+pip install "git+https://github.com/clac-ca/automatic-data-extractor@development#subdirectory=apps/ade-engine"
 ```
 
-Dependencies include `openpyxl` (XLSX IO), `pydantic` (manifest validation), and `typer` (CLI).
-
----
-
-## Quick start
-
-Normalize a workbook:
+## Quickstart
 
 ```bash
-python -m ade_engine run --input path/to/source.xlsx
+# 1) Create a starter config package (uses bundled template)
+ade-engine config init my-config --package-name ade_config
+
+# 2) Validate the config package
+ade-engine config validate --config-package my-config
+
+# 3) Process a single file
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --output-dir output \
+  --config-package my-config
+
+# 4) Process an entire directory
+ade-engine process batch \
+  --input-dir data/samples \
+  --output-dir output/batch \
+  --config-package my-config
 ```
 
-Write output to a custom directory:
+Notes:
+- `--config-package` can point to your generated folder (e.g., `my-config`) or any config package path; it is required unless set via `ADE_ENGINE_CONFIG_PACKAGE` or `settings.toml`.
+- `process batch --include` acts as an allowlist; if provided, only matching files run. `--exclude` patterns always prune recursively.
+- `process file` requires either `--output` or `--output-dir` (mutually exclusive).
 
-```bash
-python -m ade_engine run --input source.xlsx --output-dir ./out
-```
+## Commands
 
-Emit NDJSON events to stdout (useful for an API that streams progress):
+- `ade-engine process file` – run the engine on one input file.
+- `ade-engine process batch` – recurse a directory of inputs.
+- `ade-engine config init` – scaffold a config package from the bundled template.
+- `ade-engine config validate` – import and register a config package to ensure it’s wired correctly.
+- `ade-engine version` – print the CLI version.
 
-```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson
-```
+## Tips
 
-Write NDJSON to a file:
-
-```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson --logs-dir ./logs
-```
-
-Pass run-level metadata (included in every event):
-
-```bash
-python -m ade_engine run --input source.xlsx --log-format ndjson \
-  --meta workspace_id=ws_123 --meta config_id=cfg_456
-```
-
----
-
-## Where to read next
-
-- Project overview: `docs/overview.md`
-- Architecture: `docs/architecture.md`
-- Workflow (data flow): `docs/workflow.md`
-- Public API: `docs/api.md`
-- Configuration: `docs/configuration.md`
-- Development guide: `docs/development.md`
-- Troubleshooting: `docs/troubleshooting.md`
-
----
-
-## High-level architecture
-
-```mermaid
-flowchart LR
-  CLI[CLI / API runner] -->|RunRequest| Engine[Engine]
-  Engine --> Config[Config runtime (manifest + modules)]
-  Engine --> IO[Workbook IO]
-  Engine --> Pipeline[Pipeline]
-  Pipeline --> Detect[Detect tables]
-  Pipeline --> Extract[Extract cells]
-  Pipeline --> Map[Map columns]
-  Pipeline --> Norm[Normalize + validate]
-  Pipeline --> Render[Render output]
-  CLI --> Reporting[Reporting\n(text or ndjson)]
-  Reporting --> Engine
-  Reporting --> Pipeline
-```
-
----
-
-## Contributing
-
-See `docs/development.md` for local setup, conventions, and how to add new config modules safely.
-
----
-
-## License
-
-See the repository’s license file (typically `LICENSE`) for terms.
+- Logs and outputs default to `./logs` and `./output` when not provided.
+- To change defaults globally, set environment variables with the `ADE_ENGINE_` prefix or add a `settings.toml` alongside your runs.
+- Need types for the web app? From the repo root, run `ade types` (if working in the full monorepo).

@@ -1,7 +1,7 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummary, components, paths } from "@schema";
-import type { AdeEvent as RunStreamEvent } from "./types";
+import type { components, paths } from "@schema";
+import type { RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
 export type RunStatus = RunResource["status"];
@@ -15,6 +15,7 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
   force_rebuild: false,
+  debug: false,
 };
 
 export async function createRun(
@@ -56,6 +57,13 @@ export async function* streamRun(
 }
 
 export async function* streamRunEvents(
+  url: string,
+  signal?: AbortSignal,
+): AsyncGenerator<RunStreamEvent> {
+  yield* streamRunEventsViaFetch(url, signal);
+}
+
+async function* streamRunEventsViaFetch(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
@@ -103,7 +111,7 @@ export async function* streamRunEvents(
           continue;
         }
         yield event;
-        if (event.type === "run.complete") {
+        if (event.event === "run.complete") {
           shouldClose = true;
           break;
         }
@@ -141,21 +149,54 @@ export async function* streamRunEvents(
 
 function parseSseEvent(rawEvent: string): RunStreamEvent | null {
   const dataLines: string[] = [];
+  let sseId: string | null = null;
+  let sseEvent: string | null = null;
+
   for (const line of rawEvent.split(/\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+      continue;
+    }
+    if (line.startsWith("id:")) {
+      sseId = line.slice(3).trim();
+      continue;
+    }
+    if (line.startsWith("event:")) {
+      sseEvent = line.slice(6).trim();
+      continue;
     }
   }
+
   if (!dataLines.length) {
     return null;
   }
+
   const payload = dataLines.join("\n");
   if (!payload.trim()) {
     return null;
   }
+
   try {
-    return JSON.parse(payload) as RunStreamEvent;
+    const parsed = JSON.parse(payload) as RunStreamEvent;
+    (parsed as Record<string, unknown>)._raw = payload;
+
+    // Fill in missing event/type from SSE event field if not present in payload.
+    if (sseEvent && !(parsed as Record<string, unknown>).event && !(parsed as Record<string, unknown>).type) {
+      (parsed as Record<string, unknown>).event = sseEvent;
+    }
+
+    // Attach sequence/id if absent and SSE id is numeric or non-empty.
+    if (sseId && (parsed as Record<string, unknown>).sequence === undefined) {
+      const numeric = Number(sseId);
+      if (Number.isFinite(numeric)) {
+        (parsed as Record<string, unknown>).sequence = numeric;
+      } else {
+        (parsed as Record<string, unknown>).sse_id = sseId;
+      }
+    }
+
+    return parsed;
   } catch (error) {
     console.warn("Skipping malformed run event", error, payload);
     return null;
@@ -287,33 +328,6 @@ export async function fetchRun(
   return data as RunResource;
 }
 
-export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummary | null> {
-  // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
-  try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
-      params: { path: { run_id: runId } },
-      signal,
-    });
-    if (data) return data as RunSummary;
-  } catch (error) {
-    // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
-    console.warn("Falling back to embedded run summary", error);
-  }
-
-  const run = await fetchRun(runId, signal);
-  const summary = (run as { summary?: RunSummary | string | null })?.summary;
-  if (!summary) return null;
-  if (typeof summary === "string") {
-    try {
-      return JSON.parse(summary) as RunSummary;
-    } catch (error) {
-      console.warn("Unable to parse run summary", { error });
-      return null;
-    }
-  }
-  return summary as RunSummary;
-}
-
 export function runOutputUrl(run: RunResource): string | null {
   const output = run.output;
   const ready = output?.ready;
@@ -340,5 +354,4 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
 export const runQueryKeys = {
   detail: (runId: string) => ["run", runId] as const,
   telemetry: (runId: string) => ["run-telemetry", runId] as const,
-  summary: (runId: string) => ["run-summary", runId] as const,
 };

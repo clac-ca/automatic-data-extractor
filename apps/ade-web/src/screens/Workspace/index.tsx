@@ -7,16 +7,15 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
-import { WorkspaceProvider } from "@features/Workspace/context/WorkspaceContext";
-import { WorkbenchWindowProvider, useWorkbenchWindow } from "@features/Workspace/context/WorkbenchWindowContext";
+import { useWorkspacesQuery, workspacesKeys, WORKSPACE_LIST_DEFAULT_PARAMS, writePreferredWorkspaceId, type WorkspaceProfile } from "@shared/workspaces";
+import { WorkspaceProvider } from "@screens/Workspace/context/WorkspaceContext";
+import { WorkbenchWindowProvider, useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { createScopedStorage } from "@shared/storage";
-import { writePreferredWorkspace } from "@features/Workspace/state/workspace-preferences";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
-import { WorkspaceNav, WorkspaceNavList } from "@features/Workspace/components/WorkspaceNav";
-import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@features/Workspace/components/workspace-navigation";
+import { WorkspaceNav, WorkspaceNavList } from "@screens/Workspace/components/WorkspaceNav";
+import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
@@ -24,14 +23,14 @@ import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { NotificationsProvider } from "@shared/notifications";
 
-import WorkspaceOverviewRoute from "@features/Workspace/sections/Overview";
-import WorkspaceDocumentsRoute from "@features/Workspace/sections/Documents";
-import DocumentDetailRoute from "@features/Workspace/sections/Documents/components/DocumentDetail";
-import WorkspaceRunsRoute from "@features/Workspace/sections/Runs";
-import WorkspaceConfigsIndexRoute from "@features/Workspace/sections/ConfigBuilder";
-import WorkspaceConfigRoute from "@features/Workspace/sections/ConfigBuilder/detail";
-import ConfigEditorWorkbenchRoute from "@features/Workspace/sections/ConfigBuilder/workbench";
-import WorkspaceSettingsRoute from "@features/Workspace/sections/Settings";
+import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
+import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
+import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
+import WorkspaceRunsRoute from "@screens/Workspace/sections/Runs";
+import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
+import WorkspaceConfigRoute from "@screens/Workspace/sections/ConfigBuilder/detail";
+import ConfigEditorWorkbenchRoute from "@screens/Workspace/sections/ConfigBuilder/workbench";
+import WorkspaceSettingsRoute from "@screens/Workspace/sections/Settings";
 
 type WorkspaceSectionRender =
   | { readonly kind: "redirect"; readonly to: string }
@@ -96,7 +95,7 @@ function WorkspaceContent() {
 
   useEffect(() => {
     if (workspace) {
-      writePreferredWorkspace(workspace);
+      writePreferredWorkspaceId(workspace.id);
     }
   }, [workspace]);
 
@@ -388,7 +387,12 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           ) : null}
           {!immersiveWorkbenchActive && isMobileNavOpen ? (
             <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
-              <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeMobileNav} />
+              <button
+                type="button"
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                onClick={closeMobileNav}
+                aria-label="Close navigation"
+              />
               <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                   <div className="flex flex-col leading-tight">
@@ -548,13 +552,6 @@ export function resolveWorkspaceSection(
         element: <WorkspaceConfigRoute params={{ configId: decodeURIComponent(second) }} />,
       };
     }
-    case "configs": {
-      const legacyTarget = `/workspaces/${workspaceId}/config-builder${second ? `/${second}` : ""}${third ? `/${third}` : ""}`;
-      return {
-        kind: "redirect",
-        to: `${legacyTarget}${suffix}`,
-      };
-    }
     case "settings": {
       const remaining = segments.slice(1);
       const normalized = remaining.length > 0 ? remaining : [];
@@ -577,8 +574,4 @@ export function resolveWorkspaceSection(
 }
 function ConfigEditorWorkbenchRouteWithParams({ configId }: { readonly configId: string }) {
   return <ConfigEditorWorkbenchRoute params={{ configId }} />;
-}
-
-export function getDefaultWorkspacePath(workspaceId: string) {
-  return `/workspaces/${workspaceId}/${defaultWorkspaceSection.path}`;
 }

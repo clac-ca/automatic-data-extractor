@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import mimetypes
 from collections.abc import AsyncIterator
-from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -22,22 +21,31 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 
-from ade_api.app.dependencies import (
-    get_build_event_dispatcher,
-    get_run_event_dispatcher,
+from ade_api.api.deps import (
     get_runs_service,
 )
+from ade_api.common.downloads import build_content_disposition
+from ade_api.common.encoding import json_bytes
+from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
-from ade_api.common.downloads import build_content_disposition
 from ade_api.common.pagination import PageParams
+from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf
-from ade_api.core.models import RunStatus
+from ade_api.db.session import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.infra.db.session import get_sessionmaker
-from ade_api.schemas.events import AdeEvent
+from ade_api.models import RunStatus
 from ade_api.settings import Settings
 
+from .event_stream import get_run_event_streams
+from .exceptions import (
+    RunDocumentMissingError,
+    RunInputMissingError,
+    RunLogsFileMissingError,
+    RunNotFoundError,
+    RunOutputMissingError,
+    RunOutputNotReadyError,
+)
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -50,16 +58,7 @@ from .schemas import (
 )
 from .service import (
     DEFAULT_EVENTS_PAGE_LIMIT,
-    RunExecutionContext,
     RunsService,
-)
-from .exceptions import (
-    RunDocumentMissingError,
-    RunInputMissingError,
-    RunLogsFileMissingError,
-    RunNotFoundError,
-    RunOutputMissingError,
-    RunOutputNotReadyError,
 )
 
 router = APIRouter(
@@ -77,52 +76,37 @@ async def resolve_run_filters(
     return RunFilters(status=status, input_document_id=input_document_id)
 
 
-def _event_bytes(event: AdeEvent) -> bytes:
-    return event.model_dump_json().encode("utf-8") + b"\n"
-
-
-def _sse_event_bytes(event: AdeEvent) -> bytes:
-    """Format an AdeEvent for SSE with resumable sequence IDs."""
-
-    data = event.model_dump_json()
-    lines = data.splitlines() or [""]
-    parts: list[str] = []
-    if event.sequence is not None:
-        parts.append(f"id: {event.sequence}")
-    parts.append(f"event: {event.type}")
-    parts.extend(f"data: {line}" for line in lines)
-    return "\n".join(parts).encode("utf-8") + b"\n\n"
+def _event_bytes(event: EventRecord) -> bytes:
+    return json_bytes(event) + b"\n"
 
 
 async def _execute_run_background(
-    context_data: dict[str, Any],
+    run_id: str,
     options_data: dict[str, Any],
-    settings: Settings,
+    settings_payload: dict[str, Any],
 ) -> None:
     """Run execution coroutine used for non-streaming requests."""
 
+    settings = Settings(**settings_payload)
     session_factory = get_sessionmaker(settings=settings)
-    context = RunExecutionContext.from_dict(context_data)
     options = RunCreateOptions(**options_data)
-    dispatcher = get_run_event_dispatcher(settings=settings)
-    build_dispatcher = get_build_event_dispatcher(settings=settings)
+    event_streams = get_run_event_streams()
     async with session_factory() as session:
         service = RunsService(
             session=session,
             settings=settings,
-            event_dispatcher=dispatcher,
-            event_storage=dispatcher.storage,
-            build_event_dispatcher=build_dispatcher,
+            event_streams=event_streams,
+            build_event_streams=event_streams,
         )
         try:
-            await service.run_to_completion(context=context, options=options)
+            await service.run_to_completion(run_id=UUID(run_id), options=options)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception(
                 "run.background.failed",
-                extra=log_context(run_id=context.run_id),
+                extra=log_context(run_id=run_id),
             )
             async for event in service.handle_background_failure(
-                context=context,
+                run_id=UUID(run_id),
                 options=options,
                 error=exc,
             ):
@@ -146,7 +130,7 @@ async def create_run_endpoint(
     """Create a run for ``configuration_id`` and enqueue execution."""
 
     try:
-        run, context = await service.prepare_run(
+        run = await service.prepare_run(
             configuration_id=configuration_id,
             options=payload.options,
         )
@@ -158,13 +142,12 @@ async def create_run_endpoint(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     resource = await service.to_resource(run)
-    context_dict = context.as_dict()
     options_dict = payload.options.model_dump()
     background_tasks.add_task(
         _execute_run_background,
-        context_dict,
+        str(run.id),
         options_dict,
-        service.settings,
+        service.settings.model_dump(mode="python"),
     )
     return resource
 
@@ -264,7 +247,7 @@ async def download_run_input_endpoint(
 
     media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    disposition = (document.original_filename)
+    disposition = document.original_filename
     response.headers["Content-Disposition"] = disposition
     return response
 
@@ -291,6 +274,7 @@ async def get_run_events_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if format == "ndjson":
+
         async def event_stream() -> AsyncIterator[bytes]:
             for event in events:
                 yield _event_bytes(event)
@@ -314,9 +298,8 @@ async def stream_run_events_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
 
-    last_event_id_header = (
-        request.headers.get("last-event-id")
-        or request.headers.get("Last-Event-ID")
+    last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
+        "Last-Event-ID"
     )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:
@@ -327,25 +310,57 @@ async def stream_run_events_endpoint(
     start_sequence = start_sequence or 0
 
     async def event_stream() -> AsyncIterator[bytes]:
-        reader = service.event_log_reader(workspace_id=run.workspace_id, run_id=run.id)
         last_sequence = start_sequence
 
-        for event in reader.iter(after_sequence=start_sequence):
-            yield _sse_event_bytes(event)
-            if event.sequence:
-                last_sequence = event.sequence
+        async with service.subscribe_to_events(run) as subscription:
+            for event in service.iter_events(run=run, after_sequence=start_sequence):
+                seq = event.get("sequence")
+                if isinstance(seq, int):
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                    event["sequence"] = last_sequence
+                yield sse_json(
+                    str(event.get("event") or "message"),
+                    event,
+                    event_id=last_sequence,
+                )
+                if event.get("event") == "run.complete":
+                    return
 
-        async with service.subscribe_to_events(run.id) as subscription:
+            run_already_finished = run.status in {
+                RunStatus.SUCCEEDED,
+                RunStatus.FAILED,
+                RunStatus.CANCELLED,
+            }
+            if run_already_finished:
+                return
+
             async for live_event in subscription:
-                if live_event.sequence and live_event.sequence <= last_sequence:
-                    continue
-                yield _sse_event_bytes(live_event)
-                if live_event.sequence:
-                    last_sequence = live_event.sequence
-                if live_event.type == "run.complete" and live_event.source != "engine":
+                seq = live_event.get("sequence")
+                if isinstance(seq, int):
+                    if seq <= last_sequence:
+                        continue
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                    live_event["sequence"] = last_sequence
+                yield sse_json(
+                    str(live_event.get("event") or "message"),
+                    live_event,
+                    event_id=last_sequence,
+                )
+                if live_event.get("event") == "run.complete":
                     break
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

@@ -11,4 +11,3 @@ def utc_now() -> datetime:
     """Return the current UTC time with timezone information."""
 
     return datetime.now(tz=UTC)
-

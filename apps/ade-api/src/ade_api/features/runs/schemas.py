@@ -7,11 +7,11 @@ from typing import Literal
 
 from pydantic import Field
 
+from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
-from ade_api.core.models import RunStatus
-from ade_api.schemas.events import AdeEvent
+from ade_api.models import RunStatus
 
 RunObjectType = Literal["ade.run"]
 
@@ -36,6 +36,10 @@ class RunCreateOptions(BaseSchema):
     force_rebuild: bool = Field(
         default=False,
         description="If true, rebuild the configuration environment before running.",
+    )
+    debug: bool = Field(
+        default=False,
+        description="Enable verbose engine logging (passes --debug to ade_engine).",
     )
     input_document_id: UUIDStr | None = Field(
         default=None,
@@ -153,5 +157,5 @@ class RunPage(Page[RunResource]):
 class RunEventsPage(BaseSchema):
     """Paginated ADE events for a run."""
 
-    items: list[AdeEvent]
+    items: list[EventRecord]
     next_after_sequence: int | None = None

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.core.models import User, UserCredential, UserIdentity
+from ade_api.models import User, UserCredential, UserIdentity
 
 
 def _canonical_email(value: str) -> str:
@@ -68,11 +68,7 @@ class UsersRepository:
         return result.scalar_one_or_none()
 
     async def list_users(self) -> list[User]:
-        stmt = (
-            select(User)
-            .options(selectinload(User.credential))
-            .order_by(User.email_canonical)
-        )
+        stmt = select(User).options(selectinload(User.credential)).order_by(User.email_canonical)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -123,20 +119,12 @@ class UsersRepository:
         await self._session.refresh(credential)
         return credential
 
-    async def get_credential(
-        self, user_id: str
-    ) -> UserCredential | None:
-        stmt = (
-            select(UserCredential)
-            .where(UserCredential.user_id == user_id)
-            .limit(1)
-        )
+    async def get_credential(self, user_id: str) -> UserCredential | None:
+        stmt = select(UserCredential).where(UserCredential.user_id == user_id).limit(1)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def create_identity(
-        self, *, user: User, provider: str, subject: str
-    ) -> UserIdentity:
+    async def create_identity(self, *, user: User, provider: str, subject: str) -> UserIdentity:
         identity = UserIdentity(
             user_id=user.id,
             provider=provider,
@@ -161,5 +149,6 @@ class UsersRepository:
         await self._session.flush()
         await self._session.refresh(user)
         return user
+
 
 __all__ = ["UsersRepository"]

@@ -1,8 +1,8 @@
 import { NavLink } from "@app/nav/Link";
 import clsx from "clsx";
 
-import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@features/Workspace/components/workspace-navigation";
-import type { WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@screens/Workspace/components/workspace-navigation";
+import type { WorkspaceProfile } from "@shared/workspaces";
 
 const COLLAPSED_NAV_WIDTH = "4.25rem";
 const EXPANDED_NAV_WIDTH = "18.75rem";
@@ -24,7 +24,6 @@ export function WorkspaceNav({ workspace, collapsed, onToggleCollapse, items, on
       className="hidden h-screen flex-shrink-0 bg-gradient-to-b from-slate-50/80 via-white to-slate-50/60 px-3 py-4 transition-[width] duration-200 ease-out lg:flex"
       style={{ width: collapsed ? COLLAPSED_NAV_WIDTH : EXPANDED_NAV_WIDTH }}
       aria-label="Primary workspace navigation"
-      aria-expanded={!collapsed}
     >
       <div
         className={clsx(
@@ -65,6 +64,7 @@ export function WorkspaceNav({ workspace, collapsed, onToggleCollapse, items, on
             onClick={onToggleCollapse}
             className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-slate-500 hover:border-brand-200 hover:text-brand-600"
             aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-expanded={!collapsed}
           >
             {collapsed ? <ExpandIcon /> : <CollapseIcon />}
           </button>
@@ -97,7 +97,7 @@ export function WorkspaceNavList({
       {showHeading && !collapsed ? (
         <p className="mb-3 px-1 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-slate-400/90">Workspace</p>
       ) : null}
-      <ul className={clsx("flex flex-col gap-1.5", collapsed ? "items-center" : undefined, className)} role="list">
+      <ul className={clsx("flex flex-col gap-1.5", collapsed ? "items-center" : undefined, className)}>
         {items.map((item) => (
           <li key={item.id} className="w-full">
             <NavLink

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import inspect
 import logging
 import mimetypes
 import os
@@ -17,11 +16,38 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.events import (
+    EventRecord,
+    coerce_event_record,
+    ensure_event_context,
+    new_event_record,
+)
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
-from ade_api.core.models import (
+from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.features.configs.repository import ConfigurationsRepository
+from ade_api.features.configs.storage import ConfigStorage
+from ade_api.features.documents.repository import DocumentsRepository
+from ade_api.features.documents.staging import stage_document_input
+from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.runs.event_stream import (
+    RunEventContext,
+    RunEventStream,
+    RunEventStreamRegistry,
+)
+from ade_api.features.system_settings.schemas import SafeModeStatus
+from ade_api.features.system_settings.service import (
+    SAFE_MODE_DEFAULT_DETAIL,
+    SafeModeService,
+)
+from ade_api.infra.storage import (
+    workspace_documents_root,
+    workspace_run_root,
+)
+from ade_api.infra.venv import apply_venv_to_env, venv_python_path
+from ade_api.models import (
     BuildStatus,
     Configuration,
     ConfigurationStatus,
@@ -29,38 +55,8 @@ from ade_api.core.models import (
     Run,
     RunStatus,
 )
-from ade_api.features.builds.event_dispatcher import BuildEventDispatcher
-from ade_api.features.builds.schemas import BuildCreateOptions
-from ade_api.features.builds.service import BuildExecutionContext, BuildsService
-from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.features.configs.repository import ConfigurationsRepository
-from ade_api.features.configs.storage import ConfigStorage
-from ade_api.features.documents.repository import DocumentsRepository
-from ade_api.features.documents.staging import stage_document_input
-from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.runs.emitters import RunEventEmitter
-from ade_api.features.system_settings.schemas import SafeModeStatus
-from ade_api.features.system_settings.service import (
-    SAFE_MODE_DEFAULT_DETAIL,
-    SafeModeService,
-)
-from ade_api.infra.storage import (
-    build_venv_path,
-    workspace_documents_root,
-    workspace_run_root,
-)
-from ade_api.infra.venv import apply_venv_to_env, venv_python_path
-from ade_api.schemas.events import (
-    AdeEvent,
-    AdeEventPayload,
-    ConsoleLinePayload,
-    EngineEventFrame,
-    RunCompletedPayload,
-    RunQueuedPayload,
-)
 from ade_api.settings import Settings
 
-from .event_dispatcher import RunEventDispatcher, RunEventLogReader, RunEventStorage
 from .exceptions import (
     RunDocumentMissingError,
     RunInputMissingError,
@@ -97,9 +93,10 @@ event_logger = logging.getLogger("ade_api.runs.events")
 
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
 
-# Stream frames are AdeEvents as far as the public API is concerned. Internally
-# we also see EngineEventFrame and StdoutFrame objects from the process runner
-# plus RunExecutionResult markers used to finalize runs.
+
+# Stream frames include engine output frames consumed internally plus
+# EventRecords surfaced to callers alongside RunExecutionResult markers used to
+# finalize runs.
 @dataclass(slots=True)
 class RunExecutionResult:
     """Outcome of an engine-backed run execution."""
@@ -112,7 +109,7 @@ class RunExecutionResult:
     summary_json: str | None = None
 
 
-RunStreamFrame = AdeEvent | EngineEventFrame | StdoutFrame | RunExecutionResult
+RunStreamFrame = StdoutFrame | EventRecord | RunExecutionResult
 
 
 # --------------------------------------------------------------------------- #
@@ -135,42 +132,12 @@ class RunPathsSnapshot:
 
 @dataclass(slots=True, frozen=True)
 class RunExecutionContext:
-    """Minimal data required to execute a run outside the request scope."""
+    """Minimal identifiers required to execute a run."""
 
     run_id: UUID
     configuration_id: UUID
     workspace_id: UUID
-    venv_path: str
     build_id: UUID
-    runs_dir: str | None = None
-    build_context: BuildExecutionContext | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "run_id": str(self.run_id),
-            "configuration_id": str(self.configuration_id),
-            "workspace_id": str(self.workspace_id),
-            "venv_path": self.venv_path,
-            "build_id": str(self.build_id),
-            "runs_dir": self.runs_dir or "",
-            "build_context": self.build_context.as_dict() if self.build_context else None,
-        }
-
-    @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> RunExecutionContext:
-        return cls(
-            run_id=UUID(str(payload["run_id"])),
-            configuration_id=UUID(str(payload["configuration_id"])),
-            workspace_id=UUID(str(payload["workspace_id"])),
-            venv_path=payload["venv_path"],
-            build_id=UUID(str(payload["build_id"])),
-            runs_dir=payload.get("runs_dir") or None,
-            build_context=(
-                BuildExecutionContext.from_dict(payload["build_context"])
-                if payload.get("build_context")
-                else None
-            ),
-        )
 
 
 # --------------------------------------------------------------------------- #
@@ -197,10 +164,11 @@ class RunsService:
         supervisor: RunExecutionSupervisor | None = None,
         safe_mode_service: SafeModeService | None = None,
         storage: ConfigStorage | None = None,
-        event_dispatcher: RunEventDispatcher | None = None,
-        event_storage: RunEventStorage | None = None,
-        build_event_dispatcher: BuildEventDispatcher | None = None,
+        event_streams: RunEventStreamRegistry | None = None,
+        build_event_streams: RunEventStreamRegistry | None = None,
     ) -> None:
+        from ade_api.features.builds.service import BuildsService
+
         self._session = session
         self._settings = settings
         self._configs = ConfigurationsRepository(session)
@@ -211,18 +179,13 @@ class RunsService:
         self._storage = storage or ConfigStorage(
             settings=settings,
         )
+        self._event_streams = event_streams or RunEventStreamRegistry()
+        self._build_event_streams = build_event_streams or self._event_streams
         self._builds_service = BuildsService(
             session=session,
             settings=settings,
             storage=self._storage,
-            event_dispatcher=build_event_dispatcher,
-            event_storage=(build_event_dispatcher.storage if build_event_dispatcher else None),
-        )
-        if event_dispatcher and event_storage is None:
-            event_storage = event_dispatcher.storage
-        self._event_storage = event_storage or RunEventStorage(settings=settings)
-        self._event_dispatcher = event_dispatcher or RunEventDispatcher(
-            storage=self._event_storage
+            event_streams=self._build_event_streams,
         )
 
         if settings.documents_dir is None:
@@ -241,8 +204,8 @@ class RunsService:
         *,
         configuration_id: UUID,
         options: RunCreateOptions,
-    ) -> tuple[Run, RunExecutionContext]:
-        """Create the queued run row and return its execution context."""
+    ) -> Run:
+        """Create the queued run row and persist initial events."""
 
         logger.debug(
             "run.prepare.start",
@@ -267,7 +230,7 @@ class RunsService:
 
         run_id = self._generate_run_id()
 
-        build, build_ctx = await self._builds_service.ensure_build_for_run(
+        build, _ = await self._builds_service.ensure_build_for_run(
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             force_rebuild=options.force_rebuild,
@@ -275,12 +238,6 @@ class RunsService:
             reason="on_demand",
         )
         build_id = build.id
-        venv_path = build_venv_path(
-            self._settings,
-            configuration.workspace_id,
-            configuration.id,
-            build_id,
-        )
         run_status = (
             RunStatus.WAITING_FOR_BUILD
             if build.status is not BuildStatus.READY
@@ -310,26 +267,15 @@ class RunsService:
         await self._session.commit()
         await self._session.refresh(run)
 
-        runs_root = workspace_run_root(self._settings, configuration.workspace_id)
-        context = RunExecutionContext(
-            run_id=run.id,
-            workspace_id=configuration.workspace_id,
-            configuration_id=configuration.id,
-            venv_path=str(venv_path),
-            build_id=build_id,
-            runs_dir=str(runs_root),
-            build_context=build_ctx if (build.status is not BuildStatus.READY) else None,
-        )
-
         mode_literal = "validate" if options.validate_only else "execute"
         await self._emit_api_event(
             run=run,
             type_="run.queued",
-            payload=RunQueuedPayload(
-                status="queued",
-                mode=mode_literal,
-                options=options.model_dump(exclude_none=True),
-            ),
+            payload={
+                "status": "queued",
+                "mode": mode_literal,
+                "options": options.model_dump(exclude_none=True),
+            },
         )
         if run.status is RunStatus.WAITING_FOR_BUILD:
             await self._emit_api_event(
@@ -354,12 +300,23 @@ class RunsService:
                 force_rebuild=options.force_rebuild,
             ),
         )
-        return run, context
+        return run
+
+    async def _execution_context_for_run(self, run_id: UUID) -> RunExecutionContext:
+        run = await self._require_run(run_id)
+        if run.build_id is None:
+            raise RuntimeError(f"Run {run_id} is missing build metadata")
+        return RunExecutionContext(
+            run_id=run.id,
+            configuration_id=run.configuration_id,
+            workspace_id=run.workspace_id,
+            build_id=run.build_id,
+        )
 
     async def run_to_completion(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
     ) -> None:
         """Execute the run, exhausting the event stream."""
@@ -367,21 +324,17 @@ class RunsService:
         logger.info(
             "run.execute.start",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                run_id=run_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
         )
-        async for _ in self.stream_run(context=context, options=options):
+        async for _ in self.stream_run(run_id=run_id, options=options):
             pass
         logger.info(
             "run.execute.completed",
             extra=log_context(
-                workspace_id=context.workspace_id,
-                configuration_id=context.configuration_id,
-                run_id=context.run_id,
+                run_id=run_id,
                 validate_only=options.validate_only,
                 dry_run=options.dry_run,
             ),
@@ -390,11 +343,12 @@ class RunsService:
     async def stream_run(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
     ) -> AsyncIterator[RunStreamFrame]:
         """Iterate through run events while executing the engine."""
 
+        context = await self._execution_context_for_run(run_id)
         logger.debug(
             "run.stream.start",
             extra=log_context(
@@ -436,28 +390,35 @@ class RunsService:
         if queued_event:
             yield queued_event
 
-        if context.build_context:
-            build_context = context.build_context
-            build_options = BuildCreateOptions(force=options.force_rebuild, wait=True)
-            async for event in self._builds_service.stream_build(
-                context=build_context,
-                options=build_options,
+        build = await self._builds_service.get_build_or_raise(
+            context.build_id,
+            workspace_id=context.workspace_id,
+        )
+        if build.status is not BuildStatus.READY:
+            await self._builds_service.launch_build_if_needed(
+                build=build,
+                reason="run_requested",
+                run_id=run.id,
+            )
+
+            run_stream = self._event_stream_for_run(run)
+            async for event in self._builds_service.stream_build_events(
+                build=build,
+                start_sequence=None,
+                timeout_seconds=float(self._settings.build_timeout.total_seconds()),
             ):
-                forwarded = await self._event_dispatcher.emit(
-                    type=event.type,
-                    source=self._normalized_event_source(getattr(event, "source", None)),
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    build_id=event.build_id or build_context.build_id,
-                    payload=event.payload,
+                enriched = ensure_event_context(
+                    event,
+                    job_id=str(run.id),
+                    workspace_id=str(run.workspace_id),
+                    build_id=str(context.build_id),
+                    configuration_id=str(run.configuration_id),
                 )
+                forwarded = await run_stream.append(enriched)
+                self._log_event_debug(forwarded, origin="build")
                 yield forwarded
 
-            build = await self._builds_service.get_build_or_raise(
-                build_context.build_id,
-                workspace_id=build_context.workspace_id,
-            )
+            await self._session.refresh(build)
             if build.status is not BuildStatus.READY:
                 error_message = build.error_message or (
                     f"Configuration {build.configuration_id} build failed"
@@ -465,12 +426,12 @@ class RunsService:
                 yield await self._emit_api_event(
                     run=run,
                     type_="console.line",
-                    payload=ConsoleLinePayload(
-                        scope="run",
-                        stream="stderr",
-                        level="error",
-                        message=error_message,
-                    ),
+                    payload={
+                        "scope": "run",
+                        "stream": "stderr",
+                        "level": "error",
+                        "message": error_message,
+                    },
                 )
                 run_dir = self._run_dir_for_run(
                     workspace_id=run.workspace_id,
@@ -499,31 +460,27 @@ class RunsService:
                 )
                 return
 
-            venv_path = await self._builds_service.ensure_local_env(build=build)
             build_done_message = "Configuration build completed; starting ADE run."
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
-                payload=ConsoleLinePayload(
-                    scope="run",
-                    stream="stdout",
-                    level="info",
-                    message=build_done_message,
-                ),
-            )
-            context = RunExecutionContext(
-                run_id=context.run_id,
-                configuration_id=context.configuration_id,
-                workspace_id=context.workspace_id,
-                venv_path=str(venv_path),
-                build_id=context.build_id,
-                runs_dir=context.runs_dir,
-                build_context=None,
+                payload={
+                    "scope": "run",
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": build_done_message,
+                },
             )
 
         run = await self._transition_status(run, RunStatus.RUNNING)
-        run_emitter = self._run_event_emitter(run)
-        yield await run_emitter.start(mode=mode_literal)
+        yield await self._emit_api_event(
+            run=run,
+            type_="run.start",
+            payload={
+                "status": "in_progress",
+                "mode": mode_literal,
+            },
+        )
         safe_mode = await self._safe_mode_status()
 
         # Emit a one-time console banner describing the mode, if applicable.
@@ -532,42 +489,22 @@ class RunsService:
             yield await self._emit_api_event(
                 run=run,
                 type_="console.line",
-                payload=ConsoleLinePayload(
-                    scope="run",
-                    stream="stdout",
-                    level="info",
-                    message=mode_message,
-                ),
+                payload={
+                    "scope": "run",
+                    "stream": "stdout",
+                    "level": "info",
+                    "message": mode_message,
+                },
             )
 
         # Validation-only short circuit: we never touch the engine.
         if options.validate_only:
-            logger.debug(
-                "run.stream.validate_only_short_circuit",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                ),
-            )
-            async for event in self._stream_validate_only_run(
-                run=run,
-                mode_literal=mode_literal,
-            ):
+            async for event in self._stream_validate_only_run(run=run, mode_literal=mode_literal):
                 yield event
             return
 
         # Safe mode short circuit: log the skip and exit.
         if safe_mode.enabled:
-            logger.debug(
-                "run.stream.safe_mode_short_circuit",
-                extra=log_context(
-                    workspace_id=run.workspace_id,
-                    configuration_id=run.configuration_id,
-                    run_id=run.id,
-                    safe_mode_enabled=True,
-                ),
-            )
             async for event in self._stream_safe_mode_skip(
                 run=run,
                 mode_literal=mode_literal,
@@ -617,12 +554,12 @@ class RunsService:
         yield await self._emit_api_event(
             run=run,
             type_="console.line",
-            payload=ConsoleLinePayload(
-                scope="run",
-                stream="stderr",
-                level="error",
-                message=message,
-            ),
+            payload={
+                "scope": "run",
+                "stream": "stderr",
+                "level": "error",
+                "message": message,
+            },
         )
 
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
@@ -651,18 +588,20 @@ class RunsService:
     async def handle_background_failure(
         self,
         *,
-        context: RunExecutionContext,
+        run_id: UUID,
         options: RunCreateOptions,
         error: Exception,
-    ) -> AsyncIterator[AdeEvent]:
+    ) -> AsyncIterator[EventRecord]:
         """Surface background task failures via console + completion events."""
 
-        async for event in self._handle_stream_failure(
-            context=context,
-            options=options,
-            error=error,
-        ):
-            yield event
+        try:
+            context = await self._execution_context_for_run(run_id)
+        except Exception:
+            return
+
+        async for event in self._handle_stream_failure(context=context, options=options, error=error):
+            if isinstance(event, dict):
+                yield event
 
     # --------------------------------------------------------------------- #
     # Public read APIs (runs, summaries, events, outputs)
@@ -699,25 +638,23 @@ class RunsService:
         run_id: UUID,
         after_sequence: int | None = None,
         limit: int = DEFAULT_EVENTS_PAGE_LIMIT,
-    ) -> tuple[list[AdeEvent], int | None]:
-        """Return ADE telemetry events for ``run_id`` with optional paging."""
+    ) -> tuple[list[EventRecord], int | None]:
+        """Return telemetry events for ``run_id`` with optional paging."""
 
         logger.debug(
             "run.events.get.start",
-            extra=log_context(
-                run_id=run_id, after_sequence=after_sequence, limit=limit
-            ),
+            extra=log_context(run_id=run_id, after_sequence=after_sequence, limit=limit),
         )
         run = await self._require_run(run_id)
-        events: list[AdeEvent] = []
+        events: list[EventRecord] = []
         next_after: int | None = None
-        reader = self.event_log_reader(
-            workspace_id=run.workspace_id, run_id=run.id
-        )
-        for event in reader.iter(after_sequence=after_sequence):
+        stream = self._event_stream_for_run(run)
+        cursor = after_sequence or 0
+        for event in stream.iter_persisted(after_sequence=after_sequence):
+            cursor += 1
             events.append(event)
             if len(events) >= limit:
-                next_after = event.sequence
+                next_after = cursor
                 break
 
         logger.info(
@@ -833,9 +770,7 @@ class RunsService:
         started_at = self._ensure_utc(run.started_at)
         finished_at = self._ensure_utc(run.finished_at)
         duration_seconds = (
-            (finished_at - started_at).total_seconds()
-            if started_at and finished_at
-            else None
+            (finished_at - started_at).total_seconds() if started_at and finished_at else None
         )
 
         failure_code = None
@@ -1149,9 +1084,8 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        output_relative = (
-            paths_snapshot.output_path
-            or self._relative_output_path(run_dir / "output", run_dir)
+        output_relative = paths_snapshot.output_path or self._relative_output_path(
+            run_dir / "output", run_dir
         )
         if not output_relative:
             logger.warning(
@@ -1300,40 +1234,31 @@ class RunsService:
         run_dir: Path,
         default_paths: RunPathsSnapshot,
     ) -> RunPathsSnapshot:
-        """Merge inferred filesystem paths."""
+        """Merge inferred filesystem paths for events and outputs."""
 
         snapshot = RunPathsSnapshot(
             events_path=default_paths.events_path,
             output_path=default_paths.output_path,
             processed_file=default_paths.processed_file,
         )
-        # Events path: prefer default hints; avoid filesystem probing.
+
+        # Events path: default to <run_dir>/logs/events.ndjson, if it exists.
         if not snapshot.events_path:
-            for candidate in (
-                run_dir / "engine-logs" / "engine_events.ndjson",
-                run_dir / "engine-logs" / run_dir.name / "engine_events.ndjson",
-                run_dir / "logs" / "events.ndjson",
-            ):
-                snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
-                if snapshot.events_path:
-                    break
+            candidate = run_dir / "logs" / "events.ndjson"
+            snapshot.events_path = self._run_relative_hint(candidate, run_dir=run_dir)
+        if not snapshot.events_path:
+            logs_dir = run_dir / "logs"
+            if logs_dir.exists():
+                for path in sorted(logs_dir.glob("*_engine_events.ndjson")):
+                    snapshot.events_path = self._run_relative_hint(path, run_dir=run_dir)
+                    if snapshot.events_path:
+                        break
 
-        # Output path: only propagate hints already in scope (defaults).
-        output_candidates: list[str | Path | None] = []
-        output_candidates.append(default_paths.output_path)
-
-        for candidate in output_candidates:
-            if snapshot.output_path:
-                break
-            snapshot.output_path = self._run_relative_hint(candidate, run_dir=run_dir)
+        # Output path: if not provided, infer from <run_dir>/output.
+        if not snapshot.output_path:
+            snapshot.output_path = self._relative_output_path(run_dir / "output", run_dir)
 
         return snapshot
-
-    @staticmethod
-    def _normalized_event_source(source: str | None) -> str:
-        if source in {"api", "engine"}:
-            return source
-        return "engine"
 
     def _run_completed_payload(
         self,
@@ -1343,7 +1268,7 @@ class RunsService:
         failure_stage: str | None = None,
         failure_code: str | None = None,
         failure_message: str | None = None,
-    ) -> RunCompletedPayload:
+    ) -> dict[str, Any]:
         failure: dict[str, Any] | None = None
         if any([failure_stage, failure_code, failure_message]):
             failure = {
@@ -1352,21 +1277,25 @@ class RunsService:
                 "message": failure_message,
             }
 
-        return RunCompletedPayload(
-            status=run.status,
-            failure=failure,
-            execution={
+        def _dt_iso(dt: datetime | None) -> str | None:
+            normalized = self._ensure_utc(dt)
+            return normalized.isoformat() if normalized else None
+
+        return {
+            "status": getattr(run.status, "value", run.status),
+            "failure": failure,
+            "execution": {
                 "exit_code": run.exit_code,
-                "started_at": self._ensure_utc(run.started_at),
-                "completed_at": self._ensure_utc(run.finished_at),
+                "started_at": _dt_iso(run.started_at),
+                "completed_at": _dt_iso(run.finished_at),
                 "duration_ms": self._duration_ms(run),
             },
-            artifacts={
+            "artifacts": {
                 "output_path": paths.output_path,
                 "processed_file": paths.processed_file,
                 "events_path": paths.events_path,
             },
-        )
+        }
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -1413,7 +1342,7 @@ class RunsService:
         options: RunCreateOptions,
         safe_mode_enabled: bool = False,
     ) -> AsyncIterator[RunStreamFrame]:
-        """Invoke the engine process and stream ADE events back to the caller."""
+        """Invoke the engine process and stream its output lines."""
 
         logger.info(
             "run.engine.execute.start",
@@ -1427,22 +1356,24 @@ class RunsService:
             ),
         )
 
-        python = venv_python_path(Path(context.venv_path))
+        build = await self._builds_service.get_build_or_raise(
+            context.build_id,
+            workspace_id=context.workspace_id,
+        )
+        venv_path = await self._builds_service.ensure_local_env(build=build)
+        python = venv_python_path(venv_path)
         selected_sheet_names = self._select_input_sheet_names(options)
         if not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
+
         env = self._build_env(
-            Path(context.venv_path),
+            venv_path,
             options,
             context,
             input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
         )
-        runs_root = (
-            Path(context.runs_dir)
-            if context.runs_dir
-            else workspace_run_root(self._settings, context.workspace_id)
-        )
-        run_dir = runs_root / str(run.id)
+
+        run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         if not options.input_document_id:
@@ -1462,26 +1393,24 @@ class RunsService:
             run_dir=run_dir,
         )
 
-        engine_logs_dir = run_dir / "engine-logs"
-        engine_logs_dir.mkdir(parents=True, exist_ok=True)
+        # Canonical paths we expect after execution
+        output_dir = run_dir / "output"
+        logs_dir = run_dir / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
 
-        command = [str(python), "-m", "ade_engine", "run"]
-        command.extend(["--log-format", "ndjson"])
+        config_path = await self._storage.ensure_config_path(
+            workspace_id=context.workspace_id,
+            configuration_id=context.configuration_id,
+        )
+
+        command = [str(python), "-m", "ade_engine", "process", "file"]
         command.extend(["--input", str(staged_input)])
-        command.extend(["--output-dir", str(run_dir / "output")])
-        command.extend(["--logs-dir", str(engine_logs_dir)])
-
-        meta_fields: dict[str, object] = {
-            "workspace_id": run.workspace_id,
-            "configuration_id": run.configuration_id,
-            "run_id": run.id,
-        }
-        build_id = getattr(run, "build_id", None)
-        if build_id is not None:
-            meta_fields["build_id"] = build_id
-
-        for key, value in meta_fields.items():
-            command.extend(["--meta", f"{key}={value}"])
+        command.extend(["--output-dir", str(output_dir)])
+        command.extend(["--logs-dir", str(logs_dir)])
+        command.extend(["--config-package", str(config_path)])
+        command.extend(["--log-format", "ndjson"])
+        if options.debug:
+            command.append("--debug")
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
@@ -1491,13 +1420,16 @@ class RunsService:
             env=env,
         )
 
+        # We expect API-level events to be written under <run>/logs/events.ndjson
+        log_suffix = "engine_events.ndjson"
+        output_filename = f"{staged_input.stem}_normalized.xlsx"
         paths_snapshot = RunPathsSnapshot(
-            events_path=str(engine_logs_dir / "engine_events.ndjson"),
-            output_path=str(run_dir / "output" / "normalized.xlsx"),
+            events_path=str(logs_dir / f"{staged_input.stem}_{log_suffix}"),
+            output_path=str(output_dir / output_filename),
             processed_file=staged_input.name,
         )
 
-        # Stream frames from the engine process: either stdout frames or stderr lines.
+        # Stream stdout/stderr lines from the engine process.
         async for frame in runner.stream():
             yield frame
 
@@ -1624,12 +1556,12 @@ class RunsService:
         yield await self._emit_api_event(
             run=run,
             type_="console.line",
-            payload=ConsoleLinePayload(
-                scope="run",
-                stream="stdout",
-                level="info",
-                message=message,
-            ),
+            payload={
+                "scope": "run",
+                "stream": "stdout",
+                "level": "info",
+                "message": message,
+            },
         )
 
         # Completion event
@@ -1661,20 +1593,15 @@ class RunsService:
         mode_literal: str,
         safe_mode_enabled: bool,
     ) -> AsyncIterator[RunStreamFrame]:
-        """Wrap `_execute_engine` with supervision and error handling."""
+        """Wrap `_execute_engine` with supervision and event translation."""
 
         async def generator() -> AsyncIterator[RunStreamFrame]:
-            execute_engine = self._execute_engine
-            parameters = inspect.signature(execute_engine).parameters
-            kwargs: dict[str, object] = {
-                "run": run,
-                "context": context,
-                "options": options,
-            }
-            if "safe_mode_enabled" in parameters:
-                kwargs["safe_mode_enabled"] = safe_mode_enabled
-
-            async for frame in execute_engine(**kwargs):  # type: ignore[misc]
+            async for frame in self._execute_engine(
+                run=run,
+                context=context,
+                options=options,
+                safe_mode_enabled=safe_mode_enabled,
+            ):
                 yield frame
 
         logger.debug(
@@ -1687,98 +1614,61 @@ class RunsService:
             ),
         )
 
-        latest_paths_snapshot = RunPathsSnapshot()
+        run_stream = self._event_stream_for_run(run)
 
         try:
-            async for event in self._supervisor.stream(
+            async for frame in self._supervisor.stream(
                 run.id,
                 generator=generator,
             ):
-                if isinstance(event, RunExecutionResult):
-                    paths_snapshot = event.paths_snapshot or RunPathsSnapshot()
-                    if latest_paths_snapshot.processed_file and not paths_snapshot.processed_file:
-                        paths_snapshot.processed_file = latest_paths_snapshot.processed_file
-                    if latest_paths_snapshot.output_path and not paths_snapshot.output_path:
-                        paths_snapshot.output_path = latest_paths_snapshot.output_path
+                # Final result from _execute_engine
+                if isinstance(frame, RunExecutionResult):
+                    paths_snapshot = frame.paths_snapshot or RunPathsSnapshot()
 
-                    summary_json = event.summary_json
-                    if summary_json is None and event.summary_model is not None:
-                        summary_json = self._serialize_summary(event.summary_model)
+                    summary_json = frame.summary_json
+                    if summary_json is None and frame.summary_model is not None:
+                        summary_json = self._serialize_summary(frame.summary_model)
 
                     completion = await self._complete_run(
                         run,
-                        status=event.status,
-                        exit_code=event.return_code,
-                        error_message=event.error_message,
+                        status=frame.status,
+                        exit_code=frame.return_code,
+                        error_message=frame.error_message,
                         summary=summary_json,
                     )
-                    yield await self._emit_api_event(
+                    event = await self._emit_api_event(
                         run=completion,
                         type_="run.complete",
                         payload=self._run_completed_payload(
                             run=completion,
                             paths=paths_snapshot,
-                            failure_stage=("run" if event.status is RunStatus.FAILED else None),
-                            failure_message=event.error_message,
+                            failure_stage=("run" if frame.status is RunStatus.FAILED else None),
+                            failure_message=frame.error_message,
                         ),
                     )
+                    self._log_event_debug(event, origin="api")
+                    yield event
                     continue
 
-                if isinstance(event, EngineEventFrame):
-                    payload_dict = event.payload or {}
-                    if event.type == "engine.complete" and isinstance(payload_dict, dict):
-                        artifacts_value = payload_dict.get("artifacts")
-                        artifacts = (
-                            artifacts_value
-                            if isinstance(artifacts_value, dict)
-                            else payload_dict
-                        )
-                        processed_file = (
-                            artifacts.get("processed_file")
-                            if isinstance(artifacts, dict)
-                            else None
-                        )
-                        if isinstance(processed_file, str):
-                            latest_paths_snapshot.processed_file = processed_file
-                        elif isinstance(artifacts, dict) and artifacts.get("processed_files"):
-                            processed_files = artifacts.get("processed_files") or []
-                            if processed_files:
-                                latest_paths_snapshot.processed_file = str(
-                                    list(processed_files)[0],
-                                )
-                        output_path = (
-                            artifacts.get("output_path")
-                            if isinstance(artifacts, dict)
-                            else None
-                        )
-                        if isinstance(output_path, str):
-                            latest_paths_snapshot.output_path = output_path
-                        elif isinstance(artifacts, dict) and artifacts.get("output_paths"):
-                            output_paths = artifacts.get("output_paths") or []
-                            if output_paths:
-                                latest_paths_snapshot.output_path = str(
-                                    list(output_paths)[0],
-                                )
+                # Stdout/stderr line from the engine
+                if isinstance(frame, StdoutFrame):
+                    parsed = None
+                    if frame.stream == "stderr":
+                        parsed = coerce_event_record(frame.message)
+                    if parsed:
+                        forwarded = await run_stream.append(parsed)
+                        self._log_event_debug(forwarded, origin="engine")
+                        yield forwarded
+                        continue
 
-                    forwarded = await self._event_dispatcher.emit_from_engine_frame(
-                        frame=event,
-                        workspace_id=run.workspace_id,
-                        configuration_id=run.configuration_id,
-                        run_id=run.id,
-                        build_id=getattr(run, "build_id", None),
-                    )
-                    self._log_event_debug(forwarded, origin="engine")
-                    yield forwarded
-                    continue
-
-                if isinstance(event, StdoutFrame):
                     forwarded = await self._emit_engine_console_line(
                         run=run,
-                        frame=event,
+                        frame=frame,
                     )
                     self._log_event_debug(forwarded, origin="engine")
                     yield forwarded
                     continue
+
         except asyncio.CancelledError:
             logger.warning(
                 "run.engine.stream.cancelled",
@@ -1788,10 +1678,13 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+            run_dir = self._run_dir_for_run(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
             paths_snapshot = self._finalize_paths(
                 run_dir=run_dir,
-                default_paths=latest_paths_snapshot,
+                default_paths=RunPathsSnapshot(),
             )
             completion = await self._complete_run(
                 run,
@@ -1799,7 +1692,7 @@ class RunsService:
                 exit_code=None,
                 error_message="Run execution cancelled",
             )
-            yield await self._emit_api_event(
+            event = await self._emit_api_event(
                 run=completion,
                 type_="run.complete",
                 payload=self._run_completed_payload(
@@ -1810,7 +1703,10 @@ class RunsService:
                     failure_message=completion.error_message,
                 ),
             )
+            self._log_event_debug(event, origin="api")
+            yield event
             raise
+
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception(
                 "run.engine.stream.error",
@@ -1820,10 +1716,13 @@ class RunsService:
                     run_id=run.id,
                 ),
             )
-            run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
+            run_dir = self._run_dir_for_run(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
             paths_snapshot = self._finalize_paths(
                 run_dir=run_dir,
-                default_paths=latest_paths_snapshot,
+                default_paths=RunPathsSnapshot(),
             )
             completion = await self._complete_run(
                 run,
@@ -1832,18 +1731,21 @@ class RunsService:
                 error_message=str(exc),
             )
             # Error console frame
-            yield await self._emit_api_event(
+            console_event = await self._emit_api_event(
                 run=run,
                 type_="console.line",
-                payload=ConsoleLinePayload(
-                    scope="run",
-                    stream="stderr",
-                    level="error",
-                    message=f"ADE run failed: {exc}",
-                ),
+                payload={
+                    "scope": "run",
+                    "stream": "stderr",
+                    "level": "error",
+                    "message": f"ADE run failed: {exc}",
+                },
             )
+            self._log_event_debug(console_event, origin="api")
+            yield console_event
+
             # Run completion frame
-            yield await self._emit_api_event(
+            complete_event = await self._emit_api_event(
                 run=completion,
                 type_="run.complete",
                 payload=self._run_completed_payload(
@@ -1854,6 +1756,8 @@ class RunsService:
                     failure_message=completion.error_message,
                 ),
             )
+            self._log_event_debug(complete_event, origin="api")
+            yield complete_event
             return
 
     # --------------------------------------------------------------------- #
@@ -2095,12 +1999,57 @@ class RunsService:
         return normalized[0] if normalized else None
 
     # ------------------------------------------------------------------ #
+    # Internal helpers: event streams
+    # ------------------------------------------------------------------ #
+
+    def _event_context(
+        self,
+        *,
+        workspace_id: UUID,
+        run_id: UUID,
+        configuration_id: UUID,
+        build_id: UUID | None,
+    ) -> RunEventContext:
+        return RunEventContext(
+            job_id=str(run_id),
+            workspace_id=str(workspace_id),
+            build_id=str(build_id) if build_id else None,
+            configuration_id=str(configuration_id),
+        )
+
+    def _event_stream_for_run(self, run: Run) -> RunEventStream:
+        return self._event_stream_for_ids(
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+            configuration_id=run.configuration_id,
+            build_id=getattr(run, "build_id", None),
+        )
+
+    def _event_stream_for_ids(
+        self,
+        *,
+        workspace_id: UUID,
+        run_id: UUID,
+        configuration_id: UUID,
+        build_id: UUID | None,
+    ) -> RunEventStream:
+        run_dir = self._run_dir_for_run(workspace_id=workspace_id, run_id=run_id)
+        path = run_dir / "logs" / "events.ndjson"
+        context = self._event_context(
+            workspace_id=workspace_id,
+            run_id=run_id,
+            configuration_id=configuration_id,
+            build_id=build_id,
+        )
+        return self._event_streams.get_stream(path=path, context=context)
+
+    # ------------------------------------------------------------------ #
     # Internal helpers: event logging
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _log_event_debug(event: AdeEvent, *, origin: str) -> None:
-        """Emit ADE events to the console when debug logging is enabled."""
+    def _log_event_debug(event: EventRecord, *, origin: str) -> None:
+        """Emit events to the console when debug logging is enabled."""
 
         if not event_logger.isEnabledFor(logging.DEBUG):
             return
@@ -2108,59 +2057,63 @@ class RunsService:
         event_logger.debug(
             "[%s] %s %s",
             origin,
-            event.type,
-            event.model_dump_json(),
+            event.get("event"),
+            json.dumps(event, default=str),
         )
 
-    def _run_event_emitter(self, run: Run) -> RunEventEmitter:
-        return RunEventEmitter(
-            self._event_dispatcher,
-            workspace_id=run.workspace_id,
-            configuration_id=run.configuration_id,
-            run_id=run.id,
-            build_id=getattr(run, "build_id", None),
-            source="api",
-        )
-
-    async def _emit_engine_console_line(self, *, run: Run, frame: StdoutFrame) -> AdeEvent:
+    async def _emit_engine_console_line(self, *, run: Run, frame: StdoutFrame) -> EventRecord:
         """Coerce stdout/stderr lines into canonical console events."""
 
-        payload = ConsoleLinePayload(
-            scope="run",
-            stream=frame.stream,
-            level="warning" if frame.stream == "stderr" else "info",
+        level = "warning" if frame.stream == "stderr" else "info"
+        event = new_event_record(
+            event="console.line",
             message=frame.message,
-        ).model_dump(exclude_none=True)
-
-        return await self._event_dispatcher.emit(
-            type="console.line",
-            workspace_id=run.workspace_id,
-            configuration_id=run.configuration_id,
-            run_id=run.id,
-            build_id=getattr(run, "build_id", None),
-            payload=payload,
-            source="engine",
+            level=level,
+            data={
+                "scope": "run",
+                "stream": frame.stream,
+                "level": level,
+                "message": frame.message,
+            },
         )
+        stream = self._event_stream_for_run(run)
+        appended = await stream.append(event)
+        self._log_event_debug(appended, origin="engine")
+        return appended
 
     async def _emit_api_event(
         self,
         *,
         run: Run,
         type_: str,
-        payload: AdeEventPayload | dict[str, Any] | None = None,
+        payload: dict[str, Any] | Any | None = None,
         build_id: UUID | None = None,
-    ) -> AdeEvent:
-        """Emit an AdeEvent originating from the API orchestrator."""
+        level: str = "info",
+        message: str | None = None,
+    ) -> EventRecord:
+        """Emit an EventRecord originating from the API orchestrator."""
 
-        emitter = self._run_event_emitter(run)
         build_identifier = build_id or getattr(run, "build_id", None)
-        event = await emitter.emit(
-            type=type_,
-            payload=payload,
-            extra_ids={"build_id": build_identifier},
+        stream = self._event_stream_for_run(run)
+        payload_dict: dict[str, Any] = {}
+        if payload is not None:
+            if hasattr(payload, "model_dump"):
+                payload_dict = payload.model_dump(exclude_none=True)  # type: ignore[assignment]
+            elif isinstance(payload, dict):
+                payload_dict = payload
+            else:
+                payload_dict = dict(payload)
+        if build_identifier:
+            payload_dict.setdefault("build_id", str(build_identifier))
+        event = new_event_record(
+            event=type_,
+            message=message,
+            level=level,
+            data=payload_dict,
         )
-        self._log_event_debug(event, origin="api")
-        return event
+        appended = await stream.append(event)
+        self._log_event_debug(appended, origin="api")
+        return appended
 
     async def _ensure_run_queued_event(
         self,
@@ -2168,42 +2121,31 @@ class RunsService:
         run: Run,
         mode_literal: str,
         options: RunCreateOptions,
-    ) -> AdeEvent | None:
+    ) -> EventRecord | None:
         """Guarantee a single run.queued event exists for the run."""
 
-        last_sequence = self._event_storage.last_sequence(
-            workspace_id=run.workspace_id,
-            run_id=run.id,
-        )
-        if last_sequence > 0:
-            reader = self.event_log_reader(
-                workspace_id=run.workspace_id,
-                run_id=run.id,
-            )
-            return next(iter(reader.iter(after_sequence=0)), None)
+        stream = self._event_stream_for_run(run)
+        if stream.last_cursor() > 0:
+            return next(iter(stream.iter_persisted(after_sequence=0)), None)
         return await self._emit_api_event(
             run=run,
             type_="run.queued",
-            payload=RunQueuedPayload(
-                status="queued",
-                mode=mode_literal,
-                options=options.model_dump(exclude_none=True),
-            ),
+            payload={
+                "status": "queued",
+                "mode": mode_literal,
+                "options": options.model_dump(exclude_none=True),
+            },
         )
 
-    def event_log_reader(self, *, workspace_id: UUID, run_id: UUID) -> RunEventLogReader:
-        """Return a reader for persisted run events."""
+    def iter_events(self, *, run: Run, after_sequence: int | None = None):
+        """Yield persisted events for a run."""
 
-        return RunEventLogReader(
-            storage=self._event_storage,
-            workspace_id=workspace_id,
-            run_id=run_id,
-        )
+        return self._event_stream_for_run(run).iter_persisted(after_sequence=after_sequence)
 
-    def subscribe_to_events(self, run_id: UUID):
-        """Expose dispatcher subscription for live event streaming."""
+    def subscribe_to_events(self, run: Run):
+        """Expose subscription for live event streaming."""
 
-        return self._event_dispatcher.subscribe(run_id)
+        return self._event_stream_for_run(run).subscribe()
 
     @property
     def settings(self) -> Settings:
