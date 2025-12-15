@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from ade_engine.registry.models import RowKind
-
-
 def register(registry):
-    registry.register_row_detector(detect_data_row_by_density, row_kind=RowKind.DATA.value, priority=0)
+    registry.register_row_detector(detect_data_row_by_density, row_kind="data", priority=0)
 
 
 def detect_data_row_by_density(

@@ -471,8 +471,10 @@ The Run detail view composes several sections:
 
 * **Logs / console**
 
-  * Backed by the run event stream (SSE) or the archived NDJSON log file.
-  * Rendered similarly to the Configuration Builder console.
+  * Backed by either:
+    * The **job stream** (live SSE) when tailing a running job, or
+    * The archived **NDJSON** log file for historical runs.
+  * Rendered similarly to the Configuration Builder console (virtualized, bounded tail).
 
 * **Telemetry summary** (when available)
 
@@ -489,24 +491,11 @@ Data hooks:
 
 * `useRunQuery(runId)` → `GET /api/v1/runs/{run_id}` (global; `runId` is unique).
 * `useRunOutputQuery(runId)` → `/api/v1/runs/{run_id}/output`.
-* `useRunLogsStream(runId)` → `/api/v1/runs/{run_id}/events/stream`:
+* `useJobLogsStream(jobId)` → `/api/v1/jobs/{job_id}/events/stream`:
 
-  * Parses `EventRecord` dictionaries emitted over SSE, such as:
-
-    * `run.queued`
-    * `run.start`
-    * `engine.phase.start`
-    * `console.line` (payload lives under `data.scope`/`data.stream`/`data.message`)
-    * `engine.table.summary`
-    * `engine.sheet.summary`
-    * `engine.file.summary`
-    * `engine.run.summary`
-    * `run.complete`
-  * Updates console output incrementally as events arrive; uses the SSE `id` counter for ordering/resume.
-  * For schema details, see:
-
-    * `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` §6
-    * `docs/events-v1.md`.
+  * Live-only tail (no replay/resume).
+  * Uses standard SSE `event:` dispatch with a high-volume `log` event that is **plain text** (tab-separated fields).
+  * For schema details, see `apps/ade-web/docs/04-data-layer-and-backend-contracts.md` §6.
 
 If a backend also exposes workspace‑scoped detail endpoints, we may add a `useWorkspaceRunQuery(workspaceId, runId)`; the global `useRunQuery(runId)` remains the canonical entry point.
 

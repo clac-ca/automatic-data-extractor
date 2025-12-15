@@ -1,7 +1,7 @@
 import clsx from "clsx";
 
 import type { WorkbenchPane } from "../state/workbenchSearchParams";
-import type { RunStreamStatus } from "../state/runStream";
+import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
@@ -18,7 +18,7 @@ interface BottomPanelProps {
   readonly onPaneChange: (pane: WorkbenchPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly runStatus?: RunStreamStatus;
+  readonly runStatus?: JobStreamStatus;
   readonly onToggleCollapse?: () => void;
   readonly appearance?: "light" | "dark";
 }

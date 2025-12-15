@@ -320,7 +320,11 @@ async def stream_run_events_endpoint(
                 else:
                     last_sequence += 1
                     event["sequence"] = last_sequence
-                yield sse_json(event, event_id=last_sequence)
+                yield sse_json(
+                    str(event.get("event") or "message"),
+                    event,
+                    event_id=last_sequence,
+                )
                 if event.get("event") == "run.complete":
                     return
 
@@ -341,7 +345,11 @@ async def stream_run_events_endpoint(
                 else:
                     last_sequence += 1
                     live_event["sequence"] = last_sequence
-                yield sse_json(live_event, event_id=last_sequence)
+                yield sse_json(
+                    str(live_event.get("event") or "message"),
+                    live_event,
+                    event_id=last_sequence,
+                )
                 if live_event.get("event") == "run.complete":
                     break
 

@@ -11,9 +11,9 @@ This is a **template ADE config package**. It defines a *target schema* (fields)
 ## The big idea
 
 - You add Python files wherever you want inside `src/ade_config/`.
-- The ADE engine calls your package’s `register(registry)` entrypoint.
-- Put `register(registry)` inside each module under `columns/`, `row_detectors/`, or `hooks/`. The template’s top-level `register()` auto-discovers them (no central list to maintain).
-- No manifest lists or switchboard files—just explicit registration in one place.
+- A module becomes a plugin module if (and only if) it defines a top-level `register(registry)`.
+- The engine scans the whole package, imports only plugin modules, and calls their `register(registry)` in deterministic module-name order.
+- No manifest lists or central file lists—just “create a new module with `register()`”.
 
 ## Folder layout (suggested)
 
