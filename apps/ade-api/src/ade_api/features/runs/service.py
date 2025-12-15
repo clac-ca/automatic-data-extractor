@@ -591,7 +591,11 @@ class RunsService:
         except Exception:
             return
 
-        async for event in self._handle_stream_failure(context=context, options=options, error=error):
+        async for event in self._handle_stream_failure(
+            context=context,
+            options=options,
+            error=error,
+        ):
             if isinstance(event, dict):
                 yield event
 
