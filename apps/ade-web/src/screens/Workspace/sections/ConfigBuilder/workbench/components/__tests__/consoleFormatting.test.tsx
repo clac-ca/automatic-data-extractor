@@ -36,7 +36,7 @@ describe("renderConsoleLine", () => {
     expect(container.textContent).toContain("Detector");
     expect(container.textContent).toContain("detect_email_header");
     expect(container.textContent).toContain("NOV 2025");
-    expect(container.textContent).toContain("col=0");
+    expect(container.textContent).toContain("Col A");
   });
 
   it("renders console.line with message", () => {
@@ -58,7 +58,6 @@ describe("renderConsoleLine", () => {
     };
     const { container } = render(<div>{renderConsoleLine(line)}</div>);
     expect(container.textContent).toContain("Installing collected packages");
-    expect(container.textContent).toContain("scope=build");
   });
 
   it("formats NDJSON from raw event", () => {

@@ -91,6 +91,20 @@ def ensure_event_context(
     return enriched
 
 
+def strip_sequence(event: EventRecord) -> EventRecord:
+    """Return a copy of ``event`` without ``sequence``.
+
+    SSE already provides a monotonic `id:`; removing `sequence` from the JSON payload
+    keeps the envelope closer to the engine format and avoids duplication.
+    """
+
+    if "sequence" not in event:
+        return event
+    stripped = dict(event)
+    stripped.pop("sequence", None)
+    return stripped
+
+
 @dataclass(slots=True)
 class EventRecordLog:
     """Utility to read EventRecords from NDJSON files."""

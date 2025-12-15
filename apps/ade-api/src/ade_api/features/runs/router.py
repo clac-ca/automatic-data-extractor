@@ -26,7 +26,7 @@ from ade_api.api.deps import (
 )
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
-from ade_api.common.events import EventRecord
+from ade_api.common.events import EventRecord, strip_sequence
 from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import PageParams
@@ -319,10 +319,10 @@ async def stream_run_events_endpoint(
                     last_sequence = seq
                 else:
                     last_sequence += 1
-                    event["sequence"] = last_sequence
+                payload = strip_sequence(event)
                 yield sse_json(
                     str(event.get("event") or "message"),
-                    event,
+                    payload,
                     event_id=last_sequence,
                 )
                 if event.get("event") == "run.complete":
@@ -344,10 +344,10 @@ async def stream_run_events_endpoint(
                     last_sequence = seq
                 else:
                     last_sequence += 1
-                    live_event["sequence"] = last_sequence
+                payload = strip_sequence(live_event)
                 yield sse_json(
                     str(live_event.get("event") or "message"),
-                    live_event,
+                    payload,
                     event_id=last_sequence,
                 )
                 if live_event.get("event") == "run.complete":
