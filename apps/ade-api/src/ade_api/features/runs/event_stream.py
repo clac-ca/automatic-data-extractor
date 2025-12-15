@@ -12,7 +12,6 @@ from ade_api.common.events import (
     EventRecord,
     EventRecordLog,
     coerce_event_record,
-    ensure_event_context,
 )
 
 __all__ = [
@@ -101,14 +100,6 @@ class RunEventStream:
         record = coerce_event_record(event)
         if record is None:
             raise ValueError("Unable to append non-event payload to RunEventStream")
-
-        record = ensure_event_context(
-            record,
-            job_id=self._context.job_id,
-            workspace_id=self._context.workspace_id,
-            build_id=self._context.build_id,
-            configuration_id=self._context.configuration_id,
-        )
 
         async with self._lock:
             self._sequence += 1
