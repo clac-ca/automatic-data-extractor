@@ -20,6 +20,9 @@ class SpyLogger:
     def __init__(self):
         self.events = []
 
+    def isEnabledFor(self, _level: int) -> bool:  # noqa: N802 - match logging API
+        return True
+
     def event(self, *args, **kwargs):
         self.events.append({"args": args, "kwargs": kwargs})
 

@@ -6,15 +6,17 @@ Config packages supply the domain logic the engine runs. A package is any import
 
 ```python
 # src/ade_config/__init__.py
-from . import columns, row_detectors, hooks
-
 def register(registry):
-    columns.register(registry)
-    row_detectors.register(registry)
-    hooks.register(registry)
+    # Auto-discover and run register(registry) for any modules under:
+    # - ade_config/columns
+    # - ade_config/row_detectors
+    # - ade_config/hooks
+    #
+    # The built-in config template ships with this implementation; you can copy it.
+    ...
 ```
 
-Register everything imperatively inside `register(registry)` using `registry.register_*` helpers. There is no decorator-based auto-wiring.
+Register everything imperatively using `registry.register_*` helpers. Modules can register themselves; `ade_config.register` just imports and invokes them.
 
 ## Suggested layout
 
@@ -36,9 +38,9 @@ Call `registry.register_field(FieldDef(...))` to declare labels, dtypes, or arbi
 ## Settings for a package
 
 Engine settings can be pinned alongside the package:
-- Place a `settings.toml` next to your package (or at the project root). A `[ade_engine]` table is recommended to avoid collisions.
+- Place a `settings.toml` next to your config package (and/or at the project root). A `[ade_engine]` table is recommended to avoid collisions.
 - `.env` and `ADE_ENGINE_*` environment variables are also honored.
-- Settings precedence: init kwargs > env vars > `.env` > `settings.toml` > defaults.
+- Load via `Settings.load(...)`; precedence is documented in `apps/ade-engine/docs/settings.md`.
 
 Commonly overridden settings per package:
 - `append_unmapped_columns` / `unmapped_prefix` (control passthrough columns)
@@ -47,13 +49,13 @@ Commonly overridden settings per package:
 
 ## Testing your package
 
-- Run a quick check with `python -m ade_engine run --config-package <path> --input <file> --output-dir ./output`.
+- Run a quick check with `python -m ade_engine process file --config-package <path> --input <file> --output-dir ./output --logs-dir ./logs`.
 - Keep a small fixture workbook in your repo and add a smoke test that uses `Engine(Settings())` with your package path.
 - Use `--log-format ndjson --debug` to capture detector/transform telemetry while iterating.
 
 ## Packaging / installation
 
-- The engine accepts either the package directory itself or a project root containing `src/<package>`. `Engine` will adjust `sys.path` accordingly.
+- The engine accepts either the package directory itself or a project root containing `src/<package>`.
 - Editable installs work; the engine does not require the package name to be `ade_config`, but that is the default when multiple candidates exist under `src/`.
 
 ## Backward compatibility note

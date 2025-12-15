@@ -12,7 +12,7 @@ This is a **template ADE config package**. It defines a *target schema* (fields)
 
 - You add Python files wherever you want inside `src/ade_config/`.
 - The ADE engine calls your package’s `register(registry)` entrypoint.
-- That entrypoint should call `registry.register_*` for detectors/transforms/validators/hooks/fields.
+- Put `register(registry)` inside each module under `columns/`, `row_detectors/`, or `hooks/`. The template’s top-level `register()` auto-discovers them (no central list to maintain).
 - No manifest lists or switchboard files—just explicit registration in one place.
 
 ## Folder layout (suggested)
@@ -22,10 +22,11 @@ src/ade_config/
   columns/                 # one file per canonical field (recommended)
   row_detectors/           # header/data row voting
   hooks/                   # lifecycle hooks
-  utils/                   # shared helpers
 ```
 
-> You can restructure freely. The registry does the discovery.
+> You can restructure freely. Keep registration explicit for clarity/determinism.
+>
+> Convention: keep auto-discovered modules under `columns/`, `row_detectors/`, and `hooks/`.
 
 ## Engine settings (optional)
 

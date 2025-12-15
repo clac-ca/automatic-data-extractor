@@ -45,20 +45,20 @@ Commands:
 ```
 
 ```bash
-$ python -m ade_engine run --help
-Usage: python -m ade_engine run [OPTIONS]
+$ python -m ade_engine process file --help
+Usage: python -m ade_engine process file [OPTIONS]
 
 Options:
-  -i, --input PATH               Source file(s) (repeatable)
-      --input-dir PATH           Recurse for inputs
-      --include TEXT             Glob applied under --input-dir
-      --exclude TEXT             Glob to skip under --input-dir
+  -i, --input PATH               Single input file
+  -o, --output PATH              Output .xlsx file path (optional)
+      --output-dir PATH          Output directory (optional)
+      --logs-dir PATH            Logs directory (optional)
   -s, --input-sheet TEXT         Optional worksheet(s)
-      --output-dir PATH          Output directory (default: ./output)
-      --logs-dir PATH            Logs directory (default: ./logs)
-      --log-format [text|ndjson] Log output format
-      --meta TEXT                KEY=VALUE metadata (repeatable)
-      --config-package TEXT      Config package name or path
+  --log-format [text|ndjson] Log output format
+  --log-level TEXT               Log level
+  --debug / --no-debug           Enable debug logging
+  --quiet / --no-quiet           Reduce output
+  --config-package PATH          Config package directory
       --help                     Show this message and exit.
 ```
 
@@ -99,5 +99,5 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 ade types
 
 # Run the engine directly (see full flags with `python -m ade_engine run --help`)
-python -m ade_engine run --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx --output-dir data/samples-output --logs-dir data/samples-output
+python -m ade_engine process file --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx --output-dir data/samples-output --logs-dir data/samples-output --config-package apps/ade-engine/src/ade_engine/templates/config_packages/default
 ```
