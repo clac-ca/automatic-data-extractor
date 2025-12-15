@@ -229,7 +229,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       typeof emptyCols === "number" ? `maxEmptyCols=${emptyCols}` : null,
     ].filter(Boolean);
     return (
-      <span className="break-words" title={JSON.stringify(settings)}>
+      <span className="break-words" title={truncate(JSON.stringify(settings), 220)}>
         {parts.join(" · ")}
       </span>
     );
@@ -393,7 +393,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       severitySummary ? severitySummary : null,
     ].filter(Boolean);
     return (
-      <span className="break-words" title={bySeverity ? JSON.stringify(bySeverity) : undefined}>
+      <span className="break-words">
         {parts.join(" · ")}
       </span>
     );
@@ -425,7 +425,9 @@ function formatEventRecord(event: Record<string, unknown>) {
     const col = typeof data.column_index === "number" ? data.column_index : undefined;
     const issuesSample = Array.isArray(data.results_sample) ? data.results_sample : [];
     const sample =
-      issuesSample.length > 0 ? `sample=${truncate(JSON.stringify(issuesSample[0]), 80)}` : null;
+      typeof issues === "number" && issues > 0 && issuesSample.length > 0
+        ? `sample=${truncate(JSON.stringify(issuesSample[0]), 80)}`
+        : null;
 
     const parts = [
       "Validate",
@@ -436,7 +438,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       sample,
     ].filter(Boolean);
     return (
-      <span className="break-words" title={message || undefined}>
+      <span className="break-words">
         {parts.join(" · ")}
       </span>
     );
@@ -476,20 +478,17 @@ function formatEventRecord(event: Record<string, unknown>) {
     const score = typeof data.best_score === "number" ? data.best_score : undefined;
     const scores = asRecord(data.scores);
     const topScores = scores ? formatTopScores(scores, 3) : null;
-    const title = scores ? JSON.stringify(scores) : undefined;
+    const contributions = asRecord(data.contributions);
+    const topSignals = contributions ? formatTopScores(contributions, 2) : null;
     const parts = [
-      "Candidate",
       typeof col === "number" ? `Col ${indexToColumnLabel(col)}` : null,
-      header ? `header=${truncate(header, 32)}` : null,
-      best ? `→ ${best}` : null,
+      header ? `"${truncate(header, 32)}"` : null,
+      best ? `suggested=${best}` : null,
       typeof score === "number" ? `(${score.toFixed(3)})` : null,
-      topScores ? `top:${topScores}` : null,
+      topScores ? `why: ${topScores}` : null,
+      topSignals ? `signals: ${topSignals}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={title}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.column_detector.summary") {
@@ -497,7 +496,7 @@ function formatEventRecord(event: Record<string, unknown>) {
     const total = typeof data.total_columns === "number" ? data.total_columns : undefined;
     const unmapped = Array.isArray(data.unmapped_indices) ? data.unmapped_indices.length : undefined;
     const parts = [
-      "Column mapping",
+      "Columns",
       typeof total === "number" ? `total=${total}` : null,
       `mapped=${mapped.length}`,
       typeof unmapped === "number" ? `unmapped=${unmapped}` : null,
@@ -512,7 +511,7 @@ function formatEventRecord(event: Record<string, unknown>) {
     const dataStart = typeof data.data_start_index === "number" ? data.data_start_index + 1 : undefined;
     const dataEnd = typeof data.data_end_index === "number" ? data.data_end_index + 1 : undefined;
     const parts = [
-      sheet ? `${sheet}` : "Row detect",
+      sheet ? `${sheet}` : "Rows",
       typeof headerRow === "number" ? `headerRow=${headerRow}` : null,
       typeof headerScore === "number" ? `score=${headerScore.toFixed(3)}` : null,
       typeof dataStart === "number" && typeof dataEnd === "number" ? `dataRows=${dataStart}..${dataEnd}` : null,
@@ -530,14 +529,14 @@ function formatEventRecord(event: Record<string, unknown>) {
     const scores = detector.scores && typeof detector.scores === "object" ? (detector.scores as Record<string, unknown>) : null;
     const scoreSummary = scores ? formatTopScores(scores as Record<string, unknown>, 2) : null;
     return (
-      <span className="break-words" title={message || undefined}>
+      <span className="break-words">
         {[
           sheet ? sheet : null,
           typeof col === "number" ? `Col ${indexToColumnLabel(col)}` : null,
           typeof row === "number" ? `Row ${row + 1}` : null,
-          detName ? `Detector ${detName}` : "Detector",
-          typeof duration === "number" ? `${duration.toFixed(2)}ms` : null,
-          scoreSummary ? `scores:${scoreSummary}` : null,
+          detName ? `ran ${detName}` : "ran detector",
+          typeof duration === "number" ? formatDurationMs(duration) : null,
+          scoreSummary ? `scores: ${scoreSummary}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -553,14 +552,16 @@ function formatEventRecord(event: Record<string, unknown>) {
     const classification = asRecord(data.classification);
     const kind = asString(classification?.row_kind);
     const score = typeof classification?.score === "number" ? classification.score : undefined;
+    const considered = Array.isArray(classification?.considered_row_kinds) ? classification?.considered_row_kinds.length : undefined;
     return (
-      <span className="break-words" title={message || undefined}>
+      <span className="break-words">
         {[
           sheet ? sheet : null,
           typeof row === "number" ? `Row ${row}` : "Row",
-          kind ? `→ ${kind}` : null,
+          kind ? `label=${kind}` : null,
           typeof score === "number" ? `(${score.toFixed(3)})` : null,
-          topScores ? `top:${topScores}` : null,
+          typeof considered === "number" ? `considered=${considered}` : null,
+          topScores ? `why: ${topScores}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -576,14 +577,16 @@ function formatEventRecord(event: Record<string, unknown>) {
     const classification = asRecord(data.classification);
     const field = asString(classification?.field);
     const score = typeof classification?.score === "number" ? classification.score : undefined;
+    const considered = Array.isArray(classification?.considered_fields) ? classification?.considered_fields.length : undefined;
     return (
-      <span className="break-words" title={message || undefined}>
+      <span className="break-words">
         {[
           sheet ? sheet : null,
           typeof col === "number" ? `Col ${indexToColumnLabel(col)}` : "Col",
-          field ? `→ ${field}` : null,
+          field ? `label=${field}` : null,
           typeof score === "number" ? `(${score.toFixed(3)})` : null,
-          topScores ? `top:${topScores}` : null,
+          typeof considered === "number" ? `considered=${considered}` : null,
+          topScores ? `why: ${topScores}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -637,6 +640,15 @@ function indexToColumnLabel(index: number): string {
     n = Math.floor(n / 26) - 1;
   }
   return out;
+}
+
+function formatDurationMs(valueMs: number): string {
+  if (!Number.isFinite(valueMs) || valueMs < 0) return `${valueMs}ms`;
+  if (valueMs < 1) return `${valueMs.toFixed(3)}ms`;
+  if (valueMs < 10) return `${valueMs.toFixed(2)}ms`;
+  if (valueMs < 100) return `${valueMs.toFixed(1)}ms`;
+  if (valueMs < 1000) return `${Math.round(valueMs)}ms`;
+  return `${(valueMs / 1000).toFixed(2)}s`;
 }
 
 function formatTopScores(scores: Record<string, unknown>, limit: number): string | null {
