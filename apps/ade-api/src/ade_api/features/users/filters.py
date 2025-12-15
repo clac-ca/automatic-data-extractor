@@ -5,7 +5,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.sql import Select
 
 from ade_api.common.filters import FilterBase
-from ade_api.core.models import User
+from ade_api.models import User
 from ade_api.settings import MAX_SEARCH_LEN, MIN_SEARCH_LEN
 
 

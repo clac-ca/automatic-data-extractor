@@ -103,6 +103,7 @@ async def test_get_user_admin_success(
     assert data["email"] == target["email"]
     assert data["is_active"] is True
     assert "global-user" in data["roles"]
+    assert isinstance(data["permissions"], list)
 
 
 async def test_get_user_admin_not_found(
@@ -171,83 +172,6 @@ async def test_update_user_admin_success(
     assert confirm_data["is_active"] is False
 
 
-async def test_get_user_requires_admin(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Non-admins should be blocked from reading user profiles."""
-
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])
-
-    response = await async_client.get(
-        f"/api/v1/users/{seed_identity['admin']['id']}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 403
-
-
-async def test_get_user_admin_success(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Administrators should be able to fetch a single user."""
-
-    admin = seed_identity["admin"]
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
-
-    response = await async_client.get(
-        f"/api/v1/users/{member['id']}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["id"] == str(member["id"])
-    assert payload["email"] == member["email"]
-    assert payload["is_active"] is True
-    assert "global-user" in payload["roles"]
-    assert isinstance(payload["permissions"], list)
-
-
-async def test_update_user_requires_admin(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Non-admins should not be able to update user profiles."""
-
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])
-
-    response = await async_client.patch(
-        f"/api/v1/users/{seed_identity['invitee']['id']}",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"display_name": "Unauthorized"},
-    )
-    assert response.status_code == 403
-
-
-async def test_update_user_admin_success(
-    async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-) -> None:
-    """Administrators should be able to mutate display name and active state."""
-
-    admin = seed_identity["admin"]
-    target = seed_identity["invitee"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
-
-    response = await async_client.patch(
-        f"/api/v1/users/{target['id']}",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"display_name": "Updated Invitee", "is_active": False},
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["display_name"] == "Updated Invitee"
-    assert payload["is_active"] is False
-
-
 async def test_update_user_rejects_empty_payload(
     async_client: AsyncClient,
     seed_identity: dict[str, Any],
@@ -274,9 +198,7 @@ async def test_deactivate_user_revokes_api_keys(
 
     admin = seed_identity["admin"]
     target = seed_identity["member"]
-    admin_token, _ = await login(
-        async_client, email=admin["email"], password=admin["password"]
-    )
+    admin_token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     create_key = await async_client.post(
         f"/api/v1/users/{target['id']}/api-keys",
@@ -324,9 +246,7 @@ async def test_deactivate_user_blocks_self(
     """Users should not be able to deactivate themselves."""
 
     admin = seed_identity["admin"]
-    token, _ = await login(
-        async_client, email=admin["email"], password=admin["password"]
-    )
+    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
 
     response = await async_client.post(
         f"/api/v1/users/{admin['id']}/deactivate",

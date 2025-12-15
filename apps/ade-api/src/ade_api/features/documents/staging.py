@@ -9,8 +9,8 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.time import utc_now
-from ade_api.core.models import Document
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.models import Document
 
 __all__ = ["stage_document_input"]
 

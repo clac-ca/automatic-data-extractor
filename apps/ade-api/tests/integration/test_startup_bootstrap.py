@@ -18,13 +18,11 @@ async def test_app_startup_bootstraps_database(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     workspaces_dir = data_dir / "workspaces"
 
-    settings = Settings.model_validate(
-        {
-            "database_dsn": f"sqlite+aiosqlite:///{database_path}",
-            "workspaces_dir": str(workspaces_dir),
-            "documents_dir": str(workspaces_dir),
-        }
-    )
+    settings = Settings.model_validate({
+        "database_dsn": f"sqlite+aiosqlite:///{database_path}",
+        "workspaces_dir": str(workspaces_dir),
+        "documents_dir": str(workspaces_dir),
+    })
 
     app = create_app(settings=settings)
 

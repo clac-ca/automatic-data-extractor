@@ -74,29 +74,18 @@ def detect_full_name_values(
     return {"full_name": score}
 
 
-def normalize_full_name(*, field_name, values, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "value": {...}}, ...]`, splitting full names where possible.
-
-    Supported shapes:
-    - "First Last": split on the space.
-    - "Last, First": split on the comma.
-    """
+def normalize_full_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> dict[str, list[Any]]:
+    """Split full names where possible and emit derived first/last name vectors."""
 
     comma_pattern = re.compile(r"^(?P<last>[A-Za-z][\w'\-]*),\s*(?P<first>[A-Za-z][\w'\-]*)$")
+    n = len(column)
+    out_full: list[Any] = [None] * n
+    out_first: list[Any] = [None] * n
+    out_last: list[Any] = [None] * n
 
-    normalized_rows: list[Dict[str, Any]] = []
-
-    for idx, raw_value in enumerate(values):
+    for idx, raw_value in enumerate(column):
         text_value = None if raw_value is None else str(raw_value).strip()
         if not text_value:
-            normalized_rows.append({
-                "row_index": idx,
-                "value": {
-                    "full_name": None,
-                    "first_name": None,
-                    "last_name": None,
-                },
-            })
             continue
 
         first_name: str | None = None
@@ -111,37 +100,27 @@ def normalize_full_name(*, field_name, values, mapping, state, metadata, input_f
             if len(parts) == 2:
                 first_name, last_name = parts
             else:
-                normalized_rows.append({
-                    "row_index": idx,
-                    "value": {
-                        "full_name": text_value,
-                        "first_name": None,
-                        "last_name": None,
-                    },
-                })
+                out_full[idx] = text_value
                 continue
 
-        full_name = f"{first_name} {last_name}".strip()
+        out_full[idx] = f"{first_name} {last_name}".strip()
+        out_first[idx] = first_name
+        out_last[idx] = last_name
 
-        normalized_rows.append({
-            "row_index": idx,
-            "value": {
-                "full_name": full_name,
-                "first_name": first_name,
-                "last_name": last_name,
-            },
-        })
-
-    return normalized_rows
+    return {
+        "full_name": out_full,
+        "first_name": out_first,
+        "last_name": out_last,
+    }
 
 
-def validate_full_name(*, field_name, values, mapping, state, metadata, column_index, input_file_name, logger) -> list[Dict[str, Any]]:
+def validate_full_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
     """Return `[{"row_index": int, "message": str}, ...]` when names include invalid symbols."""
 
     issues: list[Dict[str, Any]] = []
     pattern = re.compile(r"^[A-Za-z][A-Za-z '\-]*$")
 
-    for idx, v in enumerate(values):
+    for idx, v in enumerate(column):
         s = "" if v is None else str(v).strip()
         if not s:
             continue

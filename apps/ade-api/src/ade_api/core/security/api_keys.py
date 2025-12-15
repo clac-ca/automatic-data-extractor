@@ -29,4 +29,3 @@ def hash_api_key_secret(secret: str) -> str:
 
     digest = hashlib.sha256(secret.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-

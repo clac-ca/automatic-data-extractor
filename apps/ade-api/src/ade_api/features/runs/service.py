@@ -16,19 +16,16 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ade_api.common.events import (
+    EventRecord,
+    coerce_event_record,
+    ensure_event_context,
+    new_event_record,
+)
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
-from ade_api.core.models import (
-    BuildStatus,
-    Configuration,
-    ConfigurationStatus,
-    Document,
-    Run,
-    RunStatus,
-)
-from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
@@ -51,11 +48,13 @@ from ade_api.infra.storage import (
     workspace_run_root,
 )
 from ade_api.infra.venv import apply_venv_to_env, venv_python_path
-from ade_api.schemas.event_record import (
-    EventRecord,
-    coerce_event_record,
-    ensure_event_context,
-    new_event_record,
+from ade_api.models import (
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    Run,
+    RunStatus,
 )
 from ade_api.settings import Settings
 
@@ -79,7 +78,7 @@ from .schemas import (
 from .supervisor import RunExecutionSupervisor
 
 if TYPE_CHECKING:
-    from ade_api.features.builds.service import BuildExecutionContext, BuildsService
+    from ade_api.features.builds.service import BuildExecutionContext
 
 __all__ = [
     "RunExecutionContext",
@@ -97,6 +96,7 @@ logger = logging.getLogger(__name__)
 event_logger = logging.getLogger("ade_api.runs.events")
 
 DEFAULT_EVENTS_PAGE_LIMIT = 1000
+
 
 # Stream frames include engine output frames consumed internally plus
 # EventRecords surfaced to callers alongside RunExecutionResult markers used to
@@ -437,7 +437,10 @@ class RunsService:
             build_context = context.build_context
             # Ensure the build is actually executing; if it's queued or building but idle,
             # launch it in the background. This decouples build execution from the run stream.
-            build = await self._builds_service._require_build(build_context.build_id)
+            build = await self._builds_service.get_build_or_raise(
+                build_context.build_id,
+                workspace_id=build_context.workspace_id,
+            )
             await self._builds_service.launch_build_if_needed(
                 build=build,
                 reason=build_context.reason or "run_requested",
@@ -610,12 +613,12 @@ class RunsService:
         yield await self._emit_api_event(
             run=run,
             type_="console.line",
-            payload=ConsoleLinePayload(
-                scope="run",
-                stream="stderr",
-                level="error",
-                message=message,
-            ),
+            payload={
+                "scope": "run",
+                "stream": "stderr",
+                "level": "error",
+                "message": message,
+            },
         )
 
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
@@ -697,9 +700,7 @@ class RunsService:
 
         logger.debug(
             "run.events.get.start",
-            extra=log_context(
-                run_id=run_id, after_sequence=after_sequence, limit=limit
-            ),
+            extra=log_context(run_id=run_id, after_sequence=after_sequence, limit=limit),
         )
         run = await self._require_run(run_id)
         events: list[EventRecord] = []
@@ -826,9 +827,7 @@ class RunsService:
         started_at = self._ensure_utc(run.started_at)
         finished_at = self._ensure_utc(run.finished_at)
         duration_seconds = (
-            (finished_at - started_at).total_seconds()
-            if started_at and finished_at
-            else None
+            (finished_at - started_at).total_seconds() if started_at and finished_at else None
         )
 
         failure_code = None
@@ -1142,9 +1141,8 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        output_relative = (
-            paths_snapshot.output_path
-            or self._relative_output_path(run_dir / "output", run_dir)
+        output_relative = paths_snapshot.output_path or self._relative_output_path(
+            run_dir / "output", run_dir
         )
         if not output_relative:
             logger.warning(
@@ -1415,13 +1413,18 @@ class RunsService:
             ),
         )
 
-        python = venv_python_path(Path(context.venv_path))
+        build = await self._builds_service.get_build_or_raise(
+            context.build_id,
+            workspace_id=context.workspace_id,
+        )
+        venv_path = await self._builds_service.ensure_local_env(build=build)
+        python = venv_python_path(venv_path)
         selected_sheet_names = self._select_input_sheet_names(options)
         if not selected_sheet_names and run.input_sheet_names:
             selected_sheet_names = list(run.input_sheet_names)
 
         env = self._build_env(
-            Path(context.venv_path),
+            venv_path,
             options,
             context,
             input_sheet_name=selected_sheet_names[0] if selected_sheet_names else None,
@@ -1615,12 +1618,12 @@ class RunsService:
         yield await self._emit_api_event(
             run=run,
             type_="console.line",
-            payload=ConsoleLinePayload(
-                scope="run",
-                stream="stdout",
-                level="info",
-                message=message,
-            ),
+            payload={
+                "scope": "run",
+                "stream": "stdout",
+                "level": "info",
+                "message": message,
+            },
         )
 
         # Completion event

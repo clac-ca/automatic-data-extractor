@@ -52,4 +52,3 @@ def test_default_response_helpers() -> None:
     err = DefaultResponse.failure("nope")
     assert err.status is False
     assert err.message == "nope"
-

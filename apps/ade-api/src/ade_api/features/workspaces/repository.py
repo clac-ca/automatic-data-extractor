@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from uuid import UUID
 
 from sqlalchemy import and_, delete, select, true, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.core.models import Workspace, WorkspaceMembership
+from ade_api.models import Workspace, WorkspaceMembership
 
 
 class WorkspacesRepository:
@@ -21,8 +22,8 @@ class WorkspacesRepository:
     async def get_membership(
         self,
         *,
-        user_id: str,
-        workspace_id: str,
+        user_id: UUID,
+        workspace_id: UUID,
     ) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
@@ -42,7 +43,7 @@ class WorkspacesRepository:
         return result.scalar_one_or_none()
 
     async def get_membership_for_workspace(
-        self, *, user_id: str, workspace_id: str
+        self, *, user_id: UUID, workspace_id: UUID
     ) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
@@ -61,7 +62,7 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_default_membership(self, *, user_id: str) -> WorkspaceMembership | None:
+    async def get_default_membership(self, *, user_id: UUID) -> WorkspaceMembership | None:
         stmt = (
             select(WorkspaceMembership)
             .options(
@@ -80,7 +81,7 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_for_user(self, user_id: str) -> list[WorkspaceMembership]:
+    async def list_for_user(self, user_id: UUID) -> list[WorkspaceMembership]:
         stmt = (
             select(WorkspaceMembership)
             .options(
@@ -93,7 +94,7 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_members(self, workspace_id: str) -> list[WorkspaceMembership]:
+    async def list_members(self, workspace_id: UUID) -> list[WorkspaceMembership]:
         stmt = (
             select(WorkspaceMembership)
             .options(
@@ -106,9 +107,7 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_members_for_update(
-        self, workspace_id: str
-    ) -> list[WorkspaceMembership]:
+    async def list_members_for_update(self, workspace_id: UUID) -> list[WorkspaceMembership]:
         stmt = (
             select(WorkspaceMembership)
             .options(
@@ -122,7 +121,7 @@ class WorkspacesRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_workspace(self, workspace_id: str) -> Workspace | None:
+    async def get_workspace(self, workspace_id: UUID) -> Workspace | None:
         stmt = select(Workspace).where(Workspace.id == workspace_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -176,9 +175,7 @@ class WorkspacesRepository:
 
     async def delete_workspace(self, workspace: Workspace) -> None:
         await self._session.execute(
-            delete(WorkspaceMembership).where(
-                WorkspaceMembership.workspace_id == workspace.id
-            )
+            delete(WorkspaceMembership).where(WorkspaceMembership.workspace_id == workspace.id)
         )
         await self._session.delete(workspace)
         await self._session.flush()
@@ -186,8 +183,8 @@ class WorkspacesRepository:
     async def create_membership(
         self,
         *,
-        workspace_id: str,
-        user_id: str,
+        workspace_id: UUID,
+        user_id: UUID,
         is_default: bool = False,
     ) -> WorkspaceMembership:
         membership = WorkspaceMembership(
@@ -207,7 +204,7 @@ class WorkspacesRepository:
         await self._session.delete(membership)
         await self._session.flush()
 
-    async def clear_default_for_user(self, *, user_id: str) -> None:
+    async def clear_default_for_user(self, *, user_id: UUID) -> None:
         stmt = (
             update(WorkspaceMembership)
             .where(WorkspaceMembership.user_id == user_id)

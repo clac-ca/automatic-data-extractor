@@ -58,7 +58,8 @@ class ColumnDetectorContext:
 @dataclass(frozen=True)
 class TransformContext:
     field_name: str
-    values: Sequence[Any]
+    column: list[Any]
+    table: Any
     mapping: Mapping[str, int | None]
     state: dict[str, Any]
     metadata: Mapping[str, Any]
@@ -69,11 +70,11 @@ class TransformContext:
 @dataclass(frozen=True)
 class ValidateContext:
     field_name: str
-    values: Sequence[Any]
+    column: list[Any]
+    table: Any
     mapping: Mapping[str, int | None]
     state: dict[str, Any]
     metadata: Mapping[str, Any]
-    column_index: int | None = None
     input_file_name: str | None = None
     logger: Any | None = None
 

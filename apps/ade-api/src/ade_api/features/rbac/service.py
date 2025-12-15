@@ -14,14 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ade_api.common.pagination import Page, paginate_sequence, paginate_sql
-from ade_api.core.models import (
-    Permission,
-    Role,
-    RolePermission,
-    User,
-    UserRoleAssignment,
-    Workspace,
-)
 from ade_api.core.rbac.policy import GLOBAL_IMPLICATIONS, WORKSPACE_IMPLICATIONS
 from ade_api.core.rbac.registry import (
     PERMISSION_REGISTRY,
@@ -32,6 +24,14 @@ from ade_api.core.rbac.registry import (
     SystemRoleDef,
 )
 from ade_api.core.rbac.types import ScopeType
+from ade_api.models import (
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRoleAssignment,
+    Workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -181,11 +181,7 @@ def _role_allows_scope(role: Role, scope: ScopeType) -> bool:
 
 
 def _role_permissions(role: Role) -> tuple[str, ...]:
-    return tuple(
-        rp.permission.key
-        for rp in role.permissions
-        if rp.permission is not None
-    )
+    return tuple(rp.permission.key for rp in role.permissions if rp.permission is not None)
 
 
 # ---------------------------------------------------------------------------
@@ -306,11 +302,7 @@ class RbacService:
     # ------------- permission listing ------------
 
     async def list_permissions(self, *, scope: ScopeType) -> list[Permission]:
-        stmt = (
-            select(Permission)
-            .where(Permission.scope_type == scope)
-            .order_by(Permission.key)
-        )
+        stmt = select(Permission).where(Permission.scope_type == scope).order_by(Permission.key)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -481,15 +473,13 @@ class RbacService:
             missing = [key for key in additions if key not in permission_map]
             if missing:
                 raise RoleValidationError(f"Permissions not found: {', '.join(sorted(missing))}")
-            self._session.add_all(
-                [
-                    RolePermission(
-                        role_id=role.id,
-                        permission_id=permission_map[key],
-                    )
-                    for key in additions
-                ]
-            )
+            self._session.add_all([
+                RolePermission(
+                    role_id=role.id,
+                    permission_id=permission_map[key],
+                )
+                for key in additions
+            ])
 
         if removals:
             removal_ids = [current[key].permission_id for key in removals if key in current]
@@ -539,9 +529,7 @@ class RbacService:
         if role_id:
             stmt = stmt.where(UserRoleAssignment.role_id == role_id)
         if not include_inactive:
-            stmt = stmt.join(User, UserRoleAssignment.user).where(
-                User.is_active == true()
-            )
+            stmt = stmt.join(User, UserRoleAssignment.user).where(User.is_active == true())
 
         return await paginate_sql(
             self._session,
@@ -696,8 +684,10 @@ class RbacService:
         await self._session.flush()
 
     async def _count_assignments_for_role(self, *, role_id: UUID) -> int:
-        stmt = select(func.count()).select_from(UserRoleAssignment).where(
-            UserRoleAssignment.role_id == role_id
+        stmt = (
+            select(func.count())
+            .select_from(UserRoleAssignment)
+            .where(UserRoleAssignment.role_id == role_id)
         )
         result = await self._session.execute(stmt)
         return int(result.scalar_one() or 0)

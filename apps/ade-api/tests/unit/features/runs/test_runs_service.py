@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from uuid import uuid4
-from typing import AsyncIterator
 
 import pytest
-from ade_api.schemas.event_record import EventRecord, new_event_record
 
+from ade_api.common.events import EventRecord, new_event_record
 from ade_api.common.time import utc_now
-from ade_api.core.models import (
+from ade_api.db.mixins import generate_uuid7
+from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
+from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.runs.schemas import RunCreateOptions
+from ade_api.features.runs.service import (
+    RunExecutionContext,
+    RunExecutionResult,
+    RunPathsSnapshot,
+    RunsService,
+)
+from ade_api.features.system_settings.service import SafeModeService
+from ade_api.infra.storage import workspace_config_root, workspace_documents_root
+from ade_api.models import (
     Build,
     BuildStatus,
     Configuration,
@@ -20,18 +31,6 @@ from ade_api.core.models import (
     RunStatus,
     Workspace,
 )
-from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
-from ade_api.features.documents.storage import DocumentStorage
-from ade_api.features.runs.service import (
-    RunExecutionContext,
-    RunExecutionResult,
-    RunPathsSnapshot,
-    RunsService,
-)
-from ade_api.features.runs.schemas import RunCreateOptions
-from ade_api.features.system_settings.service import SafeModeService
-from ade_api.infra.db.mixins import generate_uuid7
-from ade_api.infra.storage import workspace_config_root, workspace_documents_root
 from ade_api.settings import Settings
 
 
@@ -70,12 +69,38 @@ class FakeBuildsService:
         self.build.status = BuildStatus.READY
         self.build.exit_code = 0
 
+    async def stream_build_events(
+        self,
+        *,
+        build: Build,
+        start_sequence: int | None = None,  # noqa: ARG002
+        timeout_seconds: float | None = None,  # noqa: ARG002
+    ) -> AsyncIterator[EventRecord]:
+        for event in self.events:
+            yield event
+        build.status = BuildStatus.READY
+        build.exit_code = 0
+
+    async def launch_build_if_needed(
+        self,
+        *,
+        build: Build,  # noqa: ARG002
+        reason: str | None = None,  # noqa: ARG002
+        run_id=None,  # noqa: ANN001,ARG002
+    ) -> None:
+        return None
+
     async def get_build_or_raise(self, build_id: str, workspace_id: str | None = None) -> Build:
         return self.build
 
     async def ensure_local_env(self, *, build: Build) -> Path:
+        from ade_api.infra.venv import venv_python_path
+
         self.venv_path.parent.mkdir(parents=True, exist_ok=True)
         self.venv_path.mkdir(parents=True, exist_ok=True)
+        python_path = venv_python_path(self.venv_path, must_exist=False)
+        python_path.parent.mkdir(parents=True, exist_ok=True)
+        python_path.write_text("", encoding="utf-8")
         return self.venv_path
 
     def event_log_reader(self, *_, **__):

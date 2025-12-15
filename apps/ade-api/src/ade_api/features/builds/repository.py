@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from ade_api.common.pagination import Page, paginate_sql
-from ade_api.core.models import Build, BuildStatus
+from ade_api.models import Build, BuildStatus
 
 __all__ = [
     "BuildsRepository",

@@ -232,6 +232,8 @@ ENGINE_EVENT_SCHEMAS: dict[str, PayloadModel] = {
     # Transform/validation results
     f"{ENGINE_NAMESPACE}.transform.result": None,
     f"{ENGINE_NAMESPACE}.validation.result": None,
+    f"{ENGINE_NAMESPACE}.transform.derived_merge": None,
+    f"{ENGINE_NAMESPACE}.validation.summary": None,
     f"{ENGINE_NAMESPACE}.transform.overwrite": None,
     f"{ENGINE_NAMESPACE}.hook.start": None,
     f"{ENGINE_NAMESPACE}.hook.end": None,

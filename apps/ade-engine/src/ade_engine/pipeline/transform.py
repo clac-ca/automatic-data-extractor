@@ -1,162 +1,193 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
-
-from pydantic import ValidationError
+from typing import Any
 
 from ade_engine.exceptions import PipelineError
-from ade_engine.models import ColumnTransformResult
+from ade_engine.logging import RunLogger
+from ade_engine.pipeline.patches import IssuesPatch, TablePatch, merge_issues_patch, normalize_transform_return
+from ade_engine.pipeline.table_view import TableView
+from ade_engine.pipeline.models import MappedColumn
 from ade_engine.registry.invoke import call_extension
 from ade_engine.registry.models import TransformContext
 from ade_engine.registry.registry import Registry
-from ade_engine.pipeline.models import MappedColumn
-from ade_engine.logging import RunLogger
+from ade_engine.settings import Settings
 
 
-def _wrap_base_values(field_name: str, values: List[Any]) -> List[ColumnTransformResult]:
-    """Wrap raw column values into the standard row output shape."""
+def _is_missing(value: Any, *, settings: Settings) -> bool:
+    if value is None:
+        return True
+    if settings.missing_values_mode == "none_or_blank":
+        return isinstance(value, str) and not value.strip()
+    return False
 
-    return [
-        ColumnTransformResult(row_index=idx, value={field_name: value})
-        for idx, value in enumerate(values)
-    ]
 
-
-def _validate_transform_output(
+def _apply_values_patch(
     *,
-    field_name: str,
-    transform_name: str,
-    raw: Any,
-    expected_len: int,
-) -> List[ColumnTransformResult]:
-    """Validate transform output matches the strict row-output contract."""
+    owner_field: str,
+    values_patch: dict[str, list[Any]],
+    columns: dict[str, list[Any]],
+    mapping: dict[str, int | None],
+    settings: Settings,
+    row_count: int,
+    logger: RunLogger,
+) -> None:
+    for field, vec in values_patch.items():
+        if field == owner_field:
+            columns[field] = vec
+            continue
 
-    if raw is None:
-        raise PipelineError(
-            f"Transform {transform_name} for field '{field_name}' returned None; expected a list of row outputs"
-        )
-    if not isinstance(raw, list):
-        raise PipelineError(
-            f"Transform {transform_name} for field '{field_name}' must return a list of row outputs"
-        )
-    if len(raw) != expected_len:
-        raise PipelineError(
-            f"Transform {transform_name} for field '{field_name}' must return {expected_len} row outputs (got {len(raw)})"
-        )
+        mode = settings.derived_write_mode
+        if mode == "skip":
+            continue
 
-    validated: List[ColumnTransformResult] = []
-    seen_indices: set[int] = set()
-    for idx, item in enumerate(raw):
-        try:
-            entry = ColumnTransformResult.model_validate(item)
-        except ValidationError as exc:
+        existing = columns.get(field)
+        if existing is None:
+            existing = [None] * row_count
+            columns[field] = existing
+            mapping.setdefault(field, None)
+
+        if len(existing) != row_count:
             raise PipelineError(
-                f"Transform {transform_name} for field '{field_name}' returned an invalid row payload at position {idx}: {exc}"
-            ) from exc
-
-        if entry.row_index in seen_indices:
-            raise PipelineError(
-                f"Transform {transform_name} for field '{field_name}' returned duplicate row_index {entry.row_index}"
+                f"Internal error: column '{field}' length mismatch ({len(existing)} vs {row_count})"
             )
-        if entry.row_index >= expected_len:
-            raise PipelineError(
-                f"Transform {transform_name} for field '{field_name}' produced out-of-range row_index {entry.row_index}"
-            )
-        seen_indices.add(entry.row_index)
-        validated.append(entry)
 
-    missing_indices = set(range(expected_len)) - seen_indices
-    if missing_indices:
-        missing_str = ", ".join(str(idx) for idx in sorted(missing_indices))
-        raise PipelineError(
-            f"Transform {transform_name} for field '{field_name}' missing rows at indices {missing_str}"
+        if mode == "overwrite":
+            columns[field] = vec
+            continue
+
+        for idx, new_value in enumerate(vec):
+            existing_value = existing[idx]
+            if mode == "fill_missing":
+                if _is_missing(existing_value, settings=settings):
+                    existing[idx] = new_value
+                continue
+
+            if mode == "error_on_conflict":
+                if _is_missing(existing_value, settings=settings) or _is_missing(new_value, settings=settings):
+                    continue
+                if existing_value != new_value:
+                    raise PipelineError(
+                        f"Derived field conflict for '{field}' at row {idx}: {existing_value!r} vs {new_value!r}"
+                    )
+                continue
+
+            raise PipelineError(f"Unknown derived_write_mode: {mode}")
+
+        logger.event(
+            "transform.derived_merge",
+            level=logging.DEBUG,
+            data={"field": field, "mode": mode},
         )
-
-    validated.sort(key=lambda entry: entry.row_index)
-    return validated
 
 
 def apply_transforms(
     *,
-    mapped_columns: List[MappedColumn],
+    mapped_columns: list[MappedColumn],
+    columns: dict[str, list[Any]],
+    mapping: dict[str, int | None],
     registry: Registry,
+    settings: Settings,
     state: dict,
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> List[Dict[str, Any]]:
-    if not mapped_columns:
-        return []
+    row_count: int,
+) -> TablePatch:
+    """Apply transforms using the v2 column-vector contract.
 
-    row_count = max(len(col.values) for col in mapped_columns)
-    output_rows: List[Dict[str, Any]] = [dict() for _ in range(row_count)]
+    The engine owns ``columns`` + ``mapping`` and mutates them in place.
+    Returns a TablePatch containing accumulated issues/meta.
+    """
 
-    mapping_lookup = {col.field_name: col.source_index for col in mapped_columns}
+    registry_fields = set(registry.fields.keys())
     transforms_by_field = registry.column_transforms_by_field
 
-    for col in mapped_columns:
-        expected_len = len(col.values)
-        working = _wrap_base_values(col.field_name, list(col.values))
-        current_values: List[Any] = list(col.values)
+    issues_patch: IssuesPatch = {}
+    meta: dict[str, Any] = {}
 
-        transforms = transforms_by_field.get(col.field_name, [])
+    mapped_fields = [col.field_name for col in mapped_columns]
+    mapped_set = set(mapped_fields)
+
+    def run_field_chain(field_name: str) -> None:
+        transforms = transforms_by_field.get(field_name, [])
+        if not transforms:
+            return
+
+        if field_name not in columns:
+            columns[field_name] = [None] * row_count
+            mapping.setdefault(field_name, None)
+
         for tf in transforms:
-            before_sample = current_values[:3]
+            before_sample = columns[field_name][:3]
             ctx = TransformContext(
-                field_name=col.field_name,
-                values=current_values,
-                mapping=mapping_lookup,
+                field_name=field_name,
+                column=list(columns[field_name]),
+                table=TableView(columns, mapping=mapping, row_count=row_count),
+                mapping=mapping,
                 state=state,
                 metadata=metadata,
                 input_file_name=input_file_name,
                 logger=logger,
             )
-            try:
-                raw_out = call_extension(tf.fn, ctx, label=f"Transform {tf.qualname}")
-                validated = _validate_transform_output(
-                    field_name=col.field_name,
-                    transform_name=tf.qualname,
-                    raw=raw_out,
-                    expected_len=expected_len,
-                )
-            except Exception as exc:  # pragma: no cover - defensive
-                raise PipelineError(
-                    f"Transform {tf.qualname} failed for field '{col.field_name}'"
-                ) from exc
+            raw_out = call_extension(tf.fn, ctx, label=f"Transform {tf.qualname}")
+            patch = normalize_transform_return(
+                field_name=field_name,
+                raw=raw_out,
+                row_count=row_count,
+                registry_fields=registry_fields,
+                source=f"Transform {tf.qualname}",
+            )
+
+            _apply_values_patch(
+                owner_field=field_name,
+                values_patch=patch.values,
+                columns=columns,
+                mapping=mapping,
+                settings=settings,
+                row_count=row_count,
+                logger=logger,
+            )
+            merge_issues_patch(issues_patch, patch.issues)
+            meta.update(patch.meta)
+
             logger.event(
                 "transform.result",
                 level=logging.DEBUG,
                 data={
                     "transform": tf.qualname,
-                    "field": col.field_name,
-                    "input_len": expected_len,
-                    "output_len": len(validated),
+                    "field": field_name,
+                    "row_count": row_count,
                     "sample_before": before_sample,
-                    "sample_after": [entry.value for entry in validated[:3]],
+                    "sample_after": columns[field_name][:3],
+                    "emitted_fields": sorted(patch.values.keys()),
+                    "emitted_issue_fields": sorted(patch.issues.keys()),
                 },
             )
-            working = validated
-            current_values = [entry.value for entry in working]
 
-        # merge into output rows
-        for row_data in working:
-            row_index = row_data.row_index
-            if row_index >= len(output_rows):
-                output_rows.extend({} for _ in range(row_index - len(output_rows) + 1))
-            value_payload = dict(row_data.value) if row_data.value is not None else {}
-            if col.field_name not in value_payload:
-                value_payload[col.field_name] = None
-            for key, value in value_payload.items():
-                if key in output_rows[row_index] and output_rows[row_index][key] != value:
-                    logger.event(
-                        "transform.overwrite",
-                        level=logging.DEBUG,
-                        data={"field": key, "row_index": row_index},
-                    )
-                output_rows[row_index][key] = value
+    # Phase 1: mapped fields in source order.
+    for field_name in mapped_fields:
+        run_field_chain(field_name)
 
-    return output_rows
+    # Phase 2: derived-only fields that now exist and have transforms.
+    phase2_done: set[str] = set()
+    while True:
+        progressed = False
+        for field_name in registry.fields.keys():
+            if field_name in mapped_set or field_name in phase2_done:
+                continue
+            if field_name not in columns:
+                continue
+            if not transforms_by_field.get(field_name):
+                continue
+            run_field_chain(field_name)
+            phase2_done.add(field_name)
+            progressed = True
+        if not progressed:
+            break
+
+    return TablePatch(issues=issues_patch, meta=meta)
 
 
 __all__ = ["apply_transforms"]
+

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
-import json
 
 import pytest
 from fastapi import Request
 
+from ade_api.common.events import EventRecord, new_event_record
 from ade_api.features.builds.router import stream_build_events_endpoint
 from ade_api.features.runs.router import stream_run_events_endpoint
-from ade_api.schemas.event_record import EventRecord, new_event_record
+from ade_api.models import BuildStatus, RunStatus
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,6 +43,7 @@ class _StubBuildsService:
             id=build_id,
             workspace_id=workspace_id,
             configuration_id=configuration_id,
+            status=BuildStatus.READY,
         )
         self._events = events
 
@@ -50,8 +52,14 @@ class _StubBuildsService:
             return self._build
         return None
 
+    async def launch_build_if_needed(self, *, build, reason, run_id):  # noqa: ANN001,ARG002
+        return None
+
     def event_log_reader(self, *, workspace_id, configuration_id, build_id):
         return _ListReader(self._events)
+
+    def iter_events(self, *, build, after_sequence: int | None = None):  # noqa: ANN001
+        return _ListReader(self._events).iter_persisted(after_sequence=after_sequence)
 
     @asynccontextmanager
     async def subscribe_to_events(self, build):
@@ -64,6 +72,7 @@ class _StubRunsService:
             id=run_id,
             workspace_id=workspace_id,
             configuration_id=configuration_id,
+            status=RunStatus.SUCCEEDED,
         )
         self._events = events
 
@@ -146,7 +155,7 @@ async def test_run_stream_respects_resume_cursor_header() -> None:
 
     assert len(payload) == 1  # resumed at id 1, so only the second event should stream
     lines = payload[0].splitlines()
-    assert lines[0] == "id: 1"
+    assert lines[0] == "id: 2"
     assert lines[1] == "event: run.complete"
     assert lines[2].startswith("data: ")
     data_obj = json.loads(lines[2].removeprefix("data: "))

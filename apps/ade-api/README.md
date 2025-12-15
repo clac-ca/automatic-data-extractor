@@ -15,7 +15,7 @@ The API no longer bundles or syncs template folders. When you create a configura
 - `ade-engine config init <workspace>/<config_id>` – lays down the built-in starter template that ships with the engine package.
 - `ade-engine config validate --config-package <path>` – checks that the generated/edited package imports and registers correctly.
 
-Configurations are still stored under `./data/workspaces/{workspace_id}/config_packages/{config_id}/` by default, and you can clone/import existing configs as before. The `source.type="template"` payload is retained for backward compatibility; the `template_id` is ignored because the engine currently ships a single starter template.
+Configurations are still stored under `./data/workspaces/{workspace_id}/config_packages/{config_id}/` by default, and you can clone/import existing configs as before. The create-configuration API supports `source.type="template"` (engine starter template) and `source.type="clone"` (copy an existing configuration).
 
 ## Logging
 

@@ -27,13 +27,13 @@ type PrefixFormatter = (
 type PrefixHandler = { prefix: string; formatter: PrefixFormatter };
 
 const BUILD_EVENT_HANDLERS: Record<string, EventFormatter> = {
-  "build.created": (_event, payload, timestamp) => formatBuildCreated(payload, timestamp),
-  "build.queued": (_event, payload, timestamp) => formatBuildQueued(payload, timestamp),
-  "build.start": (_event, payload, timestamp) => formatBuildStarted(payload, timestamp),
-  "build.progress": (_event, payload, timestamp) => formatBuildProgress(payload, timestamp),
-  "build.phase.start": (_event, payload, timestamp) => formatBuildPhaseStarted(payload, timestamp),
-  "build.phase.complete": (_event, payload, timestamp) => formatBuildPhaseCompleted(payload, timestamp),
-  "build.complete": (_event, payload, timestamp) => formatBuildCompletion(payload, timestamp),
+  "build.created": formatBuildCreated,
+  "build.queued": formatBuildQueued,
+  "build.start": formatBuildStarted,
+  "build.progress": formatBuildProgress,
+  "build.phase.start": formatBuildPhaseStarted,
+  "build.phase.complete": formatBuildPhaseCompleted,
+  "build.complete": formatBuildCompletion,
 };
 
 const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
@@ -44,10 +44,10 @@ const RUN_EVENT_HANDLERS: Record<string, EventFormatter> = {
   "engine.phase.start": (event, payload, timestamp) => formatRunPhaseStarted(event, payload, timestamp),
   "engine.phase.complete": (event, payload, timestamp) => formatRunPhaseCompleted(event, payload, timestamp),
   "engine.table.summary": (event, payload, timestamp) => formatRunTableSummary(event, payload, timestamp),
-  "engine.detector.column.score": (event, payload, timestamp) => formatColumnDetectorScore(event, payload, timestamp),
-  "engine.detector.row.score": (event, payload, timestamp) => formatRowDetectorScore(event, payload, timestamp),
-  "engine.file.summary": (event, payload, timestamp) => formatFileSummary(event, payload, timestamp),
-  "engine.sheet.summary": (event, payload, timestamp) => formatSheetSummary(event, payload, timestamp),
+  "engine.detector.column.score": (_event, payload, timestamp) => formatColumnDetectorScore(payload, timestamp),
+  "engine.detector.row.score": (_event, payload, timestamp) => formatRowDetectorScore(payload, timestamp),
+  "engine.file.summary": (_event, payload, timestamp) => formatFileSummary(payload, timestamp),
+  "engine.sheet.summary": (_event, payload, timestamp) => formatSheetSummary(payload, timestamp),
   "engine.validation.issue": (event, payload, timestamp) => formatValidationIssue(event, payload, timestamp),
   "engine.validation.summary": (event, payload, timestamp) => formatValidationSummary(event, payload, timestamp),
   "engine.row_detector.result": (event, payload, timestamp) => formatEngineRowDetectorResult(event, payload, timestamp),
@@ -201,8 +201,10 @@ function formatBuildPhaseStarted(event: RunStreamEvent, payload: Record<string, 
 }
 
 function formatBuildProgress(event: RunStreamEvent, payload: Record<string, unknown>, timestamp: string): WorkbenchConsoleLine {
+  const payloadMessage = typeof payload.message === "string" ? payload.message.trim() : undefined;
   const message =
     (event.message as string | undefined)?.trim() ??
+    payloadMessage ??
     ((payload.step as string | undefined) ? `Build: ${payload.step as string}` : "Build progress");
   return { level: "info", message, timestamp, origin: "build" };
 }
@@ -249,7 +251,7 @@ export function formatRunEvent(event: RunStreamEvent): WorkbenchConsoleLine {
 
   const prefix = type ? RUN_PREFIX_HANDLERS.find((entry) => type.startsWith(entry.prefix)) : undefined;
   if (prefix) {
-    return withRaw(event, prefix.formatter(type, payload, ts));
+    return withRaw(event, prefix.formatter(event, type, payload, ts));
   }
 
   return withRaw(event, { level: "info", message: JSON.stringify(event), timestamp: ts, origin: "run" });
@@ -389,10 +391,7 @@ function formatRunCompletion(event: RunStreamEvent, payload: Record<string, unkn
     typeof payload.summary === "string"
       ? payload.summary.trim()
       : null;
-  const artifacts = (!isRunSummary &&
-    payload.artifacts &&
-    typeof payload.artifacts === "object" &&
-    (payload.artifacts as Record<string, unknown>)) || null;
+  const artifacts = !isRunSummary ? asRecord(payload.artifacts) : null;
   const outputPath =
     artifacts && typeof (artifacts as { output_path?: unknown }).output_path === "string"
       ? ((artifacts as { output_path: string }).output_path as string)
@@ -1259,4 +1258,11 @@ function asNumber(value: unknown): number | undefined {
     return undefined;
   }
   return value;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return value as Record<string, unknown>;
 }

@@ -7,12 +7,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.app.dependencies import get_current_principal, get_db_session
 from ade_api.common.pagination import PageParams, paginate_sequence
 from ade_api.core.auth.principal import AuthenticatedPrincipal
-from ade_api.core.http import require_csrf
-from ade_api.core.models import Role, User, UserRoleAssignment
+from ade_api.core.http import get_current_principal, require_csrf
 from ade_api.core.rbac.types import ScopeType
+from ade_api.db.session import get_session
 from ade_api.features.rbac.schemas import (
     PermissionOut,
     PermissionPage,
@@ -36,6 +35,7 @@ from ade_api.features.rbac.service import (
     ScopeMismatchError,
     _role_permissions,
 )
+from ade_api.models import Role, User, UserRoleAssignment
 
 router = APIRouter(tags=["rbac"])
 
@@ -45,7 +45,7 @@ user_roles_router = APIRouter(
 )
 
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 PageDep = Annotated[PageParams, Depends()]
 
 
@@ -60,11 +60,7 @@ def _serialize_role(role: Role) -> RoleOut:
         slug=role.slug,
         name=role.name,
         description=role.description,
-        permissions=[
-            rp.permission.key
-            for rp in role.permissions
-            if rp.permission is not None
-        ],
+        permissions=[rp.permission.key for rp in role.permissions if rp.permission is not None],
         is_system=role.is_system,
         is_editable=role.is_editable,
         created_at=role.created_at,
@@ -100,8 +96,7 @@ def _serialize_member(assignments: Iterable[UserRoleAssignment]) -> WorkspaceMem
     user_id = assignments[0].user_id
     role_ids = [assignment.role_id for assignment in assignments]
     role_slugs = [
-        assignment.role.slug if assignment.role is not None else ""
-        for assignment in assignments
+        assignment.role.slug if assignment.role is not None else "" for assignment in assignments
     ]
     created_at = min(assignment.created_at for assignment in assignments)
     return WorkspaceMemberOut(
@@ -278,7 +273,7 @@ async def create_role(
     except RoleConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except RoleValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return _serialize_role(role)
 
@@ -341,9 +336,7 @@ async def update_role(
             role_id=role.id,
             name=payload.name or role.name,
             description=(
-                payload.description
-                if payload.description is not None
-                else role.description
+                payload.description if payload.description is not None else role.description
             ),
             permissions=payload.permissions or _role_permissions(role),
             actor=actor,
@@ -353,7 +346,7 @@ async def update_role(
     except RoleConflictError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except RoleValidationError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return _serialize_role(updated)
 
@@ -441,7 +434,7 @@ async def list_assignments(
 
     if scope == ScopeType.WORKSPACE and scope_id is None:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="scope_id is required when scope=workspace",
         )
     if scope == ScopeType.GLOBAL:
@@ -543,7 +536,7 @@ async def assign_user_role(
     except (RoleNotFoundError, AssignmentError) as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     assignments = await _load_user_role_assignments(service=service, user_id=user_id)
     return UserRolesEnvelope(
@@ -587,7 +580,7 @@ async def remove_user_role(
             scope_id=None,
         )
     except ScopeMismatchError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

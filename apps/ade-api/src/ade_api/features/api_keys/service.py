@@ -15,13 +15,13 @@ from ade_api.common.pagination import Page, paginate_sql
 from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
-from ade_api.core.models import ApiKey, User, Workspace
 from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.api_keys import (
     generate_api_key_prefix,
     generate_api_key_secret,
     hash_api_key_secret,
 )
+from ade_api.models import ApiKey, User, Workspace
 from ade_api.settings import Settings
 
 
@@ -120,9 +120,7 @@ class ApiKeyService:
             scope_id=scope_id,
         )
 
-    async def _get_owner(
-        self, *, owner_user_id: UUID | None, email: str | None
-    ) -> User:
+    async def _get_owner(self, *, owner_user_id: UUID | None, email: str | None) -> User:
         provided = [owner_user_id, email]
         if sum(value is not None for value in provided) != 1:
             msg = "Provide exactly one of owner_user_id or email"
@@ -266,9 +264,7 @@ class ApiKeyService:
     # -- Read / revoke ----------------------------------------------------
 
     async def get_by_id(self, api_key_id: UUID) -> ApiKey:
-        result = await self._session.execute(
-            self._base_query().where(ApiKey.id == api_key_id)
-        )
+        result = await self._session.execute(self._base_query().where(ApiKey.id == api_key_id))
         api_key = result.scalar_one_or_none()
         if api_key is None:
             raise ApiKeyNotFoundError(f"API key {api_key_id} not found")

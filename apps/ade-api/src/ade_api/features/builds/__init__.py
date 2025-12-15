@@ -1,6 +1,6 @@
 """Virtual environment build management for configurations."""
 
-from ade_api.core.models import BuildStatus
+from ade_api.models import BuildStatus
 
 from .exceptions import (
     BuildAlreadyInProgressError,

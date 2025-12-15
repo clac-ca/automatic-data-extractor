@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import mimetypes
-import json
 from collections.abc import AsyncIterator
-from pathlib import Path as FilePath
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -23,21 +22,29 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, StreamingResponse
 
-from ade_api.app.dependencies import (
-    get_run_event_streams,
+from ade_api.api.deps import (
     get_runs_service,
 )
+from ade_api.common.downloads import build_content_disposition
+from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.logging import log_context
-from ade_api.common.downloads import build_content_disposition
 from ade_api.common.pagination import PageParams
 from ade_api.core.http import require_authenticated, require_csrf
-from ade_api.core.models import RunStatus
+from ade_api.db.session import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.infra.db.session import get_sessionmaker
-from ade_api.schemas.event_record import EventRecord
+from ade_api.models import RunStatus
 from ade_api.settings import Settings
 
+from .event_stream import get_run_event_streams
+from .exceptions import (
+    RunDocumentMissingError,
+    RunInputMissingError,
+    RunLogsFileMissingError,
+    RunNotFoundError,
+    RunOutputMissingError,
+    RunOutputNotReadyError,
+)
 from .schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -52,14 +59,6 @@ from .service import (
     DEFAULT_EVENTS_PAGE_LIMIT,
     RunExecutionContext,
     RunsService,
-)
-from .exceptions import (
-    RunDocumentMissingError,
-    RunInputMissingError,
-    RunLogsFileMissingError,
-    RunNotFoundError,
-    RunOutputMissingError,
-    RunOutputNotReadyError,
 )
 
 router = APIRouter(
@@ -92,14 +91,14 @@ def _sse_event_bytes(event: EventRecord, *, event_id: int) -> bytes:
 
 
 async def _execute_run_background(
-    context_data: dict[str, Any],
+    run_id: str,
     options_data: dict[str, Any],
-    settings: Settings,
+    settings_payload: dict[str, Any],
 ) -> None:
     """Run execution coroutine used for non-streaming requests."""
 
+    settings = Settings(**settings_payload)
     session_factory = get_sessionmaker(settings=settings)
-    context = RunExecutionContext.from_dict(context_data)
     options = RunCreateOptions(**options_data)
     event_streams = get_run_event_streams()
     async with session_factory() as session:
@@ -110,14 +109,14 @@ async def _execute_run_background(
             build_event_streams=event_streams,
         )
         try:
-            await service.run_to_completion(context=context, options=options)
+            await service.run_to_completion(run_id=UUID(run_id), options=options)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception(
                 "run.background.failed",
-                extra=log_context(run_id=context.run_id),
+                extra=log_context(run_id=run_id),
             )
             async for event in service.handle_background_failure(
-                context=context,
+                run_id=UUID(run_id),
                 options=options,
                 error=exc,
             ):
@@ -141,7 +140,7 @@ async def create_run_endpoint(
     """Create a run for ``configuration_id`` and enqueue execution."""
 
     try:
-        run, context = await service.prepare_run(
+        run, _context = await service.prepare_run(
             configuration_id=configuration_id,
             options=payload.options,
         )
@@ -153,13 +152,12 @@ async def create_run_endpoint(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     resource = await service.to_resource(run)
-    context_dict = context.as_dict()
     options_dict = payload.options.model_dump()
     background_tasks.add_task(
         _execute_run_background,
-        context_dict,
+        str(run.id),
         options_dict,
-        service.settings,
+        service.settings.model_dump(mode="python"),
     )
     return resource
 
@@ -259,7 +257,7 @@ async def download_run_input_endpoint(
 
     media_type = document.content_type or "application/octet-stream"
     response = StreamingResponse(stream, media_type=media_type)
-    disposition = (document.original_filename)
+    disposition = document.original_filename
     response.headers["Content-Disposition"] = disposition
     return response
 
@@ -286,6 +284,7 @@ async def get_run_events_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if format == "ndjson":
+
         async def event_stream() -> AsyncIterator[bytes]:
             for event in events:
                 yield _event_bytes(event)
@@ -309,9 +308,8 @@ async def stream_run_events_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
 
-    last_event_id_header = (
-        request.headers.get("last-event-id")
-        or request.headers.get("Last-Event-ID")
+    last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
+        "Last-Event-ID"
     )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:

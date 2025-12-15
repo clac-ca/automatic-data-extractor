@@ -5,7 +5,7 @@ import { useSession } from "@shared/auth/context/SessionContext";
 import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
-import { DirectoryIcon } from "@features/Workspace/components/workspace-navigation";
+import { DirectoryIcon } from "@ui/Icons";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;

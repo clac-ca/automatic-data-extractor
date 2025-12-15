@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ade_api.schemas.event_record import (
+from ade_api.common.events import (
     EventRecord,
     EventRecordLog,
     coerce_event_record,
@@ -20,6 +20,7 @@ __all__ = [
     "RunEventStream",
     "RunEventStreamRegistry",
     "RunEventSubscription",
+    "get_run_event_streams",
 ]
 
 
@@ -36,7 +37,9 @@ class RunEventContext:
 class RunEventSubscription:
     """Async iterator bound to a RunEventStream subscription queue."""
 
-    def __init__(self, queue: asyncio.Queue[EventRecord | None], on_close: callable[[], None]) -> None:
+    def __init__(
+        self, queue: asyncio.Queue[EventRecord | None], on_close: Callable[[], None]
+    ) -> None:
         self._queue = queue
         self._on_close = on_close
 
@@ -78,9 +81,7 @@ class RunEventStream:
         self._context.job_id = self._context.job_id or context.job_id
         self._context.workspace_id = self._context.workspace_id or context.workspace_id
         self._context.build_id = self._context.build_id or context.build_id
-        self._context.configuration_id = (
-            self._context.configuration_id or context.configuration_id
-        )
+        self._context.configuration_id = self._context.configuration_id or context.configuration_id
 
     def iter_persisted(self, *, after_sequence: int | None = None) -> Iterable[EventRecord]:
         """Yield events from disk, skipping up to ``after_sequence`` entries."""
@@ -166,3 +167,15 @@ class RunEventStreamRegistry:
         else:
             stream.update_context(context=context)
         return stream
+
+
+_RUN_EVENT_STREAMS: RunEventStreamRegistry | None = None
+
+
+def get_run_event_streams() -> RunEventStreamRegistry:
+    """Return a process-wide RunEventStreamRegistry."""
+
+    global _RUN_EVENT_STREAMS
+    if _RUN_EVENT_STREAMS is None:
+        _RUN_EVENT_STREAMS = RunEventStreamRegistry()
+    return _RUN_EVENT_STREAMS

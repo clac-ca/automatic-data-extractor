@@ -66,18 +66,19 @@ export function SettingsDrawer({
   }
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-40 flex items-start justify-end bg-slate-900/50"
-      onClick={onClose}
-      role="presentation"
-    >
+    <div className="fixed inset-0 z-40">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={onClose}
+        aria-label="Close drawer"
+      />
       <div
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={clsx("flex h-full flex-col bg-white shadow-2xl transition", widthClassName)}
-        onClick={(event) => event.stopPropagation()}
+        className={clsx("absolute inset-y-0 right-0 flex h-full flex-col bg-white shadow-2xl transition", widthClassName)}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div className="space-y-1">

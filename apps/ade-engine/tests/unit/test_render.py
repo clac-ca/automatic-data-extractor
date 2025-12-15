@@ -19,6 +19,7 @@ def test_render_includes_unmapped_rows_when_no_mapped_columns():
     table = TableData(
         sheet_name="Sheet1",
         header_row_index=0,
+        table_index=0,
         source_columns=[],
         mapped_columns=[],
         unmapped_columns=[
@@ -31,7 +32,6 @@ def test_render_includes_unmapped_rows_when_no_mapped_columns():
         table=table,
         worksheet=ws,
         settings=Settings(),
-        table_index=0,
         logger=DummyLogger(),
     )
 
@@ -57,17 +57,18 @@ def test_render_row_count_uses_longest_of_mapped_and_unmapped():
     table = TableData(
         sheet_name="Sheet1",
         header_row_index=0,
+        table_index=0,
         source_columns=[],
         mapped_columns=mapped,
         unmapped_columns=unmapped,
-        rows=[{"field1": "a"}],
+        row_count=1,
+        columns={"field1": ["a"]},
     )
 
     render_table(
         table=table,
         worksheet=ws,
         settings=Settings(),
-        table_index=0,
         logger=DummyLogger(),
     )
 
@@ -76,4 +77,3 @@ def test_render_row_count_uses_longest_of_mapped_and_unmapped():
     assert ws.max_column == 2
     assert [cell.value for cell in ws[2]] == ["a", 10]
     assert [cell.value for cell in ws[4]] == [None, 30]
-

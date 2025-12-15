@@ -52,7 +52,7 @@ def detect_\${2:name}(
 ) -> dict[str, float] | None:
     """\${3:Explain what this detector scores.}"""
     values = row_values or []
-    non_empty = [v for v in values if v not in (None, \"\") and not (isinstance(v, str) and not v.strip())]
+    non_empty = [v for v in values if v not in (None, "") and not (isinstance(v, str) and not v.strip())]
     density = len(non_empty) / max(len(values), 1) if values else 0.0
     score = min(1.0, density)
     return {"data": score, "header": -score * 0.2}
@@ -476,7 +476,7 @@ const hookSpecsByName = new Map<string, AdeFunctionSpec>([
   [hookWorkbookBeforeSaveSpec.name, hookWorkbookBeforeSaveSpec],
 ]);
 
-export function getHoverSpec(word: string, _filePath?: string): AdeFunctionSpec | undefined {
+export function getHoverSpec(word: string): AdeFunctionSpec | undefined {
   if (!word) {
     return undefined;
   }
@@ -492,6 +492,6 @@ export function getHoverSpec(word: string, _filePath?: string): AdeFunctionSpec 
   return hookSpecsByName.get(word);
 }
 
-export function getSnippetSpecs(_filePath?: string): AdeFunctionSpec[] {
+export function getSnippetSpecs(): AdeFunctionSpec[] {
   return ADE_FUNCTIONS;
 }

@@ -5,8 +5,8 @@ from datetime import datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.core.models import Configuration, ConfigurationStatus, Run, RunStatus, Workspace
-from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.db.mixins import generate_uuid7
+from ade_api.models import Configuration, ConfigurationStatus, Run, RunStatus, Workspace
 
 
 async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Configuration]:

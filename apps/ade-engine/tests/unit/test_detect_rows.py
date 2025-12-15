@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.exceptions import PipelineError
 from ade_engine.logging import NullLogger
-from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_bounds
+from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_regions
 from ade_engine.registry import Registry
 from ade_engine.registry.models import RowKind
 
@@ -60,7 +60,7 @@ def test_row_detector_invalid_return_shape_raises():
         )
 
 
-def test_detect_table_bounds_stops_at_next_header_without_data():
+def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
     reg = Registry()
     logger = NullLogger()
 
@@ -73,7 +73,7 @@ def test_detect_table_bounds_stops_at_next_header_without_data():
 
     reg.register_row_detector(detector, row_kind=RowKind.UNKNOWN.value, priority=0)
 
-    header_idx, data_start_idx, data_end_idx = detect_table_bounds(
+    tables = detect_table_regions(
         sheet_name="Sheet1",
         rows=[
             ["H1", "A"],
@@ -82,11 +82,47 @@ def test_detect_table_bounds_stops_at_next_header_without_data():
         ],
         registry=reg,
         state={},
-        metadata={},
+        metadata={"input_file": "input.xlsx", "sheet_index": 0},
         input_file_name=None,
         logger=logger,
     )
 
-    assert header_idx == 0
-    assert data_start_idx == 1  # header row + 1
-    assert data_end_idx == 1  # stop at the next header even without intervening data
+    assert [(t.header_row_index, t.data_start_row_index, t.data_end_row_index) for t in tables] == [
+        (0, 1, 1),
+        (1, 2, 3),
+    ]
+
+
+def test_detect_table_regions_returns_multiple_tables():
+    reg = Registry()
+    logger = NullLogger()
+
+    def detector(*, row_index, **_):
+        if row_index in (0, 3):
+            return {RowKind.HEADER.value: 1.0}
+        if row_index in (1, 2, 4):
+            return {RowKind.DATA.value: 1.0}
+        return {}
+
+    reg.register_row_detector(detector, row_kind=RowKind.UNKNOWN.value, priority=0)
+
+    tables = detect_table_regions(
+        sheet_name="Sheet1",
+        rows=[
+            ["H1", "A"],
+            ["v1", "v2"],
+            ["v3", "v4"],
+            ["H2", "B"],
+            ["v5", "v6"],
+        ],
+        registry=reg,
+        state={},
+        metadata={"input_file": "input.xlsx", "sheet_index": 0},
+        input_file_name="input.xlsx",
+        logger=logger,
+    )
+
+    assert [(t.header_row_index, t.data_start_row_index, t.data_end_row_index) for t in tables] == [
+        (0, 1, 3),
+        (3, 4, 5),
+    ]

@@ -65,6 +65,10 @@ class Settings(BaseSettings):
         default=True,
         description="Whether to include unmapped source columns in the output workbook.",
     )
+    render_derived_fields: bool = Field(
+        default=True,
+        description="Whether to render derived canonical fields (not directly mapped from the source).",
+    )
     unmapped_prefix: str = Field(
         default="raw_",
         description="Prefix applied to unmapped column headers when appended to output.",
@@ -77,6 +81,21 @@ class Settings(BaseSettings):
             "How to resolve multiple source columns mapping to the same field: "
             "'leftmost' keeps the earliest column, 'leave_unmapped' leaves all unmapped."
         ),
+    )
+
+    # Derived field merge behavior
+    derived_write_mode: Literal["fill_missing", "overwrite", "skip", "error_on_conflict"] = Field(
+        default="fill_missing",
+        description=(
+            "How transforms may write derived fields (fields other than the transform's owner field): "
+            "'fill_missing' writes only into missing cells, 'overwrite' always writes, 'skip' ignores derived "
+            "outputs, and 'error_on_conflict' raises when a non-missing existing value differs from a non-missing "
+            "new value."
+        ),
+    )
+    missing_values_mode: Literal["none_only", "none_or_blank"] = Field(
+        default="none_only",
+        description="Definition of missingness for derived merge rules: None only, or None/blank strings.",
     )
 
     # Logging

@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useNavigate } from "@app/nav/history";
-import { deleteWorkspace, workspacesKeys } from "@features/Workspace/api/workspaces-api";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { deleteWorkspace, workspacesKeys } from "@shared/workspaces";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";

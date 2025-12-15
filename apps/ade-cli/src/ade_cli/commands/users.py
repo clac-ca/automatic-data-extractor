@@ -15,7 +15,7 @@ import typer
 from ade_cli.commands import common
 
 if TYPE_CHECKING:
-    from ade_api.core.models import Role, User, UserRoleAssignment
+    from ade_api.models import Role, User, UserRoleAssignment
     from ade_api.settings import Settings
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,7 +80,7 @@ async def _user_context() -> AsyncIterator[UserCommandContext]:
     """Async context manager that yields a ``UserCommandContext`` and commits on success."""
 
     _ensure_backend()
-    from ade_api.infra.db import get_sessionmaker
+    from ade_api.db import get_sessionmaker
     from ade_api.settings import Settings
 
     settings = Settings()
@@ -316,7 +316,7 @@ async def _create_user(
 
 
 async def _show_user(*, user_ref: str, json_output: bool) -> None:
-    from ade_api.core.models.rbac import UserRoleAssignment
+    from ade_api.models import UserRoleAssignment
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 

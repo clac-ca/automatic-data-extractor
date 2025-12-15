@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Iterator
 from datetime import timedelta
-import tempfile
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from ade_api.app.lifecycles import ensure_runtime_dirs
 from ade_api.settings import (
     Settings,
     get_settings,
     reload_settings,
 )
-from ade_api.app.lifecycles import ensure_runtime_dirs
 
 
 @pytest.fixture(autouse=True)

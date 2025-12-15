@@ -1,116 +1,136 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
-from pydantic import ValidationError
-
-from ade_engine.exceptions import PipelineError
-from ade_engine.registry.invoke import call_extension
-from ade_engine.models import ColumnValidatorResult
+from ade_engine.logging import RunLogger
 from ade_engine.pipeline.models import MappedColumn
+from ade_engine.pipeline.patches import IssuesPatch, merge_issues_patch, normalize_validator_return
+from ade_engine.pipeline.table_view import TableView
+from ade_engine.registry.invoke import call_extension
 from ade_engine.registry.models import ValidateContext
 from ade_engine.registry.registry import Registry
-from ade_engine.logging import RunLogger
 
 
-def _validate_validation_output(
+def flatten_issues_patch(
     *,
-    field_name: str,
-    validator_name: str,
-    raw: Any,
-    expected_len: int,
-) -> List[ColumnValidatorResult]:
-    """Validate validator output matches the strict issue contract."""
-
-    if raw is None:
-        raise PipelineError(
-            f"Validator {validator_name} for field '{field_name}' must return a list of issues (got None)"
-        )
-    if not isinstance(raw, list):
-        raise PipelineError(
-            f"Validator {validator_name} for field '{field_name}' must return a list of issues"
-        )
-
-    validated: List[ColumnValidatorResult] = []
-    for idx, item in enumerate(raw):
-        try:
-            entry = ColumnValidatorResult.model_validate(item)
-        except ValidationError as exc:
-            raise PipelineError(
-                f"Validator {validator_name} for field '{field_name}' returned an invalid issue at position {idx}: {exc}"
-            ) from exc
-        if entry.row_index >= expected_len:
-            raise PipelineError(
-                f"Validator {validator_name} for field '{field_name}' produced out-of-range row_index {entry.row_index}"
-            )
-        validated.append(entry)
-
-    return validated
+    issues_patch: IssuesPatch,
+    columns: dict[str, list[Any]],
+    mapping: dict[str, int | None],
+) -> list[dict[str, Any]]:
+    flattened: list[dict[str, Any]] = []
+    for field, vec in issues_patch.items():
+        col = columns.get(field)
+        column_index = mapping.get(field)
+        for row_index, cell in enumerate(vec):
+            if cell is None:
+                continue
+            issues: list[dict[str, Any]]
+            if isinstance(cell, list):
+                issues = cell
+            else:
+                issues = [cell]
+            for issue in issues:
+                flattened.append(
+                    {
+                        "field": field,
+                        "row_index": row_index,
+                        "message": issue.get("message"),
+                        "severity": issue.get("severity"),
+                        "code": issue.get("code"),
+                        "meta": issue.get("meta"),
+                        "value": (col[row_index] if col is not None and row_index < len(col) else None),
+                        "column_index": column_index,
+                    }
+                )
+    return flattened
 
 
 def apply_validators(
     *,
-    mapped_columns: List[MappedColumn],
-    transformed_rows: List[Dict[str, Any]],
+    mapped_columns: list[MappedColumn],
+    columns: dict[str, list[Any]],
+    mapping: dict[str, int | None],
     registry: Registry,
     state: dict,
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> List[Dict[str, Any]]:
-    issues: List[Dict[str, Any]] = []
-    mapping_lookup = {col.field_name: col.source_index for col in mapped_columns}
+    row_count: int,
+    initial_issues: IssuesPatch | None = None,
+) -> IssuesPatch:
+    """Apply validators using the v2 column-vector contract.
+    """
+
+    registry_fields = set(registry.fields.keys())
     validators_by_field = registry.column_validators_by_field
 
-    for col in mapped_columns:
-        values = [row.get(col.field_name) for row in transformed_rows]
-        expected_len = len(values)
-        validators = validators_by_field.get(col.field_name, [])
+    issues_patch: IssuesPatch = {}
+    if initial_issues:
+        merge_issues_patch(issues_patch, initial_issues)
+
+    mapped_fields = [col.field_name for col in mapped_columns]
+    mapped_set = set(mapped_fields)
+
+    def run_field_validators(field_name: str) -> None:
+        validators = validators_by_field.get(field_name, [])
+        if not validators:
+            return
+
+        col = columns.get(field_name)
+        if col is None:
+            return
+
         for val in validators:
             ctx = ValidateContext(
-                field_name=col.field_name,
-                values=values,
-                mapping=mapping_lookup,
+                field_name=field_name,
+                column=list(col),
+                table=TableView(columns, mapping=mapping, row_count=row_count),
+                mapping=mapping,
                 state=state,
                 metadata=metadata,
-                column_index=col.source_index,
                 input_file_name=input_file_name,
                 logger=logger,
             )
-            try:
-                raw = call_extension(val.fn, ctx, label=f"Validator {val.qualname}")
-                validated = _validate_validation_output(
-                    field_name=col.field_name,
-                    validator_name=val.qualname,
-                    raw=raw,
-                    expected_len=expected_len,
-                )
-            except Exception as exc:  # pragma: no cover
-                raise PipelineError(
-                    f"Validator {val.qualname} failed for field '{col.field_name}'"
-                ) from exc
+            raw = call_extension(val.fn, ctx, label=f"Validator {val.qualname}")
+            patch = normalize_validator_return(
+                field_name=field_name,
+                raw=raw,
+                row_count=row_count,
+                registry_fields=registry_fields,
+                source=f"Validator {val.qualname}",
+            )
+            merge_issues_patch(issues_patch, patch.issues)
+
             logger.event(
                 "validation.result",
                 level=logging.DEBUG,
                 data={
                     "validator": val.qualname,
-                    "field": col.field_name,
-                    "column_index": col.source_index,
-                    "issues_found": len(validated),
-                    "results_sample": [issue.model_dump() for issue in validated[:5]],
+                    "field": field_name,
+                    "issues_emitted_fields": sorted(patch.issues.keys()),
                 },
             )
-            for res in validated:
-                issue = {
-                    "field": col.field_name,
-                    "row_index": res.row_index,
-                    "column_index": col.source_index,
-                    "message": res.message,
-                    "value": values[res.row_index],
-                }
-                issues.append(issue)
-    return issues
+
+    # Phase 1: mapped fields in source order.
+    for field_name in mapped_fields:
+        run_field_validators(field_name)
+
+    # Phase 2: derived-only fields present in the table (deterministic registry order).
+    for field_name in registry.fields.keys():
+        if field_name in mapped_set:
+            continue
+        if field_name not in columns:
+            continue
+        run_field_validators(field_name)
+
+    logger.event(
+        "validation.summary",
+        level=logging.DEBUG,
+        data={"issues_total": sum(1 for field in issues_patch for cell in issues_patch[field] if cell is not None)},
+    )
+
+    return issues_patch
 
 
-__all__ = ["apply_validators"]
+__all__ = ["apply_validators", "flatten_issues_patch"]

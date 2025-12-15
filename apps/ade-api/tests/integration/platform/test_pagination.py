@@ -5,11 +5,11 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from ade_api.core.models import Workspace
-from ade_api.settings import get_settings
-from ade_api.infra.db.engine import ensure_database_ready
-from ade_api.infra.db.session import get_sessionmaker
 from ade_api.common.pagination import paginate_sql
+from ade_api.db.engine import ensure_database_ready
+from ade_api.db.session import get_sessionmaker
+from ade_api.models import Workspace
+from ade_api.settings import get_settings
 
 pytestmark = pytest.mark.asyncio
 
@@ -27,9 +27,7 @@ async def test_paginate_returns_envelope_with_optional_total() -> None:
         session.add_all(records)
         await session.commit()
 
-        query = select(Workspace).where(
-            Workspace.slug.like(f"pagination-{suffix}-%")
-        )
+        query = select(Workspace).where(Workspace.slug.like(f"pagination-{suffix}-%"))
         page = await paginate_sql(
             session,
             query,

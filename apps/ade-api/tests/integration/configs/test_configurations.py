@@ -11,13 +11,14 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from ade_api.core.models import Configuration, ConfigurationStatus
+from ade_api.db import generate_uuid7
+from ade_api.db.session import get_sessionmaker
+from ade_api.models import Configuration, ConfigurationStatus
 from ade_api.settings import get_settings
-from ade_api.infra.db import generate_uuid7
-from ade_api.infra.db.session import get_sessionmaker
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
+
 
 async def _auth_headers(
     client: AsyncClient,
@@ -41,7 +42,7 @@ async def _create_from_template(
         headers=headers,
         json={
             "display_name": display_name,
-            "source": {"type": "template", "template_id": "default"},
+            "source": {"type": "template"},
         },
     )
     assert response.status_code == 201, response.text
@@ -63,9 +64,7 @@ async def test_create_configuration_and_validate(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
 
     record = await _create_from_template(
         async_client,
@@ -96,9 +95,7 @@ async def test_clone_configuration_creates_copy(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
 
     source = await _create_from_template(
         async_client,
@@ -128,17 +125,13 @@ async def test_validate_reports_issues_when_package_missing(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
         headers=headers,
     )
-    package_path = (
-        _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
-    )
+    package_path = _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
     package_path.unlink()
 
     response = await async_client.post(
@@ -157,9 +150,7 @@ async def test_validate_missing_config_returns_not_found(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     random_id = str(generate_uuid7())
 
     response = await async_client.post(
@@ -176,9 +167,7 @@ async def test_file_editor_endpoints(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
@@ -294,9 +283,7 @@ async def test_editing_non_draft_rejected(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
@@ -325,9 +312,7 @@ async def test_activate_configuration_sets_active_and_digest(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
@@ -370,9 +355,7 @@ async def test_activate_demotes_previous_active(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     first = await _create_from_template(
         async_client, workspace_id=workspace_id, headers=headers, display_name="First"
     )
@@ -417,17 +400,13 @@ async def test_activate_returns_422_when_validation_fails(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
         headers=headers,
     )
-    package_path = (
-        _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
-    )
+    package_path = _config_path(workspace_id, record["id"]) / "src" / "ade_config" / "__init__.py"
     package_path.unlink()
 
     response = await async_client.post(
@@ -448,9 +427,7 @@ async def test_deactivate_configuration_sets_inactive(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,
@@ -471,9 +448,7 @@ async def test_list_and_read_configurations(
 ) -> None:
     workspace_id = seed_identity["workspace_id"]
     owner = seed_identity["workspace_owner"]
-    headers = await _auth_headers(
-        async_client, email=owner["email"], password=owner["password"]
-    )
+    headers = await _auth_headers(async_client, email=owner["email"], password=owner["password"])
     record = await _create_from_template(
         async_client,
         workspace_id=workspace_id,

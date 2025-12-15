@@ -20,18 +20,15 @@ from fastapi import (
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
-from ade_api.app.dependencies import get_builds_service, get_run_event_streams
-from ade_api.common.logging import log_context
+from ade_api.api.deps import get_builds_service
+from ade_api.common.events import EventRecord
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.core.models import BuildStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.infra.db.session import get_sessionmaker
-from ade_api.schemas.event_record import EventRecord
+from ade_api.models import BuildStatus
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 from .exceptions import BuildAlreadyInProgressError, BuildNotFoundError
 from .schemas import (
-    BuildCreateOptions,
     BuildCreateRequest,
     BuildEventsPage,
     BuildFilters,
@@ -39,7 +36,8 @@ from .schemas import (
     BuildPage,
     BuildResource,
 )
-from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildExecutionContext, BuildsService
+from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildsService
+from .tasks import execute_build_background
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)
@@ -73,43 +71,6 @@ def _sse_event_bytes(event: EventRecord, *, event_id: int) -> bytes:
     parts: list[str] = [f"id: {event_id}", f"event: {event.get('event', 'ade.event')}"]
     parts.extend(f"data: {line}" for line in lines)
     return "\n".join(parts).encode("utf-8") + b"\n\n"
-
-
-async def _execute_build_background(
-    context_data: dict[str, Any],
-    options_data: dict[str, Any],
-    settings_payload: dict[str, Any],
-) -> None:
-    from ade_api.features.configs.storage import ConfigStorage
-    from ade_api.settings import Settings
-
-    settings = Settings(**settings_payload)
-    session_factory = get_sessionmaker(settings=settings)
-    storage = ConfigStorage(settings=settings)
-    event_streams = get_run_event_streams()
-    context = BuildExecutionContext.from_dict(context_data)
-    options = BuildCreateOptions(**options_data)
-    async with session_factory() as session:
-        service = BuildsService(
-            session=session,
-            settings=settings,
-            storage=storage,
-            event_streams=event_streams,
-        )
-        try:
-            await service.run_to_completion(context=context, options=options)
-        except Exception:  # pragma: no cover - defensive logging
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.exception(
-                "build.background.failed",
-                extra=log_context(
-                    workspace_id=context.workspace_id,
-                    configuration_id=context.configuration_id,
-                    build_id=context.build_id,
-                ),
-            )
 
 
 @router.get(
@@ -192,7 +153,7 @@ async def create_build_endpoint(
 
     resource = service.to_resource(build)
     background_tasks.add_task(
-        _execute_build_background,
+        execute_build_background,
         context.as_dict(),
         payload.options.model_dump(),
         service.settings.model_dump(mode="python"),
@@ -233,6 +194,7 @@ async def list_build_events_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if format == "ndjson":
+
         async def event_stream() -> AsyncIterator[bytes]:
             for event in events:
                 yield _event_bytes(event)
@@ -256,9 +218,8 @@ async def stream_build_events_endpoint(
     # Kick off execution if this build is still pending; stream will then tail events.
     await service.launch_build_if_needed(build=build, reason="sse_stream", run_id=None)
 
-    last_event_id_header = (
-        request.headers.get("last-event-id")
-        or request.headers.get("Last-Event-ID")
+    last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
+        "Last-Event-ID"
     )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:
@@ -277,7 +238,10 @@ async def stream_build_events_endpoint(
             last_event = event
             yield _sse_event_bytes(event, event_id=cursor)
 
-        terminal_replayed = last_event and last_event.get("event") in {"build.complete", "build.failed"}
+        terminal_replayed = last_event and last_event.get("event") in {
+            "build.complete",
+            "build.failed",
+        }
         build_already_finished = build.status in {
             BuildStatus.READY,
             BuildStatus.FAILED,

@@ -432,10 +432,11 @@ function formatLineForCopy(line: WorkbenchConsoleLine, viewMode: "parsed" | "raw
     const parsed = parseStructuredMessage(line.message);
     if (parsed?.type === "ade.console.run_complete") {
       const headline = parsed.headline ?? "";
+      const output = isRecord(parsed.output) ? parsed.output : null;
       const outputLabel =
-        parsed.output && typeof parsed.output === "object"
-          ? (typeof parsed.output.label === "string" && parsed.output.label.trim()) ||
-            (typeof parsed.output.path === "string" && parsed.output.path.trim()) ||
+        output
+          ? (typeof output.label === "string" && output.label.trim()) ||
+            (typeof output.path === "string" && output.path.trim()) ||
             null
           : null;
       const outputsText = outputLabel ? ` Output: ${outputLabel}` : "";
@@ -467,6 +468,10 @@ function parseStructuredMessage(message?: string) {
     return null;
   }
   return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
 function describeSheetSelection(sheetNames?: readonly string[] | null): string | null {

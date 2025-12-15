@@ -43,7 +43,7 @@ non-streaming endpoints:
 
 When the API is unavailable you can read the SQLite/PostgreSQL tables
 directly. The table layout matches the SQLAlchemy models in
-`apps/ade-api/src/ade_api/features/runs/models.py`.
+`apps/ade-api/src/ade_api/models/run.py`.
 
 ```sql
 SELECT id, status, exit_code, started_at, finished_at

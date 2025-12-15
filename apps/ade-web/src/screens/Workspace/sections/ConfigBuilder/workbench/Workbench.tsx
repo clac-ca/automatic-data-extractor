@@ -45,7 +45,7 @@ import { configurationKeys } from "@shared/configurations/keys";
 import { exportConfiguration, readConfigurationFileJson } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
-import type { ConfigBuilderConsole } from "@app/nav/urlState";
+import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@shared/api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -95,7 +95,7 @@ const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
 interface ConsolePanelPreferences {
   readonly version: 2;
   readonly fraction: number;
-  readonly state: ConfigBuilderConsole;
+  readonly state: WorkbenchConsoleState;
 }
 
 type SideBounds = {
@@ -207,7 +207,6 @@ export function Workbench({
   });
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [forceRun, setForceRun] = useState(false);
-  const [debugRun, setDebugRun] = useState(false);
 
   const tabPersistence = useMemo(
     () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
@@ -787,10 +786,9 @@ export function Workbench({
   ]);
 
   const handleRunExtraction = useCallback(
-    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[]; debug: boolean }) => {
+    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
       setRunDialogOpen(false);
       setForceRun(false);
-      setDebugRun(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
         return;
       }
@@ -803,7 +801,6 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
-          debug: selection.debug || undefined,
         },
         {
           mode: "extraction",
@@ -1239,24 +1236,12 @@ export function Workbench({
         disabled,
         onSelect: () => {
           setForceRun(true);
-          setDebugRun(false);
-          setRunDialogOpen(true);
-          setTestMenu(null);
-        },
-      },
-      {
-        id: "test-debug",
-        label: "Test (debug logs)",
-        disabled,
-        onSelect: () => {
-          setForceRun(false);
-          setDebugRun(true);
           setRunDialogOpen(true);
           setTestMenu(null);
         },
       },
     ];
-  }, [canRunExtraction, setForceRun, setRunDialogOpen, setTestMenu, setDebugRun]);
+  }, [canRunExtraction, setForceRun, setRunDialogOpen, setTestMenu]);
 
   if (!seed && filesQuery.isLoading) {
     return (
@@ -1540,10 +1525,7 @@ export function Workbench({
           onClose={() => {
             setRunDialogOpen(false);
             setForceRun(false);
-            setDebugRun(false);
           }}
-          debugEnabled={debugRun}
-          onDebugChange={setDebugRun}
           onRun={handleRunExtraction}
         />
       ) : null}
@@ -1851,13 +1833,10 @@ interface RunExtractionDialogProps {
   readonly open: boolean;
   readonly workspaceId: string;
   readonly onClose: () => void;
-  readonly debugEnabled: boolean;
-  readonly onDebugChange: (enabled: boolean) => void;
   readonly onRun: (selection: {
     documentId: string;
     documentName: string;
     sheetNames?: readonly string[];
-    debug: boolean;
   }) => void;
 }
 
@@ -1865,8 +1844,6 @@ function RunExtractionDialog({
   open,
   workspaceId,
   onClose,
-  debugEnabled,
-  onDebugChange,
   onRun,
 }: RunExtractionDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -2069,24 +2046,6 @@ function RunExtractionDialog({
           </div>
         )}
 
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-slate-700">Debug logging</p>
-            <p className="text-xs text-slate-500">
-              When enabled, the run starts the engine with --debug for verbose diagnostics.
-            </p>
-          </div>
-          <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-              checked={debugEnabled}
-              onChange={(event) => onDebugChange(event.target.checked)}
-            />
-            Enable debug
-          </label>
-        </div>
-
         <footer className="mt-6 flex items-center justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
@@ -2100,7 +2059,6 @@ function RunExtractionDialog({
                 documentId: selectedDocument.id,
                 documentName: selectedDocument.name,
                 sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-                debug: debugEnabled,
               });
             }}
             disabled={runDisabled}

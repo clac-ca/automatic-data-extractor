@@ -8,7 +8,7 @@ import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 import { PageState } from "@ui/PageState";
 
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import {
   useConfigurationsQuery,
   useCreateConfigurationMutation,
@@ -16,13 +16,14 @@ import {
 } from "@shared/configurations";
 import { buildLastSelectionStorageKey, createLastSelectionStorage, persistLastSelection, type LastSelection } from "./storage";
 
+const DEFAULT_TEMPLATE_LABEL = "Default template";
+
 const buildConfigDetailPath = (workspaceId: string, configId: string) =>
   `/workspaces/${workspaceId}/config-builder/${encodeURIComponent(configId)}`;
 
 export const handle = { workspaceSectionId: "config-builder" } as const;
 
 export default function WorkspaceConfigsIndexRoute() {
-  const DEFAULT_TEMPLATE = { value: "default", label: "Default template" };
   const { workspace } = useWorkspaceContext();
   const navigate = useNavigate();
   const storageKey = useMemo(() => buildLastSelectionStorageKey(workspace.id), [workspace.id]);
@@ -32,7 +33,6 @@ export default function WorkspaceConfigsIndexRoute() {
   const importConfig = useImportConfigurationMutation(workspace.id);
 
   const [displayName, setDisplayName] = useState(() => `${workspace.name} Config`);
-  const [templateId, setTemplateId] = useState<string>(DEFAULT_TEMPLATE.value);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [importDisplayName, setImportDisplayName] = useState(() => `${workspace.name} Import`);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -75,7 +75,6 @@ export default function WorkspaceConfigsIndexRoute() {
 
     if (idChanged) {
       setDisplayName(`${workspace.name} Config`);
-      setTemplateId(DEFAULT_TEMPLATE.value);
       setValidationError(null);
       setImportDisplayName(`${workspace.name} Import`);
       setImportFile(null);
@@ -91,12 +90,6 @@ export default function WorkspaceConfigsIndexRoute() {
       setImportDisplayName((current) => (current === `${previous?.name ?? ""} Import` ? `${workspace.name} Import` : current));
     }
   }, [workspace.id, workspace.name]);
-
-  useEffect(() => {
-    if (templateId !== DEFAULT_TEMPLATE.value) {
-      setTemplateId(DEFAULT_TEMPLATE.value);
-    }
-  }, [templateId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -149,15 +142,11 @@ export default function WorkspaceConfigsIndexRoute() {
       setValidationError("Enter a display name for the configuration.");
       return;
     }
-    if (!templateId) {
-      setValidationError("Select a template.");
-      return;
-    }
     setValidationError(null);
     createConfig.mutate(
       {
         displayName: trimmed,
-        source: { type: "template", templateId },
+        source: { type: "template" },
       },
       {
         onSuccess(record) {
@@ -197,11 +186,11 @@ export default function WorkspaceConfigsIndexRoute() {
   };
 
   const creationError = validationError ?? (createConfig.error instanceof Error ? createConfig.error.message : null);
-  const canSubmit = displayName.trim().length > 0 && templateId.length > 0 && !createConfig.isPending;
+  const canSubmit = displayName.trim().length > 0 && !createConfig.isPending;
   const canImport = importDisplayName.trim().length > 0 && Boolean(importFile) && !importConfig.isPending;
   const renderTemplateField = (disabled: boolean) => (
     <FormField label="Template">
-      <Input value={DEFAULT_TEMPLATE.label} readOnly disabled={disabled} />
+      <Input value={DEFAULT_TEMPLATE_LABEL} readOnly disabled={disabled} />
     </FormField>
   );
 
@@ -228,7 +217,6 @@ export default function WorkspaceConfigsIndexRoute() {
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder="Membership normalization"
                   disabled={createConfig.isPending}
-                  autoFocus
                 />
               </FormField>
               {renderTemplateField(createConfig.isPending)}

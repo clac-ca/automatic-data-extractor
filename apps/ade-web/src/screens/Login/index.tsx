@@ -24,7 +24,7 @@ const loginSchema = z.object({
   password: z.string().min(1, "Enter your password."),
 });
 
-export default function LoginRoute() {
+export default function LoginScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();

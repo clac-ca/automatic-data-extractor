@@ -9,7 +9,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.core.models import Document
+from ade_api.models import Document
 
 
 class DocumentsRepository:

@@ -50,5 +50,3 @@ export interface TelemetryEnvelope {
   readonly metadata?: Record<string, unknown>;
   readonly event: TelemetryEventPayload;
 }
-
-export { telemetrySchema };

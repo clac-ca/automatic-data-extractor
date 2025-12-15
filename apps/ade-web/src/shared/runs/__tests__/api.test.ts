@@ -53,16 +53,20 @@ const sampleRunResource = {
   created_at: "2025-01-01T00:00:00Z",
   links: {
     self: "/api/v1/runs/run-123",
-    summary: "/api/v1/runs/run-123/summary",
     events: "/api/v1/runs/run-123/events",
     events_stream: "/api/v1/runs/run-123/events/stream",
+    events_download: "/api/v1/runs/run-123/events/download",
     logs: "/api/v1/runs/run-123/logs",
-    outputs: "/api/v1/runs/run-123/outputs",
+    input: "/api/v1/runs/run-123/input",
+    input_download: "/api/v1/runs/run-123/input/download",
+    output: "/api/v1/runs/run-123/output",
+    output_download: "/api/v1/runs/run-123/output/download",
+    output_metadata: "/api/v1/runs/run-123/output/metadata",
   },
 } satisfies RunResource;
 
 type CreateRunPostResponse = Awaited<
-  ReturnType<typeof client.POST<"/api/v1/configurations/{configuration_id}/runs">>
+  ReturnType<typeof client.POST>
 >;
 
 afterEach(() => {
@@ -124,11 +128,10 @@ describe("streamRun", () => {
       data: { jobId: "run-123" },
     };
     const events: RunStreamEvent[] = [];
-    const postResponse: CreateRunPostResponse = {
+    const postResponse = {
       data: sampleRunResource,
-      error: undefined,
       response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
-    };
+    } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     const stream = streamRun("config-123", { dry_run: true });
@@ -151,7 +154,7 @@ describe("streamRun", () => {
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/configurations/{configuration_id}/runs", {
       params: { path: { configuration_id: "config-123" } },
-      body: { options: { dry_run: true, validate_only: false, force_rebuild: false } },
+      body: { options: { dry_run: true, validate_only: false, force_rebuild: false, debug: false } },
       signal: undefined,
     });
     expect(events).toEqual([runEvent]);
@@ -159,11 +162,10 @@ describe("streamRun", () => {
   });
 
   it("throws when run creation does not return data", async () => {
-    const postResponse: CreateRunPostResponse = {
-      data: undefined,
-      error: undefined,
+    const postResponse = {
+      error: {},
       response: new Response(null, { status: 200 }),
-    };
+    } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
     await expect(streamRun("config-123").next()).rejects.toThrow("Expected run creation response.");

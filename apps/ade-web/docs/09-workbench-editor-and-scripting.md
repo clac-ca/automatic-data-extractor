@@ -923,7 +923,7 @@ Return a float for the detector’s default label (module `DEFAULT_LABEL`/`DEFAU
 
 Helpers:
 
-* Provide completions for patterns like `detect_header_row`.
+* Provide completions for row detector functions (e.g. `detect_*`).
 * Show parameter descriptions on hover.
 * Offer signature help when using supporting utilities.
 

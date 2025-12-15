@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.core.auth.principal import AuthenticatedPrincipal
 from ade_api.core.http import get_current_principal, get_rbac_service
 from ade_api.core.rbac.service_interface import RbacService
-from ade_api.infra.db.session import get_session
+from ade_api.db.session import get_session
 
 from .schemas import (
     EffectivePermissions,
@@ -93,9 +93,7 @@ async def get_me_bootstrap(
     include_total: Annotated[
         bool,
         Query(
-            description=(
-                "When true, includes the total workspace count in the response."
-            ),
+            description=("When true, includes the total workspace count in the response."),
         ),
     ] = True,
 ) -> MeContext:
@@ -141,7 +139,7 @@ async def get_me_permissions(
         status.HTTP_404_NOT_FOUND: {
             "description": "Workspace not found when scoped permissions are requested."
         },
-        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
             "description": "Invalid permission keys or missing workspace identifier."
         },
     },
