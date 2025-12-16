@@ -34,6 +34,23 @@ export function formatConsoleLineNdjson(line: WorkbenchConsoleLine): string | nu
   }
 }
 
+export function renderPrettyJson(value: unknown) {
+  if (value == null) {
+    return <span className="text-slate-500">null</span>;
+  }
+  let pretty: string;
+  try {
+    pretty = JSON.stringify(value, null, 2);
+  } catch {
+    pretty = String(value);
+  }
+  return (
+    <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[#d4d4d4]">
+      {highlightJson(pretty)}
+    </pre>
+  );
+}
+
 function safeParseJson(value: string) {
   try {
     const parsed = JSON.parse(value);
@@ -121,11 +138,7 @@ function formatEventRecord(event: Record<string, unknown>) {
 
   if (name === "engine.log") {
     const parsed = parseConfigHook(message);
-    return (
-      <span className="break-words" title={parsed.title}>
-        {parsed.text || " "}
-      </span>
-    );
+    return <span className="break-words">{parsed.text || " "}</span>;
   }
 
   if (name.startsWith("build.") || name.startsWith("run.")) {
@@ -203,11 +216,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       logFormat ? `log=${logFormat}${typeof logLevel === "number" ? `(${logLevel})` : ""}` : null,
       pkg && pkg !== "src" ? pkg : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={title}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.settings.effective") {
@@ -228,11 +237,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       typeof emptyRows === "number" ? `maxEmptyRows=${emptyRows}` : null,
       typeof emptyCols === "number" ? `maxEmptyCols=${emptyCols}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={truncate(JSON.stringify(settings), 220)}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.hook.start" || name === "engine.hook.end") {
@@ -249,11 +254,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       inputFile ? basename(inputFile) : null,
       configPackage ? `config=${basename(configPackage)}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={inputFile ?? undefined}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.run.planned") {
@@ -264,11 +265,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       outputFile ? `output=${basename(outputFile)}` : null,
       logsFile ? `logs=${basename(logsFile)}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={outputFile ?? logsFile ?? undefined}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.run.completed") {
@@ -281,11 +278,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       stage ? `stage=${stage}` : null,
       outputPath ? basename(outputPath) : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={outputPath ?? undefined}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.workbook.started") {
@@ -304,17 +297,12 @@ function formatEventRecord(event: Record<string, unknown>) {
     const sheet = asString(data.sheet_name);
     const count = typeof data.table_count === "number" ? data.table_count : undefined;
     const rows = typeof data.row_count === "number" ? data.row_count : undefined;
-    const file = asString(data.input_file);
     const parts = [
       sheet ? sheet : "Sheet",
       typeof count === "number" ? `tables=${count}` : null,
       typeof rows === "number" ? `rows=${rows}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={file ?? undefined}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.table.detected") {
@@ -322,9 +310,7 @@ function formatEventRecord(event: Record<string, unknown>) {
     const tableIdx = typeof data.table_index === "number" ? data.table_index + 1 : undefined;
     const rows = typeof data.row_count === "number" ? data.row_count : undefined;
     const cols = typeof data.column_count === "number" ? data.column_count : undefined;
-    const region = asRecord(data.region);
-    const inputFile = asString(data.input_file);
-    const title = region ? JSON.stringify(region) : inputFile ?? undefined;
+    // title is raw NDJSON; keep any extra details in the visible text.
     const parts = [
       sheet ? sheet : null,
       typeof tableIdx === "number" ? `Table ${tableIdx}` : "Table",
@@ -332,11 +318,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       typeof rows === "number" ? `rows=${rows}` : null,
       typeof cols === "number" ? `cols=${cols}` : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words" title={title}>
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.table.extracted") {
@@ -392,11 +374,7 @@ function formatEventRecord(event: Record<string, unknown>) {
       typeof issues === "number" ? `issues=${issues}` : null,
       severitySummary ? severitySummary : null,
     ].filter(Boolean);
-    return (
-      <span className="break-words">
-        {parts.join(" · ")}
-      </span>
-    );
+    return <span className="break-words">{parts.join(" · ")}</span>;
   }
 
   if (name === "engine.table.written") {
