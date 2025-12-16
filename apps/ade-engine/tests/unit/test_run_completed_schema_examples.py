@@ -32,6 +32,12 @@ def test_run_completed_examples_validate_strict(example: str) -> None:
 
     # Contract: strict validation, extra fields forbidden, stable invariants.
     model = RunCompletedPayloadV1.model_validate(payload, strict=True)
+
+    # Important: when producing a strict payload for re-validation (e.g. before emitting to RunLogger),
+    # do not drop null fields; `exclude_none=True` can remove required-but-nullable keys (like header.raw).
+    roundtrip = model.model_dump(mode="python")
+    RunCompletedPayloadV1.model_validate(roundtrip, strict=True)
+
     dumped = model.model_dump(mode="python", exclude_none=True)
     assert dumped.get("schema_version") == 1
     assert dumped.get("scope") == "run"

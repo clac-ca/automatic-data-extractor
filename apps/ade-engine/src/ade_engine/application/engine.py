@@ -225,7 +225,8 @@ class Engine:
                 output_path=plan.output_path if output_written else None,
                 output_written=output_written,
             )
-            logger.event("run.completed", level=logging.INFO, data=payload.model_dump(mode="python", exclude_none=True))
+            # Let RunLogger validate/normalize; don't drop `null` fields pre-validation.
+            logger.event("run.completed", level=logging.INFO, data=payload.model_dump(mode="python"))
         else:
             with create_run_logger_context(
                 log_format=self.settings.log_format,
@@ -245,7 +246,7 @@ class Engine:
                 log_ctx.logger.event(
                     "run.completed",
                     level=logging.INFO,
-                    data=payload.model_dump(mode="python", exclude_none=True),
+                    data=payload.model_dump(mode="python"),
                 )
 
         return RunResult(

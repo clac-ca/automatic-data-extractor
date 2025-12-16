@@ -108,6 +108,13 @@ type SideBounds = {
 type WorkbenchWindowState = "restored" | "maximized";
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
+type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
+const RUN_LOG_LEVEL_OPTIONS: Array<{ value: RunLogLevel; label: string }> = [
+  { value: "DEBUG", label: "Debug" },
+  { value: "INFO", label: "Info" },
+  { value: "WARNING", label: "Warning" },
+  { value: "ERROR", label: "Error" },
+];
 
 interface WorkbenchProps {
   readonly workspaceId: string;
@@ -786,7 +793,12 @@ export function Workbench({
   ]);
 
   const handleRunExtraction = useCallback(
-    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+    async (selection: {
+      documentId: string;
+      documentName: string;
+      sheetNames?: readonly string[];
+      logLevel: RunLogLevel;
+    }) => {
       setRunDialogOpen(false);
       setForceRun(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
@@ -801,7 +813,7 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
-          debug: true,
+          log_level: selection.logLevel,
         },
         {
           mode: "extraction",
@@ -1838,6 +1850,7 @@ interface RunExtractionDialogProps {
     documentId: string;
     documentName: string;
     sheetNames?: readonly string[];
+    logLevel: RunLogLevel;
   }) => void;
 }
 
@@ -1887,6 +1900,7 @@ function RunExtractionDialog({
     [sheetQuery.data],
   );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+  const [logLevel, setLogLevel] = useState<RunLogLevel>("INFO");
   useEffect(() => {
     if (!open) {
       return;
@@ -1973,10 +1987,29 @@ function RunExtractionDialog({
               ) : null}
             </div>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700">Worksheet</p>
-              {sheetQuery.isLoading ? (
-                <p className="text-sm text-slate-500">Loading worksheets…</p>
+	            <div className="space-y-2">
+	              <label className="text-sm font-medium text-slate-700" htmlFor="builder-run-log-level-select">
+	                Log level
+	              </label>
+	              <Select
+	                id="builder-run-log-level-select"
+	                value={logLevel}
+	                onChange={(event) => setLogLevel(event.target.value as RunLogLevel)}
+	                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+	              >
+	                {RUN_LOG_LEVEL_OPTIONS.map((option) => (
+	                  <option key={option.value} value={option.value}>
+	                    {option.label}
+	                  </option>
+	                ))}
+	              </Select>
+	              <p className="text-xs text-slate-500">Controls the engine runtime verbosity for this run.</p>
+	            </div>
+
+	            <div className="space-y-2">
+	              <p className="text-sm font-medium text-slate-700">Worksheet</p>
+	              {sheetQuery.isLoading ? (
+	                <p className="text-sm text-slate-500">Loading worksheets…</p>
               ) : sheetQuery.isError ? (
                 <Alert tone="warning">
                   <div className="space-y-2">
@@ -2056,14 +2089,15 @@ function RunExtractionDialog({
               if (!selectedDocument) {
                 return;
               }
-	              onRun({
-	                documentId: selectedDocument.id,
-	                documentName: selectedDocument.name,
-	                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-	              });
-	            }}
-	            disabled={runDisabled}
-	          >
+		              onRun({
+		                documentId: selectedDocument.id,
+		                documentName: selectedDocument.name,
+		                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+		                logLevel,
+		              });
+		            }}
+		            disabled={runDisabled}
+		          >
             Start test run
           </Button>
         </footer>
