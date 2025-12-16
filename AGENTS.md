@@ -1,5 +1,8 @@
 # AGENTS.md
-ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
+
+This file is **for AI coding agents** working on the `ade` codebase. ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
+
+If you are operating inside a subdirectory with its own `AGENTS.md`, follow the nearest instructions in the directory tree (they override this file).
 
 ## Repo map
 
