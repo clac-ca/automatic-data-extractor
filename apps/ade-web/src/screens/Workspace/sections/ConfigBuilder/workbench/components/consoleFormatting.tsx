@@ -267,14 +267,21 @@ function formatEventRecord(event: Record<string, unknown>) {
   }
 
   if (name === "engine.run.completed") {
-    const status = asString(data.status);
-    const stage = asString(data.stage);
-    const outputPath = asString(data.output_path);
+    const execution = asRecord(data.execution) ?? {};
+    const evaluation = asRecord(data.evaluation) ?? {};
+    const counts = asRecord(data.counts) ?? {};
+
+    const status = asString(execution.status);
+    const outcome = asString(evaluation.outcome);
+    const durationMs = typeof execution.duration_ms === "number" ? execution.duration_ms : undefined;
+    const tables = typeof counts.tables === "number" ? counts.tables : undefined;
+
     const parts = [
       "Run completed",
       status ? status : null,
-      stage ? `stage=${stage}` : null,
-      outputPath ? basename(outputPath) : null,
+      outcome ? `outcome=${outcome}` : null,
+      typeof tables === "number" ? `tables=${tables}` : null,
+      typeof durationMs === "number" ? `${Math.round(durationMs)}ms` : null,
     ].filter(Boolean);
     return <span className="break-words">{parts.join(" · ")}</span>;
   }
