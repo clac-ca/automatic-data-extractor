@@ -17,6 +17,8 @@ This is distinct from step-by-step debug logs:
 ### Event identity and versioning
 - **Event name** `engine.run.completed` is the schema identity.
 - Payload includes **`schema_version` only**, so consumers can adapt across versions.
+- `schema_version` is an **int major**. For v1: `schema_version=1`.
+- Emission uses the engine logger namespace: code calls `logger.event("run.completed", ...)` and the logger qualifies it as `engine.run.completed`.
 
 ### Execution vs evaluation
 We separate two concerns:
@@ -65,7 +67,7 @@ A physical column is empty if all data cells in that column are empty.
 ### Mapping outcomes per physical column
 Each table column mapping has a `status`:
 - `mapped`: assigned to a single field
-- `ambiguous`: candidates exist but decision is not stable/safe (v1 may treat as mapped or unmapped; decide explicitly)
+- `ambiguous`: candidates exist but **no selected field** is chosen (decision is not stable/safe)
 - `unmapped`: no assignment
 - `passthrough`: treated as raw/unmapped output (if you later formalize it)
 
@@ -75,6 +77,16 @@ Candidates allow analysis like:
 - “which fields are frequently confused?”
 
 To keep payloads small, we cap candidate lists to top-N.
+
+### Unmapped/ambiguous reasons (v1)
+For machine-friendly reporting, include a stable `unmapped_reason` for `ambiguous` and `unmapped` mappings:
+
+- `no_signal`
+- `below_threshold`
+- `ambiguous_top_candidates`
+- `duplicate_field`
+- `empty_or_placeholder_header`
+- `passthrough_policy`
 
 ## Evaluation grading (v1 suggested)
 
@@ -95,4 +107,3 @@ Rollups are **sums across tables** (not “unique headers across workbook”) un
 This makes metrics stable and avoids hidden de-duplication logic.
 
 If you later need unique header aggregation for UI, add a separate `header_aggregates` section in a future schema version.
-

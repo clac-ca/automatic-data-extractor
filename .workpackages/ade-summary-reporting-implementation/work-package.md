@@ -54,7 +54,7 @@ The result should:
 
 **Supporting docs:**
 - [supporting-docs.md](supporting-docs.md)
-- [pydantic_v2.md](pydantic_v2.md)
+- [pydantic.md](pydantic.md)
 
 **Backwards compatibility:**
 Not required. This workpackage may introduce **breaking changes** to event payload schemas in `ade_engine.models.events` to enforce consistent versioning (`schema_version=1`) and naming (`*V1`).
@@ -117,12 +117,13 @@ apps/ade-engine/src/ade_engine/
 Versioning policy:
 
 - All Pydantic payload models defined in `models/events.py` must be **versioned**:
-  - `schema_version=1` is included in every strict payload (use a shared base class).
+  - Introduce `StrictPayloadV1` with `schema_version=1` (defaulted) and `extra="forbid"`.
   - payload classes are suffixed with `V1` (e.g., `RunStartedPayloadV1`).
 - This is a **breaking change**: do not preserve old class names or old payload shapes.
 - `engine.run.completed` uses `RunCompletedPayloadV1` and must include the v1 schema fields described below.
+- Open/freeform events (`ENGINE_EVENT_SCHEMAS[event] = None`) remain unversioned.
 
-`engine.run.completed` payload (in `data`) follows the contract in `pydantic_v2.md`:
+`engine.run.completed` payload (in `data`) follows the contract in `pydantic.md`:
 
 - Root includes: `schema_version`, `scope="run"`, `execution`, `evaluation`, `counts`, `validation`, `fields`, `outputs`, `workbooks[]`.
 - Workbook includes `locator`, `sheets[]` and similar rollups.
@@ -177,7 +178,7 @@ Key naming decisions:
 ### 5.1 Implementation steps (suggested order)
 
 1. Update `models/events.py`:
-   - introduce a shared strict base payload that includes `schema_version=1`
+   - introduce `StrictPayloadV1` that includes `schema_version=1` (defaulted)
    - rename existing strict payload models to `*V1` and update `ENGINE_EVENT_SCHEMAS` accordingly
    - define `RunCompletedPayloadV1` (and any nested `*V1` models) for `engine.run.completed`, and register it under `engine.run.completed`
 2. Implement `application/run_completion_report.py`:

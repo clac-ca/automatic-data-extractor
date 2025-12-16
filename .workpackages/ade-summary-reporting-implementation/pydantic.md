@@ -1,15 +1,15 @@
-# Pydantic v2 models — `engine.run.completed` (Summary schema v1.0.0)
+# Pydantic v2 models — `engine.run.completed` (Summary schema v1)
 
 This document contains the strict Pydantic v2 models for the final contract used by `engine.run.completed`.
 
 ## Integration point
 
-In `ade_engine/logging.py`, register the model:
+In `ade_engine/models/events.py`, define and register the model:
 
 ```python
-from ade_engine.summary_schema import RunCompletedSummaryV1
+from ade_engine.models.events import RunCompletedPayloadV1
 
-ENGINE_EVENT_SCHEMAS["engine.run.completed"] = RunCompletedSummaryV1
+ENGINE_EVENT_SCHEMAS["engine.run.completed"] = RunCompletedPayloadV1
 ```
 
 Then emit:
@@ -23,7 +23,7 @@ logger.event(
 )
 ```
 
-> Note: `.event()` will validate payload using `model_validate(..., strict=True)`.
+> Note: `.event()` will qualify the name to `engine.run.completed` under the engine logger namespace, and validate payload using `model_validate(..., strict=True)`.
 
 ---
 
@@ -39,7 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 NonNegativeInt = Annotated[int, Field(ge=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0)]
 
-SchemaVersion = Literal["1.0.0"]
+SchemaVersion = Literal[1]
 
 ExecutionStatus = Literal["succeeded", "failed", "cancelled"]
 EvaluationOutcome = Literal["success", "partial", "failure", "unknown"]
@@ -67,7 +67,7 @@ class Execution(StrictModel):
     status: ExecutionStatus
     started_at: str | None = None
     completed_at: str | None = None
-    duration_ms: NonNegativeFloat | None = None
+    duration_ms: NonNegativeInt | None = None
     failure: Failure | None = None
 
     @model_validator(mode="after")
@@ -257,21 +257,57 @@ class Candidate(StrictModel):
     score: float
 
 
+UnmappedReason = Literal[
+    "no_signal",
+    "below_threshold",
+    "ambiguous_top_candidates",
+    "duplicate_field",
+    "empty_or_placeholder_header",
+    "passthrough_policy",
+]
+
+MAX_CANDIDATES = 3
+
+
 class Mapping(StrictModel):
     status: MappingStatus
     field: str | None = None
     score: float | None = None
     method: MappingMethod | None = None
     candidates: list[Candidate] = Field(default_factory=list)
+    unmapped_reason: UnmappedReason | None = None
 
     @model_validator(mode="after")
     def _mapping_ok(self) -> "Mapping":
-        if self.status in ("mapped", "ambiguous"):
+        if len(self.candidates) > MAX_CANDIDATES:
+            raise ValueError(f"mapping.candidates must be <= {MAX_CANDIDATES}")
+
+        scores = [c.score for c in self.candidates]
+        if scores != sorted(scores, reverse=True):
+            raise ValueError("mapping.candidates must be sorted by descending score")
+
+        if self.status == "mapped":
             if self.field is None or self.score is None or self.method is None:
-                raise ValueError("mapped/ambiguous mapping must include field, score, and method")
-        else:
+                raise ValueError("mapped mapping must include field, score, and method")
+            if self.unmapped_reason is not None:
+                raise ValueError("unmapped_reason must be null when status == 'mapped'")
+        elif self.status == "ambiguous":
             if self.field is not None or self.score is not None or self.method is not None:
-                raise ValueError("unmapped/passthrough mapping must not include field/score/method")
+                raise ValueError("ambiguous mapping must not include field/score/method")
+            if not self.candidates:
+                raise ValueError("ambiguous mapping must include candidates")
+            if self.unmapped_reason is None:
+                raise ValueError("unmapped_reason must be provided when status == 'ambiguous'")
+        elif self.status == "unmapped":
+            if self.field is not None or self.score is not None or self.method is not None:
+                raise ValueError("unmapped mapping must not include field/score/method")
+            if self.unmapped_reason is None:
+                raise ValueError("unmapped_reason must be provided when status == 'unmapped'")
+        else:  # passthrough
+            if self.field is not None or self.score is not None or self.method is not None:
+                raise ValueError("passthrough mapping must not include field/score/method")
+            if self.unmapped_reason is not None:
+                raise ValueError("unmapped_reason must be null when status == 'passthrough'")
         return self
 
 
@@ -352,11 +388,11 @@ class WorkbookSummary(StrictModel):
 class RunTiming(StrictModel):
     started_at: str
     completed_at: str
-    duration_ms: NonNegativeFloat
+    duration_ms: NonNegativeInt
 
 
-class RunCompletedSummaryV1(StrictModel):
-    schema_version: SchemaVersion = "1.0.0"
+class RunCompletedPayloadV1(StrictModel):
+    schema_version: SchemaVersion = 1
     scope: Literal["run"] = "run"
 
     execution: Execution
@@ -369,7 +405,7 @@ class RunCompletedSummaryV1(StrictModel):
     workbooks: list[WorkbookSummary] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _run_requires_timing(self) -> "RunCompletedSummaryV1":
+    def _run_requires_timing(self) -> "RunCompletedPayloadV1":
         # For v1 we require timing in execution at run level.
         if self.execution.started_at is None or self.execution.completed_at is None:
             raise ValueError("run execution.started_at and execution.completed_at are required")
@@ -380,18 +416,17 @@ class RunCompletedSummaryV1(StrictModel):
 
 ---
 
-## Notes for `ade_engine/logging.py` strict validation
+## Notes for strict validation
 
-- Because the engine’s `_validate_payload` calls `model_validate(payload, strict=True)`:
+- Because the engine’s event logger validates with `model_validate(payload, strict=True)`:
   - use plain `dict`, `list`, `str`, `int`, `float`, `bool`
   - avoid `Path` objects (convert to str)
 
 - When you emit, prefer:
 
 ```python
-payload = RunCompletedSummaryV1.model_validate(my_dict, strict=True).model_dump(mode="python", exclude_none=True)
+payload = RunCompletedPayloadV1.model_validate(my_dict, strict=True).model_dump(mode="python", exclude_none=True)
 logger.event("run.completed", data=payload)
 ```
 
 This ensures you never emit invalid payloads.
-
