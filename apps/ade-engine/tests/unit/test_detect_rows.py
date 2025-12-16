@@ -8,11 +8,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.exceptions import PipelineError
-from ade_engine.logging import NullLogger
-from ade_engine.pipeline.detect_rows import _classify_rows, detect_table_regions
-from ade_engine.registry import Registry
-from ade_engine.registry.models import RowKind
+from ade_engine.application.pipeline.detect_rows import _classify_rows, detect_table_regions
+from ade_engine.extensions.registry import Registry
+from ade_engine.infrastructure.observability.logger import NullLogger
+from ade_engine.models.errors import PipelineError
+from ade_engine.models.extension_contexts import RowKind
 
 
 def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():

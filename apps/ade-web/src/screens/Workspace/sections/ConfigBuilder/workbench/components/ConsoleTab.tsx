@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
 import type { JobStreamStatus } from "../state/useJobStreamController";
 import type { WorkbenchConsoleLine, WorkbenchRunSummary } from "../types";
-import { formatConsoleLineNdjson, renderConsoleLine, resolveSeverity } from "./consoleFormatting";
+import { formatConsoleLineNdjson, renderConsoleLine, renderPrettyJson, resolveSeverity } from "./consoleFormatting";
 
 interface ConsoleTabProps {
   readonly console: WorkbenchConsoleStore;
@@ -47,7 +47,10 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   });
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [jsonCopied, setJsonCopied] = useState(false);
   const [viewMode, setViewMode] = useState<ConsoleViewMode>("parsed");
+  const [inspectedLine, setInspectedLine] = useState<WorkbenchConsoleLine | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const snapshot = useSyncExternalStore(console.subscribe.bind(console), console.getSnapshot, console.getSnapshot);
@@ -156,6 +159,16 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
     if (copiedSuccessfully) {
       window.setTimeout(() => setCopied(false), 1500);
     }
+  };
+
+  const openInspector = useCallback((line: WorkbenchConsoleLine) => {
+    if (!line.raw || typeof line.raw !== "object") return;
+    setInspectedLine(line);
+    setInspectorOpen(true);
+  }, []);
+
+  const closeInspector = () => {
+    setInspectorOpen(false);
   };
 
   return (
@@ -326,6 +339,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               if (!line) return null;
 
               const key = line.id ?? `${line.timestamp ?? "tbd"}-${line.origin ?? "run"}-${lineIndex}`;
+              const inspectable = Boolean(line.raw && typeof line.raw === "object");
               const rendered =
                 viewMode === "ndjson" ? (
                   <span className="whitespace-pre-wrap break-words">
@@ -335,16 +349,16 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   renderConsoleLine(line)
                 );
 
-              return (
-                <div
-                  key={key}
-                  data-index={virtualRow.index}
-                  ref={rowVirtualizer.measureElement}
-                  className="flex items-start gap-3 border-b border-[#1a1a1a] px-3 py-[2px] transition hover:bg-[#232323] last:border-b-0"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
+	              return (
+	                <div
+	                  key={key}
+	                  data-index={virtualRow.index}
+	                  ref={rowVirtualizer.measureElement}
+	                  className="group flex items-start gap-3 border-b border-[#1a1a1a] px-3 py-[2px] transition hover:bg-[#232323] last:border-b-0"
+	                  style={{
+	                    position: "absolute",
+	                    top: 0,
+	                    left: 0,
                     width: "100%",
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
@@ -359,30 +373,83 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                         "shrink-0 w-14 text-right font-mono text-[11px] leading-snug",
                         prefixTone(line.level),
                       )}
-                    >
-                      {levelBadge(line.level)}
-                    </span>
-                    <div
-                      className={clsx(
-                        "min-w-0 whitespace-pre-wrap break-words text-[13px] leading-snug",
-                        consoleMessageClass(line.level),
-                      )}
-                    >
-                      {rendered}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+	                    >
+	                      {levelBadge(line.level)}
+	                    </span>
+	                    <div
+	                      className={clsx(
+	                        "min-w-0 whitespace-pre-wrap break-words text-[13px] leading-snug",
+	                        consoleMessageClass(line.level),
+	                      )}
+	                    >
+	                      {rendered}
+	                    </div>
+	                    {inspectable ? (
+	                      <button
+	                        type="button"
+	                        onClick={() => openInspector(line)}
+	                        className="ml-2 shrink-0 rounded border border-slate-700 bg-[#101010] px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300 opacity-0 transition hover:border-slate-500 hover:text-slate-100 group-hover:opacity-100"
+	                        title="Inspect pretty JSON"
+	                      >
+	                        JSON
+	                      </button>
+	                    ) : null}
+	                  </div>
+	                </div>
+	              );
+	            })}
+	          </div>
         ) : hasAnyConsoleLines ? (
           <EmptyState title="No console output matches these filters." description="Adjust origin or level filters to see more." />
         ) : (
           <EmptyState title="Waiting for ADE output…" description="Run validation or a test to stream logs into this terminal." />
-        )}
-      </div>
-    </div>
-  );
+	        )}
+	      </div>
+	      {inspectorOpen && inspectedLine?.raw && typeof inspectedLine.raw === "object" ? (
+	        <div className="border-t border-[#2a2a2a] bg-[#151515]">
+	          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-slate-400">
+	            <div className="min-w-0 truncate">
+	              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Inspector</span>
+	              {inspectedLine.timestamp ? (
+	                <span className="ml-2 text-slate-500">[{displayTimestamp(inspectedLine.timestamp)}]</span>
+	              ) : null}
+	              <span className="ml-2 text-slate-300">{originLabel(inspectedLine.origin)}</span>
+	            </div>
+	            <div className="flex items-center gap-2">
+	              <button
+	                type="button"
+	                onClick={async () => {
+	                  const raw = inspectedLine.raw;
+	                  const pretty = JSON.stringify(raw, null, 2);
+	                  const ok = await copyToClipboard(pretty);
+	                  setJsonCopied(ok);
+	                  if (ok) window.setTimeout(() => setJsonCopied(false), 1500);
+	                }}
+	                className="rounded border border-slate-700 bg-[#101010] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-200 hover:border-slate-500"
+	                title="Copy pretty JSON"
+	              >
+	                {jsonCopied ? "Copied" : "Copy JSON"}
+	              </button>
+	              <button
+	                type="button"
+	                onClick={closeInspector}
+	                className="rounded border border-slate-700 bg-[#101010] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-200 hover:border-slate-500"
+	                title="Close inspector"
+	              >
+	                Close
+	              </button>
+	            </div>
+	          </div>
+	          <div
+	            className="max-h-[260px] overflow-auto px-3 pb-3 [color-scheme:dark]"
+	            style={{ scrollbarColor: "#2f2f2f #111111" }}
+	          >
+	            {renderPrettyJson(inspectedLine.raw)}
+	          </div>
+	        </div>
+	      ) : null}
+	    </div>
+	  );
 }
 
 function EmptyState({ title, description }: { readonly title: string; readonly description: string }) {

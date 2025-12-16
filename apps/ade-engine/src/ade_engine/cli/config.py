@@ -10,10 +10,10 @@ from typing import Optional
 import typer
 from typer import BadParameter
 
-from ade_engine.engine import Engine
-from ade_engine.exceptions import ConfigError
-from ade_engine.logging import create_run_logger_context
-from ade_engine.settings import Settings
+from ade_engine.application.engine import Engine
+from ade_engine.infrastructure.observability.context import create_run_logger_context
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.errors import ConfigError
 
 from .common import (
     LogFormat,
@@ -77,7 +77,7 @@ def init_config(
         raise BadParameter("--layout must be one of: src, flat", param_hint="layout")
 
     # Copy template package tree from bundled templates
-    template_root = resources.files("ade_engine.templates.config_packages.default")
+    template_root = resources.files("ade_engine.extensions.templates.config_packages.default")
     with resources.as_file(template_root) as template_path:
         shutil.copytree(template_path, target_dir, dirs_exist_ok=True)
 

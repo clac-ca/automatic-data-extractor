@@ -8,12 +8,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.exceptions import PipelineError
-from ade_engine.logging import NullLogger
-from ade_engine.pipeline.models import MappedColumn
-from ade_engine.pipeline.transform import apply_transforms
-from ade_engine.registry import FieldDef, Registry
-from ade_engine.settings import Settings
+from ade_engine.application.pipeline.transform import apply_transforms
+from ade_engine.extensions.registry import Registry
+from ade_engine.infrastructure.observability.logger import NullLogger
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.errors import PipelineError
+from ade_engine.models.extension_contexts import FieldDef
+from ade_engine.models.table import MappedColumn
 
 
 class SpyLogger:

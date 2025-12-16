@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Security, 
 from fastapi.responses import StreamingResponse
 
 from ade_api.api.deps import get_runs_service
-from ade_api.common.events import new_event_record
+from ade_api.common.events import new_event_record, strip_sequence
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated
 from ade_api.features.runs.schemas import RunCreateOptions
@@ -86,7 +86,7 @@ async def stream_configuration_job_endpoint(
             fallback_id += 1
             sse_id = _as_sse_id(frame, fallback_id)
             event_name = _as_event_name(frame)
-            yield sse_json(event_name, frame, event_id=sse_id)
+            yield sse_json(event_name, strip_sequence(frame), event_id=sse_id)
             if event_name == "run.complete":
                 break
 
@@ -139,7 +139,7 @@ async def stream_job_events_endpoint(
                 fallback_id += 1
                 sse_id = _as_sse_id(event, fallback_id)
                 event_name = _as_event_name(event)
-                yield sse_json(event_name, event, event_id=sse_id)
+                yield sse_json(event_name, strip_sequence(event), event_id=sse_id)
                 if event_name == "run.complete":
                     break
 

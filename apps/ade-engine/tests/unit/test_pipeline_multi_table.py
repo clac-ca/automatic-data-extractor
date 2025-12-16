@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from openpyxl import Workbook
 
-from ade_engine.logging import NullLogger
-from ade_engine.pipeline.pipeline import Pipeline
-from ade_engine.registry import Registry
-from ade_engine.registry.models import RowKind
-from ade_engine.settings import Settings
+from ade_engine.application.pipeline.pipeline import Pipeline
+from ade_engine.extensions.registry import Registry
+from ade_engine.infrastructure.observability.logger import NullLogger
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.extension_contexts import RowKind
 
 
 def test_process_sheet_renders_multiple_tables_with_blank_row():

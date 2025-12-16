@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.cli.common import collect_input_files
-from ade_engine.settings import Settings
+from ade_engine.infrastructure.settings import Settings
 
 
 def test_collect_input_files_includes_supported_nested_inputs(tmp_path):

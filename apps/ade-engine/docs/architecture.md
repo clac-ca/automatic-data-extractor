@@ -2,17 +2,17 @@
 
 ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into a small number of focused components that cooperate during a single run:
 
-- **Engine** (`ade_engine.engine.Engine`) — orchestrates a run: loads settings, prepares output/log paths, loads the config package into a Registry, iterates sheets, fires hooks, and saves the workbook.
-- **Pipeline** (`ade_engine.pipeline.Pipeline`) — sheet-level processing: detect the table region, map columns, transform values, validate issues, render the normalized table, and emit lifecycle hooks.
-- **Registry** (`ade_engine.registry.Registry`) — in-memory container populated by config-package calls to `registry.register_*`. Holds fields plus registered detectors, transforms, validators, and hooks ordered by priority.
-- **IO helpers** (`ade_engine.io`) — normalize paths, open source workbooks (CSV/XLSX), create empty output workbooks, and resolve sheet selection.
-- **Logging** (`ade_engine.logging.RunLogger`) — structured log/event stream with text or NDJSON output for every run.
-- **Settings** (`ade_engine.settings.Settings`) — runtime toggles for mapping, output ordering, logging, scan guards, and supported extensions.
+- **Engine** (`ade_engine.application.engine.Engine`) — orchestrates a run: loads settings, prepares output/log paths, loads the config package into a Registry, iterates sheets, fires hooks, and saves the workbook.
+- **Pipeline** (`ade_engine.application.pipeline.pipeline.Pipeline`) — sheet-level processing: detect the table region, map columns, transform values, validate issues, render the normalized table, and emit lifecycle hooks.
+- **Registry** (`ade_engine.extensions.registry.Registry`) — in-memory container populated by config-package calls to `registry.register_*`. Holds fields plus registered detectors, transforms, validators, and hooks ordered by priority.
+- **IO helpers** (`ade_engine.infrastructure.io`) — normalize paths, open source workbooks (CSV/XLSX), create empty output workbooks, and resolve sheet selection.
+- **Logging** (`ade_engine.infrastructure.observability.logger.RunLogger`) — structured log/event stream with text or NDJSON output for every run.
+- **Settings** (`ade_engine.infrastructure.settings.Settings`) — runtime toggles for mapping, output ordering, logging, scan guards, and supported extensions.
 
 ## End-to-end flow
 
 1. **Prepare run**  
-   `Engine.run` takes a `RunRequest` (CLI constructs this) and resolves paths via `plan_run` (`ade_engine.io.paths`). Output/log directories are created if they do not exist. If a log file path is not provided, the engine derives a per-input log filename automatically.
+   `Engine.run` takes a `RunRequest` (CLI constructs this) and resolves paths via `plan_run` (`ade_engine.infrastructure.io.run_plan`). Output/log directories are created if they do not exist. If a log file path is not provided, the engine derives a per-input log filename automatically.
 
 2. **Start logging**  
    A `RunLogger` is created with the configured format/level (`text` or `ndjson`). All engine events flow through this logger, including structured detector/transform/validator telemetry.

@@ -8,8 +8,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.exceptions import ConfigError, PipelineError
-from ade_engine.registry import FieldDef, Registry
+from ade_engine.extensions.registry import Registry
+from ade_engine.models.errors import ConfigError, PipelineError
+from ade_engine.models.extension_contexts import FieldDef
 
 
 def test_registry_sorting_priorities_and_names():
