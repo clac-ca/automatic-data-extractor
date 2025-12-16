@@ -6,10 +6,19 @@ import typer
 
 from ade_cli.commands import common
 
-docker_app = typer.Typer(
-    help="Docker Compose helpers (API + SPA) with default app at http://localhost:8000; subcommands: up, down, logs.",
-    no_args_is_help=True,
+HELP_TEXT = (
+    "Thin wrapper around the native `docker` CLI.\n\n"
+    "This command forwards all arguments to `docker` and runs from the repo root.\n"
+    "If the first argument is `compose` and you did not provide `-f/--file`, ADE injects\n"
+    "the repo's `compose.yaml` automatically.\n\n"
+    "Examples:\n"
+    "  ade docker compose up -d --build\n"
+    "  ade docker compose logs -f --tail=200 ade\n"
+    "  ade docker build -t ade:local .\n"
+    "  ade docker run --rm -p 8000:8000 ade:local\n"
 )
+
+PASSTHROUGH_SETTINGS = {"allow_extra_args": True, "ignore_unknown_options": True}
 
 
 def _docker_bin() -> str:
@@ -22,81 +31,35 @@ def _docker_bin() -> str:
     )
 
 
-@docker_app.command("up", help="Build and run the local Docker stack.")
-def docker_up(
-    detach: bool = typer.Option(
-        True,
-        "--detach/--no-detach",
-        "-d",
-        help="Run docker compose in detached mode.",
-    ),
-    build: bool = typer.Option(
-        True,
-        "--build/--no-build",
-        help="Build images before starting containers.",
-    ),
-) -> None:
-    """Start the ADE stack via docker compose."""
+def _inject_compose_file(args: list[str]) -> tuple[list[str], bool]:
+    """Inject `-f compose.yaml` for `docker compose` unless the user already supplied `-f/--file`."""
+
+    if not args or args[0] != "compose":
+        return args, False
+
+    if any(token in {"-f", "--file"} for token in args[1:]):
+        return args, False
+
+    common.ensure_compose_file()
+    return ["compose", "-f", str(common.COMPOSE_FILE), *args[1:]], True
+
+
+def docker_passthrough(ctx: typer.Context) -> None:
+    """Pass-through to the system `docker` CLI, with ADE defaults for `docker compose`."""
     common.refresh_paths()
     docker_bin = _docker_bin()
-    common.ensure_compose_file()
-    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "up"]
-    if build:
-        cmd.append("--build")
-    if detach:
-        cmd.append("-d")
-    common.run(cmd, cwd=common.REPO_ROOT)
 
-
-@docker_app.command("down", help="Stop the local Docker stack.")
-def docker_down(
-    volumes: bool = typer.Option(
-        False,
-        "--volumes",
-        "-v",
-        help="Also remove named volumes.",
-    ),
-) -> None:
-    """Stop the ADE stack and optionally remove volumes."""
-    common.refresh_paths()
-    docker_bin = _docker_bin()
-    common.ensure_compose_file()
-    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "down"]
-    if volumes:
-        cmd.append("--volumes")
-    common.run(cmd, cwd=common.REPO_ROOT)
-
-
-@docker_app.command("logs", help="Tail docker compose logs.")
-def docker_logs(
-    service: str | None = typer.Argument(
-        None,
-        help="Optional service name to filter logs (e.g., 'api').",
-    ),
-    follow: bool = typer.Option(
-        True,
-        "--follow/--no-follow",
-        "-f",
-        help="Stream logs (follow).",
-    ),
-    tail: int = typer.Option(
-        100,
-        "--tail",
-        help="Number of lines to show from the end of the logs.",
-    ),
-) -> None:
-    """Tail logs for the ADE stack, optionally for a single service."""
-    common.refresh_paths()
-    docker_bin = _docker_bin()
-    common.ensure_compose_file()
-    cmd = [docker_bin, "compose", "-f", str(common.COMPOSE_FILE), "logs", "--tail", str(tail)]
-    if follow:
-        cmd.append("-f")
-    if service:
-        cmd.append(service)
+    args = list(ctx.args)
+    args, _ = _inject_compose_file(args)
+    cmd = [docker_bin, *args]
     common.run(cmd, cwd=common.REPO_ROOT)
 
 
 def register(app: typer.Typer) -> None:
-    """Register the docker subcommands on the main CLI."""
-    app.add_typer(docker_app, name="docker")
+    """Register the docker command on the main CLI."""
+    app.command(
+        "docker",
+        help=HELP_TEXT,
+        no_args_is_help=False,
+        context_settings=PASSTHROUGH_SETTINGS,
+    )(docker_passthrough)
