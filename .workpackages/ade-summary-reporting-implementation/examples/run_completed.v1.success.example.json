@@ -1,0 +1,655 @@
+{
+  "schema_version": 1,
+  "scope": "run",
+  "execution": {
+    "status": "succeeded",
+    "started_at": "2025-12-16T19:12:03Z",
+    "completed_at": "2025-12-16T19:12:32Z",
+    "duration_ms": 29041
+  },
+  "evaluation": {
+    "outcome": "partial",
+    "findings": [
+      {
+        "code": "fields_unmapped",
+        "severity": "warning",
+        "message": "One or more expected fields were not mapped in any detected table.",
+        "count": 1,
+        "meta": {
+          "unmapped_fields": [
+            "currency"
+          ]
+        }
+      },
+      {
+        "code": "validation_warnings_present",
+        "severity": "warning",
+        "message": "Validation produced warnings that may impact downstream consumers.",
+        "count": 3,
+        "meta": {
+          "max_severity": "warning"
+        }
+      }
+    ]
+  },
+  "counts": {
+    "workbooks": 1,
+    "sheets": 2,
+    "tables": 2,
+    "rows": {
+      "total": 200,
+      "empty": 12
+    },
+    "columns": {
+      "total": 10,
+      "empty": 1,
+      "mapped": 7,
+      "ambiguous": 1,
+      "unmapped": 1,
+      "passthrough": 1
+    },
+    "fields": {
+      "expected": 5,
+      "mapped": 4
+    },
+    "cells": {
+      "total": 1000,
+      "non_empty": 838
+    }
+  },
+  "validation": {
+    "rows_evaluated": 188,
+    "issues_total": 3,
+    "issues_by_severity": {
+      "warning": 3
+    },
+    "max_severity": "warning"
+  },
+  "fields": [
+    {
+      "field": "invoice_number",
+      "label": "Invoice Number",
+      "mapped": true,
+      "best_mapping_score": 0.98,
+      "occurrences": {
+        "tables": 2,
+        "columns": 2
+      }
+    },
+    {
+      "field": "invoice_date",
+      "label": "Invoice Date",
+      "mapped": true,
+      "best_mapping_score": 0.95,
+      "occurrences": {
+        "tables": 2,
+        "columns": 2
+      }
+    },
+    {
+      "field": "vendor_name",
+      "label": "Vendor Name",
+      "mapped": true,
+      "best_mapping_score": 0.89,
+      "occurrences": {
+        "tables": 1,
+        "columns": 1
+      }
+    },
+    {
+      "field": "total_amount",
+      "label": "Total Amount",
+      "mapped": true,
+      "best_mapping_score": 0.94,
+      "occurrences": {
+        "tables": 2,
+        "columns": 2
+      }
+    },
+    {
+      "field": "currency",
+      "label": "Currency",
+      "mapped": false,
+      "occurrences": {
+        "tables": 0,
+        "columns": 0
+      }
+    }
+  ],
+  "outputs": {
+    "normalized": {
+      "path": "outputs/2025-12-16/run_9f3c6f9c/output.xlsx"
+    }
+  },
+  "workbooks": [
+    {
+      "scope": "workbook",
+      "locator": {
+        "workbook": {
+          "index": 0,
+          "name": "Acme AP - Nov 2025.xlsx"
+        }
+      },
+      "counts": {
+        "sheets": 2,
+        "tables": 2,
+        "rows": {
+          "total": 200,
+          "empty": 12
+        },
+        "columns": {
+          "total": 10,
+          "empty": 1,
+          "mapped": 7,
+          "ambiguous": 1,
+          "unmapped": 1,
+          "passthrough": 1
+        },
+        "fields": {
+          "expected": 5,
+          "mapped": 4
+        },
+        "cells": {
+          "total": 1000,
+          "non_empty": 838
+        }
+      },
+      "validation": {
+        "rows_evaluated": 188,
+        "issues_total": 3,
+        "issues_by_severity": {
+          "warning": 3
+        },
+        "max_severity": "warning"
+      },
+      "sheets": [
+        {
+          "scope": "sheet",
+          "locator": {
+            "workbook": {
+              "index": 0,
+              "name": "Acme AP - Nov 2025.xlsx"
+            },
+            "sheet": {
+              "index": 0,
+              "name": "Invoices"
+            }
+          },
+          "counts": {
+            "tables": 1,
+            "rows": {
+              "total": 120,
+              "empty": 5
+            },
+            "columns": {
+              "total": 5,
+              "empty": 0,
+              "mapped": 3,
+              "ambiguous": 1,
+              "unmapped": 0,
+              "passthrough": 1
+            },
+            "fields": {
+              "expected": 5,
+              "mapped": 3
+            },
+            "cells": {
+              "total": 600,
+              "non_empty": 524
+            }
+          },
+          "validation": {
+            "rows_evaluated": 115,
+            "issues_total": 1,
+            "issues_by_severity": {
+              "warning": 1
+            },
+            "max_severity": "warning"
+          },
+          "scan": {
+            "rows_emitted": 140,
+            "stopped_early": true,
+            "truncated_rows": 320
+          },
+          "tables": [
+            {
+              "scope": "table",
+              "locator": {
+                "workbook": {
+                  "index": 0,
+                  "name": "Acme AP - Nov 2025.xlsx"
+                },
+                "sheet": {
+                  "index": 0,
+                  "name": "Invoices"
+                },
+                "table": {
+                  "index": 0
+                }
+              },
+              "counts": {
+                "rows": {
+                  "total": 120,
+                  "empty": 5
+                },
+                "columns": {
+                  "total": 5,
+                  "empty": 0,
+                  "mapped": 3,
+                  "ambiguous": 1,
+                  "unmapped": 0,
+                  "passthrough": 1
+                },
+                "fields": {
+                  "expected": 5,
+                  "mapped": 3
+                },
+                "cells": {
+                  "total": 600,
+                  "non_empty": 524
+                }
+              },
+              "validation": {
+                "rows_evaluated": 115,
+                "issues_total": 1,
+                "issues_by_severity": {
+                  "warning": 1
+                },
+                "max_severity": "warning"
+              },
+              "structure": {
+                "region": {
+                  "a1": "Invoices!A1:E121"
+                },
+                "header": {
+                  "row_start": 1,
+                  "row_count": 1,
+                  "inferred": false
+                },
+                "data": {
+                  "row_start": 2,
+                  "row_count": 120
+                },
+                "columns": [
+                  {
+                    "index": 0,
+                    "header": {
+                      "raw": "Invoice #",
+                      "normalized": "invoice_number"
+                    },
+                    "non_empty_cells": 120,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "invoice_number",
+                      "score": 0.98,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "invoice_number",
+                          "score": 0.98
+                        },
+                        {
+                          "field": "vendor_name",
+                          "score": 0.12
+                        },
+                        {
+                          "field": "invoice_date",
+                          "score": 0.07
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 1,
+                    "header": {
+                      "raw": "Date",
+                      "normalized": "invoice_date"
+                    },
+                    "non_empty_cells": 120,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "invoice_date",
+                      "score": 0.95,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "invoice_date",
+                          "score": 0.95
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.1
+                        },
+                        {
+                          "field": "total_amount",
+                          "score": 0.05
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 2,
+                    "header": {
+                      "raw": "Vendor",
+                      "normalized": "vendor"
+                    },
+                    "non_empty_cells": 120,
+                    "mapping": {
+                      "status": "ambiguous",
+                      "candidates": [
+                        {
+                          "field": "vendor_name",
+                          "score": 0.62
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.58
+                        },
+                        {
+                          "field": "currency",
+                          "score": 0.41
+                        }
+                      ],
+                      "unmapped_reason": "ambiguous_top_candidates"
+                    }
+                  },
+                  {
+                    "index": 3,
+                    "header": {
+                      "raw": "Total",
+                      "normalized": "total"
+                    },
+                    "non_empty_cells": 120,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "total_amount",
+                      "score": 0.93,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "total_amount",
+                          "score": 0.93
+                        },
+                        {
+                          "field": "currency",
+                          "score": 0.2
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.06
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 4,
+                    "header": {
+                      "raw": "Notes",
+                      "normalized": "notes"
+                    },
+                    "non_empty_cells": 44,
+                    "mapping": {
+                      "status": "passthrough",
+                      "unmapped_reason": "passthrough_policy"
+                    }
+                  }
+                ]
+              },
+              "outputs": {
+                "normalized": {
+                  "path": "outputs/2025-12-16/run_9f3c6f9c/output.xlsx",
+                  "sheet_name": "Invoices",
+                  "range_a1": "Invoices_Normalized!A1:D121"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "scope": "sheet",
+          "locator": {
+            "workbook": {
+              "index": 0,
+              "name": "Acme AP - Nov 2025.xlsx"
+            },
+            "sheet": {
+              "index": 1,
+              "name": "Credit Notes"
+            }
+          },
+          "counts": {
+            "tables": 1,
+            "rows": {
+              "total": 80,
+              "empty": 7
+            },
+            "columns": {
+              "total": 5,
+              "empty": 1,
+              "mapped": 4,
+              "ambiguous": 0,
+              "unmapped": 1,
+              "passthrough": 0
+            },
+            "fields": {
+              "expected": 5,
+              "mapped": 4
+            },
+            "cells": {
+              "total": 400,
+              "non_empty": 314
+            }
+          },
+          "validation": {
+            "rows_evaluated": 73,
+            "issues_total": 2,
+            "issues_by_severity": {
+              "warning": 2
+            },
+            "max_severity": "warning"
+          },
+          "scan": {
+            "rows_emitted": 90,
+            "stopped_early": false,
+            "truncated_rows": 0
+          },
+          "tables": [
+            {
+              "scope": "table",
+              "locator": {
+                "workbook": {
+                  "index": 0,
+                  "name": "Acme AP - Nov 2025.xlsx"
+                },
+                "sheet": {
+                  "index": 1,
+                  "name": "Credit Notes"
+                },
+                "table": {
+                  "index": 0
+                }
+              },
+              "counts": {
+                "rows": {
+                  "total": 80,
+                  "empty": 7
+                },
+                "columns": {
+                  "total": 5,
+                  "empty": 1,
+                  "mapped": 4,
+                  "ambiguous": 0,
+                  "unmapped": 1,
+                  "passthrough": 0
+                },
+                "fields": {
+                  "expected": 5,
+                  "mapped": 4
+                },
+                "cells": {
+                  "total": 400,
+                  "non_empty": 314
+                }
+              },
+              "validation": {
+                "rows_evaluated": 73,
+                "issues_total": 2,
+                "issues_by_severity": {
+                  "warning": 2
+                },
+                "max_severity": "warning"
+              },
+              "structure": {
+                "region": {
+                  "a1": "Credit Notes!A1:E81"
+                },
+                "header": {
+                  "row_start": 1,
+                  "row_count": 1,
+                  "inferred": true
+                },
+                "data": {
+                  "row_start": 2,
+                  "row_count": 80
+                },
+                "columns": [
+                  {
+                    "index": 0,
+                    "header": {
+                      "raw": "Inv No",
+                      "normalized": "invoice_number"
+                    },
+                    "non_empty_cells": 80,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "invoice_number",
+                      "score": 0.92,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "invoice_number",
+                          "score": 0.92
+                        },
+                        {
+                          "field": "invoice_date",
+                          "score": 0.22
+                        },
+                        {
+                          "field": "vendor_name",
+                          "score": 0.1
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 1,
+                    "header": {
+                      "raw": "Invoice Date",
+                      "normalized": "invoice_date"
+                    },
+                    "non_empty_cells": 80,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "invoice_date",
+                      "score": 0.91,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "invoice_date",
+                          "score": 0.91
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.18
+                        },
+                        {
+                          "field": "total_amount",
+                          "score": 0.12
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 2,
+                    "header": {
+                      "raw": "Supplier",
+                      "normalized": "vendor_name"
+                    },
+                    "non_empty_cells": 80,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "vendor_name",
+                      "score": 0.89,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "vendor_name",
+                          "score": 0.89
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.24
+                        },
+                        {
+                          "field": "currency",
+                          "score": 0.21
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 3,
+                    "header": {
+                      "raw": "Amount",
+                      "normalized": "total_amount"
+                    },
+                    "non_empty_cells": 80,
+                    "mapping": {
+                      "status": "mapped",
+                      "field": "total_amount",
+                      "score": 0.94,
+                      "method": "classifier",
+                      "candidates": [
+                        {
+                          "field": "total_amount",
+                          "score": 0.94
+                        },
+                        {
+                          "field": "currency",
+                          "score": 0.33
+                        },
+                        {
+                          "field": "invoice_number",
+                          "score": 0.07
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "index": 4,
+                    "header": {
+                      "raw": null,
+                      "normalized": null
+                    },
+                    "non_empty_cells": 0,
+                    "mapping": {
+                      "status": "unmapped",
+                      "unmapped_reason": "empty_or_placeholder_header"
+                    }
+                  }
+                ]
+              },
+              "outputs": {
+                "normalized": {
+                  "path": "outputs/2025-12-16/run_9f3c6f9c/output.xlsx",
+                  "sheet_name": "Credit Notes",
+                  "range_a1": "CreditNotes_Normalized!A1:D81"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
