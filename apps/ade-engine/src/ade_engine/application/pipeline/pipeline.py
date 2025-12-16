@@ -13,16 +13,17 @@ from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.extension_contexts import HookName
-from ade_engine.models.table import TableData
+from ade_engine.models.table import TableData, TableRegionInfo
 
 
 class Pipeline:
     """Orchestrates sheet-level processing using the registry."""
 
-    def __init__(self, *, registry: Registry, settings: Settings, logger: RunLogger) -> None:
+    def __init__(self, *, registry: Registry, settings: Settings, logger: RunLogger, report_builder=None) -> None:
         self.registry = registry
         self.settings = settings
         self.logger = logger
+        self.report_builder = report_builder
 
     def process_sheet(
         self,
@@ -33,8 +34,15 @@ class Pipeline:
         metadata: dict,
         input_file_name: str | None = None,
     ) -> list[TableData]:
-        rows: List[List[Any]] = self._materialize_rows(sheet)
+        rows, scan = self._materialize_rows_with_scan(sheet)
         writer = SheetWriter(output_sheet)
+
+        if self.report_builder is not None:
+            try:
+                sheet_index = int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0
+                self.report_builder.record_sheet_scan(sheet_index=sheet_index, sheet_name=sheet.title, scan=scan)
+            except Exception:
+                self.logger.exception("Failed to record sheet scan for engine.run.completed")
 
         table_regions = detect_table_regions(
             sheet_name=sheet.title,
@@ -81,7 +89,7 @@ class Pipeline:
         data_rows = rows[region.data_start_row_index:region.data_end_row_index]
 
         source_cols = build_source_columns(header_row, data_rows)
-        mapped_cols, unmapped_cols = detect_and_map_columns(
+        mapped_cols, unmapped_cols, scores_by_column, duplicate_unmapped_indices = detect_and_map_columns(
             sheet_name=sheet.title,
             source_columns=source_cols,
             registry=self.registry,
@@ -97,8 +105,17 @@ class Pipeline:
             header_row_index=region.header_row_index,
             source_columns=source_cols,
             table_index=table_index,
+            sheet_index=int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0,
+            region=TableRegionInfo(
+                header_row_index=region.header_row_index,
+                data_start_row_index=region.data_start_row_index,
+                data_end_row_index=region.data_end_row_index,
+                header_inferred=region.header_inferred,
+            ),
             mapped_columns=mapped_cols,
             unmapped_columns=unmapped_cols,
+            column_scores=scores_by_column,
+            duplicate_unmapped_indices=set(duplicate_unmapped_indices),
         )
 
         # Hook: table detected
@@ -182,6 +199,12 @@ class Pipeline:
             logger=self.logger,
         )
 
+        if self.report_builder is not None:
+            try:
+                self.report_builder.record_table(table)
+            except Exception:
+                self.logger.exception("Failed to record table summary for engine.run.completed")
+
         # Hook after write
         self.registry.run_hooks(
             HookName.ON_TABLE_WRITTEN,
@@ -199,6 +222,10 @@ class Pipeline:
     # Helpers
     # ------------------------------------------------------------------
     def _materialize_rows(self, sheet: Worksheet) -> List[List[Any]]:
+        rows, _scan = self._materialize_rows_with_scan(sheet)
+        return rows
+
+    def _materialize_rows_with_scan(self, sheet: Worksheet) -> tuple[List[List[Any]], dict[str, Any]]:
         """Stream rows, trim width, and stop after long empty runs."""
 
         rows: List[List[Any]] = []
@@ -262,7 +289,19 @@ class Pipeline:
                 },
             )
 
-        return rows
+        truncated_rows = 0
+        if row_limit_hit:
+            try:
+                truncated_rows = max(0, int(sheet.max_row or 0) - len(rows))
+            except Exception:
+                truncated_rows = 0
+
+        scan = {
+            "rows_emitted": len(rows),
+            "stopped_early": bool(row_limit_hit),
+            "truncated_rows": int(truncated_rows) if row_limit_hit else 0,
+        }
+        return rows, scan
 
 
 __all__ = ["Pipeline"]

@@ -35,10 +35,11 @@ def detect_and_map_columns(
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> tuple[List[MappedColumn], List[SourceColumn]]:
+) -> tuple[List[MappedColumn], List[SourceColumn], dict[int, dict[str, float]], set[int]]:
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
     field_competitors: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
     contributions_by_column: Dict[int, Dict[str, List[Dict[str, float]]]] = {}
+    scores_by_column: Dict[int, Dict[str, float]] = {}
     debug = logger.isEnabledFor(logging.DEBUG)
 
     for col in source_columns:
@@ -128,6 +129,11 @@ def detect_and_map_columns(
                 },
             )
 
+        if scores:
+            # Keep raw (possibly negative) totals for diagnostics; consumers should
+            # clamp/filter as needed for schema constraints.
+            scores_by_column[col.index] = dict(scores)
+
         # Ignore columns with no positive signal – treating zero/negative totals as unmapped
         if not scores or best_score <= 0:
             continue
@@ -210,7 +216,7 @@ def detect_and_map_columns(
             },
         )
 
-    return mapped_cols, unmapped
+    return mapped_cols, unmapped, scores_by_column, unmapped_indices
 
 
 __all__ = ["detect_and_map_columns", "build_source_columns"]

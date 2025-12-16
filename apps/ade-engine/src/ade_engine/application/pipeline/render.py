@@ -79,6 +79,9 @@ def render_table(
     else:
         output_range = ""
 
+    table.output_range = output_range or None
+    table.output_sheet_name = writer.worksheet.title
+
     logger.event(
         "table.written",
         message=f"Rendered table with {len(canonical_fields)} canonical columns and {len(unmapped_cols)} unmapped",
