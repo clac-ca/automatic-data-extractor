@@ -109,11 +109,15 @@ Each physical column has a `mapping.status`:
 - v1: `MAX_CANDIDATES = 3`
 - Candidates are sorted by descending score.
 
-### 3.6 Payload size policy (v1)
+### 3.6 Field coverage rollups (v1)
 
 - Per-column mapping lives at **table scope** under `structure.columns[*].mapping`.
-- Field-centric summaries (`fields[]`) exist at **run scope only**.
-- Lower scopes provide `counts` and `validation` rollups (+ optional scan/outputs).
+- `fields[]` is a **derived field-coverage rollup** and may appear at:
+  - run scope
+  - workbook scope
+  - sheet scope
+- Table scope remains the ground truth; `fields[]` must be computed strictly from table mappings (no additional inference).
+- If payload size becomes a concern, sheet-level `fields[]` may be omitted, but run/workbook rollups are strongly recommended.
 
 ### 3.7 Execution vs evaluation blocks
 
@@ -176,7 +180,7 @@ Run-level fields:
 - `evaluation` (outcome + findings)
 - `counts` (rollups)
 - `validation` (rollups)
-- `fields[]` (run-only field rollup)
+- `fields[]` (field coverage rollup; derived from table mappings)
 - `outputs` (optional, only when written)
 - `workbooks[]`
 
@@ -186,6 +190,7 @@ Workbook fields:
 - `locator`
 - `counts`
 - `validation`
+- `fields[]` (workbook field coverage rollup; derived from table mappings)
 - `sheets[]`
 
 Sheet fields:
@@ -194,6 +199,7 @@ Sheet fields:
 - `locator`
 - `counts`
 - `validation`
+- `fields[]` (sheet field coverage rollup; derived from table mappings)
 - `scan` (optional)
 - `tables[]`
 

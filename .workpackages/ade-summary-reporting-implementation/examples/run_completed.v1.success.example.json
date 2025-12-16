@@ -403,6 +403,56 @@
                 }
               }
             }
+          ],
+          "fields": [
+            {
+              "field": "invoice_number",
+              "label": "Invoice Number",
+              "mapped": true,
+              "best_mapping_score": 0.98,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "invoice_date",
+              "label": "Invoice Date",
+              "mapped": true,
+              "best_mapping_score": 0.95,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "vendor_name",
+              "label": "Vendor Name",
+              "mapped": false,
+              "occurrences": {
+                "tables": 0,
+                "columns": 0
+              }
+            },
+            {
+              "field": "total_amount",
+              "label": "Total Amount",
+              "mapped": true,
+              "best_mapping_score": 0.93,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "currency",
+              "label": "Currency",
+              "mapped": false,
+              "occurrences": {
+                "tables": 0,
+                "columns": 0
+              }
+            }
           ]
         },
         {
@@ -647,7 +697,109 @@
                 }
               }
             }
+          ],
+          "fields": [
+            {
+              "field": "invoice_number",
+              "label": "Invoice Number",
+              "mapped": true,
+              "best_mapping_score": 0.92,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "invoice_date",
+              "label": "Invoice Date",
+              "mapped": true,
+              "best_mapping_score": 0.91,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "vendor_name",
+              "label": "Vendor Name",
+              "mapped": true,
+              "best_mapping_score": 0.89,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "total_amount",
+              "label": "Total Amount",
+              "mapped": true,
+              "best_mapping_score": 0.94,
+              "occurrences": {
+                "tables": 1,
+                "columns": 1
+              }
+            },
+            {
+              "field": "currency",
+              "label": "Currency",
+              "mapped": false,
+              "occurrences": {
+                "tables": 0,
+                "columns": 0
+              }
+            }
           ]
+        }
+      ],
+      "fields": [
+        {
+          "field": "invoice_number",
+          "label": "Invoice Number",
+          "mapped": true,
+          "best_mapping_score": 0.98,
+          "occurrences": {
+            "tables": 2,
+            "columns": 2
+          }
+        },
+        {
+          "field": "invoice_date",
+          "label": "Invoice Date",
+          "mapped": true,
+          "best_mapping_score": 0.95,
+          "occurrences": {
+            "tables": 2,
+            "columns": 2
+          }
+        },
+        {
+          "field": "vendor_name",
+          "label": "Vendor Name",
+          "mapped": true,
+          "best_mapping_score": 0.89,
+          "occurrences": {
+            "tables": 1,
+            "columns": 1
+          }
+        },
+        {
+          "field": "total_amount",
+          "label": "Total Amount",
+          "mapped": true,
+          "best_mapping_score": 0.94,
+          "occurrences": {
+            "tables": 2,
+            "columns": 2
+          }
+        },
+        {
+          "field": "currency",
+          "label": "Currency",
+          "mapped": false,
+          "occurrences": {
+            "tables": 0,
+            "columns": 0
+          }
         }
       ]
     }

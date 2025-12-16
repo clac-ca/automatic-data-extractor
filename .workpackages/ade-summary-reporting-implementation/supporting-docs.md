@@ -211,8 +211,12 @@ Findings should use stable `code` values for dashboards.
 
 ## Payload size policy (v1)
 
-To avoid payload bloat:
+To avoid payload bloat while still supporting “is this usable?” checks:
 
-- Detailed mapping lives only at **table scope** (`structure.columns[*].mapping`)
-- Run scope has a single `fields[]` rollup (field-centric view)
-- Workbook/sheet/table rollups include only `counts` + `validation` (+ optional scan/outputs)
+- Detailed mapping lives only at **table scope** (`structure.columns[*].mapping`).
+- `fields[]` is a **derived field-coverage rollup** and may appear at:
+  - run scope
+  - workbook scope
+  - sheet scope
+- Table scope remains the ground truth; `fields[]` must be computed strictly from table mappings (no additional inference).
+- If payload size becomes a concern, sheet-level `fields[]` may be omitted, but run/workbook rollups are strongly recommended.

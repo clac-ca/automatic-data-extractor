@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.6
 
 # Base versions (override at build time if needed)
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.14
 ARG NODE_VERSION=20
 
 # =============================================================================
@@ -18,7 +18,6 @@ RUN npm ci --no-audit --no-fund
 
 # Copy SPA sources and telemetry schemas required at build time
 COPY apps/ade-web/ ./
-COPY apps/ade-engine/src/ade_engine/schemas ../ade-engine/src/ade_engine/schemas
 
 # Build production bundle
 RUN npm run build
@@ -26,7 +25,7 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Backend build (install Python packages)
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim AS backend-build
+FROM python:${PYTHON_VERSION}-slim-bookworm AS backend-build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -40,7 +39,7 @@ RUN apt-get update \
     && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
     && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends build-essential git unixodbc unixodbc-dev msodbcsql18 \
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends build-essential git rustc cargo unixodbc unixodbc-dev msodbcsql18 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy minimal metadata first to maximize layer cache reuse
@@ -63,7 +62,7 @@ RUN python -m pip install --no-cache-dir --prefix=/install \
 # =============================================================================
 # Stage 3: Runtime image (what actually runs in prod)
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

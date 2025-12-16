@@ -6,7 +6,7 @@ Design goals:
 
 - **Strict, stable contract** (`extra="forbid"` + `strict=True`)
 - **Deterministic ordering** for child arrays (workbooks → sheets → tables → columns)
-- **Practical payload size** (detailed mapping only at table scope; run-level field rollups only)
+- **Practical payload size** (detailed mapping only at table scope; field rollups at run/workbook/sheet)
 
 ---
 
@@ -260,7 +260,7 @@ class Validation(StrictModel):
 
 
 # -----------------------
-# Run-level field summary
+# Field coverage rollups (derived)
 # -----------------------
 
 class FieldOccurrences(StrictModel):
@@ -284,6 +284,27 @@ class FieldSummary(StrictModel):
         if not self.mapped and self.best_mapping_score is not None:
             raise ValueError("best_mapping_score must be null when mapped==false")
         return self
+
+
+def _validate_fields_rollup(fields: list[FieldSummary], counts: Counts, *, scope: str) -> None:
+    """Validate optional field rollups for consistency.
+
+    When provided, fields[] should contain exactly one entry per expected field,
+    and counts.fields.mapped should match the number of mapped==true entries.
+    """
+    if not fields:
+        return
+
+    names = [f.field for f in fields]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{scope}.fields must not contain duplicate field values")
+
+    if len(fields) != counts.fields.expected:
+        raise ValueError(f"{scope}.fields must contain exactly counts.fields.expected entries when provided")
+
+    mapped = sum(1 for f in fields if f.mapped)
+    if mapped != counts.fields.mapped:
+        raise ValueError(f"{scope}.counts.fields.mapped must equal number of fields with mapped==true")
 
 
 # -----------------------
@@ -494,6 +515,7 @@ class SheetSummary(StrictModel):
     locator: SheetLocator
     counts: Counts
     validation: Validation
+    fields: list[FieldSummary] = Field(default_factory=list)
     scan: SheetScan | None = None
     tables: list[TableSummary] = Field(default_factory=list)
 
@@ -506,6 +528,8 @@ class SheetSummary(StrictModel):
             raise ValueError("sheet.tables must not contain duplicate table.index")
         if self.counts.tables is not None and self.counts.tables != len(self.tables):
             raise ValueError("counts.tables must equal len(tables) for sheet scope when provided")
+
+        _validate_fields_rollup(self.fields, self.counts, scope="sheet")
         return self
 
 
@@ -514,6 +538,7 @@ class WorkbookSummary(StrictModel):
     locator: WorkbookLocator
     counts: Counts
     validation: Validation
+    fields: list[FieldSummary] = Field(default_factory=list)
     sheets: list[SheetSummary] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -525,6 +550,8 @@ class WorkbookSummary(StrictModel):
             raise ValueError("workbook.sheets must not contain duplicate sheet.index")
         if self.counts.sheets is not None and self.counts.sheets != len(self.sheets):
             raise ValueError("counts.sheets must equal len(sheets) for workbook scope when provided")
+
+        _validate_fields_rollup(self.fields, self.counts, scope="workbook")
         return self
 
 
@@ -558,6 +585,7 @@ class RunCompletedPayloadV1(StrictPayloadV1):
         if self.counts.workbooks is not None and self.counts.workbooks != len(self.workbooks):
             raise ValueError("counts.workbooks must equal len(workbooks) for run scope when provided")
 
+        _validate_fields_rollup(self.fields, self.counts, scope="run")
         return self
 ```
 
@@ -568,3 +596,4 @@ class RunCompletedPayloadV1(StrictPayloadV1):
 - Workbook/sheet/table indexes are **0-based**.
 - `structure.header.row_start` and `structure.data.row_start` are **1-based** (spreadsheet-style).
 - `counts.fields.mapped` is **de-duplicated** within the scope (an expected field counted once even if it appears in multiple tables).
+- `fields[]` is a **derived rollup** and may appear at run/workbook/sheet scopes for convenience (table scope remains the ground truth).
