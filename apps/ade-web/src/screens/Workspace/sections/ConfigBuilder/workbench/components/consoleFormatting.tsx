@@ -200,7 +200,6 @@ function formatEventRecord(event: Record<string, unknown>) {
 
   if (name === "engine.config.loaded") {
     const pkgRaw = asString(data.config_package) ?? asString(data.config_package_name);
-    const configPath = asString(data.config_path);
     const entry = asString(data.entrypoint);
     const fieldsCount = Array.isArray(data.fields) ? data.fields.length : undefined;
     const settings = asRecord(data.settings);
@@ -208,7 +207,6 @@ function formatEventRecord(event: Record<string, unknown>) {
     const logLevel = typeof settings?.log_level === "number" ? settings.log_level : undefined;
 
     const pkg = pkgRaw ? basename(pkgRaw) : undefined;
-    const title = configPath ?? pkgRaw ?? undefined;
     const parts = [
       "Config loaded",
       entry ? `entry=${entry}` : null,
