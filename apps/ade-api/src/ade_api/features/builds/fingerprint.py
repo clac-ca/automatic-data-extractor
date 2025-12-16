@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from ade_api.common.encoding import json_dumps
@@ -48,7 +48,7 @@ def compute_engine_source_digest(engine_spec: str) -> str | None:
         except OSError:
             # If a file disappears during a run (rare), fall back to metadata.
             stat = path.stat() if path.exists() else None
-            data = f"{stat.st_size if stat else 0}:{stat.st_mtime_ns if stat else 0}".encode("utf-8")
+            data = f"{stat.st_size if stat else 0}:{stat.st_mtime_ns if stat else 0}".encode()
 
         digest.update(rel.encode("utf-8"))
         digest.update(b"\0")

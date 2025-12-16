@@ -27,7 +27,10 @@ from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
 from ade_api.common.validators import normalize_utc
-from ade_api.features.builds.fingerprint import compute_build_fingerprint, compute_engine_source_digest
+from ade_api.features.builds.fingerprint import (
+    compute_build_fingerprint,
+    compute_engine_source_digest,
+)
 from ade_api.features.configs.deps import compute_dependency_digest
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
