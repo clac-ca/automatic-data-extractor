@@ -1,0 +1,191 @@
+{
+  "scope": "table",
+  "locator": {
+    "workbook": {
+      "index": 0,
+      "name": "Acme AP - Nov 2025.xlsx"
+    },
+    "sheet": {
+      "index": 0,
+      "name": "Invoices"
+    },
+    "table": {
+      "index": 0
+    }
+  },
+  "counts": {
+    "rows": {
+      "total": 120,
+      "empty": 5
+    },
+    "columns": {
+      "total": 5,
+      "empty": 0,
+      "mapped": 3,
+      "ambiguous": 1,
+      "unmapped": 0,
+      "passthrough": 1
+    },
+    "fields": {
+      "expected": 5,
+      "mapped": 3
+    },
+    "cells": {
+      "total": 600,
+      "non_empty": 524
+    }
+  },
+  "validation": {
+    "rows_evaluated": 115,
+    "issues_total": 1,
+    "issues_by_severity": {
+      "warning": 1
+    },
+    "max_severity": "warning"
+  },
+  "structure": {
+    "region": {
+      "a1": "Invoices!A1:E121"
+    },
+    "header": {
+      "row_start": 1,
+      "row_count": 1,
+      "inferred": false
+    },
+    "data": {
+      "row_start": 2,
+      "row_count": 120
+    },
+    "columns": [
+      {
+        "index": 0,
+        "header": {
+          "raw": "Invoice #",
+          "normalized": "invoice_number"
+        },
+        "non_empty_cells": 120,
+        "mapping": {
+          "status": "mapped",
+          "field": "invoice_number",
+          "score": 0.98,
+          "method": "classifier",
+          "candidates": [
+            {
+              "field": "invoice_number",
+              "score": 0.98
+            },
+            {
+              "field": "vendor_name",
+              "score": 0.12
+            },
+            {
+              "field": "invoice_date",
+              "score": 0.07
+            }
+          ]
+        }
+      },
+      {
+        "index": 1,
+        "header": {
+          "raw": "Date",
+          "normalized": "invoice_date"
+        },
+        "non_empty_cells": 120,
+        "mapping": {
+          "status": "mapped",
+          "field": "invoice_date",
+          "score": 0.95,
+          "method": "classifier",
+          "candidates": [
+            {
+              "field": "invoice_date",
+              "score": 0.95
+            },
+            {
+              "field": "invoice_number",
+              "score": 0.1
+            },
+            {
+              "field": "total_amount",
+              "score": 0.05
+            }
+          ]
+        }
+      },
+      {
+        "index": 2,
+        "header": {
+          "raw": "Vendor",
+          "normalized": "vendor"
+        },
+        "non_empty_cells": 120,
+        "mapping": {
+          "status": "ambiguous",
+          "candidates": [
+            {
+              "field": "vendor_name",
+              "score": 0.62
+            },
+            {
+              "field": "invoice_number",
+              "score": 0.58
+            },
+            {
+              "field": "currency",
+              "score": 0.41
+            }
+          ],
+          "unmapped_reason": "ambiguous_top_candidates"
+        }
+      },
+      {
+        "index": 3,
+        "header": {
+          "raw": "Total",
+          "normalized": "total"
+        },
+        "non_empty_cells": 120,
+        "mapping": {
+          "status": "mapped",
+          "field": "total_amount",
+          "score": 0.93,
+          "method": "classifier",
+          "candidates": [
+            {
+              "field": "total_amount",
+              "score": 0.93
+            },
+            {
+              "field": "currency",
+              "score": 0.2
+            },
+            {
+              "field": "invoice_number",
+              "score": 0.06
+            }
+          ]
+        }
+      },
+      {
+        "index": 4,
+        "header": {
+          "raw": "Notes",
+          "normalized": "notes"
+        },
+        "non_empty_cells": 44,
+        "mapping": {
+          "status": "passthrough",
+          "unmapped_reason": "passthrough_policy"
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "normalized": {
+      "path": "outputs/2025-12-16/run_9f3c6f9c/output.xlsx",
+      "sheet_name": "Invoices",
+      "range_a1": "Invoices_Normalized!A1:D121"
+    }
+  }
+}

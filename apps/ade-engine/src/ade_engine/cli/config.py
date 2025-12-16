@@ -76,8 +76,14 @@ def init_config(
     if layout_norm not in {"src", "flat"}:
         raise BadParameter("--layout must be one of: src, flat", param_hint="layout")
 
-    # Copy template package tree from bundled templates
-    template_root = resources.files("ade_engine.extensions.templates.config_packages.default")
+    # Copy template package tree from bundled templates.
+    #
+    # IMPORTANT: Don't target a namespace package here (directories without
+    # __init__.py). `importlib.resources.files()` is not reliably supported for
+    # namespace packages across packaging/install modes (wheel/editable).
+    template_root = resources.files("ade_engine").joinpath(
+        "extensions/templates/config_packages/default"
+    )
     with resources.as_file(template_root) as template_path:
         shutil.copytree(template_path, target_dir, dirs_exist_ok=True)
 
