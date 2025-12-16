@@ -8,9 +8,9 @@ from typing import List, Optional
 import typer
 from typer import BadParameter
 
-from ade_engine.engine import Engine
-from ade_engine.settings import Settings
-from ade_engine.types.run import RunRequest, RunStatus
+from ade_engine.application.engine import Engine
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.run import RunRequest, RunStatus
 
 from .common import (
     LogFormat,

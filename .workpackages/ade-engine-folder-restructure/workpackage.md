@@ -13,25 +13,25 @@
 
 ### Planning & Guardrails
 
-* [ ] Finalize target package structure in code (directories + `__init__.py`)
-* [ ] Add import-layer enforcement (Import Linter) and wire into CI/test suite
-* [ ] Document architecture rules in `AGENTS.md`
+* [x] Finalize target package structure in code (directories + `__init__.py`)
+* [x] Add import-layer enforcement (Import Linter) and wire into CI/test suite
+* [x] Document architecture rules in `AGENTS.md`
 
 ### Code Migration
 
-* [ ] Move engine orchestration into `application/engine.py`
-* [ ] Move pipeline modules into `application/pipeline/`
-* [ ] Consolidate all contracts/models into `models/`
-* [ ] Move registry + config loading into `extensions/`
-* [ ] Split observability into `models/events.py` + `infrastructure/observability/`
-* [ ] Move IO + settings into `infrastructure/`
+* [x] Move engine orchestration into `application/engine.py`
+* [x] Move pipeline modules into `application/pipeline/`
+* [x] Consolidate all contracts/models into `models/`
+* [x] Move registry + config loading into `extensions/`
+* [x] Split observability into `models/events.py` + `infrastructure/observability/`
+* [x] Move IO + settings into `infrastructure/`
 
 ### Cleanup & Validation
 
-* [ ] Update all imports to new structure (no old paths remain)
-* [ ] Run full test suite and CLI smoke tests
-* [ ] Remove dead files/directories from old structure
-* [ ] Update this workpackage with final notes and decisions
+* [x] Update all imports to new structure (no old paths remain)
+* [x] Run full test suite and CLI smoke tests
+* [x] Remove dead files/directories from old structure
+* [x] Update this workpackage with final notes and decisions
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief inline notes if helpful, e.g.
@@ -207,10 +207,11 @@ Add a pytest guard so architecture violations fail CI:
 ```python
 # tests/test_architecture.py
 import subprocess
-import sys
+from pathlib import Path
 
 def test_import_layers():
-    subprocess.run([sys.executable, "-m", "importlinter"], check=True)
+    root = Path(__file__).resolve().parents[1]
+    subprocess.run(["lint-imports", "--config", str(root / ".importlinter")], cwd=root, check=True)
 ```
 
 This ensures:
@@ -260,3 +261,15 @@ This workpackage is complete when:
   * schemas in `models/events.py`
   * emission + formatting in `infrastructure/observability/`
 * This workpackage reflects final reality (no stale sections).
+
+---
+
+## 7. Final notes (what changed)
+
+- Old top-level modules (`engine.py`, `pipeline/`, `registry/`, `io/`, `logging.py`, `settings.py`, `types/`, `config_package.py`, `main.py`) were removed after moving to the target layered layout (no shims kept).
+- CLI entrypoint updated to `ade_engine.cli.app:app` and template resources now live under `ade_engine.extensions.templates.*`.
+- Import Linter is enforced via `apps/ade-engine/.importlinter` and `apps/ade-engine/tests/test_architecture.py` (uses `lint-imports`, not `python -m importlinter`).
+- Validation run:
+  - `pytest -q` (apps/ade-engine): **pass**
+  - `ade-engine --help` / `python -m ade_engine --help`: **pass**
+  - `ade-engine config init` + `ade-engine config validate`: **pass**

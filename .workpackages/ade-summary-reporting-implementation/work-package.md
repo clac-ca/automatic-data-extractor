@@ -10,9 +10,10 @@
 
 ## Work Package Checklist
 
-- [ ] Finalize `engine.run.completed` summary contract v{{SCHEMA_VERSION}} and document invariants — {{STATUS}}
-- [ ] Add Pydantic v2 models for summary payload(s) and register schema in `ENGINE_EVENT_SCHEMAS` — {{STATUS}}
-- [ ] Implement `RunSummaryBuilder` (incremental accumulation + rollups + grading) — {{STATUS}}
+- [ ] Finalize `engine.run.completed` summary contract v1 (`schema_version=1`) and document invariants — {{STATUS}}
+- [ ] Refactor `ade_engine.models.events` payloads to consistent `*V1` + `schema_version=1` (breaking; no backwards compatibility) — {{STATUS}}
+- [ ] Define versioned Pydantic v2 models for `engine.run.completed` in `ade_engine.models.events` and register schema — {{STATUS}}
+- [ ] Implement `RunCompletionReportBuilder` (incremental accumulation + rollups + grading) — {{STATUS}}
 - [ ] Instrument pipeline to capture the facts needed for summaries (sheet scan stats, table regions, mapping decisions, output range) — {{STATUS}}
 - [ ] Emit `engine.run.completed` exactly once per run (always, even on failure) — {{STATUS}}
 - [ ] Add/adjust tests (schema validation, invariants, “failed-run still summarizes progress”) — {{STATUS}}
@@ -30,6 +31,9 @@
 
 **Goal:**
 Make `engine.run.completed` the **authoritative evaluation report** for an ADE run: not just “finished/failed”, but **how successful ADE was at understanding the input** and why.
+
+**Assumption:**
+This workpackage targets the **post-refactor** ADE Engine layout from `.workpackages/ade-engine-folder-restructure` (`cli/`, `application/`, `models/`, `extensions/`, `infrastructure/`). Update paths if you are working on an older layout.
 
 You will:
 
@@ -52,15 +56,19 @@ The result should:
 - [supporting-docs.md](supporting-docs.md)
 - [pydantic_v2.md](pydantic_v2.md)
 
+**Backwards compatibility:**
+Not required. This workpackage may introduce **breaking changes** to event payload schemas in `ade_engine.models.events` to enforce consistent versioning (`schema_version=1`) and naming (`*V1`).
+
 ---
 
 ## 2. Context (What you are starting from)
 
 Today:
 
-- `ade_engine/logging.py` provides a structured logging envelope plus a strict schema registry for `engine.*` events.
+- `ade_engine/models/events.py` defines the strict schema registry for `engine.*` events.
+- `ade_engine/infrastructure/observability/` implements structured event emission + formatting.
 - `engine.run.completed` exists but is currently a thin “footer” (status + timestamps + output path) and does **not** measure extraction success.
-- The pipeline already computes the key facts we need (table regions, physical columns, mapping decisions, issues, output ranges), but they are not consistently retained for summary rollups.
+- The pipeline (in `ade_engine/application/pipeline/`) already computes the key facts we need (table regions, physical columns, mapping decisions, issues, output ranges), but they are not consistently retained for summary rollups.
 
 Constraint:
 
@@ -72,24 +80,24 @@ Constraint:
 
 ### 3.1 High-level
 
-- A `RunSummaryBuilder` accumulates **table summaries** as the pipeline progresses.
+- A `RunCompletionReportBuilder` accumulates **table summaries** as the pipeline progresses.
 - Builder rolls up table summaries into sheet/workbook/run summaries deterministically.
 - At run completion (success or failure), the engine emits:
-  - `engine.run.completed` with `data=<RunSummaryPayloadV1>`
+  - `engine.run.completed` with `data=<RunCompletedPayloadV1>`
 
 ### 3.2 Files / modules (expected)
 
 ```text
 apps/ade-engine/src/ade_engine/
-  logging.py                      # register new strict schema for engine.run.completed
-  summary_schema.py               # Pydantic v2 models for summary payload
-  summary_builder.py              # RunSummaryBuilder + rollup/grading logic
-  engine.py                       # create builder; emit run.completed in all cases
-  pipeline/pipeline.py            # capture scan stats; call builder per table/sheet
-  pipeline/render.py              # attach output_range to TableData
-  pipeline/detect_rows.py         # ensure region metadata is accessible for summaries
-  pipeline/detect_columns.py      # expose mapping diagnostics (candidates + unmapped reasons)
-  pipeline/models.py              # store region/output_range/mapping diagnostics on TableData
+  models/events.py                        # define/register versioned payload models (RunCompletedPayloadV1, etc.)
+  models/table.py                         # store region/output_range/mapping diagnostics on TableData
+  application/run_completion_report.py    # RunCompletionReportBuilder + rollup/grading logic
+  application/engine.py                   # create builder; emit run.completed in all cases
+  application/pipeline/pipeline.py        # capture scan stats; call builder per table/sheet
+  application/pipeline/render.py          # attach output_range to TableData
+  application/pipeline/detect_rows.py     # ensure region metadata is accessible for summaries
+  application/pipeline/detect_columns.py  # expose mapping diagnostics (candidates + unmapped reasons)
+  infrastructure/observability/logger.py  # emit engine.run.completed via run-scoped logger
 ```
 
 ---
@@ -104,7 +112,15 @@ apps/ade-engine/src/ade_engine/
 - **Failure-tolerant**: summary emitted even on errors, containing partial progress.
 - **Size-aware**: avoid raw cell values; cap candidates per column.
 
-### 4.2 Summary schema (v{{SCHEMA_VERSION}})
+### 4.2 Summary schema (v1)
+
+Versioning policy:
+
+- All Pydantic payload models defined in `models/events.py` must be **versioned**:
+  - `schema_version=1` is included in every strict payload (use a shared base class).
+  - payload classes are suffixed with `V1` (e.g., `RunStartedPayloadV1`).
+- This is a **breaking change**: do not preserve old class names or old payload shapes.
+- `engine.run.completed` uses `RunCompletedPayloadV1` and must include the v1 schema fields described below.
 
 `engine.run.completed` payload (in `data`) follows the contract in `pydantic_v2.md`:
 
@@ -160,8 +176,11 @@ Key naming decisions:
 
 ### 5.1 Implementation steps (suggested order)
 
-1. Create `summary_schema.py` with strict Pydantic v2 models for v{{SCHEMA_VERSION}}.
-2. Implement `summary_builder.py`:
+1. Update `models/events.py`:
+   - introduce a shared strict base payload that includes `schema_version=1`
+   - rename existing strict payload models to `*V1` and update `ENGINE_EVENT_SCHEMAS` accordingly
+   - define `RunCompletedPayloadV1` (and any nested `*V1` models) for `engine.run.completed`, and register it under `engine.run.completed`
+2. Implement `application/run_completion_report.py`:
    - incremental accumulation (per sheet scan, per table completion)
    - rollups and invariant enforcement
    - grading + findings generation
@@ -170,13 +189,11 @@ Key naming decisions:
    - store region fields on `TableData`
    - store mapping diagnostics (including candidates and unmapped reason)
    - store `output_range` on `TableData`
-4. Update `ade_engine/logging.py`:
-   - register new strict payload model for `engine.run.completed`
-5. Update `Engine.run()`:
+4. Update `application/engine.py`:
    - create builder early
    - pass builder through pipeline calls
    - emit run summary event exactly once, even on failure
-6. Add tests:
+5. Add tests:
    - schema validation for a representative run payload
    - rollup invariants
    - partial failure still emits a summary with partial progress
@@ -185,4 +202,3 @@ Key naming decisions:
 
 - Unit test the builder with synthetic table summaries (fast, deterministic).
 - Integration test: run a minimal pipeline, assert that the emitted `engine.run.completed` payload validates against schema and includes expected counts/mapping.
-
