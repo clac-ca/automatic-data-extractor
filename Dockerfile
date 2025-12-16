@@ -16,7 +16,7 @@ WORKDIR /app/apps/ade-web
 COPY apps/ade-web/package*.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy SPA sources and telemetry schemas required at build time
+# Copy SPA sources required at build time
 COPY apps/ade-web/ ./
 
 # Build production bundle
