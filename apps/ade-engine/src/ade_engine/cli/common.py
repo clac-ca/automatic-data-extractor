@@ -14,7 +14,7 @@ from typing import Iterable, List, Optional, Sequence
 import typer
 from typer import BadParameter
 
-from ade_engine.settings import Settings
+from ade_engine.infrastructure.settings import Settings
 
 
 class LogFormat(str, Enum):

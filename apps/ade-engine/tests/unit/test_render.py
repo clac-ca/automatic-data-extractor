@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from openpyxl import Workbook
 
-from ade_engine.pipeline.models import MappedColumn, SourceColumn, TableData
-from ade_engine.pipeline.render import SheetWriter, render_table
-from ade_engine.settings import Settings
+from ade_engine.application.pipeline.render import SheetWriter, render_table
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.table import MappedColumn, SourceColumn, TableData
 
 
 class DummyLogger:

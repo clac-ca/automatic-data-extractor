@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ade-engine"
-version = "1.6.7"
+version = "1.6.8"
 description = "Deterministic workbook normalization engine (detect → extract → map → normalize → render)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,20 +19,21 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "import-linter>=2.0",
   "pytest>=8.0",
 ]
 
 [project.scripts]
-ade-engine = "ade_engine.main:app"
+ade-engine = "ade_engine.cli.app:app"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.package-data]
 ade_engine = [
-  "templates/config_packages/default/**/*",
-  "templates/config_packages/default/**",
-  "templates/config_packages/default/*",
+  "extensions/templates/config_packages/default/**/*",
+  "extensions/templates/config_packages/default/**",
+  "extensions/templates/config_packages/default/*",
 ]
 
 [tool.setuptools.package-dir]

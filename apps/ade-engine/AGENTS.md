@@ -62,6 +62,14 @@ pytest -q
 
 If tests fail because you’re not in the right working directory, prefer running them from the repo root.
 
+### Architecture enforcement
+
+Layering rules are enforced by Import Linter (`apps/ade-engine/.importlinter`) and run as part of pytest via `apps/ade-engine/tests/test_architecture.py`.
+
+```bash
+lint-imports --config .importlinter
+```
+
 ---
 
 ## Repo layout (new internal structure)

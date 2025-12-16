@@ -1,6 +1,6 @@
 # Settings Reference
 
-`ade_engine.settings.Settings` is a small Pydantic model with an explicit loader: `Settings.load(...)`.
+`ade_engine.infrastructure.settings.Settings` is a small Pydantic model with an explicit loader: `Settings.load(...)`.
 
 ## Load order (lowest → highest precedence)
 
@@ -60,4 +60,3 @@ max_empty_rows_run = 2000
 max_empty_cols_run = 200
 supported_file_extensions = [".xlsx", ".csv"]
 ```
-

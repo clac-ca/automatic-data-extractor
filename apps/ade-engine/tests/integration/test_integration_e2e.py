@@ -8,9 +8,9 @@ import openpyxl
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ade_engine.engine import Engine
-from ade_engine.settings import Settings
-from ade_engine.types.run import RunRequest, RunStatus
+from ade_engine.application.engine import Engine
+from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.run import RunRequest, RunStatus
 
 
 def _write_config_package(root: Path) -> None:
@@ -28,7 +28,7 @@ def register(registry):
 
     (pkg / "rows.py").write_text(
         """
-from ade_engine.registry.models import FieldDef, RowKind
+from ade_engine.models import FieldDef, RowKind
 
 def pick_header(*, row_values, **_):
     normalized = {str(v).strip().lower() for v in row_values or [] if v not in (None, "")}
@@ -45,7 +45,7 @@ def register(registry):
 
     (pkg / "columns.py").write_text(
         """
-from ade_engine.registry.models import FieldDef
+from ade_engine.models import FieldDef
 
 def detect_email(*, header, **_):
     header = (header or "").strip().lower()
