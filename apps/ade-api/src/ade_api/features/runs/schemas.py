@@ -14,6 +14,7 @@ from ade_api.common.schema import BaseSchema
 from ade_api.models import RunStatus
 
 RunObjectType = Literal["ade.run"]
+RunLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 __all__ = [
     "RunCreateOptions",
@@ -39,7 +40,11 @@ class RunCreateOptions(BaseSchema):
     )
     debug: bool = Field(
         default=False,
-        description="Enable verbose engine logging (passes --debug to ade_engine).",
+        description="Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
+    )
+    log_level: RunLogLevel = Field(
+        default="INFO",
+        description="Engine log level passed as --log-level to ade_engine.",
     )
     input_document_id: UUIDStr | None = Field(
         default=None,

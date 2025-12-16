@@ -1405,8 +1405,8 @@ class RunsService:
         command.extend(["--logs-dir", str(logs_dir)])
         command.extend(["--config-package", str(config_path)])
         command.extend(["--log-format", "ndjson"])
-        if options.debug:
-            command.append("--debug")
+        log_level = getattr(options, "log_level", None) or ("DEBUG" if options.debug else "INFO")
+        command.extend(["--log-level", str(log_level)])
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])

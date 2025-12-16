@@ -5825,6 +5825,22 @@
             }
           },
           {
+            "name": "log_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "DEBUG",
+                "INFO",
+                "WARNING",
+                "ERROR"
+              ],
+              "type": "string",
+              "default": "INFO",
+              "title": "Log Level"
+            }
+          },
+          {
             "name": "input_document_id",
             "in": "query",
             "required": false,
@@ -10058,8 +10074,20 @@
           "debug": {
             "type": "boolean",
             "title": "Debug",
-            "description": "Enable verbose engine logging (passes --debug to ade_engine).",
+            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
             "default": false
+          },
+          "log_level": {
+            "type": "string",
+            "enum": [
+              "DEBUG",
+              "INFO",
+              "WARNING",
+              "ERROR"
+            ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine.",
+            "default": "INFO"
           },
           "input_document_id": {
             "anyOf": [

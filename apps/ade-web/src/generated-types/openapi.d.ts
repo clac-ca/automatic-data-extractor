@@ -2473,10 +2473,17 @@ export type components = {
             force_rebuild: boolean;
             /**
              * Debug
-             * @description Enable verbose engine logging (passes --debug to ade_engine).
+             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
              * @default false
              */
             debug: boolean;
+            /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             * @default INFO
+             * @enum {string}
+             */
+            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
             /**
              * Input Document Id
              * @description Document identifier to ingest.
@@ -6167,6 +6174,7 @@ export interface operations {
                 validate_only?: boolean;
                 force_rebuild?: boolean;
                 debug?: boolean;
+                log_level?: "DEBUG" | "INFO" | "WARNING" | "ERROR";
                 input_document_id?: string | null;
             };
             header?: never;

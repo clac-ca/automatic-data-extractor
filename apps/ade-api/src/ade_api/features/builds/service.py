@@ -27,7 +27,7 @@ from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
 from ade_api.common.time import utc_now
 from ade_api.common.validators import normalize_utc
-from ade_api.features.builds.fingerprint import compute_build_fingerprint
+from ade_api.features.builds.fingerprint import compute_build_fingerprint, compute_engine_source_digest
 from ade_api.features.configs.deps import compute_dependency_digest
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
@@ -1023,13 +1023,14 @@ class BuildsService:
         python_version = await self._python_version(python_interpreter)
         engine_spec = self._settings.engine_spec
         engine_version_hint = self._resolve_engine_version(engine_spec)
+        engine_source_digest = compute_engine_source_digest(engine_spec)
         fingerprint = compute_build_fingerprint(
             config_digest=config_digest,
             engine_spec=engine_spec,
             engine_version=engine_version_hint,
             python_version=python_version,
             python_bin=python_interpreter,
-            extra={},
+            extra={"engine_source_digest": engine_source_digest} if engine_source_digest else {},
         )
         logger.debug(
             "build.prepare.fingerprint",
