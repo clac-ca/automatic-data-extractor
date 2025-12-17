@@ -6,13 +6,14 @@ import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.encoding import json_dumps
 from ade_api.db.mixins import generate_uuid7
-from ade_api.db.session import get_sessionmaker
 from ade_api.features.builds import service as builds_service_module
 from ade_api.features.builds.builder import (
     BuildArtifacts,
@@ -70,21 +71,24 @@ def _override_builder(monkeypatch: pytest.MonkeyPatch) -> None:
     StubBuilder.events = []
 
 
-async def _seed_configuration(*, settings: Settings, workspace_id: str) -> str:
+async def _seed_configuration(
+    *,
+    session: AsyncSession,
+    settings: Settings,
+    workspace_id: UUID,
+) -> UUID:
     """Insert a configuration row and ensure on-disk config artifacts exist."""
 
-    session_factory = get_sessionmaker(settings=settings)
-    async with session_factory() as session:
-        configuration_id = generate_uuid7()
-        configuration = Configuration(
-            id=configuration_id,
-            workspace_id=workspace_id,
-            display_name="Test Configuration",
-            status=ConfigurationStatus.ACTIVE,
-            content_digest="test-digest",
-        )
-        session.add(configuration)
-        await session.commit()
+    configuration_id = generate_uuid7()
+    configuration = Configuration(
+        id=configuration_id,
+        workspace_id=workspace_id,
+        display_name="Test Configuration",
+        status=ConfigurationStatus.ACTIVE,
+        content_digest="test-digest",
+    )
+    session.add(configuration)
+    await session.commit()
 
     config_root = workspace_config_root(settings, workspace_id, configuration_id)
     (config_root / "src" / "ade_config").mkdir(parents=True, exist_ok=True)
@@ -118,7 +122,6 @@ async def _auth_headers(
     *,
     email: str,
     password: str,
-    settings: Settings,
 ) -> dict[str, str]:
     token, _ = await login(client, email=email, password=password)
     return {"Authorization": f"Bearer {token}"}
@@ -144,15 +147,16 @@ async def _wait_for_build_completion(
 
 async def test_background_build_executes_to_completion(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-    override_app_settings,
+    seed_identity,
+    session: AsyncSession,
+    settings: Settings,
 ) -> None:
     """Non-streaming build requests should run in a background task and finish."""
 
-    settings = override_app_settings()
     configuration_id = await _seed_configuration(
+        session=session,
         settings=settings,
-        workspace_id=seed_identity["workspace_id"],
+        workspace_id=seed_identity.workspace_id,
     )
 
     StubBuilder.events = [
@@ -163,15 +167,14 @@ async def test_background_build_executes_to_completion(
         ),
     ]
 
-    owner = seed_identity["workspace_owner"]
+    owner = seed_identity.workspace_owner
     headers = await _auth_headers(
         async_client,
-        email=owner["email"],
-        password=owner["password"],  # type: ignore[index]
-        settings=settings,
+        email=owner.email,
+        password=owner.password,
     )
 
-    workspace_id = seed_identity["workspace_id"]
+    workspace_id = seed_identity.workspace_id
     response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
         headers=headers,
@@ -191,25 +194,25 @@ async def test_background_build_executes_to_completion(
 
 async def test_list_builds_with_filters_and_limits(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
-    override_app_settings,
+    seed_identity,
+    session: AsyncSession,
+    settings: Settings,
 ) -> None:
     """Configuration-scoped build listing should support filters and pagination."""
 
-    settings = override_app_settings()
     configuration_id = await _seed_configuration(
+        session=session,
         settings=settings,
-        workspace_id=seed_identity["workspace_id"],
+        workspace_id=seed_identity.workspace_id,
     )
 
-    owner = seed_identity["workspace_owner"]
+    owner = seed_identity.workspace_owner
     headers = await _auth_headers(
         async_client,
-        email=owner["email"],
-        password=owner["password"],  # type: ignore[index]
-        settings=settings,
+        email=owner.email,
+        password=owner.password,
     )
-    workspace_id = seed_identity["workspace_id"]
+    workspace_id = seed_identity.workspace_id
 
     StubBuilder.events = [
         BuilderStepEvent(step=BuildStep.CREATE_VENV, message="create venv"),

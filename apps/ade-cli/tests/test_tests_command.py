@@ -26,6 +26,10 @@ def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(tests_cmd.common, "refresh_paths", lambda: None)
     monkeypatch.setattr(tests_cmd.common, "BACKEND_DIR", backend_dir)
     monkeypatch.setattr(tests_cmd.common, "BACKEND_SRC", backend_src)
+    monkeypatch.setattr(tests_cmd.common, "ENGINE_DIR", tmp_path / "apps" / "ade-engine")
+    monkeypatch.setattr(tests_cmd.common, "ENGINE_SRC", tmp_path / "apps" / "ade-engine" / "src" / "ade_engine")
+    monkeypatch.setattr(tests_cmd.common, "CLI_DIR", tmp_path / "apps" / "ade-cli")
+    monkeypatch.setattr(tests_cmd.common, "CLI_SRC", tmp_path / "apps" / "ade-cli" / "src" / "ade_cli")
     monkeypatch.setattr(tests_cmd.common, "FRONTEND_DIR", tmp_path / "apps" / "ade-web")
     monkeypatch.setattr(tests_cmd.common, "require_python_module", lambda *_, **__: None)
 
@@ -36,7 +40,7 @@ def test_backend_suite_runs_when_selected(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     tests_cmd.run_tests(frontend=False)
 
-    assert commands == [([sys.executable, "-m", "pytest", "-q"], backend_dir)]
+    assert commands == [([sys.executable, "-m", "pytest"], backend_dir)]
 
 
 def test_frontend_suite_runs_when_script_present(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -47,6 +51,8 @@ def test_frontend_suite_runs_when_script_present(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(tests_cmd.common, "refresh_paths", lambda: None)
     monkeypatch.setattr(tests_cmd.common, "FRONTEND_DIR", frontend_dir)
     monkeypatch.setattr(tests_cmd.common, "BACKEND_SRC", tmp_path / "missing-backend")
+    monkeypatch.setattr(tests_cmd.common, "ENGINE_SRC", tmp_path / "missing-engine")
+    monkeypatch.setattr(tests_cmd.common, "CLI_SRC", tmp_path / "missing-cli")
     monkeypatch.setattr(tests_cmd.common, "npm_path", lambda: "npm-bin")
     monkeypatch.setattr(tests_cmd.common, "ensure_node_modules", lambda *_, **__: None)
     monkeypatch.setattr(tests_cmd.common, "load_frontend_package_json", lambda: {"scripts": {"test": "vitest"}})
@@ -68,6 +74,8 @@ def test_exit_when_no_suites_run(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
     monkeypatch.setattr(tests_cmd.common, "refresh_paths", lambda: None)
     monkeypatch.setattr(tests_cmd.common, "FRONTEND_DIR", frontend_dir)
     monkeypatch.setattr(tests_cmd.common, "BACKEND_SRC", tmp_path / "missing-backend")
+    monkeypatch.setattr(tests_cmd.common, "ENGINE_SRC", tmp_path / "missing-engine")
+    monkeypatch.setattr(tests_cmd.common, "CLI_SRC", tmp_path / "missing-cli")
     monkeypatch.setattr(tests_cmd.common, "load_frontend_package_json", lambda: {"scripts": {}})
 
     with pytest.raises(typer.Exit) as excinfo:

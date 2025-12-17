@@ -1,203 +1,447 @@
 > **Agent instruction (read first):**
 >
-> * Treat this workpackage as the **single source of truth** for this task.
+> * Treat this work package as the **single source of truth** for this task.
 > * Keep the checklist below up to date: change `[ ]` → `[x]` as you complete tasks, and add new items when you discover more work.
 > * If you must change the plan, **update this document first**, then the code.
 
 ---
 
-## Work Package Checklist
+# Work Package: ADE Engine — Single-Table DataFrame Pipeline (Simplify + De-internalize)
 
-- [x] Document current hook `table` object lifecycle (`TableData`)
-- [x] Confirm `on_table_mapped` runs after mapping (and what “after mapping” means today)
-- [x] Decide on new extension-facing hook table contract (API + invariants)
-- [x] Define mapping-hook return/patch contract (no in-place mutation)
-- [ ] Implement adapter + pipeline changes (engine internal stays `TableData`)
-- [ ] Update docs + template config package + add focused tests
+## What we’re doing (plain terms)
+
+ADE should feel like: **“I’m just working with a normal table.”**
+
+Today, the engine constructs and threads stage-specific internal table objects (`TableData` / `TableView`) through mapping, transforms, validation, and rendering. That creates:
+
+* stage-dependent shapes,
+* unclear mutability,
+* extension contracts that leak engine internals,
+* and a bunch of glue code (column stores, unmapped passthrough stitching, prefixes, etc.).
+
+### New core principle
+
+> ADE works on **one** `polars.DataFrame` called `table`.
+> Mapping **renames headers**. Everything else just operates on the DataFrame.
+
+This work package intentionally **breaks** legacy extension contracts. No adapters.
 
 ---
 
-# ADE Engine hook table refactor (make hook `table` intuitive)
+## Summary of the simplification
 
-## 1. Objective
+### The “single table” model
 
-Make the `table` object passed into ADE Engine hooks:
+* As soon as ADE extracts a detected table region, it materializes **one** `table: pl.DataFrame`.
+* Initially, `table` is the raw extracted table:
 
-- Intuitive to **inspect** (consistent fields across hook stages)
-- Safe and ergonomic to **modify** (explicit, validated “patch” semantics instead of mutating internal lists)
-- Clear about what can be **returned** to the engine (hook return contracts, where applicable)
+  * columns = extracted header values (minimally normalized to safe, unique strings)
+  * rows = extracted data rows
+* That **same** DataFrame is the only table object for the rest of the pipeline.
 
-Non-goals:
+### Mapping is just a rename
 
-- Replace transforms/validators (value changes should remain transform/validator territory)
-- Change the engine’s internal storage model (`TableData`) unless needed for the external contract
+* Mapping does not build a “canonical table” or “mapped/unmapped stores”.
+* Mapping produces a rename plan and applies it:
 
-## 2. Context (what we are starting from)
+  * extracted header name → canonical field name
+* Anything not mapped simply stays as a normal column with its extracted name.
 
-Today all hooks receive `table: TableData | None` (via `HookContext.table`). `TableData` is an engine-internal dataclass that accumulates more fields as the pipeline progresses.
+### “Unmapped columns” aren’t special anymore
 
-### 2.1 Current hook timing + what `table` contains
+* We remove the idea of “append passthrough columns”.
+* Default behavior: **write whatever columns are currently in `table`.**
+* If a user wants to drop non-canonical columns, we provide one setting:
 
-Hook stage order (engine docs + code):
+  * `remove_unmapped_columns: bool = false` (default)
 
-- `on_table_detected`
-  - Runs after column mapping (`detect_and_map_columns`), before transforms/validators.
-  - `TableData` populated with:
-    - `source_columns` (raw header + raw values per source column)
-    - `mapped_columns` (field_name + source_index + raw values)
-    - `unmapped_columns`
-    - `column_scores`, `duplicate_unmapped_indices`, `region`, etc.
-  - Not yet set (currently): `row_count`, `columns` (canonical store), `mapping` (canonical map), `issues*`, `output_*`
+---
 
-- `on_table_mapped`
-  - Runs immediately after `on_table_detected`.
-  - Docs say: “Mutating `table.mapped_columns` / `table.unmapped_columns` is allowed.”
-  - Pipeline then computes:
-    - `table.row_count`
-    - `table.columns = {field_name: values_vec}`
-    - `table.mapping = {field_name: source_index}`
-  - Transforms/validators run next, mutating `table.columns` + producing `issues`.
+## Work Package Checklist
 
-- `on_table_written`
-  - Runs after transforms/validators and after render to the output worksheet.
-  - `table.columns`, `table.mapping`, `table.issues_patch`, `table.issues`, `table.output_range`, `table.output_sheet_name` are populated.
-  - `sheet` in the hook context is the **output** worksheet.
+* [x] Align on “one DataFrame” as the only table artifact
+* [x] Align on “mapping = rename headers” (no canonical/unmapped dual tables)
+* [ ] Introduce DF-native contexts for hooks/transforms/validators
+* [ ] Remove legacy `TableData`/`TableView` surfaces (code + docs + templates)
+* [ ] Remove `on_table_detected` everywhere
+* [ ] Implement extraction → `table: pl.DataFrame` materialization as the stage boundary
+* [ ] Implement mapping-as-rename with deterministic collision handling
+* [ ] Keep table hook stages and return-DF semantics:
 
-### 2.2 Pain points with the current `TableData` contract (hooks)
+  * `on_table_mapped` → `on_table_transformed` → `on_table_validated` → `on_table_written`
+* [ ] Replace `append_unmapped_columns` with `remove_unmapped_columns` (default `false`)
+* [ ] Refactor transforms to a Polars-native contract (breaking)
+* [ ] Refactor validators to a Polars-native contract (breaking)
+* [ ] Render/write directly from the final `table` DataFrame
+* [ ] Update docs + template config package + focused tests
 
-- **Stage-dependent shape**: many properties exist only “later”, but the type looks the same across hooks.
-- **Implicit mutation contract**: mapping edits require mutating `table.mapped_columns` / `table.unmapped_columns` lists directly.
-- **Overwrites surprise**: even if a hook sets `table.columns` / `table.mapping` during `on_table_mapped`, the pipeline overwrites them right after the hook.
-- **Return values are not meaningful** for hooks today (docs say hooks return `None`), so “patching” must be in-place.
-- **Engine-internal leakage**: exposing `TableData` makes it harder to evolve engine internals without breaking config packages.
+---
 
-### 2.3 Confirmation: is `on_table_mapped` “after mapping” with new headers?
+# 1) Design goals
 
-Yes, **mapping has already occurred** when `on_table_mapped` runs: `detect_and_map_columns(...)` has produced `MappedColumn(field_name=...)` entries and the hook sees those.
+## 1.1 Goals
 
-However, **the canonical column store does not exist yet** at this hook today:
+1. **Reduce engine complexity** by removing internal intermediate table representations.
+2. **Make extension contracts stable**: hooks/transforms/validators receive `pl.DataFrame`.
+3. **Make mutability explicit**: change the table by returning a new DataFrame.
+4. **Make output obvious**: the DataFrame written is the DataFrame you see.
 
-- At `on_table_mapped`, `table.columns` is still empty (it’s built *after* the hook returns).
-- “New headers” exist only as `MappedColumn.field_name` values (canonical field names), not as a rewritten header row or a populated `table.columns` dict.
+## 1.2 Non-goals
 
-## 3. Target architecture / structure (ideal)
+* Backwards compatibility for legacy config packages.
+* “Dual table” designs (no `original_unmapped_table`, no join-based passthrough stitching).
+* Complex output ordering rules baked into the engine (column order is whatever the DataFrame is at write time).
+* Making the source workbook mutable (input is read-only; output is mutable post-write).
 
-### 3.1 Core idea
+---
 
-Keep `TableData` as the internal pipeline model, but stop exposing it directly as the primary hook contract.
+# 2) Table model (one DataFrame)
 
-Instead, pass a stable, extension-facing `HookTable` object into hooks:
+## 2.1 Materialization boundary
 
-- Read-only by default (so hooks can’t accidentally corrupt invariants)
-- Provides ergonomic helpers for common inspection tasks
-- Allows **explicit** mutations via validated patch objects (especially for mapping)
+As soon as a table region is extracted (header row + data rows), the engine builds:
 
-### 3.2 Proposed file-level changes (expected)
+* `table: pl.DataFrame`
 
-```text
-apps/ade-engine/src/ade_engine/models/extension_contexts.py      # HookContext gets a better-typed `table`
-apps/ade-engine/src/ade_engine/models/hook_table.py             # NEW: HookTable + views + patch types
-apps/ade-engine/src/ade_engine/application/pipeline/pipeline.py # Apply mapping patches between hooks and transforms
-apps/ade-engine/src/ade_engine/extensions/registry.py           # Allow hook return values when enabled per hook
-apps/ade-engine/docs/hooks.md                                   # Update hook table contract + examples
-apps/ade-engine/docs/callable-contracts.md                      # Document mapping-hook return type + validation
-apps/ade-engine/src/ade_engine/extensions/templates/.../hooks/  # Update templates
-```
+No other table-shaped artifact exists.
 
-## 4. Design (for this workpackage)
+Engine internals can keep metadata (region, mapping scores, etc.) but **values live in `table`**.
 
-### 4.1 Design goals
+## 2.2 Minimal header normalization (safe + deterministic)
 
-- **Clarity:** hook authors can tell what’s available at each stage without guessing.
-- **Ergonomics:** common tasks should be 1–3 obvious calls (not list surgery).
-- **Safety:** no silent invariant breakage; mapping edits must be validated.
-- **Stability:** engine internals can change while hook contract remains stable.
-- **Determinism:** multiple hooks compose predictably (priority order, sequential patch application).
+Polars requires unique string column names, but Excel headers can be empty/duplicated/non-strings.
 
-### 4.2 Proposed hook `table` API (extension-facing)
+Column name assignment (in source column order):
 
-Introduce `HookTable` (passed as `table`), with a small set of consistently-present views:
+1. `base = str(header).strip()` if non-empty else `f"col_{i+1}"`
+2. Deduplicate collisions by suffixing: `"<base>__2"`, `"<base>__3"`, …
 
-- `table.identity`
-  - `sheet_name`, `sheet_index`, `table_index`
-  - `region` (header/data bounds, inferred header flag)
+That’s it. No lowercasing/tokenization. We preserve “raw-ness” while keeping the DataFrame valid.
 
-- `table.source`
-  - `columns`: index-addressable source columns (`index`, `header`, `values`, `values_sample`)
-  - helper lookups: `header_strings()`, `column(index)`, `sample_rows(n)`
+---
 
-- `table.mapping` (available starting `on_table_detected`)
-  - `mapped`: ordered mapping entries (`field_name`, `source_index`, `source_header`, `score`)
-  - `unmapped`: source columns not mapped
-  - helper: `mapped_fields()`, `lookup(field_name)`, `reverse_lookup(source_index)`
+# 3) Mapping (rename-only)
 
-- `table.canonical` (available starting `on_table_detected`, but read-only)
-  - `columns: Mapping[str, list[Any]]` keyed by canonical `field_name`
-  - `row_count`
-  - NOTE: built from `mapping.mapped` (so hook authors always have “post-mapping” column vectors)
+## 3.1 Mapping behavior
 
-- `table.results` (populated after transforms/validators/render)
-  - `issues_patch`, `issues` (flattened), `output_sheet_name`, `output_range`
+Mapping applies as a rename on the existing DataFrame:
 
-Key constraint: `HookTable` is *not* a dataframe; it’s a thin, stable facade over ADE’s column-vector model.
+* For each mapped column: rename extracted name → canonical field name.
+* Unmapped columns remain unchanged and remain in the DataFrame.
 
-### 4.3 Mapping edits: return a patch (no in-place mutation)
+There is no “canonical vs passthrough” construction phase anymore.
 
-Change only one hook to accept meaningful return values:
+## 3.2 Collision handling (deterministic)
 
-- `on_table_mapped` may return a `TableMappingPatch` (or `None`).
-- The engine applies patches **sequentially** in hook execution order (priority desc, then module/qualname).
-- Any invalid patch raises `HookError` with stage `on_table_mapped`.
+Mapping must not produce duplicate column names.
 
-#### 4.3.1 Patch shape (Python-friendly, no imports required)
+Rule:
 
-Allow either a dataclass instance or a plain dict with these keys:
+* If renaming a column to a canonical field name would collide with an existing column name, the rename is **skipped** and the column remains unmapped (keeps its extracted name).
+
+This avoids inventing suffixed canonical names (which would be surprising and hard to validate against).
+
+The engine must log a clear warning indicating:
+
+* the extracted column
+* the intended canonical name
+* the existing conflicting column
+* that the rename was skipped
+
+---
+
+# 4) Output behavior: `remove_unmapped_columns`
+
+We replace the old “append passthrough columns” feature with a simpler model:
+
+* The output is whatever columns are in `table` at write time.
+
+Add one setting:
+
+* `remove_unmapped_columns: bool = false` (default)
+
+Behavior:
+
+* `false` (default): write all columns in `table`
+* `true`: right before write, drop columns whose names are **not registered canonical fields**
+
+  * (engine-reserved columns, if any exist, follow the same rule unless explicitly reserved—see note below)
+
+This eliminates:
+
+* `append_unmapped_columns`
+* `unmapped_prefix`
+* passthrough stitching logic
+* and the conceptual split between “data” and “raw passthrough data”
+
+---
+
+# 5) Hook stages and mutation rules (simple + enforceable)
+
+## 5.1 Table lifecycle
+
+One table flows through:
+
+**extract → mapping(rename) → hooks → transforms → hooks → validation → hooks → write → hooks**
+
+Specifically:
+
+1. `table` is extracted (raw headers)
+2. mapping renames columns in-place (producing a new DF instance, since Polars)
+3. `on_table_mapped`
+4. transforms
+5. `on_table_transformed`
+6. validation
+7. `on_table_validated`
+8. write
+9. `on_table_written`
+
+We remove `on_table_detected` (redundant; detection is not a stable “table” state anymore).
+
+## 5.2 Hook semantics (stage contracts)
+
+### `on_table_mapped` (post-mapping, pre-transform)
+
+* Input: `table: pl.DataFrame`
+* Return: `None` or new `pl.DataFrame`
+* Allowed:
+
+  * rename/select/with_columns
+  * filter/sort (row ops allowed)
+  * reorder columns
+
+### `on_table_transformed` (post-transform, pre-validation)
+
+* Input: `table: pl.DataFrame`
+* Return: `None` or new `pl.DataFrame`
+* Allowed:
+
+  * rename/select/with_columns
+  * filter/sort (row ops allowed)
+  * reorder columns
+
+### `on_table_validated` (post-validation, pre-write)
+
+* Input: `table: pl.DataFrame` + validation results
+* Return: `None` or new `pl.DataFrame`
+* Allowed:
+
+  * **column shaping only** (rename/select/reorder/add computed columns)
+* Not allowed:
+
+  * changing row count or row order
+
+Rationale: validator outputs are keyed to row indices at the time of validation.
+
+### `on_table_written` (post-write)
+
+* Input: `table` (the written table), plus output sheet/workbook and validation results
+* Return: `None`
+* Allowed:
+
+  * formatting, summaries, additional sheets, charts
+* Not allowed:
+
+  * changing the data table (it’s already committed)
+
+## 5.3 Hook return composition
+
+Hooks run in priority order.
+
+* If a hook returns a DataFrame, that becomes the input to the next hook at the same stage.
+* If it returns `None`, the table is unchanged.
+
+This enables “small composable hooks” without any in-place mutation.
+
+---
+
+# 6) New extension contracts (breaking, simplified)
+
+## 6.1 Hook registration (unchanged mechanism, new inputs)
+
+Hooks are registered as before, but now the stable table input is always:
+
+* `table: pl.DataFrame`
+
+Table hook context fields (keyword-only; authors may accept what they want):
+
+* Identity: `sheet_name`, `sheet_index`, `table_index`, `region`
+* Table: `table: pl.DataFrame`
+* Diagnostics: `mapping` (rename plan + confidences), `column_scores` (optional)
+* Validation (validated+): `issues_patch`, `issues`
+* Standard: `metadata`, `state`, `input_file_name`, `logger`
+* Workbook objects:
+
+  * pre-write hooks receive source workbook/sheet (read-only by convention)
+  * post-write hook receives output workbook/sheet (mutable)
+
+## 6.2 Transforms (v3, Polars-native)
+
+Transforms remain “registered per field” but operate on the DataFrame.
+
+**Signature (recommended):**
 
 ```py
-{
-  "map": {"field_name": 3, ...},          # set/overwrite field->source_index
-  "unmap": ["field_name", ...],           # remove field mapping
-  "order": ["field_name", ...],           # optional mapped-field output order
-  "drop_passthrough": [7, 8, ...],        # optional: drop specific source columns from passthrough/unmapped output
-  "rename_passthrough": {7: "raw_notes"}  # optional: override passthrough header
-}
+def transform(*, field_name: str, table: pl.DataFrame, state: dict, metadata: dict, logger, **_) -> pl.Expr | dict[str, pl.Expr] | None:
+    ...
 ```
 
-Validation rules:
+Return types (kept intentionally small to reduce engine normalization complexity):
 
-- `field_name` must be a registered field.
-- `source_index` must exist in `table.source.columns`.
-- No two fields may map to the same `source_index` after patch application.
-- `order`, if present, must contain exactly the mapped fields (or define a clear rule: “subset allowed + append remainder” — decide).
+* `None` → no change
+* `pl.Expr` → replacement expression for `field_name`
+* `dict[str, pl.Expr]` → multi-output derived fields
 
-### 4.4 Compatibility / migration plan
+Constraints:
 
-We likely have existing configs that touch `TableData` directly.
+* Transforms MUST NOT change row count.
+* Derived output fields MUST be registered canonical fields.
 
-Preferred approach:
+Engine behavior:
 
-- `HookTable` wraps `TableData` and **proxies** legacy attributes (`mapped_columns`, `unmapped_columns`, etc.) for a transition window.
-- Docs + templates move to the new API immediately.
-- Add a warning path (logger debug/event) when legacy mutation is detected in `on_table_mapped`.
-- After one or two releases, freeze/remove legacy mutation.
+* Apply results via `with_columns`.
+* Transform execution order is **registry order** of fields present in the table (simplest, predictable).
 
-### 4.5 Open questions / decisions to resolve
+## 6.3 Validators (v3, simplified return shape)
 
-Decisions for v1:
+Validators operate on the DataFrame and return a simple list of row-indexed issues.
 
-- `order` is **partial**: if provided, it must be a list of unique mapped field names; the engine orders those first and appends remaining mapped fields in their existing order.
-- Patch mapping is **by source index** (unambiguous). `HookTable` should provide helpers to find candidate indices from header text/samples.
-- Passthrough/unmapped rename/drop is handled **before render** via the mapping patch (preferred over post-write worksheet surgery).
-- Output headers remain **`field_name`** (no `FieldDef.label` rendering changes in this refactor).
+**Signature (recommended):**
 
-## 5. Implementation notes (when we start coding)
+```py
+def validate(*, field_name: str, table: pl.DataFrame, state: dict, metadata: dict, logger, **_) -> list[dict] | None:
+    ...
+```
 
-- Build `HookTable` from internal `TableData` at hook invocation time.
-  - For `on_table_detected` / `on_table_mapped`, `HookTable.canonical` should be available by building a temporary column store from `mapped_columns` + `row_count`.
-  - For `on_table_written`, `HookTable.results` can reference `TableData.columns/issues/output_*`.
-- Apply mapping patches in `Pipeline._process_table`:
-  - Construct `HookTable` → run hooks one at a time → apply patch → rebuild mapping view → continue.
-- Add tests that:
-  - Confirm `on_table_mapped` sees canonical field names + canonical vectors.
-  - Confirm sequential patch application and validation.
-  - Confirm backward-compat attribute access for a transition window (if we choose proxying).
+Return value:
+
+* `None` / `[]` → no issues
+* Otherwise list of dicts with at least:
+
+  * `row_index: int`
+  * `message: str`
+  * optional: `severity`, `code`, `meta`
+
+Constraints:
+
+* Validators MUST NOT mutate table values.
+* `row_index` must be within `[0, table.height)`.
+
+This deliberately drops the multi-shape v2 formats to reduce engine branching and normalization code.
+
+---
+
+# 7) Pipeline sketch (end-to-end)
+
+Per detected table:
+
+1. Detect region (existing logic)
+2. Extract headers + rows (existing logic)
+3. Materialize `table: pl.DataFrame` (minimal header normalization)
+4. Compute mapping (existing logic)
+5. Apply mapping as `table.rename(rename_map)` (with collision skipping)
+6. `on_table_mapped` (may replace table)
+7. Run transforms (DataFrame-native)
+8. `on_table_transformed` (may replace table)
+9. Run validators → produce `issues_patch` + flattened `issues`
+10. `on_table_validated` (may replace table; columns only)
+11. If `remove_unmapped_columns=True`, drop non-canonical columns
+12. Write `table` to output worksheet
+13. `on_table_written` (formatting/summaries)
+
+---
+
+# 8) Implementation plan (touchpoints + steps)
+
+## 8.1 Expected file touchpoints (update as you go)
+
+```text
+apps/ade-engine/src/ade_engine/infrastructure/settings.py                 # remove_unmapped_columns; remove append_unmapped_columns + unmapped_prefix
+apps/ade-engine/src/ade_engine/models/extension_contexts.py               # DF-only contexts and new callable types
+apps/ade-engine/src/ade_engine/extensions/registry.py                     # hook return composition for table hooks
+apps/ade-engine/src/ade_engine/application/pipeline/pipeline.py           # materialize table DF; mapping-as-rename; stage wiring; remove on_table_detected
+apps/ade-engine/src/ade_engine/application/pipeline/transform.py          # v3 transform runner (Expr/dict[Expr])
+apps/ade-engine/src/ade_engine/application/pipeline/validate.py           # v3 validator runner (list of row-indexed issues)
+apps/ade-engine/src/ade_engine/application/pipeline/render.py             # write directly from pl.DataFrame; apply remove_unmapped_columns pre-write
+apps/ade-engine/docs/*                                                    # rewrite docs for DF-first contracts and stage semantics
+apps/ade-engine/src/ade_engine/extensions/templates/config_packages/default/  # update template settings + examples
+apps/ade-engine/tests/                                                    # focused tests for mapping rename, hook replacement, drop-unmapped, v3 transforms/validators
+```
+
+## 8.2 Steps (in order)
+
+1. **Settings cleanup**
+
+   * Add `remove_unmapped_columns` (default `false`)
+   * Delete `append_unmapped_columns` and `unmapped_prefix`
+
+2. **Stage cleanup**
+
+   * Remove `on_table_detected` (code + docs + templates)
+   * Ensure hook names and ordering match the new lifecycle
+
+3. **Materialize single DataFrame**
+
+   * Build `table: pl.DataFrame` immediately after extraction
+   * Delete internal “column store” representation in the pipeline
+
+4. **Mapping-as-rename**
+
+   * Convert mapping output into a rename plan
+   * Apply renames with collision skipping + warnings
+
+5. **Hook engine updates**
+
+   * Table hooks accept/return DataFrames (priority-ordered composition)
+
+6. **Transforms v3**
+
+   * Implement transform runner with restricted return types (Expr / dict[Expr])
+   * Apply via `with_columns` in registry order
+
+7. **Validators v3**
+
+   * Implement validator runner returning list of row-indexed issues
+   * Build `issues_patch`/`issues` from a single normalized shape
+
+8. **Write from DataFrame**
+
+   * Apply `remove_unmapped_columns` immediately before render
+   * Render headers + values directly from `table`
+
+9. **Docs + template package**
+
+   * Update hook docs, callable contracts, pipeline narrative
+   * Update default templates to demonstrate the new simplest patterns
+
+10. **Focused tests**
+
+* Mapping rename behavior (including collision skip)
+* Hook replacement composition
+* `remove_unmapped_columns` behavior
+* Transform Expr + multi-output derived fields
+* Validator list-of-issues normalization + bounds enforcement
+* Guarantee: written table == table passed into `on_table_written`
+
+---
+
+# 9) Acceptance criteria
+
+This work package is done when:
+
+* The engine creates exactly **one** `pl.DataFrame` per detected table and uses it end-to-end.
+* Mapping is implemented as deterministic **column renames** on that same DataFrame.
+* “Unmapped columns” are simply columns that remain with extracted names.
+* `remove_unmapped_columns=false` writes unmapped columns by default; `true` drops non-canonical columns immediately before write.
+* Hooks always receive `table: pl.DataFrame`; only allowed stages can replace it by return value.
+* Transforms and validators are DataFrame-native and no longer expose `TableData`/`TableView` or list-vector contracts.
+* The DataFrame written to the worksheet matches the one provided to `on_table_written`.
+* Docs, template config package, and tests reflect the new contracts and behavior.
+
+---
+
+# 10) Notes / intentional trade-offs (call out explicitly)
+
+* This refactor trades “engine magic” (passthrough stitching, special ordering rules, dual table views) for **predictability and simplicity**.
+* Output column ordering becomes “whatever `table.columns` is at write time”; configs can enforce ordering in `on_table_validated`.
+* Mapping conflicts are handled deterministically by skipping conflicting renames (and logging), rather than inventing suffixed canonical names.

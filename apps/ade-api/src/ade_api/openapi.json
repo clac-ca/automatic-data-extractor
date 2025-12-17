@@ -4460,109 +4460,12 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Activate a configuration",
-        "operationId": "activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfigurationActivateRequest",
-                "description": "Activation options.",
-                "default": {
-                  "ensure_build": false
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
       "post": {
         "tags": [
           "configurations"
         ],
-        "summary": "Publish a configuration draft",
+        "summary": "Make a draft configuration active",
         "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post",
         "parameters": [
           {
@@ -4611,7 +4514,7 @@
             "application/json": {
               "schema": {
                 "type": "null",
-                "description": "Publish the current draft into a frozen version without activating it.",
+                "description": "Make the configuration active (archives any existing active configuration).",
                 "title": "Payload"
               }
             }
@@ -4652,13 +4555,13 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive": {
       "post": {
         "tags": [
           "configurations"
         ],
-        "summary": "Deactivate a configuration (was 'archive')",
-        "operationId": "deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post",
+        "summary": "Archive the active configuration",
+        "operationId": "archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post",
         "parameters": [
           {
             "name": "workspace_id",
@@ -8356,19 +8259,6 @@
         "title": "ConfigValidationIssue",
         "description": "Description of a validation issue found on disk."
       },
-      "ConfigurationActivateRequest": {
-        "properties": {
-          "ensure_build": {
-            "type": "boolean",
-            "title": "Ensure Build",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ConfigurationActivateRequest",
-        "description": "Activation control flags."
-      },
       "ConfigurationCreate": {
         "properties": {
           "display_name": {
@@ -8526,9 +8416,8 @@
         "type": "string",
         "enum": [
           "draft",
-          "published",
           "active",
-          "inactive"
+          "archived"
         ],
         "title": "ConfigurationStatus",
         "description": "Lifecycle states for workspace configuration packages."

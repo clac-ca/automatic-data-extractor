@@ -35,6 +35,10 @@ def _find_repo_root() -> Path:
 REPO_ROOT = _find_repo_root()
 BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
 BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
+ENGINE_DIR = REPO_ROOT / "apps" / "ade-engine"
+ENGINE_SRC = ENGINE_DIR / "src" / "ade_engine"
+CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
+CLI_SRC = CLI_DIR / "src" / "ade_cli"
 FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
 VENV_DIR = REPO_ROOT / ".venv"
 COMPOSE_FILE = REPO_ROOT / "compose.yaml"
@@ -44,10 +48,14 @@ README_HINT = "See README: Developer Setup."
 def refresh_paths() -> None:
     """Refresh global path constants based on the current working directory."""
 
-    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, FRONTEND_DIR, VENV_DIR, COMPOSE_FILE
+    global REPO_ROOT, BACKEND_DIR, BACKEND_SRC, ENGINE_DIR, ENGINE_SRC, CLI_DIR, CLI_SRC, FRONTEND_DIR, VENV_DIR, COMPOSE_FILE
     REPO_ROOT = _find_repo_root()
     BACKEND_DIR = REPO_ROOT / "apps" / "ade-api"
     BACKEND_SRC = BACKEND_DIR / "src" / "ade_api"
+    ENGINE_DIR = REPO_ROOT / "apps" / "ade-engine"
+    ENGINE_SRC = ENGINE_DIR / "src" / "ade_engine"
+    CLI_DIR = REPO_ROOT / "apps" / "ade-cli"
+    CLI_SRC = CLI_DIR / "src" / "ade_cli"
     FRONTEND_DIR = REPO_ROOT / "apps" / "ade-web"
     VENV_DIR = REPO_ROOT / ".venv"
     COMPOSE_FILE = REPO_ROOT / "compose.yaml"

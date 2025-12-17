@@ -45,3 +45,26 @@ async def test_runner_streams_stdout_frames_and_stderr_lines(tmp_path: Path) -> 
     stdout_messages = [frame.message for frame in stdout_frames if frame.stream == "stdout"]
     parsed = json.loads(stdout_messages[0])
     assert parsed["type"] == "engine.phase.start"
+
+
+async def test_runner_handles_long_stderr_lines(tmp_path: Path) -> None:
+    script = tmp_path / "writer.py"
+    line_length = 100_000
+    script.write_text(
+        "import sys\n"
+        f"sys.stderr.write('A' * {line_length} + '\\n')\n"
+        "sys.stderr.flush()\n",
+        encoding="utf-8",
+    )
+
+    command = [sys.executable, str(script)]
+    runner = EngineSubprocessRunner(command=command, env=os.environ.copy())
+
+    frames = []
+    async for frame in runner.stream():
+        frames.append(frame)
+
+    stderr_messages = [
+        frame.message for frame in frames if isinstance(frame, StdoutFrame) and frame.stream == "stderr"
+    ]
+    assert any(len(message) == line_length for message in stderr_messages)

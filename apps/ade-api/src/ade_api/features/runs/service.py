@@ -1818,9 +1818,9 @@ class RunsService:
                 extra=log_context(configuration_id=configuration_id),
             )
             raise ConfigurationNotFoundError(configuration_id)
-        if configuration.status == ConfigurationStatus.INACTIVE:
+        if configuration.status == ConfigurationStatus.ARCHIVED:
             logger.warning(
-                "run.config.resolve.inactive",
+                "run.config.resolve.archived",
                 extra=log_context(
                     workspace_id=configuration.workspace_id,
                     configuration_id=configuration.id,

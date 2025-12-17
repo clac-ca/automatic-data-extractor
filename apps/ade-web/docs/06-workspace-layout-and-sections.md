@@ -130,7 +130,7 @@ Search is **purely client‑side** over the current list in typical deployments,
 
 - “Create workspace” appears only if the user has the relevant permission (e.g. `Workspaces.Create`).
 - If the user lacks this permission and has no workspaces:
-  - The screen explains that they must be **invited**.
+  - The screen explains that they must be **added to a workspace**.
   - Suggest linking to admin contact or documentation if available.
 
 ### 3.5 Empty and loading states
@@ -144,7 +144,7 @@ Common states:
   - Primary CTA: “Create your first workspace”.
 - **No workspaces & cannot create**:
   - Headline: “You’re not a member of any workspaces yet.”
-  - Body: “Ask an administrator to invite you.”
+  - Body: “Ask an administrator to add you.”
 
 ### 3.6 Workspace cards
 
@@ -163,7 +163,7 @@ Clicking a card:
 The optional right‑hand panel can include:
 
 - Examples of workspace organisation (per client, per environment, etc.).
-- A short checklist for new deployments (invite admins, configure roles, set default workspace).
+- A short checklist for new deployments (add admins, configure roles, set default workspace).
 
 ---
 
@@ -359,7 +359,7 @@ Detailed behaviour is in [`07-documents-and-runs.md`](./07-documents-and-runs.md
 Responsibilities:
 
 - Show configurations available in the workspace.
-- Provide actions: create/clone/export configurations, activate/deactivate versions.
+- Provide actions: create/clone/export configurations and manage lifecycle (make active, duplicate, archive).
 - Host the **Configuration Builder workbench** for editing configuration code and manifest.
 - Manage the “return path” so users can exit the workbench back to where they came from.
 

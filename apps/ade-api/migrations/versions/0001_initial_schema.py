@@ -131,9 +131,8 @@ BUILD_STATUS = sa.Enum(
 
 CONFIG_STATUS = sa.Enum(
     "draft",
-    "published",
     "active",
-    "inactive",
+    "archived",
     name="configuration_status",
     native_enum=False,
     create_constraint=True,
@@ -571,6 +570,8 @@ def _create_system_settings() -> None:
 
 
 def _create_configurations() -> None:
+    dialect = _dialect_name()
+
     op.create_table(
         "configurations",
         _uuid_pk(),
@@ -601,6 +602,42 @@ def _create_configurations() -> None:
         ["active_build_id"],
         unique=False,
     )
+
+    # Exactly one active configuration per workspace where the dialect supports
+    # partial/filtered indexes.
+    active_where = sa.text("status = 'active'")
+
+    if dialect in {"postgresql", "postgres"}:
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            postgresql_where=active_where,
+        )
+    elif dialect == "sqlite":
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            sqlite_where=active_where,
+        )
+    elif dialect == "mssql":
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            mssql_where=active_where,
+        )
+    else:
+        op.create_index(
+            "ix_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=False,
+        )
 
 
 def _create_builds() -> None:

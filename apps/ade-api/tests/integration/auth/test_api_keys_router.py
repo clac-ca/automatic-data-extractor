@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from httpx import AsyncClient
 
@@ -24,31 +22,31 @@ async def _auth_headers(
 
 async def test_admin_can_issue_api_key_by_email(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
     """Admin endpoint should issue keys by email without exposing secrets on read."""
 
-    admin = seed_identity["admin"]
-    target = seed_identity["member"]
+    admin = seed_identity.admin
+    target = seed_identity.member
     headers = await _auth_headers(
         async_client,
-        email=admin["email"],
-        password=admin["password"],
+        email=admin.email,
+        password=admin.password,
     )
 
     response = await async_client.post(
         "/api/v1/api-keys",
         headers=headers,
         json={
-            "email": target["email"].upper(),
+            "email": target.email.upper(),
             "label": "Integration key",
             "expires_in_days": 30,
         },
     )
     assert response.status_code == 201, response.text
     payload = response.json()
-    assert payload["owner_user_id"] == str(target["id"])
-    assert payload["created_by_user_id"] == str(admin["id"])
+    assert payload["owner_user_id"] == str(target.id)
+    assert payload["created_by_user_id"] == str(admin.id)
     assert payload["secret"].startswith(f"{payload['token_prefix']}.")
 
     detail = await async_client.get(
@@ -64,15 +62,15 @@ async def test_admin_can_issue_api_key_by_email(
 
 async def test_me_api_keys_include_revoked_and_paginate(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
     """Self-service listing should honor include_revoked and pagination params."""
 
-    member = seed_identity["member"]
+    member = seed_identity.member
     headers = await _auth_headers(
         async_client,
-        email=member["email"],
-        password=member["password"],
+        email=member.email,
+        password=member.password,
     )
 
     first = await async_client.post(

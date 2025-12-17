@@ -515,10 +515,8 @@ Streaming:
 * `GET  /api/v1/workspaces/{workspace_id}/configurations`
 * `POST /api/v1/workspaces/{workspace_id}/configurations`
 * `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish` (make active)
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive`
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate`
 * `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export`
 
@@ -554,10 +552,8 @@ Configurations:
 * `listConfigurations(workspaceId)`
 * `createConfiguration(workspaceId, payload)`
 * `readConfiguration(workspaceId, configurationId)`
-* `listConfigurationVersions(workspaceId, configurationId)`
-* `activateConfiguration(workspaceId, configurationId)`
-* `deactivateConfiguration(workspaceId, configurationId)`
-* `publishConfiguration(workspaceId, configurationId)`
+* `makeActiveConfiguration(workspaceId, configurationId)` // wraps `/publish`
+* `archiveConfiguration(workspaceId, configurationId)`    // wraps `/archive`
 * `validateConfiguration(workspaceId, configurationId, payload)`
 * `exportConfiguration(workspaceId, configurationId)`
 
@@ -581,7 +577,8 @@ Hooks:
 
 * `useConfigurationsQuery(workspaceId)`
 * `useConfigurationQuery(workspaceId, configurationId)`
-* `useConfigurationVersionsQuery(workspaceId, configurationId)`
+* `useMakeActiveConfigurationMutation(workspaceId)`
+* `useArchiveConfigurationMutation(workspaceId)`
 * `useConfigurationFilesQuery(workspaceId, configurationId)`
 * `useCreateBuildMutation(workspaceId, configurationId)` (triggers build; observe via run event stream)
 
