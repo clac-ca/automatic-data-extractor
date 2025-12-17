@@ -36,9 +36,29 @@ class EngineSubprocessRunner:
         )
         assert process.stdout is not None and process.stderr is not None
 
-        async def drain(pipe, stream: Literal["stdout", "stderr"]):
-            async for raw in pipe:  # type: ignore[attr-defined]
-                line = raw.decode("utf-8", errors="replace").rstrip("\n")
+        async def drain(
+            pipe: asyncio.StreamReader, stream: Literal["stdout", "stderr"]
+        ) -> AsyncIterator[StdoutFrame]:
+            buffer = bytearray()
+
+            while True:
+                chunk = await pipe.read(64 * 1024)
+                if not chunk:
+                    break
+                buffer.extend(chunk)
+
+                while True:
+                    newline_index = buffer.find(b"\n")
+                    if newline_index < 0:
+                        break
+                    raw_line = buffer[:newline_index]
+                    del buffer[: newline_index + 1]
+                    line = raw_line.decode("utf-8", errors="replace")
+                    if line:
+                        yield StdoutFrame(message=line, stream=stream)
+
+            if buffer:
+                line = buffer.decode("utf-8", errors="replace").rstrip("\n")
                 if line:
                     yield StdoutFrame(message=line, stream=stream)
 

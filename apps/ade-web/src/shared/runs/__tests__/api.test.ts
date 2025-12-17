@@ -154,7 +154,15 @@ describe("streamRun", () => {
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/configurations/{configuration_id}/runs", {
       params: { path: { configuration_id: "config-123" } },
-      body: { options: { dry_run: true, validate_only: false, force_rebuild: false, debug: false } },
+      body: {
+        options: {
+          dry_run: true,
+          validate_only: false,
+          force_rebuild: false,
+          debug: false,
+          log_level: "INFO",
+        },
+      },
       signal: undefined,
     });
     expect(events).toHaveLength(1);

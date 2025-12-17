@@ -94,11 +94,12 @@ export async function validateConfiguration(
   return data as ConfigurationValidateResponse;
 }
 
-export async function activateConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
+export async function makeActiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate",
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish",
     {
       params: { path: { workspace_id: workspaceId, configuration_id: configId } },
+      body: null,
     },
   );
   if (!data) {
@@ -107,9 +108,9 @@ export async function activateConfiguration(workspaceId: string, configId: strin
   return data as ConfigurationRecord;
 }
 
-export async function deactivateConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
+export async function archiveConfiguration(workspaceId: string, configId: string): Promise<ConfigurationRecord> {
   const { data } = await client.POST(
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate",
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive",
     {
       params: { path: { workspace_id: workspaceId, configuration_id: configId } },
     },

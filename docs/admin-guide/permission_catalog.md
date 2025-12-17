@@ -10,14 +10,13 @@ This catalog mirrors the registry that will live in the database. Each permissio
 | `Roles.Read.All` | global | Read roles | View any global or workspace role definition. |
 | `Roles.ReadWrite.All` | global | Manage roles | Create, edit, or archive role definitions. |
 | `Users.Read.All` | global | Read users | View user profiles, status, and assignments. |
-| `Users.Invite` | global | Invite users | Send invitations or reinstate deactivated accounts. |
 | `System.Settings.Read` | global | Read system settings | Inspect ADE global configuration. |
 | `System.Settings.ReadWrite` | global | Manage system settings | Modify ADE global configuration and feature toggles. |
 | `Workspace.Read` | workspace | Read workspace | Access basic workspace metadata and dashboards. |
 | `Workspace.Settings.ReadWrite` | workspace | Manage workspace settings | Update workspace metadata and feature toggles. |
 | `Workspace.Delete` | workspace | Delete workspace | Delete the workspace after verifying guardrails. |
 | `Workspace.Members.Read` | workspace | Read workspace members | View the membership roster and roles. |
-| `Workspace.Members.ReadWrite` | workspace | Manage workspace members | Invite, remove, or change member roles. |
+| `Workspace.Members.ReadWrite` | workspace | Manage workspace members | Add, remove, or change member roles. |
 | `Workspace.Documents.Read` | workspace | Read documents | List and download workspace documents. |
 | `Workspace.Documents.ReadWrite` | workspace | Manage documents | Upload, update, delete, or restore workspace documents. |
 | `Workspace.Configurations.Read` | workspace | Read configurations | View configuration packages, drafts, and published versions. |

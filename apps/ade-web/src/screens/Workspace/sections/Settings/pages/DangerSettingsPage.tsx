@@ -6,9 +6,9 @@ import { deleteWorkspace, workspacesKeys } from "@shared/workspaces";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function DangerSettingsPage() {

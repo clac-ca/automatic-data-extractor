@@ -84,9 +84,8 @@ Author and manage ADE configuration packages. All routes are workspace-scoped.
 - `POST /workspaces/{workspace_id}/configurations` – create from a bundled template or clone an existing config.
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}` – fetch configuration metadata.
 - `POST /workspaces/{workspace_id}/configurations/{configuration_id}/validate` – validate the working tree and return issues/content digest.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/activate` – mark as the active configuration for the workspace.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/publish` – freeze the draft into a published version.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/deactivate` – mark the configuration inactive.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/publish` – make the draft active (archives any previous active configuration).
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/archive` – archive the active configuration.
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}/export` – download a ZIP of the editable tree.
 
 **File editor surface**
@@ -124,7 +123,7 @@ If you need near real-time updates, register a webhook endpoint with the ADE tea
 
 ## SDKs and client libraries
 
-Official client libraries are on the roadmap. Until they ship, use your preferred HTTP client. The API uses predictable JSON schemas, making it easy to generate typed clients with tools such as OpenAPI Generator once the schema is published.
+Official client libraries are on the roadmap. Until they ship, use your preferred HTTP client. The API uses predictable JSON schemas, making it easy to generate typed clients with tools such as OpenAPI Generator once the schema is formally versioned.
 
 ## Sandbox environment
 

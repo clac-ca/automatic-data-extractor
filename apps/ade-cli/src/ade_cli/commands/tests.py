@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import typer
 
@@ -43,21 +44,31 @@ class TestTargets:
 
 
 def _run_backend_suite() -> bool:
-    """Execute backend tests via pytest if the backend exists."""
-    if not common.BACKEND_SRC.exists():
-        typer.echo("⚠️ Backend source directory not found; skipping backend tests.", err=True)
-        return False
+    """Execute python backend tests (api + engine + cli) via pytest."""
 
-    typer.echo("🧪 Running backend tests (pytest)…")
+    suites: list[tuple[str, str, Path, Path]] = [
+        ("ade-api", "apps/ade-api", common.BACKEND_SRC, common.BACKEND_DIR),
+        ("ade-engine", "apps/ade-engine", common.ENGINE_SRC, common.ENGINE_DIR),
+        ("ade-cli", "apps/ade-cli", common.CLI_SRC, common.CLI_DIR),
+    ]
+
+    any_ran = False
+
     common.require_python_module(
         "pytest",
         "Install backend/test dependencies (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
-    common.run(
-        [sys.executable, "-m", "pytest", "-q"],
-        cwd=common.BACKEND_DIR,
-    )
-    return True
+
+    for name, display_path, src_path, cwd in suites:
+        if not src_path.exists():
+            typer.echo(f"⚠️ {name} source directory not found ({display_path}); skipping.", err=True)
+            continue
+
+        typer.echo(f"🧪 Running {name} tests (pytest)…")
+        common.run([sys.executable, "-m", "pytest"], cwd=cwd)
+        any_ran = True
+
+    return any_ran
 
 
 def _run_frontend_suite() -> bool:
@@ -114,35 +125,40 @@ def run_tests(
 
 
 def register(app: typer.Typer) -> None:
-    @app.command(
-        name="test",
-        help="Run backend/frontend tests; flags: --backend-only, --frontend-only, --no-backend, --no-frontend.",
-    )
-    def test(
-        backend: bool = typer.Option(
-            True,
-            "--backend/--no-backend",
-            help="Run backend tests (pytest).",
-        ),
-        frontend: bool = typer.Option(
-            True,
-            "--frontend/--no-frontend",
-            help="Run frontend tests (npm test, if defined).",
-        ),
-        backend_only: bool = typer.Option(
-            False,
-            "--backend-only",
-            help="Shortcut for backend only (same as --backend --no-frontend).",
-        ),
-        frontend_only: bool = typer.Option(
-            False,
-            "--frontend-only",
-            help="Shortcut for frontend only (same as --frontend --no-backend).",
-        ),
-    ) -> None:
-        run_tests(
-            backend=backend,
-            frontend=frontend,
-            backend_only=backend_only,
-            frontend_only=frontend_only,
+    def _register_command(*, name: str, hidden: bool = False) -> None:
+        @app.command(
+            name=name,
+            help="Run backend/frontend tests; flags: --backend-only, --frontend-only, --no-backend, --no-frontend.",
+            hidden=hidden,
         )
+        def tests(
+            backend: bool = typer.Option(
+                True,
+                "--backend/--no-backend",
+                help="Run backend tests (pytest).",
+            ),
+            frontend: bool = typer.Option(
+                True,
+                "--frontend/--no-frontend",
+                help="Run frontend tests (npm test, if defined).",
+            ),
+            backend_only: bool = typer.Option(
+                False,
+                "--backend-only",
+                help="Shortcut for backend only (same as --backend --no-frontend).",
+            ),
+            frontend_only: bool = typer.Option(
+                False,
+                "--frontend-only",
+                help="Shortcut for frontend only (same as --frontend --no-backend).",
+            ),
+        ) -> None:
+            run_tests(
+                backend=backend,
+                frontend=frontend,
+                backend_only=backend_only,
+                frontend_only=frontend_only,
+            )
+
+    _register_command(name="tests")
+    _register_command(name="test", hidden=True)

@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 
+import { useNavigate } from "@app/nav/history";
 import { useSearchParams } from "@app/nav/urlState";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -1434,6 +1435,7 @@ function RunExtractionDrawerContent({
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
+  const navigate = useNavigate();
   const configurationsQuery = useConfigurationsQuery({ workspaceId });
   const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const submitRun = useSubmitRun(workspaceId);
@@ -1452,11 +1454,28 @@ function RunExtractionDrawerContent({
   const allConfigs = useMemo(() => configurationsQuery.data?.items ?? [], [configurationsQuery.data]);
   const selectableConfigs = useMemo(
     () =>
-      allConfigs.filter(
-        (config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at),
-      ),
+      allConfigs
+        .filter((config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at))
+        .filter((config) => {
+          const statusLabel = typeof config.status === "string" ? config.status.toLowerCase() : "draft";
+          return statusLabel !== "archived";
+        })
+        .sort((a, b) => {
+          const statusA = typeof a.status === "string" ? a.status.toLowerCase() : "draft";
+          const statusB = typeof b.status === "string" ? b.status.toLowerCase() : "draft";
+          if (statusA === "active" && statusB !== "active") return -1;
+          if (statusB === "active" && statusA !== "active") return 1;
+          const updatedA = new Date((a as { updated_at?: string | null }).updated_at ?? 0).getTime();
+          const updatedB = new Date((b as { updated_at?: string | null }).updated_at ?? 0).getTime();
+          return updatedB - updatedA;
+        }),
     [allConfigs],
   );
+  const activeConfig = useMemo(
+    () => selectableConfigs.find((config) => (typeof config.status === "string" ? config.status.toLowerCase() : "") === "active") ?? null,
+    [selectableConfigs],
+  );
+  const hasActiveConfig = Boolean(activeConfig);
 
   const preferredConfigId = useMemo(() => {
     if (preferences.configId) {
@@ -1465,8 +1484,8 @@ function RunExtractionDrawerContent({
         return match.id;
       }
     }
-    return selectableConfigs[0]?.id ?? "";
-  }, [preferences.configId, selectableConfigs]);
+    return activeConfig?.id ?? "";
+  }, [activeConfig?.id, preferences.configId, selectableConfigs]);
 
   useEffect(() => {
     setSelectedConfigId(preferredConfigId);
@@ -1619,16 +1638,23 @@ function RunExtractionDrawerContent({
     runRunning ||
     safeModeLoading ||
     safeModeEnabled ||
+    !hasActiveConfig ||
     !hasConfigurations ||
     !selectedConfig;
   const runButtonTitle = safeModeEnabled
     ? safeModeDetail
+    : !hasActiveConfig
+      ? "No active configuration. Make a draft active to run extraction."
     : safeModeLoading
       ? "Checking ADE safe mode status..."
       : undefined;
 
   const handleSubmit = () => {
     if (safeModeEnabled || safeModeLoading) {
+      return;
+    }
+    if (!hasActiveConfig) {
+      setErrorMessage("No active configuration. Make a draft active before running extraction.");
       return;
     }
     if (!selectedConfig) {
@@ -1725,6 +1751,21 @@ function RunExtractionDrawerContent({
                 Unable to load configurations.{" "}
                 {configurationsQuery.error instanceof Error ? configurationsQuery.error.message : "Try again later."}
               </Alert>
+            ) : hasConfigurations && !hasActiveConfig ? (
+              <div className="space-y-2">
+                <Alert tone="warning">No active configuration. Make a draft active to run extraction.</Alert>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    onClose();
+                    navigate(`/workspaces/${workspaceId}/config-builder`);
+                  }}
+                  disabled={submitRun.isPending}
+                >
+                  Go to Configuration Builder
+                </Button>
+              </div>
             ) : hasConfigurations ? (
               <div className="space-y-2">
                 <Select

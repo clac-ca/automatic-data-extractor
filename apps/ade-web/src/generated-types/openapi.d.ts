@@ -722,23 +722,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate a configuration */
-        post: operations["activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
         parameters: {
             query?: never;
@@ -748,7 +731,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Publish a configuration draft */
+        /** Make a draft configuration active */
         post: operations["publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post"];
         delete?: never;
         options?: never;
@@ -756,7 +739,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -765,8 +748,8 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Deactivate a configuration (was 'archive') */
-        post: operations["deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post"];
+        /** Archive the active configuration */
+        post: operations["archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1658,17 +1641,6 @@ export type components = {
             message: string;
         };
         /**
-         * ConfigurationActivateRequest
-         * @description Activation control flags.
-         */
-        ConfigurationActivateRequest: {
-            /**
-             * Ensure Build
-             * @default false
-             */
-            ensure_build: boolean;
-        };
-        /**
          * ConfigurationCreate
          * @description Payload for creating a configuration.
          */
@@ -1736,7 +1708,7 @@ export type components = {
          * @description Lifecycle states for workspace configuration packages.
          * @enum {string}
          */
-        ConfigurationStatus: "draft" | "published" | "active" | "inactive";
+        ConfigurationStatus: "draft" | "active" | "archived";
         /**
          * ConfigurationValidateResponse
          * @description Result of running validation.
@@ -5633,46 +5605,6 @@ export interface operations {
             };
         };
     };
-    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ConfigurationActivateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
         parameters: {
             query?: never;
@@ -5713,7 +5645,7 @@ export interface operations {
             };
         };
     };
-    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post: {
+    archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post: {
         parameters: {
             query?: never;
             header?: {

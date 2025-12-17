@@ -1,30 +1,28 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from httpx import AsyncClient
 
 from ade_api.common.time import utc_now
 from ade_api.infra.storage import workspace_run_root
 from ade_api.models import Configuration, ConfigurationStatus, Run, RunStatus
-from ade_api.settings import get_settings
+from ade_api.settings import Settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _auth_headers(client: AsyncClient, account: dict[str, Any]) -> dict[str, str]:
-    token, _ = await login(client, email=account["email"], password=account["password"])
+async def _auth_headers(client: AsyncClient, account) -> dict[str, str]:
+    token, _ = await login(client, email=account.email, password=account.password)
     return {"Authorization": f"Bearer {token}"}
 
 
 async def test_workspace_run_listing_filters_by_status(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
     session,
 ) -> None:
-    workspace_id = seed_identity["workspace_id"]
+    workspace_id = seed_identity.workspace_id
     configuration = Configuration(
         workspace_id=workspace_id,
         display_name="Runs Config",
@@ -51,7 +49,7 @@ async def test_workspace_run_listing_filters_by_status(
         created_at=utc_now(),
     )
     run_other_workspace = Run(
-        workspace_id=seed_identity["secondary_workspace_id"],
+        workspace_id=seed_identity.secondary_workspace_id,
         configuration_id=other_configuration.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
@@ -59,7 +57,7 @@ async def test_workspace_run_listing_filters_by_status(
     session.add_all([run_ok, run_failed, run_other_workspace])
     await session.commit()
 
-    headers = await _auth_headers(async_client, seed_identity["workspace_owner"])
+    headers = await _auth_headers(async_client, seed_identity.workspace_owner)
 
     all_runs = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/runs",
@@ -83,11 +81,11 @@ async def test_workspace_run_listing_filters_by_status(
 
 async def test_run_output_endpoint_serves_file(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
     session,
+    settings: Settings,
 ) -> None:
-    settings = get_settings()
-    workspace_id = seed_identity["workspace_id"]
+    workspace_id = seed_identity.workspace_id
     configuration = Configuration(
         workspace_id=workspace_id,
         display_name="Output Config",
@@ -112,7 +110,7 @@ async def test_run_output_endpoint_serves_file(
     output_file = output_dir / "normalized.xlsx"
     output_file.write_text("demo-output", encoding="utf-8")
 
-    headers = await _auth_headers(async_client, seed_identity["workspace_owner"])
+    headers = await _auth_headers(async_client, seed_identity.workspace_owner)
 
     metadata = await async_client.get(f"/api/v1/runs/{run.id}/output", headers=headers)
     assert metadata.status_code == 200

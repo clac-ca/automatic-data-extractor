@@ -14,6 +14,7 @@ interface EditorPaneProps {
   readonly onContentChange: (tabId: string, value: string) => void;
   readonly onSaveTab?: (tabId: string) => void;
   readonly canSaveFiles?: boolean;
+  readonly readOnly?: boolean;
   readonly onRetryTabLoad?: (tabId: string) => void;
   readonly onSelectTab: (tabId: string) => void;
   readonly isTabDragging?: boolean;
@@ -26,6 +27,7 @@ export function EditorPane({
   onContentChange,
   onSaveTab,
   canSaveFiles = false,
+  readOnly = false,
   onRetryTabLoad,
   onSelectTab,
   isTabDragging = false,
@@ -71,6 +73,7 @@ export function EditorPane({
                 language={tab.language ?? "plaintext"}
                 path={tab.id}
                 theme={editorTheme}
+                readOnly={readOnly}
                 onChange={(value) => onContentChange(tab.id, value ?? "")}
                 onSaveShortcut={() => {
                   if (!canSaveFiles) {

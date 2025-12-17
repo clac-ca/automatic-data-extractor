@@ -61,6 +61,12 @@ _dev_user_lock = asyncio.Lock()
 _dev_user_ready: set[uuid.UUID] = set()
 
 
+def reset_auth_state() -> None:
+    """Clear process-local auth caches (useful for tests)."""
+
+    _dev_user_ready.clear()
+
+
 async def _ensure_dev_user(
     principal: AuthenticatedPrincipal,
     settings: Settings,

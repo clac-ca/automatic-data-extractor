@@ -1,16 +1,47 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { activateConfiguration, deactivateConfiguration } from "../api";
+import { archiveConfiguration, createConfiguration, makeActiveConfiguration } from "../api";
+import { configurationKeys } from "../keys";
 import type { ConfigurationRecord } from "../types";
 
-export function useActivateConfigurationMutation(workspaceId: string, configurationId: string) {
-  return useMutation<ConfigurationRecord, Error, void>({
-    mutationFn: () => activateConfiguration(workspaceId, configurationId),
+export function useMakeActiveConfigurationMutation(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<ConfigurationRecord, Error, { configurationId: string }>({
+    mutationFn: ({ configurationId }) => makeActiveConfiguration(workspaceId, configurationId),
+    async onSuccess() {
+      await queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) });
+    },
   });
 }
 
-export function useDeactivateConfigurationMutation(workspaceId: string, configurationId: string) {
-  return useMutation<ConfigurationRecord, Error, void>({
-    mutationFn: () => deactivateConfiguration(workspaceId, configurationId),
+export function useArchiveConfigurationMutation(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<ConfigurationRecord, Error, { configurationId: string }>({
+    mutationFn: ({ configurationId }) => archiveConfiguration(workspaceId, configurationId),
+    async onSuccess() {
+      await queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) });
+    },
   });
 }
+
+export function useDuplicateConfigurationMutation(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ConfigurationRecord,
+    Error,
+    { sourceConfigurationId: string; displayName: string }
+  >({
+    mutationFn: ({ sourceConfigurationId, displayName }) =>
+      createConfiguration(workspaceId, {
+        displayName,
+        source: { type: "clone", configurationId: sourceConfigurationId },
+      }),
+    async onSuccess() {
+      await queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) });
+    },
+  });
+}
+

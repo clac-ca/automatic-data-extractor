@@ -111,7 +111,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-runs)
 
 - **Configuration & configuration package**  
-  Workspace concept that describes how ADE interprets and transforms documents. Backed by an installable Python `ade_config` package; versions are exposed as **Configuration versions** with a simple lifecycle: **Draft → Active → Inactive**.  
+  Workspace concept that describes how ADE interprets and transforms documents. Backed by an installable Python `ade_config` package; versions are exposed as **Configuration versions** with a simple lifecycle: **Draft → Active → Archived**.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#33-configuration), [`docs/08-configurations-and-config-builder.md`](./docs/08-configurations-and-config-builder.md)
 
 - **Build**  
@@ -230,8 +230,8 @@ The **Configurations** section (Configuration Builder) is where workspace owners
 
 Responsibilities:
 
-- Show configurations per workspace and their active/draft/inactive versions.
-- Provide actions: create, clone, export, activate/deactivate configurations.
+- Show configurations per workspace and their active/draft/archived versions.
+- Provide actions: create, clone, export, duplicate, make active, and archive configurations.
 - Launch the **Configuration Builder workbench** for editing a specific configuration (file tree + Monaco editor + console + validation).
 
 ### Workbench

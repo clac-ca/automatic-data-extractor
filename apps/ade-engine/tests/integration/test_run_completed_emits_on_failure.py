@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import openpyxl
-
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
 
 from ade_engine.application.engine import Engine
 from ade_engine.infrastructure.settings import Settings
