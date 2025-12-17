@@ -33,7 +33,7 @@ async def test_workspace_run_listing_filters_by_status(
     other_configuration = Configuration(
         workspace_id=workspace_id,
         display_name="Other Config",
-        status=ConfigurationStatus.ACTIVE,
+        status=ConfigurationStatus.DRAFT,
     )
     session.add_all([configuration, other_configuration])
     await session.flush()
