@@ -2480,10 +2480,8 @@ export type components = {
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
-             * @default INFO
-             * @enum {string}
              */
-            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
              * Input Document Id
              * @description Document identifier to ingest.
@@ -6174,7 +6172,7 @@ export interface operations {
                 validate_only?: boolean;
                 force_rebuild?: boolean;
                 debug?: boolean;
-                log_level?: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+                log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
                 input_document_id?: string | null;
             };
             header?: never;

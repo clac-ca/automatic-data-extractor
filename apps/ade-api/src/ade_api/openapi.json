@@ -5829,14 +5829,20 @@
             "in": "query",
             "required": false,
             "schema": {
-              "enum": [
-                "DEBUG",
-                "INFO",
-                "WARNING",
-                "ERROR"
+              "anyOf": [
+                {
+                  "enum": [
+                    "DEBUG",
+                    "INFO",
+                    "WARNING",
+                    "ERROR"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "type": "string",
-              "default": "INFO",
               "title": "Log Level"
             }
           },
@@ -10078,16 +10084,22 @@
             "default": false
           },
           "log_level": {
-            "type": "string",
-            "enum": [
-              "DEBUG",
-              "INFO",
-              "WARNING",
-              "ERROR"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Log Level",
-            "description": "Engine log level passed as --log-level to ade_engine.",
-            "default": "INFO"
+            "description": "Engine log level passed as --log-level to ade_engine."
           },
           "input_document_id": {
             "anyOf": [

@@ -44,13 +44,39 @@ app = typer.Typer(
         "    --config-package my-config\n"
         "```\n"
     ),
-    no_args_is_help=True,
+    invoke_without_command=True,
     rich_markup_mode="markdown",
 )
 
 # Subcommand groups
 app.add_typer(process_app, name="process")
 app.add_typer(config_app, name="config")
+
+
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+
+    typer.echo(__version__)
+    raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit.",
+        callback=_version_callback,
+        is_eager=True,
+    ),
+) -> None:
+    if version:
+        return
+
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
 
 
 @app.command("version")
