@@ -42,8 +42,8 @@ class RunCreateOptions(BaseSchema):
         default=False,
         description="Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
     )
-    log_level: RunLogLevel = Field(
-        default="INFO",
+    log_level: RunLogLevel | None = Field(
+        default=None,
         description="Engine log level passed as --log-level to ade_engine.",
     )
     input_document_id: UUIDStr | None = Field(
