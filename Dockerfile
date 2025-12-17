@@ -14,7 +14,8 @@ WORKDIR /app/apps/ade-web
 
 # Install frontend dependencies using only manifest files (better caching)
 COPY apps/ade-web/package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
 
 # Copy SPA sources required at build time
 COPY apps/ade-web/ ./
@@ -35,11 +36,13 @@ WORKDIR /app
 
 # System deps for building Python packages (kept out of final image)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends build-essential git rustc cargo unixodbc unixodbc-dev msodbcsql18 \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        cargo \
+        git \
+        rustc \
+        unixodbc \
+        unixodbc-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy minimal metadata first to maximize layer cache reuse
@@ -48,16 +51,18 @@ COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
-RUN python -m pip install -U pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -U pip
 
 # Now copy full sources
 COPY apps ./apps
 
 # Install CLI, engine, and API into an isolated prefix (/install)
-RUN python -m pip install --no-cache-dir --prefix=/install \
-    ./apps/ade-cli \
-    ./apps/ade-engine \
-    ./apps/ade-api
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --prefix=/install \
+        ./apps/ade-cli \
+        ./apps/ade-engine \
+        ./apps/ade-api
 
 # =============================================================================
 # Stage 3: Runtime image (what actually runs in prod)
@@ -76,10 +81,11 @@ WORKDIR /app
 # System deps for pyodbc / Azure SQL connectivity (runtime only)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc msodbcsql18 \
+    && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # OCI labels: nice to have in registries
