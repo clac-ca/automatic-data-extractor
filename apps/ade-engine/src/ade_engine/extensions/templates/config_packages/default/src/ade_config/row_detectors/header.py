@@ -46,6 +46,10 @@ def detect_header_row_by_known_words(
     # Tokenize across all string cells in the row.
     tokens: set[str] = set()
     for s in strings:
+        # Avoid treating email addresses as "header-like" just because they
+        # happen to contain words like "email" (e.g. foo@email.com).
+        if "@" in s:
+            continue
         normalized = re.sub(r"[^a-z0-9]+", " ", s.lower())
         tokens |= {tok for tok in normalized.split() if tok}
 

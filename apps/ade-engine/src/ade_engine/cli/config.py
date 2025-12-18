@@ -85,7 +85,16 @@ def init_config(
         "extensions/templates/config_packages/default"
     )
     with resources.as_file(template_root) as template_path:
-        shutil.copytree(template_path, target_dir, dirs_exist_ok=True)
+        shutil.copytree(
+            template_path,
+            target_dir,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(
+                "__pycache__",
+                "*.pyc",
+                "*.pyo",
+            ),
+        )
 
     # Adjust package name and layout
     src_pkg_dir = target_dir / "src" / "ade_config"

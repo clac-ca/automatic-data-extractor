@@ -93,6 +93,7 @@ def split_full_name(
     """Normalize full_name and emit derived first_name / last_name expressions."""
 
     full = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    full = pl.when(full.is_null() | (full == "")).then(pl.lit(None)).otherwise(full)
     comma = full.str.contains(",")
 
     comma_parts = full.str.split(",")
@@ -103,11 +104,36 @@ def split_full_name(
     space_first = space_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
     space_last = space_parts.list.get(-1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
 
-    first_name = pl.when(comma).then(comma_first).otherwise(space_first)
-    last_name = pl.when(comma).then(comma_last).otherwise(space_last)
-    normalized_full = pl.when(first_name.is_not_null() & last_name.is_not_null()).then(
-        pl.concat_str([first_name, last_name], separator=" ")
+    from_full_first = pl.when(comma).then(comma_first).otherwise(space_first)
+    from_full_last = pl.when(comma).then(comma_last).otherwise(space_last)
+
+    # Important: this transform may run even when the input file had no full_name
+    # column (the engine creates missing canonical fields as null). Avoid
+    # overwriting mapped first/last name columns with nulls in that case.
+    if "first_name" in table.columns:
+        existing = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
+        existing = pl.when(existing.is_null() | (existing == "")).then(pl.lit(None)).otherwise(existing)
+        first_name = pl.when(existing.is_null()).then(from_full_first).otherwise(existing)
+    else:
+        first_name = from_full_first
+
+    if "last_name" in table.columns:
+        existing = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
+        existing = pl.when(existing.is_null() | (existing == "")).then(pl.lit(None)).otherwise(existing)
+        last_name = pl.when(existing.is_null()).then(from_full_last).otherwise(existing)
+    else:
+        last_name = from_full_last
+
+    normalized_from_full = pl.when(from_full_first.is_not_null() & from_full_last.is_not_null()).then(
+        pl.concat_str([from_full_first, from_full_last], separator=" ")
     ).otherwise(full)
+
+    # If full_name is empty but parts exist, backfill it from first/last.
+    parts_present = first_name.is_not_null() & last_name.is_not_null()
+    from_parts = pl.when(parts_present).then(pl.concat_str([first_name, last_name], separator=" ")).otherwise(
+        pl.lit(None)
+    )
+    normalized_full = pl.when(full.is_not_null()).then(normalized_from_full).otherwise(from_parts)
 
     return {
         "full_name": normalized_full,
