@@ -48,7 +48,7 @@ from ade_engine.models.events import (
     WorkbookSummary,
 )
 from ade_engine.models.run import RunError, RunStatus
-from ade_engine.models.table import TableResult
+from ade_engine.models.table import TableRegion, TableResult
 
 _SEVERITY_ORDER: dict[str, int] = {"info": 0, "warning": 1, "error": 2}
 
@@ -320,29 +320,24 @@ class RunCompletionReportBuilder:
         table_index = int(getattr(table, "table_index", 0) or 0)
         row_count = int(getattr(table, "row_count", 0) or 0)
         source_cols = list(getattr(table, "source_columns", []) or [])
-
-        header_row_start = int(getattr(table, "header_row_index", 0) or 0) + 1
-        data_row_start = header_row_start + 1
-        data_row_count = row_count
-        header_inferred = False
-        data_end_row_number = header_row_start
-
-        region_info = getattr(table, "region", None)
-        if region_info is not None:
-            try:
-                header_row_start = int(region_info.header_row_index) + 1
-                data_row_start = int(region_info.data_start_row_index) + 1
-                data_end_row_number = int(region_info.data_end_row_index)
-                data_row_count = max(0, int(region_info.data_end_row_index) - int(region_info.data_start_row_index))
-                header_inferred = bool(region_info.header_inferred)
-            except Exception:
-                pass
-        if data_end_row_number <= 0:
-            data_end_row_number = data_row_start + data_row_count - 1 if data_row_count > 0 else header_row_start
-
         col_total = len(source_cols)
-        col_letter = get_column_letter(max(1, col_total))
-        region_a1 = f"A{header_row_start}:{col_letter}{data_end_row_number}"
+
+        source_region = getattr(table, "source_region", None)
+        if isinstance(source_region, TableRegion):
+            header_row_start = source_region.header_row
+            data_row_start = source_region.data_first_row
+            data_row_count = source_region.data_row_count
+            header_inferred = bool(source_region.header_inferred)
+            region_a1 = source_region.ref
+        else:
+            header_row_start = 1
+            data_row_start = 2
+            data_row_count = row_count
+            header_inferred = False
+
+            data_end_row_number = data_row_start + data_row_count - 1 if data_row_count > 0 else header_row_start
+            col_letter = get_column_letter(max(1, col_total))
+            region_a1 = f"A{header_row_start}:{col_letter}{data_end_row_number}"
 
         mapped_by_index = {int(c.source_index): c for c in (getattr(table, "mapped_columns", []) or [])}
         scores_by_column: dict[int, dict[str, float]] = dict(getattr(table, "column_scores", {}) or {})
@@ -438,14 +433,18 @@ class RunCompletionReportBuilder:
 
         outputs = None
         if output_written and output_path is not None:
-            rng = getattr(table, "output_range", None)
+            output_region = getattr(table, "output_region", None)
             out_sheet_name = getattr(table, "output_sheet_name", None)
-            if isinstance(rng, str) and rng.strip() and isinstance(out_sheet_name, str) and out_sheet_name.strip():
+            if (
+                isinstance(output_region, TableRegion)
+                and isinstance(out_sheet_name, str)
+                and out_sheet_name.strip()
+            ):
                 outputs = Outputs(
                     normalized=OutputsNormalized(
                         path=str(output_path),
                         sheet_name=str(getattr(table, "sheet_name", "") or ""),
-                        range_a1=f"{out_sheet_name}!{rng}",
+                        range_a1=f"{out_sheet_name}!{output_region.ref}",
                     )
                 )
 

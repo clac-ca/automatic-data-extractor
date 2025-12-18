@@ -14,7 +14,7 @@ from ade_engine.models.extension_outputs import RowDetectorResult
 
 
 @dataclass(frozen=True)
-class TableRegion:
+class DetectedTableRegion:
     header_row_index: int
     data_start_row_index: int
     data_end_row_index: int
@@ -175,7 +175,7 @@ def detect_table_regions(
     metadata: dict,
     input_file_name: str | None,
     logger: RunLogger,
-) -> list[TableRegion]:
+) -> list[DetectedTableRegion]:
     """Detect all table regions in a sheet.
 
     A table is defined as:
@@ -202,7 +202,7 @@ def detect_table_regions(
     )
 
     total_rows = len(classifications)
-    tables: list[TableRegion] = []
+    tables: list[DetectedTableRegion] = []
 
     header_idx: int | None = None
     header_inferred_from_data = False
@@ -213,7 +213,7 @@ def detect_table_regions(
             return
         data_start_idx = min(header_idx + 1, total_rows)
         tables.append(
-            TableRegion(
+            DetectedTableRegion(
                 header_row_index=header_idx,
                 data_start_row_index=data_start_idx,
                 data_end_row_index=end_idx,
@@ -252,7 +252,7 @@ def detect_table_regions(
         header_idx = _pick_best_header_row_index(rows=rows, scores=scores, classifications=classifications)
         data_start_idx = min(header_idx + 1, total_rows)
         tables.append(
-            TableRegion(
+            DetectedTableRegion(
                 header_row_index=header_idx,
                 data_start_row_index=data_start_idx,
                 data_end_row_index=total_rows,
@@ -290,4 +290,4 @@ def detect_table_regions(
     return tables
 
 
-__all__ = ["TableRegion", "detect_table_regions"]
+__all__ = ["DetectedTableRegion", "detect_table_regions"]

@@ -14,7 +14,7 @@ from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import ColumnDetectorContext
 from ade_engine.models.extension_outputs import ColumnDetectorResult
-from ade_engine.models.table import MappedColumn, SourceColumn
+from ade_engine.models.table import MappedColumn, SourceColumn, TableRegion
 
 
 def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> List[SourceColumn]:
@@ -55,6 +55,8 @@ def detect_and_map_columns(
     sheet_name: str,
     table: pl.DataFrame,
     source_columns: List[SourceColumn],
+    table_region: TableRegion | None = None,
+    table_index: int | None = None,
     registry: Registry,
     settings: Settings,
     state: dict,
@@ -90,6 +92,8 @@ def detect_and_map_columns(
             sheet_name=sheet_name,
             metadata=metadata,
             state=state,
+            table_region=table_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=logger,
         )
@@ -126,10 +130,12 @@ def detect_and_map_columns(
                     message=f"Column {col.index} detector {det.qualname} executed on {sheet_name}",
                     data={
                         "sheet_name": sheet_name,
-                    "column_index": col.index,
-                    "detector": detector_payload,
-                },
-            )
+                        "table_index": table_index,
+                        "table_region": table_region.ref if table_region else None,
+                        "column_index": col.index,
+                        "detector": detector_payload,
+                    },
+                )
             for field, delta in patch.items():
                 scores[field] = scores.get(field, 0.0) + delta
                 if debug:
@@ -154,6 +160,8 @@ def detect_and_map_columns(
                 message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
                 data={
                     "sheet_name": sheet_name,
+                    "table_index": table_index,
+                    "table_region": table_region.ref if table_region else None,
                     "column_index": col.index,
                     "detectors": detectors_run,
                     "scores": logged_scores,
@@ -180,14 +188,17 @@ def detect_and_map_columns(
                     "column_detector.candidate",
                     level=logging.DEBUG,
                     data={
-                    "column_index": col.index,
-                    "column_name": column_name,
-                    "header_text": _header_text(col.header),
-                    "best_field": best_field,
-                    "best_score": best_score,
-                    "scores": scores,
-                    "contributions": contributions.get(best_field, []),
-                },
+                        "sheet_name": sheet_name,
+                        "table_index": table_index,
+                        "table_region": table_region.ref if table_region else None,
+                        "column_index": col.index,
+                        "column_name": column_name,
+                        "header_text": _header_text(col.header),
+                        "best_field": best_field,
+                        "best_score": best_score,
+                        "scores": scores,
+                        "contributions": contributions.get(best_field, []),
+                    },
                 )
             mapping_candidates[col.index] = (best_field, best_score)
             field_competitors[best_field].append((col.index, best_score))

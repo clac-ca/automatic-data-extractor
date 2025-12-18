@@ -38,8 +38,9 @@ All hooks receive a `HookContext` expanded into keyword arguments by `call_exten
 - `state`: mutable dict shared across the run
 - `workbook`: workbook object (varies by stage)
 - `sheet`: worksheet object (varies by stage)
-- `table`: `pl.DataFrame | None`
-- `write_table`: `pl.DataFrame | None` (only meaningful for `on_table_written`)
+- `table`: `pl.DataFrame | None` (for `on_table_written`, this is the DataFrame that was written after output policies)
+- `region`: `TableRegion | None` (source region for `on_table_*`; output region for `on_table_written`)
+- `table_index`: `int | None` (0-based index within the sheet)
 - `input_file_name`: `str | None`
 - `logger`: `RunLogger`
 

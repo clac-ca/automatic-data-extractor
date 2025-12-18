@@ -8,6 +8,8 @@ from typing import Any, Mapping, Sequence
 
 import polars as pl
 
+from ade_engine.models.table import TableRegion
+
 ScorePatch = Mapping[str, float] | None
 
 
@@ -59,6 +61,8 @@ class ColumnDetectorContext:
     sheet_name: str
     metadata: Mapping[str, Any]
     state: dict[str, Any]
+    table_region: TableRegion | None = None
+    table_index: int | None = None
     input_file_name: str | None = None
     logger: Any | None = None
 
@@ -70,6 +74,8 @@ class TransformContext:
     settings: Any
     state: dict[str, Any]
     metadata: Mapping[str, Any]
+    table_region: TableRegion | None = None
+    table_index: int | None = None
     input_file_name: str | None = None
     logger: Any | None = None
 
@@ -81,20 +87,22 @@ class ValidateContext:
     settings: Any
     state: dict[str, Any]
     metadata: Mapping[str, Any]
+    table_region: TableRegion | None = None
+    table_index: int | None = None
     input_file_name: str | None = None
     logger: Any | None = None
 
 
 @dataclass(frozen=True)
 class HookContext:
-    hook_name: HookName
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
     workbook: Any | None = None
     sheet: Any | None = None
     table: pl.DataFrame | None = None
-    write_table: pl.DataFrame | None = None
+    table_region: TableRegion | None = None
+    table_index: int | None = None
     input_file_name: str | None = None
     logger: Any | None = None
 

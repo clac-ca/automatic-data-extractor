@@ -10,6 +10,7 @@ from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import ValidateContext
+from ade_engine.models.table import TableRegion
 
 _ISSUE_PREFIX = "__ade_issue__"
 _HAS_ISSUES_COL = "__ade_has_issues"
@@ -50,6 +51,8 @@ def apply_validators(
     settings,
     state: dict,
     metadata: dict,
+    table_region: TableRegion | None = None,
+    table_index: int | None = None,
     input_file_name: str | None,
     logger: RunLogger,
 ) -> pl.DataFrame:
@@ -80,6 +83,8 @@ def apply_validators(
                 settings=settings,
                 state=state,
                 metadata=metadata,
+                table_region=table_region,
+                table_index=table_index,
                 input_file_name=input_file_name,
                 logger=logger,
             )
@@ -116,6 +121,8 @@ def apply_validators(
             level=logging.DEBUG,
             data={
                 "issue_columns": issue_columns,
+                "table_index": table_index,
+                "table_region": table_region.ref if table_region else None,
                 "rows": table.height,
             },
         )

@@ -21,7 +21,7 @@ You can place files anywhere under `ade_config`; the built-in template auto-disc
 ## Plugin types
 - **Row detectors** score rows as header/data.
 - **Column detectors** score which canonical field a source column represents.
-- **Transforms (v3)** return Polars expressions (`pl.Expr` or `dict[str, pl.Expr]`) applied to the table DataFrame.
+- **Transforms (v3)** return Polars expressions (`pl.Expr`) applied to the table DataFrame.
 - **Validators (v3)** return issue-message expressions (null = valid, string = invalid); issues are stored inline in `__ade_issue__*` columns.
 - **Hooks** run at lifecycle points; table hooks may replace the DataFrame by returning a new one.
 

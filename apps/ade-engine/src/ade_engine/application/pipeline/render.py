@@ -4,13 +4,12 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 import polars as pl
-from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.infrastructure.settings import Settings
-from ade_engine.models.table import TableResult
+from ade_engine.models.table import TableRegion, TableResult
 
 _RESERVED_PREFIX = "__ade_"
 
@@ -79,12 +78,19 @@ def render_table(
     col_count = len(headers)
     if col_count > 0 and rows_written > 0:
         end_row = start_row + rows_written - 1
-        end_col = get_column_letter(col_count)
-        output_range = f"A{start_row}:{end_col}{end_row}"
+        output_region = TableRegion(
+            header_row=start_row,
+            first_col=1,
+            last_row=end_row,
+            last_col=col_count,
+            header_inferred=table_result.source_region.header_inferred,
+        )
+        output_range = output_region.ref
     else:
+        output_region = None
         output_range = ""
 
-    table_result.output_range = output_range or None
+    table_result.output_region = output_region
     table_result.output_sheet_name = writer.worksheet.title
 
     logger.event(

@@ -5,6 +5,8 @@ description = "Example ADE config package (registry-based)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "openpyxl==3.1.5",
+  "polars==1.36.1",
   "ade-engine",
 ]
 

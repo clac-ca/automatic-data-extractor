@@ -1,145 +1,800 @@
+"""ADE config hook: `on_workbook_before_save` (openpyxl)
+
+When this runs
+--------------
+- Once per input file, after all sheets/tables have been processed and written to the
+  OUTPUT openpyxl workbook.
+- Immediately before the workbook is saved to disk.
+
+What it's useful for
+--------------------
+- Workbook-wide polish (properties, UX defaults, print setup)
+- Adding helper sheets (Run Summary / Notes)
+- Final pass features (Excel Tables, conditional formatting, data validation)
+- Hiding/protecting sheets
+
+Return value
+------------
+- This hook MUST return `None` (returning anything else raises HookError).
+- `sheet` and `table` are always `None` for this hook.
+
+Template goals
+--------------
+- Keep examples self-contained and easy to copy/paste.
+- Keep most imports inside examples; `openpyxl` is imported at module scope so type annotations are explicit.
+"""
+
 from __future__ import annotations
 
+from typing import MutableMapping
+
+import openpyxl
+
 
 # -----------------------------------------------------------------------------
-# Hook: on_workbook_before_save
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
 #
-# When it runs:
-# - Called once per input workbook, after all sheets/tables have been processed
-#   and written to the OUTPUT workbook, and immediately before the workbook is
-#   saved to disk (see `metadata["output_file"]`).
-#
-# What it's good for:
-# - Workbook-wide formatting (freeze panes, filters, print setup, styles)
-# - Adding summary/notes sheets using information collected in `state`
-# - Setting workbook properties (title/author) or hiding helper sheets
-#
-# Notes:
-# - `workbook` is the output openpyxl `Workbook`.
-# - `sheet` and `table` are always `None` for this hook.
+# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
+# -----------------------------------------------------------------------------
+# Registration
 # -----------------------------------------------------------------------------
 
 
-def register(registry):
+def register(registry) -> None:
+    # Default (safe): a minimal hook that just logs.
     registry.register_hook(on_workbook_before_save, hook="on_workbook_before_save", priority=0)
 
     # Examples (uncomment to enable)
-    # registry.register_hook(on_workbook_before_save_example_1_set_properties, hook="on_workbook_before_save", priority=0)
-    # registry.register_hook(on_workbook_before_save_example_2_apply_worksheet_ux, hook="on_workbook_before_save", priority=0)
-    # registry.register_hook(on_workbook_before_save_example_3_format_headers_and_widths, hook="on_workbook_before_save", priority=0)
-    # registry.register_hook(on_workbook_before_save_example_4_write_notes_sheet, hook="on_workbook_before_save", priority=0)
+    # registry.register_hook(on_workbook_before_save_example_1_set_properties_and_calc, hook="on_workbook_before_save", priority=10)
+    # registry.register_hook(on_workbook_before_save_example_2_standardize_sheet_ux_and_print, hook="on_workbook_before_save", priority=20)
+    # registry.register_hook(on_workbook_before_save_example_3_namedstyle_headers, hook="on_workbook_before_save", priority=30)
+    # registry.register_hook(on_workbook_before_save_example_4_autosize_columns_and_number_formats, hook="on_workbook_before_save", priority=40)
+    # registry.register_hook(on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart, hook="on_workbook_before_save", priority=50)
+    # registry.register_hook(on_workbook_before_save_example_6_convert_ranges_to_excel_tables, hook="on_workbook_before_save", priority=60)
+    # registry.register_hook(on_workbook_before_save_example_7_apply_conditional_formatting, hook="on_workbook_before_save", priority=70)
+    # registry.register_hook(on_workbook_before_save_example_8_add_data_validation_dropdowns, hook="on_workbook_before_save", priority=80)
+    # registry.register_hook(on_workbook_before_save_example_9_hide_helper_sheets_and_set_active, hook="on_workbook_before_save", priority=90)
+    # registry.register_hook(on_workbook_before_save_example_10_protect_sheets, hook="on_workbook_before_save", priority=100)
+
+
+# -----------------------------------------------------------------------------
+# Default hook (minimal + safe)
+# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save(
     *,
-    hook_name,  # HookName enum value for this stage
     settings,  # Engine Settings
     metadata: dict,  # Run metadata (filenames, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook,  # Output workbook (openpyxl Workbook)
-    sheet,  # Always None for this hook
-    table,  # Always None for this hook
-    write_table,  # Always None for this hook
+    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
+    sheet: None,  # Always None for this hook
+    table: None,  # Always None for this hook
     input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
-    """Finalize the output workbook before it is saved."""
+    """Default: log basic info (safe, no workbook modifications)."""
+    _ = (settings, state, sheet, table)  # unused by default
+
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, MutableMapping):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+
+    counters = cfg.get("counters")
+    if not isinstance(counters, MutableMapping):
+        counters = {}
+        cfg["counters"] = counters
+    counters["workbooks_before_save_seen"] = int(counters.get("workbooks_before_save_seen", 0) or 0) + 1
 
     if logger:
-        logger.info("Config hook: workbook before save (%s)", metadata.get("output_file", ""))
+        out = metadata.get("output_file") or ""
+        in_name = input_file_name or metadata.get("input_file") or metadata.get("input_file_name") or ""
+        logger.info(
+            "on_workbook_before_save: input=%s output=%s sheets=%d",
+            in_name,
+            out,
+            len(getattr(workbook, "worksheets", []) or []),
+        )
 
 
+# -----------------------------------------------------------------------------
+# Example 1: workbook properties + force formula recalculation
+# -----------------------------------------------------------------------------
 
-def on_workbook_before_save_example_1_set_properties(
+
+def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: set workbook properties and choose which sheet opens by default."""
+    """Example 1: Set workbook properties and ask Excel to recalc formulas on open.
 
-    workbook.properties.creator = "Automatic Data Extractor (ADE)"
-    workbook.properties.title = f"Normalized - {metadata.get('input_file_name', '')}"
+    Useful when:
+      - You generate files for humans (title/author helps searchability).
+      - You write formulas (openpyxl does NOT compute formulas; Excel will).
+    """
+    _ = (settings, state, sheet, table)
+
+    from datetime import datetime, timezone
+
+    # Core properties (Excel: File -> Info)
+    props = workbook.properties
+    props.creator = "Automatic Data Extractor (ADE)"
+    props.lastModifiedBy = "ADE"
+
+    now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    props.created = now_utc_naive
+    props.modified = now_utc_naive
+
+    input_name = input_file_name or metadata.get("input_file_name") or metadata.get("input_file") or ""
+    if input_name:
+        props.title = f"Normalized - {input_name}"
+        props.subject = input_name
+
+    out = metadata.get("output_file") or ""
+    if out:
+        props.description = f"Generated by ADE. Output: {out}"
+
+    # Ask Excel to recalculate on open (important if you add formulas).
+    try:
+        workbook.calculation.fullCalcOnLoad = True
+    except Exception:
+        # Some workbook objects/openpyxl versions may not expose this—safe to ignore.
+        pass
+
+    # Choose which sheet opens by default (0 = first sheet).
     workbook.active = 0
 
+    if logger:
+        logger.info("Example 1: set workbook properties + fullCalcOnLoad")
 
-def on_workbook_before_save_example_2_apply_worksheet_ux(
+
+# -----------------------------------------------------------------------------
+# Example 2: standard sheet UX + print setup everywhere
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: apply consistent worksheet UX settings."""
+    """Example 2: Apply consistent worksheet UX and print settings.
 
-    for ws in workbook.worksheets:
-        ws.freeze_panes = "A2"  # keep header row visible while scrolling
+    Demonstrates:
+      - freeze panes
+      - gridlines off
+      - auto-filter on the used range
+      - print title rows + landscape + fit-to-width
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    for ws in getattr(workbook, "worksheets", []) or []:
+        # Skip truly empty sheets
+        if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value in (None, ""):
+            continue
+
+        # Freeze top row (header stays visible)
+        if ws.max_row >= 2:
+            ws.freeze_panes = "A2"
+
+        # Cleaner look for reports
         ws.sheet_view.showGridLines = False
-        if ws.max_row > 1 and ws.max_column > 1:
+
+        # Filter dropdowns in header row (only makes sense if you have header + rows)
+        if ws.max_row >= 2 and ws.max_column >= 1:
             ws.auto_filter.ref = ws.dimensions
 
+        # Print defaults
+        try:
+            ws.print_title_rows = "1:1"
+            ws.page_setup.orientation = "landscape"
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 0
+        except Exception:
+            pass
 
-def on_workbook_before_save_example_3_format_headers_and_widths(
+    if logger:
+        logger.info("Example 2: standardized worksheet UX + print setup")
+
+
+# -----------------------------------------------------------------------------
+# Example 3: NamedStyle + header row styling (fast and reusable)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_3_namedstyle_headers(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: make header rows bold and set simple column widths."""
+    """Example 3: Create a NamedStyle and apply it to header rows.
 
+    Why NamedStyle?
+      - Consistent styles across workbook
+      - Easy to apply (cell.style = "NAME")
+      - Avoids copy/pasting style objects everywhere
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
+
+    # Create (or reuse) a named header style
+    thin = Side(style="thin", color="D9D9D9")
+    header_style = NamedStyle(
+        name="ADE_Header",
+        font=Font(bold=True, color="1F2937"),
+        alignment=Alignment(vertical="top", wrap_text=True),
+        fill=PatternFill("solid", fgColor="F3F4F6"),
+        border=Border(bottom=thin),
+    )
+
+    existing = set()
+    for item in getattr(workbook, "named_styles", []) or []:
+        if isinstance(item, str):
+            existing.add(item)
+        else:
+            existing.add(getattr(item, "name", ""))
+
+    if header_style.name not in existing:
+        workbook.add_named_style(header_style)
+
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.max_row < 1 or ws.max_column < 1:
+            continue
+        for cell in ws[1]:
+            cell.style = header_style.name
+        try:
+            ws.row_dimensions[1].height = 20
+        except Exception:
+            pass
+
+    if logger:
+        logger.info("Example 3: applied NamedStyle '%s' to header rows", header_style.name)
+
+
+# -----------------------------------------------------------------------------
+# Example 4: autosize columns (sampled) + basic number formats by header
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 4: Auto-size columns (fast sampling) and set number formats by header name.
+
+    Demonstrates:
+      - values_only iteration for speed
+      - width estimation
+      - applying number formats by header heuristics (common in exports)
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import numbers
+
+    SAMPLE_ROWS = 250
+    MIN_W = 10
+    MAX_W = 60
+
+    # Simple header->format mapping (customize to your outputs)
+    # Tip: prefer stable header names in your pipeline if you want reliable formatting.
+    HEADER_FORMATS = {
+        "date": numbers.FORMAT_DATE_YYYYMMDD2,
+        "created_at": numbers.FORMAT_DATE_DATETIME,
+        "updated_at": numbers.FORMAT_DATE_DATETIME,
+        "amount": numbers.FORMAT_CURRENCY_USD_SIMPLE,
+        "total": numbers.FORMAT_NUMBER_00,
+        "percent": "0.00%",
+    }
+
+    def guess_format(header: str | None) -> str | None:
+        if not header:
+            return None
+        key = str(header).strip().lower()
+        return HEADER_FORMATS.get(key)
+
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.max_row < 1 or ws.max_column < 1:
+            continue
+
+        # --- Auto-size widths (sampled) ---
+        max_row = min(ws.max_row, max(1, SAMPLE_ROWS))
+        widths = [0] * ws.max_column
+
+        for row in ws.iter_rows(
+            min_row=1,
+            max_row=max_row,
+            min_col=1,
+            max_col=ws.max_column,
+            values_only=True,
+        ):
+            for i, v in enumerate(row):
+                if v is None:
+                    continue
+                s = str(v)
+                if "\n" in s:
+                    s = max(s.splitlines(), key=len)
+                widths[i] = max(widths[i], len(s))
+
+        for col_idx, max_len in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = float(min(max(max_len + 2, MIN_W), MAX_W))
+
+        # --- Apply number formats by header (bounded) ---
+        # Performance note: formatting every cell can be slow on giant sheets.
+        # Keep it to columns that match, and optionally cap rows.
+        header_row = [c.value for c in ws[1]]
+        for col_idx, header_val in enumerate(header_row, start=1):
+            fmt = guess_format(header_val)
+            if not fmt:
+                continue
+
+            # Apply format to the data cells only (skip header)
+            max_format_row = min(ws.max_row, 20_000)
+            for cell in ws.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2, max_row=max_format_row):
+                for c in cell:
+                    c.number_format = fmt
+
+    if logger:
+        logger.info("Example 4: autosized columns + applied basic number formats")
+
+
+# -----------------------------------------------------------------------------
+# Example 5: add a Run Summary sheet (links + formulas + chart)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 5: Create a “Run Summary” sheet at the front of the workbook.
+
+    Demonstrates:
+      - creating/replacing a sheet
+      - internal hyperlinks to worksheets
+      - formulas (Excel computes on open)
+      - a simple chart
+    """
+    _ = (settings, state, sheet, table)
+
+    from datetime import datetime, timezone
+    from openpyxl.chart import BarChart, Reference
     from openpyxl.styles import Alignment, Font
 
-    header_font = Font(bold=True)
-    header_alignment = Alignment(wrap_text=True, vertical="top")
-    for ws in workbook.worksheets:
-        for cell in ws[1]:
-            cell.font = header_font
-            cell.alignment = header_alignment
-            if cell.value:
-                width = min(max(len(str(cell.value)) + 2, 12), 40)
-                ws.column_dimensions[cell.column_letter].width = width
+    def safe_sheet_ref(title: str) -> str:
+        # Quote sheet names with spaces/specials; escape single quotes by doubling.
+        if any(ch in title for ch in (" ", "-", "!", "'", "(", ")", ",")):
+            return "'" + title.replace("'", "''") + "'"
+        return title
+
+    # Replace existing sheet if present
+    title = "Run Summary"
+    if title in getattr(workbook, "sheetnames", []):
+        workbook.remove(workbook[title])
+    ws = workbook.create_sheet(title=title, index=0)
+
+    # Header
+    ws["A1"] = "Run Summary"
+    ws["A1"].font = Font(size=16, bold=True)
+    ws["A1"].alignment = Alignment(vertical="center")
+    ws.merge_cells("A1:D1")
+    ws.row_dimensions[1].height = 24
+
+    # Metadata
+    ws["A3"] = "input_file"
+    ws["B3"] = metadata.get("input_file") or input_file_name or ""
+    ws["A4"] = "output_file"
+    ws["B4"] = metadata.get("output_file") or ""
+    ws["A5"] = "generated_at_utc"
+    ws["B5"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
+
+    # Sheet stats table
+    ws.append([])
+    header_row_idx = ws.max_row + 1
+    ws.append(["sheet", "rows", "columns", "notes"])
+
+    data_sheets = [s for s in (getattr(workbook, "worksheets", []) or []) if s.title != ws.title]
+
+    for s in data_sheets:
+        if s.max_row == 1 and s.max_column == 1 and s["A1"].value in (None, ""):
+            rows = 0
+            cols = 0
+        else:
+            rows = max(int(getattr(s, "max_row", 0) or 0) - 1, 0)
+            cols = int(getattr(s, "max_column", 0) or 0)
+
+        r = ws.max_row + 1
+        link = ws.cell(row=r, column=1, value=s.title)
+        link.hyperlink = f"#{safe_sheet_ref(s.title)}!A1"
+        link.style = "Hyperlink"
+        ws.cell(row=r, column=2, value=rows)
+        ws.cell(row=r, column=3, value=cols)
+        ws.cell(row=r, column=4, value="")
+
+    end_row = ws.max_row
+    ws.freeze_panes = f"A{header_row_idx + 1}"
+    ws.sheet_view.showGridLines = False
+
+    # Totals (Excel computes on open)
+    ws.cell(row=end_row + 2, column=1, value="TOTAL")
+    ws.cell(row=end_row + 2, column=2, value=f"=SUM(B{header_row_idx+1}:B{end_row})")
+    ws.cell(row=end_row + 2, column=3, value=f"=MAX(C{header_row_idx+1}:C{end_row})")
+
+    # Chart: rows per sheet
+    if end_row >= header_row_idx + 1:
+        chart = BarChart()
+        chart.title = "Rows per sheet"
+        chart.y_axis.title = "rows"
+        chart.x_axis.title = "sheet"
+        data = Reference(ws, min_col=2, min_row=header_row_idx, max_row=end_row)  # includes header
+        cats = Reference(ws, min_col=1, min_row=header_row_idx + 1, max_row=end_row)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.height = 7
+        chart.width = 16
+        ws.add_chart(chart, "F3")
+
+    # Make summary the active sheet by default
+    workbook.active = 0
+
+    if logger:
+        logger.info("Example 5: wrote Run Summary sheet (sheets=%d)", len(data_sheets))
 
 
-def on_workbook_before_save_example_4_write_notes_sheet(
+# -----------------------------------------------------------------------------
+# Example 6: convert each used range into an Excel Table (structured refs)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: write a simple Notes sheet from items collected in `state`."""
+    """Example 6: Convert each sheet's used range to an Excel Table.
 
-    notes = state.get("notes") or []
-    if not notes:
-        return
+    Demonstrates:
+      - openpyxl Table objects
+      - table styling (banded rows)
+      - ensuring header uniqueness (Excel requires unique header names)
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
 
-    notes_ws = workbook.create_sheet(title="Notes")
-    notes_ws.append(["note"])
-    for note in notes:
-        notes_ws.append([note])
+    import re
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    def sanitize_table_name(name: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9_]", "_", name or "").strip("_")
+        if not cleaned:
+            cleaned = "Table"
+        if cleaned[0].isdigit():
+            cleaned = f"T_{cleaned}"
+        return cleaned[:255]
+
+    def ensure_unique_headers(ws) -> None:
+        headers = []
+        for idx, cell in enumerate(ws[1], start=1):
+            raw = cell.value
+            txt = str(raw).strip().replace("\n", " ") if raw not in (None, "") else f"column_{idx}"
+            headers.append(txt)
+
+        seen: dict[str, int] = {}
+        fixed = []
+        changed = False
+        for h in headers:
+            if h in seen:
+                seen[h] += 1
+                fixed.append(f"{h}_{seen[h]}")
+                changed = True
+            else:
+                seen[h] = 1
+                fixed.append(h)
+        if changed:
+            for cell, val in zip(ws[1], fixed):
+                cell.value = val
+
+    existing_names: set[str] = set()
+    for ws in getattr(workbook, "worksheets", []) or []:
+        for t in getattr(ws, "tables", {}).values():
+            n = getattr(t, "displayName", None)
+            if n:
+                existing_names.add(n)
+
+    created = 0
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.max_row < 2 or ws.max_column < 1:
+            continue
+        if getattr(ws, "tables", None) and len(ws.tables) > 0:
+            continue
+
+        ensure_unique_headers(ws)
+
+        ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
+        base = sanitize_table_name(f"T_{ws.title}")
+        name = base
+        i = 2
+        while name in existing_names:
+            name = f"{base}_{i}"
+            i += 1
+
+        table_obj = Table(displayName=name, ref=ref)
+        table_obj.tableStyleInfo = TableStyleInfo(
+            name="TableStyleMedium9",
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=True,
+            showColumnStripes=False,
+        )
+
+        try:
+            ws.add_table(table_obj)
+            existing_names.add(name)
+            created += 1
+        except Exception as e:
+            if logger:
+                logger.info("Example 6: skipped table on '%s' (%s)", ws.title, e)
+
+    if logger:
+        logger.info("Example 6: created Excel Tables on %d sheet(s)", created)
+
+
+# -----------------------------------------------------------------------------
+# Example 7: conditional formatting (blanks, negatives, and a color scale)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_7_apply_conditional_formatting(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 7: Apply conditional formatting to each sheet's used range.
+
+    Demonstrates:
+      - FormulaRule (blanks)
+      - CellIsRule (negative numbers)
+      - ColorScaleRule (heatmap-ish for a numeric column)
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, FormulaRule
+    from openpyxl.styles import PatternFill
+    from openpyxl.utils import get_column_letter
+
+    fill_blank = PatternFill("solid", fgColor="FFF7D6")  # soft yellow
+    fill_negative = PatternFill("solid", fgColor="FADBD8")  # soft red
+
+    applied = 0
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.max_row < 2 or ws.max_column < 1:
+            continue
+
+        last_col = get_column_letter(ws.max_column)
+        data_range = f"A2:{last_col}{ws.max_row}"
+
+        # Highlight blank/whitespace cells (Excel evaluates per-cell)
+        ws.conditional_formatting.add(
+            data_range,
+            FormulaRule(formula=["LEN(TRIM(A2))=0"], fill=fill_blank),
+        )
+
+        # Highlight negative numbers
+        ws.conditional_formatting.add(
+            data_range,
+            CellIsRule(operator="lessThan", formula=["0"], fill=fill_negative),
+        )
+
+        # Add a color scale to column B (if present) as a simple visual.
+        # Adjust to your numeric column(s).
+        if ws.max_column >= 2 and ws.max_row >= 3:
+            col_b = f"B2:B{ws.max_row}"
+            ws.conditional_formatting.add(
+                col_b,
+                ColorScaleRule(
+                    start_type="min",
+                    start_color="FEE2E2",  # light red
+                    mid_type="percentile",
+                    mid_value=50,
+                    mid_color="FEF9C3",  # light yellow
+                    end_type="max",
+                    end_color="DCFCE7",  # light green
+                ),
+            )
+
+        applied += 1
+
+    if logger:
+        logger.info("Example 7: applied conditional formatting on %d sheet(s)", applied)
+
+
+# -----------------------------------------------------------------------------
+# Example 8: data validation dropdowns (simple workflow columns)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_8_add_data_validation_dropdowns(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 8: Add a dropdown (DataValidation) to a 'status' column if present.
+
+    Demonstrates:
+      - scanning header row for a specific column name
+      - adding a list validation to a whole column range
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from openpyxl.utils import get_column_letter
+
+    STATUS_VALUES = "todo,in_review,blocked,done"
+    TARGET_HEADERS = {"status", "review_status"}
+
+    updated = 0
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.max_row < 2 or ws.max_column < 1:
+            continue
+
+        headers = [str(c.value).strip().lower() if c.value not in (None, "") else "" for c in ws[1]]
+        try:
+            col_idx = next(i + 1 for i, h in enumerate(headers) if h in TARGET_HEADERS)
+        except StopIteration:
+            continue
+
+        col_letter = get_column_letter(col_idx)
+        dv = DataValidation(type="list", formula1=f'"{STATUS_VALUES}"', allow_blank=True)
+        ws.add_data_validation(dv)
+
+        # Apply to entire used range in that column (excluding header)
+        dv.add(f"{col_letter}2:{col_letter}{ws.max_row}")
+        updated += 1
+
+    if logger:
+        logger.info("Example 8: added status dropdown validation on %d sheet(s)", updated)
+
+
+# -----------------------------------------------------------------------------
+# Example 9: hide helper sheets (by naming convention) + set active sheet
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 9: Hide helper sheets and choose a default active sheet.
+
+    Common convention:
+      - helper sheets start with "_" or "tmp"
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    hidden = 0
+    for ws in getattr(workbook, "worksheets", []) or []:
+        if ws.title.startswith("_") or ws.title.lower().startswith("tmp"):
+            try:
+                ws.sheet_state = "hidden"
+                hidden += 1
+            except Exception:
+                pass
+
+    # Prefer "Run Summary" if present, else first visible sheet.
+    if "Run Summary" in getattr(workbook, "sheetnames", []):
+        workbook.active = workbook.sheetnames.index("Run Summary")
+    else:
+        workbook.active = 0
+
+    if logger:
+        logger.info("Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, workbook.active)
+
+
+# -----------------------------------------------------------------------------
+# Example 10: protect sheets from accidental edits (not strong security)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_before_save_example_10_protect_sheets(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: None,
+    table: None,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example 10: Protect worksheets from accidental edits.
+
+    IMPORTANT:
+      - Excel sheet protection is not strong security.
+      - Use it to reduce accidental changes, not for secrets.
+    """
+    _ = (settings, metadata, state, sheet, table, input_file_name)
+
+    PASSWORD = "change-me"  # If you use this, set it via env/settings instead of hardcoding.
+    protected = 0
+
+    for ws in getattr(workbook, "worksheets", []) or []:
+        # Skip empty sheets
+        if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value in (None, ""):
+            continue
+        try:
+            ws.protection.sheet = True
+            ws.protection.set_password(PASSWORD)
+            protected += 1
+        except Exception:
+            pass
+
+    if logger:
+        logger.info("Example 10: protected sheets=%d", protected)

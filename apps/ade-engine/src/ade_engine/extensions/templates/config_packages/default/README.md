@@ -99,12 +99,14 @@ if column_index + 1 < len(table.columns):
 
 Transforms return Polars expressions:
 
-- `pl.Expr` for one output column
-- `dict[str, pl.Expr]` to populate multiple output columns from one input field
+- `pl.Expr` for the output column
+- `None` for no change
 
 Transforms run after mapping, so canonical field names exist at that point.
 You may reference other fields using `pl.col("other_field")`, but guard with
 `if "other_field" in table.columns` when optional.
+
+For derived columns or multi-column edits, use a table hook (e.g., `on_table_mapped` or `on_table_transformed`).
 
 ## Validators
 

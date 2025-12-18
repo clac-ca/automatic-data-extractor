@@ -8,7 +8,7 @@ import polars as pl
 from ade_engine.application.run_completion_report import RunCompletionReportBuilder
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.run import RunStatus
-from ade_engine.models.table import SourceColumn, TableRegionInfo, TableResult
+from ade_engine.models.table import SourceColumn, TableRegion, TableResult
 
 
 def test_run_completion_report_allows_hooks_to_filter_rows() -> None:
@@ -31,8 +31,7 @@ def test_run_completion_report_allows_hooks_to_filter_rows() -> None:
             sheet_name="Sheet1",
             sheet_index=0,
             table_index=0,
-            header_row_index=0,
-            region=TableRegionInfo(header_row_index=0, data_start_row_index=1, data_end_row_index=5),
+            source_region=TableRegion(header_row=1, first_col=1, last_row=5, last_col=len(source_columns)),
             source_columns=source_columns,
             table=filtered_table,
             row_count=filtered_table.height,

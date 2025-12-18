@@ -7,7 +7,7 @@ from ade_engine.application.pipeline.render import SheetWriter, render_table
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.extension_contexts import FieldDef
-from ade_engine.models.table import TableResult
+from ade_engine.models.table import TableRegion, TableResult
 
 
 class DummyLogger:
@@ -36,7 +36,18 @@ def test_render_writes_non_reserved_columns_by_default():
         }
     )
 
-    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    table_result = TableResult(
+        sheet_name="Sheet1",
+        table=table,
+        source_region=TableRegion(
+            header_row=1,
+            first_col=1,
+            last_row=1 + table.height,
+            last_col=len(table.columns),
+        ),
+        source_columns=[],
+        row_count=table.height,
+    )
     reg = _registry_with_fields("email", "name")
 
     write_table = render_table(
@@ -50,7 +61,8 @@ def test_render_writes_non_reserved_columns_by_default():
     assert write_table.columns == ["email", "name", "Notes"]
     assert [cell.value for cell in ws[1]] == ["email", "name", "Notes"]
     assert [cell.value for cell in ws[2]] == ["a@example.com", "Alice", "note-1"]
-    assert table_result.output_range == "A1:C2"
+    assert table_result.output_region is not None
+    assert table_result.output_region.ref == "A1:C2"
 
 
 def test_render_remove_unmapped_columns_drops_non_canonical():
@@ -58,7 +70,18 @@ def test_render_remove_unmapped_columns_drops_non_canonical():
     ws = wb.active
 
     table = pl.DataFrame({"email": ["a@example.com"], "name": ["Alice"], "Notes": ["note-1"]})
-    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    table_result = TableResult(
+        sheet_name="Sheet1",
+        table=table,
+        source_region=TableRegion(
+            header_row=1,
+            first_col=1,
+            last_row=1 + table.height,
+            last_col=len(table.columns),
+        ),
+        source_columns=[],
+        row_count=table.height,
+    )
     reg = _registry_with_fields("email", "name")
 
     write_table = render_table(
@@ -78,7 +101,18 @@ def test_render_write_diagnostics_columns_keeps_reserved_columns():
     ws = wb.active
 
     table = pl.DataFrame({"email": ["a@example.com"], "__ade_issue__email": ["bad email"]})
-    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    table_result = TableResult(
+        sheet_name="Sheet1",
+        table=table,
+        source_region=TableRegion(
+            header_row=1,
+            first_col=1,
+            last_row=1 + table.height,
+            last_col=len(table.columns),
+        ),
+        source_columns=[],
+        row_count=table.height,
+    )
     reg = _registry_with_fields("email")
 
     write_table = render_table(
@@ -91,4 +125,3 @@ def test_render_write_diagnostics_columns_keeps_reserved_columns():
 
     assert write_table.columns == ["email", "__ade_issue__email"]
     assert [cell.value for cell in ws[1]] == ["email", "__ade_issue__email"]
-

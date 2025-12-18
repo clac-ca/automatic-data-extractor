@@ -11,7 +11,7 @@ from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
 
 
-def test_default_template_full_name_transform_is_safe_for_non_comma_names():
+def test_default_template_full_name_transform_normalizes_common_formats():
     template_dir = (
         Path(__file__).resolve().parents[2]
         / "src/ade_engine/extensions/templates/config_packages/default"
@@ -31,6 +31,5 @@ def test_default_template_full_name_transform_is_safe_for_non_comma_names():
         logger=NullLogger(),
     )
 
-    assert out["first_name"].to_list()[:2] == ["John", "Jane"]
-    assert out["last_name"].to_list()[:2] == ["Doe", "Doe"]
-    assert out["full_name"].to_list()[:2] == ["John Doe", "Jane Doe"]
+    assert out.columns == ["full_name"]
+    assert out["full_name"].to_list() == ["John Doe", "Jane Doe", "Cher", None]
