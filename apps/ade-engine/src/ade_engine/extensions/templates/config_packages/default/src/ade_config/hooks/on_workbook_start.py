@@ -22,6 +22,11 @@ from __future__ import annotations
 def register(registry):
     registry.register_hook(on_workbook_start, hook="on_workbook_start", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_workbook_start_example_1_fail_fast_missing_sheets, hook="on_workbook_start", priority=0)
+    # registry.register_hook(on_workbook_start_example_2_set_workbook_flags, hook="on_workbook_start", priority=0)
+    # registry.register_hook(on_workbook_start_example_3_emit_structured_event, hook="on_workbook_start", priority=0)
+
 
 def on_workbook_start(
     *,
@@ -52,24 +57,69 @@ def on_workbook_start(
             len(sheet_names),
         )
 
-    # -----------------
-    # Uncommentable examples
-    # -----------------
 
-    # Example 1) Fail fast if required worksheets are missing.
-    # required = {"Orders", "Customers"}
-    # missing = sorted(required - set(sheet_names))
-    # if missing:
-    #     raise ValueError(f"Missing required worksheet(s): {', '.join(missing)}")
+def on_workbook_start_example_1_fail_fast_missing_sheets(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: fail fast if required worksheets are missing."""
 
-    # Example 2) Store workbook-level flags for later hooks (like transforms/validators).
-    # state["vendor"] = "acme"
-    # state["treat_blank_as_null"] = True
+    required = {"Orders", "Customers"}
+    sheet_names = list(getattr(workbook, "sheetnames", []) or [])
+    missing = sorted(required - set(sheet_names))
+    if missing:
+        raise ValueError(f"Missing required worksheet(s): {', '.join(missing)}")
 
-    # Example 3) Emit a config-scoped event (no strict schema required).
-    # if logger:
-    #     cfg_logger = logger.with_namespace("engine.config")
-    #     cfg_logger.event(
-    #         "workbook.start",
-    #         data={"input_file": metadata.get("input_file"), "sheet_names": sheet_names},
-    #     )
+
+def on_workbook_start_example_2_set_workbook_flags(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: store workbook-level flags for later hooks (like transforms/validators)."""
+
+    state["vendor"] = "acme"
+    state["treat_blank_as_null"] = True
+
+
+def on_workbook_start_example_3_emit_structured_event(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: emit a config-scoped event (no strict schema required)."""
+
+    if not logger:
+        return
+
+    sheet_names = list(getattr(workbook, "sheetnames", []) or [])
+    cfg_logger = logger.with_namespace("engine.config")
+    cfg_logger.event(
+        "workbook.start",
+        data={"input_file": metadata.get("input_file"), "sheet_names": sheet_names},
+    )
