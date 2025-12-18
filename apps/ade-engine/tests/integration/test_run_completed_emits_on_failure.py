@@ -45,12 +45,12 @@ def register(registry):
         """
 from ade_engine.models import FieldDef
 
-def detect_email(*, header, **_):
-    header = (header or "").strip().lower()
+def detect_email(*, header_text: str, **_):
+    header = (header_text or "").strip().lower()
     return {"email": 1.0} if header == "email" else None
 
-def detect_name(*, header, **_):
-    header = (header or "").strip().lower()
+def detect_name(*, header_text: str, **_):
+    header = (header_text or "").strip().lower()
     return {"name": 1.0} if header == "name" else None
 
 def register(registry):
@@ -64,10 +64,8 @@ def register(registry):
 
     (pkg / "hooks.py").write_text(
         """
-from ade_engine.models import HookName
-
 def register(registry):
-    registry.register_hook(on_workbook_before_save, hook_name=HookName.ON_WORKBOOK_BEFORE_SAVE, priority=0)
+    registry.register_hook(on_workbook_before_save, hook="on_workbook_before_save", priority=0)
 
 def on_workbook_before_save(**_):
     raise RuntimeError("boom before save")

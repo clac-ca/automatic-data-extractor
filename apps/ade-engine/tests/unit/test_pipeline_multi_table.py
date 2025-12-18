@@ -50,10 +50,47 @@ def test_process_sheet_renders_multiple_tables_with_blank_row():
 
     emitted = list(output_ws.iter_rows(min_row=1, max_row=6, max_col=2, values_only=True))
     assert emitted == [
-        ("raw_A", "raw_B"),
+        ("A", "B"),
         (1, 2),
         (3, 4),
         (None, None),  # blank separator row
-        ("raw_C", "raw_D"),
+        ("C", "D"),
         (5, 6),
     ]
+
+
+def test_process_sheet_handles_mixed_numeric_types():
+    registry = Registry()
+    logger = NullLogger()
+
+    def detector(*, row_index, **_):
+        if row_index == 0:
+            return {RowKind.HEADER.value: 1.0}
+        return {RowKind.DATA.value: 1.0}
+
+    registry.register_row_detector(detector, row_kind=RowKind.UNKNOWN.value, priority=0)
+    registry.finalize()
+
+    pipeline = Pipeline(registry=registry, settings=Settings(), logger=logger)
+
+    source_wb = Workbook()
+    source_ws = source_wb.active
+    source_ws.title = "Sheet1"
+    source_ws.append(["Amount"])
+    source_ws.append([170])
+    source_ws.append([169.75])
+
+    output_wb = Workbook()
+    output_wb.remove(output_wb.active)
+    output_ws = output_wb.create_sheet(title="Sheet1")
+
+    pipeline.process_sheet(
+        sheet=source_ws,
+        output_sheet=output_ws,
+        state={},
+        metadata={"input_file": "input.xlsx", "sheet_index": 0},
+        input_file_name="input.xlsx",
+    )
+
+    emitted = list(output_ws.iter_rows(min_row=1, max_row=3, max_col=1, values_only=True))
+    assert emitted == [("Amount",), (170.0,), (169.75,)]

@@ -5,6 +5,8 @@ from collections import defaultdict
 from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
+import polars as pl
+
 from ade_engine.extensions.invoke import call_extension
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
@@ -25,9 +27,33 @@ def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> L
     return cols
 
 
+def _header_text(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    return str(value).strip()
+
+
+def _build_column_sample(column: pl.Series, *, limit: int) -> list[str]:
+    if limit <= 0:
+        return []
+
+    out: list[str] = []
+    for value in column:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def detect_and_map_columns(
     *,
     sheet_name: str,
+    table: pl.DataFrame,
     source_columns: List[SourceColumn],
     registry: Registry,
     settings: Settings,
@@ -43,14 +69,24 @@ def detect_and_map_columns(
     debug = logger.isEnabledFor(logging.DEBUG)
 
     for col in source_columns:
+        if not (0 <= col.index < len(table.columns)):
+            continue
+
+        column_name = table.columns[col.index]
+        column = table.get_column(column_name)
+        column_sample = _build_column_sample(column, limit=int(settings.detectors.text_sample_size))
+
         scores: Dict[str, float] = {}
         contributions: Dict[str, List[Dict[str, float]]] = {} if debug else {}
         detectors_run: list[dict[str, Any]] = [] if debug else []
         ctx = ColumnDetectorContext(
+            table=table,
+            column=column,
+            column_sample=column_sample,
+            column_name=column_name,
             column_index=col.index,
-            header=col.header,
-            values=col.values,
-            values_sample=col.values[:5],
+            header_text=_header_text(col.header),
+            settings=settings,
             sheet_name=sheet_name,
             metadata=metadata,
             state=state,
@@ -90,10 +126,10 @@ def detect_and_map_columns(
                     message=f"Column {col.index} detector {det.qualname} executed on {sheet_name}",
                     data={
                         "sheet_name": sheet_name,
-                        "column_index": col.index,
-                        "detector": detector_payload,
-                    },
-                )
+                    "column_index": col.index,
+                    "detector": detector_payload,
+                },
+            )
             for field, delta in patch.items():
                 scores[field] = scores.get(field, 0.0) + delta
                 if debug:
@@ -144,13 +180,14 @@ def detect_and_map_columns(
                     "column_detector.candidate",
                     level=logging.DEBUG,
                     data={
-                        "column_index": col.index,
-                        "header": col.header,
-                        "best_field": best_field,
-                        "best_score": best_score,
-                        "scores": scores,
-                        "contributions": contributions.get(best_field, []),
-                    },
+                    "column_index": col.index,
+                    "column_name": column_name,
+                    "header_text": _header_text(col.header),
+                    "best_field": best_field,
+                    "best_score": best_score,
+                    "scores": scores,
+                    "contributions": contributions.get(best_field, []),
+                },
                 )
             mapping_candidates[col.index] = (best_field, best_score)
             field_competitors[best_field].append((col.index, best_score))

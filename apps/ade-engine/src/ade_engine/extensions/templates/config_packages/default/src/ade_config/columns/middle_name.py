@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+import polars as pl
 
 from ade_engine.models import FieldDef
 
@@ -15,21 +15,23 @@ def register(registry):
 
 def detect_middle_name_header(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,  # 0-based index of this column in table.columns
+    header_text: str,
+    settings,  # Engine Settings (use settings.detectors.* for sampling)
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
-    header_text = "" if header in (None, "") else str(header)
-    t = set(header_text.lower().replace("-", " ").split())
+    t = set((header_text or "").lower().replace("-", " ").split())
     if not t:
         return None
-    header_lower = header_text.lower()
+    header_lower = (header_text or "").lower()
     if ("middle" in t and "name" in t) or "m.i" in header_lower:
         return {"middle_name": 1.0}
     if "mi" in t or "middle" in t:
@@ -39,56 +41,67 @@ def detect_middle_name_header(
 
 def detect_middle_name_values(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,
+    header_text: str,  # Trimmed header cell text for this column ("" if missing)
+    settings,
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
-    values_sample = values_sample or []
-    initials = 0
-    total = 0
-    for v in values_sample:
-        s = ("" if v is None else str(v)).strip()
-        if not s:
-            continue
-        total += 1
-        if len(s) == 1 or (len(s) == 2 and "." in s):
-            initials += 1
-    if total == 0:
+    """Middle-initial-ish heuristic ("A" or "A.")."""
+
+    row_n = settings.detectors.row_sample_size
+    text_n = settings.detectors.text_sample_size
+
+    t = table.head(row_n)
+    col_name = t.columns[column_index]
+    text = pl.col(col_name).cast(pl.Utf8).str.strip_chars()
+
+    t0 = t.filter(text.is_not_null() & (text != "")).head(text_n)
+    if t0.height == 0:
         return None
-    score = min(1.0, initials / total)
-    return {"middle_name": score}
+
+    is_initial = (text.str.len_chars() == 1) | ((text.str.len_chars() == 2) & text.str.contains(r"\."))
+
+    score = t0.select(is_initial.mean().alias("score")).to_series(0)[0]
+    if score is None:
+        return None
+    return {"middle_name": float(score)}
 
 
-def normalize_middle_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Any]:
-    return [(None if v is None else str(v).strip() or None) for v in column]
+def normalize_middle_name(
+    *,
+    field_name: str,  # Canonical field name being transformed (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
 
 
-def validate_middle_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(column):
-        s = "" if v is None else str(v).strip()
-        if len(s) > 40:
-            issues.append({
-                "row_index": idx,
-                "message": "Middle name too long",
-            })
-    return issues
-
-# Example cell-level helpers (commented out):
-# These run per cell; use column-level variants above when possible for speed and
-# when populating multiple fields from one column.
-#
-# def normalize_middle_name_cell(value: object | None) -> Dict[str, Any]:
-#     return {"row_index": 0, "value": {"middle_name": (None if value is None else str(value).strip() or None)}}
-#
-# def validate_middle_name_cell(value: object | None) -> Dict[str, Any] | None:
-#     text_value = "" if value is None else str(value).strip()
-#     if text_value and len(text_value) > 40:
-#         return {"row_index": 0, "message": "Middle name too long"}
-#     return None
+def validate_middle_name(
+    *,
+    field_name: str,  # Canonical field name being validated (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    return (
+        pl.when(v.is_not_null() & (v != "") & (v.str.len_chars() > 40))
+        .then(pl.lit("Middle name too long"))
+        .otherwise(pl.lit(None))
+    )

@@ -1,49 +1,51 @@
 # Hooks Guide
 
-Hooks let config packages run code at specific points in the Engine lifecycle. Register hooks with `registry.register_hook(fn, hook_name=HookName.<name>, priority=...)`.
+Hooks let config packages run code at specific points in the engine lifecycle. Register hooks with `registry.register_hook(fn, hook="<hook_stage>", priority=...)`.
 
-## Hook order and timing
+## Hook stages
 
-1. `on_workbook_start` — before any sheets are processed. Inputs:
-   - `workbook`: source workbook (read-only for XLSX; in-memory for CSV)
-   - `sheet`: `None`
-   - `table`: `None`
-   - Use cases: per-run initialization, metadata capture, state seeding.
+1. `on_workbook_start` — before any sheets are processed.
+2. `on_sheet_start` — per sheet, before table detection/mapping.
+3. `on_table_mapped` — after mapping (mapping is rename-only), before transforms.
+4. `on_table_transformed` — after transforms, before validation.
+5. `on_table_validated` — after validation, before write (final shaping).
+6. `on_table_written` — after the table is written to the output worksheet (formatting/summaries).
+7. `on_workbook_before_save` — final hook, receives the output workbook just before `save()`.
 
-2. `on_sheet_start` — per sheet, before detection/mapping.
-   - `sheet`: source worksheet
-   - Use cases: sheet-level skips, state resets, exploratory logging.
+## Table hook return semantics
 
-3. `on_table_detected` — after row + column detection, before transforms.
-   - `table`: `TableData` with `source_columns`, `mapped_columns`, `unmapped_columns`, `header_row_index`.
-   - Use cases: inspect mapping, stash intermediate structure in `state`.
+For these stages, hooks may replace the DataFrame:
 
-4. `on_table_mapped` — immediately after `on_table_detected`; last chance to patch mapping.
-   - Mutating `table.mapped_columns` / `table.unmapped_columns` is allowed.
-   - Use cases: reorder mapped columns, drop/merge mappings, apply custom tie-break rules.
+- `on_table_mapped`
+- `on_table_transformed`
+- `on_table_validated`
 
-5. `on_table_written` — after transforms/validators and after the table is rendered to the output worksheet.
-   - `sheet`: output worksheet
-   - `table.columns` contains the canonical column store; `table.issues_patch` contains vector-aligned issues; `table.issues` is the flattened issues list.
-   - Use cases: write summaries, create additional sheets, append totals, reorder output columns.
+Rules:
 
-6. `on_workbook_before_save` — final hook, receives the output workbook just before `save()`.
-   - Use cases: add cover sheets, global formatting, run consistency checks.
+- Hooks run in priority order.
+- If a hook returns a `pl.DataFrame`, it becomes the input to the next hook in that stage.
+- If it returns `None`, the table is unchanged.
+- Any other return type raises `HookError`.
+
+For all other hooks (including `on_table_written`), the hook must return `None`.
 
 ## Context and state
 
-All hooks receive a `HookContext` with:
-- `metadata`: dict (includes `input_file` / `output_file` names)
-- `state`: mutable dict shared across the entire run
-- `input_file_name`: source filename (str | None)
-- `logger`: `RunLogger` scoped to the run
+All hooks receive a `HookContext` expanded into keyword arguments by `call_extension`. Common fields:
+
+- `metadata`: dict (filenames, sheet index, etc.)
+- `settings`: engine settings
+- `state`: mutable dict shared across the run
+- `workbook`: workbook object (varies by stage)
+- `sheet`: worksheet object (varies by stage)
+- `table`: `pl.DataFrame | None`
+- `write_table`: `pl.DataFrame | None` (only meaningful for `on_table_written`)
+- `input_file_name`: `str | None`
+- `logger`: `RunLogger`
 
 Mutating `state` is the preferred way to share data between hooks, detectors, transforms, and validators.
 
-## Error handling
+## Error handling and ordering
 
-Any exception in a hook is wrapped as `HookError` with the stage name; the run fails. Log diagnostics via the provided `logger` instead of printing.
-
-## Priorities
-
-Hooks are sorted by `priority` (desc), then module + qualname. Use higher numbers to run earlier within the same stage.
+- Any exception in a hook is wrapped as `HookError` with the stage name; the run fails.
+- Hooks are sorted by `priority` (desc), then module + qualname (deterministic).

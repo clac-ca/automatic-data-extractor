@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import polars as pl
 
 from ade_engine.application.pipeline.transform import apply_transforms
 from ade_engine.extensions.registry import Registry
@@ -8,7 +9,6 @@ from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import FieldDef
-from ade_engine.models.table import MappedColumn
 
 
 class SpyLogger:
@@ -22,78 +22,64 @@ class SpyLogger:
         self.events.append({"args": args, "kwargs": kwargs})
 
 
-def test_transform_applies_row_outputs_and_enforces_contract():
+def test_transform_applies_expr_outputs():
     registry = Registry()
 
-    def uppercase_transform(*, column, **_):
-        return [str(value).upper() if value is not None else None for value in column]
+    def uppercase_transform(*, field_name: str, **_):
+        return pl.col(field_name).cast(pl.Utf8).str.to_uppercase()
 
     registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(uppercase_transform, field="foo", priority=0)
     registry.finalize()
 
-    mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=["a", "b"])]
     logger = SpyLogger()
+    table = pl.DataFrame({"foo": ["a", "b"]})
 
-    columns = {"foo": ["a", "b"]}
-    mapping = {"foo": 0}
-    patch = apply_transforms(
-        mapped_columns=mapped,
-        columns=columns,
-        mapping=mapping,
+    out = apply_transforms(
+        table=table,
         registry=registry,
         settings=Settings(),
         state={},
         metadata={},
         input_file_name=None,
         logger=logger,
-        row_count=2,
     )
 
-    assert columns == {"foo": ["A", "B"]}
-    assert patch.issues == {}
+    assert out.to_dict(as_series=False) == {"foo": ["A", "B"]}
     assert len(logger.events) == 1
     assert logger.events[0]["kwargs"]["data"]["row_count"] == 2
 
 
 def test_transform_invalid_return_raises_pipeline_error():
     registry = Registry()
-    logger = NullLogger()
 
-    def broken_transform(*, column, **_):
-        return column[:1]
+    def broken_transform(**_):
+        return [1]
 
     registry.register_field(FieldDef(name="foo"))
     registry.register_column_transform(broken_transform, field="foo", priority=0)
     registry.finalize()
 
-    mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=[1, 2])]
-    columns = {"foo": [1, 2]}
-    mapping = {"foo": 0}
-
     with pytest.raises(PipelineError):
         apply_transforms(
-            mapped_columns=mapped,
-            columns=columns,
-            mapping=mapping,
+            table=pl.DataFrame({"foo": [1, 2]}),
             registry=registry,
             settings=Settings(),
             state={},
             metadata={},
             input_file_name=None,
-            logger=logger,
-            row_count=2,
+            logger=NullLogger(),
         )
 
 
-def test_transform_chain_passes_scalar_values_and_accumulates_patches():
+def test_transform_dict_output_creates_derived_columns():
     registry = Registry()
 
-    def add_derived_field(*, column, **_):
-        return {"bar": [f"{value}-derived" if value is not None else None for value in column]}
+    def add_derived_field(*, field_name: str, **_):
+        return {"bar": pl.col(field_name).cast(pl.Utf8) + pl.lit("-derived")}
 
-    def uppercase_transform(*, column, **_):
-        return [str(value).upper() if value is not None else None for value in column]
+    def uppercase_transform(*, field_name: str, **_):
+        return pl.col(field_name).cast(pl.Utf8).str.to_uppercase()
 
     registry.register_field(FieldDef(name="foo"))
     registry.register_field(FieldDef(name="bar"))
@@ -101,21 +87,14 @@ def test_transform_chain_passes_scalar_values_and_accumulates_patches():
     registry.register_column_transform(uppercase_transform, field="foo", priority=0)
     registry.finalize()
 
-    mapped = [MappedColumn(field_name="foo", source_index=0, header="foo", values=["a", "b"])]
-    columns = {"foo": ["a", "b"]}
-    mapping = {"foo": 0}
-
-    apply_transforms(
-        mapped_columns=mapped,
-        columns=columns,
-        mapping=mapping,
+    out = apply_transforms(
+        table=pl.DataFrame({"foo": ["a", "b"]}),
         registry=registry,
         settings=Settings(),
         state={},
         metadata={},
         input_file_name=None,
         logger=NullLogger(),
-        row_count=2,
     )
 
-    assert columns == {"foo": ["A", "B"], "bar": ["a-derived", "b-derived"]}
+    assert out.to_dict(as_series=False) == {"foo": ["A", "B"], "bar": ["a-derived", "b-derived"]}

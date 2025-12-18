@@ -141,6 +141,7 @@ class Engine:
 
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_START,
+                        settings=self.settings,
                         state=state,
                         metadata=metadata,
                         workbook=source_wb,
@@ -164,6 +165,7 @@ class Engine:
 
                         registry.run_hooks(
                             HookName.ON_SHEET_START,
+                            settings=self.settings,
                             state=state,
                             metadata=sheet_metadata,
                             workbook=source_wb,
@@ -183,6 +185,7 @@ class Engine:
 
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_BEFORE_SAVE,
+                        settings=self.settings,
                         state=state,
                         metadata=metadata,
                         workbook=output_wb,

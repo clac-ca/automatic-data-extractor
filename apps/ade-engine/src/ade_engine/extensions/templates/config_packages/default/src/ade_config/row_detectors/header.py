@@ -20,13 +20,14 @@ def register(registry):
 
 def detect_header_row_by_known_words(
     *,
-    row_index,
-    row_values,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    row_index: int,  # 0-based row index in the scanned sheet
+    row_values: list[object],  # Raw cell values for this row (may include None/""/numbers)
+    sheet_name: str,  # Worksheet title
+    settings,  # Engine Settings
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Vote for a row being a header row.
 

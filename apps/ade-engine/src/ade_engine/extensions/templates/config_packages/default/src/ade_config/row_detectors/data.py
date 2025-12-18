@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+
 def register(registry):
     registry.register_row_detector(detect_data_row_by_density, row_kind="data", priority=0)
 
 
 def detect_data_row_by_density(
     *,
-    row_index,
-    row_values,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    row_index: int,  # 0-based row index in the scanned sheet
+    row_values: list[object],  # Raw cell values for this row (may include None/""/numbers)
+    sheet_name: str,  # Worksheet title
+    settings,  # Engine Settings
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Vote for a row being a data row.
 

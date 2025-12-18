@@ -43,8 +43,10 @@ Engine settings can be pinned alongside the package:
 - Load via `Settings.load(...)`; precedence is documented in `apps/ade-engine/docs/settings.md`.
 
 Commonly overridden settings per package:
-- `append_unmapped_columns` / `unmapped_prefix` (control passthrough columns)
+- `remove_unmapped_columns` (drop non-canonical columns at write time)
+- `write_diagnostics_columns` (include reserved `__ade_*` columns in output)
 - `mapping_tie_resolution` (choose `leftmost` vs `leave_unmapped`)
+- `detectors.row_sample_size` / `detectors.text_sample_size` (detector sampling policy)
 - `max_empty_rows_run` / `max_empty_cols_run` (sheet scanning guards)
 
 ## Testing your package

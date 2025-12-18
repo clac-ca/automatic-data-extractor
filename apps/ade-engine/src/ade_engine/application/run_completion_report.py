@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import polars as pl
 from openpyxl.utils import get_column_letter
 
 from ade_engine.extensions.registry import Registry
@@ -47,7 +48,7 @@ from ade_engine.models.events import (
     WorkbookSummary,
 )
 from ade_engine.models.run import RunError, RunStatus
-from ade_engine.models.table import TableData
+from ade_engine.models.table import TableResult
 
 _SEVERITY_ORDER: dict[str, int] = {"info": 0, "warning": 1, "error": 2}
 
@@ -121,7 +122,7 @@ class _SheetAccum:
     index: int
     name: str
     scan: dict[str, Any] | None = None
-    tables: list[TableData] = field(default_factory=list)
+    tables: list[TableResult] = field(default_factory=list)
 
 
 @dataclass
@@ -149,7 +150,7 @@ class RunCompletionReportBuilder:
             self._workbook.sheets[sheet_index] = sheet
         sheet.scan = dict(scan)
 
-    def record_table(self, table: TableData) -> None:
+    def record_table(self, table: TableResult) -> None:
         sheet_index = int(getattr(table, "sheet_index", 0) or 0)
         sheet_name = str(getattr(table, "sheet_name", "") or "")
         sheet = self._workbook.sheets.get(sheet_index)
@@ -311,7 +312,7 @@ class RunCompletionReportBuilder:
         *,
         workbook_ref: WorkbookRef,
         sheet_ref: SheetRef,
-        table: TableData,
+        table: TableResult,
         expected_fields: list[Any],
         output_path: Path | None,
         output_written: bool,
@@ -487,7 +488,7 @@ class RunCompletionReportBuilder:
             )
 
         # v1 default: columns without a selected field may be carried through as raw output.
-        if self._settings.append_unmapped_columns:
+        if not self._settings.remove_unmapped_columns:
             return (
                 Mapping(status="passthrough", candidates=candidates, unmapped_reason="passthrough_policy"),
                 "passthrough",
@@ -531,18 +532,24 @@ class RunCompletionReportBuilder:
                 empty += 1
         return empty
 
-    def _build_validation(self, table: TableData) -> Validation:
-        issues = list(getattr(table, "issues", []) or [])
-        by_sev: dict[str, int] = {}
-        for issue in issues:
-            sev = issue.get("severity") if isinstance(issue, dict) else None
-            sev = sev if isinstance(sev, str) and sev in _SEVERITY_ORDER else "warning"
-            by_sev[sev] = by_sev.get(sev, 0) + 1
-        total = sum(by_sev.values())
+    def _build_validation(self, table: TableResult) -> Validation:
+        df = getattr(table, "table", None)
+        issues_total = 0
+        if isinstance(df, pl.DataFrame) and df.height:
+            if "__ade_issue_count" in df.columns:
+                raw_total = df.get_column("__ade_issue_count").sum()
+                issues_total = int(raw_total or 0)
+            else:
+                issue_cols = [c for c in df.columns if c.startswith("__ade_issue__")]
+                for col in issue_cols:
+                    raw_count = df.get_column(col).is_not_null().sum()
+                    issues_total += int(raw_count or 0)
+
+        by_sev: dict[str, int] = {"warning": issues_total} if issues_total else {}
         return Validation(
             rows_evaluated=int(getattr(table, "row_count", 0) or 0),
-            issues_total=int(total),
-            issues_by_severity={k: int(v) for k, v in by_sev.items()},
+            issues_total=int(issues_total),
+            issues_by_severity={k: int(v) for k, v in by_sev.items()} if issues_total else {},
             max_severity=_max_severity(by_sev),
         )
 
@@ -552,7 +559,7 @@ class RunCompletionReportBuilder:
     def _expected_field_names(self, expected_fields: list[Any]) -> list[str]:
         return [str(getattr(f, "name", "") or "") for f in expected_fields]
 
-    def _mapped_fields_in_table(self, table: TableData, expected_fields: list[Any]) -> set[str]:
+    def _mapped_fields_in_table(self, table: TableResult, expected_fields: list[Any]) -> set[str]:
         expected = set(self._expected_field_names(expected_fields))
         mapped = {str(getattr(c, "field_name", "") or "") for c in (getattr(table, "mapped_columns", []) or [])}
         return {f for f in mapped if f in expected}

@@ -1,55 +1,128 @@
-# ADE Config Package Template (registry-based)
+# ADE Config Package Template (registry-based, Polars-first)
 
-This is a **template ADE config package**. It defines a *target schema* (fields) and the logic the ADE engine uses to:
+This template config package defines a target schema (fields) and the plugin logic the ADE engine uses to:
 
-1. **Detect** tables + header rows (Row Detectors)
-2. **Map** spreadsheet columns to canonical fields (Column Detectors)
-3. **Normalize** values (Column Transforms)
-4. **Report** validation issues (Column Validators)
-5. **Customize** the run (Hooks)
+1. Detect header/data rows (Row Detectors)
+2. Detect which columns map to which canonical fields (Column Detectors)
+3. Transform values using Polars expressions (Column Transforms)
+4. Write validation issues inline (Column Validators)
+5. Customize the pipeline (Hooks)
 
 ## The big idea
 
-- You add Python files wherever you want inside `src/ade_config/`.
-- A module becomes a plugin module if (and only if) it defines a top-level `register(registry)`.
-- The engine scans the whole package, imports only plugin modules, and calls their `register(registry)` in deterministic module-name order.
-- No manifest lists or central file lists—just “create a new module with `register()`”.
+- Any module with a top-level `register(registry)` is a plugin module.
+- The engine auto-discovers modules and calls `register(registry)` in deterministic order.
+- No manifests or central file lists: add a new module → it’s discovered.
 
 ## Folder layout (suggested)
 
 ```text
 src/ade_config/
   columns/                 # one file per canonical field (recommended)
-  row_detectors/           # header/data row voting
-  hooks/                   # lifecycle hooks
+  row_detectors/           # vote header row vs data row
+  hooks/                   # lifecycle hooks for customization
 ```
 
-> You can restructure freely. Keep registration explicit for clarity/determinism.
->
-> Convention: keep auto-discovered modules under `columns/`, `row_detectors/`, and `hooks/`.
+## One unified settings object
 
-## Engine settings (optional)
+The ADE engine loads runtime settings (with defaults) and can be overridden via `settings.toml`.
+That same `settings` object is passed to:
 
-Engine runtime settings (writer options, thresholds, etc.) can be set via:
+- row detectors
+- column detectors
+- transforms
+- validators
+- hooks
 
-- `settings.toml` (recommended for config packages)
-- `.env` (works too)
-- environment variables
+See `settings.toml` for the sample-size settings used in detection.
 
-This template includes an example `settings.toml`.
+## Polars everywhere (where it matters)
 
-## Adding a new column (canonical field)
+- Row detectors operate on `row_values` lists (pre-table).
+- Once a table is detected, the engine materializes a single `table: pl.DataFrame`.
+- Everything downstream (column detection → mapping → transforms → validation → hooks) uses that table.
 
-1. Copy an existing file in `columns/` (ex: `email.py`)
-2. Update the `FIELD = field(...)` metadata
-3. Add one or more detector functions and register them via `registry.register_column_detector(...)`.
-4. Optionally add transforms/validators and register them via `registry.register_column_transform` / `registry.register_column_validator`.
+## Column detection (important constraint)
 
-That’s it.
+During detection, you do not yet know canonical field column names.
+Do not reference fields by `"first_name"` / `"email"` during detection.
 
-## Reordering output columns
+Instead:
 
-The engine **preserves input column order** for mapped columns and (optionally) appends unmapped passthrough columns on the right.
-If you need a custom order, do it in a hook (see `hooks/on_table_written.py`).
+- Use `header_text` (header label for that column)
+- Use `column_index` for position-based heuristics
+- Use `table.columns[column_index]` only as an internal handle (not a semantic name)
+- If you need another column, access it by index:
+  - left neighbor: `column_index - 1`
+  - right neighbor: `column_index + 1`
 
----
+### Common detector patterns (copy/paste)
+
+**Sample sizing (settings-driven)**
+
+```python
+row_n = settings.detectors.row_sample_size
+text_n = settings.detectors.text_sample_size
+
+# Use only the first row_n rows for detection work (bounded cost).
+t = table.head(row_n)
+
+# Current column name (internal, not semantic).
+col_name = t.columns[column_index]
+
+# Text view of the column (trimmed).
+text = pl.col(col_name).cast(pl.Utf8).str.strip_chars()
+
+# Keep non-empty text and cap to text_n rows.
+t = t.filter(text.is_not_null() & (text != "")).head(text_n)
+```
+
+**Match-rate scoring with Polars (no Python loops)**
+
+```python
+score = (
+  t.select(text.str.contains(PATTERN).mean().alias("score"))
+   .to_series(0)[0]
+)
+```
+
+**Cross-column detection (by index, not by name)**
+
+```python
+if column_index + 1 < len(table.columns):
+    right_name = table.columns[column_index + 1]
+    right_text = pl.col(right_name).cast(pl.Utf8).str.strip_chars()
+    # apply the same sampling + scoring to right_name
+```
+
+## Transforms
+
+Transforms return Polars expressions:
+
+- `pl.Expr` for one output column
+- `dict[str, pl.Expr]` to populate multiple output columns from one input field
+
+Transforms run after mapping, so canonical field names exist at that point.
+You may reference other fields using `pl.col("other_field")`, but guard with
+`if "other_field" in table.columns` when optional.
+
+## Validators
+
+Validators return a Polars expression that yields:
+
+- `"Issue message"` when invalid
+- `None` when valid
+
+Validators can reference other fields (post-mapping) the same way transforms can.
+Validation issues remain row-aligned because they are stored inline.
+
+## Hooks
+
+Hooks receive `table: pl.DataFrame` and can:
+
+- reorder columns
+- filter rows
+- add summary/diagnostic columns
+- change output formatting (post-write hooks)
+
+Because issues are inline, filtering/sorting is safe after validation.

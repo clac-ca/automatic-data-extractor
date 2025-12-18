@@ -5,6 +5,7 @@ import pytest
 from ade_engine.application.pipeline.detect_rows import _classify_rows, detect_table_regions
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import NullLogger
+from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import RowKind
 
@@ -22,6 +23,7 @@ def test_row_detector_registration_normalizes_enum_row_kind_for_mapping_patch():
         sheet_name="Sheet1",
         rows=[["H1"]],
         registry=reg,
+        settings=Settings(),
         state={},
         metadata={},
         input_file_name=None,
@@ -47,6 +49,7 @@ def test_row_detector_invalid_return_shape_raises():
             sheet_name="Sheet1",
             rows=[["H1"]],
             registry=reg,
+            settings=Settings(),
             state={},
             metadata={},
             input_file_name=None,
@@ -75,6 +78,7 @@ def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
             ["v1", "v2"],
         ],
         registry=reg,
+        settings=Settings(),
         state={},
         metadata={"input_file": "input.xlsx", "sheet_index": 0},
         input_file_name=None,
@@ -110,6 +114,7 @@ def test_detect_table_regions_returns_multiple_tables():
             ["v5", "v6"],
         ],
         registry=reg,
+        settings=Settings(),
         state={},
         metadata={"input_file": "input.xlsx", "sheet_index": 0},
         input_file_name="input.xlsx",

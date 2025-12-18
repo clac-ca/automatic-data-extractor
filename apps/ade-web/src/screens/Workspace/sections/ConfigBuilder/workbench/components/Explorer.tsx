@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
 import clsx from "clsx";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { createScopedStorage } from "@shared/storage";
 
-import type { WorkbenchFileNode } from "../types";
+import type { WorkbenchFileNode, WorkbenchUploadFile } from "../types";
+import { extractDroppedFiles, hasFileDrag } from "../utils/fileDrop";
 
 type ExplorerTheme = "light" | "dark";
 type CreateTarget = { readonly parentId: string; readonly kind: "file" | "folder" } | null;
@@ -118,6 +129,9 @@ interface ExplorerProps {
   readonly openFileIds?: readonly string[];
   readonly onSelectFile: (fileId: string) => void;
   readonly theme: ExplorerTheme;
+  readonly canUploadFiles?: boolean;
+  readonly onUploadFiles?: (folderPath: string, files: readonly WorkbenchUploadFile[]) => void | Promise<void>;
+  readonly isUploadingFiles?: boolean;
   readonly canCreateFile?: boolean;
   readonly canCreateFolder?: boolean;
   readonly isCreatingEntry?: boolean;
@@ -140,6 +154,9 @@ export function Explorer({
   openFileIds = [],
   onSelectFile,
   theme,
+  canUploadFiles = false,
+  onUploadFiles,
+  isUploadingFiles = false,
   canCreateFile = false,
   canCreateFolder = false,
   isCreatingEntry = false,
@@ -159,6 +176,15 @@ export function Explorer({
     [expandedStorageKey],
   );
   const availableFolderIds = useMemo(() => collectFolderIds(tree), [tree]);
+  const nodeLookup = useMemo(() => {
+    const nodes = new Map<string, WorkbenchFileNode>();
+    const visit = (node: WorkbenchFileNode) => {
+      nodes.set(node.id, node);
+      node.children?.forEach(visit);
+    };
+    visit(tree);
+    return nodes;
+  }, [tree]);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = expansionStorage?.get<string[]>() ?? null;
     const candidate = stored ? new Set(stored) : new Set<string>([tree.id]);
@@ -170,10 +196,23 @@ export function Explorer({
   } | null>(null);
   const [editing, setEditing] = useState<CreateTarget>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
+  const [dropTarget, setDropTarget] = useState<{ readonly folderPath: string; readonly rowId: string } | null>(null);
+  const dragCounterRef = useRef(0);
+  const autoExpandTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoExpandTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     setEditing(null);
     setCreateError(null);
+    setDropTarget(null);
+    setDropActive(false);
+    dragCounterRef.current = 0;
+    lastAutoExpandTargetRef.current = null;
+    if (autoExpandTimeoutRef.current) {
+      clearTimeout(autoExpandTimeoutRef.current);
+      autoExpandTimeoutRef.current = null;
+    }
   }, [tree.id]);
 
   useEffect(() => {
@@ -233,6 +272,115 @@ export function Explorer({
       });
     },
     [tree.id],
+  );
+
+  const clearAutoExpand = useCallback(() => {
+    if (autoExpandTimeoutRef.current) {
+      clearTimeout(autoExpandTimeoutRef.current);
+      autoExpandTimeoutRef.current = null;
+    }
+    lastAutoExpandTargetRef.current = null;
+  }, []);
+
+  const resolveDropTarget = useCallback(
+    (target: EventTarget | null): { folderPath: string; rowId: string } => {
+      const element = (target as HTMLElement | null)?.closest?.("[data-explorer-drop-row]") as HTMLElement | null;
+      const folderPath = element?.dataset.explorerDropPath ?? "";
+      const rowId = element?.dataset.explorerDropRow ?? tree.id;
+      return { folderPath: folderPath === tree.id ? "" : folderPath, rowId };
+    },
+    [tree.id],
+  );
+
+  const handleDragEnter = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event.dataTransfer)) {
+      return;
+    }
+    dragCounterRef.current += 1;
+    setDropActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback(
+    (_event: ReactDragEvent<HTMLElement>) => {
+      if (!dropActive) {
+        return;
+      }
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (dragCounterRef.current === 0) {
+        setDropActive(false);
+        setDropTarget(null);
+        clearAutoExpand();
+      }
+    },
+    [clearAutoExpand, dropActive],
+  );
+
+  const handleDragOver = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      if (!hasFileDrag(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = canUploadFiles && onUploadFiles && !isUploadingFiles ? "copy" : "none";
+      if (!dropActive) {
+        setDropActive(true);
+      }
+
+      const nextTarget = resolveDropTarget(event.target);
+      setDropTarget((prev) => (prev?.rowId === nextTarget.rowId && prev.folderPath === nextTarget.folderPath ? prev : nextTarget));
+
+      const hoveredNode = nodeLookup.get(nextTarget.rowId);
+      if (!hoveredNode || hoveredNode.kind !== "folder") {
+        clearAutoExpand();
+        return;
+      }
+      if (expanded.has(hoveredNode.id)) {
+        clearAutoExpand();
+        return;
+      }
+      if (lastAutoExpandTargetRef.current === hoveredNode.id && autoExpandTimeoutRef.current) {
+        return;
+      }
+      clearAutoExpand();
+      lastAutoExpandTargetRef.current = hoveredNode.id;
+      autoExpandTimeoutRef.current = setTimeout(() => {
+        setFolderExpanded(hoveredNode.id, true);
+        clearAutoExpand();
+      }, 650);
+    },
+    [
+      canUploadFiles,
+      clearAutoExpand,
+      dropActive,
+      expanded,
+      isUploadingFiles,
+      nodeLookup,
+      onUploadFiles,
+      resolveDropTarget,
+      setFolderExpanded,
+    ],
+  );
+
+  const handleDrop = useCallback(
+    async (event: ReactDragEvent<HTMLElement>) => {
+      if (!hasFileDrag(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setDropActive(false);
+      setDropTarget(null);
+      dragCounterRef.current = 0;
+      clearAutoExpand();
+
+      const files = await extractDroppedFiles(event.dataTransfer);
+      if (!canUploadFiles || !onUploadFiles || isUploadingFiles || files.length === 0) {
+        return;
+      }
+      const target = resolveDropTarget(event.target);
+      void onUploadFiles(target.folderPath, files);
+    },
+    [canUploadFiles, clearAutoExpand, isUploadingFiles, onUploadFiles, resolveDropTarget],
   );
 
   const collapseAll = useCallback(() => {
@@ -456,6 +604,17 @@ export function Explorer({
   const focusRingClass = FOCUS_RING_CLASS[theme];
   const rootChildren = useMemo(() => tree.children ?? [], [tree]);
   const menuAppearance = theme === "dark" ? "dark" : "light";
+  const dropTargetLabel = useMemo(() => {
+    if (!dropActive) {
+      return null;
+    }
+    const folderPath = dropTarget?.folderPath ?? "";
+    if (!folderPath) {
+      return "root";
+    }
+    return folderPath;
+  }, [dropActive, dropTarget?.folderPath]);
+  const canDropUpload = canUploadFiles && Boolean(onUploadFiles) && !isUploadingFiles;
 
   return (
     <>
@@ -473,8 +632,16 @@ export function Explorer({
           className="flex items-center justify-between border-b px-3 py-2"
           style={{ borderColor: tokens.border, backgroundColor: theme === "dark" ? "#181818" : "#ececec" }}
         >
-          <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: tokens.heading }}>
-            Explorer
+          <div className="flex items-center gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: tokens.heading }}>
+              Explorer
+            </div>
+            {isUploadingFiles ? (
+              <div className="flex items-center gap-1 text-[11px]" style={{ color: tokens.label }}>
+                <span className="inline-flex h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden />
+                <span className="font-medium">Uploading…</span>
+              </div>
+            ) : null}
           </div>
           <button
             type="button"
@@ -490,12 +657,20 @@ export function Explorer({
             <HideSidebarIcon />
           </button>
         </div>
-        <nav className="flex-1 overflow-auto px-2 py-2" aria-label="Workspace files tree">
+        <nav
+          className="relative flex-1 overflow-auto px-2 py-2"
+          aria-label="Workspace files tree"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           <ul className="space-y-0.5">
             {rootChildren.map((node) => (
               <ExplorerNode
                 key={node.id}
                 node={node}
+                parentId={tree.id}
                 depth={0}
                 expanded={expanded}
                 activeFileId={activeFileId}
@@ -514,6 +689,8 @@ export function Explorer({
                 deletingFilePath={deletingFilePath}
                 deletingFolderPath={deletingFolderPath}
                 onClearCreateError={() => setCreateError(null)}
+                dropActive={dropActive}
+                dropTargetRowId={dropTarget?.rowId ?? null}
               />
             ))}
             {editing?.parentId === tree.id ? (
@@ -531,6 +708,47 @@ export function Explorer({
               </li>
             ) : null}
           </ul>
+          {dropActive ? (
+            <div
+              className={clsx(
+                "pointer-events-none absolute inset-2 rounded-xl border border-dashed p-3 transition",
+                canDropUpload ? "opacity-100" : "opacity-90",
+              )}
+              style={{
+                borderColor: tokens.badgeActive,
+                backgroundColor: theme === "dark" ? "rgba(15, 17, 26, 0.75)" : "rgba(255, 255, 255, 0.85)",
+              }}
+              aria-hidden={!dropActive}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={clsx(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border",
+                    theme === "dark" ? "border-white/10 bg-white/5" : "border-slate-200 bg-white",
+                  )}
+                  style={{ color: tokens.badgeActive }}
+                >
+                  <UploadIcon />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold" style={{ color: tokens.textPrimary }}>
+                    {canDropUpload ? "Drop to upload" : "Upload disabled"}
+                  </p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: tokens.textMuted }}>
+                    {canDropUpload ? (
+                      <>
+                        Upload to <span className="font-semibold">{dropTargetLabel}</span>
+                      </>
+                    ) : (
+                      isUploadingFiles
+                        ? "Uploads are in progress."
+                        : "Uploads aren’t available right now."
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </nav>
       </aside>
       <ContextMenu
@@ -546,6 +764,7 @@ export function Explorer({
 
 interface ExplorerNodeProps {
   readonly node: WorkbenchFileNode;
+  readonly parentId: string;
   readonly depth: number;
   readonly expanded: ReadonlySet<string>;
   readonly activeFileId: string;
@@ -564,10 +783,13 @@ interface ExplorerNodeProps {
   readonly deletingFilePath: string | null;
   readonly deletingFolderPath: string | null;
   readonly onClearCreateError: () => void;
+  readonly dropActive: boolean;
+  readonly dropTargetRowId: string | null;
 }
 
 function ExplorerNode({
   node,
+  parentId,
   depth,
   expanded,
   activeFileId,
@@ -586,12 +808,16 @@ function ExplorerNode({
   deletingFilePath,
   deletingFolderPath,
   onClearCreateError,
+  dropActive,
+  dropTargetRowId,
 }: ExplorerNodeProps) {
   const paddingLeft = 8 + depth * 16;
   const baseStyle: CSSProperties & { ["--tree-hover-bg"]?: string } = {
     paddingLeft,
     ["--tree-hover-bg"]: tokens.rowHover,
   };
+
+  const isDropTargetRow = dropActive && dropTargetRowId === node.id;
 
   if (node.kind === "folder") {
     const isOpen = expanded.has(node.id);
@@ -605,12 +831,20 @@ function ExplorerNode({
       folderStyle.backgroundColor = tokens.folderActiveBg;
     }
 
+    if (isDropTargetRow) {
+      folderStyle.outline = `1px dashed ${tokens.badgeActive}`;
+      folderStyle.outlineOffset = -1;
+      folderStyle.backgroundColor = tokens.rowHover;
+    }
+
     return (
       <li className="relative">
         <button
           type="button"
           onClick={() => onToggleFolder(node.id)}
           onContextMenu={(event) => onContextMenu(event, node)}
+          data-explorer-drop-row={node.id}
+          data-explorer-drop-path={node.id}
           className={clsx(
             "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-left font-medium transition hover:bg-[var(--tree-hover-bg)]",
             focusRingClass,
@@ -630,6 +864,7 @@ function ExplorerNode({
               <ExplorerNode
                 key={child.id}
                 node={child}
+                parentId={node.id}
                 depth={depth + 1}
                 expanded={expanded}
                 activeFileId={activeFileId}
@@ -648,6 +883,8 @@ function ExplorerNode({
                 deletingFilePath={deletingFilePath}
                 deletingFolderPath={deletingFolderPath}
                 onClearCreateError={onClearCreateError}
+                dropActive={dropActive}
+                dropTargetRowId={dropTargetRowId}
               />
             ))}
             {isEditingHere ? (
@@ -682,6 +919,13 @@ function ExplorerNode({
     fileStyle.backgroundColor = tokens.selectionBg;
     fileStyle.color = tokens.selectionText;
   }
+  if (isDropTargetRow) {
+    fileStyle.outline = `1px dashed ${tokens.badgeActive}`;
+    fileStyle.outlineOffset = -1;
+    if (!isActive) {
+      fileStyle.backgroundColor = tokens.rowHover;
+    }
+  }
 
   return (
     <li>
@@ -689,6 +933,8 @@ function ExplorerNode({
         type="button"
         onClick={() => onSelectFile(node.id)}
         onContextMenu={(event) => onContextMenu(event, node)}
+        data-explorer-drop-row={node.id}
+        data-explorer-drop-path={parentId}
         className={clsx(
           "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition hover:bg-[var(--tree-hover-bg)]",
           focusRingClass,
@@ -788,6 +1034,28 @@ function HideSidebarIcon() {
       <path d="M3 13h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M3 8h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M11 5l2 3-2 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <path d="M10 12V3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M6.25 6.75 10 3l3.75 3.75"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 12.5v2A2.5 2.5 0 0 0 6.5 17h7A2.5 2.5 0 0 0 16 14.5v-2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
