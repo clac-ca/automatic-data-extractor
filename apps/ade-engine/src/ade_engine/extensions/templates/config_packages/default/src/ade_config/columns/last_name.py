@@ -15,96 +15,114 @@ def register(registry):
 
 def detect_last_name_header(
     *,
-    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
-    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
-    column_sample: list[str],  # Trimmed, non-empty string sample from this column
-    column_name: str,  # Current DF column name (extracted header; not canonical)
-    column_index: int,  # 0-based index of this column in table.columns
+    table: pl.DataFrame,
+    column: pl.Series,
+    column_sample: list[str],
+    column_name: str,
+    column_index: int,
     header_text: str,
-    settings,  # Engine Settings (use settings.detectors.* for sampling)
-    sheet_name: str,  # Worksheet title
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    settings,
+    sheet_name: str,
+    metadata: dict,
+    state: dict,
+    input_file_name: str | None,
+    logger,
 ) -> dict[str, float] | None:
-    t = set((header_text or "").lower().replace("-", " ").split())
-    if not t:
+    """Header-based detection for last_name."""
+    tokens = set((header_text or "").lower().replace("-", " ").split())
+    if not tokens:
         return None
-    if ("last" in t and "name" in t) or "surname" in t or "family" in t:
+
+    if ("last" in tokens and "name" in tokens) or "surname" in tokens or "family" in tokens:
         return {"last_name": 1.0}
-    if "lname" in t:
+    if "lname" in tokens:
         return {"last_name": 0.9}
+
     return None
 
 
 def detect_last_name_values(
     *,
     table: pl.DataFrame,
-    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
-    column_sample: list[str],  # Trimmed, non-empty string sample from this column
-    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column: pl.Series,
+    column_sample: list[str],
+    column_name: str,
     column_index: int,
-    header_text: str,  # Trimmed header cell text for this column ("" if missing)
+    header_text: str,
     settings,
-    sheet_name: str,  # Worksheet title
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    sheet_name: str,
+    metadata: dict,
+    state: dict,
+    input_file_name: str | None,
+    logger,
 ) -> dict[str, float] | None:
-    row_n = settings.detectors.row_sample_size
-    text_n = settings.detectors.text_sample_size
+    """Value-based detection + (optional) neighbor boost (left neighbor).
 
-    t = table.head(row_n)
-    col_name = t.columns[column_index]
-
-    text = pl.col(col_name).cast(pl.Utf8).str.strip_chars()
-    t0 = t.filter(text.is_not_null() & (text != "")).head(text_n)
-    if t0.height == 0:
+    This mirrors the first_name example, but checks the left neighbor to show both directions.
+    """
+    if not column_sample:
         return None
 
-    single_token = ~text.str.contains(r"\s")
-    length_ok = text.str.len_chars() >= 2
-    score = t0.select((single_token & length_ok).mean().alias("score")).to_series(0)[0]
-    if score is None:
-        return None
+    def looks_like_last_token(s: str) -> bool:
+        if any(ch.isdigit() for ch in s):
+            return False
+        if " " in s:
+            return False
+        return len(s) >= 2
+
+    good = sum(1 for s in column_sample if looks_like_last_token(s))
+    score = good / len(column_sample)
+
+    # Optional boost: if the left neighbor is also name-like, increase confidence.
+    if column_index - 1 >= 0:
+        row_n = settings.detectors.row_sample_size
+        text_n = settings.detectors.text_sample_size
+
+        t = table.head(row_n)
+        left_col_name = t.columns[column_index - 1]
+
+        left_series = t.get_column(left_col_name).cast(pl.Utf8).str.strip_chars()
+        left_series = left_series.drop_nulls()
+        left_series = left_series.filter(left_series != "")
+        left_sample = left_series.head(text_n).to_list()
+
+        if left_sample:
+            left_good = sum(1 for s in left_sample if 2 <= len(s) <= 20 and " " not in s and not any(ch.isdigit() for ch in s))
+            left_score = left_good / len(left_sample)
+
+            if score >= 0.7 and left_score >= 0.7:
+                score = min(1.0, score + 0.15)
+
     return {"last_name": float(score)}
 
 
 def normalize_last_name(
     *,
-    field_name: str,  # Canonical field name being transformed (post-mapping)
-    table: pl.DataFrame,  # Current table DF (post-mapping)
-    settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    field_name: str,
+    table: pl.DataFrame,
+    settings,
+    state: dict,
+    metadata: dict,
+    input_file_name: str | None,
+    logger,
 ) -> pl.Expr:
+    """Trim and convert empty -> null."""
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
-    v = pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
-
-    if "full_name" not in table.columns:
-        return v
-
-    full = pl.col("full_name").cast(pl.Utf8).str.strip_chars()
-    from_full = full.str.split(" ").list.get(-1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
-
-    return pl.when(v.is_null() & full.is_not_null() & (full != "")).then(from_full).otherwise(v)
+    return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
 
 
 def validate_last_name(
     *,
-    field_name: str,  # Canonical field name being validated (post-mapping)
-    table: pl.DataFrame,  # Current table DF (post-mapping)
-    settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    field_name: str,
+    table: pl.DataFrame,
+    settings,
+    state: dict,
+    metadata: dict,
+    input_file_name: str | None,
+    logger,
 ) -> pl.Expr:
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+
     return (
         pl.when(v.is_not_null() & (v != "") & (v.str.len_chars() > 80))
         .then(pl.lit("Last name too long"))
