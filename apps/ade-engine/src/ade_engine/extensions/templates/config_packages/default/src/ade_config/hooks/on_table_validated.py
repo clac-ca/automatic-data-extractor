@@ -26,7 +26,7 @@ Notes
 -----
 - This is the last "table-returning" hook. If you change values here, validators
   will NOT re-run. Do value changes earlier in `on_table_transformed`.
-- `workbook` is `None` for this stage.
+- `workbook` is the *input* workbook (openpyxl Workbook).
 - ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
   input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
 - `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
@@ -48,10 +48,9 @@ import polars as pl
 from ade_engine.models import TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 
 # -----------------------------------------------------------------------------
@@ -89,15 +88,15 @@ def register(registry) -> None:
 
 def on_table_validated(
     *,
+    table: pl.DataFrame,  # Current table DF (post-validation; pre-write)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook | None,  # None for this stage (table hooks run before output workbook exists)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    table: pl.DataFrame,  # Current table DF (post-validation; pre-write)
-    table_region: TableRegion | None,  # header_row/first_col/last_row/last_col (1-based, inclusive) + header_inferred; refs: ref/header_ref/data_ref
-    table_index: int | None,  # 0-based table index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.DataFrame | None:
     """Default: log a small issue summary and keep the table unchanged."""
@@ -117,7 +116,7 @@ def on_table_validated(
 
     if logger:
         sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-        range_ref = table_region.ref if table_region else "<unknown>"
+        range_ref = table_region.a1
         issues_total = 0
         rows_with_issues = 0
 
@@ -129,7 +128,7 @@ def on_table_validated(
         logger.info(
             "Config hook: table validated (sheet=%s table_index=%s range=%s rows=%d cols=%d issues_total=%d rows_with_issues=%d)",
             sheet_name,
-            table_index if table_index is not None else "<unknown>",
+            table_index,
             range_ref,
             int(table.height),
             int(len(table.columns)),
@@ -147,15 +146,15 @@ def on_table_validated(
 
 def on_table_validated_example_1_enforce_template_layout(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 1: enforce a spreadsheet-style output layout.
@@ -222,15 +221,15 @@ def on_table_validated_example_1_enforce_template_layout(
 
 def on_table_validated_example_2_strict_template_only(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 2: strict template output.
@@ -272,15 +271,15 @@ def on_table_validated_example_2_strict_template_only(
 
 def on_table_validated_example_3_add_derived_columns(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 3: add derived columns using Polars expressions (fast + readable).
@@ -365,15 +364,15 @@ def on_table_validated_example_3_add_derived_columns(
 
 def on_table_validated_example_4_sort_issues_to_top(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 4: sort so rows with issues appear at the top (triage-friendly)."""
@@ -408,15 +407,15 @@ def on_table_validated_example_4_sort_issues_to_top(
 
 def on_table_validated_example_5_move_issue_columns_to_end(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 5: move ADE's reserved issue columns to the end (nicer for humans)."""
@@ -439,15 +438,15 @@ def on_table_validated_example_5_move_issue_columns_to_end(
 
 def on_table_validated_example_6_add_issues_summary_column(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 6: add a single `issues_summary` column + an `issue_fields` list column."""
@@ -488,15 +487,15 @@ def on_table_validated_example_6_add_issues_summary_column(
 
 def on_table_validated_example_7_enrich_from_reference_csv_cached(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 7: enrich your output by joining to a reference dataset.

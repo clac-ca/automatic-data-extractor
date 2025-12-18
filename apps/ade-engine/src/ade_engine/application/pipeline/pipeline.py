@@ -7,7 +7,7 @@ import polars as pl
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ade_engine.application.pipeline.detect_columns import build_source_columns, detect_and_map_columns
-from ade_engine.application.pipeline.detect_rows import DetectedTableRegion, detect_table_regions
+from ade_engine.application.pipeline.detect_rows import detect_table_regions
 from ade_engine.application.pipeline.render import SheetWriter, render_table
 from ade_engine.application.pipeline.transform import apply_transforms
 from ade_engine.application.pipeline.validate import apply_validators
@@ -124,7 +124,7 @@ class Pipeline:
         output_sheet: Worksheet,
         state: dict,
         metadata: dict,
-        input_file_name: str | None = None,
+        input_file_name: str,
     ) -> list[TableResult]:
         rows, scan = self._materialize_rows_with_scan(sheet)
         writer = SheetWriter(output_sheet)
@@ -156,7 +156,7 @@ class Pipeline:
                     sheet=sheet,
                     writer=writer,
                     rows=rows,
-                    detected_region=detected_region,
+                    table_region=detected_region,
                     state=state,
                     metadata=metadata,
                     input_file_name=input_file_name,
@@ -172,16 +172,18 @@ class Pipeline:
         sheet: Worksheet,
         writer: SheetWriter,
         rows: List[List[Any]],
-        detected_region: DetectedTableRegion,
+        table_region: TableRegion,
         state: dict,
         metadata: dict,
-        input_file_name: str | None,
+        input_file_name: str,
         table_index: int,
     ) -> TableResult:
-        header_row = (
-            rows[detected_region.header_row_index] if detected_region.header_row_index < len(rows) else []
-        )
-        data_rows = rows[detected_region.data_start_row_index : detected_region.data_end_row_index]
+        header_index = max(0, int(table_region.min_row) - 1)
+        header_row = rows[header_index] if header_index < len(rows) else []
+
+        data_start_index = max(0, int(table_region.data_first_row) - 1)
+        data_end_index = max(0, int(table_region.max_row))
+        data_rows = rows[data_start_index:data_end_index]
 
         source_cols = build_source_columns(header_row, data_rows)
 
@@ -189,11 +191,10 @@ class Pipeline:
         table = _build_table_frame(headers=extracted_headers, columns=source_cols)
 
         source_region = TableRegion(
-            header_row=int(detected_region.header_row_index) + 1,
-            first_col=1,
-            last_row=int(detected_region.data_end_row_index),
-            last_col=len(extracted_headers),
-            header_inferred=bool(getattr(detected_region, "header_inferred", False)),
+            min_row=int(table_region.min_row),
+            min_col=int(table_region.min_col),
+            max_row=int(table_region.max_row),
+            max_col=max(1, len(extracted_headers)),
         )
 
         mapped_cols, unmapped_cols, scores_by_column, duplicate_unmapped_indices = detect_and_map_columns(
@@ -227,12 +228,12 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
-            workbook=None,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
             sheet=sheet,
             table=table,
             table_region=source_region,
             table_index=table_index,
-            input_file_name=input_file_name,
             logger=self.logger,
         )
         if maybe_table is not None:
@@ -255,12 +256,12 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
-            workbook=None,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
             sheet=sheet,
             table=table,
             table_region=source_region,
             table_index=table_index,
-            input_file_name=input_file_name,
             logger=self.logger,
         )
         if maybe_table is not None:
@@ -283,12 +284,12 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
-            workbook=None,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
             sheet=sheet,
             table=table,
             table_region=source_region,
             table_index=table_index,
-            input_file_name=input_file_name,
             logger=self.logger,
         )
         if maybe_table is not None:
@@ -328,12 +329,12 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
+            input_file_name=input_file_name,
             workbook=writer.worksheet.parent,
             sheet=writer.worksheet,
             table=write_table,
             table_region=table_result.output_region,
             table_index=table_index,
-            input_file_name=input_file_name,
             logger=self.logger,
         )
         return table_result

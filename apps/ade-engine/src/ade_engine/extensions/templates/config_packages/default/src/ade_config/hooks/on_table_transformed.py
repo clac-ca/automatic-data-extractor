@@ -29,9 +29,8 @@ Return value
 
 Notes / gotchas
 ---------------
-- `workbook` is `None` in this stage (output workbook does not exist yet).
-  You *do* have `sheet` (the input openpyxl Worksheet), and can access the input
-  workbook via `sheet.parent` if needed.
+- `workbook` is the *input* workbook (openpyxl Workbook).
+  (You can also access it via `sheet.parent`.)
 - ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
   input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
 - `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
@@ -60,10 +59,9 @@ import polars as pl
 from ade_engine.models import TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 
 # -----------------------------------------------------------------------------
@@ -113,15 +111,15 @@ def register(registry) -> None:
 
 def on_table_transformed(
     *,
+    table: pl.DataFrame,  # Current table DF (post-transforms; pre-validation)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook | None,  # None for this stage (table hooks run before output workbook exists)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    table: pl.DataFrame,  # Current table DF (post-transforms; pre-validation)
-    table_region: TableRegion | None,  # header_row/first_col/last_row/last_col (1-based, inclusive) + header_inferred; refs: ref/header_ref/data_ref
-    table_index: int | None,  # 0-based table index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.DataFrame | None:
     """Default hook (no-op). Replace/extend with your own logic or enable examples below."""
@@ -140,11 +138,11 @@ def on_table_transformed(
 
     if logger:
         sheet_name = (getattr(sheet, "title", None) or getattr(sheet, "name", None) or "").strip()
-        range_ref = table_region.ref if table_region else "<unknown>"
+        range_ref = table_region.a1
         logger.info(
             "Config hook: table transformed (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
             sheet_name,
-            table_index if table_index is not None else "<unknown>",
+            table_index,
             range_ref,
             int(table.height),
             len(table.columns),
@@ -159,15 +157,15 @@ def on_table_transformed(
 
 def on_table_transformed_example_1_normalize_all_text(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """
@@ -204,15 +202,15 @@ def on_table_transformed_example_1_normalize_all_text(
 
 def on_table_transformed_example_2_add_provenance_columns(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """
@@ -240,15 +238,15 @@ def on_table_transformed_example_2_add_provenance_columns(
 
 def on_table_transformed_example_3_derive_full_name(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -293,15 +291,15 @@ def on_table_transformed_example_3_derive_full_name(
 
 def on_table_transformed_example_4_parse_date_multi_format(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -336,15 +334,15 @@ def on_table_transformed_example_4_parse_date_multi_format(
 
 def on_table_transformed_example_5_parse_currency_amount(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -406,15 +404,15 @@ def on_table_transformed_example_5_parse_currency_amount(
 
 def on_table_transformed_example_6_compute_line_total(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -450,15 +448,15 @@ def on_table_transformed_example_6_compute_line_total(
 
 def on_table_transformed_example_7_drop_non_data_rows(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """
@@ -519,15 +517,15 @@ def on_table_transformed_example_7_drop_non_data_rows(
 
 def on_table_transformed_example_8_add_report_date_from_sheet_header(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -549,9 +547,7 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
     found_label = False
     report_date_value: Any | None = None
 
-    max_scan_row = 40
-    if table_region is not None:
-        max_scan_row = min(max_scan_row, int(table_region.header_row))
+    max_scan_row = min(40, int(table_region.header_row))
 
     try:
         rows = sheet.iter_rows(min_row=1, max_row=max_scan_row, min_col=1, max_col=20)
@@ -602,15 +598,15 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
 
 def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """
@@ -633,12 +629,8 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     if join_key not in table.columns:
         return None
 
-    input_wb = getattr(sheet, "parent", None)
-    if input_wb is None:
-        return None
-
     lookup_sheet_name = "Lookups"
-    sheetnames = getattr(input_wb, "sheetnames", []) or []
+    sheetnames = getattr(workbook, "sheetnames", []) or []
     if lookup_sheet_name not in sheetnames:
         return None
 
@@ -658,7 +650,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     lookup_df = cache.get(cache_key)
 
     if lookup_df is None and cache_key not in cache:
-        ws_lookup = input_wb[lookup_sheet_name]
+        ws_lookup = workbook[lookup_sheet_name]
 
         rows: list[dict[str, Any]] = []
         # Assume header is row 1, data starts at row 2, columns A..B are the mapping.
@@ -713,15 +705,15 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 
 def on_table_transformed_example_10_geocode_address_google(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 10 (advanced): use Google Geocoding to canonicalize `address_full`.

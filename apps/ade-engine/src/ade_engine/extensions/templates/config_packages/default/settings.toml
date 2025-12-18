@@ -1,5 +1,6 @@
 # ADE engine runtime settings (optional)
 # The engine will load this file if present (otherwise it uses safe defaults).
+# If changed, ensure you force a rebuild so the package (and settings) are reinstalled in the venv.
 
 [ade_engine]
 remove_unmapped_columns = false

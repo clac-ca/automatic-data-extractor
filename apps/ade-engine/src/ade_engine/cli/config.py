@@ -32,6 +32,15 @@ app = typer.Typer(
     rich_markup_mode="markdown",
 )
 
+_CONFIG_TEMPLATE_IGNORE_PATTERNS = (
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+)
+
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -90,9 +99,7 @@ def init_config(
             target_dir,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns(
-                "__pycache__",
-                "*.pyc",
-                "*.pyo",
+                *_CONFIG_TEMPLATE_IGNORE_PATTERNS,
             ),
         )
 

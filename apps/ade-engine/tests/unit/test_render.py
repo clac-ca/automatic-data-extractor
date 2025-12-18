@@ -40,10 +40,10 @@ def test_render_writes_non_reserved_columns_by_default():
         sheet_name="Sheet1",
         table=table,
         source_region=TableRegion(
-            header_row=1,
-            first_col=1,
-            last_row=1 + table.height,
-            last_col=len(table.columns),
+            min_row=1,
+            min_col=1,
+            max_row=1 + table.height,
+            max_col=len(table.columns),
         ),
         source_columns=[],
         row_count=table.height,
@@ -62,7 +62,7 @@ def test_render_writes_non_reserved_columns_by_default():
     assert [cell.value for cell in ws[1]] == ["email", "name", "Notes"]
     assert [cell.value for cell in ws[2]] == ["a@example.com", "Alice", "note-1"]
     assert table_result.output_region is not None
-    assert table_result.output_region.ref == "A1:C2"
+    assert table_result.output_region.a1 == "A1:C2"
 
 
 def test_render_remove_unmapped_columns_drops_non_canonical():
@@ -74,10 +74,10 @@ def test_render_remove_unmapped_columns_drops_non_canonical():
         sheet_name="Sheet1",
         table=table,
         source_region=TableRegion(
-            header_row=1,
-            first_col=1,
-            last_row=1 + table.height,
-            last_col=len(table.columns),
+            min_row=1,
+            min_col=1,
+            max_row=1 + table.height,
+            max_col=len(table.columns),
         ),
         source_columns=[],
         row_count=table.height,
@@ -105,10 +105,10 @@ def test_render_write_diagnostics_columns_keeps_reserved_columns():
         sheet_name="Sheet1",
         table=table,
         source_region=TableRegion(
-            header_row=1,
-            first_col=1,
-            last_row=1 + table.height,
-            last_col=len(table.columns),
+            min_row=1,
+            min_col=1,
+            max_row=1 + table.height,
+            max_col=len(table.columns),
         ),
         source_columns=[],
         row_count=table.height,

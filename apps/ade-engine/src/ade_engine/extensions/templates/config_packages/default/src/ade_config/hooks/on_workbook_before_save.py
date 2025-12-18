@@ -16,7 +16,6 @@ What it's useful for
 Return value
 ------------
 - This hook MUST return `None` (returning anything else raises HookError).
-- `sheet` and `table` are always `None` for this hook.
 
 Template goals
 --------------
@@ -71,17 +70,15 @@ def register(registry) -> None:
 
 def on_workbook_before_save(
     *,
+    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run metadata (filenames, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
-    sheet: None,  # Always None for this hook
-    table: None,  # Always None for this hook
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
     """Default: log basic info (safe, no workbook modifications)."""
-    _ = (settings, state, sheet, table)  # unused by default
+    _ = (settings,)  # unused by default
 
     cfg = state.get(STATE_NAMESPACE)
     if not isinstance(cfg, MutableMapping):
@@ -113,13 +110,11 @@ def on_workbook_before_save(
 
 def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 1: Set workbook properties and ask Excel to recalc formulas on open.
@@ -128,7 +123,7 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
       - You generate files for humans (title/author helps searchability).
       - You write formulas (openpyxl does NOT compute formulas; Excel will).
     """
-    _ = (settings, state, sheet, table)
+    _ = (settings, state)
 
     from datetime import datetime, timezone
 
@@ -171,13 +166,11 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
 
 def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 2: Apply consistent worksheet UX and print settings.
@@ -188,7 +181,7 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
       - auto-filter on the used range
       - print title rows + landscape + fit-to-width
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     for ws in getattr(workbook, "worksheets", []) or []:
         # Skip truly empty sheets
@@ -226,13 +219,11 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
 
 def on_workbook_before_save_example_3_namedstyle_headers(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 3: Create a NamedStyle and apply it to header rows.
@@ -242,7 +233,7 @@ def on_workbook_before_save_example_3_namedstyle_headers(
       - Easy to apply (cell.style = "NAME")
       - Avoids copy/pasting style objects everywhere
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
 
@@ -287,13 +278,11 @@ def on_workbook_before_save_example_3_namedstyle_headers(
 
 def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 4: Auto-size columns (fast sampling) and set number formats by header name.
@@ -303,7 +292,7 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
       - width estimation
       - applying number formats by header heuristics (common in exports)
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     from openpyxl.utils import get_column_letter
     from openpyxl.styles import numbers
@@ -381,13 +370,11 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
 
 def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 5: Create a “Run Summary” sheet at the front of the workbook.
@@ -398,7 +385,7 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
       - formulas (Excel computes on open)
       - a simple chart
     """
-    _ = (settings, state, sheet, table)
+    _ = (settings, state)
 
     from datetime import datetime, timezone
     from openpyxl.chart import BarChart, Reference
@@ -491,13 +478,11 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
 
 def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 6: Convert each sheet's used range to an Excel Table.
@@ -507,7 +492,7 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
       - table styling (banded rows)
       - ensuring header uniqueness (Excel requires unique header names)
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     import re
     from openpyxl.utils import get_column_letter
@@ -595,13 +580,11 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
 
 def on_workbook_before_save_example_7_apply_conditional_formatting(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 7: Apply conditional formatting to each sheet's used range.
@@ -611,7 +594,7 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
       - CellIsRule (negative numbers)
       - ColorScaleRule (heatmap-ish for a numeric column)
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, FormulaRule
     from openpyxl.styles import PatternFill
@@ -670,13 +653,11 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
 
 def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 8: Add a dropdown (DataValidation) to a 'status' column if present.
@@ -685,7 +666,7 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
       - scanning header row for a specific column name
       - adding a list validation to a whole column range
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     from openpyxl.worksheet.datavalidation import DataValidation
     from openpyxl.utils import get_column_letter
@@ -723,13 +704,11 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
 
 def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 9: Hide helper sheets and choose a default active sheet.
@@ -765,13 +744,11 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
 
 def on_workbook_before_save_example_10_protect_sheets(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 10: Protect worksheets from accidental edits.
@@ -780,7 +757,7 @@ def on_workbook_before_save_example_10_protect_sheets(
       - Excel sheet protection is not strong security.
       - Use it to reduce accidental changes, not for secrets.
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     PASSWORD = "change-me"  # If you use this, set it via env/settings instead of hardcoding.
     protected = 0

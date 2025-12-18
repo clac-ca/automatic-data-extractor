@@ -102,6 +102,31 @@ Transforms return Polars expressions:
 - `pl.Expr` for the output column
 - `None` for no change
 
+### Polars expressions (quick mental model)
+
+`pl.Expr` is a *deferred, vectorized* column expression. Think “SQL expression”, not “Python value”.
+The engine applies your transform by doing something like:
+
+```python
+table = table.with_columns(transform_expr.alias(field_name))
+```
+
+Common building blocks:
+
+- `pl.col("name")` references a column
+- `pl.lit("x")` makes a literal (important: plain `"x"` can be interpreted as a column name)
+- `pl.when(cond).then(expr).otherwise(expr)` is a vectorized if/else
+- `pl.coalesce([a, b, ...])` picks the first non-null
+
+Example: normalize a text column (trim + collapse whitespace + empty → null):
+
+```python
+def normalize_text(*, field_name: str, **_) -> pl.Expr:
+    raw = pl.col(field_name).cast(pl.Utf8, strict=False)
+    text = raw.str.strip_chars().str.replace_all(r"\s+", " ")
+    return pl.when(text.is_null() | (text == "")).then(pl.lit(None)).otherwise(text)
+```
+
 Transforms run after mapping, so canonical field names exist at that point.
 You may reference other fields using `pl.col("other_field")`, but guard with
 `if "other_field" in table.columns` when optional.
@@ -114,6 +139,15 @@ Validators return a Polars expression that yields:
 
 - `"Issue message"` when invalid
 - `None` when valid
+
+Example: validate “must not contain digits” and emit a message:
+
+```python
+def validate_no_digits(*, field_name: str, **_) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8, strict=False).str.strip_chars()
+    bad = v.is_not_null() & (v != "") & v.str.contains(r"\d")
+    return pl.when(bad).then(pl.lit("Contains digits")).otherwise(pl.lit(None))
+```
 
 Validators can reference other fields (post-mapping) the same way transforms can.
 Validation issues remain row-aligned because they are stored inline.

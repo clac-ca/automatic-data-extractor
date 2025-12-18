@@ -10,13 +10,13 @@ Register with: `registry.register_row_detector(fn, row_kind="header"|"data"|...,
 
 Context fields you can accept:
 
-- `row_index: int`
+- `row_index: int` (1-based row number in the scanned sheet; Excel/openpyxl-style)
 - `row_values: Sequence[Any]`
 - `sheet_name: str`
 - `settings` (engine settings)
 - `metadata: Mapping[str, Any]`
 - `state: dict`
-- `input_file_name: str | None`
+- `input_file_name: str`
 - `logger`
 
 Return: `dict[str, float]` mapping row kind → score, or `None` / `{}`.
@@ -33,10 +33,24 @@ Context fields you can accept:
 - `column_name: str`
 - `column_index: int`
 - `header_text: str` (trimmed; `""` if missing)
+- `table_region: TableRegion`
+- `table_index: int`
 - `settings` (engine settings)
-- `sheet_name, metadata, state, input_file_name, logger`
+- `sheet_name: str`
+- `metadata: Mapping[str, Any]`
+- `state: dict`
+- `input_file_name: str`
+- `logger`
 
 Return: `dict[str, float]` keyed by field name, or `None` / `{}`.
+
+## TableRegion
+
+`TableRegion` is a simple bounding box in worksheet coordinates (1-based, inclusive):
+
+- `min_row`, `min_col`, `max_row`, `max_col`
+- `a1`: `"B5:G20"`-style range string
+- Convention: `min_row` is the header row (`table_region.header_row`).
 
 ## Transforms (v3)
 
@@ -47,7 +61,19 @@ Register with: `registry.register_column_transform(fn, field="<canonical_field>"
 Recommended signature:
 
 ```py
-def transform(*, field_name: str, table: pl.DataFrame, settings, state: dict, metadata: dict, logger, **_) -> pl.Expr | None:
+def transform(
+    *,
+    field_name: str,
+    table: pl.DataFrame,
+    table_region: TableRegion,
+    table_index: int,
+    input_file_name: str,
+    settings,
+    state: dict,
+    metadata: dict,
+    logger,
+    **_,
+) -> pl.Expr | None:
     ...
 ```
 
@@ -68,7 +94,19 @@ Register with: `registry.register_column_validator(fn, field="<canonical_field>"
 Recommended signature:
 
 ```py
-def validate(*, field_name: str, table: pl.DataFrame, settings, state: dict, metadata: dict, logger, **_) -> pl.Expr | None:
+def validate(
+    *,
+    field_name: str,
+    table: pl.DataFrame,
+    table_region: TableRegion,
+    table_index: int,
+    input_file_name: str,
+    settings,
+    state: dict,
+    metadata: dict,
+    logger,
+    **_,
+) -> pl.Expr | None:
     ...
 ```
 

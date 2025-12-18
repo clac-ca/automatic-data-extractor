@@ -76,19 +76,14 @@ def render_table(
 
     rows_written = 1 + write_table.height
     col_count = len(headers)
-    if col_count > 0 and rows_written > 0:
-        end_row = start_row + rows_written - 1
-        output_region = TableRegion(
-            header_row=start_row,
-            first_col=1,
-            last_row=end_row,
-            last_col=col_count,
-            header_inferred=table_result.source_region.header_inferred,
-        )
-        output_range = output_region.ref
-    else:
-        output_region = None
-        output_range = ""
+    end_row = start_row + rows_written - 1
+    output_region = TableRegion(
+        min_row=start_row,
+        min_col=1,
+        max_row=end_row,
+        max_col=max(1, col_count),
+    )
+    output_range = output_region.a1
 
     table_result.output_region = output_region
     table_result.output_sheet_name = writer.worksheet.title

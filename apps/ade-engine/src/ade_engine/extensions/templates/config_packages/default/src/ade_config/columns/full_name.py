@@ -33,10 +33,9 @@ import polars as pl
 from ade_engine.models import FieldDef, TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 # -----------------------------------------------------------------------------
 # Shared state namespacing
@@ -98,11 +97,11 @@ def detect_full_name_header_common_names(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
+    input_file_name: str,  # Input filename (basename)
     logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Enabled by default.
@@ -139,11 +138,11 @@ def detect_full_name_values_basic(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
+    input_file_name: str,  # Input filename (basename)
     logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
@@ -176,12 +175,12 @@ def normalize_full_name(
     *,
     field_name: str,  # Canonical field name (post-mapping)
     table: pl.DataFrame,  # Post-mapping table
+    table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
     metadata: dict,  # Run metadata
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,  # Input filename (basename) if known
+    state: dict,  # Mutable dict shared across the run
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Enabled by default.
@@ -192,19 +191,24 @@ def normalize_full_name(
         - "Last, First" -> "First Last"
         - collapse internal whitespace
         - convert empty strings to null
-    """
-    _ = (table, settings, state, metadata, table_region, table_index, input_file_name, logger)  # unused by default
 
-    full = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    Notes:
+      - Returns a `pl.Expr` (a deferred, vectorized column expression).
+      - This is a slightly more advanced example: it uses Polars list operations
+        (`str.split(...).list.get(...)`) to extract name parts.
+    """
+    full = pl.col(field_name).cast(pl.Utf8, strict=False).str.strip_chars()
     full = full.str.replace_all(r"\s+", " ")
     full = pl.when(full.is_null() | (full == "")).then(pl.lit(None)).otherwise(full)
 
     has_comma = full.str.contains(",")
 
+    # "Last, First" -> split on comma and pick both sides.
     comma_parts = full.str.split(",")
     comma_last = comma_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
     comma_first = comma_parts.list.get(1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
 
+    # "First Last" -> split on spaces and pick the first and last tokens.
     space_parts = full.str.split(" ")
     space_len = space_parts.list.len()
     space_first = space_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
@@ -232,13 +236,13 @@ def normalize_full_name(
 def validate_full_name(
     *,
     field_name: str,  # Canonical field name (post-mapping)
-    table: pl.DataFrame,  # Post-mapping table
+    table: pl.DataFrame,  # Post-mapping table (so validators can reference other fields)
+    table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
     metadata: dict,  # Run metadata
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,  # Input filename (basename) if known
+    state: dict,  # Mutable dict shared across the run
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
@@ -247,7 +251,7 @@ def validate_full_name(
       - Flag unexpected characters.
       - Show a simple cross-field consistency check (if first+last exist but full is missing).
     """
-    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    v = pl.col(field_name).cast(pl.Utf8, strict=False).str.strip_chars()
 
     format_issue = (
         pl.when(v.is_not_null() & (v != "") & ~v.str.contains(ALLOWED_FULL_NAME_PATTERN))
@@ -256,8 +260,8 @@ def validate_full_name(
     )
 
     if "first_name" in table.columns and "last_name" in table.columns:
-        first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
-        last = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
+        first = pl.col("first_name").cast(pl.Utf8, strict=False).str.strip_chars()
+        last = pl.col("last_name").cast(pl.Utf8, strict=False).str.strip_chars()
 
         missing_full = v.is_null() | (v == "")
         parts_present = first.is_not_null() & (first != "") & last.is_not_null() & (last != "")

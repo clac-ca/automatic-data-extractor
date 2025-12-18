@@ -31,7 +31,7 @@ def test_run_completion_report_allows_hooks_to_filter_rows() -> None:
             sheet_name="Sheet1",
             sheet_index=0,
             table_index=0,
-            source_region=TableRegion(header_row=1, first_col=1, last_row=5, last_col=len(source_columns)),
+            source_region=TableRegion(min_row=1, min_col=1, max_row=5, max_col=len(source_columns)),
             source_columns=source_columns,
             table=filtered_table,
             row_count=filtered_table.height,

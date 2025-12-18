@@ -61,12 +61,12 @@ def register(registry) -> None:
 
 def on_sheet_start(
     *,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
     """
@@ -173,12 +173,12 @@ def on_sheet_start(
 
 def on_sheet_start_example_1_route_or_skip_sheets(
     *,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -256,12 +256,12 @@ def on_sheet_start_example_1_route_or_skip_sheets(
 
 def on_sheet_start_example_2_capture_excel_tables(
     *,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -335,12 +335,12 @@ def on_sheet_start_example_2_capture_excel_tables(
 
 def on_sheet_start_example_3_hint_header_from_freeze_panes(
     *,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """

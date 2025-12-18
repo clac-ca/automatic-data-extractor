@@ -9,9 +9,9 @@ The Registry is the in-memory catalogue of everything a config package provides.
 - **Column detectors** — callable + `field` + `priority`.
 - **Column transforms** — callable + `field` + `priority`.
 - **Column validators** — callable + `field` + `priority`.
-- **Hooks** — callable + `hook_name` + `priority` for workbook/sheet/table lifecycle.
+- **Hooks** — callable + hook stage + `priority` for workbook/sheet/table lifecycle.
 
-`RegisteredFn` keeps `fn`, `priority`, `module`, `qualname`, and the relevant field/row_kind/hook_name.
+`RegisteredFn` keeps `fn`, `priority`, `module`, `qualname`, and the relevant field/row_kind/hook stage (internal key).
 
 ## Ordering
 

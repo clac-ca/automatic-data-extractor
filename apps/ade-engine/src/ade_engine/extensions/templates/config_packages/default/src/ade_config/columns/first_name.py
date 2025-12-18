@@ -30,10 +30,9 @@ import polars as pl
 from ade_engine.models import FieldDef, TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 # -----------------------------------------------------------------------------
 # Shared state namespacing
@@ -85,11 +84,11 @@ def detect_first_name_header_common_names(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,  # 0-based index within the sheet (when multiple tables exist)
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,  # 0-based index within the sheet (when multiple tables exist)
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
+    input_file_name: str,  # Input filename (basename)
     logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Enabled by default.
@@ -122,11 +121,11 @@ def detect_first_name_values_basic(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
+    input_file_name: str,  # Input filename (basename)
     logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
@@ -162,11 +161,11 @@ def detect_first_name_values_neighbor_pair(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    input_file_name: str | None,  # Input filename (basename) if known
+    input_file_name: str,  # Input filename (basename)
     logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
@@ -237,41 +236,56 @@ def normalize_first_name(
     *,
     field_name: str,  # Canonical field name (post-mapping)
     table: pl.DataFrame,  # Post-mapping table
+    table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
     metadata: dict,  # Run metadata
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,  # 0-based index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
+    state: dict,  # Mutable dict shared across the run
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 
     Purpose:
       - Standardize blanks and whitespace.
+
+    Notes:
+      - Returns a `pl.Expr`, which is a *deferred* expression (a recipe for a column).
+      - The engine will apply it to the DataFrame and alias it to `field_name`.
+      - Use `pl.lit(...)` for literals (including strings and `None`).
     """
-    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
-    return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
+    raw = pl.col(field_name).cast(pl.Utf8, strict=False)
+
+    # Step 1: normalize whitespace.
+    text = raw.str.strip_chars().str.replace_all(r"\s+", " ")
+
+    # Step 2: normalize empty strings to null.
+    normalized = pl.when(text.is_null() | (text == "")).then(pl.lit(None)).otherwise(text)
+    return normalized
 
 
 def validate_first_name(
     *,
     field_name: str,  # Canonical field name (post-mapping)
     table: pl.DataFrame,  # Post-mapping table
+    table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
     metadata: dict,  # Run metadata
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,  # 0-based index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
+    state: dict,  # Mutable dict shared across the run
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 
     Purpose:
       - Catch clearly bad data without being overly strict.
+
+    Return value:
+      - A `pl.Expr` that yields a message string when invalid, else null.
+      - ADE stores the result in `__ade_issue__{field_name}`.
     """
-    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    v = pl.col(field_name).cast(pl.Utf8, strict=False).str.strip_chars()
     return (
         pl.when(v.is_not_null() & (v != "") & (v.str.len_chars() > 50))
         .then(pl.lit("First name is unusually long"))

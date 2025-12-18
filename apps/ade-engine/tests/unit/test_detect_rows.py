@@ -62,9 +62,9 @@ def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
     logger = NullLogger()
 
     def detector(*, row_index, **_):
-        if row_index in (0, 1):
+        if row_index in (1, 2):
             return {RowKind.HEADER.value: 1.0}
-        if row_index == 2:
+        if row_index == 3:
             return {RowKind.DATA.value: 1.0}
         return {}
 
@@ -85,9 +85,9 @@ def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
         logger=logger,
     )
 
-    assert [(t.header_row_index, t.data_start_row_index, t.data_end_row_index) for t in tables] == [
-        (0, 1, 1),
-        (1, 2, 3),
+    assert [(t.min_row, t.max_row, t.max_col) for t in tables] == [
+        (1, 1, 2),
+        (2, 3, 2),
     ]
 
 
@@ -96,9 +96,9 @@ def test_detect_table_regions_returns_multiple_tables():
     logger = NullLogger()
 
     def detector(*, row_index, **_):
-        if row_index in (0, 3):
+        if row_index in (1, 4):
             return {RowKind.HEADER.value: 1.0}
-        if row_index in (1, 2, 4):
+        if row_index in (2, 3, 5):
             return {RowKind.DATA.value: 1.0}
         return {}
 
@@ -121,7 +121,7 @@ def test_detect_table_regions_returns_multiple_tables():
         logger=logger,
     )
 
-    assert [(t.header_row_index, t.data_start_row_index, t.data_end_row_index) for t in tables] == [
-        (0, 1, 3),
-        (3, 4, 5),
+    assert [(t.min_row, t.max_row, t.max_col) for t in tables] == [
+        (1, 3, 2),
+        (4, 5, 2),
     ]

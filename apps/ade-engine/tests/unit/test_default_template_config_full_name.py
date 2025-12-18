@@ -9,6 +9,7 @@ from ade_engine.extensions.loader import import_and_register
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
+from ade_engine.models.table import TableRegion
 
 
 def test_default_template_full_name_transform_normalizes_common_formats():
@@ -21,13 +22,16 @@ def test_default_template_full_name_transform_normalizes_common_formats():
     import_and_register(template_dir, registry=registry)
     registry.finalize()
 
+    table = pl.DataFrame({"full_name": ["Doe, John", "Jane Doe", "Cher", None]})
     out = apply_transforms(
-        table=pl.DataFrame({"full_name": ["Doe, John", "Jane Doe", "Cher", None]}),
+        table=table,
         registry=registry,
         settings=Settings(),
         state={},
         metadata={},
-        input_file_name=None,
+        table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+        table_index=0,
+        input_file_name="input.xlsx",
         logger=NullLogger(),
     )
 

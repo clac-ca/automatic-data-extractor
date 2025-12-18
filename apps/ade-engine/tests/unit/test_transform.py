@@ -9,6 +9,7 @@ from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import FieldDef
+from ade_engine.models.table import TableRegion
 
 
 class SpyLogger:
@@ -41,7 +42,9 @@ def test_transform_applies_expr_outputs():
         settings=Settings(),
         state={},
         metadata={},
-        input_file_name=None,
+        table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+        table_index=0,
+        input_file_name="input.xlsx",
         logger=logger,
     )
 
@@ -61,13 +64,16 @@ def test_transform_invalid_return_raises_pipeline_error():
     registry.finalize()
 
     with pytest.raises(PipelineError):
+        table = pl.DataFrame({"foo": [1, 2]})
         apply_transforms(
-            table=pl.DataFrame({"foo": [1, 2]}),
+            table=table,
             registry=registry,
             settings=Settings(),
             state={},
             metadata={},
-            input_file_name=None,
+            table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+            table_index=0,
+            input_file_name="input.xlsx",
             logger=NullLogger(),
         )
 
@@ -84,12 +90,15 @@ def test_transform_dict_output_raises_pipeline_error():
     registry.finalize()
 
     with pytest.raises(PipelineError):
+        table = pl.DataFrame({"foo": ["a", "b"]})
         apply_transforms(
-            table=pl.DataFrame({"foo": ["a", "b"]}),
+            table=table,
             registry=registry,
             settings=Settings(),
             state={},
             metadata={},
-            input_file_name=None,
+            table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+            table_index=0,
+            input_file_name="input.xlsx",
             logger=NullLogger(),
         )

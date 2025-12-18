@@ -51,9 +51,9 @@ def apply_validators(
     settings,
     state: dict,
     metadata: dict,
-    table_region: TableRegion | None = None,
-    table_index: int | None = None,
-    input_file_name: str | None,
+    table_region: TableRegion,
+    table_index: int,
+    input_file_name: str,
     logger: RunLogger,
 ) -> pl.DataFrame:
     """Apply v3 validators (issue-message Expr) inline to the DataFrame."""
@@ -122,7 +122,7 @@ def apply_validators(
             data={
                 "issue_columns": issue_columns,
                 "table_index": table_index,
-                "table_region": table_region.ref if table_region else None,
+                "table_region": table_region.a1 if table_region else None,
                 "rows": table.height,
             },
         )
