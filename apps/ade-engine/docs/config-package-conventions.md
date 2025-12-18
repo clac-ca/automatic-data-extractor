@@ -46,7 +46,7 @@ Commonly overridden settings per package:
 - `remove_unmapped_columns` (drop non-canonical columns at write time)
 - `write_diagnostics_columns` (include reserved `__ade_*` columns in output)
 - `mapping_tie_resolution` (choose `leftmost` vs `leave_unmapped`)
-- `detectors.row_sample_size` / `detectors.text_sample_size` (detector sampling policy)
+- `detectors.detector_max_table_rows` / `detectors.detector_column_sample_size` (detector sampling policy)
 - `max_empty_rows_run` / `max_empty_cols_run` (sheet scanning guards)
 
 ## Testing your package

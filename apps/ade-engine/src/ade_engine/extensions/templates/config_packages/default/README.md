@@ -61,8 +61,8 @@ Instead:
 **Sample sizing (settings-driven)**
 
 ```python
-row_n = settings.detectors.row_sample_size
-text_n = settings.detectors.text_sample_size
+row_n = settings.detectors.detector_max_table_rows
+text_n = settings.detectors.detector_column_sample_size
 
 # Use only the first row_n rows for detection work (bounded cost).
 t = table.head(row_n)

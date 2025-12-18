@@ -194,8 +194,8 @@ def detect_first_name_values_neighbor_pair(
     if column_index + 1 >= len(table.columns):
         return {FIELD_NAME: float(base_score)}
 
-    row_n = settings.detectors.row_sample_size
-    text_n = settings.detectors.text_sample_size
+    row_n = settings.detectors.detector_max_table_rows
+    text_n = settings.detectors.detector_column_sample_size
 
     t = table.head(row_n)
     right_col_name = t.columns[column_index + 1]
