@@ -8,7 +8,7 @@ This module demonstrates:
 Detector stage (pre-mapping)
 ----------------------------
 - Called once per extracted table column.
-- Return `{FIELD_NAME: score}` (0..1) or `None`.
+- Return `{"middle_name": score}` (0..1) or `None`.
 
 Transform/validate stage (post-mapping)
 ---------------------------------------
@@ -26,50 +26,22 @@ from __future__ import annotations
 import re
 
 import polars as pl
-
 from ade_engine.models import FieldDef, TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
-# they can share cached values and facts.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-FIELD_NAME = "middle_name"
-
-_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
-
-HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
-    {"middle", "name"},
-    {"middlename"},
-    {"middle", "initial"},
-    {"middleinitial"},
-    {"mi"},
-    {"m", "i"},  # supports "M.I." -> "m i"
-]
 
 
 def register(registry) -> None:
     """Register the `middle_name` field and its detectors/transforms/validators."""
-    registry.register_field(FieldDef(name=FIELD_NAME, label="Middle Name", dtype="string"))
+    registry.register_field(FieldDef(name="middle_name", label="Middle Name", dtype="string"))
 
     # Enabled by default:
-    registry.register_column_detector(detect_middle_name_header_common_names, field=FIELD_NAME, priority=60)
+    registry.register_column_detector(
+        detect_middle_name_header_common_names, field="middle_name", priority=60
+    )
 
     # Examples (uncomment to enable)
-    # registry.register_column_detector(detect_middle_name_values_initials, field=FIELD_NAME, priority=30)
-    # registry.register_column_transform(normalize_middle_name, field=FIELD_NAME, priority=0)
-    # registry.register_column_validator(validate_middle_name, field=FIELD_NAME, priority=0)
+    # registry.register_column_detector(detect_middle_name_values_initials, field="middle_name", priority=30)
+    # registry.register_column_transform(normalize_middle_name, field="middle_name", priority=0)
+    # registry.register_column_validator(validate_middle_name, field="middle_name", priority=0)
 
 
 def detect_middle_name_header_common_names(
@@ -82,7 +54,7 @@ def detect_middle_name_header_common_names(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion,  # See `TableRegion` notes above
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
@@ -94,17 +66,27 @@ def detect_middle_name_header_common_names(
     Purpose:
       - Match typical middle-name headers ("middle name", "mi", "middle initial", ...).
     """
+    header_non_alnum_re = re.compile(r"[^a-z0-9]+")
+    header_token_sets_strong: list[set[str]] = [
+        {"middle", "name"},
+        {"middlename"},
+        {"middle", "initial"},
+        {"middleinitial"},
+        {"mi"},
+        {"m", "i"},  # supports "M.I." -> "m i"
+    ]
+
     raw = (header_text or "").strip().lower()
     if not raw:
         return None
 
-    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    normalized = header_non_alnum_re.sub(" ", raw).strip()
     tokens = set(normalized.split())
     if not tokens:
         return None
 
-    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
-        return {FIELD_NAME: 1.0}
+    if any(pattern <= tokens for pattern in header_token_sets_strong):
+        return {"middle_name": 1.0}
 
     return None
 
@@ -143,7 +125,7 @@ def detect_middle_name_values_initials(
         elif len(s) == 2 and s[0].isalpha() and s[1] == ".":
             matches += 1
 
-    return {FIELD_NAME: float(matches / total)}
+    return {"middle_name": float(matches / total)}
 
 
 def normalize_middle_name(

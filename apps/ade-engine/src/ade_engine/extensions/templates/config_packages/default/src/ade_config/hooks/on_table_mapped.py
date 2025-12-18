@@ -34,30 +34,12 @@ Template goals
 
 from __future__ import annotations
 
-from typing import Any, MutableMapping, Sequence
+from collections.abc import MutableMapping, Sequence
 
 import openpyxl
 import openpyxl.worksheet.worksheet
 import polars as pl
-
 from ade_engine.models import TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
 
 # -----------------------------------------------------------------------------
 # Polars convenience: string dtype selection across versions
@@ -114,7 +96,7 @@ def on_table_mapped(
     table: pl.DataFrame,  # Current table DF (post-mapping; pre-transforms)
     sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
@@ -125,11 +107,7 @@ def on_table_mapped(
     """Default: increment a counter and log the table shape (does not mutate `table`)."""
     _ = (settings, workbook, input_file_name)  # unused by default
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     counters = cfg.get("counters")
     if not isinstance(counters, MutableMapping):
@@ -191,10 +169,7 @@ def on_table_mapped_example_1_basic_cleanup(
     lowered = trimmed.str.to_lowercase()
 
     cleaned = table.with_columns(
-        pl.when(lowered.is_in(tokens))
-        .then(pl.lit(None))
-        .otherwise(trimmed)
-        .name.keep()
+        pl.when(lowered.is_in(tokens)).then(pl.lit(None)).otherwise(trimmed).name.keep()
     )
 
     # 2) Drop fully-empty rows (all columns are null/blank).
@@ -240,7 +215,17 @@ def on_table_mapped_example_2_trim_all_string_columns(
     logger,
 ) -> pl.DataFrame:
     """Example 2: trim all string columns (safe, cheap, and often helpful)."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
     return table.with_columns(pl.col(_TEXT_DTYPES).str.strip_chars().name.keep())
 
@@ -260,17 +245,24 @@ def on_table_mapped_example_3_normalize_empty_sentinels(
     empty_sentinels: Sequence[str] = DEFAULT_EMPTY_SENTINELS,
 ) -> pl.DataFrame:
     """Example 3: normalize common 'empty' tokens to null across all string columns."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
     tokens = [t.strip().lower() for t in empty_sentinels]
     trimmed = pl.col(_TEXT_DTYPES).cast(TEXT_DTYPE, strict=False).str.strip_chars()
     lowered = trimmed.str.to_lowercase()
 
     return table.with_columns(
-        pl.when(lowered.is_in(tokens))
-        .then(pl.lit(None))
-        .otherwise(trimmed)
-        .name.keep()
+        pl.when(lowered.is_in(tokens)).then(pl.lit(None)).otherwise(trimmed).name.keep()
     )
 
 
@@ -388,7 +380,17 @@ def on_table_mapped_example_6_derive_full_name(
     logger,
 ) -> pl.DataFrame | None:
     """Example 6: derive `full_name` from `first_name` + `last_name`."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
     if "full_name" in table.columns:
         return None
@@ -397,18 +399,12 @@ def on_table_mapped_example_6_derive_full_name(
         return None
 
     first = (
-        pl.col("first_name")
-        .cast(TEXT_DTYPE, strict=False)
-        .fill_null("")
-        .str.strip_chars()
+        pl.col("first_name").cast(TEXT_DTYPE, strict=False).fill_null("").str.strip_chars()
         if "first_name" in table.columns
         else pl.lit("", dtype=TEXT_DTYPE)
     )
     last = (
-        pl.col("last_name")
-        .cast(TEXT_DTYPE, strict=False)
-        .fill_null("")
-        .str.strip_chars()
+        pl.col("last_name").cast(TEXT_DTYPE, strict=False).fill_null("").str.strip_chars()
         if "last_name" in table.columns
         else pl.lit("", dtype=TEXT_DTYPE)
     )
@@ -495,10 +491,7 @@ def on_table_mapped_example_8_record_table_facts(
     """Example 8: collect lightweight per-table facts into shared state."""
     _ = (settings, metadata, workbook, logger)
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     tables = cfg.get("tables_mapped")
     if not isinstance(tables, list):
@@ -539,7 +532,17 @@ def on_table_mapped_example_9_split_full_name(
     - Runs after mapping and before per-column transforms.
     - Does not overwrite existing first/last values when present.
     """
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
     if "full_name" not in table.columns:
         return None
@@ -551,28 +554,48 @@ def on_table_mapped_example_9_split_full_name(
     has_comma = full.str.contains(",").fill_null(False)
 
     comma_parts = full.str.split(",")
-    comma_last = comma_parts.list.get(0, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
-    comma_first = comma_parts.list.get(1, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
+    comma_last = (
+        comma_parts.list.get(0, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
+    )
+    comma_first = (
+        comma_parts.list.get(1, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
+    )
 
     space_parts = full.str.split(" ")
     space_len = space_parts.list.len()
-    space_first = space_parts.list.get(0, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
+    space_first = (
+        space_parts.list.get(0, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars()
+    )
     space_last = (
         pl.when(space_len >= 2)
-        .then(space_parts.list.get(-1, null_on_oob=True).cast(TEXT_DTYPE, strict=False).str.strip_chars())
+        .then(
+            space_parts.list.get(-1, null_on_oob=True)
+            .cast(TEXT_DTYPE, strict=False)
+            .str.strip_chars()
+        )
         .otherwise(pl.lit(None))
     )
 
     derived_first = pl.when(has_comma).then(comma_first).otherwise(space_first)
     derived_last = pl.when(has_comma).then(comma_last).otherwise(space_last)
 
-    derived_first = pl.when(derived_first.is_null() | (derived_first == "")).then(pl.lit(None)).otherwise(derived_first)
-    derived_last = pl.when(derived_last.is_null() | (derived_last == "")).then(pl.lit(None)).otherwise(derived_last)
+    derived_first = (
+        pl.when(derived_first.is_null() | (derived_first == ""))
+        .then(pl.lit(None))
+        .otherwise(derived_first)
+    )
+    derived_last = (
+        pl.when(derived_last.is_null() | (derived_last == ""))
+        .then(pl.lit(None))
+        .otherwise(derived_last)
+    )
 
     if "first_name" in table.columns:
         existing_first = pl.col("first_name").cast(TEXT_DTYPE, strict=False).str.strip_chars()
-        existing_first = pl.when(existing_first.is_null() | (existing_first == "")).then(pl.lit(None)).otherwise(
-            existing_first
+        existing_first = (
+            pl.when(existing_first.is_null() | (existing_first == ""))
+            .then(pl.lit(None))
+            .otherwise(existing_first)
         )
         first_out = pl.coalesce([existing_first, derived_first]).alias("first_name")
     else:
@@ -580,8 +603,10 @@ def on_table_mapped_example_9_split_full_name(
 
     if "last_name" in table.columns:
         existing_last = pl.col("last_name").cast(TEXT_DTYPE, strict=False).str.strip_chars()
-        existing_last = pl.when(existing_last.is_null() | (existing_last == "")).then(pl.lit(None)).otherwise(
-            existing_last
+        existing_last = (
+            pl.when(existing_last.is_null() | (existing_last == ""))
+            .then(pl.lit(None))
+            .otherwise(existing_last)
         )
         last_out = pl.coalesce([existing_last, derived_last]).alias("last_name")
     else:

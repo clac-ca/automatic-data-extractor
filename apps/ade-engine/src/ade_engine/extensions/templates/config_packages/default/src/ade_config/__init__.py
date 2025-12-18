@@ -51,6 +51,7 @@ def _register_all(registry, package_name: str) -> None:
 
 
 def register(registry) -> None:
+    """Register all config modules (columns, row detectors, hooks)."""
     _register_all(registry, "ade_config.columns")
     _register_all(registry, "ade_config.row_detectors")
     _register_all(registry, "ade_config.hooks")

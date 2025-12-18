@@ -49,31 +49,14 @@ Template goals
 
 from __future__ import annotations
 
+from collections.abc import MutableMapping
 from datetime import date, datetime
-from typing import Any, MutableMapping
+from typing import Any
 
 import openpyxl
 import openpyxl.worksheet.worksheet
 import polars as pl
-
 from ade_engine.models import TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
 
 # -----------------------------------------------------------------------------
 # Polars convenience: string dtype selection across versions
@@ -89,6 +72,7 @@ TEXT_DTYPE: pl.DataType = _TEXT_DTYPES[0] if _TEXT_DTYPES else pl.Utf8  # type: 
 # ---------------------------------------
 # Registry + default hook implementation
 # ---------------------------------------
+
 
 def register(registry) -> None:
     """Register this config package's `on_table_transformed` hook(s)."""
@@ -114,7 +98,7 @@ def on_table_transformed(
     table: pl.DataFrame,  # Current table DF (post-transforms; pre-validation)
     sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
@@ -123,12 +107,7 @@ def on_table_transformed(
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.DataFrame | None:
     """Default hook (no-op). Replace/extend with your own logic or enable examples below."""
-
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     counters = cfg.get("counters")
     if not isinstance(counters, MutableMapping):
@@ -154,6 +133,7 @@ def on_table_transformed(
 # -------------------------
 # Examples (common patterns)
 # -------------------------
+
 
 def on_table_transformed_example_1_normalize_all_text(
     *,
@@ -188,12 +168,7 @@ def on_table_transformed_example_1_normalize_all_text(
 
     null_like = lowered.is_in(["", "na", "n/a", "null", "none", "-", "--"])
 
-    out = table.with_columns(
-        pl.when(null_like)
-        .then(pl.lit(None))
-        .otherwise(cleaned)
-        .name.keep()
-    )
+    out = table.with_columns(pl.when(null_like).then(pl.lit(None)).otherwise(cleaned).name.keep())
 
     if logger:
         logger.info("Normalized all text columns (strip/collapse/null-like tokens).")
@@ -219,8 +194,8 @@ def on_table_transformed_example_2_add_provenance_columns(
     Common in ingestion pipelines: you’ll thank yourself later when debugging.
 
     Teaches:
-    - Adding constant columns with `pl.lit(...)` 
-    - Adding a stable row index with `pl.int_range(pl.len())` or `with_row_index` 
+    - Adding constant columns with `pl.lit(...)`
+    - Adding a stable row index with `pl.int_range(pl.len())` or `with_row_index`
     """
 
     sheet_name = (getattr(sheet, "title", None) or getattr(sheet, "name", None) or "").strip()
@@ -254,8 +229,8 @@ def on_table_transformed_example_3_derive_full_name(
 
     Teaches:
     - Building reusable expressions (first/last/full) without creating temp columns
-    - `pl.concat_str(..., ignore_nulls=True)` for robust name building 
-    - Conditional update with `when/then/otherwise` 
+    - `pl.concat_str(..., ignore_nulls=True)` for robust name building
+    - Conditional update with `when/then/otherwise`
     """
 
     required = {"full_name", "first_name", "last_name"}
@@ -271,17 +246,11 @@ def on_table_transformed_example_3_derive_full_name(
     full = pl.col("full_name").cast(TEXT_DTYPE, strict=False).str.strip_chars()
     full = pl.when(full == "").then(pl.lit(None)).otherwise(full)
 
-    derived = (
-        pl.concat_str([first, last], separator=" ", ignore_nulls=True)
-        .str.strip_chars()
-    )
+    derived = pl.concat_str([first, last], separator=" ", ignore_nulls=True).str.strip_chars()
     derived = pl.when(derived == "").then(pl.lit(None)).otherwise(derived)
 
     out = table.with_columns(
-        pl.when(full.is_null())
-        .then(derived)
-        .otherwise(full)
-        .alias("full_name")
+        pl.when(full.is_null()).then(derived).otherwise(full).alias("full_name")
     )
 
     if logger:
@@ -306,7 +275,7 @@ def on_table_transformed_example_4_parse_date_multi_format(
     Example 4: Parse a date column using multiple common formats.
 
     Teaches:
-    - `str.strptime(pl.Date, ...)` with `strict=False` 
+    - `str.strptime(pl.Date, ...)` with `strict=False`
     - Fallback parsing via `pl.coalesce(...)` (first successful parse wins)
     """
 
@@ -378,16 +347,16 @@ def on_table_transformed_example_5_parse_currency_amount(
     s_std = (
         pl.when(looks_eu)
         .then(
-            s.str.replace_all(r"\.", "")  # remove thousands dots
-             .str.replace_all(",", ".")   # decimal comma -> decimal dot
+            s.str.replace_all(r"\.", "").str.replace_all(  # remove thousands dots
+                ",", "."
+            )  # decimal comma -> decimal dot
         )
         .otherwise(s)
     )
 
     # Remove parentheses and common currency symbols / thousands separators
     cleaned = (
-        s_std
-        .str.replace_all(r"[()]", "")
+        s_std.str.replace_all(r"[()]", "")
         .str.replace_all(r"[,$€£]", "")
         .str.replace_all(r"[^\d\.\-]", "")  # keep digits/dot/minus only
     )
@@ -436,7 +405,9 @@ def on_table_transformed_example_6_compute_line_total(
 
     if "line_total" in table.columns:
         out = table.with_columns(
-            pl.coalesce([pl.col("line_total").cast(pl.Float64, strict=False), derived]).alias("line_total")
+            pl.coalesce([pl.col("line_total").cast(pl.Float64, strict=False), derived]).alias(
+                "line_total"
+            )
         )
     else:
         out = table.with_columns(derived.alias("line_total"))
@@ -463,7 +434,7 @@ def on_table_transformed_example_7_drop_non_data_rows(
     Example 7: Drop obvious non-data rows.
 
     Teaches:
-    - Drop rows that are completely null (any_horizontal/all().is_not_null()) 
+    - Drop rows that are completely null (any_horizontal/all().is_not_null())
     - Drop repeated header rows embedded inside data (common in exported PDFs / print views)
     - Optional drop of "TOTAL"/"SUBTOTAL" rows (conservative heuristic)
 
@@ -486,10 +457,7 @@ def on_table_transformed_example_7_drop_non_data_rows(
         comparisons: list[pl.Expr] = []
         for c in cols:
             comparisons.append(
-                pl.col(c)
-                .cast(TEXT_DTYPE, strict=False)
-                .str.strip_chars()
-                .str.to_lowercase()
+                pl.col(c).cast(TEXT_DTYPE, strict=False).str.strip_chars().str.to_lowercase()
                 == pl.lit(c.lower())
             )
 
@@ -507,11 +475,18 @@ def on_table_transformed_example_7_drop_non_data_rows(
     if text_cols:
         c0 = text_cols[0]
         marker = pl.col(c0).cast(TEXT_DTYPE, strict=False).str.strip_chars().str.to_lowercase()
-        is_total = marker.is_in(["total", "subtotal", "grand total"]) | marker.str.starts_with("total ")
+        is_total = marker.is_in(["total", "subtotal", "grand total"]) | marker.str.starts_with(
+            "total "
+        )
         out = out.filter(~is_total)
 
     if logger:
-        logger.info("Dropped non-data rows: %d -> %d (removed %d).", int(before), int(out.height), int(before - out.height))
+        logger.info(
+            "Dropped non-data rows: %d -> %d (removed %d).",
+            int(before),
+            int(out.height),
+            int(before - out.height),
+        )
     return out
 
 
@@ -588,7 +563,9 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
         return None
 
     out = table.with_columns(pl.lit(s).cast(TEXT_DTYPE, strict=False).alias("__report_date_raw"))
-    out = out.with_columns(pl.col("__report_date_raw").str.to_date(strict=False).alias("report_date"))
+    out = out.with_columns(
+        pl.col("__report_date_raw").str.to_date(strict=False).alias("report_date")
+    )
     out = out.drop("__report_date_raw")
 
     if logger:
@@ -634,11 +611,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     if lookup_sheet_name not in sheetnames:
         return None
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     cache = cfg.get("cache")
     if not isinstance(cache, MutableMapping):
@@ -665,7 +638,9 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 
         if not rows:
             if logger:
-                logger.warning("Lookup sheet %r found but contained no usable rows.", lookup_sheet_name)
+                logger.warning(
+                    "Lookup sheet %r found but contained no usable rows.", lookup_sheet_name
+                )
             cache[cache_key] = None
             return None
 
@@ -673,7 +648,11 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
         cache[cache_key] = lookup_df
 
         if logger:
-            logger.info("Loaded lookup table from sheet %r (%d rows).", lookup_sheet_name, int(lookup_df.height))
+            logger.info(
+                "Loaded lookup table from sheet %r (%d rows).",
+                lookup_sheet_name,
+                int(lookup_df.height),
+            )
 
     if lookup_df is None:
         return None
@@ -683,10 +662,18 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 
     # Normalize join key in the main table (trim + uppercase, for example).
     main = table.with_columns(
-        pl.col(join_key).cast(TEXT_DTYPE, strict=False).str.strip_chars().str.to_uppercase().alias(join_key)
+        pl.col(join_key)
+        .cast(TEXT_DTYPE, strict=False)
+        .str.strip_chars()
+        .str.to_uppercase()
+        .alias(join_key)
     )
     other = lookup_df.with_columns(
-        pl.col(join_key).cast(TEXT_DTYPE, strict=False).str.strip_chars().str.to_uppercase().alias(join_key)
+        pl.col(join_key)
+        .cast(TEXT_DTYPE, strict=False)
+        .str.strip_chars()
+        .str.to_uppercase()
+        .alias(join_key)
     )
 
     try:
@@ -702,6 +689,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 # ---------------------------------------------------------
 # Advanced example (external enrichment; non-deterministic)
 # ---------------------------------------------------------
+
 
 def on_table_transformed_example_10_geocode_address_google(
     *,
@@ -740,7 +728,9 @@ def on_table_transformed_example_10_geocode_address_google(
     if "address_full" not in table.columns:
         return None
 
-    api_key = getattr(settings, "google_geocoding_api_key", None) or os.getenv("GOOGLE_GEOCODING_API_KEY")
+    api_key = getattr(settings, "google_geocoding_api_key", None) or os.getenv(
+        "GOOGLE_GEOCODING_API_KEY"
+    )
     if not api_key:
         if logger:
             logger.warning(
@@ -748,11 +738,7 @@ def on_table_transformed_example_10_geocode_address_google(
             )
         return None
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     cache = cfg.get("google_geocoding_cache")
     if not isinstance(cache, dict):
@@ -796,7 +782,9 @@ def on_table_transformed_example_10_geocode_address_google(
         if addr in cache:
             continue
 
-        url = "https://maps.googleapis.com/maps/api/geocode/json?" + urlencode({"address": addr, "key": api_key})
+        url = "https://maps.googleapis.com/maps/api/geocode/json?" + urlencode(
+            {"address": addr, "key": api_key}
+        )
         try:
             req = Request(url, headers={"User-Agent": "ade-config-template"})
             with urlopen(req, timeout=10) as resp:
@@ -827,7 +815,9 @@ def on_table_transformed_example_10_geocode_address_google(
         cache[addr] = {
             "formatted_address": result.get("formatted_address"),
             "city": city_comp.get("long_name") if city_comp else None,
-            "province_state": (region_comp.get("short_name") or region_comp.get("long_name")) if region_comp else None,
+            "province_state": (region_comp.get("short_name") or region_comp.get("long_name"))
+            if region_comp
+            else None,
             "postal_code": postal_comp.get("long_name") if postal_comp else None,
             "country": country_comp.get("long_name") if country_comp else None,
         }
@@ -853,7 +843,9 @@ def on_table_transformed_example_10_geocode_address_google(
         out = out.join(mapping_df, on="__address_key", how="left")
 
     formatted = pl.col("__geo_formatted_address").cast(TEXT_DTYPE, strict=False).str.strip_chars()
-    formatted = pl.when(formatted.is_null() | (formatted == "")).then(pl.lit(None)).otherwise(formatted)
+    formatted = (
+        pl.when(formatted.is_null() | (formatted == "")).then(pl.lit(None)).otherwise(formatted)
+    )
 
     original = pl.col("address_full").cast(TEXT_DTYPE, strict=False).str.strip_chars()
     original = pl.when(original.is_null() | (original == "")).then(pl.lit(None)).otherwise(original)
@@ -872,17 +864,26 @@ def on_table_transformed_example_10_geocode_address_google(
             else geo_city
         ).alias("city"),
         (
-            pl.coalesce([geo_region, pl.col("province_state").cast(TEXT_DTYPE, strict=False).str.strip_chars()])
+            pl.coalesce(
+                [
+                    geo_region,
+                    pl.col("province_state").cast(TEXT_DTYPE, strict=False).str.strip_chars(),
+                ]
+            )
             if "province_state" in out.columns
             else geo_region
         ).alias("province_state"),
         (
-            pl.coalesce([geo_postal, pl.col("postal_code").cast(TEXT_DTYPE, strict=False).str.strip_chars()])
+            pl.coalesce(
+                [geo_postal, pl.col("postal_code").cast(TEXT_DTYPE, strict=False).str.strip_chars()]
+            )
             if "postal_code" in out.columns
             else geo_postal
         ).alias("postal_code"),
         (
-            pl.coalesce([geo_country, pl.col("country").cast(TEXT_DTYPE, strict=False).str.strip_chars()])
+            pl.coalesce(
+                [geo_country, pl.col("country").cast(TEXT_DTYPE, strict=False).str.strip_chars()]
+            )
             if "country" in out.columns
             else geo_country
         ).alias("country"),

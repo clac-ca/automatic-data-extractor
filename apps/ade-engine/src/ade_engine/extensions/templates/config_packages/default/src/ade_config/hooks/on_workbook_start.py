@@ -23,25 +23,13 @@ Template goals
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping
 import uuid
+from collections.abc import Mapping, MutableMapping
+from datetime import UTC, datetime
+from typing import Any
 
 import openpyxl
-
-if TYPE_CHECKING:  # pragma: no cover
-    import polars as pl
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
+import polars as pl
 
 
 def register(registry) -> None:
@@ -70,23 +58,13 @@ def on_workbook_start(
     """Default hook: seed run state and log workbook basics (safe, no workbook edits)."""
     _ = (settings,)  # unused by default
 
-    # --- namespaced config state (shared across the run)
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    # `state` is already the shared mutable dict for the run.
+    cfg = state
 
     # ------------------------------------------------------------------
     # 1) Establish run identity & timestamps (helpful for logs + debugging)
     # ------------------------------------------------------------------
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
-
-    run_started_at = (
-        datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    run_started_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     cfg.setdefault("run_started_at", run_started_at)
     cfg.setdefault("run_id", metadata.get("run_id") or uuid.uuid4().hex[:12])
 
@@ -214,9 +192,7 @@ def on_workbook_start_example_1_fail_fast_missing_sheets(
     sheet_names = set(getattr(workbook, "sheetnames", []) or [])
     missing = sorted(required - sheet_names)
     if missing:
-        raise ValueError(
-            "Input workbook is missing required worksheet(s): " + ", ".join(missing)
-        )
+        raise ValueError("Input workbook is missing required worksheet(s): " + ", ".join(missing))
 
     return None
 
@@ -233,10 +209,7 @@ def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
     """Example 2: Set workbook-level flags for later hooks/detectors."""
     _ = (input_file_name, settings, metadata)
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     sheet_names = [str(s).lower() for s in (getattr(workbook, "sheetnames", []) or [])]
 
@@ -320,10 +293,7 @@ def on_workbook_start_example_4_init_openai_client(
 
     import os
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     clients = cfg.get("clients")
     if not isinstance(clients, MutableMapping):
@@ -388,10 +358,7 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
     """
     _ = (metadata, input_file_name)
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     # Only do this once per run.
     if "reference" in cfg:
@@ -422,10 +389,7 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
         return None
 
     # Normalize column names (avoid None and strip whitespace).
-    columns = [
-        str(c).strip() if c is not None else f"col_{i+1}"
-        for i, c in enumerate(header)
-    ]
+    columns = [str(c).strip() if c is not None else f"col_{i + 1}" for i, c in enumerate(header)]
 
     data_rows: list[list[Any]] = []
     for row in rows_iter:
@@ -436,7 +400,7 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
             continue
         data_rows.append(list(row))
 
-    df: "pl.DataFrame" = pl.DataFrame(data_rows, schema=columns, orient="row")
+    df: pl.DataFrame = pl.DataFrame(data_rows, schema=columns, orient="row")
     cfg["reference"] = {"df": df, "sheet": sheet_name}
 
     if logger:

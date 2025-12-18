@@ -34,48 +34,15 @@ Reference docs
 
 from __future__ import annotations
 
-from typing import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping
 
 import openpyxl
 import openpyxl.worksheet.worksheet
 import polars as pl
 from ade_engine.models import TableRegion
 
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
-# --- ADE diagnostic column conventions ---------------------------------------
-#
-# When validators are present, ADE may append helper columns such as:
-#
-# - `__ade_has_issues` (bool): True if any field in the row has an issue
-# - `__ade_issue_count` (int): count of fields with issues in the row
-# - `__ade_issue__<field>` (str): per-field issue message (blank/None when ok)
-#
-# Output policies might drop these columns; every example below checks for
-# presence and becomes a no-op if they're not written.
-
-ADE_DIAGNOSTIC_PREFIX = "__ade_"
-ADE_HAS_ISSUES_COL = "__ade_has_issues"
-ADE_ISSUE_COUNT_COL = "__ade_issue_count"
-ADE_ISSUE_PREFIX = "__ade_issue__"
-
-
 # --- Public registration -----------------------------------------------------
+
 
 def register(registry) -> None:
     """
@@ -102,12 +69,13 @@ def register(registry) -> None:
 
 # --- Core hook ---------------------------------------------------------------
 
+
 def on_table_written(
     *,
     table: pl.DataFrame,  # Exact DF that was written (after output policies)
     sheet: openpyxl.worksheet.worksheet.Worksheet,  # Output worksheet (openpyxl Worksheet)
     workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Output header+data bounds (1-based, inclusive)
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
@@ -125,11 +93,7 @@ def on_table_written(
     """
     _ = (settings, metadata, workbook, input_file_name)  # unused by default
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     counters = cfg.get("counters")
     if not isinstance(counters, MutableMapping):
@@ -153,6 +117,7 @@ def on_table_written(
 
 
 # --- Example hooks -----------------------------------------------------------
+
 
 def on_table_written_example_1_log_output_range(
     *,
@@ -197,7 +162,9 @@ def on_table_written_example_2_freeze_header_and_add_filters(
     _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
 
     # Freeze panes at the first cell *below* the header row.
-    sheet.freeze_panes = sheet.cell(row=table_region.data_first_row, column=table_region.min_col).coordinate
+    sheet.freeze_panes = sheet.cell(
+        row=table_region.data_first_row, column=table_region.min_col
+    ).coordinate
 
     # Enable worksheet auto-filter for the table region.
     sheet.auto_filter.ref = table_region.a1
@@ -224,10 +191,13 @@ def on_table_written_example_3_style_header_row(
     will also style the header row.
     """
     from openpyxl.styles import Alignment, Font, PatternFill
+
     _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
 
     # Style constants (easy to tweak).
-    header_fill = PatternFill(fill_type="solid", start_color="1F4E79", end_color="1F4E79")  # dark blue
+    header_fill = PatternFill(
+        fill_type="solid", start_color="1F4E79", end_color="1F4E79"
+    )  # dark blue
     header_font = Font(bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -258,10 +228,12 @@ def on_table_written_example_4_hide_diagnostic_columns(
     Example 4: hide ADE diagnostic columns (if you choose to keep them written).
     """
     from openpyxl.utils import get_column_letter
+
     _ = (settings, metadata, state, workbook, sheet, table_index, input_file_name, logger)
 
+    ade_diagnostic_prefix = "__ade_"
     for offset, col_name in enumerate(table.columns):
-        if str(col_name).startswith(ADE_DIAGNOSTIC_PREFIX):
+        if str(col_name).startswith(ade_diagnostic_prefix):
             col_idx = table_region.min_col + offset
             sheet.column_dimensions[get_column_letter(col_idx)].hidden = True
 
@@ -282,10 +254,7 @@ def on_table_written_example_5_collect_table_facts(
     """
     Example 5: collect per-table facts into shared `state` for later hooks.
     """
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     _ = (settings, metadata, workbook, sheet, table_index, logger)
     table_region_ref = table_region.a1
@@ -329,13 +298,11 @@ def on_table_written_example_6_add_excel_structured_table(
     - Structured references in formulas
     - Better UX when people copy/paste or build pivot tables
     """
-    from openpyxl.worksheet.table import Table, TableStyleInfo
     import re
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    from openpyxl.worksheet.table import Table, TableStyleInfo
+
+    cfg = state
 
     _ = (settings, metadata, input_file_name)
     ref = table_region.a1
@@ -426,23 +393,23 @@ def on_table_written_example_7_add_header_comments(
     """
     from openpyxl.comments import Comment
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
     if not table.columns:
         return
 
+    ade_has_issues_col = "__ade_has_issues"
+    ade_issue_count_col = "__ade_issue_count"
+
     # Built-in comments for ADE diagnostic columns.
     default_comments: dict[str, str] = {
-        ADE_HAS_ISSUES_COL: "TRUE when any field in this row failed validation.",
-        ADE_ISSUE_COUNT_COL: "Number of fields with validation issues in this row.",
+        ade_has_issues_col: "TRUE when any field in this row failed validation.",
+        ade_issue_count_col: "Number of fields with validation issues in this row.",
     }
 
     # Merge in any project-specific comments from shared state.
-    # Example: state[STATE_NAMESPACE]["header_comments"] = {"amount": "USD, must be >= 0"}
+    # Example: state["header_comments"] = {"amount": "USD, must be >= 0"}
     extra: Mapping[str, str] = cfg.get("header_comments", {}) or {}
     comments: dict[str, str] = {**default_comments, **dict(extra)}
 
@@ -493,10 +460,7 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
     from openpyxl.styles import PatternFill
     from openpyxl.utils import get_column_letter
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
     if not table_region.has_data_rows or not table.columns:
@@ -513,12 +477,15 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
     data_first_row = table_region.data_first_row
     last_row = table_region.max_row
 
+    ade_has_issues_col = "__ade_has_issues"
+    ade_issue_prefix = "__ade_issue__"
+
     col_to_idx = {name: table_region.min_col + i for i, name in enumerate(table.columns)}
-    has_issues_idx = col_to_idx.get(ADE_HAS_ISSUES_COL)
+    has_issues_idx = col_to_idx.get(ade_has_issues_col)
     if not has_issues_idx:
         return  # diagnostics not present / dropped
 
-    issue_cols = [c for c in table.columns if str(c).startswith(ADE_ISSUE_PREFIX)]
+    issue_cols = [c for c in table.columns if str(c).startswith(ade_issue_prefix)]
     if not issue_cols:
         return
 
@@ -527,9 +494,11 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
     # Use an absolute column reference ($X) and a relative row number so the rule
     # applies per-row over the whole range.
     issue_col_letter = get_column_letter(has_issues_idx)
-    warn_fill = PatternFill(fill_type="solid", start_color="FFF2CC", end_color="FFF2CC")  # light yellow
+    warn_fill = PatternFill(
+        fill_type="solid", start_color="FFF2CC", end_color="FFF2CC"
+    )  # light yellow
     rule = FormulaRule(
-        formula=[f'=${issue_col_letter}{data_first_row}=TRUE'],
+        formula=[f"=${issue_col_letter}{data_first_row}=TRUE"],
         fill=warn_fill,
     )
     sheet.conditional_formatting.add(data_ref, rule)
@@ -564,7 +533,7 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
                 continue
 
             # Map "__ade_issue__amount" -> "amount"
-            field = str(issue_col)[len(ADE_ISSUE_PREFIX) :]
+            field = str(issue_col)[len(ade_issue_prefix) :]
             target_idx = col_to_idx.get(field)
             if not target_idx:
                 continue  # field column renamed/dropped
@@ -617,21 +586,19 @@ def on_table_written_example_9_autofit_column_widths(
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     sample_rows = int(cfg.get("autofit_sample_rows", 200) or 200)
     max_width = float(cfg.get("autofit_max_width", 60) or 60)
     padding = float(cfg.get("autofit_padding", 2) or 2)
     skip_diagnostics = bool(cfg.get("autofit_skip_diagnostics", True))
 
+    ade_diagnostic_prefix = "__ade_"
     scan_last_row = min(table_region.max_row, table_region.data_first_row + max(sample_rows, 0) - 1)
 
     for col in range(table_region.min_col, table_region.max_col + 1):
         col_name = table.columns[col - table_region.min_col]
-        if str(col_name).startswith(ADE_DIAGNOSTIC_PREFIX) and skip_diagnostics:
+        if str(col_name).startswith(ade_diagnostic_prefix) and skip_diagnostics:
             continue
 
         best = 0
