@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+from openpyxl import Workbook
 
 from ade_engine.application.pipeline.pipeline import _apply_mapping_as_rename, _normalize_headers
 from ade_engine.extensions.registry import Registry
@@ -9,6 +10,7 @@ from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import HookError
 from ade_engine.models.extension_contexts import FieldDef, HookName
+from ade_engine.models.table import TableRegion
 
 
 class WarningSpyLogger:
@@ -65,13 +67,22 @@ def test_table_hooks_compose_returned_dataframes():
     registry.register_hook(bump_col, hook="on_table_mapped", priority=0)
     registry.finalize()
 
+    wb = Workbook()
+    ws = wb.active
+    table_region = TableRegion(min_row=1, min_col=1, max_row=2, max_col=1)
+
     out = registry.run_hooks(
         HookName.ON_TABLE_MAPPED,
         settings=Settings(),
         state={},
         metadata={},
         logger=NullLogger(),
+        input_file_name="input.xlsx",
+        workbook=wb,
+        sheet=ws,
         table=pl.DataFrame({"email": ["a@example.com"]}),
+        table_region=table_region,
+        table_index=0,
     )
     assert out is not None
     assert out.to_dict(as_series=False) == {"email": ["a@example.com"], "x": [2]}
@@ -87,6 +98,10 @@ def test_table_hook_return_type_is_enforced():
     registry.register_hook(bad_hook, hook="on_table_mapped", priority=0)
     registry.finalize()
 
+    wb = Workbook()
+    ws = wb.active
+    table_region = TableRegion(min_row=1, min_col=1, max_row=2, max_col=1)
+
     with pytest.raises(HookError):
         registry.run_hooks(
             HookName.ON_TABLE_MAPPED,
@@ -94,5 +109,10 @@ def test_table_hook_return_type_is_enforced():
             state={},
             metadata={},
             logger=NullLogger(),
+            input_file_name="input.xlsx",
+            workbook=wb,
+            sheet=ws,
             table=pl.DataFrame({"email": ["a@example.com"]}),
+            table_region=table_region,
+            table_index=0,
         )

@@ -1,4 +1,14 @@
-"""Extension-facing contracts (contexts, enums, and table view)."""
+"""Extension-facing contracts (contexts, enums, and table view).
+
+These contexts are expanded into explicit keyword arguments when invoking config
+extensions (hooks, detectors, transforms, validators).
+
+Design goals:
+- Extension functions should only receive parameters that are *actually populated*
+  for that stage (avoid always-None placeholders).
+- Parameters that are guaranteed present in normal engine runs should not be typed
+  as optional (e.g., ``input_file_name``, ``table_region``, ``table_index``).
+"""
 
 from __future__ import annotations
 
@@ -45,7 +55,7 @@ class RowDetectorContext:
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
-    input_file_name: str | None = None
+    input_file_name: str
     logger: Any | None = None
 
 
@@ -61,9 +71,9 @@ class ColumnDetectorContext:
     sheet_name: str
     metadata: Mapping[str, Any]
     state: dict[str, Any]
-    table_region: TableRegion | None = None
-    table_index: int | None = None
-    input_file_name: str | None = None
+    table_region: TableRegion
+    table_index: int
+    input_file_name: str
     logger: Any | None = None
 
 
@@ -74,9 +84,9 @@ class TransformContext:
     settings: Any
     state: dict[str, Any]
     metadata: Mapping[str, Any]
-    table_region: TableRegion | None = None
-    table_index: int | None = None
-    input_file_name: str | None = None
+    table_region: TableRegion
+    table_index: int
+    input_file_name: str
     logger: Any | None = None
 
 
@@ -87,24 +97,58 @@ class ValidateContext:
     settings: Any
     state: dict[str, Any]
     metadata: Mapping[str, Any]
-    table_region: TableRegion | None = None
-    table_index: int | None = None
-    input_file_name: str | None = None
+    table_region: TableRegion
+    table_index: int
+    input_file_name: str
     logger: Any | None = None
 
 
 @dataclass(frozen=True)
-class HookContext:
+class WorkbookStartHookContext:
+    workbook: Any
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
-    workbook: Any | None = None
-    sheet: Any | None = None
-    table: pl.DataFrame | None = None
-    table_region: TableRegion | None = None
-    table_index: int | None = None
-    input_file_name: str | None = None
+    input_file_name: str
     logger: Any | None = None
+
+
+@dataclass(frozen=True)
+class SheetStartHookContext:
+    sheet: Any
+    workbook: Any
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
+class TableHookContext:
+    table: pl.DataFrame
+    sheet: Any
+    workbook: Any
+    table_region: TableRegion
+    table_index: int
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
+class WorkbookBeforeSaveHookContext:
+    workbook: Any
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+HookContext = WorkbookStartHookContext | SheetStartHookContext | TableHookContext | WorkbookBeforeSaveHookContext
 
 
 __all__ = [
@@ -117,4 +161,8 @@ __all__ = [
     "ColumnDetectorContext",
     "TransformContext",
     "ValidateContext",
+    "WorkbookBeforeSaveHookContext",
+    "WorkbookStartHookContext",
+    "SheetStartHookContext",
+    "TableHookContext",
 ]

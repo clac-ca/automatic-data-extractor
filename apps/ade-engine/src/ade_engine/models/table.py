@@ -3,80 +3,78 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from openpyxl.worksheet.cell_range import CellRange
+from openpyxl.worksheet.worksheet import Worksheet
+
 import polars as pl
 
 
-def _excel_column_letter(col: int) -> str:
-    """Convert a 1-based column index to an Excel column label (1 -> A, 27 -> AA)."""
-    if col < 1:
-        raise ValueError("Excel columns are 1-based")
-
-    letters: list[str] = []
-    n = col
-    while n:
-        n, rem = divmod(n - 1, 26)
-        letters.append(chr(65 + rem))
-    return "".join(reversed(letters))
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TableRegion:
-    """Openpyxl-friendly coordinates for a contiguous header+data block.
+    """Rectangular table bounds in Excel coordinates (1-based, inclusive)."""
 
-    Coordinates are 1-based and inclusive, matching Excel/openpyxl conventions.
-    """
-
-    header_row: int
-    first_col: int
-    last_row: int
-    last_col: int
-    header_inferred: bool = False
+    min_row: int
+    min_col: int
+    max_row: int
+    max_col: int
 
     def __post_init__(self) -> None:
-        if self.header_row < 1:
-            raise ValueError("header_row must be >= 1")
-        if self.first_col < 1:
-            raise ValueError("first_col must be >= 1")
-        if self.last_row < self.header_row:
-            raise ValueError("last_row must be >= header_row")
-        if self.last_col < self.first_col:
-            raise ValueError("last_col must be >= first_col")
+        if min(self.min_row, self.min_col, self.max_row, self.max_col) < 1:
+            raise ValueError("TableRegion coordinates must be >= 1 (Excel-style).")
+        if self.min_row > self.max_row:
+            raise ValueError("min_row must be <= max_row.")
+        if self.min_col > self.max_col:
+            raise ValueError("min_col must be <= max_col.")
+
+    @property
+    def cell_range(self) -> CellRange:
+        return CellRange(
+            min_col=self.min_col,
+            min_row=self.min_row,
+            max_col=self.max_col,
+            max_row=self.max_row,
+        )
+
+    @property
+    def a1(self) -> str:
+        return self.cell_range.coord
+
+    @property
+    def width(self) -> int:
+        return self.max_col - self.min_col + 1
+
+    @property
+    def height(self) -> int:
+        return self.max_row - self.min_row + 1
+
+    @property
+    def header_row(self) -> int:
+        return self.min_row
 
     @property
     def data_first_row(self) -> int:
-        return self.header_row + 1
+        return self.min_row + 1
+
+    @property
+    def data_min_row(self) -> int:
+        return min(self.min_row + 1, self.max_row)
 
     @property
     def has_data_rows(self) -> bool:
-        return self.last_row >= self.data_first_row
+        return self.max_row >= self.data_first_row
 
     @property
     def data_row_count(self) -> int:
-        return max(0, self.last_row - self.header_row)
+        return max(0, self.max_row - self.min_row)
 
-    @property
-    def col_count(self) -> int:
-        return (self.last_col - self.first_col + 1) if self.last_col >= self.first_col else 0
-
-    def _cell(self, row: int, col: int) -> str:
-        return f"{_excel_column_letter(col)}{row}"
-
-    @property
-    def ref(self) -> str:
-        """Range including header and all data rows (e.g., A1:D10)."""
-        return f"{self._cell(self.header_row, self.first_col)}:{self._cell(self.last_row, self.last_col)}"
-
-    @property
-    def header_ref(self) -> str:
-        """Header row only (e.g., A1:D1)."""
-        return f"{self._cell(self.header_row, self.first_col)}:{self._cell(self.header_row, self.last_col)}"
-
-    @property
-    def data_ref(self) -> str | None:
-        """Data rows only, excluding header (e.g., A2:D10)."""
-        if not self.has_data_rows:
-            return None
-        return f"{self._cell(self.data_first_row, self.first_col)}:{self._cell(self.last_row, self.last_col)}"
+    def iter_values(self, ws: Worksheet, *, values_only: bool = True):
+        return ws.iter_rows(
+            min_row=self.min_row,
+            max_row=self.max_row,
+            min_col=self.min_col,
+            max_col=self.max_col,
+            values_only=values_only,
+        )
 
 
 @dataclass

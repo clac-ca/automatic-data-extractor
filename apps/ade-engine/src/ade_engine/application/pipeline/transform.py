@@ -30,9 +30,9 @@ def apply_transforms(
     settings,
     state: dict,
     metadata: dict,
-    table_region: TableRegion | None = None,
-    table_index: int | None = None,
-    input_file_name: str | None,
+    table_region: TableRegion,
+    table_index: int,
+    input_file_name: str,
     logger: RunLogger,
 ) -> pl.DataFrame:
     """Apply v3 transforms (Expr) to the DataFrame."""
@@ -89,7 +89,7 @@ def apply_transforms(
                         "transform": tf.qualname,
                         "field": field_name,
                         "table_index": table_index,
-                        "table_region": table_region.ref if table_region else None,
+                        "table_region": table_region.a1 if table_region else None,
                         "row_count": table.height,
                         "sample_before": before_sample,
                         "sample_after": after_sample,

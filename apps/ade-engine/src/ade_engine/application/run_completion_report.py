@@ -327,8 +327,8 @@ class RunCompletionReportBuilder:
             header_row_start = source_region.header_row
             data_row_start = source_region.data_first_row
             data_row_count = source_region.data_row_count
-            header_inferred = bool(source_region.header_inferred)
-            region_a1 = source_region.ref
+            header_inferred = False
+            region_a1 = source_region.a1
         else:
             header_row_start = 1
             data_row_start = 2
@@ -444,7 +444,7 @@ class RunCompletionReportBuilder:
                     normalized=OutputsNormalized(
                         path=str(output_path),
                         sheet_name=str(getattr(table, "sheet_name", "") or ""),
-                        range_a1=f"{out_sheet_name}!{output_region.ref}",
+                        range_a1=f"{out_sheet_name}!{output_region.a1}",
                     )
                 )
 

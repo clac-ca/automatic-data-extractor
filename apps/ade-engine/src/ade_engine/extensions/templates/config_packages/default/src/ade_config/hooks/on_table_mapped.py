@@ -19,7 +19,7 @@ Return value
 
 Notes
 -----
-- `workbook` is `None` for this stage.
+- `workbook` is the *input* workbook (openpyxl Workbook).
 - ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
   input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
 - `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
@@ -43,10 +43,9 @@ import polars as pl
 from ade_engine.models import TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 
 # -----------------------------------------------------------------------------
@@ -112,15 +111,15 @@ def register(registry) -> None:
 
 def on_table_mapped(
     *,
+    table: pl.DataFrame,  # Current table DF (post-mapping; pre-transforms)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook | None,  # None for this stage (table hooks run before output workbook exists)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # header_row/first_col/last_row/last_col (1-based, inclusive) + header_inferred; refs: ref/header_ref/data_ref
-    table_index: int | None,  # 0-based table index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.DataFrame | None:
     """Default: increment a counter and log the table shape (does not mutate `table`)."""
@@ -140,11 +139,11 @@ def on_table_mapped(
 
     sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
     if logger:
-        range_ref = table_region.ref if table_region else "<unknown>"
+        range_ref = table_region.a1
         logger.info(
             "Config hook: table mapped (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
             sheet_name,
-            table_index if table_index is not None else "<unknown>",
+            table_index,
             range_ref,
             int(table.height),
             int(table.width),
@@ -160,15 +159,15 @@ def on_table_mapped(
 
 def on_table_mapped_example_1_basic_cleanup(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 1 (recommended): basic, safe cleanup for most table-like extracts.
@@ -229,15 +228,15 @@ def on_table_mapped_example_1_basic_cleanup(
 
 def on_table_mapped_example_2_trim_all_string_columns(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 2: trim all string columns (safe, cheap, and often helpful)."""
@@ -248,15 +247,15 @@ def on_table_mapped_example_2_trim_all_string_columns(
 
 def on_table_mapped_example_3_normalize_empty_sentinels(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
     empty_sentinels: Sequence[str] = DEFAULT_EMPTY_SENTINELS,
 ) -> pl.DataFrame:
@@ -277,15 +276,15 @@ def on_table_mapped_example_3_normalize_empty_sentinels(
 
 def on_table_mapped_example_4_drop_fully_empty_rows(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 4: drop rows that are entirely empty (null/blank strings)."""
@@ -317,15 +316,15 @@ def on_table_mapped_example_4_drop_fully_empty_rows(
 
 def on_table_mapped_example_5_drop_fully_empty_columns(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
     """Example 5: drop columns that are entirely empty (useful for noisy extracts).
@@ -377,15 +376,15 @@ def on_table_mapped_example_5_drop_fully_empty_columns(
 
 def on_table_mapped_example_6_derive_full_name(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 6: derive `full_name` from `first_name` + `last_name`."""
@@ -422,15 +421,15 @@ def on_table_mapped_example_6_derive_full_name(
 
 def on_table_mapped_example_7_drop_repeated_header_rows(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 7 (heuristic): drop repeated header rows embedded inside the table.
@@ -482,15 +481,15 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
 
 def on_table_mapped_example_8_record_table_facts(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 8: collect lightweight per-table facts into shared state."""
@@ -512,7 +511,7 @@ def on_table_mapped_example_8_record_table_facts(
             "input_file": input_file_name,
             "sheet": sheet_name,
             "table_index": table_index,
-            "source_range": table_region.ref if table_region else None,
+            "source_range": table_region.a1,
             "rows": int(table.height),
             "columns": list(table.columns),
         }
@@ -523,15 +522,15 @@ def on_table_mapped_example_8_record_table_facts(
 
 def on_table_mapped_example_9_split_full_name(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook | None,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
     """Example 9: split `full_name` into `first_name` and `last_name`.

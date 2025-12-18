@@ -3,7 +3,7 @@
 When this runs
 --------------
 - Once per input file, after ADE opens the *source* workbook.
-- Before any sheets/tables are processed (`sheet` and `table` are `None`).
+- Before any sheets/tables are processed.
 
 What it's useful for
 --------------------
@@ -60,17 +60,15 @@ def register(registry) -> None:
 
 def on_workbook_start(
     *,
+    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    input_file_name: str,  # Input filename (basename)
     settings: Any,  # Engine settings (type depends on ADE)
     metadata: Mapping[str, Any],  # Run metadata (filenames, IDs, etc.)
     state: MutableMapping[str, Any],  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
-    sheet: None,  # Always None for this hook
-    table: None,  # Always None for this hook
-    input_file_name: str | None,  # Input filename (basename) if known
     logger: Any,  # RunLogger (structured events + text logs)
 ) -> None:
     """Default hook: seed run state and log workbook basics (safe, no workbook edits)."""
-    _ = (settings, sheet, table)  # unused by default
+    _ = (settings,)  # unused by default
 
     # --- namespaced config state (shared across the run)
     cfg = state.get(STATE_NAMESPACE)
@@ -102,7 +100,7 @@ def on_workbook_start(
             input_label = val.strip()
             break
     if not input_label:
-        input_label = input_file_name or ""
+        input_label = input_file_name
 
     cfg.setdefault("input", {})
     if isinstance(cfg.get("input"), MutableMapping):
@@ -202,17 +200,15 @@ def on_workbook_start(
 
 def on_workbook_start_example_1_fail_fast_missing_sheets(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings: Any,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger: Any,
 ) -> None:
     """Example 1: Fail fast if required worksheets are missing."""
-    _ = (settings, metadata, state, sheet, table, input_file_name, logger)
+    _ = (input_file_name, settings, metadata, state, logger)
 
     required = {"Orders", "Customers"}  # customize
     sheet_names = set(getattr(workbook, "sheetnames", []) or [])
@@ -227,17 +223,15 @@ def on_workbook_start_example_1_fail_fast_missing_sheets(
 
 def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings: Any,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger: Any,
 ) -> None:
     """Example 2: Set workbook-level flags for later hooks/detectors."""
-    _ = (settings, metadata, sheet, table, input_file_name)
+    _ = (input_file_name, settings, metadata)
 
     cfg = state.get(STATE_NAMESPACE)
     if not isinstance(cfg, MutableMapping):
@@ -273,17 +267,15 @@ def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
 
 def on_workbook_start_example_3_emit_structured_event(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings: Any,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger: Any,
 ) -> None:
     """Example 3: Emit a config-scoped structured event (no strict schema required)."""
-    _ = (settings, state, workbook, sheet, table)
+    _ = (settings, state, workbook)
 
     if not logger or not hasattr(logger, "event"):
         return None
@@ -295,7 +287,7 @@ def on_workbook_start_example_3_emit_structured_event(
             input_label = val.strip()
             break
     if not input_label:
-        input_label = input_file_name or ""
+        input_label = input_file_name
 
     logger.event(
         "engine.config.workbook.start",
@@ -311,13 +303,11 @@ def on_workbook_start_example_3_emit_structured_event(
 
 def on_workbook_start_example_4_init_openai_client(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings: Any,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger: Any,
 ) -> None:
     """Example 4: Initialize an OpenAI client once and store it in `state`.
@@ -326,7 +316,7 @@ def on_workbook_start_example_4_init_openai_client(
     - This example does NOT make a network call. It just prepares the client.
     - The OpenAI SDK reads `OPENAI_API_KEY` from the environment automatically.
     """
-    _ = (metadata, workbook, sheet, table, input_file_name)
+    _ = (metadata, workbook, input_file_name)
 
     import os
 
@@ -379,13 +369,11 @@ def on_workbook_start_example_4_init_openai_client(
 
 def on_workbook_start_example_5_load_reference_sheet_into_polars(
     *,
+    workbook: openpyxl.Workbook,
+    input_file_name: str,
     settings: Any,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    workbook: openpyxl.Workbook,
-    sheet: None,
-    table: None,
-    input_file_name: str | None,
     logger: Any,
 ) -> None:
     """Example 5: Load a small reference sheet into Polars and stash it in `state`.
@@ -398,7 +386,7 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
     Best practice:
     - Keep this small. For large sheets, defer reading until you need it.
     """
-    _ = (metadata, sheet, table, input_file_name)
+    _ = (metadata, input_file_name)
 
     cfg = state.get(STATE_NAMESPACE)
     if not isinstance(cfg, MutableMapping):

@@ -9,6 +9,7 @@ from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import FieldDef
+from ade_engine.models.table import TableRegion
 
 
 def test_validator_writes_inline_issue_columns():
@@ -26,13 +27,16 @@ def test_validator_writes_inline_issue_columns():
     registry.register_column_validator(validator, field="foo", priority=0)
     registry.finalize()
 
+    table = pl.DataFrame({"foo": ["ok", "bad"]})
     out = apply_validators(
-        table=pl.DataFrame({"foo": ["ok", "bad"]}),
+        table=table,
         registry=registry,
         settings=Settings(),
         state={},
         metadata={},
-        input_file_name=None,
+        table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+        table_index=0,
+        input_file_name="input.xlsx",
         logger=NullLogger(),
     )
 
@@ -56,13 +60,16 @@ def test_validator_invalid_return_raises():
     registry.finalize()
 
     with pytest.raises(PipelineError):
+        table = pl.DataFrame({"foo": ["ok", "bad"]})
         apply_validators(
-            table=pl.DataFrame({"foo": ["ok", "bad"]}),
+            table=table,
             registry=registry,
             settings=Settings(),
             state={},
             metadata={},
-            input_file_name=None,
+            table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+            table_index=0,
+            input_file_name="input.xlsx",
             logger=NullLogger(),
         )
 
@@ -81,13 +88,16 @@ def test_inline_issues_stay_aligned_after_filter():
     registry.register_column_validator(validator, field="id", priority=0)
     registry.finalize()
 
+    table = pl.DataFrame({"id": [1, 2, 3]})
     out = apply_validators(
-        table=pl.DataFrame({"id": [1, 2, 3]}),
+        table=table,
         registry=registry,
         settings=Settings(),
         state={},
         metadata={},
-        input_file_name=None,
+        table_region=TableRegion(min_row=1, min_col=1, max_row=1 + table.height, max_col=max(1, table.width)),
+        table_index=0,
+        input_file_name="input.xlsx",
         logger=NullLogger(),
     )
 

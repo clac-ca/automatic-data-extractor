@@ -31,18 +31,19 @@ For all other hooks (including `on_table_written`), the hook must return `None`.
 
 ## Context and state
 
-All hooks receive a `HookContext` expanded into keyword arguments by `call_extension`. Common fields:
+Hooks receive a stage-specific context expanded into keyword arguments by `call_extension`.
+The engine only passes parameters that are populated for that stage:
 
-- `metadata`: dict (filenames, sheet index, etc.)
-- `settings`: engine settings
-- `state`: mutable dict shared across the run
-- `workbook`: workbook object (varies by stage)
-- `sheet`: worksheet object (varies by stage)
-- `table`: `pl.DataFrame | None` (for `on_table_written`, this is the DataFrame that was written after output policies)
-- `region`: `TableRegion | None` (source region for `on_table_*`; output region for `on_table_written`)
-- `table_index`: `int | None` (0-based index within the sheet)
-- `input_file_name`: `str | None`
-- `logger`: `RunLogger`
+- `on_workbook_start`: `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_sheet_start`: `sheet`, `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_mapped` / `on_table_transformed` / `on_table_validated`: `table`, `sheet`, `workbook`, `table_region`, `table_index`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_written`: `table`, `sheet`, `workbook`, `table_region`, `table_index`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_workbook_before_save`: `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+
+Notes:
+
+- `workbook` is the input workbook for the early hooks and the output workbook for `on_table_written` / `on_workbook_before_save`.
+- `table_region` uses Excel-style bounds (`min_row/min_col/max_row/max_col` are 1-based + inclusive; `min_row` is the header row). Use `table_region.a1` for an `"A1:D10"`-style range.
 
 Mutating `state` is the preferred way to share data between hooks, detectors, transforms, and validators.
 

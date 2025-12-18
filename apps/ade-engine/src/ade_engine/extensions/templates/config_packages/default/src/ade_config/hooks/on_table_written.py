@@ -42,10 +42,9 @@ import polars as pl
 from ade_engine.models import TableRegion
 
 # `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - header_row, first_col, last_row, last_col (1-based, inclusive)
-# - header_inferred (bool)
-# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
-# - range refs: ref, header_ref, data_ref
+# - min_row, min_col, max_row, max_col (1-based, inclusive)
+# - convenience properties: a1, cell_range, width, height
+# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
 
 
 # -----------------------------------------------------------------------------
@@ -105,15 +104,15 @@ def register(registry) -> None:
 
 def on_table_written(
     *,
+    table: pl.DataFrame,  # Exact DF that was written (after output policies)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Output worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
+    table_region: TableRegion,  # Output header+data bounds (1-based, inclusive)
+    table_index: int,  # 0-based table index within the sheet
+    input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Output worksheet (openpyxl Worksheet)
-    table: pl.DataFrame,  # Exact DF that was written (after output policies)
-    table_region: TableRegion | None,  # header_row/first_col/last_row/last_col (1-based, inclusive) + header_inferred; refs: ref/header_ref/data_ref
-    table_index: int | None,  # 0-based table index within the sheet
-    input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
     """
@@ -139,12 +138,12 @@ def on_table_written(
     counters["tables_written_seen"] = int(counters.get("tables_written_seen", 0) or 0) + 1
 
     sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    range_ref = table_region.ref if table_region else "<unknown>"
+    range_ref = table_region.a1
     if logger:
         logger.info(
             "Config hook: table written (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
             sheet_name,
-            table_index if table_index is not None else "<unknown>",
+            table_index,
             range_ref,
             int(table.height),
             len(table.columns),
@@ -157,37 +156,35 @@ def on_table_written(
 
 def on_table_written_example_1_log_output_range(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """Example 1: log the output range for THIS table."""
     _ = (settings, metadata, state, workbook, sheet, table, table_index, input_file_name)
 
-    if not table_region:
-        return
     if logger:
-        logger.info("Output range for last table: %s", table_region.ref)
+        logger.info("Output range for last table: %s", table_region.a1)
 
 
 def on_table_written_example_2_freeze_header_and_add_filters(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -199,27 +196,24 @@ def on_table_written_example_2_freeze_header_and_add_filters(
     """
     _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
 
-    if not table_region:
-        return
-
     # Freeze panes at the first cell *below* the header row.
-    sheet.freeze_panes = sheet.cell(row=table_region.data_first_row, column=table_region.first_col).coordinate
+    sheet.freeze_panes = sheet.cell(row=table_region.data_first_row, column=table_region.min_col).coordinate
 
     # Enable worksheet auto-filter for the table region.
-    sheet.auto_filter.ref = table_region.ref
+    sheet.auto_filter.ref = table_region.a1
 
 
 def on_table_written_example_3_style_header_row(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -232,15 +226,12 @@ def on_table_written_example_3_style_header_row(
     from openpyxl.styles import Alignment, Font, PatternFill
     _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
 
-    if not table_region:
-        return
-
     # Style constants (easy to tweak).
     header_fill = PatternFill(fill_type="solid", start_color="1F4E79", end_color="1F4E79")  # dark blue
     header_font = Font(bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    for col in range(table_region.first_col, table_region.last_col + 1):
+    for col in range(table_region.min_col, table_region.max_col + 1):
         cell = sheet.cell(row=table_region.header_row, column=col)
         cell.fill = header_fill
         cell.font = header_font
@@ -252,15 +243,15 @@ def on_table_written_example_3_style_header_row(
 
 def on_table_written_example_4_hide_diagnostic_columns(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -269,26 +260,23 @@ def on_table_written_example_4_hide_diagnostic_columns(
     from openpyxl.utils import get_column_letter
     _ = (settings, metadata, state, workbook, sheet, table_index, input_file_name, logger)
 
-    if not table_region:
-        return
-
     for offset, col_name in enumerate(table.columns):
         if str(col_name).startswith(ADE_DIAGNOSTIC_PREFIX):
-            col_idx = table_region.first_col + offset
+            col_idx = table_region.min_col + offset
             sheet.column_dimensions[get_column_letter(col_idx)].hidden = True
 
 
 def on_table_written_example_5_collect_table_facts(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -300,7 +288,7 @@ def on_table_written_example_5_collect_table_facts(
         state[STATE_NAMESPACE] = cfg
 
     _ = (settings, metadata, workbook, sheet, table_index, logger)
-    region_ref = table_region.ref if table_region else None
+    table_region_ref = table_region.a1
 
     tables = cfg.get("tables_written")
     if not isinstance(tables, list):
@@ -314,22 +302,22 @@ def on_table_written_example_5_collect_table_facts(
             "table_index": table_index,
             "rows": int(table.height),
             "columns": list(table.columns),
-            "range": region_ref,
+            "range": table_region_ref,
         }
     )
 
 
 def on_table_written_example_6_add_excel_structured_table(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -350,9 +338,7 @@ def on_table_written_example_6_add_excel_structured_table(
         state[STATE_NAMESPACE] = cfg
 
     _ = (settings, metadata, input_file_name)
-    if not table_region:
-        return
-    ref = table_region.ref
+    ref = table_region.a1
 
     # Excel tables are most useful when there is at least one data row.
     if int(table.height) <= 0 or not table_region.has_data_rows:
@@ -361,10 +347,7 @@ def on_table_written_example_6_add_excel_structured_table(
         return
 
     sheet_name = getattr(sheet, "title", "Sheet")
-    if table_index is not None:
-        base = f"{sheet_name}_Table_{table_index}"
-    else:
-        base = f"{sheet_name}_Table"
+    base = f"{sheet_name}_Table_{table_index}"
 
     # Make a valid Excel table name (simple + conservative).
     # Rules (high level): starts with letter/_/\, contains letters/numbers/._, no spaces,
@@ -424,15 +407,15 @@ def on_table_written_example_6_add_excel_structured_table(
 
 def on_table_written_example_7_add_header_comments(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -449,7 +432,7 @@ def on_table_written_example_7_add_header_comments(
         state[STATE_NAMESPACE] = cfg
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
-    if not table_region or not table.columns:
+    if not table.columns:
         return
 
     # Built-in comments for ADE diagnostic columns.
@@ -463,7 +446,7 @@ def on_table_written_example_7_add_header_comments(
     extra: Mapping[str, str] = cfg.get("header_comments", {}) or {}
     comments: dict[str, str] = {**default_comments, **dict(extra)}
 
-    col_to_idx = {name: table_region.first_col + i for i, name in enumerate(table.columns)}
+    col_to_idx = {name: table_region.min_col + i for i, name in enumerate(table.columns)}
 
     added = 0
     for col_name, comment_text in comments.items():
@@ -483,15 +466,15 @@ def on_table_written_example_7_add_header_comments(
 
 def on_table_written_example_8_highlight_and_comment_validation_issues(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -516,14 +499,21 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
         state[STATE_NAMESPACE] = cfg
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
-    if not table_region or not table_region.data_ref or not table.columns:
+    if not table_region.has_data_rows or not table.columns:
         return
 
-    data_ref = table_region.data_ref
-    data_first_row = table_region.data_first_row
-    last_row = table_region.last_row
+    from openpyxl.worksheet.cell_range import CellRange
 
-    col_to_idx = {name: table_region.first_col + i for i, name in enumerate(table.columns)}
+    data_ref = CellRange(
+        min_row=table_region.data_first_row,
+        max_row=table_region.max_row,
+        min_col=table_region.min_col,
+        max_col=table_region.max_col,
+    ).coord
+    data_first_row = table_region.data_first_row
+    last_row = table_region.max_row
+
+    col_to_idx = {name: table_region.min_col + i for i, name in enumerate(table.columns)}
     has_issues_idx = col_to_idx.get(ADE_HAS_ISSUES_COL)
     if not has_issues_idx:
         return  # diagnostics not present / dropped
@@ -604,15 +594,15 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
 
 def on_table_written_example_9_autofit_column_widths(
     *,
+    table: pl.DataFrame,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    workbook: openpyxl.Workbook,
+    table_region: TableRegion,  # See `TableRegion` notes above
+    table_index: int,
+    input_file_name: str,
     settings,
     metadata: dict,
     state: dict,
-    workbook: openpyxl.Workbook,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    table: pl.DataFrame,
-    table_region: TableRegion | None,  # See `TableRegion` notes above
-    table_index: int | None,
-    input_file_name: str | None,
     logger,
 ) -> None:
     """
@@ -626,8 +616,6 @@ def on_table_written_example_9_autofit_column_widths(
     from openpyxl.utils import get_column_letter
 
     _ = (settings, metadata, workbook, table_index, input_file_name)
-    if not table_region:
-        return
 
     cfg = state.get(STATE_NAMESPACE)
     if not isinstance(cfg, MutableMapping):
@@ -639,10 +627,10 @@ def on_table_written_example_9_autofit_column_widths(
     padding = float(cfg.get("autofit_padding", 2) or 2)
     skip_diagnostics = bool(cfg.get("autofit_skip_diagnostics", True))
 
-    scan_last_row = min(table_region.last_row, table_region.data_first_row + max(sample_rows, 0) - 1)
+    scan_last_row = min(table_region.max_row, table_region.data_first_row + max(sample_rows, 0) - 1)
 
-    for col in range(table_region.first_col, table_region.last_col + 1):
-        col_name = table.columns[col - table_region.first_col]
+    for col in range(table_region.min_col, table_region.max_col + 1):
+        col_name = table.columns[col - table_region.min_col]
         if str(col_name).startswith(ADE_DIAGNOSTIC_PREFIX) and skip_diagnostics:
             continue
 

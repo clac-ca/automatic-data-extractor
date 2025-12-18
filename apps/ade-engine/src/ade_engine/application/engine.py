@@ -144,10 +144,8 @@ class Engine:
                         settings=self.settings,
                         state=state,
                         metadata=metadata,
-                        workbook=source_wb,
-                        sheet=None,
-                        table=None,
                         input_file_name=plan.request.input_file.name,
+                        workbook=source_wb,
                         logger=run_logger,
                     )
 
@@ -168,10 +166,9 @@ class Engine:
                             settings=self.settings,
                             state=state,
                             metadata=sheet_metadata,
+                            input_file_name=plan.request.input_file.name,
                             workbook=source_wb,
                             sheet=sheet,
-                            table=None,
-                            input_file_name=plan.request.input_file.name,
                             logger=run_logger,
                         )
 
@@ -188,10 +185,8 @@ class Engine:
                         settings=self.settings,
                         state=state,
                         metadata=metadata,
-                        workbook=output_wb,
-                        sheet=None,
-                        table=None,
                         input_file_name=plan.request.input_file.name,
+                        workbook=output_wb,
                         logger=run_logger,
                     )
                     output_wb.save(plan.output_path)

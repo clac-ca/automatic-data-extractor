@@ -14,9 +14,9 @@ def test_process_sheet_renders_multiple_tables_with_blank_row():
     logger = NullLogger()
 
     def detector(*, row_index, **_):
-        if row_index in (0, 3):
+        if row_index in (1, 4):
             return {RowKind.HEADER.value: 1.0}
-        if row_index in (1, 2, 4):
+        if row_index in (2, 3, 5):
             return {RowKind.DATA.value: 1.0}
         return {}
 
@@ -64,7 +64,7 @@ def test_process_sheet_handles_mixed_numeric_types():
     logger = NullLogger()
 
     def detector(*, row_index, **_):
-        if row_index == 0:
+        if row_index == 1:
             return {RowKind.HEADER.value: 1.0}
         return {RowKind.DATA.value: 1.0}
 
@@ -106,7 +106,7 @@ def test_on_table_written_receives_written_table_after_output_policies():
     registry.register_field(FieldDef(name="name"))
 
     def row_detector(*, row_index, **_):
-        if row_index == 0:
+        if row_index == 1:
             return {RowKind.HEADER.value: 1.0}
         return {RowKind.DATA.value: 1.0}
 

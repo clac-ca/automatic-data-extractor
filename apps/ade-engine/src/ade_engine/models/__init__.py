@@ -20,8 +20,12 @@ from ade_engine.models.extension_contexts import (
     RowDetectorContext,
     RowKind,
     ScorePatch,
+    SheetStartHookContext,
+    TableHookContext,
     TransformContext,
     ValidateContext,
+    WorkbookBeforeSaveHookContext,
+    WorkbookStartHookContext,
 )
 from ade_engine.models.extension_outputs import (
     ColumnDetectorResult,
@@ -51,6 +55,10 @@ __all__ = [
     "TransformContext",
     "ValidateContext",
     "HookContext",
+    "WorkbookStartHookContext",
+    "SheetStartHookContext",
+    "TableHookContext",
+    "WorkbookBeforeSaveHookContext",
     "ColumnDetectorResult",
     "RowDetectorResult",
     "DetectorSettings",

@@ -55,13 +55,13 @@ def detect_and_map_columns(
     sheet_name: str,
     table: pl.DataFrame,
     source_columns: List[SourceColumn],
-    table_region: TableRegion | None = None,
-    table_index: int | None = None,
+    table_region: TableRegion,
+    table_index: int,
     registry: Registry,
     settings: Settings,
     state: dict,
     metadata: dict,
-    input_file_name: str | None,
+    input_file_name: str,
     logger: RunLogger,
 ) -> tuple[List[MappedColumn], List[SourceColumn], dict[int, dict[str, float]], set[int]]:
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
@@ -131,7 +131,7 @@ def detect_and_map_columns(
                     data={
                         "sheet_name": sheet_name,
                         "table_index": table_index,
-                        "table_region": table_region.ref if table_region else None,
+                        "table_region": table_region.a1 if table_region else None,
                         "column_index": col.index,
                         "detector": detector_payload,
                     },
@@ -161,7 +161,7 @@ def detect_and_map_columns(
                 data={
                     "sheet_name": sheet_name,
                     "table_index": table_index,
-                    "table_region": table_region.ref if table_region else None,
+                    "table_region": table_region.a1 if table_region else None,
                     "column_index": col.index,
                     "detectors": detectors_run,
                     "scores": logged_scores,
@@ -190,7 +190,7 @@ def detect_and_map_columns(
                     data={
                         "sheet_name": sheet_name,
                         "table_index": table_index,
-                        "table_region": table_region.ref if table_region else None,
+                        "table_region": table_region.a1 if table_region else None,
                         "column_index": col.index,
                         "column_name": column_name,
                         "header_text": _header_text(col.header),

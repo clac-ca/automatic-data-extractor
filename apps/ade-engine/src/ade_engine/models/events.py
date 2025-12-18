@@ -152,12 +152,16 @@ class RowDetectorResultPayloadV1(StrictPayloadV1):
 
 class ColumnDetectorResultPayloadV1(StrictPayloadV1):
     sheet_name: str
+    table_index: NonNegativeInt | None = None
+    table_region: str | None = None
     column_index: NonNegativeInt
     detector: DetectorResultV1
 
 
 class ColumnClassificationPayloadV1(StrictPayloadV1):
     sheet_name: str
+    table_index: NonNegativeInt | None = None
+    table_region: str | None = None
     column_index: NonNegativeInt
     detectors: list[DetectorResultV1]
     scores: dict[str, float]
