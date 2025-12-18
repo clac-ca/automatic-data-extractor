@@ -28,22 +28,6 @@ import openpyxl
 import openpyxl.worksheet.worksheet
 
 
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
-# ----------------------------
-# Registration
-# ----------------------------
-
-
 def register(registry) -> None:
     """Register this config package's on_sheet_start hook(s)."""
     registry.register_hook(on_sheet_start, hook="on_sheet_start", priority=0)
@@ -52,11 +36,6 @@ def register(registry) -> None:
     # registry.register_hook(on_sheet_start_example_1_route_or_skip_sheets, hook="on_sheet_start", priority=10)
     # registry.register_hook(on_sheet_start_example_2_capture_excel_tables, hook="on_sheet_start", priority=20)
     # registry.register_hook(on_sheet_start_example_3_hint_header_from_freeze_panes, hook="on_sheet_start", priority=30)
-
-
-# ----------------------------
-# Default hook implementation
-# ----------------------------
 
 
 def on_sheet_start(
@@ -69,22 +48,16 @@ def on_sheet_start(
     state: dict,  # Mutable dict shared across the run
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
-    """
-    Called once per worksheet, before ADE scans the sheet for tables.
+    """Called once per worksheet, before ADE scans the sheet for tables.
 
     This default implementation is intentionally small but useful:
     - increments a sheet counter
-    - creates/stashes a per-sheet state dict (`state[STATE_NAMESPACE]["sheets"][sheet_name]`)
+    - creates/stashes a per-sheet state dict (`state["sheets"][sheet_name]`)
     - records lightweight sheet facts that are commonly useful later
     - emits a structured config event for observability
     """
-
-    # --- namespaced config state (shared across run)
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, dict):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    # `state` is already the shared mutable dict for the run.
+    cfg = state
 
     # --- stats (shared across run)
     stats = cfg.get("stats")
@@ -190,15 +163,12 @@ def on_sheet_start_example_1_route_or_skip_sheets(
     - helper sheets that are not meant to be parsed
 
     This example sets a per-sheet flag:
-        state[STATE_NAMESPACE]["sheets"][sheet_name]["skip"] = True
+        state["sheets"][sheet_name]["skip"] = True
     which your detectors/transforms can consult to avoid scanning/processing.
     """
     sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, dict):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     sheets = cfg.get("sheets")
     if not isinstance(sheets, dict):
@@ -294,10 +264,7 @@ def on_sheet_start_example_2_capture_excel_tables(
         # prefer silently doing nothing in an example hook.
         return None
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, dict):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     sheets = cfg.get("sheets")
     if not isinstance(sheets, dict):
@@ -382,10 +349,7 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
 
     header_rows = first_data_row - 1
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, dict):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
+    cfg = state
 
     sheets = cfg.get("sheets")
     if not isinstance(sheets, dict):

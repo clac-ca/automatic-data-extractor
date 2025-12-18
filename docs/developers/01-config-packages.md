@@ -31,7 +31,7 @@ Engine settings live outside the config code in `.env`, env vars (`ADE_ENGINE_*`
 - `remove_unmapped_columns`
 - `write_diagnostics_columns`
 - `mapping_tie_resolution`
-- `detectors.detector_max_table_rows` / `detectors.detector_column_sample_size`
+- `detectors.detector_column_sample_size`
 
 ## Output ordering
 By default, unmapped columns remain in the output (mapping is rename-only). Reserved `__ade_*` columns are dropped from output unless configured. Custom ordering belongs in `on_table_validated` by returning a reordered DataFrame.

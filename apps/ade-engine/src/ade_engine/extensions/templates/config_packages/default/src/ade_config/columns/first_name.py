@@ -8,11 +8,11 @@ This module demonstrates:
 Detector stage (pre-mapping)
 ----------------------------
 - Called once per extracted table column.
-- Return `{FIELD_NAME: score}` (0..1) or `None`.
+- Return `{"first_name": score}` (0..1) or `None`.
 
 Transform/validate stage (post-mapping)
 ---------------------------------------
-- Transforms return a `pl.Expr`.
+- Transforms return a `pl.Expr` (or `None` for no-op).
 - Validators return a `pl.Expr` producing a per-row message (string) or null.
 
 Template goals
@@ -26,52 +26,24 @@ from __future__ import annotations
 import re
 
 import polars as pl
-
 from ade_engine.models import FieldDef, TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
-# they can share cached values and facts.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-FIELD_NAME = "first_name"
-
-_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
-
-HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
-    {"first", "name"},
-    {"firstname"},
-    {"fname"},
-    {"given", "name"},
-    {"givenname"},
-    {"forename"},
-]
 
 
 def register(registry) -> None:
     """Register the `first_name` field and its detectors/transforms/validators."""
-    registry.register_field(FieldDef(name=FIELD_NAME, label="First Name", dtype="string"))
+    registry.register_field(FieldDef(name="first_name", label="First Name", dtype="string"))
 
     # Enabled by default:
     # Detect "first_name" using common header names.
-    registry.register_column_detector(detect_first_name_header_common_names, field=FIELD_NAME, priority=60)
+    registry.register_column_detector(
+        detect_first_name_header_common_names, field="first_name", priority=60
+    )
 
     # Examples (uncomment to enable)
-    # registry.register_column_detector(detect_first_name_values_basic, field=FIELD_NAME, priority=30)
-    # registry.register_column_detector(detect_first_name_values_neighbor_pair, field=FIELD_NAME, priority=25)
-    # registry.register_column_transform(normalize_first_name, field=FIELD_NAME, priority=0)
-    # registry.register_column_validator(validate_first_name, field=FIELD_NAME, priority=0)
+    # registry.register_column_detector(detect_first_name_values_basic, field="first_name", priority=30)
+    # registry.register_column_detector(detect_first_name_values_neighbor_pair, field="first_name", priority=25)
+    # registry.register_column_transform(normalize_first_name, field="first_name", priority=0)
+    # registry.register_column_validator(validate_first_name, field="first_name", priority=0)
 
 
 def detect_first_name_header_common_names(
@@ -84,7 +56,7 @@ def detect_first_name_header_common_names(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion,  # See `TableRegion` notes above
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based index within the sheet (when multiple tables exist)
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
@@ -96,17 +68,27 @@ def detect_first_name_header_common_names(
     Purpose:
       - Match typical first-name headers ("first name", "fname", "given name", ...).
     """
+    header_non_alnum_re = re.compile(r"[^a-z0-9]+")
+    header_token_sets_strong: list[set[str]] = [
+        {"first", "name"},
+        {"firstname"},
+        {"fname"},
+        {"given", "name"},
+        {"givenname"},
+        {"forename"},
+    ]
+
     raw = (header_text or "").strip().lower()
     if not raw:
         return None
 
-    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    normalized = header_non_alnum_re.sub(" ", raw).strip()
     tokens = set(normalized.split())
     if not tokens:
         return None
 
-    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
-        return {FIELD_NAME: 1.0}
+    if any(pattern <= tokens for pattern in header_token_sets_strong):
+        return {"first_name": 1.0}
 
     return None
 
@@ -148,7 +130,7 @@ def detect_first_name_values_basic(
         if 2 <= len(s) <= 20:
             good += 1
 
-    return {FIELD_NAME: float(good / total)}
+    return {"first_name": float(good / total)}
 
 
 def detect_first_name_values_neighbor_pair(
@@ -192,17 +174,15 @@ def detect_first_name_values_neighbor_pair(
 
     # Neighbor score from the right column (sampled from the table).
     if column_index + 1 >= len(table.columns):
-        return {FIELD_NAME: float(base_score)}
+        return {"first_name": float(base_score)}
 
-    row_n = settings.detectors.detector_max_table_rows
     text_n = settings.detectors.detector_column_sample_size
 
-    t = table.head(row_n)
-    right_col_name = t.columns[column_index + 1]
-    right_series = t.get_column(right_col_name)
+    right_col_name = table.columns[column_index + 1]
+    right_series = table.get_column(right_col_name)
 
     right_sample: list[str] = []
-    for v in right_series.to_list():
+    for v in right_series:
         if v is None:
             continue
         s = str(v).strip()
@@ -213,7 +193,7 @@ def detect_first_name_values_neighbor_pair(
             break
 
     if not right_sample:
-        return {FIELD_NAME: float(base_score)}
+        return {"first_name": float(base_score)}
 
     right_good = 0
     right_total = 0
@@ -229,7 +209,7 @@ def detect_first_name_values_neighbor_pair(
     if base_score >= 0.7 and right_score >= 0.7:
         score = min(1.0, score + 0.15)
 
-    return {FIELD_NAME: score}
+    return {"first_name": score}
 
 
 def normalize_first_name(

@@ -18,18 +18,6 @@ Template goals
 from __future__ import annotations
 
 
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
-# they can share cached values and facts.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
 def register(registry) -> None:
     """Register this config package's data row detector(s)."""
     registry.register_row_detector(detect_data_row_by_density, row_kind="data", priority=0)
@@ -60,7 +48,9 @@ def detect_data_row_by_density(
     if not values:
         return {"data": 0.0}
 
-    non_empty = [v for v in values if v not in (None, "") and not (isinstance(v, str) and not v.strip())]
+    non_empty = [
+        v for v in values if v not in (None, "") and not (isinstance(v, str) and not v.strip())
+    ]
     density = len(non_empty) / max(len(values), 1)
 
     numericish = 0

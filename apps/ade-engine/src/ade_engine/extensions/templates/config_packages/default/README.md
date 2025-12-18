@@ -61,14 +61,10 @@ Instead:
 **Sample sizing (settings-driven)**
 
 ```python
-row_n = settings.detectors.detector_max_table_rows
 text_n = settings.detectors.detector_column_sample_size
 
-# Use only the first row_n rows for detection work (bounded cost).
-t = table.head(row_n)
-
 # Current column name (internal, not semantic).
-col_name = t.columns[column_index]
+col_name = table.columns[column_index]
 
 # Text view of the column (trimmed).
 text = pl.col(col_name).cast(pl.Utf8).str.strip_chars()

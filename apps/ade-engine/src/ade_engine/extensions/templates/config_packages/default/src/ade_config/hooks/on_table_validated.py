@@ -39,37 +39,12 @@ Template goals
 
 from __future__ import annotations
 
-from typing import MutableMapping
+from collections.abc import MutableMapping
 
 import openpyxl
 import openpyxl.worksheet.worksheet
 import polars as pl
-
 from ade_engine.models import TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
-# -----------------------------------------------------------------------------
-# ADE issue column conventions (available at this stage)
-# -----------------------------------------------------------------------------
-ISSUE_COL_PREFIX = "__ade_issue__"
-HAS_ISSUES_COL = "__ade_has_issues"
-ISSUE_COUNT_COL = "__ade_issue_count"
 
 
 def register(registry) -> None:
@@ -91,7 +66,7 @@ def on_table_validated(
     table: pl.DataFrame,  # Current table DF (post-validation; pre-write)
     sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Source header+data bounds (1-based, inclusive)
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
     settings,  # Engine Settings
@@ -102,11 +77,10 @@ def on_table_validated(
     """Default: log a small issue summary and keep the table unchanged."""
     _ = (settings, metadata, workbook, input_file_name)
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    has_issues_col = "__ade_has_issues"
+    issue_count_col = "__ade_issue_count"
+
+    cfg = state
 
     counters = cfg.get("counters")
     if not isinstance(counters, MutableMapping):
@@ -120,10 +94,10 @@ def on_table_validated(
         issues_total = 0
         rows_with_issues = 0
 
-        if ISSUE_COUNT_COL in table.columns:
-            issues_total = int(table.get_column(ISSUE_COUNT_COL).sum() or 0)
-        if HAS_ISSUES_COL in table.columns:
-            rows_with_issues = int(table.get_column(HAS_ISSUES_COL).sum() or 0)
+        if issue_count_col in table.columns:
+            issues_total = int(table.get_column(issue_count_col).sum() or 0)
+        if has_issues_col in table.columns:
+            rows_with_issues = int(table.get_column(has_issues_col).sum() or 0)
 
         logger.info(
             "Config hook: table validated (sheet=%s table_index=%s range=%s rows=%d cols=%d issues_total=%d rows_with_issues=%d)",
@@ -167,6 +141,10 @@ def on_table_validated_example_1_enforce_template_layout(
     """
     _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
 
+    issue_col_prefix = "__ade_issue__"
+    has_issues_col = "__ade_has_issues"
+    issue_count_col = "__ade_issue_count"
+
     # 1) Define your required template columns (name + dtype).
     #    - We only enforce types for columns we ADD here.
     #    - We do NOT cast existing columns (validators won't re-run at this stage).
@@ -200,14 +178,12 @@ def on_table_validated_example_1_enforce_template_layout(
             )
 
     # 3) Identify ADE's reserved issue columns.
-    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    reserved_tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    issue_cols = [c for c in table.columns if c.startswith(issue_col_prefix)]
+    reserved_tail = [has_issues_col, issue_count_col, *issue_cols]
     reserved_tail = [c for c in reserved_tail if c in table.columns]
 
     # 4) Build final column order.
-    other_cols = [
-        c for c in table.columns if c not in required_names and c not in reserved_tail
-    ]
+    other_cols = [c for c in table.columns if c not in required_names and c not in reserved_tail]
     final_cols = [*required_names, *other_cols, *reserved_tail]
 
     # 5) Select in that order (reorders columns without touching values).
@@ -238,7 +214,21 @@ def on_table_validated_example_2_strict_template_only(
     - Outputs ONLY those columns (drops everything else).
     - Optionally includes ADE issue columns at the end.
     """
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
+
+    issue_col_prefix = "__ade_issue__"
+    has_issues_col = "__ade_has_issues"
+    issue_count_col = "__ade_issue_count"
 
     TEMPLATE_COLUMNS: list[tuple[str, pl.DataType]] = [
         ("member_id", pl.Utf8),
@@ -257,8 +247,8 @@ def on_table_validated_example_2_strict_template_only(
     if missing_exprs:
         table = table.with_columns(missing_exprs)
 
-    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    reserved_tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    issue_cols = [c for c in table.columns if c.startswith(issue_col_prefix)]
+    reserved_tail = [has_issues_col, issue_count_col, *issue_cols]
     reserved_tail = [c for c in reserved_tail if c in table.columns]
 
     return table.select([*required_names, *reserved_tail])
@@ -292,9 +282,10 @@ def on_table_validated_example_3_add_derived_columns(
     """
     _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
 
+    has_issues_col = "__ade_has_issues"
+
     if not any(
-        c in table.columns
-        for c in ["first_name", "last_name", "email", "phone", HAS_ISSUES_COL]
+        c in table.columns for c in ["first_name", "last_name", "email", "phone", has_issues_col]
     ):
         return None
 
@@ -303,10 +294,14 @@ def on_table_validated_example_3_add_derived_columns(
     # full_name = "first_name last_name" (handles nulls cleanly)
     if "first_name" in table.columns or "last_name" in table.columns:
         first = (
-            pl.col("first_name").cast(pl.Utf8) if "first_name" in table.columns else pl.lit(None, dtype=pl.Utf8)
+            pl.col("first_name").cast(pl.Utf8)
+            if "first_name" in table.columns
+            else pl.lit(None, dtype=pl.Utf8)
         )
         last = (
-            pl.col("last_name").cast(pl.Utf8) if "last_name" in table.columns else pl.lit(None, dtype=pl.Utf8)
+            pl.col("last_name").cast(pl.Utf8)
+            if "last_name" in table.columns
+            else pl.lit(None, dtype=pl.Utf8)
         )
         exprs.append(
             pl.concat_str(
@@ -338,9 +333,9 @@ def on_table_validated_example_3_add_derived_columns(
         )
 
     # row_status = "ISSUES" / "OK"
-    if HAS_ISSUES_COL in table.columns:
+    if has_issues_col in table.columns:
         exprs.append(
-            pl.when(pl.col(HAS_ISSUES_COL))
+            pl.when(pl.col(has_issues_col))
             .then(pl.lit("ISSUES"))
             .otherwise(pl.lit("OK"))
             .alias("row_status")
@@ -376,19 +371,32 @@ def on_table_validated_example_4_sort_issues_to_top(
     logger,
 ) -> pl.DataFrame | None:
     """Example 4: sort so rows with issues appear at the top (triage-friendly)."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
-    if HAS_ISSUES_COL not in table.columns and ISSUE_COUNT_COL not in table.columns:
+    has_issues_col = "__ade_has_issues"
+    issue_count_col = "__ade_issue_count"
+
+    if has_issues_col not in table.columns and issue_count_col not in table.columns:
         return None
 
     by: list[str] = []
     descending: list[bool] = []
 
-    if HAS_ISSUES_COL in table.columns:
-        by.append(HAS_ISSUES_COL)
+    if has_issues_col in table.columns:
+        by.append(has_issues_col)
         descending.append(True)
-    if ISSUE_COUNT_COL in table.columns:
-        by.append(ISSUE_COUNT_COL)
+    if issue_count_col in table.columns:
+        by.append(issue_count_col)
         descending.append(True)
 
     # Optional stable sort keys (add them only if present).
@@ -419,10 +427,24 @@ def on_table_validated_example_5_move_issue_columns_to_end(
     logger,
 ) -> pl.DataFrame | None:
     """Example 5: move ADE's reserved issue columns to the end (nicer for humans)."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
-    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    issue_col_prefix = "__ade_issue__"
+    has_issues_col = "__ade_has_issues"
+    issue_count_col = "__ade_issue_count"
+
+    issue_cols = [c for c in table.columns if c.startswith(issue_col_prefix)]
+    tail = [has_issues_col, issue_count_col, *issue_cols]
     tail = [c for c in tail if c in table.columns]
     if not tail:
         return None
@@ -450,9 +472,20 @@ def on_table_validated_example_6_add_issues_summary_column(
     logger,
 ) -> pl.DataFrame | None:
     """Example 6: add a single `issues_summary` column + an `issue_fields` list column."""
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+    _ = (
+        settings,
+        metadata,
+        state,
+        workbook,
+        sheet,
+        table_region,
+        table_index,
+        input_file_name,
+        logger,
+    )
 
-    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
+    issue_col_prefix = "__ade_issue__"
+    issue_cols = [c for c in table.columns if c.startswith(issue_col_prefix)]
     if not issue_cols:
         return None
 
@@ -468,7 +501,7 @@ def on_table_validated_example_6_add_issues_summary_column(
 
     field_name_exprs: list[pl.Expr] = []
     for c in issue_cols:
-        field_name = c[len(ISSUE_COL_PREFIX) :]
+        field_name = c[len(issue_col_prefix) :]
         field_name_exprs.append(
             pl.when(pl.col(c).is_not_null() & (pl.col(c).cast(pl.Utf8) != ""))
             .then(pl.lit(field_name))
@@ -514,11 +547,7 @@ def on_table_validated_example_7_enrich_from_reference_csv_cached(
     if JOIN_KEY not in table.columns:
         return None
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     cache = cfg.get("cache")
     if not isinstance(cache, MutableMapping):

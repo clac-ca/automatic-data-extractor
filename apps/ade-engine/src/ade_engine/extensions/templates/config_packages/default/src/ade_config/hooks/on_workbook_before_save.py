@@ -25,25 +25,10 @@ Template goals
 
 from __future__ import annotations
 
-from typing import MutableMapping
+from collections.abc import MutableMapping
+from datetime import UTC
 
 import openpyxl
-
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
-# -----------------------------------------------------------------------------
-# Registration
-# -----------------------------------------------------------------------------
 
 
 def register(registry) -> None:
@@ -80,21 +65,21 @@ def on_workbook_before_save(
     """Default: log basic info (safe, no workbook modifications)."""
     _ = (settings,)  # unused by default
 
-    cfg = state.get(STATE_NAMESPACE)
-    if not isinstance(cfg, MutableMapping):
-        cfg = {}
-        state[STATE_NAMESPACE] = cfg
-    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+    cfg = state
 
     counters = cfg.get("counters")
     if not isinstance(counters, MutableMapping):
         counters = {}
         cfg["counters"] = counters
-    counters["workbooks_before_save_seen"] = int(counters.get("workbooks_before_save_seen", 0) or 0) + 1
+    counters["workbooks_before_save_seen"] = (
+        int(counters.get("workbooks_before_save_seen", 0) or 0) + 1
+    )
 
     if logger:
         out = metadata.get("output_file") or ""
-        in_name = input_file_name or metadata.get("input_file") or metadata.get("input_file_name") or ""
+        in_name = (
+            input_file_name or metadata.get("input_file") or metadata.get("input_file_name") or ""
+        )
         logger.info(
             "on_workbook_before_save: input=%s output=%s sheets=%d",
             in_name,
@@ -125,18 +110,20 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
     """
     _ = (settings, state)
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     # Core properties (Excel: File -> Info)
     props = workbook.properties
     props.creator = "Automatic Data Extractor (ADE)"
     props.lastModifiedBy = "ADE"
 
-    now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    now_utc_naive = datetime.now(UTC).replace(tzinfo=None)
     props.created = now_utc_naive
     props.modified = now_utc_naive
 
-    input_name = input_file_name or metadata.get("input_file_name") or metadata.get("input_file") or ""
+    input_name = (
+        input_file_name or metadata.get("input_file_name") or metadata.get("input_file") or ""
+    )
     if input_name:
         props.title = f"Normalized - {input_name}"
         props.subject = input_name
@@ -294,8 +281,8 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
     """
     _ = (settings, metadata, state, input_file_name)
 
-    from openpyxl.utils import get_column_letter
     from openpyxl.styles import numbers
+    from openpyxl.utils import get_column_letter
 
     SAMPLE_ROWS = 250
     MIN_W = 10
@@ -342,7 +329,9 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
                 widths[i] = max(widths[i], len(s))
 
         for col_idx, max_len in enumerate(widths, start=1):
-            ws.column_dimensions[get_column_letter(col_idx)].width = float(min(max(max_len + 2, MIN_W), MAX_W))
+            ws.column_dimensions[get_column_letter(col_idx)].width = float(
+                min(max(max_len + 2, MIN_W), MAX_W)
+            )
 
         # --- Apply number formats by header (bounded) ---
         # Performance note: formatting every cell can be slow on giant sheets.
@@ -355,7 +344,9 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
 
             # Apply format to the data cells only (skip header)
             max_format_row = min(ws.max_row, 20_000)
-            for cell in ws.iter_cols(min_col=col_idx, max_col=col_idx, min_row=2, max_row=max_format_row):
+            for cell in ws.iter_cols(
+                min_col=col_idx, max_col=col_idx, min_row=2, max_row=max_format_row
+            ):
                 for c in cell:
                     c.number_format = fmt
 
@@ -387,7 +378,8 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
     """
     _ = (settings, state)
 
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     from openpyxl.chart import BarChart, Reference
     from openpyxl.styles import Alignment, Font
 
@@ -416,7 +408,7 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
     ws["A4"] = "output_file"
     ws["B4"] = metadata.get("output_file") or ""
     ws["A5"] = "generated_at_utc"
-    ws["B5"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
+    ws["B5"] = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
 
     # Sheet stats table
     ws.append([])
@@ -447,8 +439,8 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
 
     # Totals (Excel computes on open)
     ws.cell(row=end_row + 2, column=1, value="TOTAL")
-    ws.cell(row=end_row + 2, column=2, value=f"=SUM(B{header_row_idx+1}:B{end_row})")
-    ws.cell(row=end_row + 2, column=3, value=f"=MAX(C{header_row_idx+1}:C{end_row})")
+    ws.cell(row=end_row + 2, column=2, value=f"=SUM(B{header_row_idx + 1}:B{end_row})")
+    ws.cell(row=end_row + 2, column=3, value=f"=MAX(C{header_row_idx + 1}:C{end_row})")
 
     # Chart: rows per sheet
     if end_row >= header_row_idx + 1:
@@ -495,6 +487,7 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     _ = (settings, metadata, state, input_file_name)
 
     import re
+
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.table import Table, TableStyleInfo
 
@@ -525,7 +518,7 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
                 seen[h] = 1
                 fixed.append(h)
         if changed:
-            for cell, val in zip(ws[1], fixed):
+            for cell, val in zip(ws[1], fixed, strict=False):
                 cell.value = val
 
     existing_names: set[str] = set()
@@ -668,8 +661,8 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     """
     _ = (settings, metadata, state, input_file_name)
 
-    from openpyxl.worksheet.datavalidation import DataValidation
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
 
     STATUS_VALUES = "todo,in_review,blocked,done"
     TARGET_HEADERS = {"status", "review_status"}
@@ -716,7 +709,7 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
     Common convention:
       - helper sheets start with "_" or "tmp"
     """
-    _ = (settings, metadata, state, sheet, table, input_file_name)
+    _ = (settings, metadata, state, input_file_name)
 
     hidden = 0
     for ws in getattr(workbook, "worksheets", []) or []:
@@ -734,7 +727,9 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
         workbook.active = 0
 
     if logger:
-        logger.info("Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, workbook.active)
+        logger.info(
+            "Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, workbook.active
+        )
 
 
 # -----------------------------------------------------------------------------
