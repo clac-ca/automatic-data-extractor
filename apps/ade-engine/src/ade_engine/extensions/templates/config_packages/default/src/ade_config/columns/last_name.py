@@ -1,19 +1,47 @@
 from __future__ import annotations
 
+import re
+
 import polars as pl
 
 from ade_engine.models import FieldDef
 
+FIELD_NAME = "last_name"
+
+_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
+    {"last", "name"},
+    {"lastname"},
+    {"lname"},
+    {"surname"},
+    {"family", "name"},
+    {"familyname"},
+]
+
 
 def register(registry):
-    registry.register_field(FieldDef(name="last_name", label="Last Name", dtype="string"))
-    registry.register_column_detector(detect_last_name_header, field="last_name", priority=50)
-    registry.register_column_detector(detect_last_name_values, field="last_name", priority=20)
-    registry.register_column_transform(normalize_last_name, field="last_name", priority=0)
-    registry.register_column_validator(validate_last_name, field="last_name", priority=0)
+    registry.register_field(FieldDef(name=FIELD_NAME, label="Last Name", dtype="string"))
+
+    # Enabled by default:
+    registry.register_column_detector(detect_last_name_header_common_names, field=FIELD_NAME, priority=60)
+
+    # Examples (uncomment to enable)
+    # -------------------------------------------------
+    # Example 1: value-based detection
+    # Purpose: detect last-name columns when headers are missing.
+    # registry.register_column_detector(detect_last_name_values_basic, field=FIELD_NAME, priority=30)
+
+    # Example 2: normalization
+    # Purpose: trim and convert empty -> null.
+    # registry.register_column_transform(normalize_last_name, field=FIELD_NAME, priority=0)
+
+    # Example 3: validation
+    # Purpose: flag unusually long values.
+    # registry.register_column_validator(validate_last_name, field=FIELD_NAME, priority=0)
 
 
-def detect_last_name_header(
+def detect_last_name_header_common_names(
     *,
     table: pl.DataFrame,
     column: pl.Series,
@@ -28,20 +56,27 @@ def detect_last_name_header(
     input_file_name: str | None,
     logger,
 ) -> dict[str, float] | None:
-    """Header-based detection for last_name."""
-    tokens = set((header_text or "").lower().replace("-", " ").split())
+    """Enabled by default.
+
+    Purpose:
+      - Match typical last-name headers ("last name", "surname", "family name", ...).
+    """
+    raw = (header_text or "").strip().lower()
+    if not raw:
+        return None
+
+    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    tokens = set(normalized.split())
     if not tokens:
         return None
 
-    if ("last" in tokens and "name" in tokens) or "surname" in tokens or "family" in tokens:
-        return {"last_name": 1.0}
-    if "lname" in tokens:
-        return {"last_name": 0.9}
+    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
+        return {FIELD_NAME: 1.0}
 
     return None
 
 
-def detect_last_name_values(
+def detect_last_name_values_basic(
     *,
     table: pl.DataFrame,
     column: pl.Series,
@@ -56,44 +91,26 @@ def detect_last_name_values(
     input_file_name: str | None,
     logger,
 ) -> dict[str, float] | None:
-    """Value-based detection + (optional) neighbor boost (left neighbor).
+    """Example (disabled by default).
 
-    This mirrors the first_name example, but checks the left neighbor to show both directions.
+    Purpose:
+      - Detect last-name columns from values when headers aren’t useful.
     """
     if not column_sample:
         return None
 
-    def looks_like_last_token(s: str) -> bool:
+    good = 0
+    total = 0
+    for s in column_sample:
+        total += 1
         if any(ch.isdigit() for ch in s):
-            return False
+            continue
         if " " in s:
-            return False
-        return len(s) >= 2
+            continue
+        if len(s) >= 2:
+            good += 1
 
-    good = sum(1 for s in column_sample if looks_like_last_token(s))
-    score = good / len(column_sample)
-
-    # Optional boost: if the left neighbor is also name-like, increase confidence.
-    if column_index - 1 >= 0:
-        row_n = settings.detectors.row_sample_size
-        text_n = settings.detectors.text_sample_size
-
-        t = table.head(row_n)
-        left_col_name = t.columns[column_index - 1]
-
-        left_series = t.get_column(left_col_name).cast(pl.Utf8).str.strip_chars()
-        left_series = left_series.drop_nulls()
-        left_series = left_series.filter(left_series != "")
-        left_sample = left_series.head(text_n).to_list()
-
-        if left_sample:
-            left_good = sum(1 for s in left_sample if 2 <= len(s) <= 20 and " " not in s and not any(ch.isdigit() for ch in s))
-            left_score = left_good / len(left_sample)
-
-            if score >= 0.7 and left_score >= 0.7:
-                score = min(1.0, score + 0.15)
-
-    return {"last_name": float(score)}
+    return {FIELD_NAME: float(good / total)}
 
 
 def normalize_last_name(
@@ -106,7 +123,7 @@ def normalize_last_name(
     input_file_name: str | None,
     logger,
 ) -> pl.Expr:
-    """Trim and convert empty -> null."""
+    """Example (disabled by default)."""
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
     return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
 
@@ -121,10 +138,10 @@ def validate_last_name(
     input_file_name: str | None,
     logger,
 ) -> pl.Expr:
+    """Example (disabled by default)."""
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
-
     return (
         pl.when(v.is_not_null() & (v != "") & (v.str.len_chars() > 80))
-        .then(pl.lit("Last name too long"))
+        .then(pl.lit("Last name is unusually long"))
         .otherwise(pl.lit(None))
     )
