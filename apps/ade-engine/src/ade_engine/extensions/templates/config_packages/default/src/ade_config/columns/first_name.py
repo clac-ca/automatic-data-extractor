@@ -29,20 +29,9 @@ def register(registry):
 
     # Examples (uncomment to enable)
     # -------------------------------------------------
-    # Example 1: value-based detection
-    # Purpose: detect first-name columns when headers are missing.
     # registry.register_column_detector(detect_first_name_values_basic, field=FIELD_NAME, priority=30)
-
-    # Example 2: neighbor-aware detection (by position)
-    # Purpose: boost confidence when you see common layouts like "First Name | Last Name".
     # registry.register_column_detector(detect_first_name_values_neighbor_pair, field=FIELD_NAME, priority=25)
-
-    # Example 3: normalization
-    # Purpose: trim and convert empty -> null.
     # registry.register_column_transform(normalize_first_name, field=FIELD_NAME, priority=0)
-
-    # Example 4: validation
-    # Purpose: flag values that are unusually long.
     # registry.register_column_validator(validate_first_name, field=FIELD_NAME, priority=0)
 
 
