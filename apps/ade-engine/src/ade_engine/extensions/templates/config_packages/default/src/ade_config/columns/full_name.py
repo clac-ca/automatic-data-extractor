@@ -40,16 +40,8 @@ def register(registry):
 
     # Examples (uncomment to enable)
     # -------------------------------------------------
-    # Example 1: value-based detection
-    # Purpose: detect full-name columns even when headers are blank / unhelpful.
     # registry.register_column_detector(detect_full_name_values_basic, field=FIELD_NAME, priority=30)
-
-    # Example 2: transform that populates multiple fields
-    # Purpose: split full_name into first_name / last_name without overwriting existing values.
     # registry.register_column_transform(split_full_name, field=FIELD_NAME, priority=0)
-
-    # Example 3: validation
-    # Purpose: flag unexpected characters and a simple cross-field consistency issue.
     # registry.register_column_validator(validate_full_name, field=FIELD_NAME, priority=0)
 
 

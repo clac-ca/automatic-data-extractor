@@ -41,16 +41,8 @@ def register(registry):
 
     # Examples (uncomment to enable)
     # -------------------------------------------------
-    # Example 1: value-based detection
-    # Purpose: map "email" even when headers are blank or non-standard.
     # registry.register_column_detector(detect_email_values_sample_regex, field=FIELD_NAME, priority=30)
-
-    # Example 2: normalization
-    # Purpose: trim whitespace, lowercase, convert empty -> null.
     # registry.register_column_transform(normalize_email, field=FIELD_NAME, priority=0)
-
-    # Example 3: validation
-    # Purpose: flag non-empty values that are not valid emails.
     # registry.register_column_validator(validate_email, field=FIELD_NAME, priority=0)
 
 
