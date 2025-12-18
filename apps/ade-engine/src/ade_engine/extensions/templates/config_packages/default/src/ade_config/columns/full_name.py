@@ -6,24 +6,54 @@ import polars as pl
 
 from ade_engine.models import FieldDef
 
-# Teaching note:
-# These patterns are intentionally simple. They are for *detection and normalization* examples.
+FIELD_NAME = "full_name"
+
+_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Full name can be labeled many ways.
+# We give strong score to "full name" and similar, and a weaker score for plain "name".
+HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
+    {"full", "name"},
+    {"fullname"},
+    {"employee", "name"},
+    {"person", "name"},
+    {"worker", "name"},
+    {"member", "name"},
+]
+
+HEADER_TOKEN_SETS_WEAK: list[set[str]] = [
+    {"name"},  # very common but ambiguous
+]
+
+# Simple "looks like a name" patterns for value-based example.
 COMMA_NAME_RE = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
 SPACE_NAME_RE = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
 
-# Allowed characters for validation (letters + spaces + hyphen + apostrophe).
 ALLOWED_FULL_NAME_PATTERN = r"^[A-Za-z][A-Za-z '\-]*$"
 
 
 def register(registry):
-    registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string"))
-    registry.register_column_detector(detect_full_name_header, field="full_name", priority=30)
-    registry.register_column_detector(detect_full_name_values, field="full_name", priority=10)
-    registry.register_column_transform(split_full_name, field="full_name", priority=0)
-    registry.register_column_validator(validate_full_name, field="full_name", priority=0)
+    registry.register_field(FieldDef(name=FIELD_NAME, label="Full Name", dtype="string"))
+
+    # Enabled by default:
+    registry.register_column_detector(detect_full_name_header_common_names, field=FIELD_NAME, priority=60)
+
+    # Examples (uncomment to enable)
+    # -------------------------------------------------
+    # Example 1: value-based detection
+    # Purpose: detect full-name columns even when headers are blank / unhelpful.
+    # registry.register_column_detector(detect_full_name_values_basic, field=FIELD_NAME, priority=30)
+
+    # Example 2: transform that populates multiple fields
+    # Purpose: split full_name into first_name / last_name without overwriting existing values.
+    # registry.register_column_transform(split_full_name, field=FIELD_NAME, priority=0)
+
+    # Example 3: validation
+    # Purpose: flag unexpected characters and a simple cross-field consistency issue.
+    # registry.register_column_validator(validate_full_name, field=FIELD_NAME, priority=0)
 
 
-def detect_full_name_header(
+def detect_full_name_header_common_names(
     *,
     table: pl.DataFrame,
     column: pl.Series,
@@ -38,16 +68,31 @@ def detect_full_name_header(
     input_file_name: str | None,
     logger,
 ) -> dict[str, float] | None:
-    """Header-based detection: exact matches are high confidence."""
-    header = (header_text or "").strip().lower()
-    if header == "full name":
-        return {"full_name": 1.0}
-    if header == "name":
-        return {"full_name": 0.8}
+    """Enabled by default.
+
+    Purpose:
+      - Match common headers for full_name (strong and weak variants).
+      - Keep it simple and predictable.
+    """
+    raw = (header_text or "").strip().lower()
+    if not raw:
+        return None
+
+    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    tokens = set(normalized.split())
+    if not tokens:
+        return None
+
+    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
+        return {FIELD_NAME: 1.0}
+
+    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_WEAK):
+        return {FIELD_NAME: 0.8}
+
     return None
 
 
-def detect_full_name_values(
+def detect_full_name_values_basic(
     *,
     table: pl.DataFrame,
     column: pl.Series,
@@ -62,11 +107,12 @@ def detect_full_name_values(
     input_file_name: str | None,
     logger,
 ) -> dict[str, float] | None:
-    """Value-based detection using the sample.
+    """Example (disabled by default).
 
-    Heuristic:
-    - "Last, First" OR "First Last"
-    - skip values that contain digits (often IDs/codes)
+    Purpose:
+      - Detect full names by looking at values:
+        - "First Last" OR "Last, First"
+      - Skip values that contain digits (often IDs).
     """
     if not column_sample:
         return None
@@ -84,8 +130,7 @@ def detect_full_name_values(
     if total == 0:
         return None
 
-    score = matches / total
-    return {"full_name": float(score)}
+    return {FIELD_NAME: float(matches / total)}
 
 
 def split_full_name(
@@ -98,28 +143,26 @@ def split_full_name(
     input_file_name: str | None,
     logger,
 ) -> dict[str, pl.Expr]:
-    """Normalize `full_name` and emit derived `first_name` / `last_name`.
+    """Example (disabled by default).
 
-    Teaching notes:
-    - A transform may return a dict[str, pl.Expr] to populate multiple columns.
-    - This example **does not overwrite** existing first/last name values when present.
+    Purpose:
+      - Demonstrate a transform that returns multiple columns.
+      - Split "full_name" into "first_name" and "last_name".
+      - Do NOT overwrite first/last if they already have values.
     """
     full = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
-
-    # Normalize whitespace and empty values.
     full = full.str.replace_all(r"\s+", " ")
     full = pl.when(full.is_null() | (full == "")).then(pl.lit(None)).otherwise(full)
 
     has_comma = full.str.contains(",")
-    has_space = full.str.contains(r"\s")
 
     comma_parts = full.str.split(",")
-    comma_last = comma_parts.list.first().cast(pl.Utf8).str.strip_chars()
-    comma_first = comma_parts.list.last().cast(pl.Utf8).str.strip_chars()
+    comma_last = comma_parts.list.get(0).cast(pl.Utf8).str.strip_chars()
+    comma_first = comma_parts.list.get(1).cast(pl.Utf8).str.strip_chars()
 
     space_parts = full.str.split(" ")
-    space_first = space_parts.list.first().cast(pl.Utf8).str.strip_chars()
-    space_last = space_parts.list.last().cast(pl.Utf8).str.strip_chars()
+    space_first = space_parts.list.get(0).cast(pl.Utf8).str.strip_chars()
+    space_last = space_parts.list.get(-1).cast(pl.Utf8).str.strip_chars()
 
     derived_first = pl.when(has_comma).then(comma_first).otherwise(space_first)
     derived_last = pl.when(has_comma).then(comma_last).otherwise(space_last)
@@ -127,15 +170,12 @@ def split_full_name(
     derived_first = pl.when(derived_first.is_null() | (derived_first == "")).then(pl.lit(None)).otherwise(derived_first)
     derived_last = pl.when(derived_last.is_null() | (derived_last == "")).then(pl.lit(None)).otherwise(derived_last)
 
-    # Only rebuild the full name when we actually had evidence of multiple parts.
-    can_rebuild = (has_comma | has_space) & derived_first.is_not_null() & derived_last.is_not_null()
     normalized_full = (
-        pl.when(can_rebuild)
+        pl.when(derived_first.is_not_null() & derived_last.is_not_null())
         .then(pl.concat_str([derived_first, derived_last], separator=" "))
         .otherwise(full)
     )
 
-    # Preserve existing first/last if already populated (do not overwrite with derived values).
     if "first_name" in table.columns:
         existing_first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
         existing_first = pl.when(existing_first.is_null() | (existing_first == "")).then(pl.lit(None)).otherwise(
@@ -171,17 +211,20 @@ def validate_full_name(
     input_file_name: str | None,
     logger,
 ) -> pl.Expr:
-    """Validate allowed characters + show a simple cross-field rule."""
+    """Example (disabled by default).
+
+    Purpose:
+      - Flag unexpected characters.
+      - Show a simple cross-field consistency check (if first+last exist but full is missing).
+    """
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
 
     format_issue = (
         pl.when(v.is_not_null() & (v != "") & ~v.str.contains(ALLOWED_FULL_NAME_PATTERN))
-        .then(pl.lit("Full name must be letters with spaces/hyphens/apostrophes"))
+        .then(pl.lit("Full name contains unexpected characters"))
         .otherwise(pl.lit(None))
     )
 
-    # Cross-field check (post-mapping):
-    # If first+last exist but full_name is missing, emit an issue.
     if "first_name" in table.columns and "last_name" in table.columns:
         first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
         last = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
@@ -191,7 +234,7 @@ def validate_full_name(
 
         parts_issue = (
             pl.when(missing_full & parts_present)
-            .then(pl.lit("Full name missing but first/last are present"))
+            .then(pl.lit("Full name is missing but first/last are present"))
             .otherwise(pl.lit(None))
         )
 

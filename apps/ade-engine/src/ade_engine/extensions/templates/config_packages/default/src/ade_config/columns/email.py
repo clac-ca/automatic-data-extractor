@@ -6,47 +6,91 @@ import polars as pl
 
 from ade_engine.models import FieldDef
 
-# Teaching note:
-# Keep patterns simple. This is intentionally "good enough" for a template.
+# --------------------------------------------
+# Field + header-name matching configuration
+# --------------------------------------------
+
+FIELD_NAME = "email"
+
+# Normalize header text to tokens by:
+# - lowercasing
+# - replacing non-alphanumerics with spaces (so "e-mail" -> "e mail", "email_address" -> "email address")
+# - splitting into tokens
+_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+# Enabled-by-default detection uses token sets.
+# If any set is a subset of the header tokens, we match.
+HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
+    {"email"},
+    {"e", "mail"},
+    {"emailaddress"},   # some files use "emailaddress" with no separator
+    {"emailid"},        # "emailid"
+]
+
+# Optional: keep a stricter pattern around for value-based examples.
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 EMAIL_RE = re.compile(EMAIL_PATTERN)
 
 
 def register(registry):
-    registry.register_field(FieldDef(name="email", dtype="string"))
-    registry.register_column_detector(detect_email_header, field="email", priority=60)
-    registry.register_column_detector(detect_email_values, field="email", priority=30)
-    registry.register_column_transform(normalize_email, field="email", priority=0)
-    registry.register_column_validator(validate_email, field="email", priority=0)
+    registry.register_field(FieldDef(name=FIELD_NAME, dtype="string"))
+
+    # Enabled by default:
+    # Detect "email" using common header names.
+    registry.register_column_detector(detect_email_header_common_names, field=FIELD_NAME, priority=60)
+
+    # Examples (uncomment to enable)
+    # -------------------------------------------------
+    # Example 1: value-based detection
+    # Purpose: map "email" even when headers are blank or non-standard.
+    # registry.register_column_detector(detect_email_values_sample_regex, field=FIELD_NAME, priority=30)
+
+    # Example 2: normalization
+    # Purpose: trim whitespace, lowercase, convert empty -> null.
+    # registry.register_column_transform(normalize_email, field=FIELD_NAME, priority=0)
+
+    # Example 3: validation
+    # Purpose: flag non-empty values that are not valid emails.
+    # registry.register_column_validator(validate_email, field=FIELD_NAME, priority=0)
 
 
-def detect_email_header(
+def detect_email_header_common_names(
     *,
-    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
-    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
-    column_sample: list[str],  # Trimmed, non-empty string sample from this column
-    column_name: str,  # Current DF column name (extracted header; not canonical)
-    column_index: int,  # 0-based index of this column in table.columns
-    header_text: str,  # Trimmed header cell text for this column ("" if missing)
-    settings,  # Engine Settings (sampling is controlled by engine settings)
-    sheet_name: str,  # Worksheet title
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Current table column name (extracted header; not canonical)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text for this column ("" if missing)
+    settings,  # Engine settings object
+    sheet_name: str,  # Sheet title
+    metadata: dict,  # Run metadata
+    state: dict,  # Shared mutable run state
     input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    logger,  # Logger
 ) -> dict[str, float] | None:
-    """Header-based detection: fast and high confidence."""
-    header = (header_text or "").strip().lower()
-    if not header:
+    """Enabled by default.
+
+    Purpose:
+      - Teach the simplest reliable detector: header-based matching.
+      - Works well when spreadsheets have reasonable headers.
+    """
+    raw = (header_text or "").strip().lower()
+    if not raw:
         return None
 
-    if "email" in header or "e-mail" in header:
-        return {"email": 1.0}
+    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    tokens = set(normalized.split())
+    if not tokens:
+        return None
+
+    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
+        return {FIELD_NAME: 1.0}
 
     return None
 
 
-def detect_email_values(
+def detect_email_values_sample_regex(
     *,
     table: pl.DataFrame,
     column: pl.Series,
@@ -61,58 +105,59 @@ def detect_email_values(
     input_file_name: str | None,
     logger,
 ) -> dict[str, float] | None:
-    """Value-based detection using the engine-provided sample.
+    """Example (disabled by default).
 
-    Teaching notes:
-    - `column_sample` is already trimmed + non-empty + capped by settings.
-    - Keep value detectors simple; do not rescan the full table unless needed.
+    Purpose:
+      - Detect email columns by looking at values (useful when headers are missing).
     """
     if not column_sample:
         return None
 
     matches = 0
     total = 0
-
     for s in column_sample:
         total += 1
-        if EMAIL_RE.fullmatch(s.lower()):
+        if EMAIL_RE.fullmatch(s.strip().lower()):
             matches += 1
 
-    score = matches / total
-    return {"email": float(score)}
+    return {FIELD_NAME: float(matches / total)}
 
 
 def normalize_email(
     *,
-    field_name: str,  # Canonical field name being transformed (post-mapping)
-    table: pl.DataFrame,  # Current table DF (post-mapping)
-    settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,
+    state: dict,
+    metadata: dict,
+    input_file_name: str | None,
+    logger,
 ) -> pl.Expr:
-    """Trim, lowercase, and convert empty -> null."""
+    """Example (disabled by default).
+
+    Purpose:
+      - Normalize formatting so downstream systems get consistent casing/whitespace.
+    """
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars().str.to_lowercase()
     return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
 
 
 def validate_email(
     *,
-    field_name: str,  # Canonical field name being validated (post-mapping)
-    table: pl.DataFrame,  # Current table DF (post-mapping)
-    settings,  # Engine Settings
-    state: dict,  # Mutable dict shared across the run
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    input_file_name: str | None,  # Input filename (basename) if known
-    logger,  # RunLogger (structured events + text logs)
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,
+    state: dict,
+    metadata: dict,
+    input_file_name: str | None,
+    logger,
 ) -> pl.Expr:
-    """Format validation.
+    """Example (disabled by default).
 
-    Returns a string message when invalid, otherwise null.
+    Purpose:
+      - Emit a per-row message when an email is present but invalid.
     """
     v = pl.col(field_name).cast(pl.Utf8).str.strip_chars().str.to_lowercase()
-
     return (
         pl.when(v.is_not_null() & (v != "") & ~v.str.contains(EMAIL_PATTERN))
         .then(pl.concat_str([pl.lit("Invalid email: "), v]))
