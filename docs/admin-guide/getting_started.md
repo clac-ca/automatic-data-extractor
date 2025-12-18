@@ -122,8 +122,6 @@ git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
 cp .env.example .env
 docker build -t ade:local .
-# or use the helper script
-# ade docker:build
 ```
 
 ### 5.2 Run the container
@@ -133,8 +131,6 @@ docker run -d --name ade-backend \
   -p 8000:8000 \
   -v "$(pwd)/data:/app/data" \
   ade:local
-# or run interactively with
-# ade docker:up --detach
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they

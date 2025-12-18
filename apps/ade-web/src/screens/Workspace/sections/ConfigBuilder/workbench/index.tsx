@@ -46,6 +46,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
       workspaceId: workspace.id,
       configId,
       configName: `${workspace.name} · ${resolvedName}`,
+      configDisplayName: resolvedName,
     });
   }, [configId, configQuery.data?.display_name, configQuery.isError, workspace.id, workspace.name, openSession]);
 
@@ -110,6 +111,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
           workspaceId={workspace.id}
           configId={activeSession.configId}
           configName={activeSession.configName}
+          configDisplayName={configQuery.data.display_name ?? activeSession.configId}
           windowState="restored"
           onMinimizeWindow={minimizeWindow}
           onMaximizeWindow={maximizeWindow}

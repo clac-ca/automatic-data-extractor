@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "@app/nav/history";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
@@ -19,6 +18,7 @@ import type { UserSummary } from "@shared/users/api";
 import { Alert } from "@ui/Alert";
 import { Avatar } from "@ui/Avatar";
 import { Button } from "@ui/Button";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 import { Select } from "@ui/Select";
@@ -81,18 +81,18 @@ export function MembersSettingsPage() {
   }, [rolesQuery.data]);
 
   const selectedParam = params[0];
-  const isInviteOpen = selectedParam === "new";
+  const isAddMemberOpen = selectedParam === "new";
   const selectedMemberId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
   const selectedMember = members.find((member) => member.user_id === selectedMemberId);
 
   const basePath = `/workspaces/${workspace.id}/settings/access/members`;
   const suffix = `${location.search}${location.hash}`;
   const closeDrawer = () => navigate(`${basePath}${suffix}`, { replace: true });
-  const openInviteDrawer = () => navigate(`${basePath}/new${suffix}`);
+  const openAddMemberDrawer = () => navigate(`${basePath}/new${suffix}`);
   const openMemberDrawer = (userId: string) =>
     navigate(`${basePath}/${encodeURIComponent(userId)}${suffix}`);
 
-  const handleInvite = async ({ user, roleIds }: { user: UserSummary; roleIds: string[] }) => {
+  const handleAddMember = async ({ user, roleIds }: { user: UserSummary; roleIds: string[] }) => {
     setFeedbackMessage(null);
     await addMember.mutateAsync({ user, roleIds });
     setFeedbackMessage({
@@ -120,7 +120,7 @@ export function MembersSettingsPage() {
     <div className="space-y-6">
       <SettingsSectionHeader
         title="Members"
-        description="Invite teammates, adjust their workspace roles, or remove their access."
+        description="Add members, adjust workspace roles, or remove access."
         actions={
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
             {memberCount} member{memberCount === 1 ? "" : "s"}
@@ -158,7 +158,7 @@ export function MembersSettingsPage() {
               />
             </FormField>
             {canManageMembers ? (
-              <Button type="button" onClick={openInviteDrawer}>
+              <Button type="button" onClick={openAddMemberDrawer}>
                 Add member
               </Button>
             ) : null}
@@ -251,13 +251,13 @@ export function MembersSettingsPage() {
         ) : null}
       </section>
 
-      <InviteMemberDrawer
-        open={isInviteOpen && canManageMembers}
+      <AddMemberDrawer
+        open={isAddMemberOpen && canManageMembers}
         onClose={closeDrawer}
         availableRoles={availableRoles}
         memberIds={memberIds}
         isSubmitting={addMember.isPending}
-        onInvite={handleInvite}
+        onAdd={handleAddMember}
       />
 
       <MemberDrawer
@@ -274,39 +274,39 @@ export function MembersSettingsPage() {
   );
 }
 
-interface InviteMemberDrawerProps {
+interface AddMemberDrawerProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly availableRoles: readonly RoleDefinition[];
   readonly memberIds: ReadonlySet<string>;
   readonly isSubmitting: boolean;
-  readonly onInvite: (input: { user: UserSummary; roleIds: string[] }) => Promise<void>;
+  readonly onAdd: (input: { user: UserSummary; roleIds: string[] }) => Promise<void>;
 }
 
-function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmitting, onInvite }: InviteMemberDrawerProps) {
-  const [inviteUserId, setInviteUserId] = useState("");
-  const [inviteRoleIds, setInviteRoleIds] = useState<string[]>([]);
-  const [inviteSearch, setInviteSearch] = useState("");
-  const [debouncedInviteSearch, setDebouncedInviteSearch] = useState("");
+function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmitting, onAdd }: AddMemberDrawerProps) {
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedInviteSearch(inviteSearch.trim()), 250);
+    const handle = window.setTimeout(() => setDebouncedUserSearch(userSearch.trim()), 250);
     return () => window.clearTimeout(handle);
-  }, [inviteSearch]);
+  }, [userSearch]);
 
   useEffect(() => {
     if (!open) {
-      setInviteUserId("");
-      setInviteRoleIds([]);
-      setInviteSearch("");
+      setSelectedUserId("");
+      setSelectedRoleIds([]);
+      setUserSearch("");
       setFeedback(null);
     }
   }, [open]);
 
   const usersQuery = useUsersQuery({
     enabled: open,
-    search: debouncedInviteSearch,
+    search: debouncedUserSearch,
     pageSize: 50,
   });
 
@@ -321,32 +321,32 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
       });
   }, [memberIds, usersQuery.users]);
 
-  const selectedInviteUser = useMemo(
-    () => availableUsers.find((user) => user.id === inviteUserId),
-    [availableUsers, inviteUserId],
+  const selectedUser = useMemo(
+    () => availableUsers.find((user) => user.id === selectedUserId),
+    [availableUsers, selectedUserId],
   );
 
-  const canSubmitInvite = Boolean(inviteUserId) && inviteRoleIds.length > 0 && !isSubmitting;
-  const inviteSearchTooShort = inviteSearch.trim().length > 0 && inviteSearch.trim().length < 2;
+  const canSubmitAdd = Boolean(selectedUserId) && selectedRoleIds.length > 0 && !isSubmitting;
+  const searchTooShort = userSearch.trim().length > 0 && userSearch.trim().length < 2;
   const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFeedback(null);
-    const user = availableUsers.find((candidate) => candidate.id === inviteUserId);
+    const user = availableUsers.find((candidate) => candidate.id === selectedUserId);
     if (!user) {
       setFeedback("Select a user to add.");
       return;
     }
-    if (inviteRoleIds.length === 0) {
+    if (selectedRoleIds.length === 0) {
       setFeedback("Select at least one role for this member.");
       return;
     }
     try {
-      await onInvite({ user, roleIds: inviteRoleIds });
-      setInviteUserId("");
-      setInviteSearch("");
-      setInviteRoleIds([]);
+      await onAdd({ user, roleIds: selectedRoleIds });
+      setSelectedUserId("");
+      setUserSearch("");
+      setSelectedRoleIds([]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to add member.";
       setFeedback(message);
@@ -354,12 +354,12 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
   };
 
   return (
-    <SettingsDrawer
-      open={open}
-      onClose={onClose}
-      title="Add member"
-      description="Invite an existing teammate and choose their workspace roles."
-    >
+	    <SettingsDrawer
+	      open={open}
+	      onClose={onClose}
+	      title="Add member"
+	      description="Add an existing user and choose their workspace roles."
+	    >
       <form className="space-y-4" onSubmit={handleSubmit}>
         {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
         {usersQuery.isError ? (
@@ -368,49 +368,49 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
           </Alert>
         ) : null}
 
-        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
-          <Input
-            value={inviteSearch}
-            onChange={(event) => setInviteSearch(event.target.value)}
-            placeholder="Search users"
-            disabled={isSubmitting || usersLoading}
-          />
-          {inviteSearchTooShort ? (
-            <p className="text-xs text-slate-500">Enter at least two characters to search the full directory.</p>
-          ) : null}
-        </FormField>
+	        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
+	          <Input
+	            value={userSearch}
+	            onChange={(event) => setUserSearch(event.target.value)}
+	            placeholder="Search users"
+	            disabled={isSubmitting || usersLoading}
+	          />
+	          {searchTooShort ? (
+	            <p className="text-xs text-slate-500">Enter at least two characters to search the full directory.</p>
+	          ) : null}
+	        </FormField>
 
-        <FormField label="User" required>
-          <Select
-            value={inviteUserId}
-            onChange={(event) => {
-              setInviteUserId(event.target.value);
-              if (event.target.value) {
-                setInviteSearch("");
-              }
-            }}
-            disabled={isSubmitting || usersLoading}
-            required
-          >
-            <option value="">Select a user</option>
-            {selectedInviteUser &&
-            !availableUsers.some((user) => user.id === selectedInviteUser.id) ? (
-              <option value={selectedInviteUser.id}>
-                {selectedInviteUser.display_name
-                  ? `${selectedInviteUser.display_name} (${selectedInviteUser.email})`
-                  : selectedInviteUser.email}
-              </option>
-            ) : null}
+	        <FormField label="User" required>
+	          <Select
+	            value={selectedUserId}
+	            onChange={(event) => {
+	              setSelectedUserId(event.target.value);
+	              if (event.target.value) {
+	                setUserSearch("");
+	              }
+	            }}
+	            disabled={isSubmitting || usersLoading}
+	            required
+	          >
+	            <option value="">Select a user</option>
+	            {selectedUser &&
+	            !availableUsers.some((user) => user.id === selectedUser.id) ? (
+	              <option value={selectedUser.id}>
+	                {selectedUser.display_name
+	                  ? `${selectedUser.display_name} (${selectedUser.email})`
+	                  : selectedUser.email}
+	              </option>
+	            ) : null}
             {availableUsers.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.display_name ? `${user.display_name} (${user.email})` : user.email}
               </option>
-            ))}
-          </Select>
-          {availableUsers.length === 0 && inviteSearch ? (
-            <p className="text-xs text-slate-500">No users matched "{inviteSearch}".</p>
-          ) : null}
-        </FormField>
+	            ))}
+	          </Select>
+	          {availableUsers.length === 0 && userSearch ? (
+	            <p className="text-xs text-slate-500">No users matched "{userSearch}".</p>
+	          ) : null}
+	        </FormField>
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold text-slate-700">Roles</legend>
@@ -424,26 +424,26 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
                   key={role.id}
                   className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
                 >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={inviteRoleIds.includes(role.id)}
-                    onChange={(event) =>
-                      setInviteRoleIds((current) =>
-                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
-                      )
-                    }
-                    disabled={isSubmitting}
-                  />
+	                  <input
+	                    type="checkbox"
+	                    className="h-4 w-4 rounded border-slate-300"
+	                    checked={selectedRoleIds.includes(role.id)}
+	                    onChange={(event) =>
+	                      setSelectedRoleIds((current) =>
+	                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
+	                      )
+	                    }
+	                    disabled={isSubmitting}
+	                  />
                   <span>{role.name}</span>
                 </label>
               ))
-            )}
-          </div>
-          {inviteRoleIds.length > 0 ? (
-            <p className="text-xs text-slate-500">{inviteRoleIds.length} role(s) selected.</p>
-          ) : null}
-        </fieldset>
+	            )}
+	          </div>
+	          {selectedRoleIds.length > 0 ? (
+	            <p className="text-xs text-slate-500">{selectedRoleIds.length} role(s) selected.</p>
+	          ) : null}
+	        </fieldset>
 
         {usersQuery.hasNextPage ? (
           <div className="pt-2">
@@ -462,7 +462,7 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting} disabled={!canSubmitInvite}>
+          <Button type="submit" isLoading={isSubmitting} disabled={!canSubmitAdd}>
             Add member
           </Button>
         </div>

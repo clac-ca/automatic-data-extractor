@@ -504,7 +504,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 
 * **Mutations** use `use<Verb><Domain>Mutation`:
 
-  * `useUploadDocumentMutation`, `useStartRunMutation`, `useActivateConfigurationMutation`, `useDeactivateConfigurationMutation`.
+  * `useUploadDocumentMutation`, `useStartRunMutation`, `useMakeActiveConfigurationMutation`, `useArchiveConfigurationMutation`.
 
 * **State / infra hooks** use descriptive names:
 
@@ -526,7 +526,7 @@ This section summarises naming conventions used in this document. See **01‑dom
   listWorkspaceRuns(workspaceId, params);
   startRun(workspaceId, payload);
   listConfigurations(workspaceId, params);
-  activateConfiguration(workspaceId, configurationId);
+  makeActiveConfiguration(workspaceId, configurationId);
   ```
 
 Feature hooks wrap these functions into React Query calls.

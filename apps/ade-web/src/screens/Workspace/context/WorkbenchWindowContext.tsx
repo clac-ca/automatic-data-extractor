@@ -21,6 +21,7 @@ interface WorkbenchSessionPayload {
   readonly workspaceId: string;
   readonly configId: string;
   readonly configName: string;
+  readonly configDisplayName: string;
   readonly seed?: WorkbenchDataSeed;
   readonly editorSearch?: string;
 }
@@ -177,6 +178,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
             payload.editorSearch !== undefined ? normalizedSearch : current.editorSearch;
           if (
             current.configName === payload.configName &&
+            current.configDisplayName === payload.configDisplayName &&
             current.seed === nextSeed &&
             current.editorSearch === nextEditorSearch
           ) {
@@ -185,6 +187,7 @@ export function WorkbenchWindowProvider({ workspaceId, children }: WorkbenchWind
           return {
             ...current,
             configName: payload.configName,
+            configDisplayName: payload.configDisplayName,
             seed: nextSeed,
             editorSearch: nextEditorSearch,
           };
@@ -336,6 +339,7 @@ function WorkbenchWindowLayer({
         workspaceId={session.workspaceId}
         configId={session.configId}
         configName={session.configName}
+        configDisplayName={session.configDisplayName}
         seed={session.seed}
         windowState="maximized"
         onCloseWorkbench={onClose}

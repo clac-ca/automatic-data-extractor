@@ -11,12 +11,12 @@
 
 - [x] Finalize schema v1 contract, invariants, naming conventions, and examples
 - [x] Align docs to strict validation + stable semantics (outputs, rollups, evaluation)
-- [ ] Refactor `ade_engine.models.events` payloads to consistent `*V1` + `schema_version=1` (breaking; no backwards compatibility)
-- [ ] Define Pydantic v2 models for `engine.run.completed` in `ade_engine.models.events` and register schema
-- [ ] Implement `RunCompletionReportBuilder` (incremental accumulation + rollups + grading)
-- [ ] Instrument pipeline to capture facts needed for summaries (scan stats, regions, mapping diagnostics, outputs)
-- [ ] Emit `engine.run.completed` exactly once per run (always, even on failure)
-- [ ] Add/adjust tests (schema validation, invariants, “failed run still summarizes progress”)
+- [x] Refactor `ade_engine.models.events` payloads to consistent `*V1` + `schema_version=1` (breaking; no backwards compatibility)
+- [x] Define Pydantic v2 models for `engine.run.completed` in `ade_engine.models.events` and register schema
+- [x] Implement `RunCompletionReportBuilder` (incremental accumulation + rollups + grading)
+- [x] Instrument pipeline to capture facts needed for summaries (scan stats, regions, mapping diagnostics, outputs)
+- [x] Emit `engine.run.completed` exactly once per run (always, even on failure)
+- [x] Add/adjust tests (schema validation, invariants, “failed run still summarizes progress”)
 
 ---
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
 
@@ -11,14 +10,7 @@ from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import RowDetectorContext, RowKind
 from ade_engine.models.extension_outputs import RowDetectorResult
-
-
-@dataclass(frozen=True)
-class TableRegion:
-    header_row_index: int
-    data_start_row_index: int
-    data_end_row_index: int
-    header_inferred: bool = False
+from ade_engine.models.table import TableRegion
 
 
 def _classify_rows(
@@ -26,9 +18,10 @@ def _classify_rows(
     sheet_name: str,
     rows: list[list[Any]],
     registry: Registry,
+    settings,
     state: dict,
     metadata: dict,
-    input_file_name: str | None,
+    input_file_name: str,
     logger: RunLogger,
 ) -> tuple[dict[int, dict[str, float]], list[str]]:
     """Run row detectors and return per-row scores and winning classification."""
@@ -38,11 +31,13 @@ def _classify_rows(
     debug = logger.isEnabledFor(logging.DEBUG)
 
     for row_idx, row_values in enumerate(rows):
+        row_number = row_idx + 1
         detectors_run: list[dict[str, Any]] = [] if debug else []
         ctx = RowDetectorContext(
-            row_index=row_idx,
+            row_index=row_number,
             row_values=row_values,
             sheet_name=sheet_name,
+            settings=settings,
             metadata=metadata,
             state=state,
             input_file_name=input_file_name,
@@ -54,7 +49,7 @@ def _classify_rows(
                 raw_patch = call_extension(det.fn, ctx, label=f"Row detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
                 raise PipelineError(
-                    f"Row detector {det.qualname} failed on row {row_idx}"
+                    f"Row detector {det.qualname} failed on row {row_number}"
                 ) from exc
 
             patch = registry.validate_detector_scores(
@@ -78,7 +73,7 @@ def _classify_rows(
 
                 scores_str = ", ".join(f"{k}={v:.3f}" for k, v in rounded_patch.items())
                 detector_msg = (
-                    f"Row {row_idx} detector {det.qualname} on {sheet_name}"
+                    f"Row {row_number} detector {det.qualname} on {sheet_name}"
                     + (f" (scores {scores_str})" if scores_str else "")
                 )
                 logger.event(
@@ -87,7 +82,7 @@ def _classify_rows(
                     message=detector_msg,
                     data={
                         "sheet_name": sheet_name,
-                        "row_index": row_idx,
+                        "row_index": row_number,
                         "detector": detector_payload,
                     },
                 )
@@ -113,10 +108,10 @@ def _classify_rows(
             logger.event(
                 "row_classification",
                 level=logging.DEBUG,
-                message=f"Row {row_idx} → {classification_type} ({logged_classification_score:.3f}) on {sheet_name}",
+                message=f"Row {row_number} → {classification_type} ({logged_classification_score:.3f}) on {sheet_name}",
                 data={
                     "sheet_name": sheet_name,
-                    "row_index": row_idx,
+                    "row_index": row_number,
                     "detectors": detectors_run,
                     "scores": logged_scores,
                     "classification": {
@@ -168,9 +163,10 @@ def detect_table_regions(
     sheet_name: str,
     rows: list[list[Any]],
     registry: Registry,
+    settings,
     state: dict,
     metadata: dict,
-    input_file_name: str | None,
+    input_file_name: str,
     logger: RunLogger,
 ) -> list[TableRegion]:
     """Detect all table regions in a sheet.
@@ -191,6 +187,7 @@ def detect_table_regions(
         sheet_name=sheet_name,
         rows=rows,
         registry=registry,
+        settings=settings,
         state=state,
         metadata=metadata,
         input_file_name=input_file_name,
@@ -207,14 +204,16 @@ def detect_table_regions(
         nonlocal header_idx, header_inferred_from_data
         if header_idx is None:
             return
-        data_start_idx = min(header_idx + 1, total_rows)
+        region_rows = rows[header_idx:end_idx] if 0 <= header_idx < end_idx else []
+        max_col = max((len(r) for r in region_rows), default=1)
+        max_col = max(1, int(max_col))
         tables.append(
             TableRegion(
-                header_row_index=header_idx,
-                data_start_row_index=data_start_idx,
-                data_end_row_index=end_idx,
-                header_inferred=header_inferred_from_data,
-            )
+                min_row=int(header_idx) + 1,
+                min_col=1,
+                max_row=int(end_idx),
+                max_col=max_col,
+            ),
         )
 
     for idx, kind in enumerate(classifications):
@@ -246,14 +245,16 @@ def detect_table_regions(
 
     if not tables:
         header_idx = _pick_best_header_row_index(rows=rows, scores=scores, classifications=classifications)
-        data_start_idx = min(header_idx + 1, total_rows)
+        region_rows = rows[header_idx:total_rows] if 0 <= header_idx < total_rows else []
+        max_col = max((len(r) for r in region_rows), default=1)
+        max_col = max(1, int(max_col))
         tables.append(
             TableRegion(
-                header_row_index=header_idx,
-                data_start_row_index=data_start_idx,
-                data_end_row_index=total_rows,
-                header_inferred=False,
-            )
+                min_row=int(header_idx) + 1,
+                min_col=1,
+                max_row=int(total_rows),
+                max_col=max_col,
+            ),
         )
 
     if logger.isEnabledFor(logging.DEBUG):
@@ -272,10 +273,11 @@ def detect_table_regions(
                     {
                         "table_index": i,
                         "region": {
-                            "header_row_index": t.header_row_index,
-                            "data_start_row_index": t.data_start_row_index,
-                            "data_end_row_index": t.data_end_row_index,
-                            "header_inferred": t.header_inferred,
+                            "min_row": t.min_row,
+                            "min_col": t.min_col,
+                            "max_row": t.max_row,
+                            "max_col": t.max_col,
+                            "a1": t.a1,
                         },
                     }
                     for i, t in enumerate(tables)
@@ -286,4 +288,4 @@ def detect_table_regions(
     return tables
 
 
-__all__ = ["TableRegion", "detect_table_regions"]
+__all__ = ["detect_table_regions"]

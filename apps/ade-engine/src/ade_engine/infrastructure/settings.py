@@ -20,6 +20,8 @@ from typing import Any, Literal, Mapping
 
 from pydantic import BaseModel, Field, field_validator
 
+from ade_engine.models.detectors import DetectorSettings
+
 ENV_PREFIX = "ADE_ENGINE_"
 
 
@@ -37,7 +39,13 @@ def _load_settings_toml(path: Path) -> dict[str, Any]:
 
     nested = raw.get("ade_engine")
     if isinstance(nested, dict):
-        return nested
+        # Merge [ade_engine] into the top-level map so nested tables (e.g. [ade_engine.detectors])
+        # remain visible to the settings model.
+        combined = dict(raw)
+        combined.pop("ade_engine", None)
+        combined.update(nested)
+        return combined
+
     return raw
 
 
@@ -118,19 +126,12 @@ class Settings(BaseModel):
         description="Path to the config package directory (contains ade_config).",
     )
 
-    # Output / writer toggles
-    append_unmapped_columns: bool = Field(default=True)
-    render_derived_fields: bool = Field(default=True)
-    unmapped_prefix: str = Field(default="raw_")
+    # Output / writer policy
+    remove_unmapped_columns: bool = Field(default=False)
+    write_diagnostics_columns: bool = Field(default=False)
 
     # Mapping behavior
     mapping_tie_resolution: Literal["leftmost", "leave_unmapped"] = Field(default="leftmost")
-
-    # Derived field merge behavior
-    derived_write_mode: Literal["fill_missing", "overwrite", "skip", "error_on_conflict"] = Field(
-        default="fill_missing"
-    )
-    missing_values_mode: Literal["none_only", "none_or_blank"] = Field(default="none_only")
 
     # Logging
     log_format: Literal["text", "ndjson"] = Field(default="text")
@@ -140,15 +141,11 @@ class Settings(BaseModel):
     max_empty_rows_run: int | None = Field(default=1000, ge=1)
     max_empty_cols_run: int | None = Field(default=500, ge=1)
 
+    # Detector sampling policy
+    detectors: DetectorSettings = Field(default_factory=DetectorSettings)
+
     # File discovery
     supported_file_extensions: tuple[str, ...] = Field(default=(".xlsx", ".xlsm", ".csv"))
-
-    @field_validator("unmapped_prefix")
-    @classmethod
-    def _validate_unmapped_prefix(cls, value: str) -> str:
-        if not value:
-            raise ValueError("unmapped_prefix must be non-empty")
-        return value
 
     @field_validator("log_level", mode="before")
     @classmethod

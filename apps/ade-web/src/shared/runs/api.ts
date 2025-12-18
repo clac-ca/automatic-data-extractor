@@ -16,6 +16,7 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   validate_only: false,
   force_rebuild: false,
   debug: false,
+  log_level: "INFO",
 };
 
 export async function createRun(

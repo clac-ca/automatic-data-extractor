@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 # =============================================================================
 # Prerequisites / One-time setup (Windows / macOS / Linux)
 # -----------------------------------------------------------------------------
@@ -64,16 +67,23 @@
 
 # Create and activate virtual environment (Python 3.11+)
 python3 -m venv .venv
+# shellcheck disable=SC1091
 source .venv/bin/activate
 
 # Install backend packages
-pip install -U pip setuptools wheel
-pip install -e 'apps/ade-cli[dev]'
-pip install -e 'apps/ade-api[dev]'
-pip install -e apps/ade-engine
+python -m pip install -U pip setuptools wheel
+
+# Install local packages (engine first so the API can resolve `ade-engine`)
+python -m pip install -e apps/ade-engine
+python -m pip install -e 'apps/ade-api[dev]'
+python -m pip install -e 'apps/ade-cli[dev]'
 
 # Install frontend dependencies
-(cd apps/ade-web && npm install)
+if [[ -f apps/ade-web/package-lock.json ]]; then
+  (cd apps/ade-web && npm ci)
+else
+  (cd apps/ade-web && npm install)
+fi
 
 # Verify CLI
 ade --help

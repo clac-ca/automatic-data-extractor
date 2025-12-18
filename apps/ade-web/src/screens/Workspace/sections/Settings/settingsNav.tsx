@@ -58,7 +58,7 @@ export const workspaceSettingsSections: SettingsSection[] = [
     id: "access.members",
     group: "access",
     label: "Members",
-    description: "Invite teammates and manage access.",
+    description: "Manage members and access.",
     path: "access/members",
     required: { view: ["workspace.members.view"], edit: ["workspace.members.manage"] },
     element: <MembersSettingsPage />,

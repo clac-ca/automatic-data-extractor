@@ -86,7 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     # Middleware, routers, SPA, and OpenAPI configuration.
-    register_middleware(app)
+    register_middleware(app, settings=settings)
     app.include_router(api_router, prefix=API_PREFIX)
     mount_spa(app, api_prefix=API_PREFIX, static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)

@@ -15,7 +15,7 @@ Fast reference (run `--help` for details):
 - `ade start` — serve API + built SPA. `ade build` — build frontend assets.
 - `ade tests`, `ade lint`, `ade ci` — validation pipelines.
 - `ade bundle --ext md --out <file> [--include/--exclude ...]` — bundle files/dirs into Markdown.
-- `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`.
+- `ade types`, `ade migrate`, `ade routes`, `ade users`, `ade clean` / `ade reset`.
 
 ### Help snapshots (truncated)
 

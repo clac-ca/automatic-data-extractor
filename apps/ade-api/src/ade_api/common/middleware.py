@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from ade_api.settings import get_settings
+from ade_api.settings import Settings
 
 from .logging import bind_request_context, clear_request_context, log_context
 
@@ -69,10 +69,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def register_middleware(app: FastAPI) -> None:
+def register_middleware(app: FastAPI, settings: Settings) -> None:
     """Register ADE default middleware on the FastAPI application."""
-
-    settings = get_settings()
 
     origins = list(settings.server_cors_origins)
     if origins:

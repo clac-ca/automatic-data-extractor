@@ -88,12 +88,6 @@ class ConfigurationValidateResponse(BaseSchema):
     issues: list[ConfigValidationIssue]
 
 
-class ConfigurationActivateRequest(BaseSchema):
-    """Activation control flags."""
-
-    ensure_build: bool = False
-
-
 class FileCapabilities(BaseSchema):
     editable: bool
     can_create: bool
@@ -198,7 +192,6 @@ __all__ = [
     "ConfigValidationIssue",
     "ConfigurationPage",
     "ConfigurationCreate",
-    "ConfigurationActivateRequest",
     "ConfigurationRecord",
     "ConfigurationValidateResponse",
     "FileCapabilities",

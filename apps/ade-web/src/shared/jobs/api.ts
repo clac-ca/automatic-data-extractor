@@ -9,6 +9,7 @@ function buildJobStreamUrl(configurationId: string, options: RunStreamOptions): 
   if (options.validate_only) params.set("validate_only", "true");
   if (options.force_rebuild) params.set("force_rebuild", "true");
   if (options.debug) params.set("debug", "true");
+  if (options.log_level) params.set("log_level", options.log_level);
   if (options.input_document_id) params.set("input_document_id", options.input_document_id);
   const sheetNames = options.input_sheet_names ?? [];
   for (const sheetName of sheetNames) {
@@ -156,4 +157,3 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
     return null;
   }
 }
-

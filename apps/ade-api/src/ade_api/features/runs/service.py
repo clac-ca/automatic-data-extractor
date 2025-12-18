@@ -1405,8 +1405,8 @@ class RunsService:
         command.extend(["--logs-dir", str(logs_dir)])
         command.extend(["--config-package", str(config_path)])
         command.extend(["--log-format", "ndjson"])
-        if options.debug:
-            command.append("--debug")
+        log_level = getattr(options, "log_level", None) or ("DEBUG" if options.debug else "INFO")
+        command.extend(["--log-level", str(log_level)])
 
         for sheet_name in selected_sheet_names:
             command.extend(["--input-sheet", sheet_name])
@@ -1818,9 +1818,9 @@ class RunsService:
                 extra=log_context(configuration_id=configuration_id),
             )
             raise ConfigurationNotFoundError(configuration_id)
-        if configuration.status == ConfigurationStatus.INACTIVE:
+        if configuration.status == ConfigurationStatus.ARCHIVED:
             logger.warning(
-                "run.config.resolve.inactive",
+                "run.config.resolve.archived",
                 extra=log_context(
                     workspace_id=configuration.workspace_id,
                     configuration_id=configuration.id,

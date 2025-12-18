@@ -32,6 +32,15 @@ app = typer.Typer(
     rich_markup_mode="markdown",
 )
 
+_CONFIG_TEMPLATE_IGNORE_PATTERNS = (
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+)
+
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -85,7 +94,14 @@ def init_config(
         "extensions/templates/config_packages/default"
     )
     with resources.as_file(template_root) as template_path:
-        shutil.copytree(template_path, target_dir, dirs_exist_ok=True)
+        shutil.copytree(
+            template_path,
+            target_dir,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(
+                *_CONFIG_TEMPLATE_IGNORE_PATTERNS,
+            ),
+        )
 
     # Adjust package name and layout
     src_pkg_dir = target_dir / "src" / "ade_config"

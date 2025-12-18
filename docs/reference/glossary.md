@@ -9,7 +9,7 @@ A file uploaded through the documents API. Metadata and lifecycle operations are
 An extraction request that consumes an input document and configuration revision. Run submission and monitoring routes are defined in [`apps/ade-api/src/ade_api/features/runs`](../../apps/ade-api/src/ade_api/features/runs). Execution happens inline through the pluggable processor contract exposed by [`apps/ade-api/src/ade_api/features/runs/processor.py`](../../apps/ade-api/src/ade_api/features/runs/processor.py).
 
 ## Configuration
-Workspace-scoped packages containing draft files, manifests, and published snapshots. Configuration APIs live in [`apps/ade-api/src/ade_api/features/configs`](../../apps/ade-api/src/ade_api/features/configs), while runs reference a concrete `config_version_id`.
+Workspace-scoped configuration packages with a lifecycle of `draft` → `active` → `archived`. Configuration APIs live in [`apps/ade-api/src/ade_api/features/configs`](../../apps/ade-api/src/ade_api/features/configs), while runs reference a concrete `configuration_id`.
 
 ## Workspace
 A logical tenant boundary enforced by [`apps/ade-api/src/ade_api/features/workspaces`](../../apps/ade-api/src/ade_api/features/workspaces). Workspace identifiers are part of the URL path (for example `/workspaces/{workspace_id}/documents`) so dependencies can scope database queries appropriately.

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
@@ -16,6 +15,7 @@ import {
 import type { PermissionDefinition, RoleDefinition } from "@shared/workspaces";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 

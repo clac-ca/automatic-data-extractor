@@ -17,7 +17,7 @@ def _make_documents_service(tmp_path: Path) -> DocumentsService:
     return DocumentsService(session=session, settings=settings)
 
 
-def testbuild_content_disposition_strips_control_characters() -> None:
+def test_build_content_disposition_strips_control_characters() -> None:
     header_value = build_content_disposition("report\r\nSet-Cookie: evil.txt")
 
     assert "\r" not in header_value
@@ -26,7 +26,7 @@ def testbuild_content_disposition_strips_control_characters() -> None:
     assert "filename*=UTF-8''reportSet-Cookie%3A%20evil.txt" in header_value
 
 
-def testbuild_content_disposition_preserves_unicode_filename() -> None:
+def test_build_content_disposition_preserves_unicode_filename() -> None:
     header_value = build_content_disposition("rêport ✅.pdf")
 
     assert 'filename="r_port _.pdf"' in header_value

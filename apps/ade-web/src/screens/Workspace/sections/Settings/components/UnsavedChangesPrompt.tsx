@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ConfirmDialog } from "./ConfirmDialog";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { useNavigate, useNavigationBlocker, type NavigationIntent } from "@app/nav/history";
 
 interface UnsavedChangesPromptProps {

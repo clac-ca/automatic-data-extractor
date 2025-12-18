@@ -42,7 +42,6 @@ from ..exceptions import (
 )
 from ..http import ConfigurationIdPath, WorkspaceIdPath, raise_problem
 from ..schemas import (
-    ConfigurationActivateRequest,
     ConfigurationCreate,
     ConfigurationPage,
     ConfigurationRecord,
@@ -62,13 +61,9 @@ CONFIG_CREATE_BODY = Body(
     ...,
     description="Display name and template/clone source for the configuration.",
 )
-ACTIVATE_BODY = Body(
-    ConfigurationActivateRequest(),
-    description="Activation options.",
-)
-PUBLISH_BODY = Body(
+MAKE_ACTIVE_BODY = Body(
     None,
-    description="Publish the current draft into a frozen version without activating it.",
+    description="Make the configuration active (archives any existing active configuration).",
 )
 
 
@@ -289,56 +284,10 @@ async def validate_configuration(
 
 
 @router.post(
-    "/configurations/{configuration_id}/activate",
-    dependencies=[Security(require_csrf)],
-    response_model=ConfigurationRecord,
-    summary="Activate a configuration",
-    response_model_exclude_none=True,
-)
-async def activate_configuration_endpoint(
-    workspace_id: WorkspaceIdPath,
-    configuration_id: ConfigurationIdPath,
-    service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
-    _actor: Annotated[
-        User,
-        Security(
-            require_workspace("workspace.configurations.manage"),
-            scopes=["{workspace_id}"],
-        ),
-    ],
-    *,
-    payload: ConfigurationActivateRequest = ACTIVATE_BODY,
-) -> ConfigurationRecord:
-    del payload  # ensure_build hook handled by future WPs
-    try:
-        record = await service.activate_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-    except ConfigurationNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
-    except ConfigStorageNotFoundError as exc:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail="configuration_storage_missing",
-        ) from exc
-    except ConfigValidationFailedError as exc:
-        detail = {
-            "error": "validation_failed",
-            "issues": [issue.model_dump() for issue in exc.issues],
-        }
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail) from exc
-    except ConfigStateError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    return ConfigurationRecord.model_validate(record)
-
-
-@router.post(
     "/configurations/{configuration_id}/publish",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
-    summary="Publish a configuration draft",
+    summary="Make a draft configuration active",
     response_model_exclude_none=True,
 )
 async def publish_configuration_endpoint(
@@ -352,11 +301,11 @@ async def publish_configuration_endpoint(
             scopes=["{workspace_id}"],
         ),
     ],
-    payload: None = PUBLISH_BODY,
+    payload: None = MAKE_ACTIVE_BODY,
 ) -> ConfigurationRecord:
     del payload
     try:
-        record = await service.publish_configuration(
+        record = await service.make_active_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
@@ -380,13 +329,13 @@ async def publish_configuration_endpoint(
 
 
 @router.post(
-    "/configurations/{configuration_id}/deactivate",
+    "/configurations/{configuration_id}/archive",
     dependencies=[Security(require_csrf)],
     response_model=ConfigurationRecord,
-    summary="Deactivate a configuration (was 'archive')",
+    summary="Archive the active configuration",
     response_model_exclude_none=True,
 )
-async def deactivate_configuration_endpoint(
+async def archive_configuration_endpoint(
     workspace_id: WorkspaceIdPath,
     configuration_id: ConfigurationIdPath,
     service: Annotated[ConfigurationsService, Depends(get_configurations_service)],
@@ -399,12 +348,14 @@ async def deactivate_configuration_endpoint(
     ],
 ) -> ConfigurationRecord:
     try:
-        record = await service.deactivate_configuration(
+        record = await service.archive_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="configuration_not_found") from exc
+    except ConfigStateError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return ConfigurationRecord.model_validate(record)
 
 

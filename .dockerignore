@@ -25,6 +25,7 @@ apps/ade-web/dist/
 data/
 artifacts/
 .workpackage/
+.workpackages/
 .old-codebase/
 
 # Env files (avoid baking secrets into images)

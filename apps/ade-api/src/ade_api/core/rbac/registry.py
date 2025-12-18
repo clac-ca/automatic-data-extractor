@@ -91,12 +91,6 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         description="Update user profiles or activation state across the tenant.",
     ),
     _permission(
-        key="users.invite",
-        scope=ScopeType.GLOBAL,
-        label="Invite users",
-        description="Invite new users or reinstate deactivated accounts.",
-    ),
-    _permission(
         key="system.settings.read",
         scope=ScopeType.GLOBAL,
         label="Read system settings",
@@ -137,7 +131,7 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
         key="workspace.members.manage",
         scope=ScopeType.WORKSPACE,
         label="Manage workspace members",
-        description="Invite, remove, or change member roles within the workspace.",
+        description="Add, remove, or change member roles within the workspace.",
     ),
     _permission(
         key="workspace.documents.read",

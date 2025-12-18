@@ -5,6 +5,8 @@ from collections import defaultdict
 from time import perf_counter
 from typing import Any, Dict, List, Tuple
 
+import polars as pl
+
 from ade_engine.extensions.invoke import call_extension
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
@@ -12,7 +14,7 @@ from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import ColumnDetectorContext
 from ade_engine.models.extension_outputs import ColumnDetectorResult
-from ade_engine.models.table import MappedColumn, SourceColumn
+from ade_engine.models.table import MappedColumn, SourceColumn, TableRegion
 
 
 def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> List[SourceColumn]:
@@ -25,34 +27,76 @@ def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> L
     return cols
 
 
+def _header_text(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    return str(value).strip()
+
+
+def _build_column_sample(column: pl.Series, *, limit: int) -> list[str]:
+    if limit <= 0:
+        return []
+
+    out: list[str] = []
+    for value in column:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def detect_and_map_columns(
     *,
     sheet_name: str,
+    table: pl.DataFrame,
     source_columns: List[SourceColumn],
+    table_region: TableRegion,
+    table_index: int,
     registry: Registry,
     settings: Settings,
     state: dict,
     metadata: dict,
-    input_file_name: str | None,
+    input_file_name: str,
     logger: RunLogger,
-) -> tuple[List[MappedColumn], List[SourceColumn]]:
+) -> tuple[List[MappedColumn], List[SourceColumn], dict[int, dict[str, float]], set[int]]:
     mapping_candidates: Dict[int, Tuple[str, float]] = {}
     field_competitors: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
     contributions_by_column: Dict[int, Dict[str, List[Dict[str, float]]]] = {}
+    scores_by_column: Dict[int, Dict[str, float]] = {}
     debug = logger.isEnabledFor(logging.DEBUG)
 
     for col in source_columns:
+        if not (0 <= col.index < len(table.columns)):
+            continue
+
+        column_name = table.columns[col.index]
+        column = table.get_column(column_name)
+        column_sample = _build_column_sample(
+            column,
+            limit=int(settings.detectors.detector_column_sample_size),
+        )
+
         scores: Dict[str, float] = {}
         contributions: Dict[str, List[Dict[str, float]]] = {} if debug else {}
         detectors_run: list[dict[str, Any]] = [] if debug else []
         ctx = ColumnDetectorContext(
+            table=table,
+            column=column,
+            column_sample=column_sample,
+            column_name=column_name,
             column_index=col.index,
-            header=col.header,
-            values=col.values,
-            values_sample=col.values[:5],
+            header_text=_header_text(col.header),
+            settings=settings,
             sheet_name=sheet_name,
             metadata=metadata,
             state=state,
+            table_region=table_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=logger,
         )
@@ -89,6 +133,8 @@ def detect_and_map_columns(
                     message=f"Column {col.index} detector {det.qualname} executed on {sheet_name}",
                     data={
                         "sheet_name": sheet_name,
+                        "table_index": table_index,
+                        "table_region": table_region.a1 if table_region else None,
                         "column_index": col.index,
                         "detector": detector_payload,
                     },
@@ -117,6 +163,8 @@ def detect_and_map_columns(
                 message=f"Column {col.index} classified as {best_field} (score={best_score:.3f}) on {sheet_name}",
                 data={
                     "sheet_name": sheet_name,
+                    "table_index": table_index,
+                    "table_region": table_region.a1 if table_region else None,
                     "column_index": col.index,
                     "detectors": detectors_run,
                     "scores": logged_scores,
@@ -128,6 +176,11 @@ def detect_and_map_columns(
                 },
             )
 
+        if scores:
+            # Keep raw (possibly negative) totals for diagnostics; consumers should
+            # clamp/filter as needed for schema constraints.
+            scores_by_column[col.index] = dict(scores)
+
         # Ignore columns with no positive signal – treating zero/negative totals as unmapped
         if not scores or best_score <= 0:
             continue
@@ -138,8 +191,12 @@ def detect_and_map_columns(
                     "column_detector.candidate",
                     level=logging.DEBUG,
                     data={
+                        "sheet_name": sheet_name,
+                        "table_index": table_index,
+                        "table_region": table_region.a1 if table_region else None,
                         "column_index": col.index,
-                        "header": col.header,
+                        "column_name": column_name,
+                        "header_text": _header_text(col.header),
                         "best_field": best_field,
                         "best_score": best_score,
                         "scores": scores,
@@ -210,7 +267,7 @@ def detect_and_map_columns(
             },
         )
 
-    return mapped_cols, unmapped
+    return mapped_cols, unmapped, scores_by_column, unmapped_indices
 
 
 __all__ = ["detect_and_map_columns", "build_source_columns"]

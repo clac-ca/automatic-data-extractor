@@ -93,6 +93,13 @@ def run_dev(
             raw_frontend_port = "8000"
         env["DEV_FRONTEND_PORT"] = raw_frontend_port
 
+    if backend and frontend and env.get("DEV_BACKEND_PORT") == env.get("DEV_FRONTEND_PORT"):
+        typer.echo(
+            "❌ DEV_BACKEND_PORT and DEV_FRONTEND_PORT must be different when running both servers.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
     tasks: list[tuple[str, list[str], Path | None, dict[str, str]]] = []
 
     if backend:
@@ -130,6 +137,7 @@ def run_dev(
             "0.0.0.0",
             "--port",
             env["DEV_FRONTEND_PORT"],
+            "--strictPort",
         ]
         tasks.append(("frontend", frontend_cmd, common.FRONTEND_DIR, env))
 

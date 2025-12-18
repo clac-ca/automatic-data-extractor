@@ -77,8 +77,8 @@ def _validate_payload(full_event: str, payload: dict[str, Any]) -> dict[str, Any
     except ValidationError as e:
         raise ValueError(f"Invalid payload for event '{full_event}': {e}") from e
 
-    # exclude_none keeps logs compact; flip to False if you want explicit nulls
-    return model.model_dump(mode="python", exclude_none=True)
+    # Keep explicit nulls to preserve schema shape in emitted NDJSON.
+    return model.model_dump(mode="python")
 
 
 class RunLogger(logging.LoggerAdapter):
@@ -204,4 +204,3 @@ __all__ = [
     "normalize_dotpath",
     "qualify_event_name",
 ]
-

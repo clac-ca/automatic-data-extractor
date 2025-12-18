@@ -1,28 +1,121 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, List
 
+import polars as pl
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ade_engine.application.pipeline.detect_columns import build_source_columns, detect_and_map_columns
-from ade_engine.application.pipeline.detect_rows import TableRegion, detect_table_regions
+from ade_engine.application.pipeline.detect_rows import detect_table_regions
 from ade_engine.application.pipeline.render import SheetWriter, render_table
 from ade_engine.application.pipeline.transform import apply_transforms
-from ade_engine.application.pipeline.validate import apply_validators, flatten_issues_patch
+from ade_engine.application.pipeline.validate import apply_validators
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.extension_contexts import HookName
-from ade_engine.models.table import TableData
+from ade_engine.models.table import TableRegion, TableResult
+
+
+def _stringify_cell(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _build_table_frame(*, headers: list[str], columns) -> pl.DataFrame:
+    """Build a Polars DataFrame from extracted columns, safely handling mixed types."""
+
+    data: dict[str, pl.Series] = {}
+    for name, col in zip(headers, columns):
+        try:
+            data[name] = pl.Series(name, col.values, strict=False)
+        except (pl.exceptions.ComputeError, TypeError):
+            data[name] = pl.Series(name, [_stringify_cell(v) for v in col.values], dtype=pl.Utf8)
+    return pl.DataFrame(data, strict=False)
+
+
+def _normalize_headers(headers: list[Any], *, start_index: int = 1) -> list[str]:
+    """Minimal header normalization (safe for Polars).
+
+    Rules:
+    - Convert to string and strip when non-empty; otherwise fall back to ``col_<i>``.
+    - Deduplicate collisions in source order by suffixing ``__2``, ``__3``, ...
+    """
+
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for idx, header in enumerate(headers, start=start_index):
+        base = str(header).strip() if header not in (None, "") else f"col_{idx}"
+        if not base:
+            base = f"col_{idx}"
+
+        count = seen.get(base, 0) + 1
+        seen[base] = count
+        out.append(base if count == 1 else f"{base}__{count}")
+    return out
+
+
+def _apply_mapping_as_rename(
+    *,
+    table: pl.DataFrame,
+    mapped_source_indices: list[int],
+    mapped_field_names: list[str],
+    extracted_names_by_index: list[str],
+    sheet_name: str,
+    table_index: int,
+    logger: RunLogger,
+) -> tuple[pl.DataFrame, dict[str, str]]:
+    if not mapped_source_indices:
+        return table, {}
+
+    rename_map: dict[str, str] = {}
+    current_names = list(table.columns)
+    name_set = set(current_names)
+
+    for source_index, field_name in sorted(zip(mapped_source_indices, mapped_field_names), key=lambda x: x[0]):
+        if not (0 <= source_index < len(extracted_names_by_index)):
+            continue
+        from_name = extracted_names_by_index[source_index]
+        to_name = field_name
+
+        if from_name not in name_set:
+            continue
+        if to_name in name_set:
+            logger.warning(
+                "Mapping rename collision; skipping rename",
+                extra={
+                    "data": {
+                        "sheet_name": sheet_name,
+                        "table_index": table_index,
+                        "source_index": source_index,
+                        "from_name": from_name,
+                        "to_name": to_name,
+                    }
+                },
+            )
+            continue
+
+        rename_map[from_name] = to_name
+        name_set.remove(from_name)
+        name_set.add(to_name)
+
+    if not rename_map:
+        return table, {}
+    return table.rename(rename_map), rename_map
 
 
 class Pipeline:
     """Orchestrates sheet-level processing using the registry."""
 
-    def __init__(self, *, registry: Registry, settings: Settings, logger: RunLogger) -> None:
+    def __init__(self, *, registry: Registry, settings: Settings, logger: RunLogger, report_builder=None) -> None:
         self.registry = registry
         self.settings = settings
         self.logger = logger
+        self.report_builder = report_builder
 
     def process_sheet(
         self,
@@ -31,23 +124,31 @@ class Pipeline:
         output_sheet: Worksheet,
         state: dict,
         metadata: dict,
-        input_file_name: str | None = None,
-    ) -> list[TableData]:
-        rows: List[List[Any]] = self._materialize_rows(sheet)
+        input_file_name: str,
+    ) -> list[TableResult]:
+        rows, scan = self._materialize_rows_with_scan(sheet)
         writer = SheetWriter(output_sheet)
+
+        if self.report_builder is not None:
+            try:
+                sheet_index = int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0
+                self.report_builder.record_sheet_scan(sheet_index=sheet_index, sheet_name=sheet.title, scan=scan)
+            except Exception:
+                self.logger.exception("Failed to record sheet scan for engine.run.completed")
 
         table_regions = detect_table_regions(
             sheet_name=sheet.title,
             rows=rows,
             registry=self.registry,
+            settings=self.settings,
             state=state,
             metadata=metadata,
             input_file_name=input_file_name,
             logger=self.logger,
         )
 
-        tables: list[TableData] = []
-        for table_index, region in enumerate(table_regions):
+        tables: list[TableResult] = []
+        for table_index, detected_region in enumerate(table_regions):
             if table_index > 0:
                 writer.blank_row()
             tables.append(
@@ -55,7 +156,7 @@ class Pipeline:
                     sheet=sheet,
                     writer=writer,
                     rows=rows,
-                    region=region,
+                    table_region=detected_region,
                     state=state,
                     metadata=metadata,
                     input_file_name=input_file_name,
@@ -71,19 +172,37 @@ class Pipeline:
         sheet: Worksheet,
         writer: SheetWriter,
         rows: List[List[Any]],
-        region: TableRegion,
+        table_region: TableRegion,
         state: dict,
         metadata: dict,
-        input_file_name: str | None,
+        input_file_name: str,
         table_index: int,
-    ) -> TableData:
-        header_row = rows[region.header_row_index] if region.header_row_index < len(rows) else []
-        data_rows = rows[region.data_start_row_index:region.data_end_row_index]
+    ) -> TableResult:
+        header_index = max(0, int(table_region.min_row) - 1)
+        header_row = rows[header_index] if header_index < len(rows) else []
+
+        data_start_index = max(0, int(table_region.data_first_row) - 1)
+        data_end_index = max(0, int(table_region.max_row))
+        data_rows = rows[data_start_index:data_end_index]
 
         source_cols = build_source_columns(header_row, data_rows)
-        mapped_cols, unmapped_cols = detect_and_map_columns(
+
+        extracted_headers = _normalize_headers([c.header for c in source_cols], start_index=1)
+        table = _build_table_frame(headers=extracted_headers, columns=source_cols)
+
+        source_region = TableRegion(
+            min_row=int(table_region.min_row),
+            min_col=int(table_region.min_col),
+            max_row=int(table_region.max_row),
+            max_col=max(1, len(extracted_headers)),
+        )
+
+        mapped_cols, unmapped_cols, scores_by_column, duplicate_unmapped_indices = detect_and_map_columns(
             sheet_name=sheet.title,
+            table=table,
             source_columns=source_cols,
+            table_region=source_region,
+            table_index=table_index,
             registry=self.registry,
             settings=self.settings,
             state=state,
@@ -92,113 +211,142 @@ class Pipeline:
             logger=self.logger,
         )
 
-        table = TableData(
+        mapped_source_indices = [int(c.source_index) for c in mapped_cols]
+        mapped_field_names = [str(c.field_name) for c in mapped_cols]
+        table, _rename_map = _apply_mapping_as_rename(
+            table=table,
+            mapped_source_indices=mapped_source_indices,
+            mapped_field_names=mapped_field_names,
+            extracted_names_by_index=extracted_headers,
             sheet_name=sheet.title,
-            header_row_index=region.header_row_index,
+            table_index=table_index,
+            logger=self.logger,
+        )
+
+        maybe_table = self.registry.run_hooks(
+            HookName.ON_TABLE_MAPPED,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
+            sheet=sheet,
+            table=table,
+            table_region=source_region,
+            table_index=table_index,
+            logger=self.logger,
+        )
+        if maybe_table is not None:
+            table = maybe_table
+
+        table = apply_transforms(
+            table=table,
+            registry=self.registry,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            table_region=source_region,
+            table_index=table_index,
+            input_file_name=input_file_name,
+            logger=self.logger,
+        )
+
+        maybe_table = self.registry.run_hooks(
+            HookName.ON_TABLE_TRANSFORMED,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
+            sheet=sheet,
+            table=table,
+            table_region=source_region,
+            table_index=table_index,
+            logger=self.logger,
+        )
+        if maybe_table is not None:
+            table = maybe_table
+
+        table = apply_validators(
+            table=table,
+            registry=self.registry,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            table_region=source_region,
+            table_index=table_index,
+            input_file_name=input_file_name,
+            logger=self.logger,
+        )
+
+        maybe_table = self.registry.run_hooks(
+            HookName.ON_TABLE_VALIDATED,
+            settings=self.settings,
+            state=state,
+            metadata=metadata,
+            input_file_name=input_file_name,
+            workbook=sheet.parent,
+            sheet=sheet,
+            table=table,
+            table_region=source_region,
+            table_index=table_index,
+            logger=self.logger,
+        )
+        if maybe_table is not None:
+            table = maybe_table
+
+        table_result = TableResult(
+            sheet_name=sheet.title,
+            table=table,
+            source_region=source_region,
             source_columns=source_cols,
             table_index=table_index,
+            sheet_index=int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0,
             mapped_columns=mapped_cols,
             unmapped_columns=unmapped_cols,
+            column_scores=scores_by_column,
+            duplicate_unmapped_indices=set(duplicate_unmapped_indices),
+            row_count=table.height,
         )
 
-        # Hook: table detected
-        self.registry.run_hooks(
-            HookName.ON_TABLE_DETECTED,
-            state=state,
-            metadata=metadata,
-            workbook=None,
-            sheet=sheet,
-            table=table,
-            input_file_name=input_file_name,
-            logger=self.logger,
-        )
-
-        # Hook: allow mapping reorder/patch
-        self.registry.run_hooks(
-            HookName.ON_TABLE_MAPPED,
-            state=state,
-            metadata=metadata,
-            workbook=None,
-            sheet=sheet,
-            table=table,
-            input_file_name=input_file_name,
-            logger=self.logger,
-        )
-
-        row_count = len(data_rows)
-        table.row_count = row_count
-        table.columns = {col.field_name: list(col.values) for col in table.mapped_columns}
-        table.mapping = {col.field_name: col.source_index for col in table.mapped_columns}
-
-        transform_patch = apply_transforms(
-            mapped_columns=table.mapped_columns,
-            columns=table.columns,
-            mapping=table.mapping,
-            registry=self.registry,
-            settings=self.settings,
-            state=state,
-            metadata=metadata,
-            input_file_name=input_file_name,
-            logger=self.logger,
-            row_count=row_count,
-        )
-        table.issues_patch = transform_patch.issues
-
-        issues_patch = apply_validators(
-            mapped_columns=table.mapped_columns,
-            columns=table.columns,
-            mapping=table.mapping,
-            registry=self.registry,
-            state=state,
-            metadata=metadata,
-            input_file_name=input_file_name,
-            logger=self.logger,
-            row_count=row_count,
-            initial_issues=transform_patch.issues,
-        )
-        table.issues_patch = issues_patch
-        table.issues = flatten_issues_patch(
-            issues_patch=issues_patch,
-            columns=table.columns,
-            mapping=table.mapping,
-        )
-
-        mapped_fields = [col.field_name for col in table.mapped_columns]
-        derived_fields: list[str] = []
-        if self.settings.render_derived_fields:
-            mapped_set = set(mapped_fields)
-            for field in self.registry.fields.keys():
-                if field in mapped_set:
-                    continue
-                if field in table.columns:
-                    derived_fields.append(field)
-        field_order = [*mapped_fields, *derived_fields]
-
-        render_table(
-            table=table,
+        write_table = render_table(
+            table_result=table_result,
             writer=writer,
+            registry=self.registry,
             settings=self.settings,
-            field_order=field_order,
             logger=self.logger,
         )
+
+        if self.report_builder is not None:
+            try:
+                self.report_builder.record_table(table_result)
+            except Exception:
+                self.logger.exception("Failed to record table summary for engine.run.completed")
 
         # Hook after write
         self.registry.run_hooks(
             HookName.ON_TABLE_WRITTEN,
+            settings=self.settings,
             state=state,
             metadata=metadata,
+            input_file_name=input_file_name,
             workbook=writer.worksheet.parent,
             sheet=writer.worksheet,
-            table=table,
-            input_file_name=input_file_name,
+            table=write_table,
+            table_region=table_result.output_region,
+            table_index=table_index,
             logger=self.logger,
         )
-        return table
+        return table_result
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     def _materialize_rows(self, sheet: Worksheet) -> List[List[Any]]:
+        rows, _scan = self._materialize_rows_with_scan(sheet)
+        return rows
+
+    def _materialize_rows_with_scan(self, sheet: Worksheet) -> tuple[List[List[Any]], dict[str, Any]]:
         """Stream rows, trim width, and stop after long empty runs."""
 
         rows: List[List[Any]] = []
@@ -262,7 +410,19 @@ class Pipeline:
                 },
             )
 
-        return rows
+        truncated_rows = 0
+        if row_limit_hit:
+            try:
+                truncated_rows = max(0, int(sheet.max_row or 0) - len(rows))
+            except Exception:
+                truncated_rows = 0
+
+        scan = {
+            "rows_emitted": len(rows),
+            "stopped_early": bool(row_limit_hit),
+            "truncated_rows": int(truncated_rows) if row_limit_hit else 0,
+        }
+        return rows, scan
 
 
 __all__ = ["Pipeline"]

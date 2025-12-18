@@ -39,3 +39,4 @@ include = ["ade_cli*"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+pythonpath = ["src"]

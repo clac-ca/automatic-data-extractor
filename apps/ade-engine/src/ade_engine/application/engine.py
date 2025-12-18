@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ade_engine.application.run_completion_report import RunCompletionReportBuilder
 from ade_engine.extensions.loader import import_and_register
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.io.run_plan import RunPlan, plan_run
@@ -74,6 +75,8 @@ class Engine:
         plan.output_dir.mkdir(parents=True, exist_ok=True)
         plan.logs_dir.mkdir(parents=True, exist_ok=True)
 
+        report_builder = RunCompletionReportBuilder(input_file=plan.request.input_file, settings=self.settings)
+
         metadata = {
             "input_file": str(plan.request.input_file),
             "output_file": str(plan.output_path),
@@ -83,9 +86,10 @@ class Engine:
         status = RunStatus.RUNNING
         error: RunError | None = None
         state: dict[str, Any] = {}
+        output_written = False
 
         def _execute(run_logger: RunLogger) -> None:
-            nonlocal status, error
+            nonlocal status, error, output_written
 
             run_logger.event(
                 "settings.effective",
@@ -95,23 +99,53 @@ class Engine:
             )
 
             try:
+                run_logger.event(
+                    "run.started",
+                    message="Run started",
+                    data={
+                        "input_file": str(plan.request.input_file),
+                        "config_package": str(plan.request.config_package),
+                    },
+                )
+                run_logger.event(
+                    "run.planned",
+                    message="Run planned",
+                    data={
+                        "output_file": str(plan.output_path),
+                        "output_dir": str(plan.output_dir),
+                        "logs_file": str(plan.logs_path) if plan.logs_path is not None else None,
+                        "logs_dir": str(plan.logs_dir),
+                    },
+                )
+
                 registry = self.load_registry(
                     config_package=plan.request.config_package,
                     logger=run_logger,
                 )
-                pipeline = Pipeline(registry=registry, settings=self.settings, logger=run_logger)
+                report_builder.set_registry(registry)
+                pipeline = Pipeline(
+                    registry=registry,
+                    settings=self.settings,
+                    logger=run_logger,
+                    report_builder=report_builder,
+                )
 
                 with open_source_workbook(plan.request.input_file) as source_wb:
                     output_wb = create_output_workbook()
 
+                    run_logger.event(
+                        "workbook.started",
+                        message="Workbook started",
+                        data={"sheet_count": len(source_wb.sheetnames)},
+                    )
+
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_START,
+                        settings=self.settings,
                         state=state,
                         metadata=metadata,
-                        workbook=source_wb,
-                        sheet=None,
-                        table=None,
                         input_file_name=plan.request.input_file.name,
+                        workbook=source_wb,
                         logger=run_logger,
                     )
 
@@ -121,14 +155,20 @@ class Engine:
                         out_sheet = output_wb.create_sheet(title=sheet_name)
                         sheet_metadata = {**metadata, "sheet_index": sheet_index}
 
+                        run_logger.event(
+                            "sheet.started",
+                            message="Sheet started",
+                            data={"sheet_name": sheet_name, "sheet_index": sheet_index},
+                        )
+
                         registry.run_hooks(
                             HookName.ON_SHEET_START,
+                            settings=self.settings,
                             state=state,
                             metadata=sheet_metadata,
+                            input_file_name=plan.request.input_file.name,
                             workbook=source_wb,
                             sheet=sheet,
-                            table=None,
-                            input_file_name=plan.request.input_file.name,
                             logger=run_logger,
                         )
 
@@ -142,15 +182,15 @@ class Engine:
 
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_BEFORE_SAVE,
+                        settings=self.settings,
                         state=state,
                         metadata=metadata,
-                        workbook=output_wb,
-                        sheet=None,
-                        table=None,
                         input_file_name=plan.request.input_file.name,
+                        workbook=output_wb,
                         logger=run_logger,
                     )
                     output_wb.save(plan.output_path)
+                    output_written = True
 
                 status = RunStatus.SUCCEEDED
             except (ConfigError, InputError, HookError, PipelineError) as exc:
@@ -174,6 +214,17 @@ class Engine:
 
         if logger is not None:
             _execute(logger)
+            completed_at = _utc_now()
+            payload = report_builder.build(
+                run_status=status,
+                started_at=started_at,
+                completed_at=completed_at,
+                error=error,
+                output_path=plan.output_path if output_written else None,
+                output_written=output_written,
+            )
+            # Let RunLogger validate/normalize; don't drop `null` fields pre-validation.
+            logger.event("run.completed", level=logging.INFO, data=payload.model_dump(mode="python"))
         else:
             with create_run_logger_context(
                 log_format=self.settings.log_format,
@@ -181,8 +232,21 @@ class Engine:
                 log_file=plan.logs_path,
             ) as log_ctx:
                 _execute(log_ctx.logger)
+                completed_at = _utc_now()
+                payload = report_builder.build(
+                    run_status=status,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    error=error,
+                    output_path=plan.output_path if output_written else None,
+                    output_written=output_written,
+                )
+                log_ctx.logger.event(
+                    "run.completed",
+                    level=logging.INFO,
+                    data=payload.model_dump(mode="python"),
+                )
 
-        completed_at = _utc_now()
         return RunResult(
             status=status,
             error=error,
