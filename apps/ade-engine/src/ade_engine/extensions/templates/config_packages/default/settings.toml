@@ -8,5 +8,4 @@ write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
 
 [ade_engine.detectors]
-detector_max_table_rows = 1000        # Max row limit for column detectors
-detector_column_sample_size = 100     # Size of `column_sample` passed to column detectors
+detector_column_sample_size = 100     # Max number of values collected into `column_sample` for each column detector

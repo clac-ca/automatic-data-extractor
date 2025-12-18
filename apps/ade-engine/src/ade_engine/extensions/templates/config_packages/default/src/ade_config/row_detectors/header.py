@@ -20,51 +20,6 @@ from __future__ import annotations
 import re
 
 
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
-# they can share cached values and facts.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-
-COMMON_HEADER_TOKENS = {
-    # identity
-    "name",
-    "first",
-    "last",
-    "middle",
-    "email",
-    "phone",
-    # address
-    "address",
-    "street",
-    "city",
-    "state",
-    "province",
-    "postal",
-    "zip",
-    # payroll-ish
-    "hours",
-    "wages",
-    "gross",
-    "net",
-    "rate",
-    "dues",
-    "pension",
-    # employment
-    "job",
-    "classification",
-    "status",
-    "start",
-    "end",
-}
-
-
 def register(registry) -> None:
     """Register this config package's header row detector(s)."""
     registry.register_row_detector(detect_header_row_by_known_words, row_kind="header", priority=0)
@@ -91,6 +46,38 @@ def detect_header_row_by_known_words(
       - Returns a positive `header` score.
       - Also returns a small negative `data` score to help separation (optional pattern).
     """
+    common_header_tokens = {
+        # identity
+        "name",
+        "first",
+        "last",
+        "middle",
+        "email",
+        "phone",
+        # address
+        "address",
+        "street",
+        "city",
+        "state",
+        "province",
+        "postal",
+        "zip",
+        # payroll-ish
+        "hours",
+        "wages",
+        "gross",
+        "net",
+        "rate",
+        "dues",
+        "pension",
+        # employment
+        "job",
+        "classification",
+        "status",
+        "start",
+        "end",
+    }
+
     values = row_values or []
     if not values:
         return {"header": 0.0}
@@ -109,7 +96,7 @@ def detect_header_row_by_known_words(
         normalized = re.sub(r"[^a-z0-9]+", " ", s.lower())
         tokens |= {tok for tok in normalized.split() if tok}
 
-    hits = len(tokens & COMMON_HEADER_TOKENS)
+    hits = len(tokens & common_header_tokens)
     text_ratio = len(strings) / max(len(values), 1)
 
     # Simple score: header-like if it has both "words we expect" and lots of text cells.

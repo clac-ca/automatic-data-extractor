@@ -40,9 +40,7 @@
 These settings control the shared sampling policy used by detectors.
 They do not affect transforms or validators, which always process all rows.
 
-- `detectors.detector_max_table_rows: int` — max number of table rows read for table-level / cross-column detection work (default `1000`).
 - `detectors.detector_column_sample_size: int` — max number of values collected into `column_sample` for each column detector (default `100`).
-  - Legacy keys still accepted: `detectors.row_sample_size`, `detectors.text_sample_size`.
 
 ## File discovery
 
@@ -64,6 +62,5 @@ max_empty_cols_run = 200
 supported_file_extensions = [".xlsx", ".csv"]
 
 [ade_engine.detectors]
-detector_max_table_rows = 1000
 detector_column_sample_size = 100
 ```

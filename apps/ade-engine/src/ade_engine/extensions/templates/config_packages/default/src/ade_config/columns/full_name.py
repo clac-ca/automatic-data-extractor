@@ -9,7 +9,7 @@ This module demonstrates:
 Detector stage (pre-mapping)
 ----------------------------
 - Called once per extracted table column.
-- Return `{FIELD_NAME: score}` (0..1) or `None`.
+- Return `{"full_name": score}` (0..1) or `None`.
 
 Transform/validate stage (post-mapping)
 ---------------------------------------
@@ -29,62 +29,22 @@ from __future__ import annotations
 import re
 
 import polars as pl
-
 from ade_engine.models import FieldDef, TableRegion
-
-# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
-# - min_row, min_col, max_row, max_col (1-based, inclusive)
-# - convenience properties: a1, cell_range, width, height
-# - header/data helpers: header_row, data_first_row, data_min_row, has_data_rows, data_row_count
-
-# -----------------------------------------------------------------------------
-# Shared state namespacing
-# -----------------------------------------------------------------------------
-# `state` is a mutable dict shared across the run.
-# Best practice: store everything your config package needs under ONE top-level key.
-#
-# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
-# they can share cached values and facts.
-STATE_NAMESPACE = "ade.config_package_template"
-STATE_SCHEMA_VERSION = 1
-
-FIELD_NAME = "full_name"
-
-_HEADER_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
-
-# Full name can be labeled many ways.
-# We give strong score to "full name" and similar, and a weaker score for plain "name".
-HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
-    {"full", "name"},
-    {"fullname"},
-    {"employee", "name"},
-    {"person", "name"},
-    {"worker", "name"},
-    {"member", "name"},
-]
-
-HEADER_TOKEN_SETS_WEAK: list[set[str]] = [
-    {"name"},  # very common but ambiguous
-]
-
-# Simple "looks like a name" patterns for value-based example.
-COMMA_NAME_RE = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
-SPACE_NAME_RE = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
-
-ALLOWED_FULL_NAME_PATTERN = r"^[A-Za-z][A-Za-z '\-]*$"
 
 
 def register(registry) -> None:
     """Register the `full_name` field and its detectors/transforms/validators."""
-    registry.register_field(FieldDef(name=FIELD_NAME, label="Full Name", dtype="string"))
+    registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string"))
 
     # Enabled by default:
-    registry.register_column_detector(detect_full_name_header_common_names, field=FIELD_NAME, priority=60)
-    registry.register_column_transform(normalize_full_name, field=FIELD_NAME, priority=0)
+    registry.register_column_detector(
+        detect_full_name_header_common_names, field="full_name", priority=60
+    )
+    registry.register_column_transform(normalize_full_name, field="full_name", priority=0)
 
     # Examples (uncomment to enable)
-    # registry.register_column_detector(detect_full_name_values_basic, field=FIELD_NAME, priority=30)
-    # registry.register_column_validator(validate_full_name, field=FIELD_NAME, priority=0)
+    # registry.register_column_detector(detect_full_name_values_basic, field="full_name", priority=30)
+    # registry.register_column_validator(validate_full_name, field="full_name", priority=0)
 
 
 def detect_full_name_header_common_names(
@@ -97,7 +57,7 @@ def detect_full_name_header_common_names(
     header_text: str,  # Header cell text ("" if missing)
     settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
-    table_region: TableRegion,  # See `TableRegion` notes above
+    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
@@ -110,20 +70,36 @@ def detect_full_name_header_common_names(
       - Match common headers for full_name (strong and weak variants).
       - Keep it simple and predictable.
     """
+    header_non_alnum_re = re.compile(r"[^a-z0-9]+")
+
+    # Full name can be labeled many ways.
+    # We give strong score to "full name" and similar, and a weaker score for plain "name".
+    header_token_sets_strong: list[set[str]] = [
+        {"full", "name"},
+        {"fullname"},
+        {"employee", "name"},
+        {"person", "name"},
+        {"worker", "name"},
+        {"member", "name"},
+    ]
+    header_token_sets_weak: list[set[str]] = [
+        {"name"},  # very common but ambiguous
+    ]
+
     raw = (header_text or "").strip().lower()
     if not raw:
         return None
 
-    normalized = _HEADER_NON_ALNUM_RE.sub(" ", raw).strip()
+    normalized = header_non_alnum_re.sub(" ", raw).strip()
     tokens = set(normalized.split())
     if not tokens:
         return None
 
-    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_STRONG):
-        return {FIELD_NAME: 1.0}
+    if any(pattern <= tokens for pattern in header_token_sets_strong):
+        return {"full_name": 1.0}
 
-    if any(pattern <= tokens for pattern in HEADER_TOKEN_SETS_WEAK):
-        return {FIELD_NAME: 0.8}
+    if any(pattern <= tokens for pattern in header_token_sets_weak):
+        return {"full_name": 0.8}
 
     return None
 
@@ -152,6 +128,9 @@ def detect_full_name_values_basic(
         - "First Last" OR "Last, First"
       - Skip values that contain digits (often IDs).
     """
+    comma_name_re = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
+    space_name_re = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
+
     if not column_sample:
         return None
 
@@ -162,13 +141,13 @@ def detect_full_name_values_basic(
         if any(ch.isdigit() for ch in s):
             continue
         total += 1
-        if COMMA_NAME_RE.fullmatch(s) or SPACE_NAME_RE.fullmatch(s):
+        if comma_name_re.fullmatch(s) or space_name_re.fullmatch(s):
             matches += 1
 
     if total == 0:
         return None
 
-    return {FIELD_NAME: float(matches / total)}
+    return {"full_name": float(matches / total)}
 
 
 def normalize_full_name(
@@ -221,8 +200,16 @@ def normalize_full_name(
     derived_first = pl.when(has_comma).then(comma_first).otherwise(space_first)
     derived_last = pl.when(has_comma).then(comma_last).otherwise(space_last)
 
-    derived_first = pl.when(derived_first.is_null() | (derived_first == "")).then(pl.lit(None)).otherwise(derived_first)
-    derived_last = pl.when(derived_last.is_null() | (derived_last == "")).then(pl.lit(None)).otherwise(derived_last)
+    derived_first = (
+        pl.when(derived_first.is_null() | (derived_first == ""))
+        .then(pl.lit(None))
+        .otherwise(derived_first)
+    )
+    derived_last = (
+        pl.when(derived_last.is_null() | (derived_last == ""))
+        .then(pl.lit(None))
+        .otherwise(derived_last)
+    )
 
     normalized_full = (
         pl.when(derived_first.is_not_null() & derived_last.is_not_null())
@@ -251,10 +238,11 @@ def validate_full_name(
       - Flag unexpected characters.
       - Show a simple cross-field consistency check (if first+last exist but full is missing).
     """
+    allowed_full_name_pattern = r"^[A-Za-z][A-Za-z '\-]*$"
     v = pl.col(field_name).cast(pl.Utf8, strict=False).str.strip_chars()
 
     format_issue = (
-        pl.when(v.is_not_null() & (v != "") & ~v.str.contains(ALLOWED_FULL_NAME_PATTERN))
+        pl.when(v.is_not_null() & (v != "") & ~v.str.contains(allowed_full_name_pattern))
         .then(pl.lit("Full name contains unexpected characters"))
         .otherwise(pl.lit(None))
     )
