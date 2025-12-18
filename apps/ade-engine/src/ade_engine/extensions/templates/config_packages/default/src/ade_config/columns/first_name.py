@@ -1,10 +1,50 @@
+"""ADE column template: `first_name`
+
+This module demonstrates:
+- Registering a canonical field (`FieldDef`)
+- A header-based detector (enabled by default)
+- Optional examples: value-based detection, neighbor-based detection, a transform, and a validator
+
+Detector stage (pre-mapping)
+----------------------------
+- Called once per extracted table column.
+- Return `{FIELD_NAME: score}` (0..1) or `None`.
+
+Transform/validate stage (post-mapping)
+---------------------------------------
+- Transforms return a `pl.Expr`.
+- Validators return a `pl.Expr` producing a per-row message (string) or null.
+
+Template goals
+--------------
+- Keep the default detector simple, fast, and deterministic.
+- Keep examples self-contained and opt-in (uncomment in `register()`).
+"""
+
 from __future__ import annotations
 
 import re
 
 import polars as pl
 
-from ade_engine.models import FieldDef
+from ade_engine.models import FieldDef, TableRegion
+
+# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
+# - header_row, first_col, last_row, last_col (1-based, inclusive)
+# - header_inferred (bool)
+# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
+# - range refs: ref, header_ref, data_ref
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
+# they can share cached values and facts.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
 
 FIELD_NAME = "first_name"
 
@@ -20,7 +60,8 @@ HEADER_TOKEN_SETS_STRONG: list[set[str]] = [
 ]
 
 
-def register(registry):
+def register(registry) -> None:
+    """Register the `first_name` field and its detectors/transforms/validators."""
     registry.register_field(FieldDef(name=FIELD_NAME, label="First Name", dtype="string"))
 
     # Enabled by default:
@@ -28,7 +69,6 @@ def register(registry):
     registry.register_column_detector(detect_first_name_header_common_names, field=FIELD_NAME, priority=60)
 
     # Examples (uncomment to enable)
-    # -------------------------------------------------
     # registry.register_column_detector(detect_first_name_values_basic, field=FIELD_NAME, priority=30)
     # registry.register_column_detector(detect_first_name_values_neighbor_pair, field=FIELD_NAME, priority=25)
     # registry.register_column_transform(normalize_first_name, field=FIELD_NAME, priority=0)
@@ -37,18 +77,20 @@ def register(registry):
 
 def detect_first_name_header_common_names(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,  # 0-based index within the sheet (when multiple tables exist)
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Enabled by default.
 
@@ -72,18 +114,20 @@ def detect_first_name_header_common_names(
 
 def detect_first_name_values_basic(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -110,18 +154,20 @@ def detect_first_name_values_basic(
 
 def detect_first_name_values_neighbor_pair(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -189,13 +235,15 @@ def detect_first_name_values_neighbor_pair(
 
 def normalize_first_name(
     *,
-    field_name: str,
-    table: pl.DataFrame,
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,  # 0-based index within the sheet
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 
@@ -208,13 +256,15 @@ def normalize_first_name(
 
 def validate_first_name(
     *,
-    field_name: str,
-    table: pl.DataFrame,
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,  # 0-based index within the sheet
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 

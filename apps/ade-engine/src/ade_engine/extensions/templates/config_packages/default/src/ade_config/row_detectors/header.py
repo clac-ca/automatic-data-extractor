@@ -1,20 +1,72 @@
+"""ADE row detector template: `header`
+
+Row detectors vote on what each row represents (header vs data vs unknown). ADE
+uses these votes to pick header rows and detect table regions.
+
+Return value
+------------
+- Return a score patch (`dict[str, float]`) or `None`.
+- Keys are row kinds like `"header"` and `"data"` (scores are additive across detectors).
+- Higher total score wins the per-row classification.
+
+Template goals
+--------------
+- Keep the default heuristic fast (no large scans; operate on the current row only).
+- Be deterministic and reasonably conservative (avoid overfitting to one dataset).
+"""
+
 from __future__ import annotations
 
 import re
 
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
+# they can share cached values and facts.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
 COMMON_HEADER_TOKENS = {
     # identity
-    "name", "first", "last", "middle", "email", "phone",
+    "name",
+    "first",
+    "last",
+    "middle",
+    "email",
+    "phone",
     # address
-    "address", "street", "city", "state", "province", "postal", "zip",
+    "address",
+    "street",
+    "city",
+    "state",
+    "province",
+    "postal",
+    "zip",
     # payroll-ish
-    "hours", "wages", "gross", "net", "rate", "dues", "pension",
+    "hours",
+    "wages",
+    "gross",
+    "net",
+    "rate",
+    "dues",
+    "pension",
     # employment
-    "job", "classification", "status", "start", "end",
+    "job",
+    "classification",
+    "status",
+    "start",
+    "end",
 }
 
 
-def register(registry):
+def register(registry) -> None:
+    """Register this config package's header row detector(s)."""
     registry.register_row_detector(detect_header_row_by_known_words, row_kind="header", priority=0)
 
 
@@ -34,6 +86,10 @@ def detect_header_row_by_known_words(
     Heuristic:
       - header rows contain lots of short text labels
       - header rows often include common schema words (email, name, hours, etc.)
+
+    Scoring:
+      - Returns a positive `header` score.
+      - Also returns a small negative `data` score to help separation (optional pattern).
     """
     values = row_values or []
     if not values:

@@ -26,5 +26,4 @@ At write time, the engine derives `write_table` from the in-memory `table`:
 ## Custom ordering
 
 - Use `on_table_validated` to do final shaping (filter/sort/reorder rows; reorder/drop/add columns) by returning a new DataFrame.
-- Use `on_table_written` only for formatting/summaries; it must not alter already-written data values.
-
+- Use `on_table_written` only for formatting/summaries; the `table` argument reflects the DataFrame that was written after output-column policies.

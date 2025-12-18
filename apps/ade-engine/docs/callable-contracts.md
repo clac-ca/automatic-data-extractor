@@ -47,7 +47,7 @@ Register with: `registry.register_column_transform(fn, field="<canonical_field>"
 Recommended signature:
 
 ```py
-def transform(*, field_name: str, table: pl.DataFrame, settings, state: dict, metadata: dict, logger, **_) -> pl.Expr | dict[str, pl.Expr] | None:
+def transform(*, field_name: str, table: pl.DataFrame, settings, state: dict, metadata: dict, logger, **_) -> pl.Expr | None:
     ...
 ```
 
@@ -55,9 +55,9 @@ Return types:
 
 - `None`: no change
 - `pl.Expr`: replacement expression for `field_name`
-- `dict[str, pl.Expr]`: multi-output (adds/replaces multiple columns)
 
 The engine applies outputs via `table.with_columns(...)` and must not change row count.
+For derived columns or multi-column edits, use a table hook (e.g., `on_table_mapped` or `on_table_transformed`).
 
 ## Validators (v3 inline)
 

@@ -72,29 +72,24 @@ def test_transform_invalid_return_raises_pipeline_error():
         )
 
 
-def test_transform_dict_output_creates_derived_columns():
+def test_transform_dict_output_raises_pipeline_error():
     registry = Registry()
 
     def add_derived_field(*, field_name: str, **_):
         return {"bar": pl.col(field_name).cast(pl.Utf8) + pl.lit("-derived")}
 
-    def uppercase_transform(*, field_name: str, **_):
-        return pl.col(field_name).cast(pl.Utf8).str.to_uppercase()
-
     registry.register_field(FieldDef(name="foo"))
     registry.register_field(FieldDef(name="bar"))
     registry.register_column_transform(add_derived_field, field="foo", priority=10)
-    registry.register_column_transform(uppercase_transform, field="foo", priority=0)
     registry.finalize()
 
-    out = apply_transforms(
-        table=pl.DataFrame({"foo": ["a", "b"]}),
-        registry=registry,
-        settings=Settings(),
-        state={},
-        metadata={},
-        input_file_name=None,
-        logger=NullLogger(),
-    )
-
-    assert out.to_dict(as_series=False) == {"foo": ["A", "B"], "bar": ["a-derived", "b-derived"]}
+    with pytest.raises(PipelineError):
+        apply_transforms(
+            table=pl.DataFrame({"foo": ["a", "b"]}),
+            registry=registry,
+            settings=Settings(),
+            state={},
+            metadata={},
+            input_file_name=None,
+            logger=NullLogger(),
+        )

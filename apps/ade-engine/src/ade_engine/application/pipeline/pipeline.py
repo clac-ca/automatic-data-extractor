@@ -7,7 +7,7 @@ import polars as pl
 from openpyxl.worksheet.worksheet import Worksheet
 
 from ade_engine.application.pipeline.detect_columns import build_source_columns, detect_and_map_columns
-from ade_engine.application.pipeline.detect_rows import TableRegion, detect_table_regions
+from ade_engine.application.pipeline.detect_rows import DetectedTableRegion, detect_table_regions
 from ade_engine.application.pipeline.render import SheetWriter, render_table
 from ade_engine.application.pipeline.transform import apply_transforms
 from ade_engine.application.pipeline.validate import apply_validators
@@ -15,7 +15,7 @@ from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.infrastructure.settings import Settings
 from ade_engine.models.extension_contexts import HookName
-from ade_engine.models.table import TableRegionInfo, TableResult
+from ade_engine.models.table import TableRegion, TableResult
 
 
 def _stringify_cell(value: Any) -> str | None:
@@ -148,7 +148,7 @@ class Pipeline:
         )
 
         tables: list[TableResult] = []
-        for table_index, region in enumerate(table_regions):
+        for table_index, detected_region in enumerate(table_regions):
             if table_index > 0:
                 writer.blank_row()
             tables.append(
@@ -156,7 +156,7 @@ class Pipeline:
                     sheet=sheet,
                     writer=writer,
                     rows=rows,
-                    region=region,
+                    detected_region=detected_region,
                     state=state,
                     metadata=metadata,
                     input_file_name=input_file_name,
@@ -172,37 +172,42 @@ class Pipeline:
         sheet: Worksheet,
         writer: SheetWriter,
         rows: List[List[Any]],
-        region: TableRegion,
+        detected_region: DetectedTableRegion,
         state: dict,
         metadata: dict,
         input_file_name: str | None,
         table_index: int,
     ) -> TableResult:
-        header_row = rows[region.header_row_index] if region.header_row_index < len(rows) else []
-        data_rows = rows[region.data_start_row_index:region.data_end_row_index]
+        header_row = (
+            rows[detected_region.header_row_index] if detected_region.header_row_index < len(rows) else []
+        )
+        data_rows = rows[detected_region.data_start_row_index : detected_region.data_end_row_index]
 
         source_cols = build_source_columns(header_row, data_rows)
 
         extracted_headers = _normalize_headers([c.header for c in source_cols], start_index=1)
         table = _build_table_frame(headers=extracted_headers, columns=source_cols)
 
+        source_region = TableRegion(
+            header_row=int(detected_region.header_row_index) + 1,
+            first_col=1,
+            last_row=int(detected_region.data_end_row_index),
+            last_col=len(extracted_headers),
+            header_inferred=bool(getattr(detected_region, "header_inferred", False)),
+        )
+
         mapped_cols, unmapped_cols, scores_by_column, duplicate_unmapped_indices = detect_and_map_columns(
             sheet_name=sheet.title,
             table=table,
             source_columns=source_cols,
+            table_region=source_region,
+            table_index=table_index,
             registry=self.registry,
             settings=self.settings,
             state=state,
             metadata=metadata,
             input_file_name=input_file_name,
             logger=self.logger,
-        )
-
-        region_info = TableRegionInfo(
-            header_row_index=region.header_row_index,
-            data_start_row_index=region.data_start_row_index,
-            data_end_row_index=region.data_end_row_index,
-            header_inferred=region.header_inferred,
         )
 
         mapped_source_indices = [int(c.source_index) for c in mapped_cols]
@@ -225,6 +230,8 @@ class Pipeline:
             workbook=None,
             sheet=sheet,
             table=table,
+            table_region=source_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )
@@ -237,6 +244,8 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
+            table_region=source_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )
@@ -249,6 +258,8 @@ class Pipeline:
             workbook=None,
             sheet=sheet,
             table=table,
+            table_region=source_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )
@@ -261,6 +272,8 @@ class Pipeline:
             settings=self.settings,
             state=state,
             metadata=metadata,
+            table_region=source_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )
@@ -273,6 +286,8 @@ class Pipeline:
             workbook=None,
             sheet=sheet,
             table=table,
+            table_region=source_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )
@@ -282,11 +297,10 @@ class Pipeline:
         table_result = TableResult(
             sheet_name=sheet.title,
             table=table,
-            header_row_index=region.header_row_index,
+            source_region=source_region,
             source_columns=source_cols,
             table_index=table_index,
             sheet_index=int(metadata.get("sheet_index", 0)) if isinstance(metadata, dict) else 0,
-            region=region_info,
             mapped_columns=mapped_cols,
             unmapped_columns=unmapped_cols,
             column_scores=scores_by_column,
@@ -316,8 +330,9 @@ class Pipeline:
             metadata=metadata,
             workbook=writer.worksheet.parent,
             sheet=writer.worksheet,
-            table=table,
-            write_table=write_table,
+            table=write_table,
+            table_region=table_result.output_region,
+            table_index=table_index,
             input_file_name=input_file_name,
             logger=self.logger,
         )

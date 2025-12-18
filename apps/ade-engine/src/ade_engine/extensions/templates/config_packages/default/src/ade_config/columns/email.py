@@ -1,14 +1,55 @@
+"""ADE column template: `email`
+
+This module demonstrates:
+- Registering a canonical field (`FieldDef`)
+- A header-based column detector (enabled by default)
+- Optional examples: value-based detection, a transform, and a validator
+
+Detector stage (pre-mapping)
+----------------------------
+- Called once per extracted table column.
+- Return `{FIELD_NAME: score}` (0..1) or `None`.
+
+Transform/validate stage (post-mapping)
+---------------------------------------
+- Transforms return a `pl.Expr` (or `None` for no-op).
+- Validators return a `pl.Expr` producing a per-row message (string) or null.
+
+Template goals
+--------------
+- Keep the default detector simple, fast, and deterministic.
+- Keep examples self-contained and opt-in (uncomment in `register()`).
+"""
+
 from __future__ import annotations
 
 import re
 
 import polars as pl
 
-from ade_engine.models import FieldDef
+from ade_engine.models import FieldDef, TableRegion
 
-# --------------------------------------------
+# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
+# - header_row, first_col, last_row, last_col (1-based, inclusive)
+# - header_inferred (bool)
+# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
+# - range refs: ref, header_ref, data_ref
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
+# they can share cached values and facts.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
+# -----------------------------------------------------------------------------
 # Field + header-name matching configuration
-# --------------------------------------------
+# -----------------------------------------------------------------------------
 
 FIELD_NAME = "email"
 
@@ -32,15 +73,14 @@ EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 EMAIL_RE = re.compile(EMAIL_PATTERN)
 
 
-def register(registry):
-    registry.register_field(FieldDef(name=FIELD_NAME, dtype="string"))
+def register(registry) -> None:
+    """Register the `email` field and its detectors/transforms/validators."""
+    registry.register_field(FieldDef(name=FIELD_NAME, label="Email", dtype="string"))
 
-    # Enabled by default:
-    # Detect "email" using common header names.
+    # Enabled by default: detect "email" using common header names.
     registry.register_column_detector(detect_email_header_common_names, field=FIELD_NAME, priority=60)
 
     # Examples (uncomment to enable)
-    # -------------------------------------------------
     # registry.register_column_detector(detect_email_values_sample_regex, field=FIELD_NAME, priority=30)
     # registry.register_column_transform(normalize_email, field=FIELD_NAME, priority=0)
     # registry.register_column_validator(validate_email, field=FIELD_NAME, priority=0)
@@ -56,6 +96,8 @@ def detect_email_header_common_names(
     header_text: str,  # Header cell text for this column ("" if missing)
     settings,  # Engine settings object
     sheet_name: str,  # Sheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
     metadata: dict,  # Run metadata
     state: dict,  # Shared mutable run state
     input_file_name: str | None,  # Input filename (basename) if known
@@ -84,18 +126,20 @@ def detect_email_header_common_names(
 
 def detect_email_values_sample_regex(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -119,11 +163,13 @@ def normalize_email(
     *,
     field_name: str,  # Canonical field name (post-mapping)
     table: pl.DataFrame,  # Post-mapping table
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 
@@ -138,11 +184,13 @@ def validate_email(
     *,
     field_name: str,  # Canonical field name (post-mapping)
     table: pl.DataFrame,  # Post-mapping table
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 

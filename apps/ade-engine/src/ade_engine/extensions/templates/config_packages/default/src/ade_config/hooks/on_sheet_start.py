@@ -1,170 +1,427 @@
+"""ADE config hook: on_sheet_start
+
+When this runs
+--------------
+- Once per worksheet, after `on_workbook_start` and before table detection.
+- This is the earliest per-sheet hook (the workbook is open; table detection hasn't run).
+
+What it's useful for
+--------------------
+- Routing/skip decisions (hidden sheets, covers, instruction tabs)
+- Capturing cheap sheet facts (dimensions, max_row/max_column, freeze panes)
+- Seeding per-sheet state that detectors/transforms/validators can consult
+- Emitting sheet-scoped logs/events (critical in batch runs)
+
+Return value
+------------
+- This hook MUST return `None` (returning anything else raises HookError).
+
+Template goals
+--------------
+- Default hook is small + safe (no scanning large ranges; no workbook edits)
+- Examples are self-contained and opt-in (uncomment in `register()`)
+"""
+
 from __future__ import annotations
 
+import openpyxl
+import openpyxl.worksheet.worksheet
 
-def register(registry):
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
+# ----------------------------
+# Registration
+# ----------------------------
+
+
+def register(registry) -> None:
+    """Register this config package's on_sheet_start hook(s)."""
     registry.register_hook(on_sheet_start, hook="on_sheet_start", priority=0)
 
-    # Examples (uncomment to enable)
-    # registry.register_hook(on_sheet_start_example_1_seed_per_sheet_state, hook="on_sheet_start", priority=0)
-    # registry.register_hook(on_sheet_start_example_2_stash_sheet_properties, hook="on_sheet_start", priority=0)
-    # registry.register_hook(on_sheet_start_example_3_enrich_metadata, hook="on_sheet_start", priority=0)
-    # registry.register_hook(on_sheet_start_example_4_emit_structured_event, hook="on_sheet_start", priority=0)
-    # registry.register_hook(on_sheet_start_example_5_fail_fast_blank_sheet_name, hook="on_sheet_start", priority=0)
+    # Optional high-value recipes (uncomment to enable)
+    # registry.register_hook(on_sheet_start_example_1_route_or_skip_sheets, hook="on_sheet_start", priority=10)
+    # registry.register_hook(on_sheet_start_example_2_capture_excel_tables, hook="on_sheet_start", priority=20)
+    # registry.register_hook(on_sheet_start_example_3_hint_header_from_freeze_panes, hook="on_sheet_start", priority=30)
+
+
+# ----------------------------
+# Default hook implementation
+# ----------------------------
 
 
 def on_sheet_start(
     *,
-    hook_name,  # HookName enum value for this stage
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook,  # Source workbook (openpyxl Workbook)
-    sheet,  # Source worksheet (openpyxl Worksheet)
-    table,  # Always None for this hook
-    write_table,  # Always None for this hook
+    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> None:
     """
     Called once per worksheet, before ADE scans the sheet for tables.
 
-    This is the earliest "per-sheet" hook. It runs after `on_workbook_start` and
-    before any table detection/mapping/transforms/validation happen for this
-    sheet. At this point `table` is always `None`.
-
-    Common uses:
-    - Initialize per-sheet state (counters, hints) in the shared `state` dict
-    - Emit sheet-specific logs (useful when batch processing many files)
-    - Read sheet properties to drive detectors/transforms later (via `state`)
-    - Fail fast for unexpected sheet layouts (raise; the run will fail as HookError)
-
-    Notes:
-    - Prefer mutating `state` (not globals) to share data with other hooks and
-      detectors in a thread-safe way.
-    - If you use `logger.event(...)`, emit under `engine.config.*` (e.g.
-      `logger.event("config.my_event", ...)`) so you don't trip strict validation
-      for `engine.*` events.
+    This default implementation is intentionally small but useful:
+    - increments a sheet counter
+    - creates/stashes a per-sheet state dict (`state[STATE_NAMESPACE]["sheets"][sheet_name]`)
+    - records lightweight sheet facts that are commonly useful later
+    - emits a structured config event for observability
     """
 
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    # --- namespaced config state (shared across run)
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, dict):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+
+    # --- stats (shared across run)
+    stats = cfg.get("stats")
+    if not isinstance(stats, dict):
+        stats = {}
+        cfg["stats"] = stats
+    stats["sheets_seen"] = int(stats.get("sheets_seen", 0) or 0) + 1
+
+    # --- sheet facts + per-sheet context dict
+    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+
+    sheet_index: int | None = None
+    if isinstance(metadata, dict):
+        raw_index = metadata.get("sheet_index", None)
+        try:
+            sheet_index = int(raw_index) if raw_index is not None else None
+        except (TypeError, ValueError):
+            sheet_index = None
+
+    sheets = cfg.get("sheets")
+    if not isinstance(sheets, dict):
+        sheets = {}
+        cfg["sheets"] = sheets
+
+    ctx = sheets.get(sheet_name)
+    if not isinstance(ctx, dict):
+        ctx = {}
+        sheets[sheet_name] = ctx
+
+    dimensions: str | None = None
+    try:
+        dims = getattr(sheet, "dimensions", None)
+        if dims is not None:
+            dimensions = str(dims)
+    except Exception:
+        dimensions = None
+
+    if dimensions is None:
+        try:
+            calc = getattr(sheet, "calculate_dimension", None)
+            if callable(calc):
+                dimensions = str(calc())
+        except Exception:
+            dimensions = None
+
+    # Store cheap, commonly useful sheet facts.
+    # Use setdefault so downstream hooks can override intentionally.
+    ctx.setdefault("sheet_index", sheet_index)
+    ctx.setdefault("sheet_state", getattr(sheet, "sheet_state", None))
+    ctx.setdefault("dimensions", dimensions)
+    ctx.setdefault("max_row", getattr(sheet, "max_row", None))
+    ctx.setdefault("max_column", getattr(sheet, "max_column", None))
+    ctx.setdefault("sheet_name_normalized", sheet_name.strip().lower())
+
+    if input_file_name:
+        ctx.setdefault("input_file_name", input_file_name)
+
+    # --- logging (keep it structured and cheap)
     if logger:
-        logger.info("Config hook: sheet start (%s)", sheet_name)
+        logger.info(
+            "Config hook: sheet start file=%s sheet=%s index=%s dims=%s",
+            input_file_name or "<unknown>",
+            sheet_name,
+            sheet_index if sheet_index is not None else "<unknown>",
+            ctx.get("dimensions") or "<unknown>",
+        )
+
+        logger.event(
+            "engine.config.sheet.start",
+            data={
+                "input_file_name": input_file_name,
+                "sheet_name": sheet_name,
+                "sheet_index": sheet_index,
+                "sheet_state": ctx.get("sheet_state"),
+                "dimensions": ctx.get("dimensions"),
+            },
+        )
 
     return None
 
 
-def on_sheet_start_example_1_seed_per_sheet_state(
+# ----------------------------
+# High-value examples (recipes)
+# ----------------------------
+
+
+def on_sheet_start_example_1_route_or_skip_sheets(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: seed a per-sheet dict in shared state (available to detectors/transforms)."""
+    """
+    Example 1 (high value): route/skip sheets early.
 
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    sheets = state.setdefault("sheets", {})
-    sheets.setdefault(sheet_name, {})
+    Real-world Excel workbooks commonly include:
+    - hidden/veryHidden sheets
+    - cover pages / instructions
+    - helper sheets that are not meant to be parsed
 
+    This example sets a per-sheet flag:
+        state[STATE_NAMESPACE]["sheets"][sheet_name]["skip"] = True
+    which your detectors/transforms can consult to avoid scanning/processing.
+    """
+    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
 
-def on_sheet_start_example_2_stash_sheet_properties(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> None:
-    """Example: stash sheet properties in shared state for debugging/downstream logic."""
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, dict):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
 
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    sheets = state.setdefault("sheets", {})
-    sheets[sheet_name] = {
-        "max_row": getattr(sheet, "max_row", None),
-        "max_col": getattr(sheet, "max_column", None),
-        "sheet_state": getattr(sheet, "sheet_state", None),  # "visible" / "hidden"
-    }
+    sheets = cfg.get("sheets")
+    if not isinstance(sheets, dict):
+        sheets = {}
+        cfg["sheets"] = sheets
+    ctx = sheets.get(sheet_name)
+    if not isinstance(ctx, dict):
+        ctx = {}
+        sheets[sheet_name] = ctx
 
+    sheet_state = getattr(sheet, "sheet_state", None)
+    normalized = sheet_name.strip().lower()
 
-def on_sheet_start_example_3_enrich_metadata(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> None:
-    """Example: enrich metadata (keep it small/serializable) for downstream logs."""
-
-    if not isinstance(metadata, dict):
-        return
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    metadata["sheet_name_normalized"] = sheet_name.strip().lower()
-
-
-def on_sheet_start_example_4_emit_structured_event(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> None:
-    """Example: emit a structured config event (safe under engine.config.*)."""
-
-    if not logger:
-        return
-
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    sheet_index = 0
+    sheet_index: int | None = None
     if isinstance(metadata, dict):
+        raw_index = metadata.get("sheet_index", None)
         try:
-            sheet_index = int(metadata.get("sheet_index", 0) or 0)
+            sheet_index = int(raw_index) if raw_index is not None else None
         except (TypeError, ValueError):
-            sheet_index = 0
+            sheet_index = None
 
-    logger.event(
-        "config.sheet.start",
-        data={"sheet_name": sheet_name, "sheet_index": sheet_index},
-    )
+    # Customize these rules for your org's spreadsheets.
+    # Keep rules readable and deterministic.
+    non_data_names = {"readme", "instructions", "cover", "notes", "info"}
+    non_data_prefixes = ("_", "#")
+
+    reason: str | None = None
+    if sheet_state in {"hidden", "veryHidden"}:
+        reason = f"sheet_state={sheet_state}"
+    elif normalized in non_data_names:
+        reason = "non-data sheet name"
+    elif normalized.startswith(non_data_prefixes):
+        reason = "non-data sheet prefix"
+
+    if not reason:
+        return None
+
+    ctx["skip"] = True
+    ctx["skip_reason"] = reason
+
+    if logger:
+        logger.info("Config hook: skipping sheet=%s (%s)", sheet_name, reason)
+        logger.event(
+            "engine.config.sheet.skip",
+            data={
+                "input_file_name": input_file_name,
+                "sheet_name": sheet_name,
+                "sheet_index": sheet_index,
+                "reason": reason,
+            },
+        )
+
+    return None
 
 
-def on_sheet_start_example_5_fail_fast_blank_sheet_name(
+def on_sheet_start_example_2_capture_excel_tables(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
-    table,
-    write_table,
+    workbook: openpyxl.Workbook,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
     input_file_name: str | None,
     logger,
 ) -> None:
-    """Example: fail fast if a sheet looks wrong."""
+    """
+    Example 2 (high value): capture Excel-defined tables (if present).
 
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    if not sheet_name or sheet_name.strip() == "":
-        raise ValueError("Sheet name is blank; check input workbook")
+    Excel "Tables" (Insert → Table) are structured objects with a name and a range.
+    openpyxl exposes them via `worksheet.tables` (dict-like).
+
+    Why this matters:
+    - If your spreadsheets already define tables, you can use those definitions as
+      strong hints (or even as the source of truth) for ADE table detection.
+    """
+    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+    tables = getattr(sheet, "tables", None)
+    if not tables:
+        return None
+
+    extracted: list[dict] = []
+    try:
+        for t in tables.values():
+            extracted.append(
+                {
+                    # openpyxl Table can have `.name` and/or `.displayName`
+                    "name": getattr(t, "name", None) or getattr(t, "displayName", None),
+                    "ref": getattr(t, "ref", None),
+                }
+            )
+    except Exception:
+        # Be defensive: if a sheet object provides tables in an unexpected shape,
+        # prefer silently doing nothing in an example hook.
+        return None
+
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, dict):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+
+    sheets = cfg.get("sheets")
+    if not isinstance(sheets, dict):
+        sheets = {}
+        cfg["sheets"] = sheets
+    ctx = sheets.get(sheet_name)
+    if not isinstance(ctx, dict):
+        ctx = {}
+        sheets[sheet_name] = ctx
+    ctx["excel_tables"] = extracted
+
+    sheet_index: int | None = None
+    if isinstance(metadata, dict):
+        raw_index = metadata.get("sheet_index", None)
+        try:
+            sheet_index = int(raw_index) if raw_index is not None else None
+        except (TypeError, ValueError):
+            sheet_index = None
+
+    if logger:
+        logger.event(
+            "engine.config.sheet.excel_tables",
+            data={
+                "input_file_name": input_file_name,
+                "sheet_name": sheet_name,
+                "sheet_index": sheet_index,
+                "table_count": len(extracted),
+                # Log names/refs only (avoid dumping cell content).
+                "tables": [{"name": t.get("name"), "ref": t.get("ref")} for t in extracted],
+            },
+        )
+
+    return None
+
+
+def on_sheet_start_example_3_hint_header_from_freeze_panes(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """
+    Example 3 (high value): derive header/data row hints from freeze panes.
+
+    Many "real" spreadsheets freeze header rows. If the freeze_panes top-left cell
+    is 'A2', that often means:
+      - header rows = 1
+      - first data row = 2
+
+    This example stashes a hint that downstream detectors can use to start scanning
+    for tables below the header region (without scanning the whole sheet).
+    """
+    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+
+    fp = getattr(sheet, "freeze_panes", None)
+    coord = fp if isinstance(fp, str) else getattr(fp, "coordinate", None)
+    if not isinstance(coord, str) or not coord:
+        return None
+
+    # Parse trailing digits (row number) from a coordinate like "A2" or "B10".
+    digits = ""
+    for ch in reversed(coord):
+        if ch.isdigit():
+            digits = ch + digits
+        else:
+            break
+
+    if not digits:
+        return None
+
+    try:
+        first_data_row = int(digits)
+    except ValueError:
+        return None
+
+    if first_data_row <= 1:
+        return None
+
+    header_rows = first_data_row - 1
+
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, dict):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+
+    sheets = cfg.get("sheets")
+    if not isinstance(sheets, dict):
+        sheets = {}
+        cfg["sheets"] = sheets
+    ctx = sheets.get(sheet_name)
+    if not isinstance(ctx, dict):
+        ctx = {}
+        sheets[sheet_name] = ctx
+
+    hints = ctx.get("hints")
+    if not isinstance(hints, dict):
+        hints = {}
+        ctx["hints"] = hints
+    hints.setdefault("header_rows", header_rows)
+    hints.setdefault("first_data_row", first_data_row)
+
+    sheet_index: int | None = None
+    if isinstance(metadata, dict):
+        raw_index = metadata.get("sheet_index", None)
+        try:
+            sheet_index = int(raw_index) if raw_index is not None else None
+        except (TypeError, ValueError):
+            sheet_index = None
+
+    if logger:
+        logger.event(
+            "engine.config.sheet.hint.freeze_panes",
+            data={
+                "input_file_name": input_file_name,
+                "sheet_name": sheet_name,
+                "sheet_index": sheet_index,
+                "freeze_panes": getattr(sheet, "freeze_panes", None),
+                "header_rows": header_rows,
+                "first_data_row": first_data_row,
+            },
+        )
+
+    return None

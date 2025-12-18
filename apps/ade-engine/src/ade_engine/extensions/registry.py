@@ -12,6 +12,7 @@ from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.models.errors import ConfigError, HookError, PipelineError
 from ade_engine.models.extension_contexts import FieldDef, HookContext, HookName, ScorePatch
 from ade_engine.models.extension_outputs import ColumnDetectorResult, RowDetectorResult
+from ade_engine.models.table import TableRegion
 from ade_engine.extensions.invoke import call_extension
 
 @dataclass
@@ -73,7 +74,8 @@ class Registry:
         workbook=None,
         sheet=None,
         table: pl.DataFrame | None = None,
-        write_table: pl.DataFrame | None = None,
+        table_region: TableRegion | None = None,
+        table_index: int | None = None,
         input_file_name: str | None = None,
     ) -> pl.DataFrame | None:
         hooks = self.hooks.get(hook_name, [])
@@ -88,15 +90,17 @@ class Registry:
         hook_stage = hook_name.value if hasattr(hook_name, "value") else str(hook_name)
         current_table = table
         for hook_def in hooks:
+            table_region_ref = table_region.ref if isinstance(table_region, TableRegion) else None
+            sheet_name = getattr(sheet, "title", None) if sheet is not None else None
             ctx = HookContext(
-                hook_name=hook_name,
                 settings=settings,
                 metadata=metadata,
                 state=state,
                 workbook=workbook,
                 sheet=sheet,
                 table=current_table,
-                write_table=write_table,
+                table_region=table_region,
+                table_index=table_index,
                 input_file_name=input_file_name,
                 logger=logger,
             )
@@ -106,6 +110,9 @@ class Registry:
                 data={
                     "hook_name": hook_stage,
                     "hook": hook_def.qualname,
+                    "table_index": table_index,
+                    "table_region": table_region_ref,
+                    "sheet_name": sheet_name,
                 },
             )
             try:
@@ -134,6 +141,9 @@ class Registry:
                 data={
                     "hook_name": hook_stage,
                     "hook": hook_def.qualname,
+                    "table_index": table_index,
+                    "table_region": table_region_ref,
+                    "sheet_name": sheet_name,
                 },
             )
         return current_table if table_returning else None

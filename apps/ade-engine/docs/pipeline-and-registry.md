@@ -52,7 +52,7 @@ For each detected table region:
      - `Settings.remove_unmapped_columns`
      - reserved-column dropping (`__ade_*`) unless `Settings.write_diagnostics_columns`
    - writes `write_table` headers + rows directly to the output worksheet
-   - runs `on_table_written(table=table, write_table=write_table, ...)` for formatting/summaries
+   - runs `on_table_written(table=write_table, ...)` for formatting/summaries
 
 ## Logging touchpoints
 

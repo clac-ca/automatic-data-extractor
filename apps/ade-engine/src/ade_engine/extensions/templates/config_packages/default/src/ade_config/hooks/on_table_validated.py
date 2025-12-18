@@ -1,192 +1,574 @@
+"""ADE config hook: `on_table_validated`
+
+When this runs
+--------------
+- Once per detected table, after validators have run and ADE's reserved issue columns
+  have been added, but before the output is written.
+
+Reserved validation columns
+---------------------------
+- `__ade_has_issues` (bool): row has any issues
+- `__ade_issue_count` (int): count of fields with issues in the row
+- `__ade_issue__<field>` (str): per-field issue message (null/blank when ok)
+  (these exist only for fields that have validators registered)
+
+What it's useful for
+--------------------
+- Final output shaping: reorder/select columns, add derived columns, sort/filter rows
+- Triage data quality: move issue rows to the top, add human-friendly summaries
+
+Return value
+------------
+- Return a new `pl.DataFrame` to replace `table`, or `None` to keep it unchanged.
+- Returning anything else raises HookError.
+
+Notes
+-----
+- This is the last "table-returning" hook. If you change values here, validators
+  will NOT re-run. Do value changes earlier in `on_table_transformed`.
+- `workbook` is `None` for this stage.
+- ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
+  input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
+- `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
+
+Template goals
+--------------
+- Default hook is safe and minimal (logs + lightweight counters).
+- Examples are self-contained and opt-in (uncomment in `register()`).
+"""
+
 from __future__ import annotations
 
+from typing import MutableMapping
+
+import openpyxl
+import openpyxl.worksheet.worksheet
 import polars as pl
 
+from ade_engine.models import TableRegion
+
+# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
+# - header_row, first_col, last_row, last_col (1-based, inclusive)
+# - header_inferred (bool)
+# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
+# - range refs: ref, header_ref, data_ref
+
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across *all* your hooks so they can share state.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
+# -----------------------------------------------------------------------------
+# ADE issue column conventions (available at this stage)
+# -----------------------------------------------------------------------------
 ISSUE_COL_PREFIX = "__ade_issue__"
 HAS_ISSUES_COL = "__ade_has_issues"
 ISSUE_COUNT_COL = "__ade_issue_count"
 
-# Optional: set a desired output order for your canonical fields.
-# Example:
-# DESIRED_FIELD_ORDER = ["member_id", "dob", "gender"]
-DESIRED_FIELD_ORDER: list[str] | None = None
 
-
-def register(registry):
+def register(registry) -> None:
+    """Register this config package's `on_table_validated` hook(s)."""
     registry.register_hook(on_table_validated, hook="on_table_validated", priority=0)
 
     # Examples (uncomment to enable)
-    # registry.register_hook(on_table_validated_example_1_drop_rows_with_issues, hook="on_table_validated", priority=0)
-    # registry.register_hook(on_table_validated_example_2_keep_only_rows_with_issues, hook="on_table_validated", priority=0)
-    # registry.register_hook(on_table_validated_example_3_sort_by_issue_count_desc, hook="on_table_validated", priority=0)
-    # registry.register_hook(on_table_validated_example_4_move_issue_columns_to_end, hook="on_table_validated", priority=0)
-    # registry.register_hook(on_table_validated_example_5_add_issues_summary_column, hook="on_table_validated", priority=0)
+    # registry.register_hook(on_table_validated_example_1_enforce_template_layout, hook="on_table_validated", priority=10)
+    # registry.register_hook(on_table_validated_example_2_strict_template_only, hook="on_table_validated", priority=20)
+    # registry.register_hook(on_table_validated_example_3_add_derived_columns, hook="on_table_validated", priority=30)
+    # registry.register_hook(on_table_validated_example_4_sort_issues_to_top, hook="on_table_validated", priority=40)
+    # registry.register_hook(on_table_validated_example_5_move_issue_columns_to_end, hook="on_table_validated", priority=50)
+    # registry.register_hook(on_table_validated_example_6_add_issues_summary_column, hook="on_table_validated", priority=60)
+    # registry.register_hook(on_table_validated_example_7_enrich_from_reference_csv_cached, hook="on_table_validated", priority=70)
 
-# ---------------------------------------------------------------------------
-# Hook: on_table_validated
-#
-# When it runs:
-# - Called once per detected table, after validators have run and added ADE's
-#   reserved issue columns, but before the output is written.
-#
-# What it's good for:
-# - Output shaping: reorder/select columns, add derived columns, and sort/filter
-#   rows for downstream consumption.
-# - Triaging data quality: move "bad" rows to the top, or produce a "valid-only"
-#   output by filtering out rows with issues.
-#
-# Reserved validation columns available in `table` at this point:
-# - `__ade_has_issues` (bool): row has any issues
-# - `__ade_issue_count` (int): count of fields with issues in the row
-# - `__ade_issue__<field>` (str): per-field issue message (null when ok); these
-#   are only present for fields that have validators registered.
-#
-# Tip: this is the last "table-returning" hook. If you need values to be
-# re-validated, change them earlier in `on_table_transformed`.
-# ---------------------------------------------------------------------------
+
 def on_table_validated(
     *,
-    hook_name,  # HookName enum value for this stage
     settings,  # Engine Settings
     metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
     state: dict,  # Mutable dict shared across the run
-    workbook,  # None for this stage (table hooks run before output workbook exists)
-    sheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook | None,  # None for this stage (table hooks run before output workbook exists)
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     table: pl.DataFrame,  # Current table DF (post-validation; pre-write)
-    write_table,  # None for this stage
+    table_region: TableRegion | None,  # header_row/first_col/last_row/last_col (1-based, inclusive) + header_inferred; refs: ref/header_ref/data_ref
+    table_index: int | None,  # 0-based table index within the sheet
     input_file_name: str | None,  # Input filename (basename) if known
     logger,  # RunLogger (structured events + text logs)
 ) -> pl.DataFrame | None:
-    """Post-validation hook (pre-write).
+    """Default: log a small issue summary and keep the table unchanged."""
+    _ = (settings, metadata, workbook, input_file_name)
 
-    Return a new DataFrame to replace ``table`` (or return None to keep it).
-    """
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, MutableMapping):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+
+    counters = cfg.get("counters")
+    if not isinstance(counters, MutableMapping):
+        counters = {}
+        cfg["counters"] = counters
+    counters["tables_validated_seen"] = int(counters.get("tables_validated_seen", 0) or 0) + 1
 
     if logger:
+        sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+        range_ref = table_region.ref if table_region else "<unknown>"
         issues_total = 0
         rows_with_issues = 0
+
         if ISSUE_COUNT_COL in table.columns:
             issues_total = int(table.get_column(ISSUE_COUNT_COL).sum() or 0)
         if HAS_ISSUES_COL in table.columns:
             rows_with_issues = int(table.get_column(HAS_ISSUES_COL).sum() or 0)
+
         logger.info(
-            "Config hook: table validated (issues_total=%d rows_with_issues=%d)",
+            "Config hook: table validated (sheet=%s table_index=%s range=%s rows=%d cols=%d issues_total=%d rows_with_issues=%d)",
+            sheet_name,
+            table_index if table_index is not None else "<unknown>",
+            range_ref,
+            int(table.height),
+            int(len(table.columns)),
             issues_total,
             rows_with_issues,
         )
 
-    if DESIRED_FIELD_ORDER:
-        desired = [c for c in DESIRED_FIELD_ORDER if c in table.columns]
-        remaining = [c for c in table.columns if c not in desired]
-        return table.select(desired + remaining)
-
     return None
 
 
-def on_table_validated_example_1_drop_rows_with_issues(
+# -------------------------------------------------------------------------
+# EXAMPLE 1: Enforce a canonical layout (add missing columns + reorder)
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_1_enforce_template_layout(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
     table: pl.DataFrame,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> pl.DataFrame | None:
-    """Example: drop rows that have issues (valid-only output)."""
-
-    if HAS_ISSUES_COL in table.columns:
-        return table.filter(~pl.col(HAS_ISSUES_COL))
-    return None
-
-
-def on_table_validated_example_2_keep_only_rows_with_issues(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table: pl.DataFrame,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> pl.DataFrame | None:
-    """Example: keep only rows that have issues (exceptions-only output)."""
-
-    if HAS_ISSUES_COL in table.columns:
-        return table.filter(pl.col(HAS_ISSUES_COL))
-    return None
-
-
-def on_table_validated_example_3_sort_by_issue_count_desc(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table: pl.DataFrame,
-    write_table,
-    input_file_name: str | None,
-    logger,
-) -> pl.DataFrame | None:
-    """Example: sort so the most problematic rows appear first."""
-
-    if ISSUE_COUNT_COL in table.columns:
-        return table.sort(ISSUE_COUNT_COL, descending=True)
-    return None
-
-
-def on_table_validated_example_4_move_issue_columns_to_end(
-    *,
-    hook_name,
-    settings,
-    metadata: dict,
-    state: dict,
-    workbook,
-    sheet,
-    table: pl.DataFrame,
-    write_table,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
     input_file_name: str | None,
     logger,
 ) -> pl.DataFrame:
-    """Example: move ADE's reserved issue columns to the end (nicer for humans)."""
+    """Example 1: enforce a spreadsheet-style output layout.
+
+    Pattern:
+    - Define the columns your downstream spreadsheet expects, in the exact order you want.
+    - If a required column is missing, ADD it as an empty column (nulls).
+    - Keep unexpected columns, but append them to the right.
+    - Keep ADE issue columns at the far right (so they don't break templates).
+    """
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
+
+    # 1) Define your required template columns (name + dtype).
+    #    - We only enforce types for columns we ADD here.
+    #    - We do NOT cast existing columns (validators won't re-run at this stage).
+    TEMPLATE_COLUMNS: list[tuple[str, pl.DataType]] = [
+        ("member_id", pl.Utf8),
+        ("first_name", pl.Utf8),
+        ("last_name", pl.Utf8),
+        ("dob", pl.Utf8),  # keep as text here; parse earlier if you want validation
+        ("gender", pl.Utf8),
+        ("email", pl.Utf8),
+        ("phone", pl.Utf8),
+        ("address_1", pl.Utf8),
+        ("address_2", pl.Utf8),
+        ("city", pl.Utf8),
+        ("state", pl.Utf8),
+        ("postal_code", pl.Utf8),
+    ]
+    required_names = [name for name, _dtype in TEMPLATE_COLUMNS]
+
+    # 2) Add missing template columns as empty (null) columns.
+    missing_exprs: list[pl.Expr] = []
+    for name, dtype in TEMPLATE_COLUMNS:
+        if name not in table.columns:
+            missing_exprs.append(pl.lit(None, dtype=dtype).alias(name))
+    if missing_exprs:
+        table = table.with_columns(missing_exprs)
+        if logger:
+            logger.info(
+                "Enforced template: added missing columns=%s",
+                [e.meta.output_name() for e in missing_exprs],
+            )
+
+    # 3) Identify ADE's reserved issue columns.
+    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
+    reserved_tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    reserved_tail = [c for c in reserved_tail if c in table.columns]
+
+    # 4) Build final column order.
+    other_cols = [
+        c for c in table.columns if c not in required_names and c not in reserved_tail
+    ]
+    final_cols = [*required_names, *other_cols, *reserved_tail]
+
+    # 5) Select in that order (reorders columns without touching values).
+    return table.select(final_cols)
+
+
+# -------------------------------------------------------------------------
+# EXAMPLE 2: Strict template (output only the template columns)
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_2_strict_template_only(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    table: pl.DataFrame,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example 2: strict template output.
+
+    - Ensures a required set of columns exist (adds empty ones if missing).
+    - Outputs ONLY those columns (drops everything else).
+    - Optionally includes ADE issue columns at the end.
+    """
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+
+    TEMPLATE_COLUMNS: list[tuple[str, pl.DataType]] = [
+        ("member_id", pl.Utf8),
+        ("first_name", pl.Utf8),
+        ("last_name", pl.Utf8),
+        ("dob", pl.Utf8),
+        ("gender", pl.Utf8),
+        ("email", pl.Utf8),
+    ]
+    required_names = [name for name, _dtype in TEMPLATE_COLUMNS]
+
+    missing_exprs: list[pl.Expr] = []
+    for name, dtype in TEMPLATE_COLUMNS:
+        if name not in table.columns:
+            missing_exprs.append(pl.lit(None, dtype=dtype).alias(name))
+    if missing_exprs:
+        table = table.with_columns(missing_exprs)
+
+    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
+    reserved_tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    reserved_tail = [c for c in reserved_tail if c in table.columns]
+
+    return table.select([*required_names, *reserved_tail])
+
+
+# -------------------------------------------------------------------------
+# EXAMPLE 3: Add derived columns (Polars expressions)
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_3_add_derived_columns(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    table: pl.DataFrame,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example 3: add derived columns using Polars expressions (fast + readable).
+
+    Demonstrates:
+    - Building `full_name` from first/last name
+    - Extracting an email domain
+    - Normalizing a phone number to digits only (very basic)
+    - Creating a simple `row_status` from ADE's issue columns
+    """
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
+
+    if not any(
+        c in table.columns
+        for c in ["first_name", "last_name", "email", "phone", HAS_ISSUES_COL]
+    ):
+        return None
+
+    exprs: list[pl.Expr] = []
+
+    # full_name = "first_name last_name" (handles nulls cleanly)
+    if "first_name" in table.columns or "last_name" in table.columns:
+        first = (
+            pl.col("first_name").cast(pl.Utf8) if "first_name" in table.columns else pl.lit(None, dtype=pl.Utf8)
+        )
+        last = (
+            pl.col("last_name").cast(pl.Utf8) if "last_name" in table.columns else pl.lit(None, dtype=pl.Utf8)
+        )
+        exprs.append(
+            pl.concat_str(
+                [
+                    first.fill_null("").str.strip_chars(),
+                    last.fill_null("").str.strip_chars(),
+                ],
+                separator=" ",
+            )
+            .str.strip_chars()
+            .alias("full_name")
+        )
+
+    # email_domain = part after "@"
+    if "email" in table.columns:
+        exprs.append(
+            pl.col("email")
+            .cast(pl.Utf8)
+            .str.strip_chars()
+            .str.to_lowercase()
+            .str.extract(r"@(.+)$", 1)
+            .alias("email_domain")
+        )
+
+    # phone_digits = keep digits only (very simple; adjust for your rules)
+    if "phone" in table.columns:
+        exprs.append(
+            pl.col("phone").cast(pl.Utf8).str.replace_all(r"\D+", "").alias("phone_digits")
+        )
+
+    # row_status = "ISSUES" / "OK"
+    if HAS_ISSUES_COL in table.columns:
+        exprs.append(
+            pl.when(pl.col(HAS_ISSUES_COL))
+            .then(pl.lit("ISSUES"))
+            .otherwise(pl.lit("OK"))
+            .alias("row_status")
+        )
+
+    if not exprs:
+        return None
+
+    out = table.with_columns(exprs)
+
+    if logger:
+        logger.info("Added derived columns=%s", [e.meta.output_name() for e in exprs])
+
+    return out
+
+
+# -------------------------------------------------------------------------
+# EXAMPLE 4: Sort so issue rows are first (triage-friendly)
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_4_sort_issues_to_top(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    table: pl.DataFrame,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example 4: sort so rows with issues appear at the top (triage-friendly)."""
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
+
+    if HAS_ISSUES_COL not in table.columns and ISSUE_COUNT_COL not in table.columns:
+        return None
+
+    by: list[str] = []
+    descending: list[bool] = []
+
+    if HAS_ISSUES_COL in table.columns:
+        by.append(HAS_ISSUES_COL)
+        descending.append(True)
+    if ISSUE_COUNT_COL in table.columns:
+        by.append(ISSUE_COUNT_COL)
+        descending.append(True)
+
+    # Optional stable sort keys (add them only if present).
+    for key in ["member_id", "id", "row_number"]:
+        if key in table.columns:
+            by.append(key)
+            descending.append(False)
+
+    return table.sort(by=by, descending=descending) if by else None
+
+
+# -------------------------------------------------------------------------
+# EXAMPLE 5: Move ADE issue columns to the far right
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_5_move_issue_columns_to_end(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    table: pl.DataFrame,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example 5: move ADE's reserved issue columns to the end (nicer for humans)."""
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
 
     issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
     tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
     tail = [c for c in tail if c in table.columns]
+    if not tail:
+        return None
+
     head = [c for c in table.columns if c not in tail]
     return table.select([*head, *tail])
 
 
-def on_table_validated_example_5_add_issues_summary_column(
+# -------------------------------------------------------------------------
+# EXAMPLE 6: Add a human-friendly issues summary column
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_6_add_issues_summary_column(
     *,
-    hook_name,
     settings,
     metadata: dict,
     state: dict,
-    workbook,
-    sheet,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
     table: pl.DataFrame,
-    write_table,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
     input_file_name: str | None,
     logger,
 ) -> pl.DataFrame | None:
-    """Example: add a single summary column that concatenates all issue messages."""
+    """Example 6: add a single `issues_summary` column + an `issue_fields` list column."""
+    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name, logger)
 
     issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    if issue_cols:
-        return table.with_columns(
-            pl.concat_str(
-                [pl.col(c) for c in issue_cols],
-                separator="; ",
-                ignore_nulls=True,
-            ).alias("issues_summary")
+    if not issue_cols:
+        return None
+
+    summary_expr = (
+        pl.concat_str(
+            [pl.col(c).cast(pl.Utf8) for c in issue_cols],
+            separator="; ",
+            ignore_nulls=True,
         )
-    return None
+        .str.strip_chars()
+        .alias("issues_summary")
+    )
+
+    field_name_exprs: list[pl.Expr] = []
+    for c in issue_cols:
+        field_name = c[len(ISSUE_COL_PREFIX) :]
+        field_name_exprs.append(
+            pl.when(pl.col(c).is_not_null() & (pl.col(c).cast(pl.Utf8) != ""))
+            .then(pl.lit(field_name))
+            .otherwise(None)
+        )
+
+    fields_expr = pl.concat_list(field_name_exprs).list.drop_nulls().alias("issue_fields")
+
+    return table.with_columns([summary_expr, fields_expr])
+
+
+# -------------------------------------------------------------------------
+# EXAMPLE 7: Enrich from a reference CSV and cache it in `state`
+# -------------------------------------------------------------------------
+
+
+def on_table_validated_example_7_enrich_from_reference_csv_cached(
+    *,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook: openpyxl.Workbook | None,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,
+    table: pl.DataFrame,
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example 7: enrich your output by joining to a reference dataset.
+
+    Demonstrates:
+    1) Cache expensive work (reading a CSV) in `state` so it happens once per run.
+    2) Join enrichment via Polars (fast + readable).
+    """
+    _ = (settings, metadata, workbook, sheet, table_region, table_index, input_file_name)
+
+    # --- Configuration you would customize ---
+    REFERENCE_CSV_PATH = "member_reference.csv"  # <-- change me
+    CACHE_KEY = "member_reference_df"
+    JOIN_KEY = "member_id"
+
+    if JOIN_KEY not in table.columns:
+        return None
+
+    cfg = state.get(STATE_NAMESPACE)
+    if not isinstance(cfg, MutableMapping):
+        cfg = {}
+        state[STATE_NAMESPACE] = cfg
+    cfg.setdefault("schema_version", STATE_SCHEMA_VERSION)
+
+    cache = cfg.get("cache")
+    if not isinstance(cache, MutableMapping):
+        cache = {}
+        cfg["cache"] = cache
+
+    # 1) Load (or reuse) the reference DataFrame.
+    ref_df = cache.get(CACHE_KEY)
+    if ref_df is None and CACHE_KEY not in cache:
+        try:
+            ref_df = pl.read_csv(REFERENCE_CSV_PATH)
+            cache[CACHE_KEY] = ref_df
+            if logger:
+                logger.info(
+                    "Loaded reference CSV for enrichment: path=%s rows=%d cols=%d",
+                    REFERENCE_CSV_PATH,
+                    int(ref_df.height),
+                    int(len(ref_df.columns)),
+                )
+        except Exception as exc:
+            cache[CACHE_KEY] = None
+            if logger:
+                logger.warning(
+                    "Skipping enrichment: failed to read reference CSV path=%s error=%s",
+                    REFERENCE_CSV_PATH,
+                    repr(exc),
+                )
+            return None
+
+    if ref_df is None or not isinstance(ref_df, pl.DataFrame):
+        return None
+
+    if JOIN_KEY not in ref_df.columns:
+        if logger:
+            logger.warning(
+                "Skipping enrichment: reference CSV missing join key=%s (cols=%s)",
+                JOIN_KEY,
+                ref_df.columns,
+            )
+        return None
+
+    # 2) Join (left join keeps all original rows).
+    enriched = table.join(ref_df, on=JOIN_KEY, how="left")
+
+    if logger:
+        logger.info(
+            "Enriched table via join: key=%s added_cols=%s",
+            JOIN_KEY,
+            [c for c in enriched.columns if c not in table.columns],
+        )
+
+    return enriched

@@ -1,5 +1,12 @@
-"""Row detectors vote on what a row represents (header vs data, etc.).
+"""ADE config package: row detector modules (`ade_config.row_detectors`)
 
-Define ``register(registry)`` inside any module under this package.
-The top-level ``ade_config.register`` auto-discovers these modules.
+Row detectors vote on what each row represents (`header`, `data`, etc.). ADE runs
+them early to find table regions in messy spreadsheets.
+
+Convention (recommended)
+------------------------
+- Each module defines `register(registry) -> None`.
+- Register one or more detectors with `registry.register_row_detector(...)`.
+
+The top-level `ade_config.register()` auto-discovers and registers these modules.
 """

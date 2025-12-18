@@ -10,30 +10,17 @@ from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.models.errors import PipelineError
 from ade_engine.models.extension_contexts import TransformContext
+from ade_engine.models.table import TableRegion
 
 
-def _normalize_transform_output(*, field_name: str, raw: Any, source: str) -> list[pl.Expr]:
+def _normalize_transform_output(*, field_name: str, raw: Any, source: str) -> pl.Expr | None:
     if raw is None:
-        return []
+        return None
 
     if isinstance(raw, pl.Expr):
-        return [raw.alias(field_name)]
+        return raw.alias(field_name)
 
-    if isinstance(raw, dict):
-        exprs: list[pl.Expr] = []
-        for out_name, expr in raw.items():
-            if not isinstance(out_name, str) or not out_name.strip():
-                raise PipelineError(f"{source} output column names must be non-empty strings")
-            if not isinstance(expr, pl.Expr):
-                raise PipelineError(
-                    f"{source} output for '{out_name}' must be a polars Expr (got {type(expr).__name__})"
-                )
-            exprs.append(expr.alias(out_name))
-        return exprs
-
-    raise PipelineError(
-        f"{source} must return None, a polars Expr, or a dict[str, polars Expr] (got {type(raw).__name__})"
-    )
+    raise PipelineError(f"{source} must return None or a polars Expr (got {type(raw).__name__})")
 
 
 def apply_transforms(
@@ -43,10 +30,12 @@ def apply_transforms(
     settings,
     state: dict,
     metadata: dict,
+    table_region: TableRegion | None = None,
+    table_index: int | None = None,
     input_file_name: str | None,
     logger: RunLogger,
 ) -> pl.DataFrame:
-    """Apply v3 transforms (Expr / dict[str, Expr]) to the DataFrame."""
+    """Apply v3 transforms (Expr) to the DataFrame."""
 
     transforms_by_field = registry.column_transforms_by_field
     if not transforms_by_field:
@@ -73,35 +62,38 @@ def apply_transforms(
                 settings=settings,
                 state=state,
                 metadata=metadata,
+                table_region=table_region,
+                table_index=table_index,
                 input_file_name=input_file_name,
                 logger=logger,
             )
 
             before_sample = table.get_column(field_name).head(3).to_list() if debug else None
             raw_out = call_extension(tf.fn, ctx, label=f"Transform {tf.qualname}")
-            exprs = _normalize_transform_output(
+            expr = _normalize_transform_output(
                 field_name=field_name,
                 raw=raw_out,
                 source=f"Transform {tf.qualname}",
             )
-            if not exprs:
+            if expr is None:
                 continue
 
-            table = table.with_columns(exprs)
+            table = table.with_columns(expr)
 
             if debug:
                 after_sample = table.get_column(field_name).head(3).to_list()
-                emitted = [e.meta.output_name() or "<expr>" for e in exprs]
                 logger.event(
                     "transform.result",
                     level=logging.DEBUG,
                     data={
                         "transform": tf.qualname,
                         "field": field_name,
+                        "table_index": table_index,
+                        "table_region": table_region.ref if table_region else None,
                         "row_count": table.height,
                         "sample_before": before_sample,
                         "sample_after": after_sample,
-                        "emitted_columns": emitted,
+                        "emitted_column": field_name,
                     },
                 )
 

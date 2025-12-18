@@ -1,10 +1,53 @@
+"""ADE column template: `full_name`
+
+This module demonstrates:
+- Registering a canonical field (`FieldDef`)
+- A header-based detector (enabled by default)
+- A per-column transform (enabled by default)
+- Optional examples: value-based detection and a validator with a simple cross-field check
+
+Detector stage (pre-mapping)
+----------------------------
+- Called once per extracted table column.
+- Return `{FIELD_NAME: score}` (0..1) or `None`.
+
+Transform/validate stage (post-mapping)
+---------------------------------------
+- Transforms return a `pl.Expr` (or `None` for no-op).
+- Validators return a `pl.Expr` producing a per-row message (string) or null.
+- For derived columns (e.g., split `full_name` into `first_name`/`last_name`), use a table hook (see `ade_config/hooks/on_table_mapped.py`).
+
+Template goals
+--------------
+- Keep the default detector simple, fast, and deterministic.
+- Keep examples self-contained and opt-in (uncomment in `register()`).
+- This file intentionally enables one transform to demonstrate per-column transforms.
+"""
+
 from __future__ import annotations
 
 import re
 
 import polars as pl
 
-from ade_engine.models import FieldDef
+from ade_engine.models import FieldDef, TableRegion
+
+# `TableRegion` (engine-owned, openpyxl-friendly coordinates):
+# - header_row, first_col, last_row, last_col (1-based, inclusive)
+# - header_inferred (bool)
+# - convenience properties: data_first_row, has_data_rows, data_row_count, col_count
+# - range refs: ref, header_ref, data_ref
+
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
+# they can share cached values and facts.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
 
 FIELD_NAME = "full_name"
 
@@ -32,33 +75,35 @@ SPACE_NAME_RE = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
 ALLOWED_FULL_NAME_PATTERN = r"^[A-Za-z][A-Za-z '\-]*$"
 
 
-def register(registry):
+def register(registry) -> None:
+    """Register the `full_name` field and its detectors/transforms/validators."""
     registry.register_field(FieldDef(name=FIELD_NAME, label="Full Name", dtype="string"))
 
     # Enabled by default:
     registry.register_column_detector(detect_full_name_header_common_names, field=FIELD_NAME, priority=60)
+    registry.register_column_transform(normalize_full_name, field=FIELD_NAME, priority=0)
 
     # Examples (uncomment to enable)
-    # -------------------------------------------------
     # registry.register_column_detector(detect_full_name_values_basic, field=FIELD_NAME, priority=30)
-    # registry.register_column_transform(split_full_name, field=FIELD_NAME, priority=0)
     # registry.register_column_validator(validate_full_name, field=FIELD_NAME, priority=0)
 
 
 def detect_full_name_header_common_names(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Enabled by default.
 
@@ -86,18 +131,20 @@ def detect_full_name_header_common_names(
 
 def detect_full_name_values_basic(
     *,
-    table: pl.DataFrame,
-    column: pl.Series,
-    column_sample: list[str],
-    column_name: str,
-    column_index: int,
-    header_text: str,
-    settings,
-    sheet_name: str,
-    metadata: dict,
-    state: dict,
-    input_file_name: str | None,
-    logger,
+    table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
+    column: pl.Series,  # Current column as a Series
+    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_name: str,  # Extracted column name (not canonical yet)
+    column_index: int,  # 0-based index in table.columns
+    header_text: str,  # Header cell text ("" if missing)
+    settings,  # Engine Settings
+    sheet_name: str,  # Worksheet title
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -125,23 +172,29 @@ def detect_full_name_values_basic(
     return {FIELD_NAME: float(matches / total)}
 
 
-def split_full_name(
+def normalize_full_name(
     *,
-    field_name: str,
-    table: pl.DataFrame,
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
-) -> dict[str, pl.Expr]:
-    """Example (disabled by default).
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    """Enabled by default.
 
     Purpose:
-      - Demonstrate a transform that returns multiple columns.
-      - Split "full_name" into "first_name" and "last_name".
-      - Do NOT overwrite first/last if they already have values.
+      - Demonstrate a per-column transform (single-output).
+      - Normalize common full-name formats:
+        - "Last, First" -> "First Last"
+        - collapse internal whitespace
+        - convert empty strings to null
     """
+    _ = (table, settings, state, metadata, table_region, table_index, input_file_name, logger)  # unused by default
+
     full = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
     full = full.str.replace_all(r"\s+", " ")
     full = pl.when(full.is_null() | (full == "")).then(pl.lit(None)).otherwise(full)
@@ -149,12 +202,17 @@ def split_full_name(
     has_comma = full.str.contains(",")
 
     comma_parts = full.str.split(",")
-    comma_last = comma_parts.list.get(0).cast(pl.Utf8).str.strip_chars()
-    comma_first = comma_parts.list.get(1).cast(pl.Utf8).str.strip_chars()
+    comma_last = comma_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
+    comma_first = comma_parts.list.get(1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
 
     space_parts = full.str.split(" ")
-    space_first = space_parts.list.get(0).cast(pl.Utf8).str.strip_chars()
-    space_last = space_parts.list.get(-1).cast(pl.Utf8).str.strip_chars()
+    space_len = space_parts.list.len()
+    space_first = space_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
+    space_last = (
+        pl.when(space_len >= 2)
+        .then(space_parts.list.get(-1, null_on_oob=True).cast(pl.Utf8).str.strip_chars())
+        .otherwise(pl.lit(None))
+    )
 
     derived_first = pl.when(has_comma).then(comma_first).otherwise(space_first)
     derived_last = pl.when(has_comma).then(comma_last).otherwise(space_last)
@@ -168,40 +226,20 @@ def split_full_name(
         .otherwise(full)
     )
 
-    if "first_name" in table.columns:
-        existing_first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
-        existing_first = pl.when(existing_first.is_null() | (existing_first == "")).then(pl.lit(None)).otherwise(
-            existing_first
-        )
-        first_out = pl.coalesce([existing_first, derived_first])
-    else:
-        first_out = derived_first
-
-    if "last_name" in table.columns:
-        existing_last = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
-        existing_last = pl.when(existing_last.is_null() | (existing_last == "")).then(pl.lit(None)).otherwise(
-            existing_last
-        )
-        last_out = pl.coalesce([existing_last, derived_last])
-    else:
-        last_out = derived_last
-
-    return {
-        "full_name": normalized_full,
-        "first_name": first_out,
-        "last_name": last_out,
-    }
+    return normalized_full
 
 
 def validate_full_name(
     *,
-    field_name: str,
-    table: pl.DataFrame,
-    settings,
-    state: dict,
-    metadata: dict,
-    input_file_name: str | None,
-    logger,
+    field_name: str,  # Canonical field name (post-mapping)
+    table: pl.DataFrame,  # Post-mapping table
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run metadata
+    table_region: TableRegion | None,  # See `TableRegion` notes above
+    table_index: int | None,
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 

@@ -1,7 +1,37 @@
+"""ADE row detector template: `data`
+
+Row detectors vote on what each row represents (header vs data vs unknown). ADE
+uses these votes to pick header rows and detect table regions.
+
+Return value
+------------
+- Return a score patch (`dict[str, float]`) or `None`.
+- Keys are row kinds like `"data"` and `"header"` (scores are additive across detectors).
+- Higher total score wins the per-row classification.
+
+Template goals
+--------------
+- Keep the default heuristic fast (no large scans; operate on the current row only).
+- Prefer simple signals: non-empty density and mixed numeric/text content.
+"""
+
 from __future__ import annotations
 
 
-def register(registry):
+# -----------------------------------------------------------------------------
+# Shared state namespacing
+# -----------------------------------------------------------------------------
+# `state` is a mutable dict shared across the run.
+# Best practice: store everything your config package needs under ONE top-level key.
+#
+# IMPORTANT: Keep this constant the same across your hooks/detectors/transforms so
+# they can share cached values and facts.
+STATE_NAMESPACE = "ade.config_package_template"
+STATE_SCHEMA_VERSION = 1
+
+
+def register(registry) -> None:
+    """Register this config package's data row detector(s)."""
     registry.register_row_detector(detect_data_row_by_density, row_kind="data", priority=0)
 
 
@@ -21,6 +51,10 @@ def detect_data_row_by_density(
     Heuristic:
       - data rows have more non-empty cells
       - data rows often contain numerics/dates mixed in
+
+    Scoring:
+      - Returns a positive `data` score.
+      - Also returns a small negative `header` score to help separation (optional pattern).
     """
     values = row_values or []
     if not values:
