@@ -6,6 +6,13 @@ import polars as pl
 def register(registry):
     registry.register_hook(on_table_transformed, hook="on_table_transformed", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_table_transformed_example_1_trim_text_and_null_empty, hook="on_table_transformed", priority=0)
+    # registry.register_hook(on_table_transformed_example_2_ensure_full_name_column, hook="on_table_transformed", priority=0)
+    # registry.register_hook(on_table_transformed_example_3_backfill_full_name, hook="on_table_transformed", priority=0)
+    # registry.register_hook(on_table_transformed_example_4_parse_amount_currency, hook="on_table_transformed", priority=0)
+    # registry.register_hook(on_table_transformed_example_5_drop_all_null_rows, hook="on_table_transformed", priority=0)
+
 
 def on_table_transformed(
     *,
@@ -48,42 +55,115 @@ def on_table_transformed(
     if logger:
         logger.info("Config hook: table transformed (columns=%s)", list(table.columns))
 
-    # --- Examples (uncomment and adapt) ---------------------------------
-
-    # Example: trim whitespace and convert empty strings to nulls for all text columns.
-    # table = table.with_columns(pl.col(pl.Utf8).str.strip_chars().replace("", None))
-
-    # Example: ensure a column exists before validation (useful for optional inputs).
-    # if "full_name" not in table.columns:
-    #     table = table.with_columns(pl.lit(None).cast(pl.Utf8).alias("full_name"))
-
-    # Example: backfill `full_name` from `first_name` + `last_name` when missing.
-    # if {"first_name", "last_name", "full_name"}.issubset(table.columns):
-    #     first = pl.col("first_name").cast(pl.Utf8).str.strip_chars().replace("", None)
-    #     last = pl.col("last_name").cast(pl.Utf8).str.strip_chars().replace("", None)
-    #     full = pl.col("full_name").cast(pl.Utf8).str.strip_chars().replace("", None)
-    #     table = table.with_columns(
-    #         pl.when(full.is_null() & first.is_not_null() & last.is_not_null())
-    #         .then(pl.concat_str([first, last], separator=" "))
-    #         .otherwise(full)
-    #         .alias("full_name")
-    #     )
-
-    # Example: parse a currency-like string column into Float64.
-    # if "amount" in table.columns:
-    #     table = table.with_columns(
-    #         pl.col("amount")
-    #         .cast(pl.Utf8)
-    #         .str.strip_chars()
-    #         .str.replace_all(r"[,$]", "")
-    #         .cast(pl.Float64, strict=False)
-    #         .alias("amount")
-    #     )
-
-    # Example: drop rows that are completely empty (all columns null).
-    # table = table.filter(pl.any_horizontal(pl.all().is_not_null()))
-
-    # If you uncomment any of the examples above, return the updated table by
-    # replacing `return None` below with:
-    # return table
     return None
+
+
+def on_table_transformed_example_1_trim_text_and_null_empty(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: trim whitespace and convert empty strings to nulls for all text columns."""
+
+    return table.with_columns(pl.col(pl.Utf8).str.strip_chars().replace("", None))
+
+
+def on_table_transformed_example_2_ensure_full_name_column(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: ensure a column exists before validation (useful for optional inputs)."""
+
+    if "full_name" not in table.columns:
+        return table.with_columns(pl.lit(None).cast(pl.Utf8).alias("full_name"))
+    return None
+
+
+def on_table_transformed_example_3_backfill_full_name(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: backfill `full_name` from `first_name` + `last_name` when missing."""
+
+    if {"first_name", "last_name", "full_name"}.issubset(table.columns):
+        first = pl.col("first_name").cast(pl.Utf8).str.strip_chars().replace("", None)
+        last = pl.col("last_name").cast(pl.Utf8).str.strip_chars().replace("", None)
+        full = pl.col("full_name").cast(pl.Utf8).str.strip_chars().replace("", None)
+        return table.with_columns(
+            pl.when(full.is_null() & first.is_not_null() & last.is_not_null())
+            .then(pl.concat_str([first, last], separator=" "))
+            .otherwise(full)
+            .alias("full_name")
+        )
+    return None
+
+
+def on_table_transformed_example_4_parse_amount_currency(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: parse a currency-like string column into Float64."""
+
+    if "amount" in table.columns:
+        return table.with_columns(
+            pl.col("amount")
+            .cast(pl.Utf8)
+            .str.strip_chars()
+            .str.replace_all(r"[,$]", "")
+            .cast(pl.Float64, strict=False)
+            .alias("amount")
+        )
+    return None
+
+
+def on_table_transformed_example_5_drop_all_null_rows(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: drop rows that are completely empty (all columns null)."""
+
+    return table.filter(pl.any_horizontal(pl.all().is_not_null()))

@@ -398,10 +398,21 @@ class RunCompletionReportBuilder:
                 )
             )
 
-        empty_rows = self._count_empty_rows(source_cols, data_row_count=row_count)
+        # TableResult.row_count reflects the post-hook output table height, but
+        # SourceColumn.values reflect the detected source region. Hooks may
+        # filter rows (e.g. drop invalid records), so compute structural counts
+        # against the source row count for internal consistency.
+        source_row_count = data_row_count
+        if source_cols:
+            source_row_count = max(
+                source_row_count,
+                max(len(getattr(col, "values", []) or []) for col in source_cols),
+            )
+
+        empty_rows = self._count_empty_rows(source_cols, data_row_count=source_row_count)
 
         counts = Counts(
-            rows=RowsCount(total=row_count, empty=empty_rows),
+            rows=RowsCount(total=source_row_count, empty=empty_rows),
             columns=ColumnsCount(
                 total=col_total,
                 empty=empty_cols,
@@ -411,7 +422,9 @@ class RunCompletionReportBuilder:
                 passthrough=passthrough_count,
             ),
             fields=FieldsCount(expected=len(expected_fields), mapped=len(self._mapped_fields_in_table(table, expected_fields))),
-            cells=CellsCount(total=row_count * col_total, non_empty=non_empty_cells_total) if col_total and row_count else CellsCount(total=0, non_empty=0),
+            cells=CellsCount(total=source_row_count * col_total, non_empty=non_empty_cells_total)
+            if col_total and source_row_count
+            else CellsCount(total=0, non_empty=0),
         )
 
         validation = self._build_validation(table)

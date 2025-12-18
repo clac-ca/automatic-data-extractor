@@ -25,6 +25,13 @@ import polars as pl
 def register(registry):
     registry.register_hook(on_table_mapped, hook="on_table_mapped", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_table_mapped_example_1_trim_all_string_columns, hook="on_table_mapped", priority=0)
+    # registry.register_hook(on_table_mapped_example_2_normalize_empty_sentinels, hook="on_table_mapped", priority=0)
+    # registry.register_hook(on_table_mapped_example_3_drop_fully_empty_rows, hook="on_table_mapped", priority=0)
+    # registry.register_hook(on_table_mapped_example_4_derive_full_name, hook="on_table_mapped", priority=0)
+    # registry.register_hook(on_table_mapped_example_5_record_tables_seen, hook="on_table_mapped", priority=0)
+
 
 def on_table_mapped(
     *,
@@ -44,50 +51,119 @@ def on_table_mapped(
     if logger:
         logger.info("Config hook: table mapped (columns=%s)", list(table.columns))
 
-    # Example: Trim all string columns (safe, cheap, and often useful).
-    # table = table.with_columns(pl.col(pl.Utf8).str.strip_chars())
-
-    # Example: Normalize common "empty" sentinels to null (across all string columns).
-    # empty_tokens = ["", "n/a", "na", "null", "none", "-"]
-    # trimmed = pl.col(pl.Utf8).str.strip_chars()
-    # table = table.with_columns(
-    #     pl.when(trimmed.str.to_lowercase().is_in(empty_tokens))
-    #     .then(None)
-    #     .otherwise(trimmed)
-    #     .name.keep()
-    # )
-
-    # Example: Drop rows that are entirely empty (all values null/blank after trimming).
-    # non_empty_row = pl.any_horizontal(
-    #     [
-    #         pl.col(c).is_not_null()
-    #         & (pl.col(c).cast(pl.Utf8).str.strip_chars() != "")
-    #         for c in table.columns
-    #     ]
-    # )
-    # table = table.filter(non_empty_row)
-
-    # Example: Create a derived column from multiple fields.
-    # if {"first_name", "last_name"} <= set(table.columns):
-    #     table = table.with_columns(
-    #         pl.concat_str(
-    #             [
-    #                 pl.col("first_name")
-    #                 .cast(pl.Utf8)
-    #                 .fill_null("")
-    #                 .str.strip_chars(),
-    #                 pl.col("last_name").cast(pl.Utf8).fill_null("").str.strip_chars(),
-    #             ],
-    #             separator=" ",
-    #         )
-    #         .str.strip_chars()
-    #         .alias("full_name")
-    #     )
-
-    # Example: Record facts in shared run state for later hooks.
-    # state["tables_seen"] = int(state.get("tables_seen", 0)) + 1
-
-    # If you built a new table above, return it:
-    # return table
-
     return None
+
+
+def on_table_mapped_example_1_trim_all_string_columns(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: trim all string columns (safe, cheap, and often useful)."""
+
+    return table.with_columns(pl.col(pl.Utf8).str.strip_chars())
+
+
+def on_table_mapped_example_2_normalize_empty_sentinels(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: normalize common "empty" sentinels to null (across all string columns)."""
+
+    empty_tokens = ["", "n/a", "na", "null", "none", "-"]
+    trimmed = pl.col(pl.Utf8).str.strip_chars()
+    return table.with_columns(
+        pl.when(trimmed.str.to_lowercase().is_in(empty_tokens))
+        .then(None)
+        .otherwise(trimmed)
+        .name.keep()
+    )
+
+
+def on_table_mapped_example_3_drop_fully_empty_rows(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: drop rows that are entirely empty (all values null/blank after trimming)."""
+
+    non_empty_row = pl.any_horizontal(
+        [
+            pl.col(c).is_not_null() & (pl.col(c).cast(pl.Utf8).str.strip_chars() != "")
+            for c in table.columns
+        ]
+    )
+    return table.filter(non_empty_row)
+
+
+def on_table_mapped_example_4_derive_full_name(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: create a derived `full_name` column from `first_name` + `last_name`."""
+
+    if {"first_name", "last_name"} <= set(table.columns):
+        return table.with_columns(
+            pl.concat_str(
+                [
+                    pl.col("first_name").cast(pl.Utf8).fill_null("").str.strip_chars(),
+                    pl.col("last_name").cast(pl.Utf8).fill_null("").str.strip_chars(),
+                ],
+                separator=" ",
+            )
+            .str.strip_chars()
+            .alias("full_name")
+        )
+    return None
+
+
+def on_table_mapped_example_5_record_tables_seen(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: record per-run facts in shared state for later hooks."""
+
+    state["tables_seen"] = int(state.get("tables_seen", 0)) + 1

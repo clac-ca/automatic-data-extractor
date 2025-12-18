@@ -31,6 +31,13 @@ import polars as pl
 def register(registry):
     registry.register_hook(on_table_written, hook="on_table_written", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_table_written_example_1_log_output_range, hook="on_table_written", priority=0)
+    # registry.register_hook(on_table_written_example_2_freeze_header_and_add_filters, hook="on_table_written", priority=0)
+    # registry.register_hook(on_table_written_example_3_format_header_bold_wrap, hook="on_table_written", priority=0)
+    # registry.register_hook(on_table_written_example_4_hide_diagnostic_columns, hook="on_table_written", priority=0)
+    # registry.register_hook(on_table_written_example_5_collect_table_facts, hook="on_table_written", priority=0)
+
 
 def on_table_written(
     *,
@@ -61,54 +68,145 @@ def on_table_written(
             len(write_table.columns),
         )
 
-    # ---------------------------------------------------------------------
-    # Examples (uncomment to use)
-    # ---------------------------------------------------------------------
 
-    # Example: compute the output range for THIS table.
-    # (Because this hook runs immediately after the write, the table ends at
-    # `sheet.max_row` and spans `len(write_table.columns)` columns.)
-    # from openpyxl.utils import get_column_letter
-    # if len(write_table.columns) > 0 and sheet.max_row:
-    #     header_row = int(sheet.max_row) - int(write_table.height)
-    #     last_row = int(sheet.max_row)
-    #     last_col = get_column_letter(len(write_table.columns))
-    #     output_range = f"A{header_row}:{last_col}{last_row}"
-    #     if logger:
-    #         logger.info("Output range for last table: %s", output_range)
+def on_table_written_example_1_log_output_range(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table: pl.DataFrame,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: compute the output range for THIS table and log it."""
 
-    # Example: freeze the header row and turn on filters for this table.
-    # from openpyxl.utils import get_column_letter
-    # if len(write_table.columns) > 0 and sheet.max_row:
-    #     header_row = int(sheet.max_row) - int(write_table.height)
-    #     last_row = int(sheet.max_row)
-    #     last_col = get_column_letter(len(write_table.columns))
-    #     sheet.freeze_panes = f"A{header_row + 1}"
-    #     sheet.auto_filter.ref = f"A{header_row}:{last_col}{last_row}"
+    from openpyxl.utils import get_column_letter
 
-    # Example: make the header row bold and wrap header text.
-    # from openpyxl.styles import Alignment, Font
-    # if len(write_table.columns) > 0 and sheet.max_row:
-    #     header_row = int(sheet.max_row) - int(write_table.height)
-    #     header_font = Font(bold=True)
-    #     header_alignment = Alignment(wrap_text=True, vertical="top")
-    #     for cell in sheet[header_row]:
-    #         cell.font = header_font
-    #         cell.alignment = header_alignment
+    if len(write_table.columns) == 0:
+        return
+    max_row = getattr(sheet, "max_row", None)
+    if not max_row:
+        return
 
-    # Example: hide ADE diagnostic columns (if you choose to keep them written).
-    # from openpyxl.utils import get_column_letter
-    # for idx, col_name in enumerate(write_table.columns, start=1):
-    #     if col_name.startswith("__ade_"):
-    #         sheet.column_dimensions[get_column_letter(idx)].hidden = True
+    header_row = int(max_row) - int(write_table.height)
+    last_row = int(max_row)
+    last_col = get_column_letter(len(write_table.columns))
+    output_range = f"A{header_row}:{last_col}{last_row}"
 
-    # Example: collect per-table facts into shared state for later summary writing.
-    # tables = state.setdefault("tables", [])
-    # tables.append(
-    #     {
-    #         "input_file": input_file_name,
-    #         "sheet": sheet_name,
-    #         "rows": int(write_table.height),
-    #         "columns": list(write_table.columns),
-    #     }
-    # )
+    if logger:
+        logger.info("Output range for last table: %s", output_range)
+
+
+def on_table_written_example_2_freeze_header_and_add_filters(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table: pl.DataFrame,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: freeze the header row and turn on filters for this table."""
+
+    from openpyxl.utils import get_column_letter
+
+    if len(write_table.columns) == 0:
+        return
+    max_row = getattr(sheet, "max_row", None)
+    if not max_row:
+        return
+
+    header_row = int(max_row) - int(write_table.height)
+    last_row = int(max_row)
+    last_col = get_column_letter(len(write_table.columns))
+    sheet.freeze_panes = f"A{header_row + 1}"
+    sheet.auto_filter.ref = f"A{header_row}:{last_col}{last_row}"
+
+
+def on_table_written_example_3_format_header_bold_wrap(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table: pl.DataFrame,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: make the header row bold and wrap header text."""
+
+    from openpyxl.styles import Alignment, Font
+
+    if len(write_table.columns) == 0:
+        return
+    max_row = getattr(sheet, "max_row", None)
+    if not max_row:
+        return
+
+    header_row = int(max_row) - int(write_table.height)
+    header_font = Font(bold=True)
+    header_alignment = Alignment(wrap_text=True, vertical="top")
+    for col_idx in range(1, len(write_table.columns) + 1):
+        cell = sheet.cell(row=header_row, column=col_idx)
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+
+def on_table_written_example_4_hide_diagnostic_columns(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table: pl.DataFrame,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: hide ADE diagnostic columns (if you choose to keep them written)."""
+
+    from openpyxl.utils import get_column_letter
+
+    for idx, col_name in enumerate(write_table.columns, start=1):
+        if col_name.startswith("__ade_"):
+            sheet.column_dimensions[get_column_letter(idx)].hidden = True
+
+
+def on_table_written_example_5_collect_table_facts(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table: pl.DataFrame,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: collect per-table facts into shared state for later summary writing."""
+
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    tables = state.setdefault("tables", [])
+    tables.append(
+        {
+            "input_file": input_file_name,
+            "sheet": sheet_name,
+            "rows": int(write_table.height),
+            "columns": list(write_table.columns),
+        }
+    )

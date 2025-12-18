@@ -4,6 +4,13 @@ from __future__ import annotations
 def register(registry):
     registry.register_hook(on_sheet_start, hook="on_sheet_start", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_sheet_start_example_1_seed_per_sheet_state, hook="on_sheet_start", priority=0)
+    # registry.register_hook(on_sheet_start_example_2_stash_sheet_properties, hook="on_sheet_start", priority=0)
+    # registry.register_hook(on_sheet_start_example_3_enrich_metadata, hook="on_sheet_start", priority=0)
+    # registry.register_hook(on_sheet_start_example_4_emit_structured_event, hook="on_sheet_start", priority=0)
+    # registry.register_hook(on_sheet_start_example_5_fail_fast_blank_sheet_name, hook="on_sheet_start", priority=0)
+
 
 def on_sheet_start(
     *,
@@ -43,33 +50,121 @@ def on_sheet_start(
     if logger:
         logger.info("Config hook: sheet start (%s)", sheet_name)
 
-    # ---------------------------------------------------------------------
-    # Examples (uncomment to use)
-    # ---------------------------------------------------------------------
+    return None
 
-    # Example: seed a per-sheet dict in shared state (available to detectors/transforms).
-    # sheets = state.setdefault("sheets", {})
-    # sheets.setdefault(sheet_name, {})
 
-    # Example: stash some sheet properties for debugging or downstream logic.
-    # sheets = state.setdefault("sheets", {})
-    # sheets[sheet_name] = {
-    #     "max_row": getattr(sheet, "max_row", None),
-    #     "max_col": getattr(sheet, "max_column", None),
-    #     "sheet_state": getattr(sheet, "sheet_state", None),  # "visible" / "hidden"
-    # }
+def on_sheet_start_example_1_seed_per_sheet_state(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: seed a per-sheet dict in shared state (available to detectors/transforms)."""
 
-    # Example: enrich metadata (kept small/serializable) for downstream logs.
-    # if isinstance(metadata, dict):
-    #     metadata["sheet_name_normalized"] = sheet_name.strip().lower()
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    sheets = state.setdefault("sheets", {})
+    sheets.setdefault(sheet_name, {})
 
-    # Example: emit a structured config event (safe under engine.config.*).
-    # if logger:
-    #     logger.event(
-    #         "config.sheet.start",
-    #         data={"sheet_name": sheet_name, "sheet_index": int(metadata.get("sheet_index", 0))},
-    #     )
 
-    # Example: fail fast if a sheet looks wrong.
-    # if not sheet_name or sheet_name.strip() == "":
-    #     raise ValueError("Sheet name is blank; check input workbook")
+def on_sheet_start_example_2_stash_sheet_properties(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: stash sheet properties in shared state for debugging/downstream logic."""
+
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    sheets = state.setdefault("sheets", {})
+    sheets[sheet_name] = {
+        "max_row": getattr(sheet, "max_row", None),
+        "max_col": getattr(sheet, "max_column", None),
+        "sheet_state": getattr(sheet, "sheet_state", None),  # "visible" / "hidden"
+    }
+
+
+def on_sheet_start_example_3_enrich_metadata(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: enrich metadata (keep it small/serializable) for downstream logs."""
+
+    if not isinstance(metadata, dict):
+        return
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    metadata["sheet_name_normalized"] = sheet_name.strip().lower()
+
+
+def on_sheet_start_example_4_emit_structured_event(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: emit a structured config event (safe under engine.config.*)."""
+
+    if not logger:
+        return
+
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    sheet_index = 0
+    if isinstance(metadata, dict):
+        try:
+            sheet_index = int(metadata.get("sheet_index", 0) or 0)
+        except (TypeError, ValueError):
+            sheet_index = 0
+
+    logger.event(
+        "config.sheet.start",
+        data={"sheet_name": sheet_name, "sheet_index": sheet_index},
+    )
+
+
+def on_sheet_start_example_5_fail_fast_blank_sheet_name(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> None:
+    """Example: fail fast if a sheet looks wrong."""
+
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    if not sheet_name or sheet_name.strip() == "":
+        raise ValueError("Sheet name is blank; check input workbook")

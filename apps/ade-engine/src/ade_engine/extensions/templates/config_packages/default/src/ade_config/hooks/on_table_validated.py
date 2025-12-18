@@ -15,6 +15,12 @@ DESIRED_FIELD_ORDER: list[str] | None = None
 def register(registry):
     registry.register_hook(on_table_validated, hook="on_table_validated", priority=0)
 
+    # Examples (uncomment to enable)
+    # registry.register_hook(on_table_validated_example_1_drop_rows_with_issues, hook="on_table_validated", priority=0)
+    # registry.register_hook(on_table_validated_example_2_keep_only_rows_with_issues, hook="on_table_validated", priority=0)
+    # registry.register_hook(on_table_validated_example_3_sort_by_issue_count_desc, hook="on_table_validated", priority=0)
+    # registry.register_hook(on_table_validated_example_4_move_issue_columns_to_end, hook="on_table_validated", priority=0)
+    # registry.register_hook(on_table_validated_example_5_add_issues_summary_column, hook="on_table_validated", priority=0)
 
 # ---------------------------------------------------------------------------
 # Hook: on_table_validated
@@ -74,36 +80,113 @@ def on_table_validated(
         remaining = [c for c in table.columns if c not in desired]
         return table.select(desired + remaining)
 
-    # Examples (uncomment one):
-    #
-    # # 1) Drop rows that have issues (valid-only output).
-    # if HAS_ISSUES_COL in table.columns:
-    #     return table.filter(~pl.col(HAS_ISSUES_COL))
-    #
-    # # 2) Keep only rows that have issues (exceptions-only output).
-    # if HAS_ISSUES_COL in table.columns:
-    #     return table.filter(pl.col(HAS_ISSUES_COL))
-    #
-    # # 3) Sort so the most problematic rows appear first.
-    # if ISSUE_COUNT_COL in table.columns:
-    #     return table.sort(ISSUE_COUNT_COL, descending=True)
-    #
-    # # 4) Move ADE's reserved issue columns to the end (nicer for humans).
-    # issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    # tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
-    # tail = [c for c in tail if c in table.columns]
-    # head = [c for c in table.columns if c not in tail]
-    # return table.select([*head, *tail])
-    #
-    # # 5) Add a single summary column that concatenates all issue messages.
-    # issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
-    # if issue_cols:
-    #     return table.with_columns(
-    #         pl.concat_str(
-    #             [pl.col(c) for c in issue_cols],
-    #             separator="; ",
-    #             ignore_nulls=True,
-    #         ).alias("issues_summary")
-    #     )
+    return None
 
+
+def on_table_validated_example_1_drop_rows_with_issues(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: drop rows that have issues (valid-only output)."""
+
+    if HAS_ISSUES_COL in table.columns:
+        return table.filter(~pl.col(HAS_ISSUES_COL))
+    return None
+
+
+def on_table_validated_example_2_keep_only_rows_with_issues(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: keep only rows that have issues (exceptions-only output)."""
+
+    if HAS_ISSUES_COL in table.columns:
+        return table.filter(pl.col(HAS_ISSUES_COL))
+    return None
+
+
+def on_table_validated_example_3_sort_by_issue_count_desc(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: sort so the most problematic rows appear first."""
+
+    if ISSUE_COUNT_COL in table.columns:
+        return table.sort(ISSUE_COUNT_COL, descending=True)
+    return None
+
+
+def on_table_validated_example_4_move_issue_columns_to_end(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame:
+    """Example: move ADE's reserved issue columns to the end (nicer for humans)."""
+
+    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
+    tail = [HAS_ISSUES_COL, ISSUE_COUNT_COL, *issue_cols]
+    tail = [c for c in tail if c in table.columns]
+    head = [c for c in table.columns if c not in tail]
+    return table.select([*head, *tail])
+
+
+def on_table_validated_example_5_add_issues_summary_column(
+    *,
+    hook_name,
+    settings,
+    metadata: dict,
+    state: dict,
+    workbook,
+    sheet,
+    table: pl.DataFrame,
+    write_table,
+    input_file_name: str | None,
+    logger,
+) -> pl.DataFrame | None:
+    """Example: add a single summary column that concatenates all issue messages."""
+
+    issue_cols = [c for c in table.columns if c.startswith(ISSUE_COL_PREFIX)]
+    if issue_cols:
+        return table.with_columns(
+            pl.concat_str(
+                [pl.col(c) for c in issue_cols],
+                separator="; ",
+                ignore_nulls=True,
+            ).alias("issues_summary")
+        )
     return None
