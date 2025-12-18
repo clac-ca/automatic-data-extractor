@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import re
-from typing import Any, Dict
+import polars as pl
 
 from ade_engine.models import FieldDef
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
 def register(registry):
@@ -14,22 +13,24 @@ def register(registry):
     registry.register_column_detector(detect_email_values, field="email", priority=30)
     registry.register_column_transform(normalize_email, field="email", priority=0)
     registry.register_column_validator(validate_email, field="email", priority=0)
-    # If you prefer per-cell helpers, wrap them yourself and register via register_column_transform/validator.
 
 
 def detect_email_header(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,  # 0-based index of this column in table.columns
+    header_text: str,
+    settings,  # Engine Settings (use settings.detectors.* for sampling)
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
-    header = "" if header is None else str(header).strip().lower()
+    header = (header_text or "").strip().lower()
     if not header:
         return None
     if "email" in header or "e-mail" in header:
@@ -39,61 +40,96 @@ def detect_email_header(
 
 def detect_email_values(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,
+    header_text: str,  # Trimmed header cell text for this column ("" if missing)
+    settings,  # Engine Settings (use settings.detectors.* for sampling)
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
-    values_sample = values_sample or []
-    hits = 0
-    total = 0
-    for v in values_sample:
-        s = "" if v is None else str(v).strip().lower()
-        if not s:
-            continue
-        total += 1
-        if EMAIL_RE.match(s):
-            hits += 1
-    if total == 0:
+    """Value-based detection using Polars (no Python loops).
+
+    Note: During detection, do NOT rely on semantic column names. We reference the
+    current column via ``column_index``.
+    """
+
+    row_n = settings.detectors.row_sample_size
+    text_n = settings.detectors.text_sample_size
+
+    t = table.head(row_n)
+    col_name = t.columns[column_index]
+
+    text = pl.col(col_name).cast(pl.Utf8).str.strip_chars().str.to_lowercase()
+
+    # Keep only non-empty values and cap.
+    t = t.filter(text.is_not_null() & (text != "")).head(text_n)
+    if t.height == 0:
         return None
-    score = min(1.0, hits / total)
-    return {"email": score}
+
+    score = t.select(text.str.contains(EMAIL_PATTERN).mean().alias("score")).to_series(0)[0]
+    if score is None:
+        return None
+    return {"email": float(score)}
 
 
-def normalize_email(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Any]:
-    return [("" if v is None else str(v).strip().lower()) or None for v in column]
+def normalize_email(
+    *,
+    field_name: str,  # Canonical field name being transformed (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars().str.to_lowercase()
+    return pl.when(v.is_null() | (v == "")).then(pl.lit(None)).otherwise(v)
 
 
-def validate_email(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    issues: list[Dict[str, Any]] = []
-    for idx, v in enumerate(column):
-        s = "" if v is None else str(v).strip().lower()
-        if not s:
-            continue
-        if not EMAIL_RE.match(s):
-            issues.append({
-                "row_index": idx,
-                "message": f"Invalid email: {v}",
-            })
-    return issues
+def validate_email(
+    *,
+    field_name: str,  # Canonical field name being validated (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars().str.to_lowercase()
 
-# Optional cell-level helpers (commented out):
-# - These are thin wrappers that handle one cell at a time.
-# - Use the column-level versions above for better performance or when emitting multiple fields per column.
-#
-# def normalize_email_cell(value: object | None) -> Dict[str, Any]:
-#     """Return a single normalized email dict for one cell."""
-#     text_value = "" if value is None else str(value).strip().lower()
-#     return {"row_index": 0, "value": {"email": (text_value or None)}}
-#
-# def validate_email_cell(value: object | None) -> Dict[str, Any] | None:
-#     """Validate one email cell; return a single issue or None."""
-#     text_value = "" if value is None else str(value).strip().lower()
-#     if text_value and not EMAIL_RE.match(text_value):
-#         return {"row_index": 0, "message": f"Invalid email: {value}"}
-#     return None
+    format_issue = (
+        pl.when(v.is_not_null() & (v != "") & ~v.str.contains(EMAIL_PATTERN))
+        .then(pl.format("Invalid email: {}", v))
+        .otherwise(pl.lit(None))
+    )
+
+    # Example cross-field rule (optional):
+    # If a row has an email but no name fields, flag it (only if those columns exist).
+    if "first_name" in table.columns and "last_name" in table.columns:
+        first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
+        last = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
+
+        missing_name = (
+            v.is_not_null()
+            & (v != "")
+            & (first.is_null() | (first == ""))
+            & (last.is_null() | (last == ""))
+        )
+
+        name_issue = (
+            pl.when(missing_name)
+            .then(pl.lit("Email present but first/last name are missing"))
+            .otherwise(pl.lit(None))
+        )
+
+        # Prefer format issues; otherwise emit the cross-field issue.
+        return pl.coalesce([format_issue, name_issue])
+
+    return format_issue

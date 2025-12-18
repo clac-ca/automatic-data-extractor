@@ -1,33 +1,40 @@
 from __future__ import annotations
 
-import re
-from typing import Any, Dict
+import polars as pl
 
 from ade_engine.models import FieldDef
+
+COMMA_NAME_PATTERN = r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$"
+SPACE_NAME_PATTERN = r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$"
+ALLOWED_FULL_NAME_PATTERN = r"^[A-Za-z][A-Za-z '-]*$"
+
 
 def register(registry):
     registry.register_field(FieldDef(name="full_name", label="Full Name", dtype="string"))
     registry.register_column_detector(detect_full_name_header, field="full_name", priority=30)
     registry.register_column_detector(detect_full_name_values, field="full_name", priority=10)
-    registry.register_column_transform(normalize_full_name, field="full_name", priority=0)
+    registry.register_column_transform(split_full_name, field="full_name", priority=0)
     registry.register_column_validator(validate_full_name, field="full_name", priority=0)
 
 
 def detect_full_name_header(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,  # Table DF (pre-mapping; extracted headers, data rows only)
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,  # 0-based index of this column in table.columns
+    header_text: str,
+    settings,  # Engine Settings (use settings.detectors.* for sampling)
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Real-world but simple: exact "full name" boosts, also slightly nudges plain "name"."""
 
-    header = ("" if header in (None, "") else str(header)).strip().lower()
+    header = (header_text or "").strip().lower()
     if header == "full name":
         return {"full_name": 1.0}
     if header == "name":
@@ -37,112 +44,111 @@ def detect_full_name_header(
 
 def detect_full_name_values(
     *,
-    column_index,
-    header,
-    values,
-    values_sample,
-    sheet_name,
-    metadata,
-    state,
-    input_file_name,
-    logger,
+    table: pl.DataFrame,
+    column: pl.Series,  # Current column Series (same as table.get_column(column_name))
+    column_sample: list[str],  # Trimmed, non-empty string sample from this column
+    column_name: str,  # Current DF column name (extracted header; not canonical)
+    column_index: int,
+    settings,
+    header_text: str,  # Trimmed header cell text for this column ("" if missing)
+    sheet_name: str,  # Worksheet title
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
-    """Look for two-part names ("First Last") or comma names ("Last, First")."""
+    """Look for "Last, First" or "First Last" patterns (Polars-first; no loops)."""
 
-    values_sample = values_sample or []
-    comma_pattern = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
-    space_pattern = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
+    row_n = settings.detectors.row_sample_size
+    text_n = settings.detectors.text_sample_size
 
-    matches = 0
-    total = 0
+    t = table.head(row_n)
+    col_name = t.columns[column_index]
+    text = pl.col(col_name).cast(pl.Utf8).str.strip_chars()
 
-    for v in values_sample:
-        s = ("" if v is None else str(v)).strip()
-        if not s:
-            continue
-        # ignore strings with digits; likely IDs, not names
-        if any(ch.isdigit() for ch in s):
-            continue
-        total += 1
-        if comma_pattern.match(s) or space_pattern.match(s):
-            matches += 1
-
-    if total == 0:
+    # Ignore empty and digit-containing strings (often IDs/codes).
+    t0 = t.filter(text.is_not_null() & (text != "") & ~text.str.contains(r"\d")).head(text_n)
+    if t0.height == 0:
         return None
 
-    score = min(1.0, matches / total)
-    return {"full_name": score}
+    is_comma = text.str.contains(COMMA_NAME_PATTERN)
+    is_space = text.str.contains(SPACE_NAME_PATTERN)
+
+    score = t0.select((is_comma | is_space).mean().alias("score")).to_series(0)[0]
+    if score is None:
+        return None
+    return {"full_name": float(score)}
 
 
-def normalize_full_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> dict[str, list[Any]]:
-    """Split full names where possible and emit derived first/last name vectors."""
+def split_full_name(
+    *,
+    field_name: str,  # Canonical field name being transformed (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> dict[str, pl.Expr]:
+    """Normalize full_name and emit derived first_name / last_name expressions."""
 
-    comma_pattern = re.compile(r"^(?P<last>[A-Za-z][\w'\-]*),\s*(?P<first>[A-Za-z][\w'\-]*)$")
-    n = len(column)
-    out_full: list[Any] = [None] * n
-    out_first: list[Any] = [None] * n
-    out_last: list[Any] = [None] * n
+    full = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
+    comma = full.str.contains(",")
 
-    for idx, raw_value in enumerate(column):
-        text_value = None if raw_value is None else str(raw_value).strip()
-        if not text_value:
-            continue
+    comma_parts = full.str.split(",")
+    comma_last = comma_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
+    comma_first = comma_parts.list.get(1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
 
-        first_name: str | None = None
-        last_name: str | None = None
+    space_parts = full.str.split(" ")
+    space_first = space_parts.list.get(0, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
+    space_last = space_parts.list.get(-1, null_on_oob=True).cast(pl.Utf8).str.strip_chars()
 
-        comma_match = comma_pattern.match(text_value)
-        if comma_match:
-            last_name = comma_match.group("last")
-            first_name = comma_match.group("first")
-        else:
-            parts = text_value.split()
-            if len(parts) == 2:
-                first_name, last_name = parts
-            else:
-                out_full[idx] = text_value
-                continue
-
-        out_full[idx] = f"{first_name} {last_name}".strip()
-        out_first[idx] = first_name
-        out_last[idx] = last_name
+    first_name = pl.when(comma).then(comma_first).otherwise(space_first)
+    last_name = pl.when(comma).then(comma_last).otherwise(space_last)
+    normalized_full = pl.when(first_name.is_not_null() & last_name.is_not_null()).then(
+        pl.concat_str([first_name, last_name], separator=" ")
+    ).otherwise(full)
 
     return {
-        "full_name": out_full,
-        "first_name": out_first,
-        "last_name": out_last,
+        "full_name": normalized_full,
+        "first_name": first_name,
+        "last_name": last_name,
     }
 
 
-def validate_full_name(*, field_name, column, table, mapping, state, metadata, input_file_name, logger) -> list[Dict[str, Any]]:
-    """Return `[{"row_index": int, "message": str}, ...]` when names include invalid symbols."""
+def validate_full_name(
+    *,
+    field_name: str,  # Canonical field name being validated (post-mapping)
+    table: pl.DataFrame,  # Current table DF (post-mapping)
+    settings,  # Engine Settings
+    state: dict,  # Mutable dict shared across the run
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.Expr:
+    v = pl.col(field_name).cast(pl.Utf8).str.strip_chars()
 
-    issues: list[Dict[str, Any]] = []
-    pattern = re.compile(r"^[A-Za-z][A-Za-z '\-]*$")
+    format_issue = (
+        pl.when(v.is_not_null() & (v != "") & ~v.str.contains(ALLOWED_FULL_NAME_PATTERN))
+        .then(pl.lit("Full name must be letters with spaces/hyphens/apostrophes"))
+        .otherwise(pl.lit(None))
+    )
 
-    for idx, v in enumerate(column):
-        s = "" if v is None else str(v).strip()
-        if not s:
-            continue
-        if not pattern.fullmatch(s):
-            issues.append({
-                "row_index": idx,
-                "message": "Full name must be letters with spaces/hyphens/apostrophes",
-            })
+    # Cross-column validation (post-mapping): if first/last exist but full_name is
+    # empty, flag it.
+    if "first_name" in table.columns and "last_name" in table.columns:
+        first = pl.col("first_name").cast(pl.Utf8).str.strip_chars()
+        last = pl.col("last_name").cast(pl.Utf8).str.strip_chars()
 
-    return issues
+        missing_full = v.is_null() | (v == "")
+        parts_present = first.is_not_null() & (first != "") & last.is_not_null() & (last != "")
 
-# Example cell-level helpers (commented out):
-# These show the per-cell shape; they are just wrappers that process one cell at a time.
-# Prefer the column-level transforms/validators above when you want to touch multiple
-# fields at once or keep things more performant.
-#
-# def normalize_full_name_cell(value: object | None) -> Dict[str, Any]:
-#     text_value = None if value is None else str(value).strip()
-#     return {"row_index": 0, "value": {"full_name": (text_value or None)}}
-#
-# def validate_full_name_cell(value: object | None) -> Dict[str, Any] | None:
-#     text_value = "" if value is None else str(value).strip()
-#     if text_value and not pattern.fullmatch(text_value):
-#         return {"row_index": 0, "message": "Full name must be letters with spaces/hyphens/apostrophes"}
-#     return None
+        parts_issue = (
+            pl.when(missing_full & parts_present)
+            .then(pl.lit("Full name missing but first/last are present"))
+            .otherwise(pl.lit(None))
+        )
+
+        return pl.coalesce([format_issue, parts_issue])
+
+    return format_issue

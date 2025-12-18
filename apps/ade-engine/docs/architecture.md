@@ -30,12 +30,16 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
    For each sheet, `Pipeline.process_sheet` performs:
    - `detect_table_regions`: run row detectors to classify each row and segment the sheet into one or more table regions.
    - For each table region:
-     - `detect_and_map_columns`: map source columns to registered fields, resolve duplicates per `mapping_tie_resolution`, and split mapped vs. unmapped columns.
-     - Hooks: `on_table_detected` then `on_table_mapped`.
-     - `apply_transforms`: run column transforms for each mapped field, enforcing the strict row-output contract.
-     - `apply_validators`: run column validators to collect issue payloads.
-     - `render_table`: write headers + rows to the output sheet, optionally appending unmapped columns.
-     - Hook: `on_table_written`.
+     - `detect_and_map_columns`: map source columns to registered fields and resolve duplicates per `mapping_tie_resolution`.
+     - Materialize one `pl.DataFrame` immediately after extraction (minimal header normalization).
+     - Apply mapping as a rename-only step on the same DataFrame.
+     - Hook: `on_table_mapped` (may replace the DataFrame).
+     - `apply_transforms`: run v3 transforms (Polars expressions) to add/replace columns.
+     - Hook: `on_table_transformed` (may replace the DataFrame).
+     - `apply_validators`: run v3 validators to write inline issue-message columns (`__ade_issue__*`).
+     - Hook: `on_table_validated` (may replace the DataFrame; safe to filter/sort/reorder).
+     - `render_table`: derive `write_table` using output settings and write it directly to the output sheet.
+     - Hook: `on_table_written` (formatting/summaries; receives both `table` and `write_table`).
 
 6. **Finalize workbook**  
    Hook `on_workbook_before_save` fires with the output workbook, then the workbook is saved to `<output_dir>/<input_stem>_normalized.xlsx` (or a caller-specified path).
@@ -54,8 +58,8 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
 ## Key extension points
 
 - **Detectors** vote on header/data rows and column-to-field mapping.
-- **Transforms** normalize per-field values and can emit additional columns by returning extra keys in the row payload.
-- **Validators** emit structured issues; the engine does not stop on validation failures—it records them in `TableData.issues`.
+- **Transforms** return Polars expressions and can emit additional columns by returning a `dict[str, Expr]`.
+- **Validators** return issue-message expressions; the engine writes issues inline as reserved columns (`__ade_issue__*`).
 - **Hooks** wrap workbook and table lifecycle moments for custom side effects (telemetry, reordering, extra worksheets, etc.).
 
 Use `apps/ade-engine/docs/callable-contracts.md` for the exact signatures and return contracts of each extension type.

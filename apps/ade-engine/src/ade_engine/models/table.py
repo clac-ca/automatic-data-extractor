@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ade_engine.models.issues import IssuesPatch
+import polars as pl
 
 
 @dataclass
@@ -33,8 +33,14 @@ class TableRegionInfo:
 
 
 @dataclass
-class TableData:
+class TableResult:
+    """Processed table facts for reporting/debugging.
+
+    Table values are stored only in ``table`` (a single Polars DataFrame).
+    """
+
     sheet_name: str
+    table: pl.DataFrame
     header_row_index: int
     source_columns: list[SourceColumn]
     table_index: int = 0
@@ -45,17 +51,11 @@ class TableData:
     column_scores: dict[int, dict[str, float]] = field(default_factory=dict)
     duplicate_unmapped_indices: set[int] = field(default_factory=set)
     row_count: int = 0
-    columns: dict[str, list[Any]] = field(default_factory=dict)  # canonical column store
-    mapping: dict[str, int | None] = field(default_factory=dict)
-    issues_patch: IssuesPatch = field(default_factory=dict)
-    issues: list[dict[str, Any]] = field(default_factory=list)  # flattened issues for output/logs
     output_range: str | None = None
     output_sheet_name: str | None = None
 
     def mapping_lookup(self) -> dict[str, int | None]:
-        if self.mapping:
-            return dict(self.mapping)
         return {col.field_name: col.source_index for col in self.mapped_columns}
 
 
-__all__ = ["SourceColumn", "MappedColumn", "TableData", "TableRegionInfo"]
+__all__ = ["SourceColumn", "MappedColumn", "TableRegionInfo", "TableResult"]

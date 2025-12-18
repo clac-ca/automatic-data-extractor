@@ -41,29 +41,31 @@ def register(registry):
 
     (pkg / "columns.py").write_text(
         """
+import polars as pl
 from ade_engine.models import FieldDef
 
-def detect_email(*, header, **_):
-    header = (header or "").strip().lower()
+def detect_email(*, header_text: str, **_):
+    header = (header_text or "").strip().lower()
     if header == "email":
         return {"email": 1.0}
     return None
 
-def detect_name(*, header, **_):
-    header = (header or "").strip().lower()
+def detect_name(*, header_text: str, **_):
+    header = (header_text or "").strip().lower()
     if header == "name":
         return {"name": 1.0}
     return None
 
-def normalize_email(*, column, **_):
-    return [str(value).lower() if value is not None else None for value in column]
+def normalize_email(*, field_name: str, **_):
+    return pl.col(field_name).cast(pl.Utf8).str.to_lowercase()
 
-def validate_email(*, column, **_):
-    issues = []
-    for idx, v in enumerate(column):
-        if v and "@" not in str(v):
-            issues.append({"row_index": idx, "message": "invalid email"})
-    return issues
+def validate_email(*, field_name: str, **_):
+    v = pl.col(field_name).cast(pl.Utf8)
+    return (
+        pl.when(v.is_not_null() & ~v.str.contains("@"))
+        .then(pl.lit("invalid email"))
+        .otherwise(pl.lit(None))
+    )
 
 
 def register(registry):
@@ -114,7 +116,7 @@ def test_end_to_end_pipeline(tmp_path: Path):
     wb = openpyxl.load_workbook(output_file)
     ws = wb.active
     headers = [cell.value for cell in next(ws.iter_rows(min_row=1, max_row=1))[0:3]]
-    assert headers == ["email", "name", "raw_Notes"]
+    assert headers == ["email", "name", "Notes"]
 
     rows = list(ws.iter_rows(min_row=2, values_only=True))
     assert rows[0][0] == "user@example.com"

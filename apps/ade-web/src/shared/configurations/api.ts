@@ -14,8 +14,6 @@ import type {
 } from "./types";
 import type { paths } from "@schema";
 
-const textEncoder = new TextEncoder();
-
 type ListConfigurationsQuery = paths["/api/v1/workspaces/{workspace_id}/configurations"]["get"]["parameters"]["query"];
 type DeleteDirectoryQuery =
   paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}"]["delete"]["parameters"]["query"];
@@ -217,10 +215,11 @@ export async function exportConfiguration(
 
 export interface UpsertConfigurationFilePayload {
   readonly path: string;
-  readonly content: string;
+  readonly content: string | Blob | ArrayBuffer;
   readonly parents?: boolean;
   readonly etag?: string | null;
   readonly create?: boolean;
+  readonly contentType?: string;
 }
 
 export async function upsertConfigurationFile(
@@ -230,13 +229,19 @@ export async function upsertConfigurationFile(
 ): Promise<FileWriteResponse> {
   const encodedPath = encodeFilePath(payload.path);
   const query = payload.parents ? "?parents=1" : "";
+  const body = payload.content;
+  const contentType =
+    payload.contentType ??
+    (typeof Blob !== "undefined" && payload.content instanceof Blob && payload.content.type
+      ? payload.content.type
+      : "application/octet-stream");
   const response = await apiFetch(
     `/api/v1/workspaces/${workspaceId}/configurations/${configId}/files/${encodedPath}${query}`,
     {
       method: "PUT",
-      body: textEncoder.encode(payload.content),
+      body,
       headers: {
-        "Content-Type": "application/octet-stream",
+        "Content-Type": contentType,
         ...(payload.create ? { "If-None-Match": "*" } : payload.etag ? { "If-Match": payload.etag } : {}),
       },
     },

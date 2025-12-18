@@ -2,6 +2,12 @@
 # The engine will load this file if present (otherwise it uses safe defaults).
 
 [ade_engine]
-append_unmapped_columns = true
-unmapped_prefix = "raw_"
+remove_unmapped_columns = false
+write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
+
+[ade_engine.detectors]
+# Detection sampling settings (used by column detectors).
+# These bound detector cost and make detector behavior consistent across files.
+row_sample_size = 1000
+text_sample_size = 200

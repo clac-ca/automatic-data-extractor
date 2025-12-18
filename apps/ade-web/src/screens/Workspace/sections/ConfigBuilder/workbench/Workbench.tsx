@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type MouseEventHandler,
   type ReactNode,
@@ -27,9 +28,12 @@ import { useEditorThemePreference } from "./state/useEditorThemePreference";
 import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type {
   WorkbenchDataSeed,
+  WorkbenchUploadFile,
 } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
+import { hasFileDrag } from "./utils/fileDrop";
+import { isAssetsWorkbenchPath, isSafeWorkbenchPath, joinWorkbenchPath, normalizeWorkbenchPath } from "./utils/paths";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
 import { ConfirmDialog } from "@ui/ConfirmDialog";
@@ -114,6 +118,21 @@ type SideBounds = {
 };
 
 type WorkbenchWindowState = "restored" | "maximized";
+
+type WorkbenchUploadItem = {
+  readonly file: File;
+  readonly relativePath: string;
+  readonly targetPath: string;
+  readonly exists: boolean;
+  readonly etag: string | null;
+};
+
+type WorkbenchUploadPlan = {
+  readonly folderPath: string;
+  readonly items: readonly WorkbenchUploadItem[];
+  readonly conflicts: readonly WorkbenchUploadItem[];
+  readonly skipped: readonly { readonly relativePath: string; readonly reason: string }[];
+};
 
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
@@ -335,6 +354,8 @@ export function Workbench({
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [uploadPlan, setUploadPlan] = useState<WorkbenchUploadPlan | null>(null);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
   const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
   const [deletingFolderPath, setDeletingFolderPath] = useState<string | null>(null);
@@ -343,6 +364,7 @@ export function Workbench({
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
+  const uploadToastKey = useMemo(() => `workbench-upload:${workspaceId}:${configId}`, [workspaceId, configId]);
   const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
   const createConfigDirectory = useCreateConfigurationDirectoryMutation(workspaceId, configId);
   const deleteConfigDirectory = useDeleteConfigurationDirectoryMutation(workspaceId, configId);
@@ -1098,6 +1120,318 @@ export function Workbench({
     setExplorer((prev) => ({ ...prev, collapsed: true }));
   }, []);
 
+  const handleWorkbenchDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+  }, []);
+
+  const handleWorkbenchDrop = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      if (event.defaultPrevented || !hasFileDrag(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      notifyToast({
+        title: "Drop files into the Explorer to upload.",
+        description: "Open the Explorer pane, then drop into a folder in the file tree.",
+        intent: "info",
+        duration: 7000,
+        persistKey: uploadToastKey,
+        actions: [
+          {
+            label: "Show Explorer",
+            variant: "secondary",
+            onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: false })),
+          },
+        ],
+      });
+    },
+    [notifyToast, uploadToastKey, setExplorer],
+  );
+
+  const runUploadPlan = useCallback(
+    async (plan: WorkbenchUploadPlan, options: { overwriteExisting: boolean }) => {
+      if (usingSeed) {
+        notifyToast({
+          title: "Uploads aren’t available in demo mode.",
+          intent: "warning",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (isReadOnlyConfig) {
+        notifyToast({
+          title: "This configuration is read-only.",
+          description: "Duplicate it to upload files.",
+          intent: "warning",
+          duration: 7000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (!canCreateFiles) {
+        notifyToast({
+          title: "Files are still loading.",
+          description: "Wait for the explorer to finish syncing and try again.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (isUploadingFiles) {
+        notifyToast({
+          title: "Upload already in progress.",
+          description: "Wait for the current upload to finish before starting another.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+
+      const total = plan.items.length;
+      if (total === 0) {
+        notifyToast({ title: "No files to upload.", intent: "warning", duration: 5000, persistKey: uploadToastKey });
+        return;
+      }
+
+      setIsUploadingFiles(true);
+      notifyToast({
+        title: `Uploading ${total} file${total === 1 ? "" : "s"}…`,
+        description: plan.folderPath ? `Destination: ${plan.folderPath}` : "Destination: root",
+        intent: "info",
+        duration: null,
+        dismissible: false,
+        persistKey: uploadToastKey,
+      });
+
+      const uploaded: string[] = [];
+      const failures: Array<{ path: string; message: string }> = [];
+      try {
+        for (const item of plan.items) {
+          if (item.exists && !options.overwriteExisting) {
+            continue;
+          }
+          try {
+            await saveConfigFile.mutateAsync({
+              path: item.targetPath,
+              content: item.file,
+              parents: true,
+              create: !item.exists,
+              etag: item.exists ? item.etag ?? undefined : undefined,
+              contentType: item.file.type || undefined,
+            });
+            uploaded.push(item.targetPath);
+          } catch (error) {
+            const message =
+              error instanceof ApiError && error.status === 412
+                ? "Upload blocked because the file changed on the server. Refresh and try again."
+                : error instanceof ApiError && error.status === 428
+                  ? "Upload blocked: refresh the file list and try again."
+                  : error instanceof ApiError && error.status === 413
+                    ? error.problem?.detail || "File is larger than the allowed limit."
+                    : describeError(error);
+            failures.push({ path: item.targetPath, message });
+          }
+        }
+
+        try {
+          await filesQuery.refetch();
+        } catch {
+          // ignore
+        }
+
+        for (const path of uploaded) {
+          const tab = files.tabs.find((entry) => entry.id === path);
+          if (!tab || tab.status !== "ready") {
+            continue;
+          }
+          const isDirty = tab.content !== tab.initialContent;
+          if (isDirty) {
+            continue;
+          }
+          try {
+            await reloadFileFromServer(path);
+          } catch {
+            // ignore tab reload failures; next manual reload/save will reconcile
+          }
+        }
+      } finally {
+        setIsUploadingFiles(false);
+      }
+
+      const skippedCount = plan.skipped.length;
+      const uploadedCount = uploaded.length;
+      const failedCount = failures.length;
+      const intent: NotificationIntent =
+        failedCount > 0 ? (uploadedCount > 0 ? "warning" : "danger") : skippedCount > 0 ? "warning" : "success";
+      const descriptionParts: string[] = [];
+      if (uploadedCount > 0) descriptionParts.push(`${uploadedCount} uploaded`);
+      if (skippedCount > 0) descriptionParts.push(`${skippedCount} skipped`);
+      if (failedCount > 0) descriptionParts.push(`${failedCount} failed`);
+
+      notifyToast({
+        title:
+          failedCount > 0
+            ? "Upload finished with issues."
+            : skippedCount > 0
+              ? "Upload finished."
+              : "Upload complete.",
+        description: descriptionParts.join(" · "),
+        intent,
+        duration: 8000,
+        dismissible: true,
+        persistKey: uploadToastKey,
+        actions:
+          failures.length > 0
+            ? [
+                {
+                  label: "Show errors",
+                  variant: "secondary",
+                  onSelect: () => {
+                    const sample = failures
+                      .slice(0, 6)
+                      .map((failure) => `${failure.path}: ${failure.message}`)
+                      .join(" · ");
+                    notifyBanner({
+                      title: "Upload errors",
+                      description: sample || "Upload errors occurred.",
+                      intent: "danger",
+                      duration: null,
+                      dismissible: true,
+                      scope: uploadToastKey,
+                      persistKey: `${uploadToastKey}:errors`,
+                    });
+                  },
+                },
+              ]
+            : undefined,
+      });
+    },
+    [
+      canCreateFiles,
+      filesQuery,
+      isReadOnlyConfig,
+      isUploadingFiles,
+      notifyBanner,
+      notifyToast,
+      reloadFileFromServer,
+      saveConfigFile,
+      uploadToastKey,
+      usingSeed,
+      files.tabs,
+    ],
+  );
+
+  const handleUploadFiles = useCallback(
+    async (folderPath: string, droppedFiles: readonly WorkbenchUploadFile[]) => {
+      if (isUploadingFiles) {
+        notifyToast({
+          title: "Upload already in progress.",
+          description: "Wait for the current upload to finish before dropping more files.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (uploadPlan) {
+        notifyToast({
+          title: "Resolve the overwrite prompt first.",
+          description: "Choose whether to overwrite existing files, then try again.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (!tree) {
+        return;
+      }
+      const normalizedFolder = normalizeWorkbenchPath(folderPath);
+      const limits = filesQuery.data?.limits ?? null;
+
+      const items: WorkbenchUploadItem[] = [];
+      const skipped: Array<{ relativePath: string; reason: string }> = [];
+      const seenPaths = new Set<string>();
+
+      for (const entry of droppedFiles) {
+        const relativePath = normalizeWorkbenchPath(entry.relativePath);
+        if (!relativePath) {
+          skipped.push({ relativePath: entry.relativePath, reason: "Missing file name." });
+          continue;
+        }
+        const targetPath = joinWorkbenchPath(normalizedFolder, relativePath);
+        if (!targetPath || !isSafeWorkbenchPath(targetPath)) {
+          skipped.push({ relativePath, reason: "Invalid path." });
+          continue;
+        }
+        if (seenPaths.has(targetPath)) {
+          skipped.push({ relativePath, reason: "Duplicate path in drop payload." });
+          continue;
+        }
+        seenPaths.add(targetPath);
+
+        const existing = findFileNode(tree, targetPath);
+        if (existing && existing.kind === "folder") {
+          skipped.push({ relativePath, reason: "A folder with this name already exists." });
+          continue;
+        }
+
+        const exists = Boolean(existing && existing.kind === "file");
+        const etag = exists ? existing?.metadata?.etag ?? null : null;
+        if (exists && !etag) {
+          skipped.push({ relativePath, reason: "Missing file version. Refresh and try again." });
+          continue;
+        }
+
+        const maxBytes =
+          limits && typeof limits.code_max_bytes === "number" && typeof limits.asset_max_bytes === "number"
+            ? isAssetsWorkbenchPath(targetPath)
+              ? limits.asset_max_bytes
+              : limits.code_max_bytes
+            : null;
+        if (typeof maxBytes === "number" && entry.file.size > maxBytes) {
+          skipped.push({ relativePath, reason: `File exceeds ${maxBytes} bytes.` });
+          continue;
+        }
+
+        items.push({ file: entry.file, relativePath, targetPath, exists, etag });
+      }
+
+      if (items.length === 0) {
+        notifyToast({
+          title: "No uploadable files.",
+          description: skipped.length ? `${skipped.length} item${skipped.length === 1 ? "" : "s"} skipped.` : undefined,
+          intent: "warning",
+          duration: 7000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+
+      const conflicts = items.filter((item) => item.exists);
+      const plan: WorkbenchUploadPlan = {
+        folderPath: normalizedFolder,
+        items,
+        conflicts,
+        skipped,
+      };
+
+      if (conflicts.length > 0) {
+        setUploadPlan(plan);
+        return;
+      }
+
+      await runUploadPlan(plan, { overwriteExisting: false });
+    },
+    [filesQuery.data?.limits, isUploadingFiles, notifyToast, runUploadPlan, tree, uploadPlan, uploadToastKey],
+  );
+
   const handleCreateFile = useCallback(
     async (folderPath: string, fileName: string) => {
       const trimmed = fileName.trim();
@@ -1516,7 +1850,11 @@ export function Workbench({
         };
 
   return (
-    <div className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
+    <div
+      className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}
+      onDragOver={handleWorkbenchDragOver}
+      onDrop={handleWorkbenchDrop}
+    >
       {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
@@ -1621,6 +1959,9 @@ export function Workbench({
                       setFileId(fileId);
                     }}
                     theme={menuAppearance}
+                    canUploadFiles={canCreateFiles}
+                    onUploadFiles={handleUploadFiles}
+                    isUploadingFiles={isUploadingFiles}
                     canCreateFile={canCreateFiles}
                     canCreateFolder={canCreateFolders}
                     isCreatingEntry={isCreatingFile || isCreatingFolder}
@@ -1929,6 +2270,76 @@ export function Workbench({
           <p className="text-sm font-medium text-danger-600">{makeActiveDialogState.message}</p>
         ) : null}
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(uploadPlan)}
+        title={uploadPlan && uploadPlan.conflicts.length === 1 ? "Overwrite existing file?" : "Overwrite existing files?"}
+        description={
+          uploadPlan
+            ? `${uploadPlan.conflicts.length} file${uploadPlan.conflicts.length === 1 ? "" : "s"} already exist${
+                uploadPlan.folderPath ? ` in “${uploadPlan.folderPath}”.` : " in the configuration root."
+              } Overwrite to replace them.`
+            : undefined
+        }
+        confirmLabel={
+          uploadPlan
+            ? `Overwrite ${uploadPlan.conflicts.length} file${uploadPlan.conflicts.length === 1 ? "" : "s"}`
+            : "Overwrite"
+        }
+        cancelLabel="Cancel"
+        onCancel={() => setUploadPlan(null)}
+        onConfirm={() => {
+          const plan = uploadPlan;
+          setUploadPlan(null);
+          if (!plan) return;
+          void runUploadPlan(plan, { overwriteExisting: true });
+        }}
+        isConfirming={isUploadingFiles}
+        confirmDisabled={!uploadPlan || uploadPlan.conflicts.length === 0 || isUploadingFiles}
+        tone="danger"
+      >
+        {uploadPlan ? (
+          <div className="space-y-3">
+            <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              <p className="font-semibold text-slate-900">Will overwrite:</p>
+              <ul className="mt-2 space-y-1">
+                {uploadPlan.conflicts.slice(0, 20).map((item) => (
+                  <li key={item.targetPath} className="break-all">
+                    {item.targetPath}
+                  </li>
+                ))}
+              </ul>
+              {uploadPlan.conflicts.length > 20 ? (
+                <p className="mt-2 text-[11px] text-slate-500">And {uploadPlan.conflicts.length - 20} more…</p>
+              ) : null}
+            </div>
+            {uploadPlan.skipped.length > 0 ? (
+              <p className="text-xs text-slate-600">
+                {uploadPlan.skipped.length} item{uploadPlan.skipped.length === 1 ? "" : "s"} will be skipped due to invalid
+                paths or size limits.
+              </p>
+            ) : null}
+            {uploadPlan.items.length > uploadPlan.conflicts.length ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                <p className="font-medium">Prefer not to overwrite?</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isUploadingFiles}
+                  onClick={() => {
+                    const plan = uploadPlan;
+                    setUploadPlan(null);
+                    void runUploadPlan(plan, { overwriteExisting: false });
+                  }}
+                >
+                  Upload new only ({uploadPlan.items.length - uploadPlan.conflicts.length})
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmDialog>
+
       <ContextMenu
         open={Boolean(actionsMenu)}
         position={actionsMenu}

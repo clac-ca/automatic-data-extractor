@@ -1,25 +1,30 @@
 # Output Ordering
 
-The engine writes a single normalized table per sheet. Column and row ordering follow deterministic rules:
+ADE processes each detected table as a single Polars DataFrame. The output worksheet is written directly from that DataFrame (after applying output-column policies).
 
-## Columns
+## Column ordering
 
-1. **Mapped columns**  
-   - Ordered by the source column index (i.e., the order they appeared in the input sheet).  
-   - If multiple source columns map to the same field, resolution depends on `Settings.mapping_tie_resolution`:
-     - `leftmost` (default): keep the highest score; if scores tie, keep the leftmost mapped column and mark the others unmapped.
-     - `leave_unmapped`: if more than one column maps to a field, mark all of them unmapped.
+- Column order is whatever the pipeline produces:
+  - extraction materializes columns in source order (minimal header normalization only)
+  - mapping is a rename-only step (no reordering)
+  - transforms may add/replace columns
+  - hooks may reorder columns by returning a new DataFrame
 
-2. **Unmapped passthrough columns** (optional)  
-   - Appended to the right **after** mapped columns when `Settings.append_unmapped_columns` is `True` (default).
-   - Headers use `Settings.unmapped_prefix` (default `raw_`) + the source header value; if the source header is empty, a fallback `col_<index+1>` is used.
+## Output column policy
 
-## Rows
+At write time, the engine derives `write_table` from the in-memory `table`:
 
-- The number of data rows written equals the longest column length among mapped + appended unmapped columns. This ensures sheets that have only unmapped columns still emit data rows.
-- Header row is always first, followed by data rows in source order.
+1. If `Settings.remove_unmapped_columns=True`, drop any non-reserved column not in the canonical registry.
+2. Drop engine-reserved `__ade_*` columns unless `Settings.write_diagnostics_columns=True`.
+3. Write `write_table` headers + rows to the worksheet.
+
+## Row ordering
+
+- Row order is the current DataFrame row order at write time.
+- Hooks may filter/sort/reorder rows safely after validation because issues are stored inline as reserved columns.
 
 ## Custom ordering
 
-- To enforce a different mapped-column order, patch `table.mapped_columns` in `on_table_mapped` or reorder the output worksheet inside `on_table_written`.
-- To suppress passthrough columns entirely, set `append_unmapped_columns=False` via settings or strip them in a hook.
+- Use `on_table_validated` to do final shaping (filter/sort/reorder rows; reorder/drop/add columns) by returning a new DataFrame.
+- Use `on_table_written` only for formatting/summaries; it must not alter already-written data values.
+

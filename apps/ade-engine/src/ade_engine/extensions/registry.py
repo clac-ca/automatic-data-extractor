@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping
 
+import polars as pl
 from pydantic import ValidationError
 
 from ade_engine.infrastructure.observability.logger import RunLogger
@@ -65,30 +66,40 @@ class Registry:
         self,
         hook_name: HookName,
         *,
+        settings,
         state: dict,
         metadata: Mapping[str, Any],
         logger: RunLogger,
         workbook=None,
         sheet=None,
-        table=None,
+        table: pl.DataFrame | None = None,
+        write_table: pl.DataFrame | None = None,
         input_file_name: str | None = None,
-    ) -> None:
+    ) -> pl.DataFrame | None:
         hooks = self.hooks.get(hook_name, [])
+        table_returning = hook_name in {
+            HookName.ON_TABLE_MAPPED,
+            HookName.ON_TABLE_TRANSFORMED,
+            HookName.ON_TABLE_VALIDATED,
+        }
         if not hooks:
-            return
+            return table if table_returning else None
 
         hook_stage = hook_name.value if hasattr(hook_name, "value") else str(hook_name)
-        ctx = HookContext(
-            hook_name=hook_name,
-            metadata=metadata,
-            state=state,
-            workbook=workbook,
-            sheet=sheet,
-            table=table,
-            input_file_name=input_file_name,
-            logger=logger,
-        )
+        current_table = table
         for hook_def in hooks:
+            ctx = HookContext(
+                hook_name=hook_name,
+                settings=settings,
+                metadata=metadata,
+                state=state,
+                workbook=workbook,
+                sheet=sheet,
+                table=current_table,
+                write_table=write_table,
+                input_file_name=input_file_name,
+                logger=logger,
+            )
             logger.event(
                 "hook.start",
                 level=logging.DEBUG,
@@ -98,11 +109,25 @@ class Registry:
                 },
             )
             try:
-                call_extension(hook_def.fn, ctx, label=f"Hook {hook_def.qualname}")
+                out = call_extension(hook_def.fn, ctx, label=f"Hook {hook_def.qualname}")
             except Exception as exc:
                 message = f"Hook {hook_def.qualname} failed during {hook_stage}"
                 logger.exception(message, exc_info=exc)
                 raise HookError(message, stage=hook_stage) from exc
+
+            if table_returning:
+                if out is None:
+                    pass
+                elif isinstance(out, pl.DataFrame):
+                    current_table = out
+                else:
+                    message = (
+                        f"Hook {hook_def.qualname} must return a polars DataFrame or None during {hook_stage}"
+                    )
+                    raise HookError(message, stage=hook_stage)
+            elif out is not None:
+                message = f"Hook {hook_def.qualname} must return None during {hook_stage}"
+                raise HookError(message, stage=hook_stage)
             logger.event(
                 "hook.end",
                 level=logging.DEBUG,
@@ -111,6 +136,7 @@ class Registry:
                     "hook": hook_def.qualname,
                 },
             )
+        return current_table if table_returning else None
 
     # ------------------------------------------------------------------
     # Field registration
@@ -209,7 +235,13 @@ class Registry:
             )
         )
 
-    def register_hook(self, fn: Callable[..., Any], *, hook_name: HookName, priority: int) -> None:
+    def register_hook(self, fn: Callable[..., Any], *, hook: str, priority: int) -> None:
+        try:
+            hook_name = HookName(hook)
+        except ValueError as exc:
+            valid = ", ".join(sorted(name.value for name in HookName))
+            raise ConfigError(f"Unknown hook '{hook}'. Must be one of: {valid}") from exc
+
         self.hooks[hook_name].append(
             RegisteredFn(
                 fn=fn,

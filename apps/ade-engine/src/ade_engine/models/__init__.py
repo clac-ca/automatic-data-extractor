@@ -20,32 +20,16 @@ from ade_engine.models.extension_contexts import (
     RowDetectorContext,
     RowKind,
     ScorePatch,
-    TableView,
     TransformContext,
     ValidateContext,
 )
 from ade_engine.models.extension_outputs import (
-    CellTransformResult,
-    CellValidatorResult,
     ColumnDetectorResult,
-    ColumnTransformResult,
-    ColumnValidatorResult,
     RowDetectorResult,
 )
-from ade_engine.models.issues import (
-    Issue,
-    IssueCell,
-    IssuesPatch,
-    merge_issues_patch,
-)
-from ade_engine.models.patches import (
-    TablePatch,
-    ValuesPatch,
-    normalize_transform_return,
-    normalize_validator_return,
-)
+from ade_engine.models.detectors import DetectorSettings
 from ade_engine.models.run import RunError, RunErrorCode, RunRequest, RunResult, RunStatus
-from ade_engine.models.table import MappedColumn, SourceColumn, TableData
+from ade_engine.models.table import MappedColumn, SourceColumn, TableResult
 
 __all__ = [
     "AdeEngineError",
@@ -67,21 +51,9 @@ __all__ = [
     "TransformContext",
     "ValidateContext",
     "HookContext",
-    "TableView",
-    "CellTransformResult",
-    "CellValidatorResult",
     "ColumnDetectorResult",
-    "ColumnTransformResult",
-    "ColumnValidatorResult",
     "RowDetectorResult",
-    "Issue",
-    "IssueCell",
-    "IssuesPatch",
-    "merge_issues_patch",
-    "TablePatch",
-    "ValuesPatch",
-    "normalize_transform_return",
-    "normalize_validator_return",
+    "DetectorSettings",
     "RunError",
     "RunErrorCode",
     "RunRequest",
@@ -89,5 +61,5 @@ __all__ = [
     "RunStatus",
     "SourceColumn",
     "MappedColumn",
-    "TableData",
+    "TableResult",
 ]

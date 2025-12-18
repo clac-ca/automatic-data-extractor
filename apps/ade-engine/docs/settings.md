@@ -18,18 +18,12 @@
 
 ## Output / writer
 
-- `append_unmapped_columns: bool` — include unmapped source columns in the output (default `True`).
-- `render_derived_fields: bool` — include derived (transform-emitted) canonical fields in the output (default `True`).
-- `unmapped_prefix: str` — prefix for unmapped headers (default `raw_`; must be non-empty).
+- `remove_unmapped_columns: bool` — drop non-canonical columns from the written output (default `False`).
+- `write_diagnostics_columns: bool` — include engine-reserved `__ade_*` columns in the written output (default `False`).
 
 ## Mapping behavior
 
 - `mapping_tie_resolution: "leftmost" | "leave_unmapped"` — resolve multiple columns mapping to the same field. Default `leftmost`.
-
-## Derived merge behavior
-
-- `derived_write_mode: "fill_missing" | "overwrite" | "skip" | "error_on_conflict"` — how derived field writes behave.
-- `missing_values_mode: "none_only" | "none_or_blank"` — how “missingness” is interpreted for merge rules.
 
 ## Logging
 
@@ -41,6 +35,13 @@
 - `max_empty_rows_run: int | None` — stop scanning a sheet after this many consecutive empty rows (default `1000`; `None` disables).
 - `max_empty_cols_run: int | None` — within a row, stop after this many consecutive empty cells beyond the last seen value (default `500`; `None` disables).
 
+## Detector sampling
+
+These settings control the shared sampling policy used by detectors.
+
+- `detectors.row_sample_size: int` — upper bound for table-level (cross-column) detection work (default `1000`).
+- `detectors.text_sample_size: int` — upper bound for per-column text heuristics (default `200`).
+
 ## File discovery
 
 - `supported_file_extensions: tuple[str, ...]` — extensions considered when scanning directories for inputs. Default `(".xlsx", ".xlsm", ".csv")`.
@@ -51,12 +52,16 @@
 
 ```toml
 [ade_engine]
-append_unmapped_columns = true
-unmapped_prefix = "raw_"
+remove_unmapped_columns = false
+write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost"
 log_format = "ndjson"
 log_level = "INFO"
 max_empty_rows_run = 2000
 max_empty_cols_run = 200
 supported_file_extensions = [".xlsx", ".csv"]
+
+[ade_engine.detectors]
+row_sample_size = 1000
+text_sample_size = 200
 ```

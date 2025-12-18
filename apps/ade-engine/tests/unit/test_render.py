@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from openpyxl import Workbook
+import polars as pl
 
 from ade_engine.application.pipeline.render import SheetWriter, render_table
+from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.settings import Settings
-from ade_engine.models.table import MappedColumn, SourceColumn, TableData
+from ade_engine.models.extension_contexts import FieldDef
+from ade_engine.models.table import TableResult
 
 
 class DummyLogger:
@@ -12,68 +15,80 @@ class DummyLogger:
         pass
 
 
-def test_render_includes_unmapped_rows_when_no_mapped_columns():
+def _registry_with_fields(*fields: str) -> Registry:
+    reg = Registry()
+    for name in fields:
+        reg.register_field(FieldDef(name=name))
+    reg.finalize()
+    return reg
+
+
+def test_render_writes_non_reserved_columns_by_default():
     wb = Workbook()
     ws = wb.active
 
-    table = TableData(
-        sheet_name="Sheet1",
-        header_row_index=0,
-        table_index=0,
-        source_columns=[],
-        mapped_columns=[],
-        unmapped_columns=[
-            SourceColumn(index=0, header="col_a", values=[1, 2]),
-            SourceColumn(index=1, header="col_b", values=[3, 4]),
-        ],
+    table = pl.DataFrame(
+        {
+            "email": ["a@example.com"],
+            "name": ["Alice"],
+            "Notes": ["note-1"],
+            "__ade_issue__email": ["bad email"],
+        }
     )
 
-    render_table(
-        table=table,
+    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    reg = _registry_with_fields("email", "name")
+
+    write_table = render_table(
+        table_result=table_result,
         writer=SheetWriter(ws),
+        registry=reg,
         settings=Settings(),
         logger=DummyLogger(),
     )
 
-    # Expect header + two data rows
-    assert ws.max_row == 3
-    assert ws.max_column == 2
-    assert [cell.value for cell in ws[1]] == ["raw_col_a", "raw_col_b"]
-    assert [cell.value for cell in ws[2]] == [1, 3]
-    assert [cell.value for cell in ws[3]] == [2, 4]
+    assert write_table.columns == ["email", "name", "Notes"]
+    assert [cell.value for cell in ws[1]] == ["email", "name", "Notes"]
+    assert [cell.value for cell in ws[2]] == ["a@example.com", "Alice", "note-1"]
+    assert table_result.output_range == "A1:C2"
 
 
-def test_render_row_count_uses_longest_of_mapped_and_unmapped():
+def test_render_remove_unmapped_columns_drops_non_canonical():
     wb = Workbook()
     ws = wb.active
 
-    mapped = [
-        MappedColumn(field_name="field1", source_index=0, header="f1", values=["a"], score=1.0),
-    ]
-    unmapped = [
-        SourceColumn(index=1, header="extra", values=[10, 20, 30]),
-    ]
+    table = pl.DataFrame({"email": ["a@example.com"], "name": ["Alice"], "Notes": ["note-1"]})
+    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    reg = _registry_with_fields("email", "name")
 
-    table = TableData(
-        sheet_name="Sheet1",
-        header_row_index=0,
-        table_index=0,
-        source_columns=[],
-        mapped_columns=mapped,
-        unmapped_columns=unmapped,
-        row_count=1,
-        columns={"field1": ["a"]},
-    )
-
-    render_table(
-        table=table,
+    write_table = render_table(
+        table_result=table_result,
         writer=SheetWriter(ws),
-        settings=Settings(),
+        registry=reg,
+        settings=Settings(remove_unmapped_columns=True),
         logger=DummyLogger(),
     )
 
-    # Longest column is unmapped (3 values), so we should emit 3 data rows.
-    assert ws.max_row == 4  # header + 3 rows
-    assert ws.max_column == 2
-    assert [cell.value for cell in ws[2]] == ["a", 10]
-    assert [cell.value for cell in ws[4]] == [None, 30]
+    assert write_table.columns == ["email", "name"]
+    assert [cell.value for cell in ws[1]] == ["email", "name"]
+
+
+def test_render_write_diagnostics_columns_keeps_reserved_columns():
+    wb = Workbook()
+    ws = wb.active
+
+    table = pl.DataFrame({"email": ["a@example.com"], "__ade_issue__email": ["bad email"]})
+    table_result = TableResult(sheet_name="Sheet1", table=table, header_row_index=0, source_columns=[])
+    reg = _registry_with_fields("email")
+
+    write_table = render_table(
+        table_result=table_result,
+        writer=SheetWriter(ws),
+        registry=reg,
+        settings=Settings(write_diagnostics_columns=True),
+        logger=DummyLogger(),
+    )
+
+    assert write_table.columns == ["email", "__ade_issue__email"]
+    assert [cell.value for cell in ws[1]] == ["email", "__ade_issue__email"]
+

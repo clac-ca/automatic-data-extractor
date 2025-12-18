@@ -37,6 +37,11 @@ export interface WorkbenchFileTab {
   lastSavedAt?: string | null;
 }
 
+export interface WorkbenchUploadFile {
+  readonly file: File;
+  readonly relativePath: string;
+}
+
 export type WorkbenchConsoleLevel = "debug" | "info" | "success" | "warning" | "error";
 
 export interface WorkbenchConsoleLine {

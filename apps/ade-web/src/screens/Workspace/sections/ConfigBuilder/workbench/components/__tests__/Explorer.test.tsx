@@ -27,6 +27,126 @@ afterEach(() => {
 });
 
 describe("Explorer", () => {
+  it("uploads dropped files into a folder target", async () => {
+    const onUploadFiles = vi.fn();
+    const file = new File(["hello"], "example.py", { type: "text/x-python" });
+
+    render(
+      <Explorer
+        width={300}
+        tree={buildTree()}
+        activeFileId=""
+        openFileIds={[]}
+        onSelectFile={() => {}}
+        theme="light"
+        canUploadFiles
+        onUploadFiles={onUploadFiles}
+        onHide={() => {}}
+      />,
+    );
+
+    const folderButton = screen.getByRole("button", { name: "src" });
+    fireEvent.drop(folderButton, {
+      dataTransfer: {
+        types: ["Files"],
+        files: [file],
+        items: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(onUploadFiles).toHaveBeenCalledWith("src", [{ file, relativePath: "example.py" }]);
+    });
+  });
+
+  it("uploads dropped files using the parent folder when dropped on a file", async () => {
+    const tree: WorkbenchFileNode = {
+      id: "",
+      name: "",
+      kind: "folder",
+      children: [
+        {
+          id: "src",
+          name: "src",
+          kind: "folder",
+          children: [
+            {
+              id: "src/foo.py",
+              name: "foo.py",
+              kind: "file",
+            },
+          ],
+        },
+      ],
+    };
+
+    const onUploadFiles = vi.fn();
+    const file = new File(["hello"], "bar.py", { type: "text/x-python" });
+    const user = userEvent.setup();
+
+    render(
+      <Explorer
+        width={300}
+        tree={tree}
+        activeFileId=""
+        openFileIds={[]}
+        onSelectFile={() => {}}
+        theme="light"
+        canUploadFiles
+        onUploadFiles={onUploadFiles}
+        onHide={() => {}}
+      />,
+    );
+
+    const folderButton = screen.getByRole("button", { name: "src" });
+    await user.click(folderButton);
+
+    const fileButton = screen.getByRole("button", { name: "foo.py" });
+    fireEvent.drop(fileButton, {
+      dataTransfer: {
+        types: ["Files"],
+        files: [file],
+        items: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(onUploadFiles).toHaveBeenCalledWith("src", [{ file, relativePath: "bar.py" }]);
+    });
+  });
+
+  it("ignores drop uploads when uploads are disabled", async () => {
+    const onUploadFiles = vi.fn();
+    const file = new File(["hello"], "example.py", { type: "text/x-python" });
+
+    render(
+      <Explorer
+        width={300}
+        tree={buildTree()}
+        activeFileId=""
+        openFileIds={[]}
+        onSelectFile={() => {}}
+        theme="light"
+        canUploadFiles={false}
+        onUploadFiles={onUploadFiles}
+        onHide={() => {}}
+      />,
+    );
+
+    const folderButton = screen.getByRole("button", { name: "src" });
+    fireEvent.drop(folderButton, {
+      dataTransfer: {
+        types: ["Files"],
+        files: [file],
+        items: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(onUploadFiles).not.toHaveBeenCalled();
+    });
+  });
+
   it("creates folders from the context menu", async () => {
     const onCreateFolder = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();

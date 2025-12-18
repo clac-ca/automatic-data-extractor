@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Sequence
+from typing import Any, Sequence
 
-from openpyxl.worksheet.worksheet import Worksheet
+import polars as pl
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
+from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import RunLogger
 from ade_engine.infrastructure.settings import Settings
-from ade_engine.models.table import MappedColumn, SourceColumn, TableData
+from ade_engine.models.table import TableResult
+
+_RESERVED_PREFIX = "__ade_"
 
 
 @dataclass
@@ -32,45 +36,46 @@ class SheetWriter:
         return self.write_row([])
 
 
+def derive_write_table(*, table: pl.DataFrame, registry: Registry, settings: Settings) -> pl.DataFrame:
+    write_table = table
+
+    if settings.remove_unmapped_columns:
+        canonical_fields = set(registry.fields.keys())
+        drop_cols = [
+            c for c in write_table.columns if not c.startswith(_RESERVED_PREFIX) and c not in canonical_fields
+        ]
+        if drop_cols:
+            write_table = write_table.drop(drop_cols)
+
+    if not settings.write_diagnostics_columns:
+        reserved_cols = [c for c in write_table.columns if c.startswith(_RESERVED_PREFIX)]
+        if reserved_cols:
+            write_table = write_table.drop(reserved_cols)
+
+    return write_table
+
+
 def render_table(
     *,
-    table: TableData,
+    table_result: TableResult,
     writer: SheetWriter,
+    registry: Registry,
     settings: Settings,
-    field_order: list[str] | None = None,
     logger: RunLogger,
-) -> None:
-    """Write a normalized table to ``worksheet`` following ordering rules."""
+) -> pl.DataFrame:
+    """Write the table to ``writer.worksheet`` and update ``table_result`` facts."""
 
-    mapped_cols: List[MappedColumn] = table.mapped_columns
-    unmapped_cols: List[SourceColumn] = table.unmapped_columns if settings.append_unmapped_columns else []
+    write_table = derive_write_table(table=table_result.table, registry=registry, settings=settings)
 
     start_row = writer.row + 1
 
-    # Headers
-    canonical_fields = field_order or [col.field_name for col in mapped_cols]
-    headers: List[Any] = list(canonical_fields)
-    for col in unmapped_cols:
-        prefix = settings.unmapped_prefix or "raw_"
-        header = str(col.header) if col.header not in (None, "") else f"col_{col.index + 1}"
-        headers.append(f"{prefix}{header}")
-
+    headers = list(write_table.columns)
     writer.write_row(headers)
 
-    # Include unmapped columns when determining how many data rows to emit; otherwise
-    # sheets with only unmapped columns would collapse to a header-only table.
-    row_count_candidates = [table.row_count, *(len(col.values) for col in unmapped_cols)]
-    row_count = max(row_count_candidates)
-    for row_idx in range(row_count):
-        row_values: List[Any] = []
-        for field in canonical_fields:
-            col = table.columns.get(field)
-            row_values.append(col[row_idx] if col is not None and row_idx < len(col) else None)
-        for col in unmapped_cols:
-            row_values.append(col.values[row_idx] if row_idx < len(col.values) else None)
-        writer.write_row(row_values)
+    for row in write_table.iter_rows(named=False):
+        writer.write_row(row)
 
-    rows_written = 1 + row_count
+    rows_written = 1 + write_table.height
     col_count = len(headers)
     if col_count > 0 and rows_written > 0:
         end_row = start_row + rows_written - 1
@@ -79,18 +84,20 @@ def render_table(
     else:
         output_range = ""
 
-    table.output_range = output_range or None
-    table.output_sheet_name = writer.worksheet.title
+    table_result.output_range = output_range or None
+    table_result.output_sheet_name = writer.worksheet.title
 
     logger.event(
         "table.written",
-        message=f"Rendered table with {len(canonical_fields)} canonical columns and {len(unmapped_cols)} unmapped",
+        message=f"Rendered table with {len(headers)} columns",
         data={
             "sheet_name": writer.worksheet.title,
-            "table_index": table.table_index,
+            "table_index": table_result.table_index,
             "output_range": output_range,
         },
     )
 
+    return write_table
 
-__all__ = ["SheetWriter", "render_table"]
+
+__all__ = ["SheetWriter", "derive_write_table", "render_table"]

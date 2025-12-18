@@ -1,72 +1,114 @@
 from __future__ import annotations
 
-from typing import Any
+import polars as pl
 
-from ade_engine.models import HookName
 
-# Optional: set a desired canonical output order.
-# If left as None, the engine's default ordering is used.
-DESIRED_FIELD_ORDER: list[str] | None = None
+# -----------------------------------------------------------------------------
+# Hook: on_table_written
+#
+# When it runs:
+# - Called once per detected table region, immediately AFTER ADE has rendered the
+#   table into the OUTPUT workbook (openpyxl) and BEFORE the workbook is saved.
+# - The table's cells already exist in `sheet` when this hook runs.
+#
+# What it's good for:
+# - Applying worksheet/table formatting (freeze panes, filters, column widths,
+#   number formats, conditional formatting)
+# - Hiding helper/diagnostic columns that you still want to keep in the output
+# - Recording post-write metrics into `state` for later use (e.g. in
+#   `on_workbook_before_save`)
+#
+# Notes:
+# - This hook MUST return None (returning anything else raises HookError).
+# - If you need to change table values/shape, do it earlier:
+#   `on_table_mapped` / `on_table_transformed` / `on_table_validated`.
+# - `table` is the full post-validation DataFrame; `write_table` is the exact
+#   DataFrame that was written (after output settings like dropping unmapped or
+#   diagnostic columns).
+# -----------------------------------------------------------------------------
 
 
 def register(registry):
-    registry.register_hook(on_table_written, hook_name=HookName.ON_TABLE_WRITTEN, priority=0)
+    registry.register_hook(on_table_written, hook="on_table_written", priority=0)
 
 
 def on_table_written(
     *,
-    hook_name,
-    metadata,
-    state,
-    workbook,
-    sheet,
-    table,
-    input_file_name,
-    logger,
+    hook_name,  # HookName enum value for this stage
+    settings,  # Engine Settings
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    workbook,  # Output workbook (openpyxl Workbook)
+    sheet,  # Output worksheet (openpyxl Worksheet)
+    table: pl.DataFrame,  # Full in-memory table DF (post-validation)
+    write_table: pl.DataFrame,  # Exact DF that was written (after output policies)
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
 ) -> None:
-    """Called after a table has been written to the output workbook."""
+    """
+    Called after ADE writes a single normalized table to the output worksheet.
 
-    if logger and table:
-        row_count = getattr(table, "row_count", None)
+    Use this hook for Excel-only concerns (formatting, UX, summary/notes sheets).
+    It must not modify the already-written table values.
+    """
+
+    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
+    if logger:
         logger.info(
-            "Config hook: table written (rows=%d, issues=%d)",
-            row_count or 0,
-            len(getattr(table, "issues", []) or []),
+            "Config hook: table written (sheet=%s, rows=%d, columns=%d)",
+            sheet_name,
+            int(write_table.height),
+            len(write_table.columns),
         )
 
-    if DESIRED_FIELD_ORDER:
-        reorder_table_columns_in_place(sheet, DESIRED_FIELD_ORDER)
+    # ---------------------------------------------------------------------
+    # Examples (uncomment to use)
+    # ---------------------------------------------------------------------
 
+    # Example: compute the output range for THIS table.
+    # (Because this hook runs immediately after the write, the table ends at
+    # `sheet.max_row` and spans `len(write_table.columns)` columns.)
+    # from openpyxl.utils import get_column_letter
+    # if len(write_table.columns) > 0 and sheet.max_row:
+    #     header_row = int(sheet.max_row) - int(write_table.height)
+    #     last_row = int(sheet.max_row)
+    #     last_col = get_column_letter(len(write_table.columns))
+    #     output_range = f"A{header_row}:{last_col}{last_row}"
+    #     if logger:
+    #         logger.info("Output range for last table: %s", output_range)
 
-def reorder_table_columns_in_place(sheet: Any, desired_headers: list[str]) -> None:
-    """Reorder columns in the rendered sheet by header name (no insert/delete)."""
+    # Example: freeze the header row and turn on filters for this table.
+    # from openpyxl.utils import get_column_letter
+    # if len(write_table.columns) > 0 and sheet.max_row:
+    #     header_row = int(sheet.max_row) - int(write_table.height)
+    #     last_row = int(sheet.max_row)
+    #     last_col = get_column_letter(len(write_table.columns))
+    #     sheet.freeze_panes = f"A{header_row + 1}"
+    #     sheet.auto_filter.ref = f"A{header_row}:{last_col}{last_row}"
 
-    if sheet is None or not desired_headers:
-        return
+    # Example: make the header row bold and wrap header text.
+    # from openpyxl.styles import Alignment, Font
+    # if len(write_table.columns) > 0 and sheet.max_row:
+    #     header_row = int(sheet.max_row) - int(write_table.height)
+    #     header_font = Font(bold=True)
+    #     header_alignment = Alignment(wrap_text=True, vertical="top")
+    #     for cell in sheet[header_row]:
+    #         cell.font = header_font
+    #         cell.alignment = header_alignment
 
-    header_rows = list(sheet.iter_rows(min_row=1, max_row=1))
-    if not header_rows:
-        return
+    # Example: hide ADE diagnostic columns (if you choose to keep them written).
+    # from openpyxl.utils import get_column_letter
+    # for idx, col_name in enumerate(write_table.columns, start=1):
+    #     if col_name.startswith("__ade_"):
+    #         sheet.column_dimensions[get_column_letter(idx)].hidden = True
 
-    header_values = [str(cell.value or "") for cell in header_rows[0]]
-    index_by_header = {h: idx for idx, h in enumerate(header_values)}
-
-    desired_idxs = [index_by_header[h] for h in desired_headers if h in index_by_header]
-    remaining_idxs = [i for i in range(len(header_values)) if i not in desired_idxs]
-    new_order = desired_idxs + remaining_idxs
-
-    max_row = sheet.max_row or 0
-    max_col = sheet.max_column or 0
-    if max_row == 0 or max_col == 0:
-        return
-
-    # Snapshot grid
-    grid: list[list[Any]] = [
-        [sheet.cell(row=r, column=c).value for c in range(1, max_col + 1)]
-        for r in range(1, max_row + 1)
-    ]
-
-    # Rewrite in new order
-    for r_idx, row_values in enumerate(grid, start=1):
-        for out_col, src_idx in enumerate(new_order, start=1):
-            sheet.cell(row=r_idx, column=out_col).value = row_values[src_idx]
+    # Example: collect per-table facts into shared state for later summary writing.
+    # tables = state.setdefault("tables", [])
+    # tables.append(
+    #     {
+    #         "input_file": input_file_name,
+    #         "sheet": sheet_name,
+    #         "rows": int(write_table.height),
+    #         "columns": list(write_table.columns),
+    #     }
+    # )

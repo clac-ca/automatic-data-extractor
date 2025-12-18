@@ -1,34 +1,93 @@
 from __future__ import annotations
 
-from ade_engine.models import HookName
+import polars as pl
 
 
+# -----------------------------------------------------------------------------
+# Hook: `on_table_mapped`
+#
+# When is this called?
+# - Once per detected table region, after column mapping has been applied and
+#   before any transforms/validators run.
+# - Mapping is rename-only: the engine renames extracted columns to canonical
+#   field names where confident; unmapped columns remain in the same DataFrame.
+#
+# What is this hook good for?
+# - Table-level cleanup before transforms (drop blank rows, trim whitespace,
+#   normalize common null/sentinel values like "N/A")
+# - Combining/splitting columns when the logic involves multiple fields
+# - Recording per-run facts in `state` for later hooks (counts, flags, etc.)
+#
+# Return value:
+# - Return a new `pl.DataFrame` to replace `table` for the rest of the pipeline,
+#   or return `None` to keep the current table unchanged.
+# -----------------------------------------------------------------------------
 def register(registry):
-    registry.register_hook(on_table_mapped, hook_name=HookName.ON_TABLE_MAPPED, priority=0)
+    registry.register_hook(on_table_mapped, hook="on_table_mapped", priority=0)
 
 
 def on_table_mapped(
     *,
-    hook_name,
-    metadata,
-    state,
-    workbook,
-    sheet,
-    table,
-    input_file_name,
-    logger,
-):
-    """Optional mapping patch hook.
+    hook_name,  # HookName enum value for this stage
+    settings,  # Engine Settings
+    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: dict,  # Mutable dict shared across the run
+    workbook,  # None for this stage (table hooks run before output workbook exists)
+    sheet,  # Source worksheet (openpyxl Worksheet)
+    table: pl.DataFrame,
+    write_table,  # None for this stage
+    input_file_name: str | None,  # Input filename (basename) if known
+    logger,  # RunLogger (structured events + text logs)
+) -> pl.DataFrame | None:
+    """Post-mapping hook (mapping is rename-only; pre-transform)."""
 
-    Return a ColumnMappingPatch (or None). This is the place to:
-      - call an LLM with the extracted headers
-      - propose a patch for unmapped/incorrect fields
-      - rename/drop passthrough columns
+    if logger:
+        logger.info("Config hook: table mapped (columns=%s)", list(table.columns))
 
-    This template returns None by default.
-    """
+    # Example: Trim all string columns (safe, cheap, and often useful).
+    # table = table.with_columns(pl.col(pl.Utf8).str.strip_chars())
 
-    if logger and table:
-        mapped_fields = [col.field_name for col in getattr(table, "mapped_columns", [])]
-        logger.info("Config hook: table mapped (fields=%s)", mapped_fields)
+    # Example: Normalize common "empty" sentinels to null (across all string columns).
+    # empty_tokens = ["", "n/a", "na", "null", "none", "-"]
+    # trimmed = pl.col(pl.Utf8).str.strip_chars()
+    # table = table.with_columns(
+    #     pl.when(trimmed.str.to_lowercase().is_in(empty_tokens))
+    #     .then(None)
+    #     .otherwise(trimmed)
+    #     .name.keep()
+    # )
+
+    # Example: Drop rows that are entirely empty (all values null/blank after trimming).
+    # non_empty_row = pl.any_horizontal(
+    #     [
+    #         pl.col(c).is_not_null()
+    #         & (pl.col(c).cast(pl.Utf8).str.strip_chars() != "")
+    #         for c in table.columns
+    #     ]
+    # )
+    # table = table.filter(non_empty_row)
+
+    # Example: Create a derived column from multiple fields.
+    # if {"first_name", "last_name"} <= set(table.columns):
+    #     table = table.with_columns(
+    #         pl.concat_str(
+    #             [
+    #                 pl.col("first_name")
+    #                 .cast(pl.Utf8)
+    #                 .fill_null("")
+    #                 .str.strip_chars(),
+    #                 pl.col("last_name").cast(pl.Utf8).fill_null("").str.strip_chars(),
+    #             ],
+    #             separator=" ",
+    #         )
+    #         .str.strip_chars()
+    #         .alias("full_name")
+    #     )
+
+    # Example: Record facts in shared run state for later hooks.
+    # state["tables_seen"] = int(state.get("tables_seen", 0)) + 1
+
+    # If you built a new table above, return it:
+    # return table
+
     return None

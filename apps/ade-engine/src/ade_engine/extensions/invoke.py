@@ -75,10 +75,13 @@ def call_extension(fn: Callable[..., Any], ctx: Any, *, label: str) -> Any:
     We expand the context and call it the way config authors expect:
 
         detect_email_header(
+            table=...,
+            column=...,
+            column_sample=[...],
+            column_name="Email",
             column_index=3,
-            header="Email",
-            values=["a@x.com", "b@y.com", None],
-            values_sample=["a@x.com", "b@y.com"],
+            header_text="Email",
+            settings=...,
             sheet_name="Sheet1",
             metadata={...},
             state={...},

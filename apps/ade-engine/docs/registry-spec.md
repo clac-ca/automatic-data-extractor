@@ -30,13 +30,13 @@ Transforms/validators are additionally grouped by field (`column_transforms_by_f
 
 Detectors must return score patches (dict[str, float] or `None`). `validate_detector_scores` enforces:
 - Numeric, finite scores.
-- All keys must be known fields for column detectors/transforms/validators. Row detectors may emit unknown keys when `allow_unknown=True`.
+- All keys must be known fields for column detectors. Row detectors may emit unknown keys when `allow_unknown=True`.
 - Raises `PipelineError` on invalid payloads.
 
 ## Hooks
 
-Hook lists are stored under the `HookName` enum keys:
-- `on_workbook_start`, `on_sheet_start`, `on_table_detected`, `on_table_mapped`, `on_table_written`, `on_workbook_before_save`
+Hook lists are stored under internal `HookName` enum keys, but config packages register by string stage name:
+- `on_workbook_start`, `on_sheet_start`, `on_table_mapped`, `on_table_transformed`, `on_table_validated`, `on_table_written`, `on_workbook_before_save`
 
 Hook failures raise `HookError` with the stage name; the run is marked failed.
 
