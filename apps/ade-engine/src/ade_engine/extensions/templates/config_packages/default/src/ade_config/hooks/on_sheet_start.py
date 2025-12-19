@@ -1,41 +1,50 @@
-"""ADE config hook: on_sheet_start
-
-When this runs
---------------
-- Once per worksheet, after `on_workbook_start` and before table detection.
-- This is the earliest per-sheet hook (the workbook is open; table detection hasn't run).
-
-What it's useful for
---------------------
-- Routing/skip decisions (hidden sheets, covers, instruction tabs)
-- Capturing cheap sheet facts (dimensions, max_row/max_column, freeze panes)
-- Seeding per-sheet state that detectors/transforms/validators can consult
-- Emitting sheet-scoped logs/events (critical in batch runs)
-
-Return value
-------------
-- This hook MUST return `None` (returning anything else raises HookError).
-
-Template goals
---------------
-- Default hook is small + safe (no scanning large ranges; no workbook edits)
-- Examples are self-contained and opt-in (uncomment in `register()`)
 """
+ADE hook: ``on_sheet_start``.
+
+This hook runs once per worksheet, after the workbook has been opened and before ADE
+performs table detection. It is the earliest per-sheet entrypoint.
+
+Use this hook to make cheap, sheet-scoped decisions and to seed context for downstream
+detectors/transforms/validators (e.g., skip/routing flags, header/data-row hints, sheet
+metadata, structured logs/events).
+
+Contract
+--------
+- Called once per worksheet.
+- Must return ``None`` (any other return value is an error).
+
+Guidance
+--------
+- Keep work inexpensive and deterministic (avoid scanning large cell ranges).
+- Avoid mutating the workbook/worksheet.
+- Prefer storing derived facts under a per-sheet namespace in ``state`` and emitting
+  structured events via the provided logger.
+"""
+
 
 from __future__ import annotations
 
-import openpyxl
-import openpyxl.worksheet.worksheet
+from collections.abc import Mapping, MutableMapping
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 
-def register(registry) -> None:
+def register(registry: Registry) -> None:
     """Register this config package's on_sheet_start hook(s)."""
     registry.register_hook(on_sheet_start, hook="on_sheet_start", priority=0)
 
     # Optional high-value recipes (uncomment to enable)
-    # registry.register_hook(on_sheet_start_example_1_route_or_skip_sheets, hook="on_sheet_start", priority=10)
-    # registry.register_hook(on_sheet_start_example_2_capture_excel_tables, hook="on_sheet_start", priority=20)
-    # registry.register_hook(on_sheet_start_example_3_hint_header_from_freeze_panes, hook="on_sheet_start", priority=30)
+    # registry.register_hook(on_sheet_start_example_0_seed_sheet_state_and_log, hook="on_sheet_start", priority=10)
+    # registry.register_hook(on_sheet_start_example_1_route_or_skip_sheets, hook="on_sheet_start", priority=20)
+    # registry.register_hook(on_sheet_start_example_2_capture_excel_tables, hook="on_sheet_start", priority=30)
+    # registry.register_hook(on_sheet_start_example_3_hint_header_from_freeze_panes, hook="on_sheet_start", priority=40)
 
 
 def on_sheet_start(
@@ -43,14 +52,36 @@ def on_sheet_start(
     sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
     workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> None:
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
     """Called once per worksheet, before ADE scans the sheet for tables.
 
-    This default implementation is intentionally small but useful:
+    Default implementation is a placeholder (no-op). Add your own sheet-scoped logic
+    here or enable one of the examples in `register()`.
+    """
+    return None
+
+
+# ----------------------------
+# High-value examples (recipes)
+# ----------------------------
+
+
+def on_sheet_start_example_0_seed_sheet_state_and_log(
+    *,
+    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    input_file_name: str,  # Input filename (basename)
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
+    """Example 0 (recommended): seed per-sheet state and log sheet basics.
+
     - increments a sheet counter
     - creates/stashes a per-sheet state dict (`state["sheets"][sheet_name]`)
     - records lightweight sheet facts that are commonly useful later
@@ -70,12 +101,11 @@ def on_sheet_start(
     sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
 
     sheet_index: int | None = None
-    if isinstance(metadata, dict):
-        raw_index = metadata.get("sheet_index", None)
-        try:
-            sheet_index = int(raw_index) if raw_index is not None else None
-        except (TypeError, ValueError):
-            sheet_index = None
+    raw_index = metadata.get("sheet_index", None)
+    try:
+        sheet_index = int(raw_index) if raw_index is not None else None
+    except (TypeError, ValueError):
+        sheet_index = None
 
     sheets = cfg.get("sheets")
     if not isinstance(sheets, dict):
@@ -139,20 +169,15 @@ def on_sheet_start(
     return None
 
 
-# ----------------------------
-# High-value examples (recipes)
-# ----------------------------
-
-
 def on_sheet_start_example_1_route_or_skip_sheets(
     *,
     sheet: openpyxl.worksheet.worksheet.Worksheet,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> None:
     """
     Example 1 (high value): route/skip sheets early.
@@ -183,12 +208,11 @@ def on_sheet_start_example_1_route_or_skip_sheets(
     normalized = sheet_name.strip().lower()
 
     sheet_index: int | None = None
-    if isinstance(metadata, dict):
-        raw_index = metadata.get("sheet_index", None)
-        try:
-            sheet_index = int(raw_index) if raw_index is not None else None
-        except (TypeError, ValueError):
-            sheet_index = None
+    raw_index = metadata.get("sheet_index", None)
+    try:
+        sheet_index = int(raw_index) if raw_index is not None else None
+    except (TypeError, ValueError):
+        sheet_index = None
 
     # Customize these rules for your org's spreadsheets.
     # Keep rules readable and deterministic.
@@ -229,10 +253,10 @@ def on_sheet_start_example_2_capture_excel_tables(
     sheet: openpyxl.worksheet.worksheet.Worksheet,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> None:
     """
     Example 2 (high value): capture Excel-defined tables (if present).
@@ -249,7 +273,7 @@ def on_sheet_start_example_2_capture_excel_tables(
     if not tables:
         return None
 
-    extracted: list[dict] = []
+    extracted: list[dict[str, str | None]] = []
     try:
         for t in tables.values():
             extracted.append(
@@ -277,12 +301,11 @@ def on_sheet_start_example_2_capture_excel_tables(
     ctx["excel_tables"] = extracted
 
     sheet_index: int | None = None
-    if isinstance(metadata, dict):
-        raw_index = metadata.get("sheet_index", None)
-        try:
-            sheet_index = int(raw_index) if raw_index is not None else None
-        except (TypeError, ValueError):
-            sheet_index = None
+    raw_index = metadata.get("sheet_index", None)
+    try:
+        sheet_index = int(raw_index) if raw_index is not None else None
+    except (TypeError, ValueError):
+        sheet_index = None
 
     if logger:
         logger.event(
@@ -305,10 +328,10 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
     sheet: openpyxl.worksheet.worksheet.Worksheet,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> None:
     """
     Example 3 (high value): derive header/data row hints from freeze panes.
@@ -368,12 +391,11 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
     hints.setdefault("first_data_row", first_data_row)
 
     sheet_index: int | None = None
-    if isinstance(metadata, dict):
-        raw_index = metadata.get("sheet_index", None)
-        try:
-            sheet_index = int(raw_index) if raw_index is not None else None
-        except (TypeError, ValueError):
-            sheet_index = None
+    raw_index = metadata.get("sheet_index", None)
+    try:
+        sheet_index = int(raw_index) if raw_index is not None else None
+    except (TypeError, ValueError):
+        sheet_index = None
 
     if logger:
         logger.event(

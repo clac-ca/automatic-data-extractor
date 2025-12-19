@@ -8,5 +8,5 @@ Convention (recommended)
 - Each module defines `register(registry) -> None`.
 - Register one or more detectors with `registry.register_row_detector(...)`.
 
-The top-level `ade_config.register()` auto-discovers and registers these modules.
+The ADE engine auto-discovers and registers these modules.
 """

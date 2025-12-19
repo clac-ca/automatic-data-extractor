@@ -846,46 +846,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/configurations/{configuration_id}/jobs/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream Configuration Job Endpoint
-         * @description Create and execute a job while streaming EventRecords over SSE (live only).
-         */
-        get: operations["stream_configuration_job_endpoint_api_v1_configurations__configuration_id__jobs_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/jobs/{job_id}/events/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Stream Job Events Endpoint
-         * @description Tail a job's events as SSE (live only, no replay/resume).
-         */
-        get: operations["stream_job_events_endpoint_api_v1_jobs__job_id__events_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds": {
         parameters: {
             query?: never;
@@ -1454,15 +1414,6 @@ export type components = {
              * Format: binary
              */
             file: string;
-        };
-        /** Body_stream_configuration_job_endpoint_api_v1_configurations__configuration_id__jobs_stream_get */
-        Body_stream_configuration_job_endpoint_api_v1_configurations__configuration_id__jobs_stream_get: {
-            /** Input Sheet Names */
-            input_sheet_names?: string[] | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: string;
-            } | null;
         };
         /** Body_upload_document_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_document_api_v1_workspaces__workspace_id__documents_post: {
@@ -6085,81 +6036,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_configuration_job_endpoint_api_v1_configurations__configuration_id__jobs_stream_get: {
-        parameters: {
-            query?: {
-                dry_run?: boolean;
-                validate_only?: boolean;
-                force_rebuild?: boolean;
-                debug?: boolean;
-                log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
-                input_document_id?: string | null;
-            };
-            header?: never;
-            path: {
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["Body_stream_configuration_job_endpoint_api_v1_configurations__configuration_id__jobs_stream_get"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_job_events_endpoint_api_v1_jobs__job_id__events_stream_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Job identifier (run id) */
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
             };
             /** @description Validation Error */
             422: {

@@ -14,18 +14,12 @@ from ade_engine.models.run import RunRequest, RunStatus
 def _write_config_package(root: Path) -> None:
     pkg = root / "ade_config"
     pkg.mkdir(parents=True, exist_ok=True)
-    (pkg / "__init__.py").write_text(
-        """
-def register(registry):
-    from . import rows, columns, hooks
-    rows.register(registry)
-    columns.register(registry)
-    hooks.register(registry)
-""",
-        encoding="utf-8",
-    )
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
 
-    (pkg / "rows.py").write_text(
+    row_detectors = pkg / "row_detectors"
+    row_detectors.mkdir(parents=True, exist_ok=True)
+    (row_detectors / "__init__.py").write_text("", encoding="utf-8")
+    (row_detectors / "pick_header.py").write_text(
         """
 from ade_engine.models import RowKind
 
@@ -41,7 +35,10 @@ def register(registry):
         encoding="utf-8",
     )
 
-    (pkg / "columns.py").write_text(
+    columns = pkg / "columns"
+    columns.mkdir(parents=True, exist_ok=True)
+    (columns / "__init__.py").write_text("", encoding="utf-8")
+    (columns / "contact_fields.py").write_text(
         """
 from ade_engine.models import FieldDef
 
@@ -62,7 +59,10 @@ def register(registry):
         encoding="utf-8",
     )
 
-    (pkg / "hooks.py").write_text(
+    hooks = pkg / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / "__init__.py").write_text("", encoding="utf-8")
+    (hooks / "boom_before_save.py").write_text(
         """
 def register(registry):
     registry.register_hook(on_workbook_before_save, hook="on_workbook_before_save", priority=0)

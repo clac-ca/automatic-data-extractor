@@ -1,24 +1,24 @@
-"""ADE config hook: `on_workbook_start`
+"""
+ADE hook: ``on_workbook_start``.
 
-When this runs
---------------
-- Once per input file, after ADE opens the *source* workbook.
-- Before any sheets/tables are processed.
+This hook runs once per input file after ADE opens the *source* workbook and before any
+sheets or tables are processed.
 
-What it's useful for
---------------------
-- Run-scoped setup (seed shared state, precompute flags, init reusable clients)
-- Safe workbook inspection (sheet names, document properties, Excel "Tables")
-- Failing fast with clear errors when required sheets/tables are missing
+Use this hook for run-scoped initialization and safe workbook inspection: seeding shared
+``state``, computing flags used by downstream hooks/detectors, initializing reusable
+clients (without performing work yet), and failing fast when required sheets or workbook
+structure is missing.
 
-Return value
-------------
-- This hook MUST return `None` (returning anything else raises HookError).
+Contract
+--------
+- Called once per source workbook.
+- Must return ``None`` (any other return value is an error).
 
-Template goals
---------------
-- Keep the default hook minimal and safe (no workbook edits, no heavy scanning).
-- Keep examples self-contained and opt-in (uncomment in `register()`).
+Guidance
+--------
+- Keep work inexpensive and deterministic (avoid heavy scanning).
+- Treat the source workbook as read-only.
+- Prefer caching derived facts in ``state`` for reuse by later hooks.
 """
 
 from __future__ import annotations
@@ -26,37 +26,62 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
 import polars as pl
 
+if TYPE_CHECKING:
+    import openpyxl
 
-def register(registry) -> None:
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
+
+
+def register(registry: Registry) -> None:
     """Register hook(s) with the ADE registry."""
     registry.register_hook(on_workbook_start, hook="on_workbook_start", priority=0)
 
     # ------------------------------------------------------------------
     # Optional examples (uncomment to enable)
     # ------------------------------------------------------------------
-    # registry.register_hook(on_workbook_start_example_1_fail_fast_missing_sheets, hook="on_workbook_start", priority=10)
-    # registry.register_hook(on_workbook_start_example_2_detect_workbook_flavor_and_flags, hook="on_workbook_start", priority=20)
-    # registry.register_hook(on_workbook_start_example_3_emit_structured_event, hook="on_workbook_start", priority=30)
-    # registry.register_hook(on_workbook_start_example_4_init_openai_client, hook="on_workbook_start", priority=40)
-    # registry.register_hook(on_workbook_start_example_5_load_reference_sheet_into_polars, hook="on_workbook_start", priority=50)
+    # registry.register_hook(on_workbook_start_example_0_seed_state_and_log_workbook_basics, hook="on_workbook_start", priority=10)
+    # registry.register_hook(on_workbook_start_example_1_fail_fast_missing_sheets, hook="on_workbook_start", priority=20)
+    # registry.register_hook(on_workbook_start_example_2_detect_workbook_flavor_and_flags, hook="on_workbook_start", priority=30)
+    # registry.register_hook(on_workbook_start_example_3_emit_structured_event, hook="on_workbook_start", priority=40)
+    # registry.register_hook(on_workbook_start_example_4_init_openai_client, hook="on_workbook_start", priority=50)
+    # registry.register_hook(on_workbook_start_example_5_load_reference_sheet_into_polars, hook="on_workbook_start", priority=60)
 
 
 def on_workbook_start(
     *,
     workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
-    settings: Any,  # Engine settings (type depends on ADE)
+    settings: Settings,  # Engine settings
     metadata: Mapping[str, Any],  # Run metadata (filenames, IDs, etc.)
     state: MutableMapping[str, Any],  # Mutable dict shared across the run
-    logger: Any,  # RunLogger (structured events + text logs)
-) -> None:
-    """Default hook: seed run state and log workbook basics (safe, no workbook edits)."""
-    _ = (settings,)  # unused by default
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
+    """Default implementation is a placeholder (no-op). Add run-scoped init here."""
+
+    return None
+
+
+# -----------------------------------------------------------------------------
+# Optional examples (disabled by default)
+# -----------------------------------------------------------------------------
+
+
+def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
+    *,
+    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    input_file_name: str,  # Input filename (basename)
+    settings: Settings,  # Engine settings
+    metadata: Mapping[str, Any],  # Run metadata (filenames, IDs, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
+    """Example 0 (recommended): seed run state and log workbook basics."""
 
     # `state` is already the shared mutable dict for the run.
     cfg = state
@@ -171,22 +196,16 @@ def on_workbook_start(
     return None
 
 
-# -----------------------------------------------------------------------------
-# Optional examples (disabled by default)
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_start_example_1_fail_fast_missing_sheets(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings: Any,
+    settings: Settings,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    logger: Any,
-) -> None:
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 1: Fail fast if required worksheets are missing."""
-    _ = (input_file_name, settings, metadata, state, logger)
 
     required = {"Orders", "Customers"}  # customize
     sheet_names = set(getattr(workbook, "sheetnames", []) or [])
@@ -201,13 +220,12 @@ def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings: Any,
+    settings: Settings,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    logger: Any,
-) -> None:
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 2: Set workbook-level flags for later hooks/detectors."""
-    _ = (input_file_name, settings, metadata)
 
     cfg = state
 
@@ -242,13 +260,12 @@ def on_workbook_start_example_3_emit_structured_event(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings: Any,
+    settings: Settings,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    logger: Any,
-) -> None:
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 3: Emit a config-scoped structured event (no strict schema required)."""
-    _ = (settings, state, workbook)
 
     if not logger or not hasattr(logger, "event"):
         return None
@@ -278,19 +295,17 @@ def on_workbook_start_example_4_init_openai_client(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings: Any,
+    settings: Settings,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    logger: Any,
-) -> None:
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 4: Initialize an OpenAI client once and store it in `state`.
 
     Notes:
     - This example does NOT make a network call. It just prepares the client.
     - The OpenAI SDK reads `OPENAI_API_KEY` from the environment automatically.
     """
-    _ = (metadata, workbook, input_file_name)
-
     import os
 
     cfg = state
@@ -341,11 +356,11 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings: Any,
+    settings: Settings,
     metadata: Mapping[str, Any],
     state: MutableMapping[str, Any],
-    logger: Any,
-) -> None:
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 5: Load a small reference sheet into Polars and stash it in `state`.
 
     Pattern:
@@ -356,8 +371,6 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
     Best practice:
     - Keep this small. For large sheets, defer reading until you need it.
     """
-    _ = (metadata, input_file_name)
-
     cfg = state
 
     # Only do this once per run.

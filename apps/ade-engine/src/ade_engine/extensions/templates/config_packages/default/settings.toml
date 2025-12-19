@@ -2,10 +2,7 @@
 # The engine will load this file if present (otherwise it uses safe defaults).
 # If changed, ensure you force a rebuild so the package (and settings) are reinstalled in the venv.
 
-[ade_engine]
 remove_unmapped_columns = false
 write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
-
-[ade_engine.detectors]
 detector_column_sample_size = 100     # Max number of values collected into `column_sample` for each column detector

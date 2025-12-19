@@ -78,7 +78,7 @@ def detect_and_map_columns(
         column = table.get_column(column_name)
         column_sample = _build_column_sample(
             column,
-            limit=int(settings.detectors.detector_column_sample_size),
+            limit=int(settings.detector_column_sample_size),
         )
 
         scores: Dict[str, float] = {}

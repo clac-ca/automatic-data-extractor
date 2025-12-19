@@ -14,8 +14,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .tox/
-.venv/
-venv/
+.venv*/
+venv*/
 ENV/
 *.egg-info/
 .eggs/

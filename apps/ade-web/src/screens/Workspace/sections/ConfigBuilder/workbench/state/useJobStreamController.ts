@@ -3,8 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkbenchConsoleStore } from "./consoleStore";
 import type { WorkbenchConsoleLine } from "../types";
 
-import { streamConfigurationJobEvents } from "@shared/jobs/api";
-import type { RunStreamOptions } from "@shared/runs/api";
+import { createRun, streamRunEventsForRun, type RunStreamOptions } from "@shared/runs/api";
 import { eventName, eventPayload, eventTimestamp, type RunStreamEvent } from "@shared/runs/types";
 
 export type JobStreamStatus = "idle" | "running" | "succeeded" | "failed" | "cancelled";
@@ -97,16 +96,6 @@ export function useJobStreamController({
     (evt: RunStreamEvent) => {
       const name = eventName(evt);
 
-      if (name === "job.meta") {
-        const details = eventPayload(evt);
-        const nextId = typeof details.jobId === "string" ? details.jobId : null;
-        if (nextId) {
-          setJobId((prev) => prev ?? nextId);
-          onJobIdChange?.(nextId);
-        }
-        return;
-      }
-
       const payload = eventPayload(evt);
       const scopeRaw =
         name.startsWith("build.")
@@ -178,25 +167,20 @@ export function useJobStreamController({
 
       let resolvedJobId: string | null = null;
       try {
-        for await (const evt of streamConfigurationJobEvents(configId, options, controller.signal)) {
+        const run = await createRun(configId, options, controller.signal);
+        resolvedJobId = run.id;
+        setJobId(run.id);
+        onJobIdChange?.(run.id);
+
+        for await (const evt of streamRunEventsForRun(run, { afterSequence: 0, signal: controller.signal })) {
           pushEvent(evt);
-          const name = eventName(evt);
-          if (name === "job.meta") {
-            const details = eventPayload(evt);
-            const nextId = typeof details.jobId === "string" ? details.jobId : null;
-            if (nextId && !resolvedJobId) {
-              resolvedJobId = nextId;
-              setJobId(nextId);
-              onJobIdChange?.(nextId);
-            }
-          }
-          if (name === "run.complete") {
+          if (eventName(evt) === "run.complete") {
             break;
           }
         }
 
         if (!resolvedJobId) {
-          throw new Error("Job stream ended before returning a job id.");
+          throw new Error("Run creation response missing run id.");
         }
         return { jobId: resolvedJobId, startedAt };
       } catch (error) {

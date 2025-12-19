@@ -1,53 +1,47 @@
-"""ADE config hook: `on_table_validated`
+"""
+ADE hook: ``on_table_validated``.
 
-When this runs
---------------
-- Once per detected table, after validators have run and ADE's reserved issue columns
-  have been added, but before the output is written.
+This hook runs once per detected table after validators have executed and ADE has added
+its reserved issue columns, but before the output is written. It is the final stage for
+output shaping and triage-friendly presentation.
 
-Reserved validation columns
----------------------------
-- `__ade_has_issues` (bool): row has any issues
-- `__ade_issue_count` (int): count of fields with issues in the row
-- `__ade_issue__<field>` (str): per-field issue message (null/blank when ok)
-  (these exist only for fields that have validators registered)
+Use this hook to reorder/select columns, add presentation-only derived columns, sort or
+filter rows for review (e.g., move issue rows to the top), and create human-friendly
+summaries from the issue columns.
 
-What it's useful for
---------------------
-- Final output shaping: reorder/select columns, add derived columns, sort/filter rows
-- Triage data quality: move issue rows to the top, add human-friendly summaries
-
-Return value
-------------
-- Return a new `pl.DataFrame` to replace `table`, or `None` to keep it unchanged.
-- Returning anything else raises HookError.
+Contract
+--------
+- Called once per validated table.
+- Return a replacement ``pl.DataFrame`` to update the table, or ``None`` to leave it
+  unchanged. Any other return value is an error.
 
 Notes
 -----
-- This is the last "table-returning" hook. If you change values here, validators
-  will NOT re-run. Do value changes earlier in `on_table_transformed`.
-- `workbook` is the *input* workbook (openpyxl Workbook).
-- ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
-  input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
-- `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
-
-Template goals
---------------
-- Default hook is safe and minimal (logs + lightweight counters).
-- Examples are self-contained and opt-in (uncomment in `register()`).
+- Validators will not re-run after this hook. Perform any value normalization earlier
+  (e.g., in ``on_table_transformed``).
+- ADE issue columns include ``__ade_has_issues`` (bool), ``__ade_issue_count`` (int), and
+  per-field columns named ``__ade_issue__<field>`` for fields with validators.
 """
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
-import openpyxl.worksheet.worksheet
 import polars as pl
+from polars.type_aliases import PolarsDataType
 from ade_engine.models import TableRegion
 
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
 
-def register(registry) -> None:
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
+
+
+def register(registry: Registry) -> None:
     """Register this config package's `on_table_validated` hook(s)."""
     registry.register_hook(on_table_validated, hook="on_table_validated", priority=0)
 
@@ -69,47 +63,12 @@ def on_table_validated(
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> pl.DataFrame | None:
-    """Default: log a small issue summary and keep the table unchanged."""
-    _ = (settings, metadata, workbook, input_file_name)
-
-    has_issues_col = "__ade_has_issues"
-    issue_count_col = "__ade_issue_count"
-
-    cfg = state
-
-    counters = cfg.get("counters")
-    if not isinstance(counters, MutableMapping):
-        counters = {}
-        cfg["counters"] = counters
-    counters["tables_validated_seen"] = int(counters.get("tables_validated_seen", 0) or 0) + 1
-
-    if logger:
-        sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-        range_ref = table_region.a1
-        issues_total = 0
-        rows_with_issues = 0
-
-        if issue_count_col in table.columns:
-            issues_total = int(table.get_column(issue_count_col).sum() or 0)
-        if has_issues_col in table.columns:
-            rows_with_issues = int(table.get_column(has_issues_col).sum() or 0)
-
-        logger.info(
-            "Config hook: table validated (sheet=%s table_index=%s range=%s rows=%d cols=%d issues_total=%d rows_with_issues=%d)",
-            sheet_name,
-            table_index,
-            range_ref,
-            int(table.height),
-            int(len(table.columns)),
-            issues_total,
-            rows_with_issues,
-        )
-
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> pl.DataFrame | None:  # noqa: ARG001
+    """Default implementation is a placeholder (no-op)."""
     return None
 
 
@@ -126,11 +85,11 @@ def on_table_validated_example_1_enforce_template_layout(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 1: enforce a spreadsheet-style output layout.
 
     Pattern:
@@ -139,8 +98,6 @@ def on_table_validated_example_1_enforce_template_layout(
     - Keep unexpected columns, but append them to the right.
     - Keep ADE issue columns at the far right (so they don't break templates).
     """
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
-
     issue_col_prefix = "__ade_issue__"
     has_issues_col = "__ade_has_issues"
     issue_count_col = "__ade_issue_count"
@@ -148,7 +105,7 @@ def on_table_validated_example_1_enforce_template_layout(
     # 1) Define your required template columns (name + dtype).
     #    - We only enforce types for columns we ADD here.
     #    - We do NOT cast existing columns (validators won't re-run at this stage).
-    TEMPLATE_COLUMNS: list[tuple[str, pl.DataType]] = [
+    TEMPLATE_COLUMNS: list[tuple[str, PolarsDataType]] = [
         ("member_id", pl.Utf8),
         ("first_name", pl.Utf8),
         ("last_name", pl.Utf8),
@@ -203,34 +160,22 @@ def on_table_validated_example_2_strict_template_only(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 2: strict template output.
 
     - Ensures a required set of columns exist (adds empty ones if missing).
     - Outputs ONLY those columns (drops everything else).
     - Optionally includes ADE issue columns at the end.
     """
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
-
     issue_col_prefix = "__ade_issue__"
     has_issues_col = "__ade_has_issues"
     issue_count_col = "__ade_issue_count"
 
-    TEMPLATE_COLUMNS: list[tuple[str, pl.DataType]] = [
+    TEMPLATE_COLUMNS: list[tuple[str, PolarsDataType]] = [
         ("member_id", pl.Utf8),
         ("first_name", pl.Utf8),
         ("last_name", pl.Utf8),
@@ -267,11 +212,11 @@ def on_table_validated_example_3_add_derived_columns(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 3: add derived columns using Polars expressions (fast + readable).
 
     Demonstrates:
@@ -280,8 +225,6 @@ def on_table_validated_example_3_add_derived_columns(
     - Normalizing a phone number to digits only (very basic)
     - Creating a simple `row_status` from ADE's issue columns
     """
-    _ = (settings, metadata, state, workbook, sheet, table_region, table_index, input_file_name)
-
     has_issues_col = "__ade_has_issues"
 
     if not any(
@@ -365,23 +308,12 @@ def on_table_validated_example_4_sort_issues_to_top(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 4: sort so rows with issues appear at the top (triage-friendly)."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
 
     has_issues_col = "__ade_has_issues"
     issue_count_col = "__ade_issue_count"
@@ -421,23 +353,12 @@ def on_table_validated_example_5_move_issue_columns_to_end(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 5: move ADE's reserved issue columns to the end (nicer for humans)."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
 
     issue_col_prefix = "__ade_issue__"
     has_issues_col = "__ade_has_issues"
@@ -466,23 +387,12 @@ def on_table_validated_example_6_add_issues_summary_column(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 6: add a single `issues_summary` column + an `issue_fields` list column."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
 
     issue_col_prefix = "__ade_issue__"
     issue_cols = [c for c in table.columns if c.startswith(issue_col_prefix)]
@@ -526,19 +436,17 @@ def on_table_validated_example_7_enrich_from_reference_csv_cached(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 7: enrich your output by joining to a reference dataset.
 
     Demonstrates:
     1) Cache expensive work (reading a CSV) in `state` so it happens once per run.
     2) Join enrichment via Polars (fast + readable).
     """
-    _ = (settings, metadata, workbook, sheet, table_region, table_index, input_file_name)
-
     # --- Configuration you would customize ---
     REFERENCE_CSV_PATH = "member_reference.csv"  # <-- change me
     CACHE_KEY = "member_reference_df"

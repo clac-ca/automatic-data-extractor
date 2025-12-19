@@ -1478,18 +1478,26 @@ function RunExtractionDrawerContent({
   const hasActiveConfig = Boolean(activeConfig);
 
   const preferredConfigId = useMemo(() => {
+    if (activeConfig?.id) {
+      return activeConfig.id;
+    }
     if (preferences.configId) {
       const match = selectableConfigs.find((config) => config.id === preferences.configId);
       if (match) {
         return match.id;
       }
     }
-    return activeConfig?.id ?? "";
+    return selectableConfigs[0]?.id ?? "";
   }, [activeConfig?.id, preferences.configId, selectableConfigs]);
 
   useEffect(() => {
-    setSelectedConfigId(preferredConfigId);
-  }, [preferredConfigId]);
+    setSelectedConfigId((current) => {
+      if (current && selectableConfigs.some((config) => config.id === current)) {
+        return current;
+      }
+      return preferredConfigId;
+    });
+  }, [preferredConfigId, selectableConfigs]);
 
   const selectedConfig = useMemo(
     () => selectableConfigs.find((config) => config.id === selectedConfigId) ?? null,
@@ -1638,23 +1646,20 @@ function RunExtractionDrawerContent({
     runRunning ||
     safeModeLoading ||
     safeModeEnabled ||
-    !hasActiveConfig ||
     !hasConfigurations ||
     !selectedConfig;
   const runButtonTitle = safeModeEnabled
     ? safeModeDetail
-    : !hasActiveConfig
-      ? "No active configuration. Make a draft active to run extraction."
     : safeModeLoading
       ? "Checking ADE safe mode status..."
+      : !hasConfigurations
+        ? "No configurations available. Create one before running extraction."
+        : !selectedConfig
+          ? "Select a configuration to run extraction."
       : undefined;
 
   const handleSubmit = () => {
     if (safeModeEnabled || safeModeLoading) {
-      return;
-    }
-    if (!hasActiveConfig) {
-      setErrorMessage("No active configuration. Make a draft active before running extraction.");
       return;
     }
     if (!selectedConfig) {
@@ -1751,23 +1756,26 @@ function RunExtractionDrawerContent({
                 Unable to load configurations.{" "}
                 {configurationsQuery.error instanceof Error ? configurationsQuery.error.message : "Try again later."}
               </Alert>
-            ) : hasConfigurations && !hasActiveConfig ? (
-              <div className="space-y-2">
-                <Alert tone="warning">No active configuration. Make a draft active to run extraction.</Alert>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    onClose();
-                    navigate(`/workspaces/${workspaceId}/config-builder`);
-                  }}
-                  disabled={submitRun.isPending}
-                >
-                  Go to Configuration Builder
-                </Button>
-              </div>
             ) : hasConfigurations ? (
               <div className="space-y-2">
+                {!hasActiveConfig ? (
+                  <div className="space-y-2">
+                    <Alert tone="warning">
+                      No active configuration. Runs will use the selected draft configuration.
+                    </Alert>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        onClose();
+                        navigate(`/workspaces/${workspaceId}/config-builder`);
+                      }}
+                      disabled={submitRun.isPending}
+                    >
+                      Go to Configuration Builder
+                    </Button>
+                  </div>
+                ) : null}
                 <Select
                   value={selectedConfigId}
                   onChange={(event) => {

@@ -1,6 +1,6 @@
 # Settings Reference
 
-`ade_engine.infrastructure.settings.Settings` is a small Pydantic model with an explicit loader: `Settings.load(...)`.
+`ade_engine.infrastructure.settings.Settings` is a `pydantic-settings` model. You can instantiate it directly (`Settings()`) or use the convenience loader `Settings.load(...)`.
 
 ## Load order (lowest → highest precedence)
 
@@ -10,11 +10,11 @@
 4) environment variables prefixed `ADE_ENGINE_`  
 5) explicit overrides (kwargs / CLI)
 
-`settings.toml` may use either top-level keys or a nested `[ade_engine]` table.
+`settings.toml` is flat: keys map 1:1 to `Settings` fields.
 
 ## Core field
 
-- `config_package: str | None` — optional default config package directory used by the CLI when `--config-package` is omitted. (The engine run itself is driven by `RunRequest.config_package`.)
+- `config_package: Path | None` — optional default config package directory used by the CLI when `--config-package` is omitted. (The engine run itself is driven by `RunRequest.config_package`.)
 
 ## Output / writer
 
@@ -40,7 +40,8 @@
 These settings control the shared sampling policy used by detectors.
 They do not affect transforms or validators, which always process all rows.
 
-- `detectors.detector_column_sample_size: int` — max number of values collected into `column_sample` for each column detector (default `100`).
+- `detector_column_sample_size: int` — max number of values collected into `column_sample` for each column detector (default `100`).
+  - Can be set via env: `ADE_ENGINE_DETECTOR_COLUMN_SAMPLE_SIZE=100`
 
 ## File discovery
 
@@ -51,16 +52,13 @@ They do not affect transforms or validators, which always process all rows.
 ## TOML example
 
 ```toml
-[ade_engine]
 remove_unmapped_columns = false
 write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost"
+detector_column_sample_size = 100
 log_format = "ndjson"
 log_level = "INFO"
 max_empty_rows_run = 2000
 max_empty_cols_run = 200
 supported_file_extensions = [".xlsx", ".csv"]
-
-[ade_engine.detectors]
-detector_column_sample_size = 100
 ```

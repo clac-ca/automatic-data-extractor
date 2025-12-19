@@ -1,6 +1,6 @@
 # Registry Specification
 
-The Registry is the in-memory catalogue of everything a config package provides. Config packages populate it imperatively via `registry.register_*` calls inside `register(registry)`, then the engine finalizes it before the pipeline runs.
+The Registry is the in-memory catalogue of everything a config package provides. Config packages populate it imperatively via `registry.register_*` calls inside module-level `register(registry)` functions that the engine auto-discovers and invokes, then the engine finalizes it before the pipeline runs.
 
 ## Stored objects
 
@@ -48,4 +48,4 @@ Hook failures raise `HookError` with the stage name; the run is marked failed.
 - `*args` / `**kwargs` are tolerated but not required.
 - Any exception from the callable is wrapped as `PipelineError` (or `HookError` for hooks) so the run can attribute the failure.
 
-There is no decorator-based discovery. Config packages are responsible for calling `registry.register_*` explicitly inside their `register(registry)` entrypoint.
+There is no decorator-based discovery. Config packages are responsible for calling `registry.register_*` explicitly inside module-level `register(registry)` functions.

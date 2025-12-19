@@ -1,80 +1,28 @@
-"""Settings for ade_engine (infrastructure).
+"""Settings for :mod:`ade_engine` (infrastructure).
 
-The engine loads settings from (lowest → highest precedence):
-1) ``settings.toml`` in the current working directory
-2) ``settings.toml`` in the config package directory (if available)
-3) ``.env`` (current working directory)
-4) environment variables (prefix: ``ADE_ENGINE_``)
-5) explicit overrides (kwargs / CLI)
+Settings are defined in one place (this file) and loaded using `pydantic-settings`.
 
-The TOML file may use either top-level keys or a nested ``[ade_engine]`` table.
+Supported sources (lowest → highest precedence):
+1) `settings.toml` (current working directory)
+2) `settings.toml` (config package directory; when provided)
+3) `.env` (current working directory)
+4) environment variables (prefix: `ADE_ENGINE_`)
+5) explicit overrides (`Settings(...)` / CLI)
+
+`settings.toml` is intentionally flat: keys map 1:1 to `Settings` fields.
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import tomllib
 from pathlib import Path
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
-
-from ade_engine.models.detectors import DetectorSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import PydanticBaseSettingsSource, TomlConfigSettingsSource
 
 ENV_PREFIX = "ADE_ENGINE_"
-
-
-def _load_settings_toml(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-
-    try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-    if not isinstance(raw, dict):
-        return {}
-
-    nested = raw.get("ade_engine")
-    if isinstance(nested, dict):
-        # Merge [ade_engine] into the top-level map so nested tables (e.g. [ade_engine.detectors])
-        # remain visible to the settings model.
-        combined = dict(raw)
-        combined.pop("ade_engine", None)
-        combined.update(nested)
-        return combined
-
-    return raw
-
-
-def _load_dotenv(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-
-    env: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export ") :].lstrip()
-        if "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if not key:
-            continue
-
-        if (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')):
-            value = value[1:-1]
-
-        env[key] = value
-
-    return env
 
 
 def _coerce_log_level(value: Any) -> int:
@@ -117,11 +65,17 @@ def _coerce_supported_file_extensions(value: Any) -> tuple[str, ...]:
     raise TypeError("supported_file_extensions must be a list/tuple of strings or a comma-separated string")
 
 
-class Settings(BaseModel):
+class Settings(BaseSettings):
     """Runtime settings for the engine."""
 
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        env_prefix=ENV_PREFIX,
+        env_file=".env",
+    )
+
     # Optional default config package resolution (used by CLI when --config-package is omitted).
-    config_package: str | None = Field(
+    config_package: Path | None = Field(
         default=None,
         description="Path to the config package directory (contains ade_config).",
     )
@@ -141,8 +95,8 @@ class Settings(BaseModel):
     max_empty_rows_run: int | None = Field(default=1000, ge=1)
     max_empty_cols_run: int | None = Field(default=500, ge=1)
 
-    # Detector sampling policy
-    detectors: DetectorSettings = Field(default_factory=DetectorSettings)
+    # Detector sampling policy (detection stage only)
+    detector_column_sample_size: int = Field(default=100, ge=1)
 
     # File discovery
     supported_file_extensions: tuple[str, ...] = Field(default=(".xlsx", ".xlsm", ".csv"))
@@ -158,6 +112,7 @@ class Settings(BaseModel):
         coerced = _coerce_supported_file_extensions(value)
         if not coerced:
             return coerced
+
         normalized: list[str] = []
         for ext in coerced:
             ext = ext.strip()
@@ -169,66 +124,52 @@ class Settings(BaseModel):
         return tuple(normalized)
 
     @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        toml_files = None
+        if hasattr(init_settings, "init_kwargs"):
+            toml_files = init_settings.init_kwargs.get("_ade_toml_files")  # type: ignore[attr-defined]
+
+        if toml_files is None:
+            toml_files = [Path.cwd() / "settings.toml"]
+
+        toml_settings = TomlConfigSettingsSource(settings_cls, toml_file=toml_files)
+
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            toml_settings,
+            file_secret_settings,
+        )
+
+    @classmethod
     def load(
         cls,
         *,
         config_package_dir: Path | None = None,
         cwd: Path | None = None,
-        env: Mapping[str, str] | None = None,
-        dotenv_path: Path | None = None,
-        overrides: Mapping[str, Any] | None = None,
+        **overrides: Any,
     ) -> "Settings":
-        """Load settings from TOML + dotenv + env vars + explicit overrides."""
+        cwd_path = (cwd or Path.cwd()).expanduser().resolve()
 
-        cwd = cwd or Path.cwd()
-        env = env or os.environ
-        overrides_dict = dict(overrides or {})
-
-        cwd_toml = _load_settings_toml(cwd / "settings.toml")
-        dotenv_env = _load_dotenv(dotenv_path or (cwd / ".env"))
-
-        def parse_prefixed(source: Mapping[str, str]) -> dict[str, Any]:
-            out: dict[str, Any] = {}
-            for key, value in source.items():
-                if not key.startswith(ENV_PREFIX):
-                    continue
-                field = key[len(ENV_PREFIX) :].lower()
-                if field in cls.model_fields:
-                    out[field] = value
-            return out
-
-        dotenv_settings = parse_prefixed(dotenv_env)
-        env_settings = parse_prefixed(env)
-
-        # Resolve config package directory for settings.toml discovery.
-        cfg_dir: Path | None = None
+        toml_files: list[Path] = [cwd_path / "settings.toml"]
         if config_package_dir is not None:
-            cfg_dir = Path(config_package_dir).expanduser().resolve()
-        elif "config_package" in overrides_dict and overrides_dict["config_package"]:
-            cfg_dir = Path(str(overrides_dict["config_package"])).expanduser().resolve()
-        elif env_settings.get("config_package"):
-            cfg_dir = Path(str(env_settings["config_package"])).expanduser().resolve()
-        elif dotenv_settings.get("config_package"):
-            cfg_dir = Path(str(dotenv_settings["config_package"])).expanduser().resolve()
-        elif cwd_toml.get("config_package"):
-            cfg_dir = Path(str(cwd_toml["config_package"])).expanduser().resolve()
+            cfg_path = Path(config_package_dir).expanduser().resolve()
+            toml_files.append(cfg_path / "settings.toml")
+            overrides.setdefault("config_package", cfg_path)
 
-        cfg_toml: dict[str, Any] = {}
-        if cfg_dir is not None:
-            cfg_toml = _load_settings_toml(cfg_dir / "settings.toml")
-
-        data: dict[str, Any] = {}
-        data.update(cwd_toml)
-        data.update(cfg_toml)
-        data.update(dotenv_settings)
-        data.update(env_settings)
-        data.update(overrides_dict)
-
-        if cfg_dir is not None:
-            # Keep the stored config_package normalized if we resolved it.
-            data["config_package"] = str(cfg_dir)
-
-        return cls.model_validate(data)
+        return cls(
+            _ade_toml_files=toml_files,
+            _env_file=cwd_path / ".env",
+            **overrides,
+        )
 
 
 __all__ = ["ENV_PREFIX", "Settings"]

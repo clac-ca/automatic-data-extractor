@@ -17,8 +17,16 @@ Template goals
 
 from __future__ import annotations
 
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any, TYPE_CHECKING
 
-def register(registry) -> None:
+if TYPE_CHECKING:
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
+
+
+def register(registry: Registry) -> None:
     """Register this config package's data row detector(s)."""
     registry.register_row_detector(detect_data_row_by_density, row_kind="data", priority=0)
 
@@ -26,13 +34,13 @@ def register(registry) -> None:
 def detect_data_row_by_density(
     *,
     row_index: int,  # 1-based row number in the scanned sheet (Excel-style)
-    row_values: list[object],  # Raw cell values for this row (may include None/""/numbers)
+    row_values: Sequence[Any],  # Raw cell values for this row (may include None/""/numbers)
     sheet_name: str,  # Worksheet title
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
     input_file_name: str,  # Input filename (basename)
-    logger,  # RunLogger (structured events + text logs)
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Vote for a row being a data row.
 

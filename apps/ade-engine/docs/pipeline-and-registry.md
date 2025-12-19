@@ -5,7 +5,7 @@ This document describes how the pipeline consumes the `Registry` populated by a 
 ## Registry lifecycle
 
 1. **Creation** — the engine creates a fresh `Registry`.
-2. **Population** — the config package’s `register(registry)` calls `registry.register_*` for all fields, detectors, transforms, validators, and hooks.
+2. **Population** — the engine imports discovered plugin modules and invokes their `register(registry)` functions, which call `registry.register_*` for all fields, detectors, transforms, validators, and hooks.
 3. **Finalization** — `registry.finalize()`:
    - sorts callables by `priority` (desc), then module + qualname (deterministic)
    - groups transforms/validators by `field` for fast lookup
