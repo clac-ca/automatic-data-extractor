@@ -2,7 +2,7 @@
 
 Hooks let you customize how ADE runs without changing the engine:
 - seed state at workbook start
-- capture per-sheet info
+- capture per-sheet info at start/end
 - reorder/add columns after mapping/transforms/validation
 - format the output workbook after writing
 - add summary sheets before save
