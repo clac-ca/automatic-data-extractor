@@ -28,7 +28,7 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
    The source workbook is opened (CSV files are converted to an in-memory workbook). Visible sheets are chosen either from the source order or filtered by `--input-sheet`. A shared `state` dict and `metadata` (input/output filenames) travel through hooks and pipeline stages.
 
 5. **Sheet pipeline**  
-   For each sheet, `Pipeline.process_sheet` performs:
+   For each sheet, the engine fires `on_sheet_start` (input workbook), then `Pipeline.process_sheet` performs:
    - `detect_table_regions`: run row detectors to classify each row and segment the sheet into one or more table regions.
    - For each table region:
      - `detect_and_map_columns`: map source columns to registered fields and resolve duplicates per `mapping_tie_resolution`.
@@ -41,6 +41,7 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
      - Hook: `on_table_validated` (may replace the DataFrame; safe to filter/sort/reorder).
      - `render_table`: derive `write_table` using output settings and write it directly to the output sheet.
      - Hook: `on_table_written` (formatting/summaries; receives the DataFrame that was written to the output sheet).
+   After all tables are written, the engine fires `on_sheet_end` with the output workbook/worksheet.
 
 6. **Finalize workbook**  
    Hook `on_workbook_before_save` fires with the output workbook, then the workbook is saved to `<output_dir>/<input_stem>_normalized.xlsx` (or a caller-specified path).

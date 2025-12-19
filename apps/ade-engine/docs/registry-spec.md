@@ -36,7 +36,7 @@ Detectors must return score patches (dict[str, float] or `None`). `validate_dete
 ## Hooks
 
 Hook lists are stored under internal `HookName` enum keys, but config packages register by string stage name:
-- `on_workbook_start`, `on_sheet_start`, `on_table_mapped`, `on_table_transformed`, `on_table_validated`, `on_table_written`, `on_workbook_before_save`
+- `on_workbook_start`, `on_sheet_start`, `on_table_mapped`, `on_table_transformed`, `on_table_validated`, `on_table_written`, `on_sheet_end`, `on_workbook_before_save`
 
 Hook failures raise `HookError` with the stage name; the run is marked failed.
 

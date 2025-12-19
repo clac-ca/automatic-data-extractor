@@ -54,6 +54,9 @@ For each detected table region:
    - writes `write_table` headers + rows directly to the output worksheet
    - runs `on_table_written(table=write_table, ...)` for formatting/summaries
 
+After `Pipeline.process_sheet` completes, the engine fires `on_sheet_end` with the output
+workbook/worksheet for any sheet-level formatting or summaries.
+
 ## Logging touchpoints
 
 The pipeline emits structured events when a `RunLogger` is in use, including:
