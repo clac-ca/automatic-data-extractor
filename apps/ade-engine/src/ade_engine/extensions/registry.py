@@ -14,6 +14,7 @@ from ade_engine.models.extension_contexts import (
     FieldDef,
     HookName,
     ScorePatch,
+    SheetEndHookContext,
     SheetStartHookContext,
     TableHookContext,
     WorkbookBeforeSaveHookContext,
@@ -118,6 +119,20 @@ class Registry:
                 if sheet is None:
                     raise HookError("on_sheet_start requires sheet", stage=hook_stage)
                 ctx = SheetStartHookContext(
+                    sheet=sheet,
+                    workbook=workbook,
+                    settings=settings,
+                    metadata=metadata,
+                    state=state,
+                    input_file_name=input_file_name,
+                    logger=logger,
+                )
+            elif hook_name == HookName.ON_SHEET_END:
+                if workbook is None:
+                    raise HookError("on_sheet_end requires workbook", stage=hook_stage)
+                if sheet is None:
+                    raise HookError("on_sheet_end requires sheet", stage=hook_stage)
+                ctx = SheetEndHookContext(
                     sheet=sheet,
                     workbook=workbook,
                     settings=settings,

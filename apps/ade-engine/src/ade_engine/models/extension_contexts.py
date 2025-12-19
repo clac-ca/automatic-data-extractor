@@ -32,6 +32,7 @@ class RowKind(str, Enum):
 class HookName(str, Enum):
     ON_WORKBOOK_START = "on_workbook_start"
     ON_SHEET_START = "on_sheet_start"
+    ON_SHEET_END = "on_sheet_end"
     ON_TABLE_MAPPED = "on_table_mapped"
     ON_TABLE_TRANSFORMED = "on_table_transformed"
     ON_TABLE_VALIDATED = "on_table_validated"
@@ -125,6 +126,17 @@ class SheetStartHookContext:
 
 
 @dataclass(frozen=True)
+class SheetEndHookContext:
+    sheet: Any
+    workbook: Any
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
 class TableHookContext:
     table: pl.DataFrame
     sheet: Any
@@ -148,7 +160,13 @@ class WorkbookBeforeSaveHookContext:
     logger: Any | None = None
 
 
-HookContext = WorkbookStartHookContext | SheetStartHookContext | TableHookContext | WorkbookBeforeSaveHookContext
+HookContext = (
+    WorkbookStartHookContext
+    | SheetStartHookContext
+    | SheetEndHookContext
+    | TableHookContext
+    | WorkbookBeforeSaveHookContext
+)
 
 
 __all__ = [
@@ -163,6 +181,7 @@ __all__ = [
     "ValidateContext",
     "WorkbookBeforeSaveHookContext",
     "WorkbookStartHookContext",
+    "SheetEndHookContext",
     "SheetStartHookContext",
     "TableHookContext",
 ]

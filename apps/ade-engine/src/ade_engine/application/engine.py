@@ -181,6 +181,17 @@ class Engine:
                             input_file_name=plan.request.input_file.name,
                         )
 
+                        registry.run_hooks(
+                            HookName.ON_SHEET_END,
+                            settings=self.settings,
+                            state=state,
+                            metadata=sheet_metadata,
+                            input_file_name=plan.request.input_file.name,
+                            workbook=output_wb,
+                            sheet=out_sheet,
+                            logger=run_logger,
+                        )
+
                     registry.run_hooks(
                         HookName.ON_WORKBOOK_BEFORE_SAVE,
                         settings=self.settings,
