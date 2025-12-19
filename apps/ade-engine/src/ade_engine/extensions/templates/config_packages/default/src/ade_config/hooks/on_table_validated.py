@@ -72,9 +72,9 @@ def on_table_validated(
     return None
 
 
-# -------------------------------------------------------------------------
-# EXAMPLE 1: Enforce a canonical layout (add missing columns + reorder)
-# -------------------------------------------------------------------------
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 
 def on_table_validated_example_1_enforce_template_layout(
@@ -147,11 +147,6 @@ def on_table_validated_example_1_enforce_template_layout(
     return table.select(final_cols)
 
 
-# -------------------------------------------------------------------------
-# EXAMPLE 2: Strict template (output only the template columns)
-# -------------------------------------------------------------------------
-
-
 def on_table_validated_example_2_strict_template_only(
     *,
     table: pl.DataFrame,
@@ -197,11 +192,6 @@ def on_table_validated_example_2_strict_template_only(
     reserved_tail = [c for c in reserved_tail if c in table.columns]
 
     return table.select([*required_names, *reserved_tail])
-
-
-# -------------------------------------------------------------------------
-# EXAMPLE 3: Add derived columns (Polars expressions)
-# -------------------------------------------------------------------------
 
 
 def on_table_validated_example_3_add_derived_columns(
@@ -295,11 +285,6 @@ def on_table_validated_example_3_add_derived_columns(
     return out
 
 
-# -------------------------------------------------------------------------
-# EXAMPLE 4: Sort so issue rows are first (triage-friendly)
-# -------------------------------------------------------------------------
-
-
 def on_table_validated_example_4_sort_issues_to_top(
     *,
     table: pl.DataFrame,
@@ -340,11 +325,6 @@ def on_table_validated_example_4_sort_issues_to_top(
     return table.sort(by=by, descending=descending) if by else None
 
 
-# -------------------------------------------------------------------------
-# EXAMPLE 5: Move ADE issue columns to the far right
-# -------------------------------------------------------------------------
-
-
 def on_table_validated_example_5_move_issue_columns_to_end(
     *,
     table: pl.DataFrame,
@@ -372,11 +352,6 @@ def on_table_validated_example_5_move_issue_columns_to_end(
 
     head = [c for c in table.columns if c not in tail]
     return table.select([*head, *tail])
-
-
-# -------------------------------------------------------------------------
-# EXAMPLE 6: Add a human-friendly issues summary column
-# -------------------------------------------------------------------------
 
 
 def on_table_validated_example_6_add_issues_summary_column(
@@ -421,11 +396,6 @@ def on_table_validated_example_6_add_issues_summary_column(
     fields_expr = pl.concat_list(field_name_exprs).list.drop_nulls().alias("issue_fields")
 
     return table.with_columns([summary_expr, fields_expr])
-
-
-# -------------------------------------------------------------------------
-# EXAMPLE 7: Enrich from a reference CSV and cache it in `state`
-# -------------------------------------------------------------------------
 
 
 def on_table_validated_example_7_enrich_from_reference_csv_cached(

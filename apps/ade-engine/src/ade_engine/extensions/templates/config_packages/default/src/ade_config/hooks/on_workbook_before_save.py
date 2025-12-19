@@ -36,10 +36,12 @@ if TYPE_CHECKING:
 
 
 def register(registry: Registry) -> None:
-    # Default placeholder (no-op).
+    """Register hook(s) with the ADE registry."""
     registry.register_hook(on_workbook_before_save, hook="on_workbook_before_save", priority=0)
 
-    # Examples (uncomment to enable)
+    # ---------------------------------------------------------------------
+    # Examples (uncomment to enable, then customize as needed)
+    # ---------------------------------------------------------------------
     # registry.register_hook(on_workbook_before_save_example_1_set_properties_and_calc, hook="on_workbook_before_save", priority=10)
     # registry.register_hook(on_workbook_before_save_example_2_standardize_sheet_ux_and_print, hook="on_workbook_before_save", priority=20)
     # registry.register_hook(on_workbook_before_save_example_3_namedstyle_headers, hook="on_workbook_before_save", priority=30)
@@ -50,11 +52,6 @@ def register(registry: Registry) -> None:
     # registry.register_hook(on_workbook_before_save_example_8_add_data_validation_dropdowns, hook="on_workbook_before_save", priority=80)
     # registry.register_hook(on_workbook_before_save_example_9_hide_helper_sheets_and_set_active, hook="on_workbook_before_save", priority=90)
     # registry.register_hook(on_workbook_before_save_example_10_protect_sheets, hook="on_workbook_before_save", priority=100)
-
-
-# -----------------------------------------------------------------------------
-# Default hook (minimal + safe)
-# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save(
@@ -70,10 +67,9 @@ def on_workbook_before_save(
     return None
 
 
-# -----------------------------------------------------------------------------
-# Example 1: workbook properties + force formula recalculation
-# -----------------------------------------------------------------------------
-
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
@@ -126,11 +122,6 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
         logger.info("Example 1: set workbook properties + fullCalcOnLoad")
 
 
-# -----------------------------------------------------------------------------
-# Example 2: standard sheet UX + print setup everywhere
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
     *,
     workbook: openpyxl.Workbook,
@@ -175,11 +166,6 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
 
     if logger:
         logger.info("Example 2: standardized worksheet UX + print setup")
-
-
-# -----------------------------------------------------------------------------
-# Example 3: NamedStyle + header row styling (fast and reusable)
-# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save_example_3_namedstyle_headers(
@@ -233,10 +219,6 @@ def on_workbook_before_save_example_3_namedstyle_headers(
     if logger:
         logger.info("Example 3: applied NamedStyle '%s' to header rows", header_style.name)
 
-
-# -----------------------------------------------------------------------------
-# Example 4: autosize columns (sampled) + basic number formats by header
-# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
@@ -326,11 +308,6 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
 
     if logger:
         logger.info("Example 4: autosized columns + applied basic number formats")
-
-
-# -----------------------------------------------------------------------------
-# Example 5: add a Run Summary sheet (links + formulas + chart)
-# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart(
@@ -435,11 +412,6 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
         logger.info("Example 5: wrote Run Summary sheet (sheets=%d)", len(data_sheets))
 
 
-# -----------------------------------------------------------------------------
-# Example 6: convert each used range into an Excel Table (structured refs)
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     *,
     workbook: openpyxl.Workbook,
@@ -536,11 +508,6 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
         logger.info("Example 6: created Excel Tables on %d sheet(s)", created)
 
 
-# -----------------------------------------------------------------------------
-# Example 7: conditional formatting (blanks, negatives, and a color scale)
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_before_save_example_7_apply_conditional_formatting(
     *,
     workbook: openpyxl.Workbook,
@@ -607,11 +574,6 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
         logger.info("Example 7: applied conditional formatting on %d sheet(s)", applied)
 
 
-# -----------------------------------------------------------------------------
-# Example 8: data validation dropdowns (simple workflow columns)
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     *,
     workbook: openpyxl.Workbook,
@@ -656,11 +618,6 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
         logger.info("Example 8: added status dropdown validation on %d sheet(s)", updated)
 
 
-# -----------------------------------------------------------------------------
-# Example 9: hide helper sheets (by naming convention) + set active sheet
-# -----------------------------------------------------------------------------
-
-
 def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
     *,
     workbook: openpyxl.Workbook,
@@ -694,11 +651,6 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
         logger.info(
             "Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, workbook.active
         )
-
-
-# -----------------------------------------------------------------------------
-# Example 10: protect sheets from accidental edits (not strong security)
-# -----------------------------------------------------------------------------
 
 
 def on_workbook_before_save_example_10_protect_sheets(
