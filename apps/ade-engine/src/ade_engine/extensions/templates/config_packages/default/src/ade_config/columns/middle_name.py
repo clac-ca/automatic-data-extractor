@@ -15,7 +15,6 @@ Post-mapping (optional)
 - Validators return a ``pl.Expr`` that yields a per-row message (string) or null.
 """
 
-
 from __future__ import annotations
 
 import re

@@ -39,8 +39,6 @@ if TYPE_CHECKING:
     from ade_engine.infrastructure.observability.logger import RunLogger
     from ade_engine.infrastructure.settings import Settings
 
-# --- Public registration -----------------------------------------------------
-
 
 def register(registry: Registry) -> None:
     """
@@ -63,10 +61,6 @@ def register(registry: Registry) -> None:
     # registry.register_hook(on_table_written_example_7_add_header_comments, hook="on_table_written", priority=70)
     # registry.register_hook(on_table_written_example_8_highlight_and_comment_validation_issues, hook="on_table_written", priority=80)
     # registry.register_hook(on_table_written_example_9_autofit_column_widths, hook="on_table_written", priority=90)
-
-
-# --- Core hook ---------------------------------------------------------------
-
 
 def on_table_written(
     *,
@@ -94,9 +88,9 @@ def on_table_written(
     """
     return None
 
-
-# --- Example hooks -----------------------------------------------------------
-
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 def on_table_written_example_1_log_output_range(
     *,

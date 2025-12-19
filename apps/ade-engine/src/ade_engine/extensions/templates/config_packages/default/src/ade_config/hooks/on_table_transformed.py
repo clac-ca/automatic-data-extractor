@@ -53,16 +53,13 @@ for _attr in ("String", "Utf8"):
 TEXT_DTYPE: pl.DataType = _TEXT_DTYPES[0] if _TEXT_DTYPES else pl.Utf8  # type: ignore[attr-defined]
 
 
-# ---------------------------------------
-# Registry + default hook implementation
-# ---------------------------------------
-
-
 def register(registry: Registry) -> None:
     """Register this config package's `on_table_transformed` hook(s)."""
     registry.register_hook(on_table_transformed, hook="on_table_transformed", priority=0)
 
-    # Examples (uncomment to enable; choose the ones that fit your config)
+    # ---------------------------------------------------------------------
+    # Examples (uncomment to enable, then customize as needed)
+    # ---------------------------------------------------------------------
     # registry.register_hook(on_table_transformed_example_1_normalize_all_text, hook="on_table_transformed", priority=10)
     # registry.register_hook(on_table_transformed_example_2_add_provenance_columns, hook="on_table_transformed", priority=20)
     # registry.register_hook(on_table_transformed_example_3_derive_full_name, hook="on_table_transformed", priority=30)
@@ -94,9 +91,9 @@ def on_table_transformed(
     return None
 
 
-# -------------------------
-# Examples (common patterns)
-# -------------------------
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 
 def on_table_transformed_example_1_normalize_all_text(

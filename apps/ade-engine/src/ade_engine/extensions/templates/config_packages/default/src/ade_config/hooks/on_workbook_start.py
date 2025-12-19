@@ -42,9 +42,9 @@ def register(registry: Registry) -> None:
     """Register hook(s) with the ADE registry."""
     registry.register_hook(on_workbook_start, hook="on_workbook_start", priority=0)
 
-    # ------------------------------------------------------------------
-    # Optional examples (uncomment to enable)
-    # ------------------------------------------------------------------
+    # ---------------------------------------------------------------------
+    # Examples (uncomment to enable, then customize as needed)
+    # ---------------------------------------------------------------------
     # registry.register_hook(on_workbook_start_example_0_seed_state_and_log_workbook_basics, hook="on_workbook_start", priority=10)
     # registry.register_hook(on_workbook_start_example_1_fail_fast_missing_sheets, hook="on_workbook_start", priority=20)
     # registry.register_hook(on_workbook_start_example_2_detect_workbook_flavor_and_flags, hook="on_workbook_start", priority=30)
@@ -67,9 +67,9 @@ def on_workbook_start(
     return None
 
 
-# -----------------------------------------------------------------------------
-# Optional examples (disabled by default)
-# -----------------------------------------------------------------------------
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 
 def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
