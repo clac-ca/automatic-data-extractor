@@ -31,7 +31,6 @@ from ade_engine.models.extension_outputs import (
     ColumnDetectorResult,
     RowDetectorResult,
 )
-from ade_engine.models.detectors import DetectorSettings
 from ade_engine.models.run import RunError, RunErrorCode, RunRequest, RunResult, RunStatus
 from ade_engine.models.table import MappedColumn, SourceColumn, TableRegion, TableResult
 
@@ -61,7 +60,6 @@ __all__ = [
     "WorkbookBeforeSaveHookContext",
     "ColumnDetectorResult",
     "RowDetectorResult",
-    "DetectorSettings",
     "RunError",
     "RunErrorCode",
     "RunRequest",

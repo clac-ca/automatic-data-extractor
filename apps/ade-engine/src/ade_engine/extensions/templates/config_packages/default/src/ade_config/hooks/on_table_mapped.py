@@ -1,45 +1,43 @@
-"""ADE config hook: `on_table_mapped`
-
-When this runs
---------------
-- Once per detected table region, after column mapping and before transforms.
-- Mapping is rename-only: extracted columns are renamed to canonical field names
-  where confident; unmapped columns remain in the same DataFrame.
-
-What it's useful for
---------------------
-- Table-level cleanup (trim whitespace, normalize "empty" tokens, drop blank rows)
-- Combining/splitting columns when the logic spans multiple fields
-- Recording lightweight per-run facts in `state` for later hooks
-
-Return value
-------------
-- Return a new `pl.DataFrame` to replace `table`, or return `None` to keep it unchanged.
-- Returning anything else raises HookError.
-
-Notes
------
-- `workbook` is the *input* workbook (openpyxl Workbook).
-- ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
-  input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
-- `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
-- Keep hooks deterministic + idempotent (re-running should yield the same output).
-- Prefer vectorized Polars expressions; avoid Python row loops.
-
-Template goals
---------------
-- Default hook is safe and minimal (logs + lightweight counters).
-- Examples are self-contained and opt-in (uncomment in `register()`).
 """
+ADE hook: ``on_table_mapped``.
+
+This hook runs once per detected table region after column mapping (rename-only) and
+before any per-column transforms. It is the earliest point where canonical field names
+may be present on the Polars DataFrame.
+
+Use this hook for table-scoped normalization that may span multiple columns (e.g., trimming,
+empty-token normalization, dropping blank rows/columns, deriving or splitting fields) and
+for recording lightweight per-table facts into shared ``state``.
+
+Contract
+--------
+- Called once per mapped table.
+- Return a replacement ``pl.DataFrame`` to update the table, or ``None`` to leave it
+  unchanged. Any other return value is an error.
+
+Guidance
+--------
+- Keep logic deterministic and idempotent.
+- Prefer vectorized Polars expressions; avoid Python row loops.
+- Avoid mutating the input workbook/worksheet; treat ``table_region`` as source context.
+"""
+
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping, Sequence
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
-import openpyxl.worksheet.worksheet
 import polars as pl
 from ade_engine.models import TableRegion
+
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 # -----------------------------------------------------------------------------
 # Polars convenience: string dtype selection across versions
@@ -66,10 +64,10 @@ DEFAULT_EMPTY_SENTINELS: tuple[str, ...] = (
 )
 
 
-def register(registry) -> None:
+def register(registry: Registry) -> None:
     """Register this config package's `on_table_mapped` hook(s)."""
 
-    # Default (safe) no-op hook: records lightweight stats + logs table shape.
+    # Default placeholder (no-op).
     registry.register_hook(on_table_mapped, hook="on_table_mapped", priority=0)
 
     # ---------------------------------------------------------------------
@@ -86,11 +84,6 @@ def register(registry) -> None:
     # registry.register_hook(on_table_mapped_example_9_split_full_name, hook="on_table_mapped", priority=90)
 
 
-# ---------------------------------------------------------------------------
-# Default hook (enabled by default)
-# ---------------------------------------------------------------------------
-
-
 def on_table_mapped(
     *,
     table: pl.DataFrame,  # Current table DF (post-mapping; pre-transforms)
@@ -99,34 +92,12 @@ def on_table_mapped(
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> pl.DataFrame | None:
-    """Default: increment a counter and log the table shape (does not mutate `table`)."""
-    _ = (settings, workbook, input_file_name)  # unused by default
-
-    cfg = state
-
-    counters = cfg.get("counters")
-    if not isinstance(counters, MutableMapping):
-        counters = {}
-        cfg["counters"] = counters
-    counters["tables_seen"] = int(counters.get("tables_seen", 0) or 0) + 1
-
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
-    if logger:
-        range_ref = table_region.a1
-        logger.info(
-            "Config hook: table mapped (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
-            sheet_name,
-            table_index,
-            range_ref,
-            int(table.height),
-            int(table.width),
-        )
-
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> pl.DataFrame | None:  # noqa: ARG001
+    """Default implementation is a placeholder (no-op)."""
     return None
 
 
@@ -143,11 +114,11 @@ def on_table_mapped_example_1_basic_cleanup(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 1 (recommended): basic, safe cleanup for most table-like extracts.
 
     Includes:
@@ -157,8 +128,6 @@ def on_table_mapped_example_1_basic_cleanup(
 
     This is deliberately conservative and avoids type coercion.
     """
-    _ = (settings, metadata, state, workbook, table_region, table_index, input_file_name)
-
     before_rows, before_cols = int(table.height), int(table.width)
 
     # 1) Normalize empty sentinels across *string* columns.
@@ -209,24 +178,12 @@ def on_table_mapped_example_2_trim_all_string_columns(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 2: trim all string columns (safe, cheap, and often helpful)."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
-
     return table.with_columns(pl.col(_TEXT_DTYPES).str.strip_chars().name.keep())
 
 
@@ -238,24 +195,13 @@ def on_table_mapped_example_3_normalize_empty_sentinels(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
     empty_sentinels: Sequence[str] = DEFAULT_EMPTY_SENTINELS,
-) -> pl.DataFrame:
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 3: normalize common 'empty' tokens to null across all string columns."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
 
     tokens = [t.strip().lower() for t in empty_sentinels]
     trimmed = pl.col(_TEXT_DTYPES).cast(TEXT_DTYPE, strict=False).str.strip_chars()
@@ -274,13 +220,12 @@ def on_table_mapped_example_4_drop_fully_empty_rows(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 4: drop rows that are entirely empty (null/blank strings)."""
-    _ = (settings, metadata, state, workbook, table_region, table_index, input_file_name)
 
     if table.width == 0:
         return table
@@ -314,19 +259,17 @@ def on_table_mapped_example_5_drop_fully_empty_columns(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame:  # noqa: ARG001
     """Example 5: drop columns that are entirely empty (useful for noisy extracts).
 
     "Empty" means:
     - for string columns: null or blank after trimming in every row
     - for non-string columns: null in every row
     """
-    _ = (settings, metadata, state, workbook, table_region, table_index, input_file_name)
-
     if table.width == 0:
         return table
 
@@ -374,23 +317,12 @@ def on_table_mapped_example_6_derive_full_name(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 6: derive `full_name` from `first_name` + `last_name`."""
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
 
     if "full_name" in table.columns:
         return None
@@ -423,11 +355,11 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 7 (heuristic): drop repeated header rows embedded inside the table.
 
     Many spreadsheets repeat the header every N rows (page breaks) or after section
@@ -435,8 +367,6 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
 
     This is a heuristic: keep it disabled by default and tune the threshold.
     """
-    _ = (settings, metadata, state, workbook, table_region, table_index, input_file_name)
-
     if table.width == 0 or table.height == 0:
         return None
 
@@ -483,13 +413,12 @@ def on_table_mapped_example_8_record_table_facts(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 8: collect lightweight per-table facts into shared state."""
-    _ = (settings, metadata, workbook, logger)
 
     cfg = state
 
@@ -521,29 +450,17 @@ def on_table_mapped_example_9_split_full_name(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> pl.DataFrame | None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> pl.DataFrame | None:  # noqa: ARG001
     """Example 9: split `full_name` into `first_name` and `last_name`.
 
     Notes:
     - Runs after mapping and before per-column transforms.
     - Does not overwrite existing first/last values when present.
     """
-    _ = (
-        settings,
-        metadata,
-        state,
-        workbook,
-        sheet,
-        table_region,
-        table_index,
-        input_file_name,
-        logger,
-    )
-
     if "full_name" not in table.columns:
         return None
 

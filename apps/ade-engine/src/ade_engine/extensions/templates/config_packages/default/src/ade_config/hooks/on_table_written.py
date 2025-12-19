@@ -1,50 +1,48 @@
-"""ADE config hook: `on_table_written`
-
-When this runs
---------------
-- Once per detected table region, after ADE writes the normalized table into the
-  OUTPUT workbook (openpyxl) and before the workbook is saved.
-- The table's cells already exist in `sheet` when this hook runs.
-
-What it's useful for
---------------------
-- Excel-only formatting (freeze panes, filters, column widths, styles)
-- Adding Excel "structured tables" (Insert → Table) for better UX
-- Adding comments/notes for humans reading the output workbook
-- Hiding helper/diagnostic columns that you still want to keep written
-- Collecting per-table facts into `state` for later hooks (e.g., summary sheets)
-
-Best practice
--------------
-- Prefer not to change *table values* here. Do value changes earlier in the pipeline
-  (`on_table_mapped` / `on_table_transformed` / `on_table_validated`).
-- This hook is best for Excel UX and presentation.
-
-Notes
------
-- ADE passes `table_region` (a `TableRegion`) to this hook. It is the authoritative,
-  openpyxl-friendly range for the table that was just written, so examples avoid
-  brittle `sheet.max_row` inference.
-
-Reference docs
---------------
-- Worksheet Tables: https://openpyxl.readthedocs.io/en/stable/worksheet_tables.html
-- Conditional formatting: https://openpyxl.readthedocs.io/en/3.1/formatting.html
 """
+ADE hook: ``on_table_written``.
+
+This hook runs once per table after ADE has written the normalized output table into the
+*output* workbook/worksheet, and before the workbook is saved. The table range already
+exists as cells in ``sheet`` when this hook executes.
+
+Use this hook for Excel-only presentation and UX work: freeze panes, filters, column
+widths, styles, structured tables, comments/notes, and optionally hiding diagnostic
+columns while keeping them written. It can also record per-table facts into ``state`` for
+later hooks (e.g., building summary sheets).
+
+Contract
+--------
+- Called once per written table.
+- Must return ``None`` (any other return value is an error).
+
+Guidance
+--------
+- Avoid changing table values here; perform value edits earlier (mapped/transformed/validated).
+- Prefer deterministic, idempotent formatting operations.
+- Use ``table_region`` as the authoritative written range (avoid inferring via ``max_row``).
+"""
+
 
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
-import openpyxl.worksheet.worksheet
-import polars as pl
 from ade_engine.models import TableRegion
+
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
+    import polars as pl
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 # --- Public registration -----------------------------------------------------
 
 
-def register(registry) -> None:
+def register(registry: Registry) -> None:
     """
     Register hook(s) with the ADE registry.
 
@@ -78,41 +76,22 @@ def on_table_written(
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> None:
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
     """
     Called after ADE writes a single normalized table to the output worksheet.
+
+    Default implementation is a placeholder (no-op). Add Excel-only formatting here or
+    enable one of the examples in `register()`.
 
     Keep this function *small*. Use additional hook registrations for examples
     and project-specific behavior.
 
     Tip: `table.columns` and `table.height` reflect what you see in `sheet`.
     """
-    _ = (settings, metadata, workbook, input_file_name)  # unused by default
-
-    cfg = state
-
-    counters = cfg.get("counters")
-    if not isinstance(counters, MutableMapping):
-        counters = {}
-        cfg["counters"] = counters
-    counters["tables_written_seen"] = int(counters.get("tables_written_seen", 0) or 0) + 1
-
-    sheet_name = getattr(sheet, "title", getattr(sheet, "name", ""))
-    range_ref = table_region.a1
-    if logger:
-        logger.info(
-            "Config hook: table written (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
-            sheet_name,
-            table_index,
-            range_ref,
-            int(table.height),
-            len(table.columns),
-        )
-
     return None
 
 
@@ -127,13 +106,12 @@ def on_table_written_example_1_log_output_range(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 1: log the output range for THIS table."""
-    _ = (settings, metadata, state, workbook, sheet, table, table_index, input_file_name)
 
     if logger:
         logger.info("Output range for last table: %s", table_region.a1)
@@ -147,11 +125,11 @@ def on_table_written_example_2_freeze_header_and_add_filters(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 2: freeze the header row and enable filters for this table range.
 
@@ -159,8 +137,6 @@ def on_table_written_example_2_freeze_header_and_add_filters(
     - If you also add an Excel *structured table* (example 6), Excel will add
       filters automatically for that table.
     """
-    _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
-
     # Freeze panes at the first cell *below* the header row.
     sheet.freeze_panes = sheet.cell(
         row=table_region.data_first_row, column=table_region.min_col
@@ -178,11 +154,11 @@ def on_table_written_example_3_style_header_row(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 3: make the header row look nice (fill, font, wrap, alignment).
 
@@ -191,8 +167,6 @@ def on_table_written_example_3_style_header_row(
     will also style the header row.
     """
     from openpyxl.styles import Alignment, Font, PatternFill
-
-    _ = (settings, metadata, state, workbook, table, table_index, input_file_name, logger)
 
     # Style constants (easy to tweak).
     header_fill = PatternFill(
@@ -219,17 +193,15 @@ def on_table_written_example_4_hide_diagnostic_columns(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 4: hide ADE diagnostic columns (if you choose to keep them written).
     """
     from openpyxl.utils import get_column_letter
-
-    _ = (settings, metadata, state, workbook, sheet, table_index, input_file_name, logger)
 
     ade_diagnostic_prefix = "__ade_"
     for offset, col_name in enumerate(table.columns):
@@ -246,17 +218,16 @@ def on_table_written_example_5_collect_table_facts(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 5: collect per-table facts into shared `state` for later hooks.
     """
     cfg = state
 
-    _ = (settings, metadata, workbook, sheet, table_index, logger)
     table_region_ref = table_region.a1
 
     tables = cfg.get("tables_written")
@@ -284,11 +255,11 @@ def on_table_written_example_6_add_excel_structured_table(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 6: convert the written range into an Excel "structured table".
 
@@ -304,7 +275,6 @@ def on_table_written_example_6_add_excel_structured_table(
 
     cfg = state
 
-    _ = (settings, metadata, input_file_name)
     ref = table_region.a1
 
     # Excel tables are most useful when there is at least one data row.
@@ -380,11 +350,11 @@ def on_table_written_example_7_add_header_comments(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 7: add helpful comments to header cells.
 
@@ -395,7 +365,6 @@ def on_table_written_example_7_add_header_comments(
 
     cfg = state
 
-    _ = (settings, metadata, workbook, table_index, input_file_name)
     if not table.columns:
         return
 
@@ -439,11 +408,11 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 8: use ADE diagnostics to improve UX for validation failures.
 
@@ -462,7 +431,6 @@ def on_table_written_example_8_highlight_and_comment_validation_issues(
 
     cfg = state
 
-    _ = (settings, metadata, workbook, table_index, input_file_name)
     if not table_region.has_data_rows or not table.columns:
         return
 
@@ -569,11 +537,11 @@ def on_table_written_example_9_autofit_column_widths(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """
     Example 9: approximate Excel "auto-fit" for column widths.
 
@@ -583,8 +551,6 @@ def on_table_written_example_9_autofit_column_widths(
     The result is an approximation (often good enough for reports).
     """
     from openpyxl.utils import get_column_letter
-
-    _ = (settings, metadata, workbook, table_index, input_file_name)
 
     cfg = state
 

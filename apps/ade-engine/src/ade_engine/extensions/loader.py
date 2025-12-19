@@ -1,18 +1,26 @@
 """Config package loading.
 
-A config package is a Python package on disk (usually ``ade_config``) that exposes:
+A config package is a Python package on disk (often ``ade_config``) containing plugin
+modules under:
 
-    def register(registry): ...
+- ``<package>/columns/``
+- ``<package>/row_detectors/``
+- ``<package>/hooks/``
 
-The engine loads it by temporarily adding an import root to ``sys.path`` and importing
-the package by name. To avoid cross-run contamination when package names repeat
-(common with ``ade_config``), we purge any existing modules under that package name
-before importing.
+Any module in those folders that defines a top-level ``register(registry)`` function
+will be imported and invoked by the engine (deterministic order; no central list).
+
+The engine loads a config package by temporarily adding an import root to ``sys.path``
+and importing modules by dotted name. To avoid cross-run contamination when package
+names repeat (common with ``ade_config``), we purge any existing modules under that
+package name before importing.
 """
 
 from __future__ import annotations
 
+import ast
 import importlib
+import os
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -25,6 +33,9 @@ class ConfigImport:
 
     package_name: str
     import_root: Path
+
+
+_PLUGIN_SUBPACKAGES: tuple[str, ...] = ("columns", "row_detectors", "hooks")
 
 
 def resolve_config_import(config_dir: Path) -> ConfigImport:
@@ -87,26 +98,95 @@ def _purge_modules(package_name: str) -> None:
             sys.modules.pop(name, None)
 
 
-def import_and_register(config_dir: Path, *, registry) -> str:
-    """Import config package under ``config_dir`` and call ``register(registry)``.
+def _should_skip_path_parts(*, parts: tuple[str, ...]) -> bool:
+    return any(part == "tests" or (part.startswith("_") and part != "__init__.py") for part in parts)
 
-    Returns the resolved entrypoint string (e.g., ``ade_config.register``).
+
+def _has_top_level_register(path: Path) -> bool:
+    source = path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError as exc:
+        raise ModuleNotFoundError(f"Config module has invalid Python syntax: {path} ({exc})") from exc
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "register":
+            return True
+    return False
+
+
+def _iter_registerable_modules(*, spec: ConfigImport) -> list[str]:
+    package_dir = (Path(spec.import_root) / spec.package_name).resolve()
+    modules: list[str] = []
+
+    for subpkg in _PLUGIN_SUBPACKAGES:
+        root = package_dir / subpkg
+        if not root.is_dir():
+            continue
+
+        for dirpath, dirnames, filenames in os.walk(root):
+            # Prune skip-directories for speed and determinism.
+            dirnames[:] = sorted(
+                d for d in dirnames if d != "__pycache__" and not _should_skip_path_parts(parts=(d,))
+            )
+
+            rel_dir = Path(dirpath).resolve().relative_to(package_dir)
+            if _should_skip_path_parts(parts=rel_dir.parts):
+                continue
+
+            for filename in sorted(filenames):
+                if not filename.endswith(".py"):
+                    continue
+                if filename.startswith("_") and filename != "__init__.py":
+                    continue
+
+                path = Path(dirpath) / filename
+                rel = path.resolve().relative_to(package_dir)
+                if _should_skip_path_parts(parts=rel.parts):
+                    continue
+
+                if not _has_top_level_register(path):
+                    continue
+
+                parts = [spec.package_name, *rel.parts]
+                parts[-1] = parts[-1][:-3]  # drop ".py"
+                if parts[-1] == "__init__":
+                    parts.pop()
+                modules.append(".".join(parts))
+
+    # Deterministic import/call order.
+    return sorted(set(modules))
+
+
+def import_and_register(config_dir: Path, *, registry) -> list[str]:
+    """Import config package under ``config_dir`` and register plugin modules.
+
+    Returns the list of module names whose ``register(registry)`` was invoked.
     """
 
     spec = resolve_config_import(config_dir)
     with _sys_path_root(spec.import_root):
         importlib.invalidate_caches()
         _purge_modules(spec.package_name)
-        module = importlib.import_module(spec.package_name)
+        importlib.import_module(spec.package_name)  # Ensure the package itself imports.
 
-        register_fn = getattr(module, "register", None)
-        if not callable(register_fn):
+        module_names = _iter_registerable_modules(spec=spec)
+        if not module_names:
+            expected = ", ".join(f"{spec.package_name}.{p}" for p in _PLUGIN_SUBPACKAGES)
             raise ModuleNotFoundError(
-                f"Config package '{spec.package_name}' must define a register(registry) entrypoint"
+                f"Config package '{spec.package_name}' contains no plugin modules with register(registry) under: {expected}"
             )
 
-        register_fn(registry)
-        return f"{spec.package_name}.register"
+        for module_name in module_names:
+            module = importlib.import_module(module_name)
+            register_fn = getattr(module, "register", None)
+            if not callable(register_fn):
+                raise ModuleNotFoundError(
+                    f"Plugin module '{module_name}' must define a callable register(registry)"
+                )
+            register_fn(registry)
+
+        return module_names
 
 
 __all__ = ["ConfigImport", "import_and_register", "resolve_config_import"]

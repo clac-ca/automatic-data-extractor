@@ -1,6 +1,6 @@
 # Callable Contracts (v3)
 
-This document defines the extension contracts for config packages. Config packages register callables imperatively with `registry.register_*` inside their `register(registry)` entrypoint.
+This document defines the extension contracts for config packages. Config packages register callables imperatively with `registry.register_*` inside module-level `register(registry)` functions (auto-discovered and invoked by the engine).
 
 Context objects are expanded into keyword arguments by `call_extension`, so authors declare only the parameters they need.
 

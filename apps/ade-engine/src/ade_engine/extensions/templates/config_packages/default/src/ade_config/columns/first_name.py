@@ -1,43 +1,44 @@
-"""ADE column template: `first_name`
-
-This module demonstrates:
-- Registering a canonical field (`FieldDef`)
-- A header-based detector (enabled by default)
-- Optional examples: value-based detection, neighbor-based detection, a transform, and a validator
-
-Detector stage (pre-mapping)
-----------------------------
-- Called once per extracted table column.
-- Return `{"first_name": score}` (0..1) or `None`.
-
-Transform/validate stage (post-mapping)
----------------------------------------
-- Transforms return a `pl.Expr` (or `None` for no-op).
-- Validators return a `pl.Expr` producing a per-row message (string) or null.
-
-Template goals
---------------
-- Keep the default detector simple, fast, and deterministic.
-- Keep examples self-contained and opt-in (uncomment in `register()`).
 """
+ADE column template.
+
+Conventions
+-----------
+- The engine calls ``register(registry)`` to register the canonical field and any callbacks.
+- Detectors (pre-mapping) are invoked once per extracted table column and return
+  ``{field_name: score}`` or ``None`` to abstain. ``score`` may be any float; higher values
+  indicate a stronger match signal and negative values indicate counter-evidence. The
+  effective scale is up to the developer.
+
+Post-mapping (optional)
+-----------------------
+- Transforms return a ``pl.Expr`` (or ``None`` for a no-op).
+- Validators return a ``pl.Expr`` that yields a per-row message (string) or null.
+"""
+
+
+
 
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, MutableMapping
+from typing import Any, TYPE_CHECKING
 
 import polars as pl
-from ade_engine.models import FieldDef, TableRegion
+from ade_engine.models import FieldDef
+
+if TYPE_CHECKING:
+    from ade_engine.models import TableRegion
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 
-def register(registry) -> None:
+def register(registry: Registry) -> None:
     """Register the `first_name` field and its detectors/transforms/validators."""
     registry.register_field(FieldDef(name="first_name", label="First Name", dtype="string"))
-
-    # Enabled by default:
-    # Detect "first_name" using common header names.
-    registry.register_column_detector(
-        detect_first_name_header_common_names, field="first_name", priority=60
-    )
+    registry.register_column_detector(detect_first_name_header_common_names, field="first_name", priority=60)
 
     # Examples (uncomment to enable)
     # registry.register_column_detector(detect_first_name_values_basic, field="first_name", priority=30)
@@ -54,14 +55,14 @@ def detect_first_name_header_common_names(
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
     header_text: str,  # Header cell text ("" if missing)
-    settings,  # Engine Settings
+    settings: Settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based index within the sheet (when multiple tables exist)
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
     input_file_name: str,  # Input filename (basename)
-    logger,  # RunLogger (structured events + text logs)
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Enabled by default.
 
@@ -101,14 +102,14 @@ def detect_first_name_values_basic(
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
     header_text: str,  # Header cell text ("" if missing)
-    settings,  # Engine Settings
+    settings: Settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
     input_file_name: str,  # Input filename (basename)
-    logger,  # RunLogger (structured events + text logs)
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -141,14 +142,14 @@ def detect_first_name_values_neighbor_pair(
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
     header_text: str,  # Header cell text ("" if missing)
-    settings,  # Engine Settings
+    settings: Settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
     input_file_name: str,  # Input filename (basename)
-    logger,  # RunLogger (structured events + text logs)
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> dict[str, float] | None:
     """Example (disabled by default).
 
@@ -176,7 +177,7 @@ def detect_first_name_values_neighbor_pair(
     if column_index + 1 >= len(table.columns):
         return {"first_name": float(base_score)}
 
-    text_n = settings.detectors.detector_column_sample_size
+    text_n = settings.detector_column_sample_size
 
     right_col_name = table.columns[column_index + 1]
     right_series = table.get_column(right_col_name)
@@ -219,10 +220,10 @@ def normalize_first_name(
     table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run metadata
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run metadata
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 
@@ -251,10 +252,10 @@ def validate_first_name(
     table_region: TableRegion,  # Source table coordinates (1-based, inclusive)
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run metadata
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run metadata
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
 ) -> pl.Expr:
     """Example (disabled by default).
 

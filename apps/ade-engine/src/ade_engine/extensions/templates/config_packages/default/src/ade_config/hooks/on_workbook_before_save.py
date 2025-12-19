@@ -1,38 +1,42 @@
-"""ADE config hook: `on_workbook_before_save` (openpyxl)
-
-When this runs
---------------
-- Once per input file, after all sheets/tables have been processed and written to the
-  OUTPUT openpyxl workbook.
-- Immediately before the workbook is saved to disk.
-
-What it's useful for
---------------------
-- Workbook-wide polish (properties, UX defaults, print setup)
-- Adding helper sheets (Run Summary / Notes)
-- Final pass features (Excel Tables, conditional formatting, data validation)
-- Hiding/protecting sheets
-
-Return value
-------------
-- This hook MUST return `None` (returning anything else raises HookError).
-
-Template goals
---------------
-- Keep examples self-contained and easy to copy/paste.
-- Keep most imports inside examples; `openpyxl` is imported at module scope so type annotations are explicit.
 """
+ADE hook: ``on_workbook_before_save``.
+
+This hook runs once per input file after all tables have been processed and written to
+the *output* openpyxl workbook, immediately before the workbook is saved.
+
+Use this hook for workbook-wide presentation and finalization: setting properties and
+calculation flags, standardizing sheet UX/print setup, adding summary/helper sheets,
+applying workbook-level formatting rules, and optionally hiding or protecting sheets.
+
+Contract
+--------
+- Called once per output workbook.
+- Must return ``None`` (any other return value is an error).
+
+Guidance
+--------
+- Prefer deterministic, idempotent operations.
+- Avoid changing table values here; treat this stage as output polish and UX.
+- Keep expensive work in earlier hooks and reuse cached data from ``state`` when possible.
+"""
+
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from datetime import UTC
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
+if TYPE_CHECKING:
+    import openpyxl
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 
-def register(registry) -> None:
-    # Default (safe): a minimal hook that just logs.
+def register(registry: Registry) -> None:
+    # Default placeholder (no-op).
     registry.register_hook(on_workbook_before_save, hook="on_workbook_before_save", priority=0)
 
     # Examples (uncomment to enable)
@@ -57,35 +61,13 @@ def on_workbook_before_save(
     *,
     workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run metadata (filenames, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> None:
-    """Default: log basic info (safe, no workbook modifications)."""
-    _ = (settings,)  # unused by default
-
-    cfg = state
-
-    counters = cfg.get("counters")
-    if not isinstance(counters, MutableMapping):
-        counters = {}
-        cfg["counters"] = counters
-    counters["workbooks_before_save_seen"] = (
-        int(counters.get("workbooks_before_save_seen", 0) or 0) + 1
-    )
-
-    if logger:
-        out = metadata.get("output_file") or ""
-        in_name = (
-            input_file_name or metadata.get("input_file") or metadata.get("input_file_name") or ""
-        )
-        logger.info(
-            "on_workbook_before_save: input=%s output=%s sheets=%d",
-            in_name,
-            out,
-            len(getattr(workbook, "worksheets", []) or []),
-        )
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run metadata (filenames, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> None:  # noqa: ARG001
+    """Default implementation is a placeholder (no-op)."""
+    return None
 
 
 # -----------------------------------------------------------------------------
@@ -97,19 +79,17 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 1: Set workbook properties and ask Excel to recalc formulas on open.
 
     Useful when:
       - You generate files for humans (title/author helps searchability).
       - You write formulas (openpyxl does NOT compute formulas; Excel will).
     """
-    _ = (settings, state)
-
     from datetime import datetime
 
     # Core properties (Excel: File -> Info)
@@ -155,11 +135,11 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 2: Apply consistent worksheet UX and print settings.
 
     Demonstrates:
@@ -168,8 +148,6 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
       - auto-filter on the used range
       - print title rows + landscape + fit-to-width
     """
-    _ = (settings, metadata, state, input_file_name)
-
     for ws in getattr(workbook, "worksheets", []) or []:
         # Skip truly empty sheets
         if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value in (None, ""):
@@ -208,11 +186,11 @@ def on_workbook_before_save_example_3_namedstyle_headers(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 3: Create a NamedStyle and apply it to header rows.
 
     Why NamedStyle?
@@ -220,8 +198,6 @@ def on_workbook_before_save_example_3_namedstyle_headers(
       - Easy to apply (cell.style = "NAME")
       - Avoids copy/pasting style objects everywhere
     """
-    _ = (settings, metadata, state, input_file_name)
-
     from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
 
     # Create (or reuse) a named header style
@@ -267,11 +243,11 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 4: Auto-size columns (fast sampling) and set number formats by header name.
 
     Demonstrates:
@@ -279,8 +255,6 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
       - width estimation
       - applying number formats by header heuristics (common in exports)
     """
-    _ = (settings, metadata, state, input_file_name)
-
     from openpyxl.styles import numbers
     from openpyxl.utils import get_column_letter
 
@@ -363,11 +337,11 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 5: Create a “Run Summary” sheet at the front of the workbook.
 
     Demonstrates:
@@ -376,8 +350,6 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
       - formulas (Excel computes on open)
       - a simple chart
     """
-    _ = (settings, state)
-
     from datetime import datetime
 
     from openpyxl.chart import BarChart, Reference
@@ -472,11 +444,11 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 6: Convert each sheet's used range to an Excel Table.
 
     Demonstrates:
@@ -484,8 +456,6 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
       - table styling (banded rows)
       - ensuring header uniqueness (Excel requires unique header names)
     """
-    _ = (settings, metadata, state, input_file_name)
-
     import re
 
     from openpyxl.utils import get_column_letter
@@ -575,11 +545,11 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 7: Apply conditional formatting to each sheet's used range.
 
     Demonstrates:
@@ -587,8 +557,6 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
       - CellIsRule (negative numbers)
       - ColorScaleRule (heatmap-ish for a numeric column)
     """
-    _ = (settings, metadata, state, input_file_name)
-
     from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, FormulaRule
     from openpyxl.styles import PatternFill
     from openpyxl.utils import get_column_letter
@@ -648,19 +616,17 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 8: Add a dropdown (DataValidation) to a 'status' column if present.
 
     Demonstrates:
       - scanning header row for a specific column name
       - adding a list validation to a whole column range
     """
-    _ = (settings, metadata, state, input_file_name)
-
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -699,18 +665,16 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 9: Hide helper sheets and choose a default active sheet.
 
     Common convention:
       - helper sheets start with "_" or "tmp"
     """
-    _ = (settings, metadata, state, input_file_name)
-
     hidden = 0
     for ws in getattr(workbook, "worksheets", []) or []:
         if ws.title.startswith("_") or ws.title.lower().startswith("tmp"):
@@ -741,19 +705,17 @@ def on_workbook_before_save_example_10_protect_sheets(
     *,
     workbook: openpyxl.Workbook,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
-) -> None:
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
+) -> None:  # noqa: ARG001
     """Example 10: Protect worksheets from accidental edits.
 
     IMPORTANT:
       - Excel sheet protection is not strong security.
       - Use it to reduce accidental changes, not for secrets.
     """
-    _ = (settings, metadata, state, input_file_name)
-
     PASSWORD = "change-me"  # If you use this, set it via env/settings instead of hardcoding.
     protected = 0
 

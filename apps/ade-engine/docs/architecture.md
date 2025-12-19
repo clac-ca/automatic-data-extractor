@@ -19,7 +19,8 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
 
 3. **Load config package into the Registry**  
    - The config package path is resolved to an importable package name (supports bare package dir, `src/<package>`, or a root containing `ade_config`).
-   - The package **must** expose `register(registry)`, and that function should call `registry.register_*` for every detector/transform/validator/hook/field it provides. The CLI (or your app) loads runtime settings from `settings.toml` / `.env` / env vars via `Settings.load(...)`.
+   - The engine auto-discovers plugin modules under `<package>/columns/`, `<package>/row_detectors/`, and `<package>/hooks/`. Any module in those folders that defines `register(registry)` is imported and invoked (deterministic order; no central list).
+   - Each plugin module’s `register(registry)` should call `registry.register_*` for every detector/transform/validator/hook/field it provides. The CLI (or your app) loads runtime settings from `settings.toml` / `.env` / env vars via `Settings.load(...)`.
    - Loading is done with a scoped `sys.path` insertion and a module purge to avoid cross-run contamination when multiple packages share the same name (common with `ade_config`).
    - After registration, `registry.finalize()` sorts callables by priority and groups transforms/validators by field.
 

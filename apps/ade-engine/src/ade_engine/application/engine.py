@@ -53,14 +53,15 @@ class Engine:
         """Create a Registry and populate it using a config package entrypoint."""
 
         registry = Registry()
-        entrypoint = import_and_register(config_package, registry=registry)
+        plugin_modules = import_and_register(config_package, registry=registry)
         registry.finalize()
         logger.event(
             "config.loaded",
             message="Config package loaded",
             data={
                 "config_package": str(Path(config_package).expanduser().resolve()),
-                "entrypoint": entrypoint,
+                "entrypoint": "auto-discovery",
+                "plugin_modules": plugin_modules,
                 "fields": list(registry.fields.keys()),
                 "settings": self._settings_snapshot(),
             },
