@@ -1,62 +1,46 @@
-"""ADE config hook: `on_table_transformed`
-
-When this runs
---------------
-- Once per detected table, after mapping + per-column transforms, and before validation.
-
-What it's best for
-------------------
-This is the “cross-column cleanup / finishing” stage. The table is fully materialized
-as a Polars DataFrame, so you can do things that are awkward in per-column transforms:
-
-- Cross-column fixes and derived columns
-  - e.g., `full_name` from `first_name`/`last_name`, `line_total = quantity * unit_price`
-- Final type normalization before validators run
-  - parse dates, numeric/currency, booleans; standardize nulls
-- Add missing canonical columns so validators can be consistent
-  - if a validator expects `currency_code`, add it (null/default) here
-- Drop obvious non-data rows
-  - blank rows, repeated headers embedded inside data, footers/totals (carefully!)
-- Use workbook context (openpyxl) for “sheet-level constants”
-  - read report date, entity name, or config flags that live in cells above the table
-- Join enrichment tables
-  - read a lookup sheet via openpyxl, cache it in `state`, join in Polars
-
-Return value
-------------
-- Return a new `pl.DataFrame` to replace `table`, or return `None` to keep it unchanged.
-- Returning anything else raises HookError.
-
-Notes / gotchas
----------------
-- `workbook` is the *input* workbook (openpyxl Workbook).
-  (You can also access it via `sheet.parent`.)
-- ADE passes `table_region` (a `TableRegion`) describing the source header+data block in the
-  input sheet using 1-based, inclusive (openpyxl-friendly) coordinates.
-- `table_index` is a 0-based index within the sheet (useful when a sheet has multiple tables).
-- Prefer vectorized Polars expressions; avoid Python row loops.
-- Keep hooks deterministic + idempotent (re-running should produce the same output).
-- If you use `pl.when(...).then("literal")`, remember that strings can be interpreted
-  as column names in expression contexts; use `pl.lit("literal")` for literal strings.
-- When broadcasting a `when/then/otherwise` over multiple selected columns, call
-  `.name.keep()` to preserve original column names.
-
-Template goals
---------------
-- Keep examples self-contained (avoid referencing helper functions).
-- Prefer explicit steps over clever one-liners.
 """
+ADE hook: ``on_table_transformed``.
+
+This hook runs once per detected table after column mapping and per-column transforms,
+and before validation. The table is fully materialized with canonical columns (when
+available), making this the best stage for table-wide, cross-column finishing work.
+
+Use this hook for actions that are awkward or impossible in per-column transforms, such
+as deriving/splitting fields across multiple columns, final type normalization, adding
+missing canonical columns for validator consistency, dropping obvious non-data rows, and
+optionally enriching via workbook context (read-only) or cached lookups.
+
+Contract
+--------
+- Called once per transformed table.
+- Return a replacement ``pl.DataFrame`` to update the table, or ``None`` to leave it
+  unchanged. Any other return value is an error.
+
+Guidance
+--------
+- Keep logic deterministic and idempotent.
+- Prefer vectorized Polars expressions; avoid Python row loops.
+- Treat the workbook as read-only and use ``table_region`` only as source context.
+- When constructing literals in expressions, use ``pl.lit(...)``.
+"""
+
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-import openpyxl
-import openpyxl.worksheet.worksheet
 import polars as pl
 from ade_engine.models import TableRegion
+
+if TYPE_CHECKING:
+    import openpyxl
+    import openpyxl.worksheet.worksheet
+
+    from ade_engine.extensions.registry import Registry
+    from ade_engine.infrastructure.observability.logger import RunLogger
+    from ade_engine.infrastructure.settings import Settings
 
 # -----------------------------------------------------------------------------
 # Polars convenience: string dtype selection across versions
@@ -74,7 +58,7 @@ TEXT_DTYPE: pl.DataType = _TEXT_DTYPES[0] if _TEXT_DTYPES else pl.Utf8  # type: 
 # ---------------------------------------
 
 
-def register(registry) -> None:
+def register(registry: Registry) -> None:
     """Register this config package's `on_table_transformed` hook(s)."""
     registry.register_hook(on_table_transformed, hook="on_table_transformed", priority=0)
 
@@ -101,32 +85,12 @@ def on_table_transformed(
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
     table_index: int,  # 0-based table index within the sheet
     input_file_name: str,  # Input filename (basename)
-    settings,  # Engine Settings
-    metadata: dict,  # Run/sheet metadata (filenames, sheet_index, etc.)
-    state: dict,  # Mutable dict shared across the run
-    logger,  # RunLogger (structured events + text logs)
-) -> pl.DataFrame | None:
-    """Default hook (no-op). Replace/extend with your own logic or enable examples below."""
-    cfg = state
-
-    counters = cfg.get("counters")
-    if not isinstance(counters, MutableMapping):
-        counters = {}
-        cfg["counters"] = counters
-    counters["tables_transformed_seen"] = int(counters.get("tables_transformed_seen", 0) or 0) + 1
-
-    if logger:
-        sheet_name = (getattr(sheet, "title", None) or getattr(sheet, "name", None) or "").strip()
-        range_ref = table_region.a1
-        logger.info(
-            "Config hook: table transformed (sheet=%s, table_index=%s, range=%s, rows=%d, columns=%d)",
-            sheet_name,
-            table_index,
-            range_ref,
-            int(table.height),
-            len(table.columns),
-        )
-
+    settings: Settings,  # Engine Settings
+    metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
+    state: MutableMapping[str, Any],  # Mutable dict shared across the run
+    logger: RunLogger,  # RunLogger (structured events + text logs)
+) -> pl.DataFrame | None:  # noqa: ARG001
+    """Default implementation is a placeholder (no-op)."""
     return None
 
 
@@ -143,10 +107,10 @@ def on_table_transformed_example_1_normalize_all_text(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame:
     """
     Example 1: Normalize all text columns.
@@ -183,10 +147,10 @@ def on_table_transformed_example_2_add_provenance_columns(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame:
     """
     Example 2: Add provenance columns for traceability.
@@ -219,10 +183,10 @@ def on_table_transformed_example_3_derive_full_name(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 3: Derive/backfill `full_name`.
@@ -266,10 +230,10 @@ def on_table_transformed_example_4_parse_date_multi_format(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 4: Parse a date column using multiple common formats.
@@ -309,10 +273,10 @@ def on_table_transformed_example_5_parse_currency_amount(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 5: Parse a currency-like string column into Float64.
@@ -379,10 +343,10 @@ def on_table_transformed_example_6_compute_line_total(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 6: Compute a derived numeric column from multiple columns.
@@ -425,10 +389,10 @@ def on_table_transformed_example_7_drop_non_data_rows(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame:
     """
     Example 7: Drop obvious non-data rows.
@@ -498,10 +462,10 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 8: Use openpyxl to read a sheet-level constant (e.g., report_date) and add it.
@@ -536,9 +500,13 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
                 if v is None:
                     continue
                 if str(v).strip().lower() == target:
+                    row_idx = cell.row
+                    col_idx = cell.column
+                    if row_idx is None or col_idx is None:
+                        continue
                     found_label = True
                     try:
-                        report_date_value = sheet.cell(row=cell.row, column=cell.column + 1).value
+                        report_date_value = sheet.cell(row=row_idx, column=col_idx + 1).value
                     except Exception:
                         report_date_value = None
                     break
@@ -581,10 +549,10 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """
     Example 9: Read a lookup table from another worksheet (openpyxl), cache it, join via Polars.
@@ -699,10 +667,10 @@ def on_table_transformed_example_10_geocode_address_google(
     table_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
-    settings,
-    metadata: dict,
-    state: dict,
-    logger,
+    settings: Settings,
+    metadata: Mapping[str, Any],
+    state: MutableMapping[str, Any],
+    logger: RunLogger,
 ) -> pl.DataFrame | None:
     """Example 10 (advanced): use Google Geocoding to canonicalize `address_full`.
 

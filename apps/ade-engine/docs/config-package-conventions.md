@@ -1,22 +1,30 @@
 # Config Package Conventions
 
-Config packages supply the domain logic the engine runs. A package is any importable Python package (folder with `__init__.py`) that exposes a `register(registry)` entrypoint.
+Config packages supply the domain logic the engine runs. A config package is any importable Python package (folder with `__init__.py`).
 
-## Minimal `register` implementation
+The engine auto-discovers plugin modules under:
+
+- `<package>/columns/`
+- `<package>/row_detectors/`
+- `<package>/hooks/`
+
+Any module in those folders with a top-level `register(registry)` function is imported and invoked (deterministic order; no central list).
+
+## Minimal plugin module implementation
 
 ```python
-# src/ade_config/__init__.py
+# src/ade_config/columns/first_name.py
+from ade_engine.models import FieldDef
+
+
 def register(registry):
-    # Auto-discover and run register(registry) for any modules under:
-    # - ade_config/columns
-    # - ade_config/row_detectors
-    # - ade_config/hooks
-    #
-    # The built-in config template ships with this implementation; you can copy it.
-    ...
+    registry.register_field(FieldDef(name="first_name", label="First Name", dtype="string"))
+    # registry.register_column_detector(...)
+    # registry.register_column_transform(...)
+    # registry.register_column_validator(...)
 ```
 
-Register everything imperatively using `registry.register_*` helpers. Modules can register themselves; `ade_config.register` just imports and invokes them.
+Register everything imperatively using `registry.register_*` helpers inside module-level `register()` functions. You can keep shared helpers under `utils/` (or anywhere else), but the engine will not auto-import them unless a discovered module imports them.
 
 ## Suggested layout
 
@@ -26,10 +34,10 @@ src/ade_config/
   row_detectors/    # header/data voting
   hooks/            # lifecycle hooks
   utils/            # shared helpers
-  __init__.py       # register() lives here
+  __init__.py       # marks this folder as a Python package
 ```
 
-This layout is not required—the registry honors any structure as long as modules are imported inside `register()`.
+This layout is not required, but auto-discovery only scans `columns/`, `row_detectors/`, and `hooks/`.
 
 ## Field metadata
 
@@ -38,7 +46,7 @@ Call `registry.register_field(FieldDef(...))` to declare labels, dtypes, or arbi
 ## Settings for a package
 
 Engine settings can be pinned alongside the package:
-- Place a `settings.toml` next to your config package (and/or at the project root). A `[ade_engine]` table is recommended to avoid collisions.
+- Place a `settings.toml` next to your config package (and/or at the project root). The file is flat: keys map 1:1 to `Settings` fields.
 - `.env` and `ADE_ENGINE_*` environment variables are also honored.
 - Load via `Settings.load(...)`; precedence is documented in `apps/ade-engine/docs/settings.md`.
 
@@ -46,7 +54,7 @@ Commonly overridden settings per package:
 - `remove_unmapped_columns` (drop non-canonical columns at write time)
 - `write_diagnostics_columns` (include reserved `__ade_*` columns in output)
 - `mapping_tie_resolution` (choose `leftmost` vs `leave_unmapped`)
-- `detectors.detector_column_sample_size` (column detector sampling policy)
+- `detector_column_sample_size` (column detector sampling policy)
 - `max_empty_rows_run` / `max_empty_cols_run` (sheet scanning guards)
 
 ## Testing your package
@@ -62,4 +70,4 @@ Commonly overridden settings per package:
 
 ## Backward compatibility note
 
-Legacy manifest-based wiring is no longer supported. All config logic must be registered explicitly inside `register(registry)` using `registry.register_*`.
+Legacy manifest-based wiring is no longer supported. All config logic must be registered explicitly inside module-level `register(registry)` functions using `registry.register_*`.

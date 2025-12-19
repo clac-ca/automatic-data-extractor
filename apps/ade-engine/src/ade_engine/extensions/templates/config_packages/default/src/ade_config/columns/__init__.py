@@ -32,5 +32,5 @@ Common building blocks:
 Tip: When prototyping in a scratch notebook, remember to alias:
 `df.with_columns(expr.alias("my_field"))`.
 
-The top-level `ade_config.register()` auto-discovers and registers these modules.
+The ADE engine auto-discovers and registers these modules.
 """

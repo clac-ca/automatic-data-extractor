@@ -10,8 +10,8 @@ This template config package defines a target schema (fields) and the plugin log
 
 ## The big idea
 
-- Any module with a top-level `register(registry)` is a plugin module.
-- The engine auto-discovers modules and calls `register(registry)` in deterministic order.
+- Any module under `columns/`, `row_detectors/`, or `hooks/` with a top-level `register(registry)` is a plugin module.
+- The engine auto-discovers those modules and calls `register(registry)` in deterministic order.
 - No manifests or central file lists: add a new module → it’s discovered.
 
 ## Folder layout (suggested)
@@ -61,7 +61,7 @@ Instead:
 **Sample sizing (settings-driven)**
 
 ```python
-text_n = settings.detectors.detector_column_sample_size
+text_n = settings.detector_column_sample_size
 
 # Current column name (internal, not semantic).
 col_name = table.columns[column_index]

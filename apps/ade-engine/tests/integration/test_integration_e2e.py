@@ -12,19 +12,14 @@ from ade_engine.models.run import RunRequest, RunStatus
 def _write_config_package(root: Path) -> None:
     pkg = root / "ade_config"
     pkg.mkdir(parents=True, exist_ok=True)
-    (pkg / "__init__.py").write_text(
-        """
-def register(registry):
-    from . import rows, columns
-    rows.register(registry)
-    columns.register(registry)
-""",
-        encoding="utf-8",
-    )
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
 
-    (pkg / "rows.py").write_text(
+    row_detectors = pkg / "row_detectors"
+    row_detectors.mkdir(parents=True, exist_ok=True)
+    (row_detectors / "__init__.py").write_text("", encoding="utf-8")
+    (row_detectors / "pick_header.py").write_text(
         """
-from ade_engine.models import FieldDef, RowKind
+from ade_engine.models import RowKind
 
 def pick_header(*, row_values, **_):
     normalized = {str(v).strip().lower() for v in row_values or [] if v not in (None, "")}
@@ -32,29 +27,27 @@ def pick_header(*, row_values, **_):
         return {"header": 1.0}
     return {}
 
-
 def register(registry):
     registry.register_row_detector(pick_header, row_kind=RowKind.HEADER.value, priority=10)
 """,
         encoding="utf-8",
     )
 
-    (pkg / "columns.py").write_text(
+    columns = pkg / "columns"
+    columns.mkdir(parents=True, exist_ok=True)
+    (columns / "__init__.py").write_text("", encoding="utf-8")
+    (columns / "contact_fields.py").write_text(
         """
 import polars as pl
 from ade_engine.models import FieldDef
 
 def detect_email(*, header_text: str, **_):
     header = (header_text or "").strip().lower()
-    if header == "email":
-        return {"email": 1.0}
-    return None
+    return {"email": 1.0} if header == "email" else None
 
 def detect_name(*, header_text: str, **_):
     header = (header_text or "").strip().lower()
-    if header == "name":
-        return {"name": 1.0}
-    return None
+    return {"name": 1.0} if header == "name" else None
 
 def normalize_email(*, field_name: str, **_):
     return pl.col(field_name).cast(pl.Utf8).str.to_lowercase()
@@ -66,7 +59,6 @@ def validate_email(*, field_name: str, **_):
         .then(pl.lit("invalid email"))
         .otherwise(pl.lit(None))
     )
-
 
 def register(registry):
     registry.register_field(FieldDef(name="email"))
