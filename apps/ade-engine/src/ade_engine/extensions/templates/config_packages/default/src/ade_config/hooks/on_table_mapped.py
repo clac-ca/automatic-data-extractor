@@ -66,8 +66,6 @@ DEFAULT_EMPTY_SENTINELS: tuple[str, ...] = (
 
 def register(registry: Registry) -> None:
     """Register this config package's `on_table_mapped` hook(s)."""
-
-    # Default placeholder (no-op).
     registry.register_hook(on_table_mapped, hook="on_table_mapped", priority=0)
 
     # ---------------------------------------------------------------------
@@ -101,9 +99,9 @@ def on_table_mapped(
     return None
 
 
-# ---------------------------------------------------------------------------
-# Example hooks (disabled by default)
-# ---------------------------------------------------------------------------
+# ----------------------------
+# Examples (uncomment in register() to enable)
+# ----------------------------
 
 
 def on_table_mapped_example_1_basic_cleanup(

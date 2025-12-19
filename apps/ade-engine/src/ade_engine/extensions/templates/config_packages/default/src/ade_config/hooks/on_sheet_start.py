@@ -40,7 +40,9 @@ def register(registry: Registry) -> None:
     """Register this config package's on_sheet_start hook(s)."""
     registry.register_hook(on_sheet_start, hook="on_sheet_start", priority=0)
 
-    # Optional high-value recipes (uncomment to enable)
+    # ---------------------------------------------------------------------
+    # Examples (uncomment to enable, then customize as needed)
+    # ---------------------------------------------------------------------
     # registry.register_hook(on_sheet_start_example_0_seed_sheet_state_and_log, hook="on_sheet_start", priority=10)
     # registry.register_hook(on_sheet_start_example_1_route_or_skip_sheets, hook="on_sheet_start", priority=20)
     # registry.register_hook(on_sheet_start_example_2_capture_excel_tables, hook="on_sheet_start", priority=30)
@@ -66,7 +68,7 @@ def on_sheet_start(
 
 
 # ----------------------------
-# High-value examples (recipes)
+# Examples (uncomment in register() to enable)
 # ----------------------------
 
 
