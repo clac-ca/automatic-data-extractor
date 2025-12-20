@@ -29,10 +29,11 @@ Context fields you can accept:
 
 - `table: pl.DataFrame`
 - `column: pl.Series`
-- `column_sample: Sequence[str]` (trimmed, non-empty strings; size controlled by settings)
+- `column_sample_non_empty_values: Sequence[str]` (trimmed, non-empty strings; size controlled by settings)
 - `column_name: str`
 - `column_index: int`
-- `header_text: str` (trimmed; `""` if missing)
+- `column_header_original: str` (trimmed; `""` if missing)
+- `field_name: str` (the canonical field this detector is registered under)
 - `table_region: TableRegion`
 - `table_index: int`
 - `settings` (engine settings)
@@ -43,6 +44,7 @@ Context fields you can accept:
 - `logger`
 
 Return: `dict[str, float]` keyed by field name, or `None` / `{}`.
+
 
 ## TableRegion
 

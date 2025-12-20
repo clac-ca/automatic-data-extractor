@@ -110,11 +110,11 @@ def test_on_table_written_receives_written_table_after_output_policies():
             return {RowKind.HEADER.value: 1.0}
         return {RowKind.DATA.value: 1.0}
 
-    def detect_email(*, header_text, **_):
-        return {"email": 1.0} if header_text.strip().lower() == "email" else {}
+    def detect_email(*, column_header_original, **_):
+        return {"email": 1.0} if column_header_original.strip().lower() == "email" else {}
 
-    def detect_name(*, header_text, **_):
-        return {"name": 1.0} if header_text.strip().lower() == "name" else {}
+    def detect_name(*, column_header_original, **_):
+        return {"name": 1.0} if column_header_original.strip().lower() == "name" else {}
 
     def capture_written(*, table, sheet, state, **_):
         state["written_columns"] = list(table.columns)

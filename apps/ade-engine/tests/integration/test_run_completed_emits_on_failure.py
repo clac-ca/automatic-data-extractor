@@ -42,12 +42,12 @@ def register(registry):
         """
 from ade_engine.models import FieldDef
 
-def detect_email(*, header_text: str, **_):
-    header = (header_text or "").strip().lower()
+def detect_email(*, column_header_original: str, **_):
+    header = (column_header_original or "").strip().lower()
     return {"email": 1.0} if header == "email" else None
 
-def detect_name(*, header_text: str, **_):
-    header = (header_text or "").strip().lower()
+def detect_name(*, column_header_original: str, **_):
+    header = (column_header_original or "").strip().lower()
     return {"name": 1.0} if header == "name" else None
 
 def register(registry):

@@ -5,4 +5,4 @@
 remove_unmapped_columns = false
 write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost" # options: "leftmost" (default) or "leave_unmapped"
-detector_column_sample_size = 100     # Max number of values collected into `column_sample` for each column detector
+detector_column_sample_size = 100     # Max number of values collected into `column_sample_non_empty_values` for each column detector
