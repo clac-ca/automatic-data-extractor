@@ -27,7 +27,7 @@ def build_source_columns(header_row: List[Any], data_rows: List[List[Any]]) -> L
     return cols
 
 
-def _header_text(value: Any) -> str:
+def _column_header_original(value: Any) -> str:
     if value in (None, ""):
         return ""
     return str(value).strip()
@@ -76,7 +76,7 @@ def detect_and_map_columns(
 
         column_name = table.columns[col.index]
         column = table.get_column(column_name)
-        column_sample = _build_column_sample(
+        column_sample_non_empty_values = _build_column_sample(
             column,
             limit=int(settings.detector_column_sample_size),
         )
@@ -84,24 +84,28 @@ def detect_and_map_columns(
         scores: Dict[str, float] = {}
         contributions: Dict[str, List[Dict[str, float]]] = {} if debug else {}
         detectors_run: list[dict[str, Any]] = [] if debug else []
-        ctx = ColumnDetectorContext(
-            table=table,
-            column=column,
-            column_sample=column_sample,
-            column_name=column_name,
-            column_index=col.index,
-            header_text=_header_text(col.header),
-            settings=settings,
-            sheet_name=sheet_name,
-            metadata=metadata,
-            state=state,
-            table_region=table_region,
-            table_index=table_index,
-            input_file_name=input_file_name,
-            logger=logger,
-        )
+        column_header_original = _column_header_original(col.header)
         for det in registry.column_detectors:
             started = perf_counter() if debug else 0.0
+            ctx = ColumnDetectorContext(
+                table=table,
+                column=column,
+                column_sample_non_empty_values=column_sample_non_empty_values,
+                column_sample=column_sample_non_empty_values,
+                column_name=column_name,
+                column_index=col.index,
+                column_header_original=column_header_original,
+                header_text=column_header_original,
+                field_name=det.field,
+                settings=settings,
+                sheet_name=sheet_name,
+                metadata=metadata,
+                state=state,
+                table_region=table_region,
+                table_index=table_index,
+                input_file_name=input_file_name,
+                logger=logger,
+            )
             try:
                 raw_patch = call_extension(det.fn, ctx, label=f"Column detector {det.qualname}")
             except Exception as exc:  # pragma: no cover - defensive
@@ -196,7 +200,7 @@ def detect_and_map_columns(
                         "table_region": table_region.a1 if table_region else None,
                         "column_index": col.index,
                         "column_name": column_name,
-                        "header_text": _header_text(col.header),
+                        "column_header_original": column_header_original,
                         "best_field": best_field,
                         "best_score": best_score,
                         "scores": scores,
