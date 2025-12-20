@@ -64,10 +64,13 @@ class RowDetectorContext:
 class ColumnDetectorContext:
     table: pl.DataFrame
     column: pl.Series
+    column_sample_non_empty_values: Sequence[str]
     column_sample: Sequence[str]
     column_name: str
     column_index: int
+    column_header_original: str
     header_text: str
+    field_name: str
     settings: Any
     sheet_name: str
     metadata: Mapping[str, Any]

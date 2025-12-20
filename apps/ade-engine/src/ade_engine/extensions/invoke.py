@@ -77,10 +77,11 @@ def call_extension(fn: Callable[..., Any], ctx: Any, *, label: str) -> Any:
         detect_email_header(
             table=...,
             column=...,
-            column_sample=[...],
+            column_sample_non_empty_values=[...],
             column_name="Email",
             column_index=3,
-            header_text="Email",
+            column_header_original="Email",
+            field_name="email",
             settings=...,
             sheet_name="Sheet1",
             metadata={...},

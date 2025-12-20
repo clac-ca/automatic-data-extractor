@@ -49,7 +49,7 @@ Do not reference fields by `"first_name"` / `"email"` during detection.
 
 Instead:
 
-- Use `header_text` (header label for that column)
+- Use `column_header_original` (header label for that column)
 - Use `column_index` for position-based heuristics
 - Use `table.columns[column_index]` only as an internal handle (not a semantic name)
 - If you need another column, access it by index:

@@ -40,7 +40,7 @@
 These settings control the shared sampling policy used by detectors.
 They do not affect transforms or validators, which always process all rows.
 
-- `detector_column_sample_size: int` — max number of values collected into `column_sample` for each column detector (default `100`).
+- `detector_column_sample_size: int` — max number of values collected into `column_sample_non_empty_values` for each column detector (default `100`).
   - Can be set via env: `ADE_ENGINE_DETECTOR_COLUMN_SAMPLE_SIZE=100`
 
 ## File discovery

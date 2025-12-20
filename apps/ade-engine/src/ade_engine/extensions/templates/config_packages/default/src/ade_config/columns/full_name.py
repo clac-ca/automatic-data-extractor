@@ -47,10 +47,11 @@ def detect_full_name_header_common_names(
     *,
     table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
     column: pl.Series,  # Current column as a Series
-    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_sample_non_empty_values: list[str],  # Trimmed, non-empty sample from this column (strings)
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
-    header_text: str,  # Header cell text ("" if missing)
+    field_name: str,  # Canonical field name (registered for this detector)
+    column_header_original: str,  # Header cell text ("" if missing)
     settings: Settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
     table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
@@ -82,7 +83,7 @@ def detect_full_name_header_common_names(
         {"name"},  # very common but ambiguous
     ]
 
-    raw = (header_text or "").strip().lower()
+    raw = (column_header_original or "").strip().lower()
     if not raw:
         return None
 
@@ -104,10 +105,11 @@ def detect_full_name_values_basic(
     *,
     table: pl.DataFrame,  # Extracted table (pre-mapping; header row already applied)
     column: pl.Series,  # Current column as a Series
-    column_sample: list[str],  # Trimmed, non-empty sample from this column (strings)
+    column_sample_non_empty_values: list[str],  # Trimmed, non-empty sample from this column (strings)
     column_name: str,  # Extracted column name (not canonical yet)
     column_index: int,  # 0-based index in table.columns
-    header_text: str,  # Header cell text ("" if missing)
+    field_name: str,  # Canonical field name (registered for this detector)
+    column_header_original: str,  # Header cell text ("" if missing)
     settings: Settings,  # Engine Settings
     sheet_name: str,  # Worksheet title
     table_region: TableRegion,  # See `TableRegion` notes above
@@ -127,13 +129,13 @@ def detect_full_name_values_basic(
     comma_name_re = re.compile(r"^[A-Za-z][\w'\-]*,\s*[A-Za-z][\w'\-]*$")
     space_name_re = re.compile(r"^[A-Za-z][\w'\-]*\s+[A-Za-z][\w'\-]*$")
 
-    if not column_sample:
+    if not column_sample_non_empty_values:
         return None
 
     matches = 0
     total = 0
 
-    for s in column_sample:
+    for s in column_sample_non_empty_values:
         if any(ch.isdigit() for ch in s):
             continue
         total += 1
