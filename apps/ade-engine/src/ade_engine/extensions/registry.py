@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Mapping
+from typing import Any, Callable, Dict, List, Mapping, Sequence
 
 import polars as pl
 from pydantic import ValidationError
@@ -16,12 +16,15 @@ from ade_engine.models.extension_contexts import (
     ScorePatch,
     SheetEndHookContext,
     SheetStartHookContext,
-    TableHookContext,
+    TableMappedHookContext,
+    TableTransformedHookContext,
+    TableValidatedHookContext,
+    TableWrittenHookContext,
     WorkbookBeforeSaveHookContext,
     WorkbookStartHookContext,
 )
 from ade_engine.models.extension_outputs import ColumnDetectorResult, RowDetectorResult
-from ade_engine.models.table import TableRegion
+from ade_engine.models.table import TableRegion, TableResult
 from ade_engine.extensions.invoke import call_extension
 
 @dataclass
@@ -81,11 +84,17 @@ class Registry:
         metadata: Mapping[str, Any],
         logger: RunLogger,
         input_file_name: str,
-        workbook=None,
-        sheet=None,
+        source_workbook=None,
+        output_workbook=None,
+        source_sheet=None,
+        output_sheet=None,
         table: pl.DataFrame | None = None,
-        table_region: TableRegion | None = None,
+        write_table: pl.DataFrame | None = None,
+        source_region: TableRegion | None = None,
+        output_region: TableRegion | None = None,
         table_index: int | None = None,
+        table_result: TableResult | None = None,
+        tables: Sequence[TableResult] | None = None,
     ) -> pl.DataFrame | None:
         hooks = self.hooks.get(hook_name, [])
         table_returning = hook_name in {
@@ -99,14 +108,14 @@ class Registry:
         hook_stage = hook_name.value if hasattr(hook_name, "value") else str(hook_name)
         current_table = table
         for hook_def in hooks:
-            table_region_ref = table_region.a1 if isinstance(table_region, TableRegion) else None
-            sheet_name = getattr(sheet, "title", None) if sheet is not None else None
+            table_region_ref = None
+            sheet_name = None
 
             if hook_name == HookName.ON_WORKBOOK_START:
-                if workbook is None:
-                    raise HookError("on_workbook_start requires workbook", stage=hook_stage)
+                if source_workbook is None:
+                    raise HookError("on_workbook_start requires source_workbook", stage=hook_stage)
                 ctx = WorkbookStartHookContext(
-                    workbook=workbook,
+                    source_workbook=source_workbook,
                     settings=settings,
                     metadata=metadata,
                     state=state,
@@ -114,56 +123,120 @@ class Registry:
                     logger=logger,
                 )
             elif hook_name == HookName.ON_SHEET_START:
-                if workbook is None:
-                    raise HookError("on_sheet_start requires workbook", stage=hook_stage)
-                if sheet is None:
-                    raise HookError("on_sheet_start requires sheet", stage=hook_stage)
+                if source_workbook is None:
+                    raise HookError("on_sheet_start requires source_workbook", stage=hook_stage)
+                if source_sheet is None:
+                    raise HookError("on_sheet_start requires source_sheet", stage=hook_stage)
                 ctx = SheetStartHookContext(
-                    sheet=sheet,
-                    workbook=workbook,
+                    source_sheet=source_sheet,
+                    source_workbook=source_workbook,
                     settings=settings,
                     metadata=metadata,
                     state=state,
                     input_file_name=input_file_name,
                     logger=logger,
                 )
+                sheet_name = getattr(source_sheet, "title", None)
             elif hook_name == HookName.ON_SHEET_END:
-                if workbook is None:
-                    raise HookError("on_sheet_end requires workbook", stage=hook_stage)
-                if sheet is None:
-                    raise HookError("on_sheet_end requires sheet", stage=hook_stage)
+                if output_workbook is None:
+                    raise HookError("on_sheet_end requires output_workbook", stage=hook_stage)
+                if output_sheet is None:
+                    raise HookError("on_sheet_end requires output_sheet", stage=hook_stage)
+                if tables is None:
+                    raise HookError("on_sheet_end requires tables", stage=hook_stage)
                 ctx = SheetEndHookContext(
-                    sheet=sheet,
-                    workbook=workbook,
+                    output_sheet=output_sheet,
+                    output_workbook=output_workbook,
+                    tables=tables,
                     settings=settings,
                     metadata=metadata,
                     state=state,
                     input_file_name=input_file_name,
                     logger=logger,
                 )
+                sheet_name = getattr(output_sheet, "title", None)
             elif hook_name in {
                 HookName.ON_TABLE_MAPPED,
                 HookName.ON_TABLE_TRANSFORMED,
                 HookName.ON_TABLE_VALIDATED,
-                HookName.ON_TABLE_WRITTEN,
             }:
-                if workbook is None:
-                    raise HookError(f"{hook_stage} requires workbook", stage=hook_stage)
-                if sheet is None:
-                    raise HookError(f"{hook_stage} requires sheet", stage=hook_stage)
+                if source_workbook is None:
+                    raise HookError(f"{hook_stage} requires source_workbook", stage=hook_stage)
+                if source_sheet is None:
+                    raise HookError(f"{hook_stage} requires source_sheet", stage=hook_stage)
                 if current_table is None:
                     raise HookError(f"{hook_stage} requires table", stage=hook_stage)
-                if table_region is None:
-                    raise HookError(f"{hook_stage} requires table_region", stage=hook_stage)
+                if source_region is None:
+                    raise HookError(f"{hook_stage} requires source_region", stage=hook_stage)
                 if table_index is None:
                     raise HookError(f"{hook_stage} requires table_index", stage=hook_stage)
 
-                ctx = TableHookContext(
-                    table=current_table,
-                    sheet=sheet,
-                    workbook=workbook,
-                    table_region=table_region,
+                table_region_ref = source_region.a1 if isinstance(source_region, TableRegion) else None
+                sheet_name = getattr(source_sheet, "title", None)
+
+                if hook_name == HookName.ON_TABLE_MAPPED:
+                    ctx = TableMappedHookContext(
+                        table=current_table,
+                        source_sheet=source_sheet,
+                        source_workbook=source_workbook,
+                        source_region=source_region,
+                        table_index=table_index,
+                        settings=settings,
+                        metadata=metadata,
+                        state=state,
+                        input_file_name=input_file_name,
+                        logger=logger,
+                    )
+                elif hook_name == HookName.ON_TABLE_TRANSFORMED:
+                    ctx = TableTransformedHookContext(
+                        table=current_table,
+                        source_sheet=source_sheet,
+                        source_workbook=source_workbook,
+                        source_region=source_region,
+                        table_index=table_index,
+                        settings=settings,
+                        metadata=metadata,
+                        state=state,
+                        input_file_name=input_file_name,
+                        logger=logger,
+                    )
+                else:
+                    ctx = TableValidatedHookContext(
+                        table=current_table,
+                        source_sheet=source_sheet,
+                        source_workbook=source_workbook,
+                        source_region=source_region,
+                        table_index=table_index,
+                        settings=settings,
+                        metadata=metadata,
+                        state=state,
+                        input_file_name=input_file_name,
+                        logger=logger,
+                    )
+            elif hook_name == HookName.ON_TABLE_WRITTEN:
+                if output_workbook is None:
+                    raise HookError(f"{hook_stage} requires output_workbook", stage=hook_stage)
+                if output_sheet is None:
+                    raise HookError(f"{hook_stage} requires output_sheet", stage=hook_stage)
+                if write_table is None:
+                    raise HookError(f"{hook_stage} requires write_table", stage=hook_stage)
+                if output_region is None:
+                    raise HookError(f"{hook_stage} requires output_region", stage=hook_stage)
+                if table_index is None:
+                    raise HookError(f"{hook_stage} requires table_index", stage=hook_stage)
+                if table_result is None:
+                    raise HookError(f"{hook_stage} requires table_result", stage=hook_stage)
+
+                table_region_ref = output_region.a1 if isinstance(output_region, TableRegion) else None
+                sheet_name = getattr(output_sheet, "title", None)
+
+                ctx = TableWrittenHookContext(
+                    write_table=write_table,
+                    output_sheet=output_sheet,
+                    output_workbook=output_workbook,
+                    output_region=output_region,
                     table_index=table_index,
+                    table_result=table_result,
                     settings=settings,
                     metadata=metadata,
                     state=state,
@@ -171,10 +244,10 @@ class Registry:
                     logger=logger,
                 )
             elif hook_name == HookName.ON_WORKBOOK_BEFORE_SAVE:
-                if workbook is None:
-                    raise HookError("on_workbook_before_save requires workbook", stage=hook_stage)
+                if output_workbook is None:
+                    raise HookError("on_workbook_before_save requires output_workbook", stage=hook_stage)
                 ctx = WorkbookBeforeSaveHookContext(
-                    workbook=workbook,
+                    output_workbook=output_workbook,
                     settings=settings,
                     metadata=metadata,
                     state=state,

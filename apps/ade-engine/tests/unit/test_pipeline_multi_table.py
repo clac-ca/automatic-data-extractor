@@ -116,9 +116,11 @@ def test_on_table_written_receives_written_table_after_output_policies():
     def detect_name(*, column_header_original, **_):
         return {"name": 1.0} if column_header_original.strip().lower() == "name" else {}
 
-    def capture_written(*, table, sheet, state, **_):
-        state["written_columns"] = list(table.columns)
-        state["written_sheet_title"] = getattr(sheet, "title", getattr(sheet, "name", ""))
+    def capture_written(*, write_table, output_sheet, table_result, state, **_):
+        state["written_columns"] = list(write_table.columns)
+        state["written_sheet_title"] = getattr(output_sheet, "title", getattr(output_sheet, "name", ""))
+        state["output_region_a1"] = table_result.output_region.a1 if table_result.output_region else None
+        state["mapped_headers"] = [col.header for col in table_result.mapped_columns]
 
     registry.register_row_detector(row_detector, row_kind=RowKind.UNKNOWN.value, priority=0)
     registry.register_column_detector(detect_email, field="email", priority=0)
@@ -157,6 +159,8 @@ def test_on_table_written_receives_written_table_after_output_policies():
 
     assert state["written_sheet_title"] == "Sheet1"
     assert state["written_columns"] == ["email", "name"]
+    assert state["output_region_a1"] == "A1:B3"
+    assert state["mapped_headers"] == ["Email", "Name"]
 
     headers = list(output_ws.iter_rows(min_row=1, max_row=1, max_col=2, values_only=True))[0]
     assert headers == ("email", "name")

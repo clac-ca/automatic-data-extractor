@@ -146,7 +146,7 @@ class Engine:
                         state=state,
                         metadata=metadata,
                         input_file_name=plan.request.input_file.name,
-                        workbook=source_wb,
+                        source_workbook=source_wb,
                         logger=run_logger,
                     )
 
@@ -168,12 +168,12 @@ class Engine:
                             state=state,
                             metadata=sheet_metadata,
                             input_file_name=plan.request.input_file.name,
-                            workbook=source_wb,
-                            sheet=sheet,
+                            source_workbook=source_wb,
+                            source_sheet=sheet,
                             logger=run_logger,
                         )
 
-                        pipeline.process_sheet(
+                        tables = pipeline.process_sheet(
                             sheet=sheet,
                             output_sheet=out_sheet,
                             state=state,
@@ -187,8 +187,9 @@ class Engine:
                             state=state,
                             metadata=sheet_metadata,
                             input_file_name=plan.request.input_file.name,
-                            workbook=output_wb,
-                            sheet=out_sheet,
+                            output_workbook=output_wb,
+                            output_sheet=out_sheet,
+                            tables=tables,
                             logger=run_logger,
                         )
 
@@ -198,7 +199,7 @@ class Engine:
                         state=state,
                         metadata=metadata,
                         input_file_name=plan.request.input_file.name,
-                        workbook=output_wb,
+                        output_workbook=output_wb,
                         logger=run_logger,
                     )
                     output_wb.save(plan.output_path)

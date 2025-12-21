@@ -58,10 +58,10 @@ def register(registry: Registry) -> None:
 def on_table_validated(
     *,
     table: pl.DataFrame,  # Current table DF (post-validation; pre-write)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
-    table_index: int,  # 0-based table index within the sheet
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    source_workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    source_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
+    table_index: int,  # 0-based table index within the source_sheet
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
@@ -80,9 +80,9 @@ def on_table_validated(
 def on_table_validated_example_1_enforce_template_layout(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -150,9 +150,9 @@ def on_table_validated_example_1_enforce_template_layout(
 def on_table_validated_example_2_strict_template_only(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -197,9 +197,9 @@ def on_table_validated_example_2_strict_template_only(
 def on_table_validated_example_3_add_derived_columns(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -288,9 +288,9 @@ def on_table_validated_example_3_add_derived_columns(
 def on_table_validated_example_4_sort_issues_to_top(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -328,9 +328,9 @@ def on_table_validated_example_4_sort_issues_to_top(
 def on_table_validated_example_5_move_issue_columns_to_end(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -357,9 +357,9 @@ def on_table_validated_example_5_move_issue_columns_to_end(
 def on_table_validated_example_6_add_issues_summary_column(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -401,9 +401,9 @@ def on_table_validated_example_6_add_issues_summary_column(
 def on_table_validated_example_7_enrich_from_reference_csv_cached(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,

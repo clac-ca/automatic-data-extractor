@@ -56,7 +56,7 @@ def register(registry: Registry) -> None:
 
 def on_workbook_before_save(
     *,
-    workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
+    output_workbook: openpyxl.Workbook,  # Output workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run metadata (filenames, etc.)
@@ -73,7 +73,7 @@ def on_workbook_before_save(
 
 def on_workbook_before_save_example_1_set_properties_and_calc(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -89,7 +89,7 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
     from datetime import datetime
 
     # Core properties (Excel: File -> Info)
-    props = workbook.properties
+    props = output_workbook.properties
     props.creator = "Automatic Data Extractor (ADE)"
     props.lastModifiedBy = "ADE"
 
@@ -110,21 +110,21 @@ def on_workbook_before_save_example_1_set_properties_and_calc(
 
     # Ask Excel to recalculate on open (important if you add formulas).
     try:
-        workbook.calculation.fullCalcOnLoad = True
+        output_workbook.calculation.fullCalcOnLoad = True
     except Exception:
-        # Some workbook objects/openpyxl versions may not expose this—safe to ignore.
+        # Some output_workbook objects/openpyxl versions may not expose this—safe to ignore.
         pass
 
     # Choose which sheet opens by default (0 = first sheet).
-    workbook.active = 0
+    output_workbook.active = 0
 
     if logger:
-        logger.info("Example 1: set workbook properties + fullCalcOnLoad")
+        logger.info("Example 1: set output_workbook properties + fullCalcOnLoad")
 
 
 def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -139,7 +139,7 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
       - auto-filter on the used range
       - print title rows + landscape + fit-to-width
     """
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         # Skip truly empty sheets
         if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value in (None, ""):
             continue
@@ -170,7 +170,7 @@ def on_workbook_before_save_example_2_standardize_sheet_ux_and_print(
 
 def on_workbook_before_save_example_3_namedstyle_headers(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -197,16 +197,16 @@ def on_workbook_before_save_example_3_namedstyle_headers(
     )
 
     existing = set()
-    for item in getattr(workbook, "named_styles", []) or []:
+    for item in getattr(output_workbook, "named_styles", []) or []:
         if isinstance(item, str):
             existing.add(item)
         else:
             existing.add(getattr(item, "name", ""))
 
     if header_style.name not in existing:
-        workbook.add_named_style(header_style)
+        output_workbook.add_named_style(header_style)
 
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.max_row < 1 or ws.max_column < 1:
             continue
         for cell in ws[1]:
@@ -223,7 +223,7 @@ def on_workbook_before_save_example_3_namedstyle_headers(
 
 def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -261,7 +261,7 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
         key = str(header).strip().lower()
         return HEADER_FORMATS.get(key)
 
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.max_row < 1 or ws.max_column < 1:
             continue
 
@@ -312,7 +312,7 @@ def on_workbook_before_save_example_4_autosize_columns_and_number_formats(
 
 def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -340,9 +340,9 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
 
     # Replace existing sheet if present
     title = "Run Summary"
-    if title in getattr(workbook, "sheetnames", []):
-        workbook.remove(workbook[title])
-    ws = workbook.create_sheet(title=title, index=0)
+    if title in getattr(output_workbook, "sheetnames", []):
+        output_workbook.remove(output_workbook[title])
+    ws = output_workbook.create_sheet(title=title, index=0)
 
     # Header
     ws["A1"] = "Run Summary"
@@ -364,7 +364,7 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
     header_row_idx = ws.max_row + 1
     ws.append(["sheet", "rows", "columns", "notes"])
 
-    data_sheets = [s for s in (getattr(workbook, "worksheets", []) or []) if s.title != ws.title]
+    data_sheets = [s for s in (getattr(output_workbook, "worksheets", []) or []) if s.title != ws.title]
 
     for s in data_sheets:
         if s.max_row == 1 and s.max_column == 1 and s["A1"].value in (None, ""):
@@ -406,7 +406,7 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
         ws.add_chart(chart, "F3")
 
     # Make summary the active sheet by default
-    workbook.active = 0
+    output_workbook.active = 0
 
     if logger:
         logger.info("Example 5: wrote Run Summary sheet (sheets=%d)", len(data_sheets))
@@ -414,7 +414,7 @@ def on_workbook_before_save_example_5_add_run_summary_sheet_with_links_and_chart
 
 def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -464,14 +464,14 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
                 cell.value = val
 
     existing_names: set[str] = set()
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         for t in getattr(ws, "tables", {}).values():
             n = getattr(t, "displayName", None)
             if n:
                 existing_names.add(n)
 
     created = 0
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.max_row < 2 or ws.max_column < 1:
             continue
         if getattr(ws, "tables", None) and len(ws.tables) > 0:
@@ -510,7 +510,7 @@ def on_workbook_before_save_example_6_convert_ranges_to_excel_tables(
 
 def on_workbook_before_save_example_7_apply_conditional_formatting(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -532,7 +532,7 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
     fill_negative = PatternFill("solid", fgColor="FADBD8")  # soft red
 
     applied = 0
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.max_row < 2 or ws.max_column < 1:
             continue
 
@@ -576,7 +576,7 @@ def on_workbook_before_save_example_7_apply_conditional_formatting(
 
 def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -596,7 +596,7 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
     TARGET_HEADERS = {"status", "review_status"}
 
     updated = 0
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.max_row < 2 or ws.max_column < 1:
             continue
 
@@ -620,7 +620,7 @@ def on_workbook_before_save_example_8_add_data_validation_dropdowns(
 
 def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -633,7 +633,7 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
       - helper sheets start with "_" or "tmp"
     """
     hidden = 0
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         if ws.title.startswith("_") or ws.title.lower().startswith("tmp"):
             try:
                 ws.sheet_state = "hidden"
@@ -642,20 +642,20 @@ def on_workbook_before_save_example_9_hide_helper_sheets_and_set_active(
                 pass
 
     # Prefer "Run Summary" if present, else first visible sheet.
-    if "Run Summary" in getattr(workbook, "sheetnames", []):
-        workbook.active = workbook.sheetnames.index("Run Summary")
+    if "Run Summary" in getattr(output_workbook, "sheetnames", []):
+        output_workbook.active = output_workbook.sheetnames.index("Run Summary")
     else:
-        workbook.active = 0
+        output_workbook.active = 0
 
     if logger:
         logger.info(
-            "Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, workbook.active
+            "Example 9: hidden helper sheets=%d; set active sheet index=%d", hidden, output_workbook.active
         )
 
 
 def on_workbook_before_save_example_10_protect_sheets(
     *,
-    workbook: openpyxl.Workbook,
+    output_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -671,7 +671,7 @@ def on_workbook_before_save_example_10_protect_sheets(
     PASSWORD = "change-me"  # If you use this, set it via env/settings instead of hardcoding.
     protected = 0
 
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(output_workbook, "worksheets", []) or []:
         # Skip empty sheets
         if ws.max_row == 1 and ws.max_column == 1 and ws["A1"].value in (None, ""):
             continue

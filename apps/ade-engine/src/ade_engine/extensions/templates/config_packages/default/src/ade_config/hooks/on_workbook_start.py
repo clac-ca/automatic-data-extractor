@@ -55,7 +55,7 @@ def register(registry: Registry) -> None:
 
 def on_workbook_start(
     *,
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    source_workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine settings
     metadata: Mapping[str, Any],  # Run metadata (filenames, IDs, etc.)
@@ -74,7 +74,7 @@ def on_workbook_start(
 
 def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
     *,
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    source_workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine settings
     metadata: Mapping[str, Any],  # Run metadata (filenames, IDs, etc.)
@@ -112,13 +112,13 @@ def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
         cfg["input"] = {"file": input_label, "basename": input_file_name}
 
     # ------------------------------------------------------------------
-    # 3) Inspect workbook shape (safe + fast)
+    # 3) Inspect source_workbook shape (safe + fast)
     # ------------------------------------------------------------------
-    sheet_names = list(getattr(workbook, "sheetnames", []) or [])
+    sheet_names = list(getattr(source_workbook, "sheetnames", []) or [])
 
     # Safe, compact document properties (avoid logging full objects).
     props_out: dict[str, Any] = {}
-    props = getattr(workbook, "properties", None)
+    props = getattr(source_workbook, "properties", None)
     if props is not None:
         for key in (
             "title",
@@ -136,7 +136,7 @@ def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
             if val not in (None, ""):
                 props_out[key] = val
 
-    cfg["workbook"] = {
+    cfg["source_workbook"] = {
         "sheet_count": len(sheet_names),
         "sheet_names": sheet_names,
         "properties": props_out,
@@ -145,7 +145,7 @@ def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
     # (Optional) Collect Excel "Table" objects per sheet (Insert → Table).
     # These are NOT the same thing as ADE tables, but can be useful for validation/routing.
     excel_tables_by_sheet: dict[str, list[str]] = {}
-    for ws in getattr(workbook, "worksheets", []) or []:
+    for ws in getattr(source_workbook, "worksheets", []) or []:
         ws_name = getattr(ws, "title", None) or "<unknown>"
         tables = getattr(ws, "tables", None)
 
@@ -188,7 +188,7 @@ def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
     # ------------------------------------------------------------------
     if logger:
         logger.info(
-            "Config hook: workbook start (input=%s, sheets=%d)",
+            "Config hook: source_workbook start (input=%s, sheets=%d)",
             input_label,
             len(sheet_names),
         )
@@ -198,7 +198,7 @@ def on_workbook_start_example_0_seed_state_and_log_workbook_basics(
 
 def on_workbook_start_example_1_fail_fast_missing_sheets(
     *,
-    workbook: openpyxl.Workbook,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -208,17 +208,17 @@ def on_workbook_start_example_1_fail_fast_missing_sheets(
     """Example 1: Fail fast if required worksheets are missing."""
 
     required = {"Orders", "Customers"}  # customize
-    sheet_names = set(getattr(workbook, "sheetnames", []) or [])
+    sheet_names = set(getattr(source_workbook, "sheetnames", []) or [])
     missing = sorted(required - sheet_names)
     if missing:
-        raise ValueError("Input workbook is missing required worksheet(s): " + ", ".join(missing))
+        raise ValueError("Input source_workbook is missing required worksheet(s): " + ", ".join(missing))
 
     return None
 
 
 def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
     *,
-    workbook: openpyxl.Workbook,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -229,7 +229,7 @@ def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
 
     cfg = state
 
-    sheet_names = [str(s).lower() for s in (getattr(workbook, "sheetnames", []) or [])]
+    sheet_names = [str(s).lower() for s in (getattr(source_workbook, "sheetnames", []) or [])]
 
     # Toy heuristics (replace with your real template/vendor detection).
     if any("acme" in s for s in sheet_names):
@@ -251,14 +251,14 @@ def on_workbook_start_example_2_detect_workbook_flavor_and_flags(
     )
 
     if logger:
-        logger.info("Detected workbook vendor=%s", vendor)
+        logger.info("Detected source_workbook vendor=%s", vendor)
 
     return None
 
 
 def on_workbook_start_example_3_emit_structured_event(
     *,
-    workbook: openpyxl.Workbook,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -280,11 +280,11 @@ def on_workbook_start_example_3_emit_structured_event(
         input_label = input_file_name
 
     logger.event(
-        "engine.config.workbook.start",
+        "engine.config.source_workbook.start",
         data={
             "input_file": input_label,
-            "sheet_count": len(getattr(workbook, "sheetnames", []) or []),
-            "sheet_names": list(getattr(workbook, "sheetnames", []) or []),
+            "sheet_count": len(getattr(source_workbook, "sheetnames", []) or []),
+            "sheet_names": list(getattr(source_workbook, "sheetnames", []) or []),
         },
     )
 
@@ -293,7 +293,7 @@ def on_workbook_start_example_3_emit_structured_event(
 
 def on_workbook_start_example_4_init_openai_client(
     *,
-    workbook: openpyxl.Workbook,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -354,7 +354,7 @@ def on_workbook_start_example_4_init_openai_client(
 
 def on_workbook_start_example_5_load_reference_sheet_into_polars(
     *,
-    workbook: openpyxl.Workbook,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -386,13 +386,13 @@ def on_workbook_start_example_5_load_reference_sheet_into_polars(
         return None
 
     sheet_name = getattr(settings, "reference_sheet_name", "Reference")
-    if sheet_name not in (getattr(workbook, "sheetnames", []) or []):
+    if sheet_name not in (getattr(source_workbook, "sheetnames", []) or []):
         if logger:
             logger.info("No %r sheet found; skipping reference load.", sheet_name)
         cfg["reference"] = {"df": None, "sheet": sheet_name}
         return None
 
-    ws = workbook[sheet_name]
+    ws = source_workbook[sheet_name]
 
     # Beginner-friendly: read rows as values (no cell objects).
     rows_iter = ws.iter_rows(values_only=True)

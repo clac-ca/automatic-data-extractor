@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import io
+import os
 import secrets
 import shutil
 import subprocess
@@ -196,7 +197,7 @@ class ConfigStorage:
                 "--log-format",
                 "text",
             ]
-            result = subprocess.run(command, capture_output=True, text=True)
+            result = subprocess.run(command, capture_output=True, text=True, env=self._engine_subprocess_env())
             issues: list[ConfigValidationIssue] = []
             if result.returncode != 0:
                 message_src = result.stderr.strip() or result.stdout.strip()
@@ -323,11 +324,43 @@ class ConfigStorage:
             "--layout",
             "src",
         ]
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(command, capture_output=True, text=True, env=self._engine_subprocess_env())
         if result.returncode != 0:
             message_src = result.stderr.strip() or result.stdout.strip()
             message = message_src.splitlines()[0] if message_src else "Config init failed"
             raise ConfigSourceInvalidError([ConfigValidationIssue(path=".", message=message)])
+
+    def _engine_subprocess_env(self) -> dict[str, str]:
+        env = os.environ.copy()
+        src_root = self._resolve_engine_src_root()
+        if src_root is None:
+            return env
+
+        existing = env.get("PYTHONPATH")
+        parts = [str(src_root)]
+        if existing:
+            parts.append(existing)
+        env["PYTHONPATH"] = os.pathsep.join(parts)
+        return env
+
+    def _resolve_engine_src_root(self) -> Path | None:
+        candidates: list[Path] = []
+        if self._settings is not None:
+            spec = Path(self._settings.engine_spec)
+            if spec.exists():
+                candidates.append(spec)
+
+        for parent in Path(__file__).resolve().parents:
+            repo_candidate = parent / "apps" / "ade-engine"
+            if repo_candidate.exists():
+                candidates.append(repo_candidate)
+
+        for root in candidates:
+            src_root = root / "src"
+            if (src_root / "ade_engine").is_dir():
+                return src_root
+
+        return None
 
 
 def _calculate_digest(root: Path) -> str:

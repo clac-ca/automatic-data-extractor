@@ -18,7 +18,7 @@ from typing import Any, Mapping, Sequence
 
 import polars as pl
 
-from ade_engine.models.table import TableRegion
+from ade_engine.models.table import TableRegion, TableResult
 
 ScorePatch = Mapping[str, float] | None
 
@@ -109,7 +109,7 @@ class ValidateContext:
 
 @dataclass(frozen=True)
 class WorkbookStartHookContext:
-    workbook: Any
+    source_workbook: Any
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
@@ -119,8 +119,8 @@ class WorkbookStartHookContext:
 
 @dataclass(frozen=True)
 class SheetStartHookContext:
-    sheet: Any
-    workbook: Any
+    source_sheet: Any
+    source_workbook: Any
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
@@ -130,8 +130,9 @@ class SheetStartHookContext:
 
 @dataclass(frozen=True)
 class SheetEndHookContext:
-    sheet: Any
-    workbook: Any
+    output_sheet: Any
+    output_workbook: Any
+    tables: Sequence[TableResult]
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
@@ -140,11 +141,11 @@ class SheetEndHookContext:
 
 
 @dataclass(frozen=True)
-class TableHookContext:
+class TableMappedHookContext:
     table: pl.DataFrame
-    sheet: Any
-    workbook: Any
-    table_region: TableRegion
+    source_sheet: Any
+    source_workbook: Any
+    source_region: TableRegion
     table_index: int
     settings: Any
     metadata: Mapping[str, Any]
@@ -154,8 +155,51 @@ class TableHookContext:
 
 
 @dataclass(frozen=True)
+class TableTransformedHookContext:
+    table: pl.DataFrame
+    source_sheet: Any
+    source_workbook: Any
+    source_region: TableRegion
+    table_index: int
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
+class TableValidatedHookContext:
+    table: pl.DataFrame
+    source_sheet: Any
+    source_workbook: Any
+    source_region: TableRegion
+    table_index: int
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
+class TableWrittenHookContext:
+    write_table: pl.DataFrame
+    output_sheet: Any
+    output_workbook: Any
+    output_region: TableRegion
+    table_index: int
+    table_result: TableResult
+    settings: Any
+    metadata: Mapping[str, Any]
+    state: dict[str, Any]
+    input_file_name: str
+    logger: Any | None = None
+
+
+@dataclass(frozen=True)
 class WorkbookBeforeSaveHookContext:
-    workbook: Any
+    output_workbook: Any
     settings: Any
     metadata: Mapping[str, Any]
     state: dict[str, Any]
@@ -167,7 +211,10 @@ HookContext = (
     WorkbookStartHookContext
     | SheetStartHookContext
     | SheetEndHookContext
-    | TableHookContext
+    | TableMappedHookContext
+    | TableTransformedHookContext
+    | TableValidatedHookContext
+    | TableWrittenHookContext
     | WorkbookBeforeSaveHookContext
 )
 
@@ -186,5 +233,8 @@ __all__ = [
     "WorkbookStartHookContext",
     "SheetEndHookContext",
     "SheetStartHookContext",
-    "TableHookContext",
+    "TableMappedHookContext",
+    "TableTransformedHookContext",
+    "TableValidatedHookContext",
+    "TableWrittenHookContext",
 ]

@@ -35,20 +35,20 @@ For all other hooks (including `on_table_written` and `on_sheet_end`), the hook 
 Hooks receive a stage-specific context expanded into keyword arguments by `call_extension`.
 The engine only passes parameters that are populated for that stage:
 
-- `on_workbook_start`: `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
-- `on_sheet_start`: `sheet`, `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
-- `on_sheet_end`: `sheet`, `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
-- `on_table_mapped` / `on_table_transformed` / `on_table_validated`: `table`, `sheet`, `workbook`, `table_region`, `table_index`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
-- `on_table_written`: `table`, `sheet`, `workbook`, `table_region`, `table_index`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
-- `on_workbook_before_save`: `workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_workbook_start`: `source_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_sheet_start`: `source_sheet`, `source_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_sheet_end`: `output_sheet`, `output_workbook`, `tables`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_mapped` / `on_table_transformed` / `on_table_validated`: `table`, `source_sheet`, `source_workbook`, `source_region`, `table_index`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_written`: `write_table`, `output_sheet`, `output_workbook`, `output_region`, `table_index`, `table_result`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_workbook_before_save`: `output_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
 
 Notes:
 
-- `workbook` is the input workbook for the early hooks and the output workbook for `on_table_written` / `on_sheet_end` / `on_workbook_before_save`.
-- `sheet` is the input worksheet for `on_sheet_start` and the output worksheet for `on_sheet_end`.
-- `table_region` uses Excel-style bounds (`min_row/min_col/max_row/max_col` are 1-based + inclusive; `min_row` is the header row). Use `table_region.a1` for an `"A1:D10"`-style range.
+- `source_*` values are always from the input workbook; `output_*` values are always from the output workbook.
+- `tables` is ordered in the same top-to-bottom order the tables were written.
+- `source_region` / `output_region` use Excel-style bounds (`min_row/min_col/max_row/max_col` are 1-based + inclusive; `min_row` is the header row). Use `.a1` for an `"A1:D10"`-style range.
 
-Mutating `state` is the preferred way to share data between hooks, detectors, transforms, and validators.
+`state` remains available for cross-stage sharing, but `table_result` and `tables` cover most diagnostics without extra bookkeeping.
 
 ## Error handling and ordering
 

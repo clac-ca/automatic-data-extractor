@@ -52,10 +52,10 @@ For each detected table region:
      - `Settings.remove_unmapped_columns`
      - reserved-column dropping (`__ade_*`) unless `Settings.write_diagnostics_columns`
    - writes `write_table` headers + rows directly to the output worksheet
-   - runs `on_table_written(table=write_table, ...)` for formatting/summaries
+   - runs `on_table_written(write_table=write_table, table_result=..., ...)` for formatting/summaries
 
 After `Pipeline.process_sheet` completes, the engine fires `on_sheet_end` with the output
-workbook/worksheet for any sheet-level formatting or summaries.
+workbook/worksheet plus the ordered `tables` list for any sheet-level formatting or summaries.
 
 ## Logging touchpoints
 
