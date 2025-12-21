@@ -130,6 +130,18 @@ The engine reserves the prefix `__ade_` for internal/diagnostic columns.
 
 Register with: `registry.register_hook(fn, hook="<hook_stage>", priority=int)`
 
+Context fields you can accept (by stage):
+
+- `on_workbook_start`: `source_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_sheet_start`: `source_sheet`, `source_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_mapped` / `on_table_transformed` / `on_table_validated`:
+  `table`, `source_sheet`, `source_workbook`, `source_region`, `table_index`,
+  `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_table_written`: `write_table`, `output_sheet`, `output_workbook`, `output_region`,
+  `table_index`, `table_result`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_sheet_end`: `output_sheet`, `output_workbook`, `tables`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+- `on_workbook_before_save`: `output_workbook`, `input_file_name`, `settings`, `metadata`, `state`, `logger`
+
 Table hooks that may replace the DataFrame:
 
 - `on_table_mapped`

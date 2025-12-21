@@ -20,7 +20,7 @@ Guidance
 --------
 - Keep logic deterministic and idempotent.
 - Prefer vectorized Polars expressions; avoid Python row loops.
-- Treat the workbook as read-only and use ``table_region`` only as source context.
+- Treat the workbook as read-only and use ``source_region`` only as source context.
 - When constructing literals in expressions, use ``pl.lit(...)``.
 """
 
@@ -77,10 +77,10 @@ def register(registry: Registry) -> None:
 def on_table_transformed(
     *,
     table: pl.DataFrame,  # Current table DF (post-transforms; pre-validation)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
-    table_index: int,  # 0-based table index within the sheet
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    source_workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    source_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
+    table_index: int,  # 0-based table index within the source_sheet
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
@@ -99,9 +99,9 @@ def on_table_transformed(
 def on_table_transformed_example_1_normalize_all_text(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -139,9 +139,9 @@ def on_table_transformed_example_1_normalize_all_text(
 def on_table_transformed_example_2_add_provenance_columns(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -159,7 +159,7 @@ def on_table_transformed_example_2_add_provenance_columns(
     - Adding a stable row index with `pl.int_range(pl.len())` or `with_row_index`
     """
 
-    sheet_name = (getattr(sheet, "title", None) or getattr(sheet, "name", None) or "").strip()
+    sheet_name = (getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "").strip()
 
     # 0-based index within this materialized table
     row_index_expr = pl.int_range(pl.len(), dtype=pl.UInt32).alias("__row_index")
@@ -175,9 +175,9 @@ def on_table_transformed_example_2_add_provenance_columns(
 def on_table_transformed_example_3_derive_full_name(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -222,9 +222,9 @@ def on_table_transformed_example_3_derive_full_name(
 def on_table_transformed_example_4_parse_date_multi_format(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -265,9 +265,9 @@ def on_table_transformed_example_4_parse_date_multi_format(
 def on_table_transformed_example_5_parse_currency_amount(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -335,9 +335,9 @@ def on_table_transformed_example_5_parse_currency_amount(
 def on_table_transformed_example_6_compute_line_total(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -381,9 +381,9 @@ def on_table_transformed_example_6_compute_line_total(
 def on_table_transformed_example_7_drop_non_data_rows(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -454,9 +454,9 @@ def on_table_transformed_example_7_drop_non_data_rows(
 def on_table_transformed_example_8_add_report_date_from_sheet_header(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -483,10 +483,10 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
     found_label = False
     report_date_value: Any | None = None
 
-    max_scan_row = min(40, int(table_region.header_row))
+    max_scan_row = min(40, int(source_region.header_row))
 
     try:
-        rows = sheet.iter_rows(min_row=1, max_row=max_scan_row, min_col=1, max_col=20)
+        rows = source_sheet.iter_rows(min_row=1, max_row=max_scan_row, min_col=1, max_col=20)
     except Exception:
         rows = None
 
@@ -503,7 +503,7 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
                         continue
                     found_label = True
                     try:
-                        report_date_value = sheet.cell(row=row_idx, column=col_idx + 1).value
+                        report_date_value = source_sheet.cell(row=row_idx, column=col_idx + 1).value
                     except Exception:
                         report_date_value = None
                     break
@@ -519,7 +519,7 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
     if isinstance(report_date_value, date):
         out = table.with_columns(pl.lit(report_date_value, dtype=pl.Date).alias("report_date"))
         if logger:
-            logger.info("Added report_date from sheet header (date object).")
+            logger.info("Added report_date from source_sheet header (date object).")
         return out
 
     # Otherwise treat as a string and let Polars parse it.
@@ -534,16 +534,16 @@ def on_table_transformed_example_8_add_report_date_from_sheet_header(
     out = out.drop("__report_date_raw")
 
     if logger:
-        logger.info("Added report_date from sheet header (parsed from string).")
+        logger.info("Added report_date from source_sheet header (parsed from string).")
     return out
 
 
 def on_table_transformed_example_9_join_lookup_from_reference_sheet(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -572,7 +572,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
         return None
 
     lookup_sheet_name = "Lookups"
-    sheetnames = getattr(workbook, "sheetnames", []) or []
+    sheetnames = getattr(source_workbook, "sheetnames", []) or []
     if lookup_sheet_name not in sheetnames:
         return None
 
@@ -583,12 +583,12 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
         cache = {}
         cfg["cache"] = cache
 
-    # Cache per input file + lookup sheet name (adjust keying for your environment).
+    # Cache per input file + lookup source_sheet name (adjust keying for your environment).
     cache_key = ("lookup_df", input_file_name, lookup_sheet_name)
     lookup_df = cache.get(cache_key)
 
     if lookup_df is None and cache_key not in cache:
-        ws_lookup = workbook[lookup_sheet_name]
+        ws_lookup = source_workbook[lookup_sheet_name]
 
         rows: list[dict[str, Any]] = []
         # Assume header is row 1, data starts at row 2, columns A..B are the mapping.
@@ -604,7 +604,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
         if not rows:
             if logger:
                 logger.warning(
-                    "Lookup sheet %r found but contained no usable rows.", lookup_sheet_name
+                    "Lookup source_sheet %r found but contained no usable rows.", lookup_sheet_name
                 )
             cache[cache_key] = None
             return None
@@ -614,7 +614,7 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 
         if logger:
             logger.info(
-                "Loaded lookup table from sheet %r (%d rows).",
+                "Loaded lookup table from source_sheet %r (%d rows).",
                 lookup_sheet_name,
                 int(lookup_df.height),
             )
@@ -659,9 +659,9 @@ def on_table_transformed_example_9_join_lookup_from_reference_sheet(
 def on_table_transformed_example_10_geocode_address_google(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,

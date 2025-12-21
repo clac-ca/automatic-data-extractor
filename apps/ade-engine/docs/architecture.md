@@ -40,8 +40,8 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
      - `apply_validators`: run v3 validators to write inline issue-message columns (`__ade_issue__*`).
      - Hook: `on_table_validated` (may replace the DataFrame; safe to filter/sort/reorder).
      - `render_table`: derive `write_table` using output settings and write it directly to the output sheet.
-     - Hook: `on_table_written` (formatting/summaries; receives the DataFrame that was written to the output sheet).
-   After all tables are written, the engine fires `on_sheet_end` with the output workbook/worksheet.
+     - Hook: `on_table_written` (formatting/summaries; receives `write_table` plus `table_result` facts).
+   After all tables are written, the engine fires `on_sheet_end` with the output workbook/worksheet and the list of `TableResult` objects.
 
 6. **Finalize workbook**  
    Hook `on_workbook_before_save` fires with the output workbook, then the workbook is saved to `<output_dir>/<input_stem>_normalized.xlsx` (or a caller-specified path).

@@ -51,8 +51,8 @@ def register(registry: Registry) -> None:
 
 def on_sheet_start(
     *,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    source_workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
@@ -74,8 +74,8 @@ def on_sheet_start(
 
 def on_sheet_start_example_0_seed_sheet_state_and_log(
     *,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    source_workbook: openpyxl.Workbook,  # Source workbook (openpyxl Workbook)
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
@@ -100,7 +100,7 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
     stats["sheets_seen"] = int(stats.get("sheets_seen", 0) or 0) + 1
 
     # --- sheet facts + per-sheet context dict
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
 
     sheet_index: int | None = None
     raw_index = metadata.get("sheet_index", None)
@@ -121,7 +121,7 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
 
     dimensions: str | None = None
     try:
-        dims = getattr(sheet, "dimensions", None)
+        dims = getattr(source_sheet, "dimensions", None)
         if dims is not None:
             dimensions = str(dims)
     except Exception:
@@ -129,7 +129,7 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
 
     if dimensions is None:
         try:
-            calc = getattr(sheet, "calculate_dimension", None)
+            calc = getattr(source_sheet, "calculate_dimension", None)
             if callable(calc):
                 dimensions = str(calc())
         except Exception:
@@ -138,10 +138,10 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
     # Store cheap, commonly useful sheet facts.
     # Use setdefault so downstream hooks can override intentionally.
     ctx.setdefault("sheet_index", sheet_index)
-    ctx.setdefault("sheet_state", getattr(sheet, "sheet_state", None))
+    ctx.setdefault("sheet_state", getattr(source_sheet, "sheet_state", None))
     ctx.setdefault("dimensions", dimensions)
-    ctx.setdefault("max_row", getattr(sheet, "max_row", None))
-    ctx.setdefault("max_column", getattr(sheet, "max_column", None))
+    ctx.setdefault("max_row", getattr(source_sheet, "max_row", None))
+    ctx.setdefault("max_column", getattr(source_sheet, "max_column", None))
     ctx.setdefault("sheet_name_normalized", sheet_name.strip().lower())
 
     if input_file_name:
@@ -150,7 +150,7 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
     # --- logging (keep it structured and cheap)
     if logger:
         logger.info(
-            "Config hook: sheet start file=%s sheet=%s index=%s dims=%s",
+            "Config hook: source_sheet start file=%s source_sheet=%s index=%s dims=%s",
             input_file_name or "<unknown>",
             sheet_name,
             sheet_index if sheet_index is not None else "<unknown>",
@@ -158,7 +158,7 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
         )
 
         logger.event(
-            "engine.config.sheet.start",
+            "engine.config.source_sheet.start",
             data={
                 "input_file_name": input_file_name,
                 "sheet_name": sheet_name,
@@ -173,8 +173,8 @@ def on_sheet_start_example_0_seed_sheet_state_and_log(
 
 def on_sheet_start_example_1_route_or_skip_sheets(
     *,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -193,7 +193,7 @@ def on_sheet_start_example_1_route_or_skip_sheets(
         state["sheets"][sheet_name]["skip"] = True
     which your detectors/transforms can consult to avoid scanning/processing.
     """
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
 
     cfg = state
 
@@ -206,7 +206,7 @@ def on_sheet_start_example_1_route_or_skip_sheets(
         ctx = {}
         sheets[sheet_name] = ctx
 
-    sheet_state = getattr(sheet, "sheet_state", None)
+    sheet_state = getattr(source_sheet, "sheet_state", None)
     normalized = sheet_name.strip().lower()
 
     sheet_index: int | None = None
@@ -225,9 +225,9 @@ def on_sheet_start_example_1_route_or_skip_sheets(
     if sheet_state in {"hidden", "veryHidden"}:
         reason = f"sheet_state={sheet_state}"
     elif normalized in non_data_names:
-        reason = "non-data sheet name"
+        reason = "non-data source_sheet name"
     elif normalized.startswith(non_data_prefixes):
-        reason = "non-data sheet prefix"
+        reason = "non-data source_sheet prefix"
 
     if not reason:
         return None
@@ -236,9 +236,9 @@ def on_sheet_start_example_1_route_or_skip_sheets(
     ctx["skip_reason"] = reason
 
     if logger:
-        logger.info("Config hook: skipping sheet=%s (%s)", sheet_name, reason)
+        logger.info("Config hook: skipping source_sheet=%s (%s)", sheet_name, reason)
         logger.event(
-            "engine.config.sheet.skip",
+            "engine.config.source_sheet.skip",
             data={
                 "input_file_name": input_file_name,
                 "sheet_name": sheet_name,
@@ -252,8 +252,8 @@ def on_sheet_start_example_1_route_or_skip_sheets(
 
 def on_sheet_start_example_2_capture_excel_tables(
     *,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -270,8 +270,8 @@ def on_sheet_start_example_2_capture_excel_tables(
     - If your spreadsheets already define tables, you can use those definitions as
       strong hints (or even as the source of truth) for ADE table detection.
     """
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
-    tables = getattr(sheet, "tables", None)
+    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+    tables = getattr(source_sheet, "tables", None)
     if not tables:
         return None
 
@@ -286,7 +286,7 @@ def on_sheet_start_example_2_capture_excel_tables(
                 }
             )
     except Exception:
-        # Be defensive: if a sheet object provides tables in an unexpected shape,
+        # Be defensive: if a source_sheet object provides tables in an unexpected shape,
         # prefer silently doing nothing in an example hook.
         return None
 
@@ -311,7 +311,7 @@ def on_sheet_start_example_2_capture_excel_tables(
 
     if logger:
         logger.event(
-            "engine.config.sheet.excel_tables",
+            "engine.config.source_sheet.excel_tables",
             data={
                 "input_file_name": input_file_name,
                 "sheet_name": sheet_name,
@@ -327,8 +327,8 @@ def on_sheet_start_example_2_capture_excel_tables(
 
 def on_sheet_start_example_3_hint_header_from_freeze_panes(
     *,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
     input_file_name: str,
     settings: Settings,
     metadata: Mapping[str, Any],
@@ -346,9 +346,9 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
     This example stashes a hint that downstream detectors can use to start scanning
     for tables below the header region (without scanning the whole sheet).
     """
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
 
-    fp = getattr(sheet, "freeze_panes", None)
+    fp = getattr(source_sheet, "freeze_panes", None)
     coord = fp if isinstance(fp, str) else getattr(fp, "coordinate", None)
     if not isinstance(coord, str) or not coord:
         return None
@@ -401,12 +401,12 @@ def on_sheet_start_example_3_hint_header_from_freeze_panes(
 
     if logger:
         logger.event(
-            "engine.config.sheet.hint.freeze_panes",
+            "engine.config.source_sheet.hint.freeze_panes",
             data={
                 "input_file_name": input_file_name,
                 "sheet_name": sheet_name,
                 "sheet_index": sheet_index,
-                "freeze_panes": getattr(sheet, "freeze_panes", None),
+                "freeze_panes": getattr(source_sheet, "freeze_panes", None),
                 "header_rows": header_rows,
                 "first_data_row": first_data_row,
             },

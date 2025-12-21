@@ -158,3 +158,5 @@ Hooks receive `table: pl.DataFrame` and can:
 - change output formatting (post-write hooks)
 
 Because issues are inline, filtering/sorting is safe after validation.
+`on_table_written` receives `write_table` (post-output-policy) and `table_result` facts, while
+`on_sheet_end` receives the ordered `tables` list for sheet-level diagnostics.
