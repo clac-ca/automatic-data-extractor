@@ -489,8 +489,11 @@ class ColumnHeader(StrictModel):
 
     @model_validator(mode="after")
     def _header_ok(self) -> "ColumnHeader":
-        if (self.raw is None) != (self.normalized is None):
-            raise ValueError("header.raw and header.normalized must both be null or both be set")
+        if self.raw is None and self.normalized is not None:
+            raise ValueError("header.normalized must be null when header.raw is null")
+        if self.raw is not None and self.normalized is None:
+            if any(ch.isalnum() for ch in self.raw):
+                raise ValueError("header.normalized must be set when header.raw has alphanumerics")
         return self
 
 
