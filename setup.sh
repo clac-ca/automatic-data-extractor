@@ -74,7 +74,7 @@ source .venv/bin/activate
 python -m pip install -U pip setuptools wheel
 
 # Install local packages (engine first so the API can resolve `ade-engine`)
-python -m pip install -e apps/ade-engine
+python -m pip install -e apps/ade-engine.
 python -m pip install -e 'apps/ade-api[dev]'
 python -m pip install -e 'apps/ade-cli[dev]'
 

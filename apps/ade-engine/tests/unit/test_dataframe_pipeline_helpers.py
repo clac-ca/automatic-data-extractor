@@ -78,10 +78,10 @@ def test_table_hooks_compose_returned_dataframes():
         metadata={},
         logger=NullLogger(),
         input_file_name="input.xlsx",
-        workbook=wb,
-        sheet=ws,
+        source_workbook=wb,
+        source_sheet=ws,
         table=pl.DataFrame({"email": ["a@example.com"]}),
-        table_region=table_region,
+        source_region=table_region,
         table_index=0,
     )
     assert out is not None
@@ -110,9 +110,9 @@ def test_table_hook_return_type_is_enforced():
             metadata={},
             logger=NullLogger(),
             input_file_name="input.xlsx",
-            workbook=wb,
-            sheet=ws,
+            source_workbook=wb,
+            source_sheet=ws,
             table=pl.DataFrame({"email": ["a@example.com"]}),
-            table_region=table_region,
+            source_region=table_region,
             table_index=0,
         )

@@ -19,7 +19,7 @@ Guidance
 --------
 - Keep logic deterministic and idempotent.
 - Prefer vectorized Polars expressions; avoid Python row loops.
-- Avoid mutating the input workbook/worksheet; treat ``table_region`` as source context.
+- Avoid mutating the input workbook/worksheet; treat ``source_region`` as source context.
 """
 
 
@@ -85,10 +85,10 @@ def register(registry: Registry) -> None:
 def on_table_mapped(
     *,
     table: pl.DataFrame,  # Current table DF (post-mapping; pre-transforms)
-    sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
-    workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
-    table_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
-    table_index: int,  # 0-based table index within the sheet
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,  # Source worksheet (openpyxl Worksheet)
+    source_workbook: openpyxl.Workbook,  # Input workbook (openpyxl Workbook)
+    source_region: TableRegion,  # Excel coords via .min_row/.max_row/.min_col/.max_col; helpers .a1/.header_row/.data_first_row
+    table_index: int,  # 0-based table index within the source_sheet
     input_file_name: str,  # Input filename (basename)
     settings: Settings,  # Engine Settings
     metadata: Mapping[str, Any],  # Run/sheet metadata (filenames, sheet_index, etc.)
@@ -107,9 +107,9 @@ def on_table_mapped(
 def on_table_mapped_example_1_basic_cleanup(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -155,9 +155,9 @@ def on_table_mapped_example_1_basic_cleanup(
     after_rows, after_cols = int(cleaned.height), int(cleaned.width)
 
     if logger and (after_rows != before_rows or after_cols != before_cols):
-        sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+        sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
         logger.info(
-            "Basic cleanup: rows %d->%d, cols %d->%d (sheet=%s)",
+            "Basic cleanup: rows %d->%d, cols %d->%d (source_sheet=%s)",
             before_rows,
             after_rows,
             before_cols,
@@ -171,9 +171,9 @@ def on_table_mapped_example_1_basic_cleanup(
 def on_table_mapped_example_2_trim_all_string_columns(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -188,9 +188,9 @@ def on_table_mapped_example_2_trim_all_string_columns(
 def on_table_mapped_example_3_normalize_empty_sentinels(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -213,9 +213,9 @@ def on_table_mapped_example_3_normalize_empty_sentinels(
 def on_table_mapped_example_4_drop_fully_empty_rows(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -243,8 +243,8 @@ def on_table_mapped_example_4_drop_fully_empty_rows(
     if logger:
         removed = before - int(out.height)
         if removed:
-            sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
-            logger.info("Dropped %d fully-empty rows (sheet=%s)", removed, sheet_name)
+            sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
+            logger.info("Dropped %d fully-empty rows (source_sheet=%s)", removed, sheet_name)
 
     return out
 
@@ -252,9 +252,9 @@ def on_table_mapped_example_4_drop_fully_empty_rows(
 def on_table_mapped_example_5_drop_fully_empty_columns(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -296,9 +296,9 @@ def on_table_mapped_example_5_drop_fully_empty_columns(
     if logger:
         removed_cols = [c for c in before_cols if c not in set(out.columns)]
         if removed_cols:
-            sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+            sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
             logger.info(
-                "Dropped %d empty columns (sheet=%s): %s",
+                "Dropped %d empty columns (source_sheet=%s): %s",
                 len(removed_cols),
                 sheet_name,
                 removed_cols,
@@ -310,9 +310,9 @@ def on_table_mapped_example_5_drop_fully_empty_columns(
 def on_table_mapped_example_6_derive_full_name(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -348,9 +348,9 @@ def on_table_mapped_example_6_derive_full_name(
 def on_table_mapped_example_7_drop_repeated_header_rows(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -391,9 +391,9 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
 
     removed = int(table.height) - int(out.height)
     if logger and removed:
-        sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+        sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
         logger.info(
-            "Dropped %d repeated header-like rows (sheet=%s, threshold=%d/%d)",
+            "Dropped %d repeated header-like rows (source_sheet=%s, threshold=%d/%d)",
             removed,
             sheet_name,
             threshold,
@@ -406,9 +406,9 @@ def on_table_mapped_example_7_drop_repeated_header_rows(
 def on_table_mapped_example_8_record_table_facts(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
@@ -425,13 +425,13 @@ def on_table_mapped_example_8_record_table_facts(
         tables = []
         cfg["tables_mapped"] = tables
 
-    sheet_name = str(getattr(sheet, "title", None) or getattr(sheet, "name", None) or "")
+    sheet_name = str(getattr(source_sheet, "title", None) or getattr(source_sheet, "name", None) or "")
     tables.append(
         {
             "input_file": input_file_name,
-            "sheet": sheet_name,
+            "source_sheet": sheet_name,
             "table_index": table_index,
-            "source_range": table_region.a1,
+            "source_range": source_region.a1,
             "rows": int(table.height),
             "columns": list(table.columns),
         }
@@ -443,9 +443,9 @@ def on_table_mapped_example_8_record_table_facts(
 def on_table_mapped_example_9_split_full_name(
     *,
     table: pl.DataFrame,
-    sheet: openpyxl.worksheet.worksheet.Worksheet,
-    workbook: openpyxl.Workbook,
-    table_region: TableRegion,  # See `TableRegion` notes above
+    source_sheet: openpyxl.worksheet.worksheet.Worksheet,
+    source_workbook: openpyxl.Workbook,
+    source_region: TableRegion,  # See `TableRegion` notes above
     table_index: int,
     input_file_name: str,
     settings: Settings,
