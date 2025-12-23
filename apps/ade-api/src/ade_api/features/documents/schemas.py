@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
@@ -75,6 +75,13 @@ class DocumentOut(BaseSchema):
         description="Latest run execution associated with the document when available.",
     )
 
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _sort_tags(cls, value: Any) -> list[str]:
+        if not value:
+            return []
+        return sorted(value)
+
     @field_validator("metadata", mode="before")
     @classmethod
     def _strip_internal_metadata(cls, value: Any) -> dict[str, Any]:
@@ -86,6 +93,45 @@ class DocumentOut(BaseSchema):
             data = {}
         data.pop("worksheets", None)
         return data
+
+
+class DocumentTagsReplace(BaseSchema):
+    """Payload for replacing tags on a document."""
+
+    tags: list[str] = Field(
+        ...,
+        description="Complete set of tags for the document.",
+    )
+
+
+class DocumentTagsPatch(BaseSchema):
+    """Payload for adding/removing tags on a document."""
+
+    add: list[str] | None = Field(
+        default=None,
+        description="Tags to add to the document.",
+    )
+    remove: list[str] | None = Field(
+        default=None,
+        description="Tags to remove from the document.",
+    )
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "DocumentTagsPatch":
+        if not (self.add or self.remove):
+            raise ValueError("add or remove is required")
+        return self
+
+
+class TagCatalogItem(BaseSchema):
+    """Tag entry with document counts."""
+
+    tag: str
+    document_count: int = Field(ge=0)
+
+
+class TagCatalogPage(Page[TagCatalogItem]):
+    """Paginated tag catalog."""
 
 
 class DocumentLastRun(BaseSchema):
@@ -124,5 +170,9 @@ __all__ = [
     "DocumentOut",
     "DocumentPage",
     "DocumentSheet",
+    "DocumentTagsPatch",
+    "DocumentTagsReplace",
+    "TagCatalogItem",
+    "TagCatalogPage",
     "UploaderOut",
 ]

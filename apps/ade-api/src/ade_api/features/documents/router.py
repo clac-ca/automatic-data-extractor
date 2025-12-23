@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import (
@@ -11,6 +11,7 @@ from fastapi import (
     Form,
     HTTPException,
     Path,
+    Query,
     Request,
     Security,
     UploadFile,
@@ -32,14 +33,27 @@ from .exceptions import (
     DocumentTooLargeError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
+    InvalidDocumentTagsError,
 )
 from .filters import DocumentFilters
-from .schemas import DocumentOut, DocumentPage, DocumentSheet
+from .schemas import (
+    DocumentOut,
+    DocumentPage,
+    DocumentSheet,
+    DocumentTagsPatch,
+    DocumentTagsReplace,
+    TagCatalogPage,
+)
 from .service import DocumentsService
 from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}/documents",
+    tags=["documents"],
+    dependencies=[Security(require_authenticated)],
+)
+tags_router = APIRouter(
+    prefix="/workspaces/{workspace_id}",
     tags=["documents"],
     dependencies=[Security(require_authenticated)],
 )
@@ -84,7 +98,10 @@ _FILTER_KEYS = {
     "q",
     "status_in",
     "source_in",
-    "tags_in",
+    "tags",
+    "tags_match",
+    "tags_not",
+    "tags_empty",
     "uploader",
     "uploader_id_in",
     "created_at_from",
@@ -225,6 +242,89 @@ async def list_documents(
     )
 
 
+@router.put(
+    "/{document_id}/tags",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Replace document tags",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update tags.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Tag payload is invalid.",
+        },
+    },
+)
+async def replace_document_tags(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    payload: DocumentTagsReplace,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return await service.replace_document_tags(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            tags=payload.tags,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentTagsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+@router.patch(
+    "/{document_id}/tags",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Update document tags",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update tags.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Tag payload is invalid.",
+        },
+    },
+)
+async def patch_document_tags(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    payload: DocumentTagsPatch,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return await service.patch_document_tags(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            add=payload.add,
+            remove=payload.remove,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentTagsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentOut,
@@ -358,4 +458,47 @@ async def delete_document(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-__all__ = ["router"]
+TagCatalogSort = Literal["name", "-count"]
+
+
+@tags_router.get(
+    "/tags",
+    response_model=TagCatalogPage,
+    status_code=status.HTTP_200_OK,
+    summary="List document tags",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to list tags.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow tag access.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Tag search parameters are invalid.",
+        },
+    },
+)
+async def list_document_tags(
+    workspace_id: WorkspacePath,
+    page: Annotated[PageParams, Depends()],
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+    *,
+    q: Annotated[str | None, Query(description="Search tags (min length 2).")] = None,
+    sort: Annotated[TagCatalogSort, Query()] = "name",
+) -> TagCatalogPage:
+    try:
+        return await service.list_tag_catalog(
+            workspace_id=workspace_id,
+            page=page.page,
+            page_size=page.page_size,
+            include_total=page.include_total,
+            q=q,
+            sort=sort,
+        )
+    except InvalidDocumentTagsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
+__all__ = ["router", "tags_router"]
