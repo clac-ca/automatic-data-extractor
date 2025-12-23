@@ -26,7 +26,7 @@ We are simplifying ADE’s run/build orchestration so it is correct under concur
 * [x] Finalize “Pass 1” behavior decisions (statuses, limits scope, error codes)
 * [ ] Update schema in `apps/ade-api/migrations/versions/0001_initial_schema.py` (runs/builds invariants, remove retry fields)
 * [ ] Implement build dedupe by `(configuration_id, fingerprint)` with get-or-create logic
-* [ ] Implement a simple run queue (enforce `ADE_MAX_CONCURRENCY` / `ADE_QUEUE_SIZE`)
+* [ ] Implement a simple run queue (enforce `ADE_RUN_MAX_CONCURRENCY` / `ADE_RUN_QUEUE_SIZE`)
 * [ ] Implement timeouts + stuck-state cleanup (no external scheduler)
 * [ ] Update OpenAPI/TS types + frontend assumptions for new run/build semantics
 * [ ] Update docs (runs semantics, queue behavior, retry wording)
@@ -78,7 +78,7 @@ Current implementation characteristics (high-level):
 * Build orchestration includes complex branching and uses process-local task registries to avoid duplicate build runners.
 * The database schema includes retry concepts (`attempt`, `retry_of_run_id`) even though the engine has no retry mode.
 * Some fields that should identify a run are optional in the schema today (`input_document_id`, `build_id`), which conflicts with the desired model.
-* Settings include `max_concurrency`, `queue_size`, and `run_timeout_seconds`, but those settings are not enforced.
+* Settings include run worker settings and timeouts, but those settings are not enforced (today this is `max_concurrency`, `queue_size`, and `run_timeout_seconds`).
 
 This work is needed because:
 
@@ -107,7 +107,7 @@ apps/ade-api/
   migrations/versions/0001_initial_schema.py       # runs/builds schema changes (in-place)
   src/ade_api/features/runs/                       # run lifecycle + worker pool
   src/ade_api/features/builds/                     # build dedupe + claim/execute semantics
-  src/ade_api/settings.py                          # enforce max_concurrency/queue_size/run_timeout_seconds
+  src/ade_api/settings.py                          # enforce run_max_concurrency/run_queue_size/run_timeout
 apps/ade-web/                                      # OpenAPI/types and UI wording updates as needed
 docs/                                              # docs updated to describe the new behavior
 ```
@@ -122,9 +122,9 @@ This pass describes system behavior from start to finish, without implementation
 
 #### 1) Inputs
 
-* A **document** is an uploaded file stored by the system and identified by `document_id`.
+* A **document** is an uploaded file stored by the system and identified by `input_document_id`.
 * A **configuration** is the set of rules/code used to process a document.
-* A **run** is one execution of the engine for one `document_id` using one `configuration_id`.
+* A **run** is one execution of the engine for one `input_document_id` using one `configuration_id`.
 
 #### 2) Creating a run
 
@@ -138,7 +138,7 @@ When a user triggers a run:
   * timestamps (created immediately; start/finish later)
   * status initially `queued`
 * The system also assigns a build (`build_id`) that the run will use.
-* If the queue is full (based on configuration), the system rejects the request with a clear “queue full” error and does not create a run.
+* If the queue is full (based on server settings), the system rejects the request with a clear “queue full” error and does not create a run.
 
 #### 3) Builds (reused and deduplicated)
 
@@ -150,7 +150,7 @@ When a user triggers a run:
 #### 4) Run execution queue (bounded concurrency)
 
 * The system does not execute all runs immediately.
-* A configurable limit controls how many runs may execute at the same time (`ADE_MAX_CONCURRENCY`).
+* A configurable limit controls how many runs may execute at the same time (`ADE_RUN_MAX_CONCURRENCY`).
 * Runs beyond that limit remain queued until capacity is available.
 * Runs are started in the order they were created, except when a run cannot start because its build is not ready.
 
@@ -177,7 +177,7 @@ When a user triggers a run:
 #### 7) Timeouts
 
 * Builds have a configured timeout (`ADE_BUILD_TIMEOUT`).
-* Runs have a configured timeout (`ADE_RUN_TIMEOUT_SECONDS`).
+* Runs have a configured timeout (`ADE_RUN_TIMEOUT`).
 * When a timeout occurs, the system stops the relevant work and marks the build/run as failed with a clear message.
 * The system should not leave builds/runs stuck as “in progress” indefinitely.
 
@@ -225,18 +225,24 @@ Build status set:
 
 #### Settings (configuration knobs)
 
-These are already present in `apps/ade-api/src/ade_api/settings.py` and must be enforced:
+Best-practice naming for this refactor:
 
-* `ADE_MAX_CONCURRENCY` (`Settings.max_concurrency`)
+* Settings fields are explicit and domain-scoped (run settings start with `run_`, build settings start with `build_`).
+* Environment variables follow `ADE_<DOMAIN>_<NAME>` (for example, `ADE_RUN_*`, `ADE_BUILD_*`).
+* Timeouts are `*_timeout` duration values (not `*_timeout_seconds`).
+
+Existing code uses older, more generic names for the run settings (`max_concurrency`, `queue_size`, `run_timeout_seconds`). This refactor renames them to the explicit names below (no backwards compatibility required) and enforces them.
+
+* `ADE_RUN_MAX_CONCURRENCY` (`Settings.run_max_concurrency`)
   * Default: 2.
   * Server-level setting; enforced per API process.
   * Maximum number of runs that may be executing at once in a single API process.
-* `ADE_QUEUE_SIZE` (`Settings.queue_size`)
-  * Maximum number of non-terminal runs allowed (recommended: count runs in `queued` and `running`).
+* `ADE_RUN_QUEUE_SIZE` (`Settings.run_queue_size`)
+  * Maximum number of queued runs allowed (count runs in `queued`).
   * Server-level setting (not per workspace).
 * `ADE_BUILD_TIMEOUT` (`Settings.build_timeout`)
   * Maximum time a build may spend in `building`.
-* `ADE_RUN_TIMEOUT_SECONDS` (`Settings.run_timeout_seconds`)
+* `ADE_RUN_TIMEOUT` (`Settings.run_timeout`)
   * Maximum time a run may spend in `running`.
 
 #### Cross-database compatibility rules
@@ -286,7 +292,7 @@ On `POST /configurations/{configuration_id}/runs`:
 2. Compute configuration fingerprint.
 3. Get-or-create the build for that fingerprint.
 4. If the build is not `ready`, start/continue the build execution (best-effort, idempotent).
-5. Enforce `queue_size` if configured (reject if full).
+5. Enforce `run_queue_size` if configured (reject if full).
 6. Create run row with `status='queued'`, `build_id`, and timestamps.
 7. Return the run immediately.
 
@@ -294,7 +300,7 @@ On `POST /configurations/{configuration_id}/runs`:
 
 The system runs a fixed-size worker pool:
 
-* Worker count = `Settings.max_concurrency`.
+* Worker count = `Settings.run_max_concurrency`.
 * Workers are started at application startup.
 * Each worker repeatedly:
   1. Select the next run candidate:
@@ -303,12 +309,12 @@ The system runs a fixed-size worker pool:
   3. If the build is `ready`, claim the run:
      * `UPDATE runs SET status='running', started_at=now WHERE id=:id AND status='queued'`
      * If the update affects 0 rows, another worker claimed it; continue.
-  4. Execute the engine for the run (enforcing `run_timeout_seconds`).
+  4. Execute the engine for the run (enforcing `run_timeout`).
   5. Record terminal status and `finished_at`.
 
 Guarantees (simple and explicit):
 
-* In a single API process, at most `max_concurrency` runs execute concurrently, because there are only that many workers.
+* In a single API process, at most `run_max_concurrency` runs execute concurrently, because there are only that many workers.
 * Runs are not started until the referenced build is terminal. “Waiting for build” is represented by `runs.status='queued'` plus the build status/events.
 * If multiple API processes are deployed, each process runs its own worker pool. Total concurrency is the sum across processes.
 
@@ -317,13 +323,13 @@ Guarantees (simple and explicit):
 Timeout enforcement:
 
 * Build execution enforces `build_timeout`.
-* Run execution enforces `run_timeout_seconds`.
+* Run execution enforces `run_timeout`.
 
 Stuck-state cleanup:
 
 * During normal worker operation and/or normal status reads:
   * builds in `building` with `started_at` older than `build_timeout` are marked `failed` with a timeout message
-  * runs in `running` with `started_at` older than `run_timeout_seconds` are marked `failed` with a timeout message
+  * runs in `running` with `started_at` older than `run_timeout` are marked `failed` with a timeout message
 
 This avoids introducing a separate scheduler service while ensuring stuck states are eventually corrected.
 
@@ -356,7 +362,7 @@ Builds:
 #### 2) API contract changes
 
 * Require `input_document_id` at run creation (do not allow null runs).
-* If `queue_size` is configured and the queue is full, reject run creation with HTTP 429 and a stable error code (e.g., `run_queue_full`).
+* If `run_queue_size` is configured and the queue is full, reject run creation with HTTP 429 and a stable error code (e.g., `run_queue_full`).
 * Ensure run responses clearly communicate:
   * status
   * build reference (or build-derived details)
@@ -366,11 +372,11 @@ Builds:
 
 Runs:
 
-* Add a run worker pool (size = `Settings.max_concurrency`) started at application startup.
-* Enforce `Settings.queue_size` during run submission.
+* Add a run worker pool (size = `Settings.run_max_concurrency`) started at application startup.
+* Enforce `Settings.run_queue_size` during run submission.
 * Remove any retry/attempt handling in services and tests.
 * Replace per-request run background tasks with the worker pool.
-* Update `Settings.max_concurrency` default to 2 (so queueing is enabled by default).
+* Update `Settings.run_max_concurrency` default to 2 (so queueing is enabled by default).
 
 Builds:
 
@@ -388,8 +394,8 @@ Timeouts:
 Minimum tests for confidence:
 
 * Build dedupe: concurrent build creation yields a single build row for a fingerprint.
-* Queue: with `max_concurrency=1`, multiple queued runs never result in >1 running at the same time.
-* Queue size: submissions over `queue_size` are rejected with a stable error.
+* Queue: with `run_max_concurrency=1`, multiple queued runs never result in >1 running at the same time.
+* Queue size: submissions over `run_queue_size` are rejected with a stable error.
 * Timeout: a forced timeout produces a terminal failed run/build and does not leave an in-progress status.
 
 #### 5) Acceptance criteria
@@ -399,7 +405,7 @@ This work is complete when:
 * 1000 run submissions for the same configuration fingerprint create:
   * 1000 run rows (queued) and at most 1 build row for that fingerprint
   * at most 1 build execution in progress for that build row
-* With `ADE_MAX_CONCURRENCY = N`, a single API process never executes more than N runs at once.
+* With `ADE_RUN_MAX_CONCURRENCY = N`, a single API process never executes more than N runs at once.
 * Timeouts produce clear terminal states and do not leave permanent “running/building” records.
 * Behavior is consistent on SQLite, MSSQL, and Postgres.
 
@@ -410,7 +416,7 @@ This work is complete when:
   * There is no `waiting_for_build` status; build waiting is derived from build state and events.
   * Retry is “create a new run” (no attempt/retry columns).
 * Limits:
-  * `ADE_MAX_CONCURRENCY` and `ADE_QUEUE_SIZE` are server-level limits (not per workspace).
+  * `ADE_RUN_MAX_CONCURRENCY` and `ADE_RUN_QUEUE_SIZE` are server-level limits (not per workspace).
   * Concurrency is enforced per API process via a fixed worker pool.
 
 #### Simplifications checklist (verify removals/simplifications)
@@ -440,9 +446,9 @@ Database / migrations:
 
 Settings enforcement:
 
-* [ ] Set `Settings.max_concurrency` default to `2` and ensure the worker pool size uses it (`apps/ade-api/src/ade_api/settings.py`).
-* [ ] Enforce `Settings.queue_size` during run creation; return HTTP 429 with a stable error code (e.g., `run_queue_full`).
-* [ ] Enforce `Settings.run_timeout_seconds` and `Settings.build_timeout` during execution and mark stuck records terminal during normal worker operation.
+* [ ] Rename run settings to `Settings.run_max_concurrency`, `Settings.run_queue_size`, `Settings.run_timeout` (default `run_max_concurrency=2`) and enforce them (`apps/ade-api/src/ade_api/settings.py`).
+* [ ] Return HTTP 429 with a stable error code (e.g., `run_queue_full`) when `Settings.run_queue_size` is exceeded.
+* [ ] Enforce `Settings.run_timeout` and `Settings.build_timeout` during execution and mark stuck records terminal during normal worker operation.
 
 Frontend/docs alignment:
 
