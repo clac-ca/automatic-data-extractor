@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, List
 
@@ -24,6 +25,41 @@ def _stringify_cell(value: Any) -> str | None:
     if isinstance(value, datetime):
         return value.isoformat()
     return str(value)
+
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _normalize_header_piece(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return _WHITESPACE_RE.sub(" ", text)
+
+
+def _merge_header_rows(header_rows: list[list[Any]]) -> list[Any]:
+    if not header_rows:
+        return []
+    max_cols = max((len(row) for row in header_rows), default=0)
+    merged: list[Any] = []
+    for col_idx in range(max_cols):
+        seen: set[str] = set()
+        pieces: list[str] = []
+        for row in header_rows:
+            if col_idx >= len(row):
+                continue
+            piece = _normalize_header_piece(row[col_idx])
+            if not piece:
+                continue
+            key = piece.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            pieces.append(piece)
+        merged.append(" ".join(pieces) if pieces else None)
+    return merged
 
 
 def _build_table_frame(*, headers: list[str], columns) -> pl.DataFrame:
@@ -179,7 +215,12 @@ class Pipeline:
         table_index: int,
     ) -> TableResult:
         header_index = max(0, int(table_region.min_row) - 1)
-        header_row = rows[header_index] if header_index < len(rows) else []
+        header_row_count = max(1, int(getattr(table_region, "header_row_count", 1) or 1))
+        header_rows = rows[header_index : min(len(rows), header_index + header_row_count)]
+        if self.settings.merge_stacked_headers and header_row_count > 1:
+            header_row = _merge_header_rows(header_rows)
+        else:
+            header_row = header_rows[0] if header_rows else []
 
         data_start_index = max(0, int(table_region.data_first_row) - 1)
         data_end_index = max(0, int(table_region.max_row))
@@ -195,6 +236,7 @@ class Pipeline:
             min_col=int(table_region.min_col),
             max_row=int(table_region.max_row),
             max_col=max(1, len(extracted_headers)),
+            header_row_count=header_row_count,
         )
 
         mapped_cols, unmapped_cols, scores_by_column, duplicate_unmapped_indices = detect_and_map_columns(

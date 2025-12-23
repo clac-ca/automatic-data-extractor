@@ -325,12 +325,14 @@ class RunCompletionReportBuilder:
         source_region = getattr(table, "source_region", None)
         if isinstance(source_region, TableRegion):
             header_row_start = source_region.header_row
+            header_row_count = max(1, int(getattr(source_region, "header_row_count", 1) or 1))
             data_row_start = source_region.data_first_row
             data_row_count = source_region.data_row_count
             header_inferred = False
             region_a1 = source_region.a1
         else:
             header_row_start = 1
+            header_row_count = 1
             data_row_start = 2
             data_row_count = row_count
             header_inferred = False
@@ -426,7 +428,7 @@ class RunCompletionReportBuilder:
 
         structure = TableStructure(
             region=Region(a1=region_a1),
-            header=HeaderInfo(row_start=header_row_start, row_count=1, inferred=header_inferred),
+            header=HeaderInfo(row_start=header_row_start, row_count=header_row_count, inferred=header_inferred),
             data=DataInfo(row_start=data_row_start, row_count=data_row_count),
             columns=sorted(columns, key=lambda c: c.index),
         )
