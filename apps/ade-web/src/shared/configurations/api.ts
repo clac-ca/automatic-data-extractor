@@ -21,6 +21,8 @@ type ImportConfigurationBody =
   paths["/api/v1/workspaces/{workspace_id}/configurations/import"]["post"]["requestBody"]["content"]["multipart/form-data"];
 type ReplaceConfigurationBody =
   paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import"]["put"]["requestBody"]["content"]["multipart/form-data"];
+type UpsertConfigurationFileQuery =
+  paths["/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}"]["put"]["parameters"]["query"];
 
 export interface ListConfigurationsOptions {
   readonly page?: number;
@@ -228,7 +230,12 @@ export async function upsertConfigurationFile(
   payload: UpsertConfigurationFilePayload,
 ): Promise<FileWriteResponse> {
   const encodedPath = encodeFilePath(payload.path);
-  const query = payload.parents ? "?parents=1" : "";
+  const query: UpsertConfigurationFileQuery = payload.parents ? { parents: true } : {};
+  const searchParams = new URLSearchParams();
+  if (query.parents) {
+    searchParams.set("parents", "true");
+  }
+  const queryString = searchParams.toString();
   const body = payload.content;
   const contentType =
     payload.contentType ??
@@ -236,7 +243,9 @@ export async function upsertConfigurationFile(
       ? payload.content.type
       : "application/octet-stream");
   const response = await apiFetch(
-    `/api/v1/workspaces/${workspaceId}/configurations/${configId}/files/${encodedPath}${query}`,
+    `/api/v1/workspaces/${workspaceId}/configurations/${configId}/files/${encodedPath}${
+      queryString ? `?${queryString}` : ""
+    }`,
     {
       method: "PUT",
       body,

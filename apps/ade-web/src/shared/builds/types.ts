@@ -1,4 +1,6 @@
-export type BuildStatus = "queued" | "building" | "ready" | "failed" | "cancelled";
+import type { components } from "@schema";
+
+export type BuildStatus = components["schemas"]["BuildStatus"];
 
 // Build streaming reuses the unified EventRecord envelope. Helpers live in
-// @shared/runs/types; this file only keeps the status union.
+// @shared/runs/types; this file keeps the API-sourced status union.

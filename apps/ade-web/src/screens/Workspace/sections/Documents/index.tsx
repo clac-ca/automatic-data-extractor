@@ -19,13 +19,17 @@ import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext
 import { useSession } from "@shared/auth/context/SessionContext";
 import { useConfigurationsQuery } from "@shared/configurations";
 import { client } from "@shared/api/client";
+import { ApiError } from "@shared/api/errors";
 import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
-import type { components, RunSummary } from "@schema";
-import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
+import type { components, paths, RunSummary } from "@schema";
+import { fetchDocumentSheets, uploadWorkspaceDocument, type DocumentSheet } from "@shared/documents";
+import { useUploadQueue, type UploadQueueItem, type UploadQueueSummary } from "@shared/uploads/queue";
+import type { UploadProgress } from "@shared/uploads/xhr";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
 import {
+  createRun,
   fetchRun,
   fetchRunTelemetry,
   runLogsUrl,
@@ -44,22 +48,37 @@ import { Button } from "@ui/Button";
 
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentOut"];
+type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 type RunSubmissionOptions = components["schemas"]["RunCreateOptions"];
 type RunSubmissionPayload = {
   readonly configId: string;
   readonly options: RunSubmissionOptions;
 };
-type DocumentListPage = components["schemas"]["DocumentPage"];
-
-type ListDocumentsQuery = {
-  status?: DocumentStatus[];
-  q?: string;
-  sort?: string;
-  uploader?: string;
-  page?: number;
-  page_size?: number;
-  include_total?: boolean;
+type RunBatchPathParams =
+  paths["/api/v1/configurations/{configuration_id}/runs/batch"]["post"]["parameters"]["path"];
+type RunBatchCreateOptions = components["schemas"]["RunBatchCreateOptions"];
+type RunBatchCreateRequest = components["schemas"]["RunBatchCreateRequest"];
+type RunBatchSubmissionPayload = {
+  readonly configId: RunBatchPathParams["configuration_id"];
+  readonly documentIds: readonly string[];
+  readonly options?: RunBatchCreateOptions;
 };
+type DocumentListPage = components["schemas"]["DocumentPage"];
+type UploadItem = UploadQueueItem<DocumentRecord>;
+type UploadRunState = {
+  readonly status: "pending" | "queued" | "failed";
+  readonly runId?: string;
+  readonly error?: string;
+};
+type DocumentTableRow = {
+  readonly key: string;
+  readonly document?: DocumentRecord;
+  readonly upload?: UploadItem;
+  readonly runState?: UploadRunState;
+};
+
+type ListDocumentsQuery =
+  paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"];
 
 type DocumentsView = "mine" | "team" | "attention" | "recent";
 
@@ -164,6 +183,7 @@ const DOCUMENTS_PAGE_SIZE = 50;
 export default function WorkspaceDocumentsRoute() {
   const { workspace } = useWorkspaceContext();
   const session = useSession();
+  const queryClient = useQueryClient();
 
   // URL-synced state
   const [searchParams, setSearchParams] = useSearchParams();
@@ -197,21 +217,72 @@ export default function WorkspaceDocumentsRoute() {
   const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedIdsArray = useMemo(() => Array.from(selectedIdsSet), [selectedIdsSet]);
   const selectedCount = selectedIdsSet.size;
+  const currentUserLabel = session.user.name ?? session.user.email ?? "You";
 
   // Operations
-  const uploadDocuments = useUploadWorkspaceDocuments(workspace.id);
+  const startUpload = useCallback(
+    (file: File, { onProgress }: { onProgress: (progress: UploadProgress) => void }) =>
+      uploadWorkspaceDocument(workspace.id, file, { onProgress }),
+    [workspace.id],
+  );
+  const uploadQueue = useUploadQueue<DocumentRecord>({
+    concurrency: 3,
+    startUpload,
+  });
+  const uploadSummary = uploadQueue.summary;
+  const uploadBusy = uploadSummary.inFlightCount > 0;
   const deleteDocuments = useDeleteWorkspaceDocuments(workspace.id);
   const safeModeStatus = useSafeModeStatus();
   const safeModeEnabled = safeModeStatus.data?.enabled ?? false;
   const safeModeDetail = safeModeStatus.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
   const safeModeLoading = safeModeStatus.isPending;
 
+  const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const allConfigurations = useMemo(
+    () => configurationsQuery.data?.items ?? [],
+    [configurationsQuery.data],
+  );
+  const { selectableConfigs, activeConfig } = useMemo(
+    () => resolveSelectableConfigs(allConfigurations),
+    [allConfigurations],
+  );
+  const preferredConfigId = useMemo(() => {
+    if (activeConfig?.id) {
+      return activeConfig.id;
+    }
+    return selectableConfigs[0]?.id ?? "";
+  }, [activeConfig?.id, selectableConfigs]);
+
   const [banner, setBanner] = useState<{ tone: "error"; message: string } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [runDrawerDocument, setRunDrawerDocument] = useState<DocumentRecord | null>(null);
+  const [runDrawerRunId, setRunDrawerRunId] = useState<string | null>(null);
+  const [batchRunOpen, setBatchRunOpen] = useState(false);
 
-  const isUploading = uploadDocuments.isPending;
+  const [runOnUploadEnabled, setRunOnUploadEnabled] = useState(false);
+  const [runOnUploadConfigId, setRunOnUploadConfigId] = useState("");
+  const [runOnUploadStates, setRunOnUploadStates] = useState<Record<string, UploadRunState>>({});
+  const runOnUploadHandledRef = useRef(new Set<string>());
+  const uploadRefreshHandledRef = useRef(new Set<string>());
+
   const isDeleting = deleteDocuments.isPending;
+  const runOnUploadAvailable =
+    runOnUploadEnabled && Boolean(runOnUploadConfigId) && !safeModeEnabled;
+
+  useEffect(() => {
+    setRunOnUploadConfigId((current) => {
+      if (current && selectableConfigs.some((config) => config.id === current)) {
+        return current;
+      }
+      return preferredConfigId;
+    });
+  }, [preferredConfigId, selectableConfigs]);
+
+  useEffect(() => {
+    if (runOnUploadEnabled && (!runOnUploadConfigId || safeModeEnabled)) {
+      setRunOnUploadEnabled(false);
+    }
+  }, [runOnUploadConfigId, runOnUploadEnabled, safeModeEnabled]);
 
   // Query
   const documentsQuery = useWorkspaceDocuments(workspace.id, {
@@ -223,7 +294,7 @@ export default function WorkspaceDocumentsRoute() {
   const { refetch: refetchDocuments } = documentsQuery;
   const getDocumentKey = useCallback((document: DocumentRecord) => document.id, []);
   const documentsRaw = useFlattenedPages(documentsQuery.data?.pages, getDocumentKey);
-  const documents = useMemo(() => {
+  const documentsFiltered = useMemo(() => {
     const normalizedSearch = debouncedSearch.toLowerCase();
     const uploaderId = uploaderFilter === "me" ? session.user.id : null;
     const uploaderEmail = uploaderFilter === "me" ? session.user.email ?? null : null;
@@ -250,9 +321,122 @@ export default function WorkspaceDocumentsRoute() {
       return true;
     });
   }, [debouncedSearch, documentsRaw, session.user.email, session.user.id, statusFiltersArray, uploaderFilter]);
+  const documentsById = useMemo(() => {
+    const map = new Map(documentsRaw.map((document) => [document.id, document]));
+    for (const item of uploadQueue.items) {
+      const document = item.response;
+      if (document?.id) {
+        map.set(document.id, document);
+      }
+    }
+    return map;
+  }, [documentsRaw, uploadQueue.items]);
+  const uploadRows = useMemo<DocumentTableRow[]>(() => {
+    return uploadQueue.items.map((item) => {
+      const documentId = item.response?.id;
+      const document = documentId ? documentsById.get(documentId) ?? item.response : item.response;
+      return {
+        key: item.id,
+        upload: item,
+        document,
+        runState: runOnUploadStates[item.id],
+      };
+    });
+  }, [documentsById, runOnUploadStates, uploadQueue.items]);
+  const uploadDocumentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of uploadRows) {
+      if (row.document?.id) {
+        ids.add(row.document.id);
+      }
+    }
+    return ids;
+  }, [uploadRows]);
+  const documentRows = useMemo<DocumentTableRow[]>(
+    () =>
+      documentsFiltered
+        .filter((document) => !uploadDocumentIds.has(document.id))
+        .map((document) => ({ key: document.id, document })),
+    [documentsFiltered, uploadDocumentIds],
+  );
+  const tableRows = useMemo(() => [...uploadRows, ...documentRows], [uploadRows, documentRows]);
+  const selectableDocumentIds = useMemo(
+    () => tableRows.flatMap((row) => (row.document ? [row.document.id] : [])),
+    [tableRows],
+  );
+  const selectableDocumentIdSet = useMemo(
+    () => new Set(selectableDocumentIds),
+    [selectableDocumentIds],
+  );
   const fetchingNextPage = documentsQuery.isFetchingNextPage;
   const backgroundFetch = documentsQuery.isFetching && !fetchingNextPage;
-  const totalDocuments = documents.length;
+  const totalDocuments = documentsFiltered.length;
+
+  useEffect(() => {
+    let shouldInvalidate = false;
+    for (const item of uploadQueue.items) {
+      if (item.status !== "succeeded" || !item.response?.id) {
+        continue;
+      }
+      if (uploadRefreshHandledRef.current.has(item.id)) {
+        continue;
+      }
+      uploadRefreshHandledRef.current.add(item.id);
+      shouldInvalidate = true;
+    }
+    if (shouldInvalidate) {
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspace.id) });
+    }
+  }, [queryClient, uploadQueue.items, workspace.id]);
+
+  useEffect(() => {
+    if (!uploadQueue.items.length || safeModeLoading) {
+      return;
+    }
+
+    for (const item of uploadQueue.items) {
+      if (item.status !== "succeeded") {
+        continue;
+      }
+      if (runOnUploadHandledRef.current.has(item.id)) {
+        continue;
+      }
+      runOnUploadHandledRef.current.add(item.id);
+
+      if (!runOnUploadAvailable) {
+        continue;
+      }
+
+      const documentId = item.response?.id;
+      if (!documentId) {
+        setRunOnUploadStates((current) => ({
+          ...current,
+          [item.id]: { status: "failed", error: "Upload response missing document metadata." },
+        }));
+        continue;
+      }
+
+      setRunOnUploadStates((current) => ({
+        ...current,
+        [item.id]: { status: "pending" },
+      }));
+
+      createRun(runOnUploadConfigId, { input_document_id: documentId })
+        .then((run) => {
+          setRunOnUploadStates((current) => ({
+            ...current,
+            [item.id]: { status: "queued", runId: run.id },
+          }));
+        })
+        .catch((error) => {
+          const message = resolveApiErrorMessage(error, "Unable to queue a run for this upload.");
+          setRunOnUploadStates((current) => ({
+            ...current,
+            [item.id]: { status: "failed", error: message },
+          }));
+        });
+    }
+  }, [runOnUploadAvailable, runOnUploadConfigId, safeModeLoading, uploadQueue.items]);
 
   /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
@@ -282,20 +466,14 @@ export default function WorkspaceDocumentsRoute() {
     setSelectedIds((current) => {
       if (current.size === 0) return current;
       const next = new Set<string>();
-      const valid = new Set(documents.map((d) => d.id));
       let changed = false;
       for (const id of current) {
-        if (valid.has(id)) next.add(id);
+        if (selectableDocumentIdSet.has(id)) next.add(id);
         else changed = true;
       }
       return changed ? next : current;
     });
-  }, [documents]);
-
-  const firstSelectedDocument = useMemo(() => {
-    for (const d of documents) if (selectedIdsSet.has(d.id)) return d;
-    return null;
-  }, [documents, selectedIdsSet]);
+  }, [selectableDocumentIdSet]);
 
   const handleSelectView = useCallback((nextView: DocumentsView) => {
     const preset = DOCUMENT_VIEW_PRESETS[nextView];
@@ -353,22 +531,75 @@ export default function WorkspaceDocumentsRoute() {
   }, []);
 
   const handleUploadFiles = useCallback(
-    async (files: readonly File[]) => {
+    (files: readonly File[]) => {
       if (!files.length) return;
       setBanner(null);
-      try {
-        await uploadDocuments.mutateAsync({ files });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to upload documents.";
-        setBanner({ tone: "error", message });
-      }
+      uploadQueue.enqueue(files);
     },
-    [uploadDocuments],
+    [uploadQueue],
   );
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleCancelUpload = useCallback(
+    (itemId: string) => {
+      uploadQueue.cancel(itemId);
+    },
+    [uploadQueue],
+  );
+
+  const handleRetryUpload = useCallback(
+    (itemId: string) => {
+      uploadQueue.retry(itemId);
+      setRunOnUploadStates((current) => {
+        if (!(itemId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      runOnUploadHandledRef.current.delete(itemId);
+      uploadRefreshHandledRef.current.delete(itemId);
+    },
+    [uploadQueue],
+  );
+
+  const handleRemoveUpload = useCallback(
+    (itemId: string) => {
+      uploadQueue.remove(itemId);
+      setRunOnUploadStates((current) => {
+        if (!(itemId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      runOnUploadHandledRef.current.delete(itemId);
+      uploadRefreshHandledRef.current.delete(itemId);
+    },
+    [uploadQueue],
+  );
+
+  const handleClearCompletedUploads = useCallback(() => {
+    const completed = uploadQueue.items.filter((item) => isTerminalUploadStatus(item.status));
+    if (!completed.length) return;
+    uploadQueue.clearCompleted();
+    setRunOnUploadStates((current) => {
+      const next = { ...current };
+      for (const item of completed) {
+        delete next[item.id];
+      }
+      return next;
+    });
+    for (const item of completed) {
+      runOnUploadHandledRef.current.delete(item.id);
+      uploadRefreshHandledRef.current.delete(item.id);
+    }
+  }, [uploadQueue]);
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    await handleUploadFiles(files);
+    handleUploadFiles(files);
     event.target.value = "";
   };
 
@@ -383,10 +614,14 @@ export default function WorkspaceDocumentsRoute() {
 
   const handleToggleAll = () => {
     setSelectedIds((current) => {
-      if (documents.length === 0) return new Set();
-      const allIds = documents.map((doc) => doc.id);
-      if (current.size === documents.length && allIds.every((id) => current.has(id))) return new Set();
-      return new Set(allIds);
+      if (selectableDocumentIds.length === 0) return new Set();
+      if (
+        current.size === selectableDocumentIds.length &&
+        selectableDocumentIds.every((id) => current.has(id))
+      ) {
+        return new Set();
+      }
+      return new Set(selectableDocumentIds);
     });
   };
 
@@ -437,8 +672,9 @@ export default function WorkspaceDocumentsRoute() {
     [workspace.id],
   );
 
-  const handleOpenRunDrawer = useCallback((document: DocumentRecord) => {
+  const handleOpenRunDrawer = useCallback((document: DocumentRecord, runId?: string | null) => {
     setRunDrawerDocument(document);
+    setRunDrawerRunId(runId ?? null);
   }, []);
 
   const handleRunSuccess = useCallback(() => {
@@ -467,10 +703,8 @@ export default function WorkspaceDocumentsRoute() {
       {/* Global drop-anywhere overlay */}
       <DropAnywhereOverlay
         workspaceName={workspace.name ?? undefined}
-        disabled={isUploading}
-        onFiles={async (files) => {
-          await handleUploadFiles(files);
-        }}
+        disabled={false}
+        onFiles={handleUploadFiles}
       />
 
       <div className="space-y-3">
@@ -495,10 +729,26 @@ export default function WorkspaceDocumentsRoute() {
           isFetching={documentsQuery.isFetching}
           isDefault={isDefaultFilters}
           onUploadClick={handleOpenFilePicker}
-          uploadDisabled={isUploading}
+          uploadDisabled={false}
+          uploadLoading={uploadBusy}
           selectedStatuses={statusFilters}
           onToggleStatus={toggleStatusFilter}
           onClearStatuses={clearStatusFilters}
+          runOnUploadEnabled={runOnUploadEnabled}
+          runOnUploadConfigId={runOnUploadConfigId}
+          uploadSummary={uploadSummary}
+          configurations={selectableConfigs}
+          configurationsLoading={configurationsQuery.isLoading}
+          configurationsError={configurationsQuery.isError}
+          configurationsErrorMessage={
+            configurationsQuery.error instanceof Error ? configurationsQuery.error.message : undefined
+          }
+          onToggleRunOnUpload={() => setRunOnUploadEnabled((current) => !current)}
+          onSelectRunOnUploadConfig={setRunOnUploadConfigId}
+          onClearCompletedUploads={handleClearCompletedUploads}
+          safeModeEnabled={safeModeEnabled}
+          safeModeMessage={safeModeDetail}
+          safeModeLoading={safeModeLoading}
         />
 
         {banner ? (
@@ -514,7 +764,7 @@ export default function WorkspaceDocumentsRoute() {
             </div>
           ) : documentsQuery.isError ? (
             <p className="p-4 text-rose-600">Failed to load documents.</p>
-          ) : documents.length === 0 ? (
+          ) : tableRows.length === 0 ? (
             <div className="p-6">
               <EmptyState onUploadClick={handleOpenFilePicker} />
             </div>
@@ -522,11 +772,11 @@ export default function WorkspaceDocumentsRoute() {
             <>
               <div className="overflow-x-auto p-2 sm:p-3">
                 <DocumentsTable
-                  documents={documents}
+                  rows={tableRows}
                   selectedIds={selectedIdsSet}
                   onToggleDocument={handleToggleDocument}
                   onToggleAll={handleToggleAll}
-                  disableSelection={backgroundFetch || isDeleting || uploadDocuments.isPending}
+                  disableSelection={backgroundFetch || isDeleting}
                   disableRowActions={deleteDocuments.isPending}
                   formatStatusLabel={statusFormatter}
                   onDeleteDocument={handleDeleteSingle}
@@ -534,6 +784,11 @@ export default function WorkspaceDocumentsRoute() {
                   onRunDocument={handleOpenRunDrawer}
                   downloadingId={downloadingId}
                   renderRunStatus={renderRunStatus}
+                  onViewRun={(document, runId) => handleOpenRunDrawer(document, runId)}
+                  onCancelUpload={handleCancelUpload}
+                  onRetryUpload={handleRetryUpload}
+                  onRemoveUpload={handleRemoveUpload}
+                  currentUserLabel={currentUserLabel}
                   safeModeEnabled={safeModeEnabled}
                   safeModeMessage={safeModeDetail}
                   safeModeLoading={safeModeLoading}
@@ -561,12 +816,34 @@ export default function WorkspaceDocumentsRoute() {
         count={selectedCount}
         onClear={() => setSelectedIds(new Set())}
         onRun={() => {
-          if (firstSelectedDocument && !safeModeEnabled && !safeModeLoading) {
-            handleOpenRunDrawer(firstSelectedDocument);
+          if (!safeModeEnabled && !safeModeLoading) {
+            setBatchRunOpen(true);
           }
         }}
         onDelete={handleDeleteSelected}
         busy={isDeleting}
+        safeModeEnabled={safeModeEnabled}
+        safeModeMessage={safeModeDetail}
+        safeModeLoading={safeModeLoading}
+      />
+
+      <BatchRunDialog
+        open={batchRunOpen}
+        workspaceId={workspace.id}
+        documentIds={selectedIdsArray}
+        documentsById={documentsById}
+        configurations={selectableConfigs}
+        preferredConfigId={preferredConfigId}
+        configurationsLoading={configurationsQuery.isLoading}
+        configurationsError={configurationsQuery.isError}
+        configurationsErrorMessage={
+          configurationsQuery.error instanceof Error ? configurationsQuery.error.message : undefined
+        }
+        onClose={() => setBatchRunOpen(false)}
+        onViewRun={(document, runId) => {
+          setBatchRunOpen(false);
+          handleOpenRunDrawer(document, runId);
+        }}
         safeModeEnabled={safeModeEnabled}
         safeModeMessage={safeModeDetail}
         safeModeLoading={safeModeLoading}
@@ -577,7 +854,11 @@ export default function WorkspaceDocumentsRoute() {
         open={Boolean(runDrawerDocument)}
         workspaceId={workspace.id}
         documentRecord={runDrawerDocument}
-        onClose={() => setRunDrawerDocument(null)}
+        initialRunId={runDrawerRunId}
+        onClose={() => {
+          setRunDrawerDocument(null);
+          setRunDrawerRunId(null);
+        }}
         onRunSuccess={handleRunSuccess}
         onRunError={handleRunError}
         safeModeEnabled={safeModeEnabled}
@@ -619,30 +900,6 @@ function useWorkspaceDocuments(workspaceId: string, options: WorkspaceDocumentsO
   });
 }
 
-function useUploadWorkspaceDocuments(workspaceId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation<void, Error, { files: readonly File[] }>({
-    mutationFn: async ({ files }) => {
-      const uploads = Array.from(files);
-      for (const file of uploads) {
-        await client.POST("/api/v1/workspaces/{workspace_id}/documents", {
-          params: { path: { workspace_id: workspaceId } },
-          body: { file: "" },
-          bodySerializer: () => {
-            const formData = new FormData();
-            formData.append("file", file);
-            return formData;
-          },
-        });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
-    },
-  });
-}
-
 function useDeleteWorkspaceDocuments(workspaceId: string) {
   const queryClient = useQueryClient();
 
@@ -673,6 +930,38 @@ function useSubmitRun(workspaceId: string) {
       });
       if (!data) throw new Error("Expected run payload.");
       return data as RunResource;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+    },
+  });
+}
+
+function useSubmitRunsBatch(workspaceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation<RunResource[], Error, RunBatchSubmissionPayload>({
+    mutationFn: async ({ configId, documentIds, options }) => {
+      const baseRunOptions: RunBatchCreateOptions = {
+        dry_run: false,
+        validate_only: false,
+        force_rebuild: false,
+        debug: false,
+        log_level: "INFO",
+      };
+      const body: RunBatchCreateRequest = {
+        document_ids: [...documentIds],
+        options: options ?? baseRunOptions,
+      };
+      const pathParams: RunBatchPathParams = { configuration_id: configId };
+      const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs/batch", {
+        params: { path: pathParams },
+        body,
+      });
+      if (!data) {
+        throw new Error("Expected batch run payload.");
+      }
+      return data.runs ?? [];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
@@ -817,9 +1106,23 @@ function DocumentsHeader({
   isDefault,
   onUploadClick,
   uploadDisabled,
+  uploadLoading,
   selectedStatuses,
   onToggleStatus,
   onClearStatuses,
+  runOnUploadEnabled,
+  runOnUploadConfigId,
+  uploadSummary,
+  configurations,
+  configurationsLoading,
+  configurationsError,
+  configurationsErrorMessage,
+  onToggleRunOnUpload,
+  onSelectRunOnUploadConfig,
+  onClearCompletedUploads,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
 }: {
   workspaceName?: string | null;
   totalDocuments?: number | null;
@@ -832,9 +1135,23 @@ function DocumentsHeader({
   isDefault: boolean;
   onUploadClick: () => void;
   uploadDisabled?: boolean;
+  uploadLoading?: boolean;
   selectedStatuses: ReadonlySet<DocumentStatus>;
   onToggleStatus: (status: DocumentStatus) => void;
   onClearStatuses: () => void;
+  runOnUploadEnabled: boolean;
+  runOnUploadConfigId: string;
+  uploadSummary: UploadQueueSummary;
+  configurations: ConfigurationRecord[];
+  configurationsLoading: boolean;
+  configurationsError: boolean;
+  configurationsErrorMessage?: string;
+  onToggleRunOnUpload: () => void;
+  onSelectRunOnUploadConfig: (configId: string) => void;
+  onClearCompletedUploads: () => void;
+  safeModeEnabled?: boolean;
+  safeModeMessage?: string;
+  safeModeLoading?: boolean;
 }) {
   const subtitle =
     typeof totalDocuments === "number"
@@ -842,6 +1159,29 @@ function DocumentsHeader({
       : workspaceName
         ? `Uploads and runs for ${workspaceName}`
         : "Manage workspace uploads and runs";
+  const hasConfigurations = configurations.length > 0;
+  const toggleDisabled =
+    safeModeEnabled ||
+    safeModeLoading ||
+    configurationsLoading ||
+    configurationsError ||
+    !hasConfigurations ||
+    !runOnUploadConfigId;
+  const disabledReason = safeModeEnabled
+    ? safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE
+    : safeModeLoading
+      ? "Checking safe mode status…"
+      : configurationsLoading
+        ? "Loading configurations…"
+        : configurationsError
+          ? configurationsErrorMessage ?? "Unable to load configurations."
+          : !hasConfigurations
+            ? "Create or activate a configuration to enable run on upload."
+            : !runOnUploadConfigId
+              ? "Select a configuration to enable run on upload."
+              : null;
+  const showClearUploads = uploadSummary.completedCount > 0;
+  const showUploadSummary = uploadSummary.totalCount > 0;
 
   return (
     <section
@@ -873,16 +1213,97 @@ function DocumentsHeader({
             className="shrink-0"
             onClick={onUploadClick}
             disabled={uploadDisabled}
-            isLoading={uploadDisabled}
+            isLoading={uploadLoading}
             aria-label="Upload documents"
           >
             Upload
           </Button>
+        </div>
       </div>
-    </div>
 
-    <div className="mt-3 flex flex-wrap items-center gap-2">
-      <DocumentsViewTabs view={view} onChange={onChangeView} />
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <span>Run on upload</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={runOnUploadEnabled}
+            onClick={() => {
+              if (toggleDisabled) return;
+              onToggleRunOnUpload();
+            }}
+            title={toggleDisabled ? disabledReason ?? undefined : undefined}
+            className={clsx(
+              "relative h-6 w-11 rounded-full border transition",
+              runOnUploadEnabled ? "border-emerald-500 bg-emerald-500" : "border-slate-200 bg-slate-200",
+              toggleDisabled && "opacity-60",
+            )}
+          >
+            <span
+              className={clsx(
+                "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition",
+                runOnUploadEnabled ? "left-5" : "left-0.5",
+              )}
+            />
+          </button>
+        </label>
+
+        <div className="min-w-[220px]">
+          {configurationsLoading ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              Loading configurations…
+            </div>
+          ) : configurationsError ? (
+            <Alert tone="danger">
+              {configurationsErrorMessage ?? "Unable to load configurations."}
+            </Alert>
+          ) : hasConfigurations ? (
+            <Select
+              value={runOnUploadConfigId}
+              onChange={(event) => onSelectRunOnUploadConfig(event.target.value)}
+              disabled={safeModeEnabled}
+            >
+              <option value="">Select configuration</option>
+              {configurations.map((config) => (
+                <option key={config.id} value={config.id}>
+                  {formatConfigurationLabel(config)}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              No configurations available.
+            </div>
+          )}
+        </div>
+
+        {showUploadSummary ? (
+          <span className="text-xs text-slate-500">
+            {uploadSummary.inFlightCount > 0
+              ? `Uploading ${uploadSummary.inFlightCount} file${
+                  uploadSummary.inFlightCount === 1 ? "" : "s"
+                } · ${uploadSummary.percent}%`
+              : `${uploadSummary.completedCount} completed`}
+          </span>
+        ) : null}
+
+        {showClearUploads ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearCompletedUploads}
+          >
+            Clear completed
+          </Button>
+        ) : null}
+      </div>
+
+      {disabledReason && !runOnUploadEnabled ? (
+        <p className="mt-2 text-xs text-slate-500">{disabledReason}</p>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <DocumentsViewTabs view={view} onChange={onChangeView} />
         <StatusFilterControl
           selectedStatuses={selectedStatuses}
           onToggleStatus={onToggleStatus}
@@ -916,6 +1337,261 @@ function DocumentsHeader({
         </span>
       </div>
     </section>
+  );
+}
+
+function BatchRunDialog({
+  open,
+  workspaceId,
+  documentIds,
+  documentsById,
+  configurations,
+  preferredConfigId,
+  configurationsLoading,
+  configurationsError,
+  configurationsErrorMessage,
+  onClose,
+  onViewRun,
+  safeModeEnabled = false,
+  safeModeMessage,
+  safeModeLoading = false,
+}: {
+  open: boolean;
+  workspaceId: string;
+  documentIds: readonly string[];
+  documentsById: Map<string, DocumentRecord>;
+  configurations: ConfigurationRecord[];
+  preferredConfigId: string;
+  configurationsLoading: boolean;
+  configurationsError: boolean;
+  configurationsErrorMessage?: string;
+  onClose: () => void;
+  onViewRun: (document: DocumentRecord, runId?: string | null) => void;
+  safeModeEnabled?: boolean;
+  safeModeMessage?: string;
+  safeModeLoading?: boolean;
+}) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const submitBatch = useSubmitRunsBatch(workspaceId);
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [createdRuns, setCreatedRuns] = useState<RunResource[] | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setErrorMessage(null);
+      setCreatedRuns(null);
+      return;
+    }
+    setSelectedConfigId((current) => {
+      if (current && configurations.some((config) => config.id === current)) {
+        return current;
+      }
+      return preferredConfigId;
+    });
+  }, [configurations, open, preferredConfigId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const focusable = getFocusableElements(dialog);
+    (focusable[0] ?? dialog).focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusableElements = getFocusableElements(dialog);
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = window.document.activeElement;
+
+      if (event.shiftKey) {
+        if (!dialog.contains(activeElement) || activeElement === firstElement) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+        return;
+      }
+
+      if (activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (typeof window === "undefined" || !open) return null;
+
+  const hasConfigurations = configurations.length > 0;
+  const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
+  const runDisabled =
+    safeModeEnabled ||
+    safeModeLoading ||
+    submitBatch.isPending ||
+    documentIds.length === 0 ||
+    !selectedConfigId;
+
+  const handleSubmit = () => {
+    if (safeModeEnabled || safeModeLoading) {
+      return;
+    }
+    if (!selectedConfigId) {
+      setErrorMessage("Select a configuration to run.");
+      return;
+    }
+    setErrorMessage(null);
+    submitBatch.mutate(
+      { configId: selectedConfigId, documentIds },
+      {
+        onSuccess: (runs) => {
+          setCreatedRuns(runs);
+        },
+        onError: (error) => {
+          const message = resolveApiErrorMessage(error, "Unable to submit batch runs.");
+          setErrorMessage(message);
+        },
+      },
+    );
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={onClose}
+        aria-label="Close dialog"
+      />
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+      >
+        <header className="space-y-1">
+          <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+            Run extraction on selected documents
+          </h2>
+          <p id={descriptionId} className="text-xs text-slate-500">
+            {documentIds.length.toLocaleString()} document{documentIds.length === 1 ? "" : "s"} selected.
+          </p>
+        </header>
+
+        <div className="mt-4 space-y-4 text-sm text-slate-600">
+          {safeModeEnabled ? <Alert tone="warning">{safeModeDetail}</Alert> : null}
+          {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
+
+          {createdRuns ? (
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Batch queued</p>
+              <div className="space-y-2">
+                {createdRuns.length === 0 ? (
+                  <p className="text-xs text-slate-500">No runs were created.</p>
+                ) : (
+                  createdRuns.map((run) => {
+                    const documentId = run.input?.document_id ?? null;
+                    const document = documentId ? documentsById.get(documentId) ?? null : null;
+                    const title = document?.name ?? (documentId ? `Document ${documentId}` : "Document");
+                    return (
+                      <div key={run.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800" title={title}>
+                              {title}
+                            </p>
+                            <p className="text-xs text-slate-500">{run.id}</p>
+                          </div>
+                          {document ? (
+                            <Button size="sm" variant="ghost" onClick={() => onViewRun(document, run.id)}>
+                              View run
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          ) : (
+            <>
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
+                {configurationsLoading ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    Loading configurations…
+                  </div>
+                ) : configurationsError ? (
+                  <Alert tone="danger">
+                    {configurationsErrorMessage ?? "Unable to load configurations."}
+                  </Alert>
+                ) : hasConfigurations ? (
+                  <Select
+                    value={selectedConfigId}
+                    onChange={(event) => setSelectedConfigId(event.target.value)}
+                    disabled={safeModeEnabled}
+                  >
+                    <option value="">Select configuration</option>
+                    {configurations.map((config) => (
+                      <option key={config.id} value={config.id}>
+                        {formatConfigurationLabel(config)}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Alert tone="info">No configurations available. Create one before running extraction.</Alert>
+                )}
+              </section>
+              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Batch runs process the entire document. Sheet selection is not available for this action.
+              </p>
+            </>
+          )}
+        </div>
+
+        <footer className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={submitBatch.isPending}>
+            {createdRuns ? "Close" : "Cancel"}
+          </Button>
+          {!createdRuns ? (
+            <Button
+              onClick={handleSubmit}
+              isLoading={submitBatch.isPending}
+              disabled={runDisabled}
+              title={
+                safeModeEnabled
+                  ? safeModeDetail
+                  : !selectedConfigId
+                    ? "Select a configuration to run extraction."
+                    : undefined
+              }
+            >
+              Run extraction
+            </Button>
+          ) : null}
+        </footer>
+      </div>
+    </div>,
+    window.document.body,
   );
 }
 
@@ -1035,7 +1711,7 @@ function StatusFilterControl({
 /* ----------------------------- Documents table ----------------------------- */
 
 interface DocumentsTableProps {
-  readonly documents: readonly DocumentRecord[];
+  readonly rows: readonly DocumentTableRow[];
   readonly selectedIds: ReadonlySet<string>;
   readonly onToggleDocument: (documentId: string) => void;
   readonly onToggleAll: () => void;
@@ -1047,13 +1723,18 @@ interface DocumentsTableProps {
   readonly onRunDocument?: (document: DocumentRecord) => void;
   readonly downloadingId?: string | null;
   readonly renderRunStatus?: (document: DocumentRecord) => ReactNode;
+  readonly onViewRun?: (document: DocumentRecord, runId?: string | null) => void;
+  readonly onCancelUpload?: (itemId: string) => void;
+  readonly onRetryUpload?: (itemId: string) => void;
+  readonly onRemoveUpload?: (itemId: string) => void;
+  readonly currentUserLabel?: string;
   readonly safeModeEnabled?: boolean;
   readonly safeModeMessage?: string;
   readonly safeModeLoading?: boolean;
 }
 
 function DocumentsTable({
-  documents,
+  rows,
   selectedIds,
   onToggleDocument,
   onToggleAll,
@@ -1065,20 +1746,33 @@ function DocumentsTable({
   onRunDocument,
   downloadingId = null,
   renderRunStatus,
+  onViewRun,
+  onCancelUpload,
+  onRetryUpload,
+  onRemoveUpload,
+  currentUserLabel,
   safeModeEnabled = false,
   safeModeMessage,
   safeModeLoading = false,
 }: DocumentsTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const resolvedUserLabel = currentUserLabel ?? "You";
+
+  const selectableIds = useMemo(() => {
+    return rows.flatMap((row) => (row.document ? [row.document.id] : []));
+  }, [rows]);
 
   const { allSelected, someSelected } = useMemo(() => {
-    if (documents.length === 0) return { allSelected: false, someSelected: false };
-    const selectedCount = documents.reduce(
-      (count, d) => (selectedIds.has(d.id) ? count + 1 : count),
+    if (selectableIds.length === 0) return { allSelected: false, someSelected: false };
+    const selectedCount = selectableIds.reduce(
+      (count, id) => (selectedIds.has(id) ? count + 1 : count),
       0,
     );
-    return { allSelected: selectedCount === documents.length, someSelected: selectedCount > 0 && selectedCount < documents.length };
-  }, [documents, selectedIds]);
+    return {
+      allSelected: selectedCount === selectableIds.length,
+      someSelected: selectedCount > 0 && selectedCount < selectableIds.length,
+    };
+  }, [selectableIds, selectedIds]);
 
   useEffect(() => {
     if (headerCheckboxRef.current) headerCheckboxRef.current.indeterminate = someSelected;
@@ -1096,7 +1790,7 @@ function DocumentsTable({
                 className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 checked={allSelected}
                 onChange={onToggleAll}
-                disabled={disableSelection || documents.length === 0}
+                disabled={disableSelection || selectableIds.length === 0}
               />
             </th>
             <th scope="col" className="w-20 px-2 py-2 text-left">ID</th>
@@ -1104,19 +1798,27 @@ function DocumentsTable({
             <th scope="col" className="w-40 px-2 py-2 text-left">Uploaded</th>
             <th scope="col" className="w-48 px-2 py-2 text-left">Uploader</th>
             <th scope="col" className="w-48 px-2 py-2 text-left">Latest run</th>
-            <th scope="col" className="w-32 px-2 py-2 text-left">Status</th>
+            <th scope="col" className="w-44 px-2 py-2 text-left">Status</th>
             <th scope="col" className="w-36 px-2 py-2 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {documents.map((document) => {
-            const isSelected = selectedIds.has(document.id);
+          {rows.map((row) => {
+            const document = row.document;
+            const upload = row.upload;
+            const isSelected = document ? selectedIds.has(document.id) : false;
+            const hasActiveUpload = Boolean(upload) && upload.status !== "succeeded";
+            const rowTone = isSelected ? "bg-brand-50/50" : hasActiveUpload ? "bg-slate-50/60" : "bg-white";
+            const uploaderLabel = document
+              ? document.uploader?.name ?? document.uploader?.email ?? "—"
+              : resolvedUserLabel;
+            const showDocumentActions = Boolean(document) && (!upload || upload.status === "succeeded");
             return (
               <tr
-                key={document.id}
+                key={row.key}
                 className={clsx(
                   "border-b border-slate-200 last:border-b-0 transition-colors hover:bg-slate-50",
-                  isSelected ? "bg-brand-50/50" : "bg-white"
+                  rowTone,
                 )}
               >
                 <td className="px-2 py-2 align-middle">
@@ -1124,60 +1826,105 @@ function DocumentsTable({
                     type="checkbox"
                     className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     checked={isSelected}
-                    onChange={() => onToggleDocument(document.id)}
-                    disabled={disableSelection}
+                    onChange={() => {
+                      if (document) {
+                        onToggleDocument(document.id);
+                      }
+                    }}
+                    disabled={disableSelection || !document}
                   />
                 </td>
                 <td className="px-2 py-2 align-middle font-mono text-xs text-slate-500">
-                  {document.id.slice(-6)}
+                  {document ? document.id.slice(-6) : "—"}
                 </td>
                 <td className="px-2 py-2 align-middle">
                   <div className="min-w-0">
-                    <div className="truncate font-semibold text-slate-900" title={document.name}>
-                      {document.name}
+                    <div
+                      className="truncate font-semibold text-slate-900"
+                      title={document?.name ?? upload?.file.name}
+                    >
+                      {document?.name ?? upload?.file.name ?? "Untitled file"}
                     </div>
-                    <div className="text-xs text-slate-500">{formatFileDescription(document)}</div>
+                    <div className="text-xs text-slate-500">
+                      {document
+                        ? formatFileDescription(document)
+                        : upload
+                          ? formatUploadFileDescription(upload)
+                          : "Pending upload"}
+                    </div>
                   </div>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <time
-                    dateTime={document.created_at}
-                    className="block text-xs text-slate-600"
-                    title={uploadedFormatter.format(new Date(document.created_at))}
-                  >
-                    {formatUploadedAt(document)}
-                  </time>
+                  {document ? (
+                    <time
+                      dateTime={document.created_at}
+                      className="block text-xs text-slate-600"
+                      title={uploadedFormatter.format(new Date(document.created_at))}
+                    >
+                      {formatUploadedAt(document)}
+                    </time>
+                  ) : upload ? (
+                    <span className="block text-xs text-slate-500">
+                      {formatUploadTimestamp(upload)}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-2 py-2 align-middle">
                   <span className="block truncate text-xs text-slate-600">
-                    {document.uploader?.name ?? document.uploader?.email ?? "—"}
+                    {uploaderLabel}
                   </span>
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  {renderRunStatus ? renderRunStatus(document) : null}
+                  {row.runState ? (
+                    <UploadRunStatus
+                      runState={row.runState}
+                      document={document ?? undefined}
+                      onViewRun={onViewRun}
+                    />
+                  ) : document ? (
+                    renderRunStatus ? renderRunStatus(document) : null
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <span
-                    className={clsx(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-                      statusBadgeClass(document.status),
-                    )}
-                  >
-                    {formatStatusLabel ? formatStatusLabel(document.status) : document.status}
-                  </span>
+                  {upload && upload.status !== "succeeded" ? (
+                    <UploadStatusCell upload={upload} />
+                  ) : document ? (
+                    <span
+                      className={clsx(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                        statusBadgeClass(document.status),
+                      )}
+                    >
+                      {formatStatusLabel ? formatStatusLabel(document.status) : document.status}
+                    </span>
+                  ) : upload ? (
+                    <UploadStatusCell upload={upload} />
+                  ) : null}
                 </td>
                 <td className="px-2 py-2 align-middle text-right">
-                  <DocumentActionsMenu
-                    document={document}
-                    onDownload={onDownloadDocument}
-                    onDelete={onDeleteDocument}
-                    onRun={onRunDocument}
-                    disabled={disableRowActions}
-                    downloading={downloadingId === document.id}
-                    safeModeEnabled={safeModeEnabled}
-                    safeModeMessage={safeModeMessage}
-                    safeModeLoading={safeModeLoading}
-                  />
+                  {showDocumentActions && document ? (
+                    <DocumentActionsMenu
+                      document={document}
+                      onDownload={onDownloadDocument}
+                      onDelete={onDeleteDocument}
+                      onRun={onRunDocument}
+                      disabled={disableRowActions}
+                      downloading={downloadingId === document.id}
+                      safeModeEnabled={safeModeEnabled}
+                      safeModeMessage={safeModeMessage}
+                      safeModeLoading={safeModeLoading}
+                    />
+                  ) : upload ? (
+                    <UploadActions
+                      upload={upload}
+                      onCancel={onCancelUpload}
+                      onRetry={onRetryUpload}
+                      onRemove={onRemoveUpload}
+                      disabled={disableRowActions}
+                    />
+                  ) : null}
                 </td>
               </tr>
             );
@@ -1260,6 +2007,139 @@ function DocumentActionsMenu({
   );
 }
 
+function UploadActions({
+  upload,
+  onCancel,
+  onRetry,
+  onRemove,
+  disabled = false,
+}: {
+  upload: UploadItem;
+  onCancel?: (itemId: string) => void;
+  onRetry?: (itemId: string) => void;
+  onRemove?: (itemId: string) => void;
+  disabled?: boolean;
+}) {
+  const canCancel = Boolean(onCancel) && (upload.status === "uploading" || upload.status === "queued");
+  const canRetry = Boolean(onRetry) && upload.status === "failed";
+  const canRemove = Boolean(onRemove) && (upload.status === "failed" || upload.status === "cancelled");
+
+  return (
+    <div className="inline-flex items-center gap-1.5 justify-end">
+      {canCancel ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onCancel?.(upload.id)}
+          disabled={disabled}
+        >
+          Cancel
+        </Button>
+      ) : null}
+      {canRetry ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => onRetry?.(upload.id)}
+          disabled={disabled}
+        >
+          Retry
+        </Button>
+      ) : null}
+      {canRemove ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onRemove?.(upload.id)}
+          disabled={disabled}
+        >
+          Remove
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function UploadRunStatus({
+  runState,
+  document,
+  onViewRun,
+}: {
+  runState: UploadRunState;
+  document?: DocumentRecord;
+  onViewRun?: (document: DocumentRecord, runId?: string | null) => void;
+}) {
+  if (runState.status === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+        <SpinnerIcon className="h-3.5 w-3.5" />
+        Queueing run…
+      </span>
+    );
+  }
+
+  if (runState.status === "queued") {
+    return (
+      <div className="flex flex-col gap-1 text-xs">
+        <span className="text-emerald-700">Run queued</span>
+        {runState.runId ? (
+          <span className="text-[11px] text-slate-400">{runState.runId}</span>
+        ) : null}
+        {document && runState.runId && onViewRun ? (
+          <button
+            type="button"
+            className="text-emerald-700 underline underline-offset-4"
+            onClick={() => onViewRun(document, runState.runId)}
+          >
+            View run
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <span className="text-xs text-rose-600">
+      Failed{runState.error ? `: ${runState.error}` : ""}
+    </span>
+  );
+}
+
+function UploadStatusCell({ upload }: { upload: UploadItem }) {
+  const statusLabel = formatUploadStatus(upload.status);
+  const statusTone = uploadStatusBadgeClass(upload.status);
+  const canShowProgress = upload.status === "uploading" || upload.status === "queued";
+  const progressText = `${formatFileSize(upload.progress.loaded)} of ${formatFileSize(upload.progress.total)}`;
+
+  return (
+    <div className="space-y-1">
+      <span
+        className={clsx(
+          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+          statusTone,
+        )}
+      >
+        {statusLabel}
+      </span>
+      {canShowProgress ? (
+        <div className="space-y-1 text-[11px] text-slate-500">
+          <div className="flex items-center justify-between">
+            <span>{progressText}</span>
+            <span>{upload.progress.percent}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-slate-100">
+            <div
+              className="h-1.5 rounded-full bg-brand-500 transition"
+              style={{ width: `${upload.progress.percent}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+      {upload.error ? <span className="text-[11px] text-rose-600">{upload.error}</span> : null}
+    </div>
+  );
+}
+
 /* --------------------------- Formatting helpers --------------------------- */
 
 function formatFileDescription(document: DocumentRecord) {
@@ -1267,6 +2147,13 @@ function formatFileDescription(document: DocumentRecord) {
   if (document.content_type) parts.push(humanizeContentType(document.content_type));
   if (typeof document.byte_size === "number" && document.byte_size >= 0) parts.push(formatFileSize(document.byte_size));
   return parts.join(" • ") || "Unknown type";
+}
+
+function formatUploadFileDescription(upload: UploadItem) {
+  const parts: string[] = [];
+  if (upload.file.type) parts.push(humanizeContentType(upload.file.type));
+  if (upload.file.size >= 0) parts.push(formatFileSize(upload.file.size));
+  return parts.join(" • ") || "Pending upload";
 }
 
 function humanizeContentType(contentType: string) {
@@ -1292,6 +2179,107 @@ function formatFileSize(bytes: number) {
   }
   const formatted = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
   return `${formatted} ${units[unitIndex]}`;
+}
+
+function formatUploadTimestamp(upload: UploadItem) {
+  switch (upload.status) {
+    case "queued":
+      return "Queued";
+    case "uploading":
+      return "Uploading…";
+    case "succeeded":
+      return "Uploaded";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return upload.status;
+  }
+}
+
+function resolveApiErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    const detail = error.problem?.detail as unknown;
+    if (typeof detail === "string" && detail.length > 0) {
+      return detail;
+    }
+    if (detail && typeof detail === "object" && "error" in detail) {
+      const message = (detail as { error?: { message?: string } }).error?.message;
+      if (message) {
+        return message;
+      }
+    }
+    return error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+}
+
+function resolveSelectableConfigs(configurations: ConfigurationRecord[]) {
+  const selectableConfigs = configurations
+    .filter((config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at))
+    .filter((config) => {
+      const statusLabel = typeof config.status === "string" ? config.status.toLowerCase() : "draft";
+      return statusLabel !== "archived";
+    })
+    .sort((a, b) => {
+      const statusA = typeof a.status === "string" ? a.status.toLowerCase() : "draft";
+      const statusB = typeof b.status === "string" ? b.status.toLowerCase() : "draft";
+      if (statusA === "active" && statusB !== "active") return -1;
+      if (statusB === "active" && statusA !== "active") return 1;
+      const updatedA = new Date((a as { updated_at?: string | null }).updated_at ?? 0).getTime();
+      const updatedB = new Date((b as { updated_at?: string | null }).updated_at ?? 0).getTime();
+      return updatedB - updatedA;
+    });
+  const activeConfig =
+    selectableConfigs.find((config) => (typeof config.status === "string" ? config.status.toLowerCase() : "") === "active") ??
+    null;
+  return { selectableConfigs, activeConfig };
+}
+
+function formatConfigurationLabel(config: ConfigurationRecord) {
+  const statusLabel = typeof config.status === "string" ? config.status : "draft";
+  const title = (config as { title?: string | null }).title ?? config.display_name ?? "Untitled configuration";
+  return `${title} (${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)})`;
+}
+
+function formatUploadStatus(status: UploadItem["status"]) {
+  switch (status) {
+    case "queued":
+      return "Queued";
+    case "uploading":
+      return "Uploading";
+    case "succeeded":
+      return "Uploaded";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status;
+  }
+}
+
+function uploadStatusBadgeClass(status: UploadItem["status"]) {
+  switch (status) {
+    case "succeeded":
+      return "bg-success-100 text-success-700";
+    case "failed":
+      return "bg-danger-100 text-danger-700";
+    case "uploading":
+      return "bg-brand-100 text-brand-700";
+    case "cancelled":
+      return "bg-slate-200 text-slate-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+function isTerminalUploadStatus(status: UploadItem["status"]) {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 function statusBadgeClass(status: DocumentRecord["status"]) {
@@ -1353,6 +2341,7 @@ interface RunExtractionDrawerProps {
   readonly open: boolean;
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord | null;
+  readonly initialRunId?: string | null;
   readonly onClose: () => void;
   readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
@@ -1365,6 +2354,7 @@ function RunExtractionDrawer({
   open,
   workspaceId,
   documentRecord,
+  initialRunId,
   onClose,
   onRunSuccess,
   onRunError,
@@ -1400,6 +2390,7 @@ function RunExtractionDrawer({
     <RunExtractionDrawerContent
       workspaceId={workspaceId}
       documentRecord={documentRecord}
+      initialRunId={initialRunId}
       onClose={onClose}
       onRunSuccess={onRunSuccess}
       onRunError={onRunError}
@@ -1414,6 +2405,7 @@ function RunExtractionDrawer({
 interface DrawerContentProps {
   readonly workspaceId: string;
   readonly documentRecord: DocumentRecord;
+  readonly initialRunId?: string | null;
   readonly onClose: () => void;
   readonly onRunSuccess?: (run: RunResource) => void;
   readonly onRunError?: (message: string) => void;
@@ -1425,6 +2417,7 @@ interface DrawerContentProps {
 function RunExtractionDrawerContent({
   workspaceId,
   documentRecord,
+  initialRunId,
   onClose,
   onRunSuccess,
   onRunError,
@@ -1444,36 +2437,18 @@ function RunExtractionDrawerContent({
     documentRecord.id,
   );
   const [activeRunId, setActiveRunId] = useState<string | null>(
-    documentRecord.last_run?.run_id ?? null,
+    initialRunId ?? documentRecord.last_run?.run_id ?? null,
   );
 
   useEffect(() => {
-    setActiveRunId(documentRecord.last_run?.run_id ?? null);
-  }, [documentRecord.id, documentRecord.last_run?.run_id]);
+    const next = initialRunId ?? documentRecord.last_run?.run_id ?? null;
+    setActiveRunId(next);
+  }, [documentRecord.id, documentRecord.last_run?.run_id, initialRunId]);
 
   const allConfigs = useMemo(() => configurationsQuery.data?.items ?? [], [configurationsQuery.data]);
-  const selectableConfigs = useMemo(
-    () =>
-      allConfigs
-        .filter((config) => !("deleted_at" in config && (config as { deleted_at?: string | null }).deleted_at))
-        .filter((config) => {
-          const statusLabel = typeof config.status === "string" ? config.status.toLowerCase() : "draft";
-          return statusLabel !== "archived";
-        })
-        .sort((a, b) => {
-          const statusA = typeof a.status === "string" ? a.status.toLowerCase() : "draft";
-          const statusB = typeof b.status === "string" ? b.status.toLowerCase() : "draft";
-          if (statusA === "active" && statusB !== "active") return -1;
-          if (statusB === "active" && statusA !== "active") return 1;
-          const updatedA = new Date((a as { updated_at?: string | null }).updated_at ?? 0).getTime();
-          const updatedB = new Date((b as { updated_at?: string | null }).updated_at ?? 0).getTime();
-          return updatedB - updatedA;
-        }),
+  const { selectableConfigs, activeConfig } = useMemo(
+    () => resolveSelectableConfigs(allConfigs),
     [allConfigs],
-  );
-  const activeConfig = useMemo(
-    () => selectableConfigs.find((config) => (typeof config.status === "string" ? config.status.toLowerCase() : "") === "active") ?? null,
-    [selectableConfigs],
   );
   const hasActiveConfig = Boolean(activeConfig);
 
@@ -1503,12 +2478,6 @@ function RunExtractionDrawerContent({
     () => selectableConfigs.find((config) => config.id === selectedConfigId) ?? null,
     [selectableConfigs, selectedConfigId],
   );
-
-  const formatConfigLabel = useCallback((config: (typeof selectableConfigs)[number]) => {
-    const statusLabel = typeof config.status === "string" ? config.status : "draft";
-    const title = (config as { title?: string | null }).title ?? config.display_name ?? "Untitled configuration";
-    return `${title} (${statusLabel.charAt(0).toUpperCase()}${statusLabel.slice(1)})`;
-  }, []);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const safeModeDetail = safeModeMessage ?? DEFAULT_SAFE_MODE_MESSAGE;
@@ -1544,6 +2513,8 @@ function RunExtractionDrawerContent({
     queryFn: ({ signal }) => fetchDocumentSheets(workspaceId, documentRecord.id, signal),
     staleTime: 60_000,
   });
+  const sheetParseFailed =
+    sheetQuery.error instanceof ApiError && sheetQuery.error.status === 422;
   const sheetOptions = useMemo(
     () => sheetQuery.data ?? [],
     [sheetQuery.data],
@@ -1787,7 +2758,7 @@ function RunExtractionDrawerContent({
                   <option value="">Select configuration</option>
                   {selectableConfigs.map((config) => (
                     <option key={config.id} value={config.id}>
-                      {formatConfigLabel(config)}
+                      {formatConfigurationLabel(config)}
                     </option>
                   ))}
                 </Select>
@@ -1801,6 +2772,13 @@ function RunExtractionDrawerContent({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Advanced options</p>
             {sheetQuery.isLoading ? (
               <p className="text-xs text-slate-500">Loading worksheets…</p>
+            ) : sheetParseFailed ? (
+              <Alert tone="warning">
+                <p className="text-xs text-slate-700">
+                  Worksheet inspection failed for this file. ADE will process the full document and
+                  sheet selection is disabled.
+                </p>
+              </Alert>
             ) : sheetQuery.isError ? (
               <Alert tone="warning">
                 <div className="space-y-2">
