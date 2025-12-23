@@ -936,6 +936,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/configurations/{configuration_id}/runs/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Runs Batch Endpoint
+         * @description Create multiple runs for ``configuration_id`` and enqueue execution.
+         */
+        post: operations["create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/runs": {
         parameters: {
             query?: never;
@@ -2372,6 +2392,66 @@ export type components = {
             description?: string | null;
             /** Permissions */
             permissions?: string[] | null;
+        };
+        /**
+         * RunBatchCreateOptions
+         * @description Execution toggles for batch ADE runs (per-document input).
+         */
+        RunBatchCreateOptions: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Validate Only
+             * @default false
+             */
+            validate_only: boolean;
+            /**
+             * Force Rebuild
+             * @description If true, rebuild the configuration environment before running.
+             * @default false
+             */
+            force_rebuild: boolean;
+            /**
+             * Debug
+             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
+             * @default false
+             */
+            debug: boolean;
+            /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
+            /**
+             * Metadata
+             * @description Opaque metadata to propagate with run telemetry.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+        };
+        /**
+         * RunBatchCreateRequest
+         * @description Payload accepted by the batch run creation endpoint.
+         */
+        RunBatchCreateRequest: {
+            /**
+             * Document Ids
+             * @description Documents to enqueue as individual runs (all-or-nothing).
+             */
+            document_ids: string[];
+            options?: components["schemas"]["RunBatchCreateOptions"];
+        };
+        /**
+         * RunBatchCreateResponse
+         * @description Response envelope for batch run creation.
+         */
+        RunBatchCreateResponse: {
+            /** Runs */
+            runs: components["schemas"]["RunResource"][];
         };
         /**
          * RunCreateOptions
@@ -6300,6 +6380,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunBatchCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunBatchCreateResponse"];
                 };
             };
             /** @description Validation Error */

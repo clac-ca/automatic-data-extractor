@@ -1,19 +1,9 @@
 import { client } from "@shared/api/client";
+import type { components } from "@schema";
 
-export interface SafeModeStatus {
-  readonly enabled: boolean;
-  readonly detail: string;
-}
-
-export interface SafeModeUpdateRequest {
-  readonly enabled: boolean;
-  readonly detail?: string | null;
-}
-
-export interface SystemVersions {
-  readonly ade_api: string;
-  readonly ade_engine: string;
-}
+export type SafeModeStatus = components["schemas"]["SafeModeStatus"];
+export type SafeModeUpdateRequest = components["schemas"]["SafeModeUpdateRequest"];
+export type SystemVersions = components["schemas"]["VersionsResponse"];
 
 interface RequestOptions {
   readonly signal?: AbortSignal;
