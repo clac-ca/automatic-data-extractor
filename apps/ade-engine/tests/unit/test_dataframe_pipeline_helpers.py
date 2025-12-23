@@ -4,7 +4,7 @@ import polars as pl
 import pytest
 from openpyxl import Workbook
 
-from ade_engine.application.pipeline.pipeline import _apply_mapping_as_rename, _normalize_headers
+from ade_engine.application.pipeline.pipeline import _apply_mapping_as_rename, _merge_header_rows, _normalize_headers
 from ade_engine.extensions.registry import Registry
 from ade_engine.infrastructure.observability.logger import NullLogger
 from ade_engine.infrastructure.settings import Settings
@@ -50,6 +50,19 @@ def test_mapping_as_rename_skips_collisions():
     assert out.columns == ["Email", "email"]
     assert rename_map == {}
     assert len(logger.warnings) == 1
+
+
+def test_merge_header_rows_normalizes_dedupes_and_joins():
+    header_rows = [
+        ["Payment", "Amount", None, "  Total  "],
+        ["Date", "Amount", "USD", "total"],
+    ]
+    assert _merge_header_rows(header_rows) == [
+        "Payment Date",
+        "Amount",
+        "USD",
+        "Total",
+    ]
 
 
 def test_table_hooks_compose_returned_dataframes():

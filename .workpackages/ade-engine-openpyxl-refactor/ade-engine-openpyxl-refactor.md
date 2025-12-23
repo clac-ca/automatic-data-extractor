@@ -18,6 +18,7 @@
 * [x] Implement table detection as a pluggable `TableDetector`.
 * [x] Implement Extract → Map (+patch) → Normalize stages using **pure data** (no openpyxl cell mutations).
 * [x] Implement Render/Write stage that writes normalized output into an **openpyxl output workbook** and returns a `TablePlacement` (`Worksheet + CellRange`).
+* [x] Add configurable stacked-header merging (settings + detection + pipeline merge + reporting).
 
 ### Efficiency & safety conventions
 

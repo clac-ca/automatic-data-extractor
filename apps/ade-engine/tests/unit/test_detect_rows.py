@@ -57,7 +57,7 @@ def test_row_detector_invalid_return_shape_raises():
         )
 
 
-def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
+def test_detect_table_regions_merges_contiguous_header_rows_by_default():
     reg = Registry()
     logger = NullLogger()
 
@@ -79,6 +79,39 @@ def test_detect_table_regions_splits_on_next_header_even_without_data_rows():
         ],
         registry=reg,
         settings=Settings(),
+        state={},
+        metadata={"input_file": "input.xlsx", "sheet_index": 0},
+        input_file_name=None,
+        logger=logger,
+    )
+
+    assert [(t.min_row, t.max_row, t.max_col, t.header_row_count) for t in tables] == [
+        (1, 3, 2, 2),
+    ]
+
+
+def test_detect_table_regions_can_disable_header_merge():
+    reg = Registry()
+    logger = NullLogger()
+
+    def detector(*, row_index, **_):
+        if row_index in (1, 2):
+            return {RowKind.HEADER.value: 1.0}
+        if row_index == 3:
+            return {RowKind.DATA.value: 1.0}
+        return {}
+
+    reg.register_row_detector(detector, row_kind=RowKind.UNKNOWN.value, priority=0)
+
+    tables = detect_table_regions(
+        sheet_name="Sheet1",
+        rows=[
+            ["H1", "A"],
+            ["H2", "B"],
+            ["v1", "v2"],
+        ],
+        registry=reg,
+        settings=Settings(merge_stacked_headers=False),
         state={},
         metadata={"input_file": "input.xlsx", "sheet_index": 0},
         input_file_name=None,
