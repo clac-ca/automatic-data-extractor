@@ -99,6 +99,98 @@ async def _ensure_configuration(session, workspace_id):
     return configuration.id
 
 
+async def _build_tag_filter_fixture(session):
+    workspace = Workspace(name="Tagged Workspace", slug=f"ws-tags-{uuid4().hex[:6]}")
+    uploader = User(
+        id=generate_uuid7(),
+        email="tagger@example.com",
+        display_name="Tagger",
+        is_active=True,
+    )
+    session.add_all([workspace, uploader])
+    await session.flush()
+
+    now = datetime.now(tz=UTC)
+    expires = now + timedelta(days=30)
+
+    doc_all = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        original_filename="alpha.csv",
+        content_type="text/csv",
+        byte_size=200,
+        sha256="c" * 64,
+        stored_uri="alpha",
+        attributes={},
+        uploaded_by_user_id=uploader.id,
+        status=DocumentStatus.PROCESSED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=expires,
+        last_run_at=None,
+    )
+    doc_all.tags.extend(
+        [
+            DocumentTag(document_id=doc_all.id, tag="finance"),
+            DocumentTag(document_id=doc_all.id, tag="priority"),
+        ]
+    )
+
+    doc_finance = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        original_filename="bravo.csv",
+        content_type="text/csv",
+        byte_size=201,
+        sha256="d" * 64,
+        stored_uri="bravo",
+        attributes={},
+        uploaded_by_user_id=uploader.id,
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=expires,
+        last_run_at=None,
+    )
+    doc_finance.tags.append(DocumentTag(document_id=doc_finance.id, tag="finance"))
+
+    doc_priority = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        original_filename="charlie.csv",
+        content_type="text/csv",
+        byte_size=202,
+        sha256="e" * 64,
+        stored_uri="charlie",
+        attributes={},
+        uploaded_by_user_id=uploader.id,
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=expires,
+        last_run_at=None,
+    )
+    doc_priority.tags.append(DocumentTag(document_id=doc_priority.id, tag="priority"))
+
+    doc_empty = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        original_filename="delta.csv",
+        content_type="text/csv",
+        byte_size=203,
+        sha256="f" * 64,
+        stored_uri="delta",
+        attributes={},
+        uploaded_by_user_id=uploader.id,
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=expires,
+        last_run_at=None,
+    )
+
+    session.add_all([doc_all, doc_finance, doc_priority, doc_empty])
+    await session.flush()
+
+    return workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty
+
+
 async def test_list_documents_applies_filters_and_sorting(session, settings) -> None:
     workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
 
@@ -106,7 +198,7 @@ async def test_list_documents_applies_filters_and_sorting(session, settings) -> 
 
     filters = DocumentFilters(
         status_in={DocumentStatus.PROCESSED},
-        tags_in={"finance"},
+        tags={"finance"},
         uploader="me",
         q="Uploader",
     )
@@ -261,3 +353,66 @@ async def test_list_documents_includes_last_run_summary(session, settings) -> No
 
     uploaded_record = next(item for item in result.items if item.id == uploaded.id)
     assert uploaded_record.last_run is None
+
+
+async def test_tag_filters_any_all_not_empty(session, settings) -> None:
+    workspace, uploader, doc_all, doc_finance, doc_priority, doc_empty = await _build_tag_filter_fixture(
+        session
+    )
+
+    service = DocumentsService(session=session, settings=settings)
+    order_by = resolve_sort(
+        [],
+        allowed=SORT_FIELDS,
+        default=DEFAULT_SORT,
+        id_field=ID_FIELD,
+    )
+
+    any_match = await service.list_documents(
+        workspace_id=workspace.id,
+        page=1,
+        page_size=50,
+        include_total=False,
+        order_by=order_by,
+        filters=DocumentFilters(tags={"finance", "priority"}),
+        actor=uploader,
+    )
+    any_ids = {item.id for item in any_match.items}
+    assert any_ids == {doc_all.id, doc_finance.id, doc_priority.id}
+
+    all_match = await service.list_documents(
+        workspace_id=workspace.id,
+        page=1,
+        page_size=50,
+        include_total=False,
+        order_by=order_by,
+        filters=DocumentFilters(tags={"finance", "priority"}, tags_match="all"),
+        actor=uploader,
+    )
+    assert {item.id for item in all_match.items} == {doc_all.id}
+
+    not_match = await service.list_documents(
+        workspace_id=workspace.id,
+        page=1,
+        page_size=50,
+        include_total=False,
+        order_by=order_by,
+        filters=DocumentFilters(tags_not={"priority"}),
+        actor=uploader,
+    )
+    not_ids = {item.id for item in not_match.items}
+    assert doc_all.id not in not_ids
+    assert doc_priority.id not in not_ids
+    assert doc_finance.id in not_ids
+    assert doc_empty.id in not_ids
+
+    empty_match = await service.list_documents(
+        workspace_id=workspace.id,
+        page=1,
+        page_size=50,
+        include_total=False,
+        order_by=order_by,
+        filters=DocumentFilters(tags_empty=True),
+        actor=uploader,
+    )
+    assert {item.id for item in empty_match.items} == {doc_empty.id}

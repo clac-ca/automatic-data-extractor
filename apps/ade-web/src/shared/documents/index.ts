@@ -20,3 +20,4 @@ export async function fetchDocumentSheets(
 }
 
 export * from "./uploads";
+export * from "./tags";

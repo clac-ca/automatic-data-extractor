@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Select
@@ -21,6 +22,8 @@ from ade_api.models import (
     User,
 )
 from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
+
+from .tags import TagValidationError, normalize_tag_set
 
 
 class DocumentFilters(FilterBase):
@@ -40,9 +43,21 @@ class DocumentFilters(FilterBase):
         None,
         description="Filter by the origin of the document.",
     )
-    tags_in: set[str] | None = Field(
+    tags: set[str] | None = Field(
         None,
-        description="Filter by documents tagged with any of the provided values.",
+        description="Filter by documents tagged with the provided values (CSV or repeated params).",
+    )
+    tags_match: Literal["any", "all"] | None = Field(
+        None,
+        description="Match strategy for tags (any or all). Defaults to any.",
+    )
+    tags_not: set[str] | None = Field(
+        None,
+        description="Exclude documents tagged with any of the provided values (CSV or repeated params).",
+    )
+    tags_empty: bool | None = Field(
+        None,
+        description="When true, only return documents without tags.",
     )
     uploader: str | None = Field(
         None,
@@ -114,7 +129,7 @@ class DocumentFilters(FilterBase):
         except ValueError as exc:  # pragma: no cover - validation guard
             raise HTTPException(422, "Invalid source value") from exc
 
-    @field_validator("tags_in", mode="before")
+    @field_validator("tags", "tags_not", mode="before")
     @classmethod
     def _parse_tags(cls, value):
         parsed = parse_csv_or_repeated(value)
@@ -122,8 +137,11 @@ class DocumentFilters(FilterBase):
             raise HTTPException(422, f"Too many tag values; max {MAX_SET_SIZE}.")
         if not parsed:
             return None
-        cleaned = {tag.strip() for tag in parsed if tag.strip()}
-        return cleaned or None
+        try:
+            normalized = normalize_tag_set(parsed)
+        except TagValidationError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return normalized or None
 
     @field_validator("uploader_id_in", mode="before")
     @classmethod
@@ -177,6 +195,12 @@ class DocumentFilters(FilterBase):
             )
         return value
 
+    @model_validator(mode="after")
+    def _validate_tag_filters(self) -> "DocumentFilters":
+        if self.tags_empty and (self.tags or self.tags_not):
+            raise HTTPException(422, "tags_empty cannot be combined with tags or tags_not.")
+        return self
+
 
 def apply_document_filters(
     stmt: Select,
@@ -200,8 +224,18 @@ def apply_document_filters(
             for source in filters.source_in
         )
         predicates.append(Document.source.in_(source_values))
-    if filters.tags_in:
-        predicates.append(Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags_in))))
+    if filters.tags_empty:
+        predicates.append(~Document.tags.any())
+    else:
+        if filters.tags:
+            match = filters.tags_match or "any"
+            if match == "all":
+                for tag in sorted(filters.tags):
+                    predicates.append(Document.tags.any(DocumentTag.tag == tag))
+            else:
+                predicates.append(Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags))))
+        if filters.tags_not:
+            predicates.append(~Document.tags.any(DocumentTag.tag.in_(sorted(filters.tags_not))))
 
     uploader_ids: set[str] = set()
     if filters.uploader == "me":

@@ -9,6 +9,7 @@ from ade_api.features.auth.router import router as auth_router
 from ade_api.features.builds.router import router as builds_router
 from ade_api.features.configs.router import router as configurations_router
 from ade_api.features.documents.router import router as documents_router
+from ade_api.features.documents.router import tags_router as document_tags_router
 from ade_api.features.health.router import router as health_router
 from ade_api.features.me.router import router as me_router
 from ade_api.features.rbac.router import router as rbac_router
@@ -32,6 +33,7 @@ api_router.include_router(me_router)
 api_router.include_router(workspaces_router)
 api_router.include_router(workspace_members_router)
 api_router.include_router(documents_router)
+api_router.include_router(document_tags_router)
 api_router.include_router(configurations_router)
 api_router.include_router(builds_router)
 api_router.include_router(runs_router)

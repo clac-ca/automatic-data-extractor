@@ -22,7 +22,7 @@ from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
 from ade_api.common.types import OrderBy
 from ade_api.infra.storage import workspace_documents_root
-from ade_api.models import Document, DocumentSource, DocumentStatus, Run, User
+from ade_api.models import Document, DocumentSource, DocumentStatus, DocumentTag, Run, User
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -30,11 +30,25 @@ from .exceptions import (
     DocumentNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
+    InvalidDocumentTagsError,
 )
 from .filters import DocumentFilters, apply_document_filters
 from .repository import DocumentsRepository
-from .schemas import DocumentLastRun, DocumentOut, DocumentPage, DocumentSheet
+from .schemas import (
+    DocumentLastRun,
+    DocumentOut,
+    DocumentPage,
+    DocumentSheet,
+    TagCatalogItem,
+    TagCatalogPage,
+)
 from .storage import DocumentStorage
+from .tags import (
+    MAX_TAGS_PER_DOCUMENT,
+    TagValidationError,
+    normalize_tag_list,
+    normalize_tag_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -376,6 +390,134 @@ class DocumentsService:
                 user_id=actor_id,
                 stored_uri=document.stored_uri,
             ),
+        )
+
+    async def replace_document_tags(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        tags: list[str],
+    ) -> DocumentOut:
+        """Replace tags on a document in a single transaction."""
+
+        try:
+            normalized = normalize_tag_list(tags, max_tags=MAX_TAGS_PER_DOCUMENT)
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        document = await self._get_document(workspace_id, document_id)
+        document.tags = [DocumentTag(document_id=document.id, tag=tag) for tag in normalized]
+        await self._session.flush()
+
+        return DocumentOut.model_validate(document)
+
+    async def patch_document_tags(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> DocumentOut:
+        """Add or remove tags on a document."""
+
+        if not add and not remove:
+            raise InvalidDocumentTagsError("add or remove is required")
+
+        try:
+            normalized_add = normalize_tag_list(add or [])
+            normalized_remove = normalize_tag_list(remove or [])
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        document = await self._get_document(workspace_id, document_id)
+        existing = {tag.tag for tag in document.tags}
+        next_tags = (existing | set(normalized_add)) - set(normalized_remove)
+        if len(next_tags) > MAX_TAGS_PER_DOCUMENT:
+            raise InvalidDocumentTagsError(f"Too many tags; max {MAX_TAGS_PER_DOCUMENT}.")
+
+        to_remove = existing - next_tags
+        if to_remove:
+            document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
+        to_add = next_tags - existing
+        for tag in to_add:
+            document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+
+        await self._session.flush()
+
+        return DocumentOut.model_validate(document)
+
+    async def list_tag_catalog(
+        self,
+        *,
+        workspace_id: UUID,
+        page: int,
+        page_size: int,
+        include_total: bool,
+        q: str | None = None,
+        sort: str = "name",
+    ) -> TagCatalogPage:
+        """Return tag catalog entries with counts."""
+
+        try:
+            normalized_q = normalize_tag_query(q)
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        count_expr = func.count(DocumentTag.document_id).label("document_count")
+        stmt = (
+            select(
+                DocumentTag.tag.label("tag"),
+                count_expr,
+            )
+            .join(Document, DocumentTag.document_id == Document.id)
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+            )
+            .group_by(DocumentTag.tag)
+        )
+
+        if normalized_q:
+            pattern = f"%{normalized_q}%"
+            stmt = stmt.where(DocumentTag.tag.like(pattern))
+
+        if sort == "-count":
+            order_by = [count_expr.desc(), DocumentTag.tag.asc()]
+        else:
+            order_by = [DocumentTag.tag.asc()]
+
+        offset = (page - 1) * page_size
+        ordered_stmt = stmt.order_by(*order_by)
+
+        if include_total:
+            count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
+            result = await self._session.execute(ordered_stmt.limit(page_size).offset(offset))
+            rows = result.mappings().all()
+            has_next = (page * page_size) < total
+        else:
+            result = await self._session.execute(
+                ordered_stmt.limit(page_size + 1).offset(offset)
+            )
+            rows = result.mappings().all()
+            has_next = len(rows) > page_size
+            rows = rows[:page_size]
+            total = None
+
+        items = [
+            TagCatalogItem(tag=row["tag"], document_count=int(row["document_count"] or 0))
+            for row in rows
+        ]
+
+        return TagCatalogPage(
+            items=items,
+            page=page,
+            page_size=page_size,
+            has_next=has_next,
+            has_previous=page > 1,
+            total=total,
         )
 
     async def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:

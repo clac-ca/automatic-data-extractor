@@ -66,10 +66,18 @@ class DocumentWorksheetParseError(Exception):
         self.reason = reason
 
 
+class InvalidDocumentTagsError(Exception):
+    """Raised when document tag inputs fail validation."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
     "DocumentTooLargeError",
     "InvalidDocumentExpirationError",
     "DocumentWorksheetParseError",
+    "InvalidDocumentTagsError",
 ]

@@ -601,6 +601,24 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace document tags */
+        put: operations["replace_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update document tags */
+        patch: operations["patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -645,6 +663,23 @@ export type paths = {
         };
         /** List worksheets for a document */
         get: operations["list_document_sheets_endpoint_api_v1_workspaces__workspace_id__documents__document_id__sheets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document tags */
+        get: operations["list_document_tags_api_v1_workspaces__workspace_id__tags_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1847,6 +1882,33 @@ export type components = {
          */
         DocumentStatus: "uploaded" | "processing" | "processed" | "failed" | "archived";
         /**
+         * DocumentTagsPatch
+         * @description Payload for adding/removing tags on a document.
+         */
+        DocumentTagsPatch: {
+            /**
+             * Add
+             * @description Tags to add to the document.
+             */
+            add?: string[] | null;
+            /**
+             * Remove
+             * @description Tags to remove from the document.
+             */
+            remove?: string[] | null;
+        };
+        /**
+         * DocumentTagsReplace
+         * @description Payload for replacing tags on a document.
+         */
+        DocumentTagsReplace: {
+            /**
+             * Tags
+             * @description Complete set of tags for the document.
+             */
+            tags: string[];
+        };
+        /**
          * EffectivePermissions
          * @description Effective permission sets for the current principal.
          */
@@ -2826,6 +2888,34 @@ export type components = {
              * @description Seconds until the refresh token expires, if applicable.
              */
             refresh_expires_in?: number | null;
+        };
+        /**
+         * TagCatalogItem
+         * @description Tag entry with document counts.
+         */
+        TagCatalogItem: {
+            /** Tag */
+            tag: string;
+            /** Document Count */
+            document_count: number;
+        };
+        /**
+         * TagCatalogPage
+         * @description Paginated tag catalog.
+         */
+        TagCatalogPage: {
+            /** Items */
+            items: components["schemas"]["TagCatalogItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
         };
         /**
          * UploaderOut
@@ -5255,6 +5345,124 @@ export interface operations {
             };
         };
     };
+    replace_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTagsReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTagsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     read_document_api_v1_workspaces__workspace_id__documents__document_id__get: {
         parameters: {
             query?: never;
@@ -5451,6 +5659,57 @@ export interface operations {
                 content?: never;
             };
             /** @description The workbook exists but could not be parsed for worksheets. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_document_tags_api_v1_workspaces__workspace_id__tags_get: {
+        parameters: {
+            query?: {
+                /** @description Search tags (min length 2). */
+                q?: string | null;
+                sort?: "name" | "-count";
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCatalogPage"];
+                };
+            };
+            /** @description Authentication required to list tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow tag access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag search parameters are invalid. */
             422: {
                 headers: {
                     [name: string]: unknown;

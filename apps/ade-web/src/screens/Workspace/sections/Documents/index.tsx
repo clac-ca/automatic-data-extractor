@@ -24,7 +24,13 @@ import { useFlattenedPages } from "@shared/api/pagination";
 import { createScopedStorage } from "@shared/storage";
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import type { components, paths, RunSummary } from "@schema";
-import { fetchDocumentSheets, uploadWorkspaceDocument, type DocumentSheet } from "@shared/documents";
+import {
+  fetchDocumentSheets,
+  fetchTagCatalog,
+  replaceDocumentTags,
+  uploadWorkspaceDocument,
+  type DocumentSheet,
+} from "@shared/documents";
 import { useUploadQueue, type UploadQueueItem, type UploadQueueSummary } from "@shared/uploads/queue";
 import type { UploadProgress } from "@shared/uploads/xhr";
 import { RunSummaryView, TelemetrySummary } from "@shared/runs/RunInsights";
@@ -43,6 +49,7 @@ import type { RunStreamEvent } from "@shared/runs/types";
 import { Alert } from "@ui/Alert";
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
+import { Input } from "@ui/Input";
 
 /* -------------------------------- Types & constants ------------------------------- */
 
@@ -178,6 +185,7 @@ const documentsKeys = {
 };
 
 const DOCUMENTS_PAGE_SIZE = 50;
+const MAX_DOCUMENT_TAGS = 50;
 /* -------------------------------- Route component -------------------------------- */
 
 export default function WorkspaceDocumentsRoute() {
@@ -1813,6 +1821,7 @@ function DocumentsTable({
               ? document.uploader?.name ?? document.uploader?.email ?? "—"
               : resolvedUserLabel;
             const showDocumentActions = Boolean(document) && (!upload || upload.status === "succeeded");
+            const documentTags = document?.tags ?? [];
             return (
               <tr
                 key={row.key}
@@ -1852,6 +1861,23 @@ function DocumentsTable({
                           ? formatUploadFileDescription(upload)
                           : "Pending upload"}
                     </div>
+                    {documentTags.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                        {documentTags.slice(0, 3).map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                        {documentTags.length > 3 ? (
+                          <span className="px-1 text-[10px] text-slate-400">
+                            +{documentTags.length - 3}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </td>
                 <td className="px-2 py-2 align-middle">
@@ -2714,6 +2740,10 @@ function RunExtractionDrawerContent({
                 </p>
               ) : null}
             </div>
+            <DocumentTagsEditor
+              workspaceId={workspaceId}
+              documentRecord={documentRecord}
+            />
           </section>
 
           <section className="space-y-2">
@@ -2950,6 +2980,222 @@ function RunExtractionDrawerContent({
       </aside>
     </div>
   );
+}
+
+function DocumentTagsEditor({
+  workspaceId,
+  documentRecord,
+}: {
+  workspaceId: string;
+  documentRecord: DocumentRecord;
+}) {
+  const queryClient = useQueryClient();
+  const [draftTags, setDraftTags] = useState<string[]>(() => documentRecord.tags ?? []);
+  const [savedTags, setSavedTags] = useState<string[]>(() => documentRecord.tags ?? []);
+  const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next = documentRecord.tags ?? [];
+    setDraftTags(next);
+    setSavedTags(next);
+    setInputValue("");
+    setError(null);
+  }, [documentRecord.id, (documentRecord.tags ?? []).join("|")]);
+
+  const saveTags = useMutation({
+    mutationFn: (nextTags: string[]) =>
+      replaceDocumentTags(workspaceId, documentRecord.id, nextTags),
+    onSuccess: (updated) => {
+      const next = updated.tags ?? [];
+      setDraftTags(next);
+      setSavedTags(next);
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+    },
+    onError: (err) => {
+      setError(resolveApiErrorMessage(err, "Unable to update tags."));
+    },
+  });
+
+  const suggestionsQuery = useQuery({
+    queryKey: ["tag-catalog", workspaceId],
+    queryFn: ({ signal }) =>
+      fetchTagCatalog(
+        workspaceId,
+        {
+          page: 1,
+          page_size: 8,
+          sort: "-count",
+        },
+        signal,
+      ),
+    enabled: workspaceId.length > 0,
+    staleTime: 30_000,
+  });
+
+  const suggestedTags = useMemo(() => {
+    const items = suggestionsQuery.data?.items ?? [];
+    return items.map((item) => item.tag).filter((tag) => !draftTags.includes(tag));
+  }, [draftTags, suggestionsQuery.data?.items]);
+
+  const isDirty = !areTagsEqual(savedTags, draftTags);
+  const tagLimitReached = draftTags.length >= MAX_DOCUMENT_TAGS;
+
+  const addTags = useCallback((raw: string) => {
+    const tokens = splitTagInput(raw);
+    if (tokens.length === 0) return;
+    setDraftTags((current) => {
+      const next = new Set(current);
+      for (const token of tokens) {
+        if (next.size >= MAX_DOCUMENT_TAGS) break;
+        next.add(token);
+      }
+      return Array.from(next).sort();
+    });
+    setInputValue("");
+  }, []);
+
+  const removeTag = useCallback((tag: string) => {
+    setDraftTags((current) => current.filter((entry) => entry !== tag));
+  }, []);
+
+  const handleSave = () => {
+    if (!isDirty) return;
+    saveTags.mutate(draftTags);
+  };
+
+  const handleReset = () => {
+    setDraftTags(savedTags);
+    setInputValue("");
+    setError(null);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tags</p>
+        {isDirty ? (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Unsaved</span>
+        ) : (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">Saved</span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {draftTags.length > 0 ? (
+          draftTags.map((tag) => (
+            <span
+              key={tag}
+              className="group inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+            >
+              #{tag}
+              <button
+                type="button"
+                className="rounded-full px-1 text-[10px] text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                onClick={() => removeTag(tag)}
+                aria-label={`Remove tag ${tag}`}
+              >
+                x
+              </button>
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-slate-400">No tags yet.</span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Input
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              addTags(inputValue);
+            }
+          }}
+          placeholder="Add tags (comma separated)"
+          disabled={tagLimitReached || saveTags.isPending}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => addTags(inputValue)}
+          disabled={!inputValue.trim() || tagLimitReached || saveTags.isPending}
+        >
+          Add
+        </Button>
+      </div>
+
+      {tagLimitReached ? (
+        <p className="text-[11px] text-amber-600">
+          Tag limit reached ({MAX_DOCUMENT_TAGS} max).
+        </p>
+      ) : null}
+
+      {suggestedTags.length ? (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Suggested</p>
+          <div className="flex flex-wrap gap-1">
+            {suggestedTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                onClick={() => addTags(tag)}
+              >
+                +{tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={handleReset}
+          disabled={!isDirty || saveTags.isPending}
+        >
+          Reset
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleSave}
+          isLoading={saveTags.isPending}
+          disabled={!isDirty || saveTags.isPending}
+        >
+          Save tags
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function splitTagInput(value: string): string[] {
+  return value
+    .split(",")
+    .map((token) => normalizeTagInput(token))
+    .filter(Boolean);
+}
+
+function normalizeTagInput(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function areTagsEqual(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 /* ------------------------ Global drag & drop overlay ------------------------ */
 

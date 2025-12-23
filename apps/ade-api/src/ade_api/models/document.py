@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -142,7 +142,7 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         return [entry.tag for entry in getattr(self, "tags", [])]
 
 
-class DocumentTag(Base):
+class DocumentTag(UUIDPrimaryKeyMixin, Base):
     """Join table capturing string tags applied to documents."""
 
     __tablename__ = "document_tags"
@@ -150,9 +150,9 @@ class DocumentTag(Base):
     document_id: Mapped[UUID] = mapped_column(
         UUIDType(),
         ForeignKey("documents.id", ondelete="NO ACTION"),
-        primary_key=True,
+        nullable=False,
     )
-    tag: Mapped[str] = mapped_column(String(100), primary_key=True, nullable=False)
+    tag: Mapped[str] = mapped_column(String(100), nullable=False)
 
     document: Mapped[Document] = relationship(
         "Document",
@@ -161,8 +161,10 @@ class DocumentTag(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint("document_id", "tag"),
         Index("document_tags_document_id_idx", "document_id"),
         Index("document_tags_tag_idx", "tag"),
+        Index("document_tags_tag_document_id_idx", "tag", "document_id"),
     )
 
 
