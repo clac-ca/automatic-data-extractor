@@ -43,6 +43,12 @@ They do not affect transforms or validators, which always process all rows.
 - `detector_column_sample_size: int` — max number of values collected into `column_sample_non_empty_values` for each column detector (default `100`).
   - Can be set via env: `ADE_ENGINE_DETECTOR_COLUMN_SAMPLE_SIZE=100`
 
+## Header handling
+
+- `merge_stacked_headers: bool` — merge contiguous header rows into a single header per column (default `true`).
+  - Set to `false` to keep each header row as its own table (legacy behavior).
+  - Can be set via env: `ADE_ENGINE_MERGE_STACKED_HEADERS=false`
+
 ## File discovery
 
 - `supported_file_extensions: tuple[str, ...]` — extensions considered when scanning directories for inputs. Default `(".xlsx", ".xlsm", ".csv")`.
@@ -56,6 +62,7 @@ remove_unmapped_columns = false
 write_diagnostics_columns = false
 mapping_tie_resolution = "leftmost"
 detector_column_sample_size = 100
+merge_stacked_headers = true
 log_format = "ndjson"
 log_level = "INFO"
 max_empty_rows_run = 2000

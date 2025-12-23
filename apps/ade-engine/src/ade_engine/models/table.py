@@ -17,6 +17,7 @@ class TableRegion:
     min_col: int
     max_row: int
     max_col: int
+    header_row_count: int = 1
 
     def __post_init__(self) -> None:
         if min(self.min_row, self.min_col, self.max_row, self.max_col) < 1:
@@ -25,6 +26,10 @@ class TableRegion:
             raise ValueError("min_row must be <= max_row.")
         if self.min_col > self.max_col:
             raise ValueError("min_col must be <= max_col.")
+        if self.header_row_count < 1:
+            raise ValueError("header_row_count must be >= 1.")
+        if self.header_row_count > self.height:
+            raise ValueError("header_row_count must be <= table height.")
 
     @property
     def cell_range(self) -> CellRange:
@@ -53,11 +58,11 @@ class TableRegion:
 
     @property
     def data_first_row(self) -> int:
-        return self.min_row + 1
+        return self.min_row + self.header_row_count
 
     @property
     def data_min_row(self) -> int:
-        return min(self.min_row + 1, self.max_row)
+        return min(self.min_row + self.header_row_count, self.max_row)
 
     @property
     def has_data_rows(self) -> bool:
@@ -65,7 +70,7 @@ class TableRegion:
 
     @property
     def data_row_count(self) -> int:
-        return max(0, self.max_row - self.min_row)
+        return max(0, self.max_row - self.min_row + 1 - self.header_row_count)
 
     def iter_values(self, ws: Worksheet, *, values_only: bool = True):
         return ws.iter_rows(

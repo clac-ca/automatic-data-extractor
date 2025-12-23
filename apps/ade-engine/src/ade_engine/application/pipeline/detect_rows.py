@@ -172,7 +172,7 @@ def detect_table_regions(
     """Detect all table regions in a sheet.
 
     A table is defined as:
-    - a header row (detected or inferred),
+    - a header row (detected or inferred, or a contiguous header block when enabled),
     - followed by rows until the next header (exclusive) or end of sheet.
     """
 
@@ -198,10 +198,13 @@ def detect_table_regions(
     tables: list[TableRegion] = []
 
     header_idx: int | None = None
+    header_row_count = 0
     header_inferred_from_data = False
+    data_started = False
+    merge_stacked_headers = bool(getattr(settings, "merge_stacked_headers", True))
 
     def close_table(*, end_idx: int) -> None:
-        nonlocal header_idx, header_inferred_from_data
+        nonlocal header_idx, header_row_count, header_inferred_from_data, data_started
         if header_idx is None:
             return
         region_rows = rows[header_idx:end_idx] if 0 <= header_idx < end_idx else []
@@ -213,6 +216,7 @@ def detect_table_regions(
                 min_col=1,
                 max_row=int(end_idx),
                 max_col=max_col,
+                header_row_count=max(1, int(header_row_count)),
             ),
         )
 
@@ -220,31 +224,57 @@ def detect_table_regions(
         if header_idx is None:
             if kind == RowKind.HEADER.value:
                 header_idx = idx
+                header_row_count = 1
                 header_inferred_from_data = False
+                data_started = False
             elif kind == RowKind.DATA.value and idx > 0:
                 inferred_header = idx - 1
                 # Avoid inferring an empty header row; fall back to treating the
                 # current row as the header when the row above is empty.
                 header_idx = inferred_header if not _is_row_empty(rows[inferred_header]) else idx
+                header_row_count = 1
                 header_inferred_from_data = True
+                data_started = header_idx != idx
             continue
 
         if kind == RowKind.HEADER.value and idx > header_idx:
             if header_inferred_from_data:
                 # Upgrade to a concrete header and restart data tracking.
                 header_idx = idx
+                header_row_count = 1
                 header_inferred_from_data = False
+                data_started = False
+                continue
+
+            if not data_started and merge_stacked_headers and idx == header_idx + header_row_count:
+                header_row_count += 1
                 continue
 
             close_table(end_idx=idx)
             header_idx = idx
+            header_row_count = 1
             header_inferred_from_data = False
+            data_started = False
+            continue
+
+        if kind == RowKind.DATA.value and header_idx is not None:
+            data_started = True
 
     if header_idx is not None:
         close_table(end_idx=total_rows)
 
     if not tables:
         header_idx = _pick_best_header_row_index(rows=rows, scores=scores, classifications=classifications)
+        header_row_count = 1
+        if (
+            merge_stacked_headers
+            and 0 <= header_idx < total_rows
+            and classifications[header_idx] == RowKind.HEADER.value
+        ):
+            for idx in range(header_idx + 1, total_rows):
+                if classifications[idx] != RowKind.HEADER.value:
+                    break
+                header_row_count += 1
         region_rows = rows[header_idx:total_rows] if 0 <= header_idx < total_rows else []
         max_col = max((len(r) for r in region_rows), default=1)
         max_col = max(1, int(max_col))
@@ -254,6 +284,7 @@ def detect_table_regions(
                 min_col=1,
                 max_row=int(total_rows),
                 max_col=max_col,
+                header_row_count=max(1, int(header_row_count)),
             ),
         )
 

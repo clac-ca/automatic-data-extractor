@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     # Detector sampling policy (detection stage only)
     detector_column_sample_size: int = Field(default=100, ge=1)
 
+    # Header handling
+    merge_stacked_headers: bool = Field(default=True)
+
     # File discovery
     supported_file_extensions: tuple[str, ...] = Field(default=(".xlsx", ".xlsm", ".csv"))
 
