@@ -17,6 +17,9 @@ RunObjectType = Literal["ade.run"]
 RunLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 __all__ = [
+    "RunBatchCreateOptions",
+    "RunBatchCreateRequest",
+    "RunBatchCreateResponse",
     "RunCreateOptions",
     "RunCreateRequest",
     "RunFilters",
@@ -64,6 +67,46 @@ class RunCreateRequest(BaseSchema):
     """Payload accepted by the run creation endpoint."""
 
     options: RunCreateOptions = Field(default_factory=RunCreateOptions)
+
+
+class RunBatchCreateOptions(BaseSchema):
+    """Execution toggles for batch ADE runs (per-document input)."""
+
+    dry_run: bool = False
+    validate_only: bool = False
+    force_rebuild: bool = Field(
+        default=False,
+        description="If true, rebuild the configuration environment before running.",
+    )
+    debug: bool = Field(
+        default=False,
+        description="Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
+    )
+    log_level: RunLogLevel | None = Field(
+        default=None,
+        description="Engine log level passed as --log-level to ade_engine.",
+    )
+    metadata: dict[str, str] | None = Field(
+        default=None,
+        description="Opaque metadata to propagate with run telemetry.",
+    )
+
+
+class RunBatchCreateRequest(BaseSchema):
+    """Payload accepted by the batch run creation endpoint."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        description="Documents to enqueue as individual runs (all-or-nothing).",
+    )
+    options: RunBatchCreateOptions = Field(default_factory=RunBatchCreateOptions)
+
+
+class RunBatchCreateResponse(BaseSchema):
+    """Response envelope for batch run creation."""
+
+    runs: list["RunResource"]
 
 
 class RunLinks(BaseSchema):

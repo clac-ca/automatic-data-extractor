@@ -5,15 +5,18 @@ from __future__ import annotations
 import io
 from uuid import UUID
 
+import openpyxl
 import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
 from ade_api.common.encoding import json_dumps
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.time import utc_now
 from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.service import DocumentsService
 from ade_api.infra.storage import workspace_documents_root
-from ade_api.models import Document, User
+from ade_api.models import Document, DocumentSource, DocumentStatus, User
 from ade_api.settings import Settings
 from tests.utils import login
 
@@ -96,6 +99,43 @@ async def test_upload_document_ignores_blank_metadata(
     assert payload["metadata"] == {}
 
 
+async def test_upload_document_does_not_cache_worksheets(
+    async_client: AsyncClient,
+    seed_identity,
+    session,
+) -> None:
+    """Uploads should not persist worksheet metadata on document records."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    workbook = openpyxl.Workbook()
+    workbook.active.title = "Sheet A"
+    payload = io.BytesIO()
+    workbook.save(payload)
+    workbook.close()
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={
+            "file": (
+                "example.xlsx",
+                payload.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert upload.status_code == 201, upload.text
+    document_id = UUID(upload.json()["id"])
+    record = await session.get(Document, document_id)
+    assert record is not None
+    assert "worksheets" not in (record.attributes or {})
+
+
 async def test_upload_document_exceeds_limit_returns_413(
     async_client: AsyncClient,
     seed_identity,
@@ -119,6 +159,46 @@ async def test_upload_document_exceeds_limit_returns_413(
     )
 
     assert response.status_code == 413
+
+
+async def test_list_document_sheets_ignores_cached_metadata_when_missing(
+    async_client: AsyncClient,
+    seed_identity,
+    session,
+) -> None:
+    """Missing files should not fall back to cached worksheet metadata."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    document = Document(
+        id=generate_uuid7(),
+        workspace_id=seed_identity.workspace_id,
+        original_filename="cached.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/cached.xlsx",
+        attributes={
+            "worksheets": [
+                {"name": "Cached", "index": 0, "kind": "worksheet", "is_active": True},
+            ]
+        },
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add(document)
+    await session.commit()
+
+    listing = await async_client.get(
+        f"{workspace_base}/documents/{document.id}/sheets",
+        headers=headers,
+    )
+
+    assert listing.status_code == 404
     assert "exceeds the allowed maximum" in response.text
 
 

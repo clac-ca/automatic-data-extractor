@@ -43,7 +43,8 @@ from .exceptions import (
     RunQueueFullError,
 )
 from .schemas import (
-    RunCreateOptions,
+    RunBatchCreateRequest,
+    RunBatchCreateResponse,
     RunCreateRequest,
     RunEventsPage,
     RunFilters,
@@ -115,6 +116,45 @@ async def create_run_endpoint(
 
     resource = await service.to_resource(run)
     return resource
+
+
+@router.post(
+    "/configurations/{configuration_id}/runs/batch",
+    response_model=RunBatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Security(require_csrf)],
+)
+async def create_runs_batch_endpoint(
+    *,
+    configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
+    payload: RunBatchCreateRequest,
+    service: RunsService = runs_service_dependency,
+) -> RunBatchCreateResponse:
+    """Create multiple runs for ``configuration_id`` and enqueue execution."""
+
+    try:
+        runs = await service.prepare_runs_batch(
+            configuration_id=configuration_id,
+            document_ids=payload.document_ids,
+            options=payload.options,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunQueueFullError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": {
+                    "code": "run_queue_full",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+
+    resources = [await service.to_resource(run) for run in runs]
+    return RunBatchCreateResponse(runs=resources)
 
 
 @router.get(

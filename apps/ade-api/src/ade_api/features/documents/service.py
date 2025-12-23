@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import unicodedata
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -110,7 +110,6 @@ class DocumentsService:
             expires_at=expiration,
             last_run_at=None,
         )
-        await self._capture_worksheet_metadata(document, storage.path_for(stored_uri))
         self._session.add(document)
         await self._session.flush()
 
@@ -231,24 +230,11 @@ class DocumentsService:
         )
 
         document = await self._get_document(workspace_id, document_id)
-        cached_sheets = self._cached_worksheets(document)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
 
         exists = await run_in_threadpool(path.exists)
         if not exists:
-            if cached_sheets:
-                logger.warning(
-                    "document.sheets.cached_missing_file",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        document_id=document_id,
-                        stored_uri=document.stored_uri,
-                        cache_source="worksheets",
-                    ),
-                )
-                return cached_sheets
-
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -269,35 +255,11 @@ class DocumentsService:
                 )
                 return sheets
             except Exception as exc:  # pragma: no cover - defensive fallback
-                if cached_sheets:
-                    logger.warning(
-                        "document.sheets.cached_after_inspection_error",
-                        extra=log_context(
-                            workspace_id=workspace_id,
-                            document_id=document_id,
-                            stored_uri=document.stored_uri,
-                            reason=type(exc).__name__,
-                        ),
-                    )
-                    return cached_sheets
-
                 raise DocumentWorksheetParseError(
                     document_id=document_id,
                     stored_uri=document.stored_uri,
                     reason=type(exc).__name__,
                 ) from exc
-
-        if cached_sheets:
-            logger.info(
-                "document.sheets.list.success",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    document_id=document_id,
-                    sheet_count=len(cached_sheets),
-                    kind="cached",
-                ),
-            )
-            return cached_sheets
 
         name = self._default_sheet_name(document.original_filename)
         sheets = [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
@@ -592,47 +554,6 @@ class DocumentsService:
             return None
         candidate = content_type.strip()
         return candidate or None
-
-    def _cached_worksheets(self, document: Document) -> list[DocumentSheet] | None:
-        """Return cached worksheet metadata stored on the document, if any."""
-
-        attrs = document.attributes if isinstance(document.attributes, Mapping) else {}
-        cached = attrs.get("worksheets") if isinstance(attrs, Mapping) else None
-        if not isinstance(cached, Sequence) or isinstance(cached, (str, bytes, bytearray)):
-            return None
-
-        valid: list[DocumentSheet] = []
-        for entry in cached:
-            try:
-                valid.append(DocumentSheet.model_validate(entry))
-            except Exception:  # pragma: no cover - defensive
-                continue
-
-        return valid or None
-
-    async def _capture_worksheet_metadata(self, document: Document, path: Path) -> None:
-        """Persist worksheet descriptors on the document for later reuse."""
-
-        suffix = Path(document.original_filename).suffix.lower()
-        try:
-            if suffix == ".xlsx":
-                sheets = await run_in_threadpool(self._inspect_workbook, path)
-            else:
-                sheet_name = self._default_sheet_name(document.original_filename)
-                sheets = [DocumentSheet(name=sheet_name, index=0, kind="file", is_active=True)]
-        except Exception as exc:  # pragma: no cover - defensive fallback
-            logger.warning(
-                "document.sheets.cache_failed",
-                extra=log_context(
-                    workspace_id=document.workspace_id,
-                    document_id=document.id,
-                    stored_uri=document.stored_uri,
-                    reason=type(exc).__name__,
-                ),
-            )
-            return
-
-        document.attributes["worksheets"] = [sheet.model_dump() for sheet in sheets]
 
     def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
