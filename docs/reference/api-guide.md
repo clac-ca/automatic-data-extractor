@@ -55,10 +55,10 @@ will receive `403 Forbidden`.
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
 - `GET /workspaces/{workspace_id}/documents` – list documents with pagination, sorting, and filters.
-- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration).
+- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand).
 - `GET /workspaces/{workspace_id}/documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
 - `GET /workspaces/{workspace_id}/documents/{document_id}/download` – download the stored file with a safe `Content-Disposition` header.
-- `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads (falls back to a single-sheet descriptor for other file types).
+- `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspace_id}/documents/{document_id}` – remove a document, if permitted.
 
 ### Runs
@@ -66,6 +66,7 @@ Upload source files for extraction. All document routes are nested under the wor
 Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
 - `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; requires `input_document_id` and supports inline streaming or background execution depending on `stream` (returns `429` with `run_queue_full` when the queue is full).
+- `POST /configurations/{configuration_id}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection; returns `429` with `run_queue_full` when the full batch does not fit).
 - `GET /workspaces/{workspace_id}/runs` – list recent runs for a workspace, filterable by status or source document.
 - `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
 - `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).

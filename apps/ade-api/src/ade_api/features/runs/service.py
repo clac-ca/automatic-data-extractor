@@ -70,6 +70,7 @@ from .exceptions import (
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
 from .schemas import (
+    RunBatchCreateOptions,
     RunCreateOptions,
     RunInput,
     RunLinks,
@@ -295,6 +296,106 @@ class RunsService:
         )
         return run
 
+    async def prepare_runs_batch(
+        self,
+        *,
+        configuration_id: UUID,
+        document_ids: Sequence[UUID],
+        options: RunBatchCreateOptions,
+    ) -> list[Run]:
+        """Create queued runs for each document id, enforcing all-or-nothing semantics."""
+
+        logger.debug(
+            "run.prepare.batch.start",
+            extra=log_context(
+                configuration_id=configuration_id,
+                document_count=len(document_ids),
+                validate_only=options.validate_only,
+                dry_run=options.dry_run,
+                force_rebuild=options.force_rebuild,
+            ),
+        )
+
+        if not document_ids:
+            return []
+
+        configuration = await self._resolve_configuration(configuration_id)
+        await self._require_documents(
+            workspace_id=configuration.workspace_id,
+            document_ids=document_ids,
+        )
+
+        run_ids = [self._generate_run_id() for _ in document_ids]
+
+        build, _ = await self._builds_service.ensure_build_for_run(
+            workspace_id=configuration.workspace_id,
+            configuration_id=configuration.id,
+            force_rebuild=options.force_rebuild,
+            run_id=run_ids[0],
+            reason="on_demand",
+        )
+        if build.status is not BuildStatus.READY:
+            await self._builds_service.launch_build_if_needed(
+                build=build,
+                reason="run_requested",
+                run_id=run_ids[0],
+            )
+
+        await self._enforce_queue_capacity(requested=len(document_ids))
+
+        runs: list[Run] = []
+        for run_id, document_id in zip(run_ids, document_ids):
+            run = Run(
+                id=run_id,
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                status=RunStatus.QUEUED,
+                trace_id=str(run_id),
+                input_document_id=document_id,
+                input_sheet_names=None,
+                build_id=build.id,
+            )
+            self._session.add(run)
+            runs.append(run)
+
+        configuration.last_used_at = utc_now()  # type: ignore[attr-defined]
+
+        await self._session.flush()
+        await self._session.commit()
+
+        for run, document_id in zip(runs, document_ids):
+            await self._session.refresh(run)
+            run_options = RunCreateOptions(
+                dry_run=options.dry_run,
+                validate_only=options.validate_only,
+                force_rebuild=options.force_rebuild,
+                debug=options.debug,
+                log_level=options.log_level,
+                input_document_id=document_id,
+                input_sheet_names=None,
+                metadata=options.metadata,
+            )
+            mode_literal = "validate" if options.validate_only else "execute"
+            await self._emit_api_event(
+                run=run,
+                type_="run.queued",
+                payload={
+                    "status": "queued",
+                    "mode": mode_literal,
+                    "options": run_options.model_dump(exclude_none=True),
+                },
+            )
+
+        logger.info(
+            "run.prepare.batch.success",
+            extra=log_context(
+                workspace_id=configuration.workspace_id,
+                configuration_id=configuration.id,
+                count=len(runs),
+            ),
+        )
+        return runs
+
     async def load_run_options(self, run: Run) -> RunCreateOptions:
         """Rehydrate run options from the persisted run.queued event."""
 
@@ -400,12 +501,12 @@ class RunsService:
     async def expire_stuck_builds(self) -> int:
         return await self._builds_service.expire_stuck_builds()
 
-    async def _enforce_queue_capacity(self) -> None:
+    async def _enforce_queue_capacity(self, *, requested: int = 1) -> None:
         limit = self._settings.queue_size
-        if not limit:
+        if not limit or requested <= 0:
             return
         queued = await self._runs.count_queued()
-        if queued >= limit:
+        if queued + requested > limit:
             raise RunQueueFullError(f"Run queue is full (limit {limit})")
 
     async def _claim_run(self, run_id: UUID) -> bool:
@@ -1920,6 +2021,36 @@ class RunsService:
             )
             raise RunDocumentMissingError(f"Document {document_id} not found")
         return document
+
+    async def _require_documents(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+    ) -> list[Document]:
+        if not document_ids:
+            return []
+
+        stmt = select(Document).where(
+            Document.workspace_id == workspace_id,
+            Document.deleted_at.is_(None),
+            Document.id.in_(document_ids),
+        )
+        result = await self._session.execute(stmt)
+        documents = list(result.scalars())
+        found = {doc.id for doc in documents}
+        missing = [document_id for document_id in document_ids if document_id not in found]
+        if missing:
+            logger.warning(
+                "run.require_documents.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=str(missing[0]),
+                    missing_count=len(missing),
+                ),
+            )
+            raise RunDocumentMissingError(f"Document {missing[0]} not found")
+        return documents
 
     def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)

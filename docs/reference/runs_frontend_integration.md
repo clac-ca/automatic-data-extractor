@@ -11,6 +11,8 @@ The documents screen already references "runs" in copy and state but still
 relies on the legacy runs endpoints. Key touchpoints:
 
 - `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
+  - Uploads now use an XHR-backed queue (progress, cancel, retry) and support an optional "Run on upload" toggle that queues runs after each successful upload.
+  - Bulk "Run selected" actions now call `POST /api/v1/configurations/{configuration_id}/runs/batch` and skip sheet selection.
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
     keys and displays the "Run" button per document. Update the request
     handlers to call `POST /api/v1/configurations/{configuration_id}/runs` and stream

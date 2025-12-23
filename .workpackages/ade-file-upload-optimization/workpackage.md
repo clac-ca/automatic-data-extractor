@@ -26,15 +26,15 @@ There is only one durable queue: the run queue (`RunWorkerPool`).
 ## Work Package Checklist
 
 * [x] Finalize Pass 1 design decisions (on-demand sheets, no sheet persistence, run-on-upload UX)
-* [ ] Backend: remove upload-time sheet caching (stop writing `documents.attributes["worksheets"]`)
-* [ ] Backend: ensure `/documents/{id}/sheets` inspects the stored file only (no cached fallback)
-* [ ] Frontend: implement XHR upload queue (progress, cancel, retry, concurrency=3)
-* [ ] Frontend: integrate upload queue into Documents page (does not block browsing)
-* [ ] Frontend: add “Run on upload” toggle + config selector + per-file run enqueue status
-* [ ] Backend: add batch run endpoint `POST /configurations/{configuration_id}/runs/batch` (all-or-nothing, no sheet selection)
-* [ ] Frontend: update Documents bulk run action to use batch endpoint (no sheet selection)
-* [ ] Tests: backend coverage for “upload is fast ingest” + `/sheets`; frontend queue state tests
-* [ ] Docs: update docs/notes for new upload UX and “run on upload”
+* [x] Backend: remove upload-time sheet caching (stop writing `documents.attributes["worksheets"]`) — removed worksheet caching from document create flow
+* [x] Backend: ensure `/documents/{id}/sheets` inspects the stored file only (no cached fallback) — dropped cached fallback paths
+* [x] Frontend: implement XHR upload queue (progress, cancel, retry, concurrency=3) — added XHR helper + concurrency queue
+* [x] Frontend: integrate upload queue into Documents page (does not block browsing) — new Upload Queue panel + non-blocking UI
+* [x] Frontend: add “Run on upload” toggle + config selector + per-file run enqueue status — toggle + per-file run status in queue
+* [x] Backend: add batch run endpoint `POST /configurations/{configuration_id}/runs/batch` (all-or-nothing, no sheet selection) — new schemas/service/router endpoint
+* [x] Frontend: update Documents bulk run action to use batch endpoint (no sheet selection) — batch run dialog wired to new endpoint
+* [x] Tests: backend coverage for “upload is fast ingest” + `/sheets`; frontend queue state tests — new integration + queue hook tests
+* [x] Docs: update docs/notes for new upload UX and “run on upload” — updated API guide + frontend notes
 
 > **Agent note:**
 > Keep brief status notes inline, for example:

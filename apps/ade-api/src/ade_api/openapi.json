@@ -6339,6 +6339,89 @@
         ]
       }
     },
+    "/api/v1/configurations/{configuration_id}/runs/batch": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Runs Batch Endpoint",
+        "description": "Create multiple runs for ``configuration_id`` and enqueue execution.",
+        "operationId": "create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post",
+        "parameters": [
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunBatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunBatchCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/runs": {
       "get": {
         "tags": [
@@ -9714,6 +9797,112 @@
         "type": "object",
         "title": "RoleUpdate",
         "description": "Payload for updating an existing role."
+      },
+      "RunBatchCreateOptions": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "validate_only": {
+            "type": "boolean",
+            "title": "Validate Only",
+            "default": false
+          },
+          "force_rebuild": {
+            "type": "boolean",
+            "title": "Force Rebuild",
+            "description": "If true, rebuild the configuration environment before running.",
+            "default": false
+          },
+          "debug": {
+            "type": "boolean",
+            "title": "Debug",
+            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
+            "default": false
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Opaque metadata to propagate with run telemetry."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunBatchCreateOptions",
+        "description": "Execution toggles for batch ADE runs (per-document input)."
+      },
+      "RunBatchCreateRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to enqueue as individual runs (all-or-nothing)."
+          },
+          "options": {
+            "$ref": "#/components/schemas/RunBatchCreateOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "RunBatchCreateRequest",
+        "description": "Payload accepted by the batch run creation endpoint."
+      },
+      "RunBatchCreateResponse": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunResource"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "RunBatchCreateResponse",
+        "description": "Response envelope for batch run creation."
       },
       "RunCreateOptions": {
         "properties": {
