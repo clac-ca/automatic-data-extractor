@@ -46,8 +46,8 @@ class RunCreateOptions(BaseSchema):
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
     )
-    input_document_id: UUIDStr | None = Field(
-        default=None,
+    input_document_id: UUIDStr = Field(
+        ...,
         description="Document identifier to ingest.",
     )
     input_sheet_names: list[str] | None = Field(
@@ -114,7 +114,7 @@ class RunResource(BaseSchema):
     object: RunObjectType = Field(default="ade.run", alias="object")
     workspace_id: UUIDStr
     configuration_id: UUIDStr
-    build_id: UUIDStr | None = None
+    build_id: UUIDStr
 
     status: RunStatus
     failure_code: str | None = None

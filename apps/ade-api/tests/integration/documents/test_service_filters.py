@@ -9,6 +9,8 @@ from ade_api.features.documents.filters import DocumentFilters
 from ade_api.features.documents.service import DocumentsService
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 from ade_api.models import (
+    Build,
+    BuildStatus,
     Configuration,
     ConfigurationStatus,
     Document,
@@ -202,14 +204,23 @@ async def test_list_documents_includes_last_run_summary(session, settings) -> No
 
     now = datetime.now(tz=UTC)
     configuration_id = await _ensure_configuration(session, workspace.id)
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration_id,
+        fingerprint="fingerprint",
+        status=BuildStatus.READY,
+        created_at=now - timedelta(minutes=15),
+    )
+    session.add(build)
+    await session.flush()
     run = Run(
         id=generate_uuid7(),
         workspace_id=workspace.id,
         configuration_id=configuration_id,
+        build_id=build.id,
         submitted_by_user_id=uploader.id,
         status=RunStatus.FAILED,
-        attempt=1,
-        retry_of_run_id=None,
         input_document_id=processed.id,
         trace_id=None,
         artifact_uri=None,

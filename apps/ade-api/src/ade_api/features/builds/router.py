@@ -28,7 +28,7 @@ from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import BuildStatus
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
-from .exceptions import BuildAlreadyInProgressError, BuildNotFoundError
+from .exceptions import BuildNotFoundError
 from .schemas import (
     BuildCreateRequest,
     BuildEventsPage,
@@ -139,8 +139,6 @@ async def create_build_endpoint(
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except BuildAlreadyInProgressError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     resource = service.to_resource(build)
     background_tasks.add_task(

@@ -49,6 +49,7 @@ const sampleRunResource = {
   object: "ade.run",
   workspace_id: "ws-1",
   configuration_id: "config-123",
+  build_id: "build-123",
   status: "queued",
   created_at: "2025-01-01T00:00:00Z",
   links: {
@@ -134,7 +135,7 @@ describe("streamRun", () => {
     } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    const stream = streamRun("config-123", { dry_run: true });
+    const stream = streamRun("config-123", { dry_run: true, input_document_id: "doc-123" });
     const consume = (async () => {
       for await (const event of stream) {
         events.push(event);
@@ -161,6 +162,7 @@ describe("streamRun", () => {
           force_rebuild: false,
           debug: false,
           log_level: "INFO",
+          input_document_id: "doc-123",
         },
       },
       signal: undefined,
@@ -177,7 +179,9 @@ describe("streamRun", () => {
     } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    await expect(streamRun("config-123").next()).rejects.toThrow("Expected run creation response.");
+    await expect(streamRun("config-123", { input_document_id: "doc-123" }).next()).rejects.toThrow(
+      "Expected run creation response.",
+    );
   });
 });
 

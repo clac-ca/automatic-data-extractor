@@ -9758,16 +9758,8 @@
             "description": "Engine log level passed as --log-level to ade_engine."
           },
           "input_document_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "uuid",
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
           },
@@ -9804,6 +9796,9 @@
         },
         "additionalProperties": false,
         "type": "object",
+        "required": [
+          "input_document_id"
+        ],
         "title": "RunCreateOptions",
         "description": "Optional execution toggles for ADE runs."
       },
@@ -10169,17 +10164,10 @@
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "build_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Build Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -10361,6 +10349,7 @@
           "id",
           "workspace_id",
           "configuration_id",
+          "build_id",
           "status",
           "created_at",
           "links"
@@ -10372,7 +10361,6 @@
         "type": "string",
         "enum": [
           "queued",
-          "waiting_for_build",
           "running",
           "succeeded",
           "failed",

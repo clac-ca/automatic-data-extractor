@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, desc, select
+from sqlalchemy import Select, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.pagination import Page, paginate_sql
-from ade_api.models import Run, RunStatus
+from ade_api.models import Build, BuildStatus, Run, RunStatus
 
 __all__ = ["RunsRepository"]
 
@@ -54,3 +54,32 @@ class RunsRepository:
             include_total=include_total,
             order_by=[desc(Run.created_at)],
         )
+
+    async def count_queued(self) -> int:
+        stmt = select(func.count()).select_from(Run).where(Run.status == RunStatus.QUEUED)
+        result = await self._session.execute(stmt)
+        return int(result.scalar_one())
+
+    async def next_queued_with_terminal_build(self) -> tuple[Run, BuildStatus] | None:
+        stmt = (
+            select(Run, Build.status)
+            .join(Build, Run.build_id == Build.id)
+            .where(
+                Run.status == RunStatus.QUEUED,
+                Build.status.in_(
+                    [
+                        BuildStatus.READY,
+                        BuildStatus.FAILED,
+                        BuildStatus.CANCELLED,
+                    ]
+                ),
+            )
+            .order_by(Run.created_at.asc())
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        row = result.first()
+        if row is None:
+            return None
+        run, build_status = row
+        return run, BuildStatus(build_status)

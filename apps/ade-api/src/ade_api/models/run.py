@@ -20,7 +20,6 @@ class RunStatus(str, Enum):
     """Lifecycle states for ADE runs."""
 
     QUEUED = "queued"
-    WAITING_FOR_BUILD = "waiting_for_build"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
@@ -39,11 +38,11 @@ class Run(Base):
     workspace_id: Mapped[UUID] = mapped_column(
         UUIDType(), ForeignKey("workspaces.id", ondelete="NO ACTION"), nullable=False
     )
-    build_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=True
+    build_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("builds.id", ondelete="NO ACTION"), nullable=False
     )
-    input_document_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=True
+    input_document_id: Mapped[UUID] = mapped_column(
+        UUIDType(), ForeignKey("documents.id", ondelete="NO ACTION"), nullable=False
     )
     input_sheet_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
 
@@ -60,12 +59,6 @@ class Run(Base):
         server_default=RunStatus.QUEUED.value,
     )
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
-    retry_of_run_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(),
-        ForeignKey("runs.id", ondelete="NO ACTION"),
-        nullable=True,
-    )
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     submitted_by_user_id: Mapped[UUID | None] = mapped_column(
         UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
@@ -97,7 +90,6 @@ class Run(Base):
             "started_at",
         ),
         Index("ix_runs_workspace_created", "workspace_id", "created_at"),
-        Index("ix_runs_retry_of", "retry_of_run_id"),
         Index("ix_runs_build", "build_id"),
     )
 

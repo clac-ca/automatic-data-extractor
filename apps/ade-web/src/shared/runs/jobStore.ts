@@ -35,7 +35,6 @@ export interface RunJobState {
 export type RunStatus =
   | "idle"
   | "queued"
-  | "waiting_for_build"
   | "building"
   | "running"
   | "succeeded"
@@ -79,7 +78,6 @@ function updateRun(runId: string, updater: (prev: RunJobState | undefined) => Ru
 
 function normalizeRunStatus(value: unknown): RunStatus {
   if (value === "queued") return "queued";
-  if (value === "waiting_for_build") return "waiting_for_build";
   if (value === "building") return "building";
   if (value === "running") return "running";
   if (value === "succeeded") return "succeeded";
@@ -112,8 +110,6 @@ function reduceStatus(current: RunStatus, event: RunStreamEvent): RunStatus {
   switch (type) {
     case "run.queued":
       return "queued";
-    case "run.waiting_for_build":
-      return "waiting_for_build";
     case "build.start":
     case "build.started":
       return "building";

@@ -13,6 +13,8 @@ from fastapi.routing import Lifespan
 from ade_api.db.engine import ensure_database_ready
 from ade_api.db.session import get_sessionmaker
 from ade_api.features.rbac import RbacService
+from ade_api.features.runs.event_stream import get_run_event_streams
+from ade_api.features.runs.worker_pool import RunWorkerPool
 from ade_api.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -120,7 +122,16 @@ def create_application_lifespan(
             except Exception:
                 await session.rollback()
                 logger.warning("rbac.registry.sync.failed", exc_info=True)
+
+        run_workers = RunWorkerPool(
+            settings=settings,
+            session_factory=session_factory,
+            event_streams=get_run_event_streams(),
+        )
+        await run_workers.start()
+        app.state.run_workers = run_workers
         yield
+        await run_workers.stop()
 
     return lifespan
 

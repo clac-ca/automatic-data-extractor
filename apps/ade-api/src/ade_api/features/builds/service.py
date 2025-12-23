@@ -10,12 +10,14 @@ import sys
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.events import (
@@ -55,12 +57,7 @@ from .builder import (
     BuilderStepEvent,
     VirtualEnvironmentBuilder,
 )
-from .exceptions import (
-    BuildAlreadyInProgressError,
-    BuildExecutionError,
-    BuildNotFoundError,
-    BuildWorkspaceMismatchError,
-)
+from .exceptions import BuildExecutionError, BuildNotFoundError, BuildWorkspaceMismatchError
 from .repository import BuildsRepository
 from .schemas import BuildCreateOptions, BuildLinks, BuildResource
 
@@ -170,9 +167,6 @@ class BuildExecutionContext:
 class BuildsService:
     """Coordinate build persistence, execution, and serialization."""
 
-    # Shared across service instances to avoid duplicate build runners.
-    _global_build_tasks: dict[UUID, asyncio.Task] = {}
-
     def __init__(
         self,
         *,
@@ -191,8 +185,6 @@ class BuildsService:
         self._builds = BuildsRepository(session)
         self._now = now
         self._hydration_locks: dict[tuple[UUID, UUID, UUID], asyncio.Lock] = {}
-        # Process-wide registry to avoid duplicate runners across service instances.
-        self._build_tasks = self._global_build_tasks
         self._event_streams = event_streams or RunEventStreamRegistry()
 
     # ------------------------------------------------------------------
@@ -294,17 +286,13 @@ class BuildsService:
         context: BuildExecutionContext,
         options: BuildCreateOptions,
     ) -> AsyncIterator[EventRecord]:
-        timeout_seconds = context.timeout_seconds or float(
-            self._settings.build_timeout.total_seconds()
-        )
-        decision = context.decision
+        timeout_seconds = context.timeout_seconds or float(self._settings.build_timeout)
         logger.debug(
             "build.stream.start",
             extra=log_context(
                 workspace_id=context.workspace_id,
                 configuration_id=context.configuration_id,
                 build_id=context.build_id,
-                decision=decision.value,
                 force=options.force,
             ),
         )
@@ -318,7 +306,7 @@ class BuildsService:
                 queued_event = await self._ensure_build_queued_event(
                     build=build,
                     reason=reason,
-                    should_build=decision is BuildDecision.START_NEW,
+                    should_build=build.status is BuildStatus.QUEUED,
                     engine_spec=context.engine_spec,
                     engine_version_hint=context.engine_version_hint,
                     python_bin=context.python_bin,
@@ -327,7 +315,7 @@ class BuildsService:
                 if queued_event:
                     yield queued_event
 
-                if decision is BuildDecision.REUSE_READY:
+                if build.status is BuildStatus.READY:
                     logger.info(
                         "build.stream.reuse_short_circuit",
                         extra=log_context(
@@ -352,7 +340,24 @@ class BuildsService:
                         run_id=context.run_id,
                     )
                     return
-                if decision is BuildDecision.JOIN_INFLIGHT:
+                if build.status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
+                    yield await self._emit_event(
+                        build=build,
+                        type_="build.complete",
+                        payload=self._build_completed_payload(
+                            build=build,
+                            reason="build_terminal",
+                            should_build=False,
+                            reuse_summary=summary,
+                            engine_spec=context.engine_spec,
+                            engine_version_hint=context.engine_version_hint,
+                            python_bin=context.python_bin,
+                        ),
+                        run_id=context.run_id,
+                    )
+                    return
+
+                if build.status is BuildStatus.BUILDING:
                     logger.info(
                         "build.stream.join_inflight",
                         extra=log_context(
@@ -369,7 +374,38 @@ class BuildsService:
                         yield event
                     return
 
-                build = await self._transition_status(build, BuildStatus.BUILDING)
+                claimed = await self._claim_build(build.id)
+                if not claimed:
+                    refreshed = await self._require_build(build.id)
+                    if refreshed.status in (
+                        BuildStatus.READY,
+                        BuildStatus.FAILED,
+                        BuildStatus.CANCELLED,
+                    ):
+                        yield await self._emit_event(
+                            build=refreshed,
+                            type_="build.complete",
+                            payload=self._build_completed_payload(
+                                build=refreshed,
+                                reason="build_terminal",
+                                should_build=False,
+                                reuse_summary=summary,
+                                engine_spec=context.engine_spec,
+                                engine_version_hint=context.engine_version_hint,
+                                python_bin=context.python_bin,
+                            ),
+                            run_id=context.run_id,
+                        )
+                        return
+                    async for event in self.stream_build_events(
+                        build=refreshed,
+                        start_sequence=queued_event.get("sequence") if queued_event else None,
+                        timeout_seconds=timeout_seconds,
+                    ):
+                        yield event
+                    return
+
+                build = await self._require_build(build.id)
                 logger.info(
                     "build.stream.started",
                     extra=log_context(
@@ -704,8 +740,8 @@ class BuildsService:
                     Path(self._settings.pip_cache_dir) if self._settings.pip_cache_dir else None
                 ),
                 python_bin=build.python_interpreter or self._resolve_python_interpreter(),
-                timeout=float(self._settings.build_timeout.total_seconds()),
-                fingerprint=build.fingerprint or "",
+                timeout=float(self._settings.build_timeout),
+                fingerprint=build.fingerprint,
             )
 
             logger.info(
@@ -802,19 +838,14 @@ class BuildsService:
         reason: str | None = None,
         run_id: UUID | None = None,
     ) -> None:
-        """Start asynchronous execution for a queued/building build if not already running.
+        """Start asynchronous execution for a queued build if not already running.
 
         This decouples build execution from request background tasks and allows
         queued builds to self-start when referenced (e.g., by runs or SSE consumers).
         """
 
-        if build.status in (BuildStatus.READY, BuildStatus.FAILED, BuildStatus.CANCELLED):
+        if build.status is not BuildStatus.QUEUED:
             return
-
-        if build.id in self._build_tasks:
-            task = self._build_tasks.get(build.id)
-            if task and not task.done():
-                return
 
         async def _run_detached() -> None:
             from ade_api.db.session import get_sessionmaker
@@ -829,11 +860,7 @@ class BuildsService:
                     event_streams=self._event_streams,
                 )
                 detached_build = await detached_service._require_build(build.id)
-                if detached_build.status in (
-                    BuildStatus.READY,
-                    BuildStatus.FAILED,
-                    BuildStatus.CANCELLED,
-                ):
+                if detached_build.status is not BuildStatus.QUEUED:
                     return
                 ctx = await detached_service._context_for_existing_build(
                     build=detached_build,
@@ -843,8 +870,7 @@ class BuildsService:
                 opts = BuildCreateOptions(force=False, wait=True)
                 await detached_service.run_to_completion(context=ctx, options=opts)
 
-        task = asyncio.create_task(_run_detached())
-        self._build_tasks[build.id] = task
+        asyncio.create_task(_run_detached())
 
     def _build_event_context(
         self,
@@ -1092,7 +1118,7 @@ class BuildsService:
             pip_cache_dir=str(self._settings.pip_cache_dir)
             if self._settings.pip_cache_dir
             else None,
-            timeout_seconds=float(self._settings.build_timeout.total_seconds()),
+            timeout_seconds=float(self._settings.build_timeout),
             decision=BuildDecision.START_NEW
             if build.status is BuildStatus.QUEUED
             else BuildDecision.JOIN_INFLIGHT,
@@ -1111,87 +1137,88 @@ class BuildsService:
         allow_inflight: bool,
         reason: str | None,
     ) -> _BuildResolution:
-        # 1) Fast path: reuse ready build with matching fingerprint unless forced.
-        if not options.force:
-            ready_build = await self._find_ready_build_match(
-                configuration=configuration,
-                fingerprint=spec.fingerprint,
-            )
-            if ready_build:
-                await self._sync_active_pointer(configuration, ready_build, spec.fingerprint)
-                return _BuildResolution(
-                    build=ready_build,
-                    decision=BuildDecision.REUSE_READY,
-                    spec=spec,
-                    reason=reason,
-                    reuse_summary="Reused existing build",
-                )
-
-        # 2) If a matching inflight build exists, either join it or claim it.
-        inflight = await self._builds.get_inflight_by_fingerprint(
-            configuration_id=configuration.id,
-            fingerprint=spec.fingerprint,
-        )
-        if inflight and self._is_stale(inflight):
-            await self._fail_stale_build(inflight)
-            inflight = None
-        if inflight:
-            decision = (
-                BuildDecision.START_NEW
-                if inflight.status is BuildStatus.QUEUED
-                else BuildDecision.JOIN_INFLIGHT
-            )
-            if not allow_inflight and decision is BuildDecision.JOIN_INFLIGHT:
-                raise BuildAlreadyInProgressError(
-                    "Build in progress for "
-                    f"workspace={spec.workspace_id} configuration={configuration.id}"
-                )
-            return _BuildResolution(
-                build=inflight,
-                decision=decision,
-                spec=spec,
-                reason=reason,
-                reuse_summary=(
-                    "Joined inflight build" if decision is BuildDecision.JOIN_INFLIGHT else None
-                ),
-            )
-
-        # 3) If another inflight build exists with a different fingerprint, block unless allowed.
-        inflight_other = await self._builds.get_latest_inflight(configuration_id=configuration.id)
-        if inflight_other and self._is_stale(inflight_other):
-            await self._fail_stale_build(inflight_other)
-            inflight_other = None
-        if inflight_other and inflight_other.fingerprint != spec.fingerprint:
-            if not allow_inflight:
-                raise BuildAlreadyInProgressError(
-                    "Build in progress for "
-                    f"workspace={spec.workspace_id} configuration={configuration.id}"
-                )
-            # Otherwise join the existing inflight build rather than spawning another.
-            return _BuildResolution(
-                build=inflight_other,
-                decision=(
-                    BuildDecision.START_NEW
-                    if inflight_other.status is BuildStatus.QUEUED
-                    else BuildDecision.JOIN_INFLIGHT
-                ),
-                spec=spec,
-                reason=reason,
-                reuse_summary="Joined inflight build",
-            )
-
-        # 4) Otherwise create a fresh build record.
-        build = await self._create_build(
+        _ = allow_inflight
+        build, _created = await self._get_or_create_build(
             configuration=configuration,
             spec=spec,
             reason=reason,
         )
+
+        configuration.content_digest = spec.config_digest
+        await self._session.flush()
+
+        if build.status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
+            build = await self._reset_build(build)
+
+        if options.force and build.status is BuildStatus.READY:
+            build = await self._reset_build(build)
+
+        if build.status is BuildStatus.READY and not options.force:
+            await self._sync_active_pointer(configuration, build, spec.fingerprint)
+            return _BuildResolution(
+                build=build,
+                decision=BuildDecision.REUSE_READY,
+                spec=spec,
+                reason=reason,
+                reuse_summary="Reused existing build",
+            )
+
+        decision = (
+            BuildDecision.JOIN_INFLIGHT
+            if build.status is BuildStatus.BUILDING
+            else BuildDecision.START_NEW
+        )
+
         return _BuildResolution(
             build=build,
-            decision=BuildDecision.START_NEW,
+            decision=decision,
             spec=spec,
             reason=reason,
+            reuse_summary=None,
         )
+
+    async def _get_or_create_build(
+        self,
+        *,
+        configuration: Configuration,
+        spec: BuildSpec,
+        reason: str | None,
+    ) -> tuple[Build, bool]:
+        existing = await self._builds.get_by_fingerprint(
+            configuration_id=configuration.id,
+            fingerprint=spec.fingerprint,
+        )
+        if existing:
+            return existing, False
+
+        try:
+            build = await self._create_build(
+                configuration=configuration,
+                spec=spec,
+                reason=reason,
+            )
+        except IntegrityError:
+            await self._session.rollback()
+            fallback = await self._builds.get_by_fingerprint(
+                configuration_id=configuration.id,
+                fingerprint=spec.fingerprint,
+            )
+            if fallback is None:
+                raise
+            return fallback, False
+
+        return build, True
+
+    async def _reset_build(self, build: Build) -> Build:
+        build.status = BuildStatus.QUEUED
+        build.started_at = None
+        build.finished_at = None
+        build.exit_code = None
+        build.error_message = None
+        build.summary = None
+        await self._session.commit()
+        await self._session.refresh(build)
+        return build
 
     async def stream_build_events(
         self,
@@ -1349,6 +1376,16 @@ class BuildsService:
         )
         return build
 
+    async def _claim_build(self, build_id: UUID) -> bool:
+        stmt = (
+            update(Build)
+            .where(Build.id == build_id, Build.status == BuildStatus.QUEUED)
+            .values(status=BuildStatus.BUILDING, started_at=self._now())
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        return bool(result.rowcount)
+
     async def _handle_failure(
         self,
         *,
@@ -1486,7 +1523,7 @@ class BuildsService:
             pip_cache_dir=str(self._settings.pip_cache_dir)
             if self._settings.pip_cache_dir
             else None,
-            timeout_seconds=float(self._settings.build_timeout.total_seconds()),
+            timeout_seconds=float(self._settings.build_timeout),
             decision=resolution.decision,
             fingerprint=spec.fingerprint,
             reason=resolution.reason,
@@ -1528,15 +1565,18 @@ class BuildsService:
 
     def _is_stale(self, build: Build) -> bool:
         """Return True if a build has exceeded the configured timeout window."""
-
-        horizon = normalize_utc(self._now()) - self._settings.build_timeout
-        started_or_created = normalize_utc(build.started_at or build.created_at)
-        return started_or_created < horizon if started_or_created else False
+        if build.status is not BuildStatus.BUILDING:
+            return False
+        if build.started_at is None:
+            return False
+        horizon = normalize_utc(self._now()) - timedelta(seconds=self._settings.build_timeout)
+        started_at = normalize_utc(build.started_at)
+        return started_at < horizon if started_at else False
 
     async def _fail_stale_build(
         self, build: Build, *, reason: str = "Stale build timed out"
     ) -> None:
-        if build.status not in (BuildStatus.QUEUED, BuildStatus.BUILDING):
+        if build.status is not BuildStatus.BUILDING:
             return
         if not self._is_stale(build):
             return
@@ -1554,6 +1594,32 @@ class BuildsService:
                 reason=reason,
             ),
         )
+
+    async def expire_stuck_builds(self) -> int:
+        horizon = normalize_utc(self._now()) - timedelta(seconds=self._settings.build_timeout)
+        stmt = (
+            update(Build)
+            .where(
+                Build.status == BuildStatus.BUILDING,
+                Build.started_at.is_not(None),
+                Build.started_at < horizon,
+            )
+            .values(
+                status=BuildStatus.FAILED,
+                finished_at=self._now(),
+                exit_code=1,
+                error_message=f"Build timed out after {self._settings.build_timeout}s",
+            )
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        count = int(result.rowcount or 0)
+        if count:
+            logger.warning(
+                "build.stuck.expired",
+                extra=log_context(count=count, timeout_seconds=self._settings.build_timeout),
+            )
+        return count
 
     def _epoch_seconds(self, dt: datetime | None) -> int | None:
         if dt is None:

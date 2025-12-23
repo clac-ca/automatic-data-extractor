@@ -21,7 +21,6 @@ from ade_api.features.builds.builder import (
     BuilderStepEvent,
     BuildStep,
 )
-from ade_api.features.builds.exceptions import BuildAlreadyInProgressError
 from ade_api.features.builds.schemas import BuildCreateOptions
 from ade_api.features.builds.service import BuildDecision, BuildsService
 from ade_api.features.configs.storage import ConfigStorage
@@ -229,16 +228,18 @@ async def test_is_stale_handles_naive_datetimes(
         id=generate_uuid7(),
         workspace_id=workspace.id,
         configuration_id=configuration.id,
-        status=BuildStatus.QUEUED,
-        created_at=(fixed_now - timeout - timedelta(seconds=1)).replace(tzinfo=None),
+        status=BuildStatus.BUILDING,
+        fingerprint="fingerprint",
+        created_at=fixed_now,
+        started_at=(fixed_now - timedelta(seconds=timeout + 1)).replace(tzinfo=None),
     )
     assert service._is_stale(build) is True
 
-    build.created_at = (fixed_now - timeout + timedelta(seconds=1)).replace(tzinfo=None)
+    build.started_at = (fixed_now - timedelta(seconds=timeout - 1)).replace(tzinfo=None)
     assert service._is_stale(build) is False
 
-    build.started_at = (fixed_now - timeout - timedelta(seconds=1)).replace(tzinfo=None)
-    assert service._is_stale(build) is True
+    build.status = BuildStatus.QUEUED
+    assert service._is_stale(build) is False
 
 
 @pytest.mark.asyncio()
@@ -347,12 +348,13 @@ async def test_prepare_build_blocks_matching_inflight_when_disallowed(
     session.add(inflight)
     await session.commit()
 
-    with pytest.raises(BuildAlreadyInProgressError):
-        await service.prepare_build(
-            workspace_id=workspace.id,
-            configuration_id=configuration.id,
-            options=BuildCreateOptions(force=False, wait=False),
-        )
+    build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        options=BuildCreateOptions(force=False, wait=False),
+    )
+    assert build.id == inflight.id
+    assert context.decision is BuildDecision.JOIN_INFLIGHT
 
 
 @pytest.mark.asyncio()
@@ -411,12 +413,13 @@ async def test_prepare_build_blocks_other_inflight_when_disallowed(
     session.add(other_inflight)
     await session.commit()
 
-    with pytest.raises(BuildAlreadyInProgressError):
-        await service.prepare_build(
-            workspace_id=workspace.id,
-            configuration_id=configuration.id,
-            options=BuildCreateOptions(force=False, wait=False),
-        )
+    build, context = await service.prepare_build(
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        options=BuildCreateOptions(force=False, wait=False),
+    )
+    assert build.id != other_inflight.id
+    assert context.decision is BuildDecision.START_NEW
 
 
 @pytest.mark.asyncio()
@@ -447,8 +450,8 @@ async def test_prepare_build_conflicting_inflight_can_be_joined_when_allowed(
         allow_inflight=True,
     )
 
-    assert build.id == other_inflight.id
-    assert context.decision is BuildDecision.JOIN_INFLIGHT
+    assert build.id != other_inflight.id
+    assert context.decision is BuildDecision.START_NEW
 
 
 @pytest.mark.asyncio()
@@ -491,10 +494,10 @@ async def test_prepare_build_force_rebuild_creates_new_row(
 
     total_builds = (await session.execute(select(func.count()).select_from(Build))).scalar_one()
 
-    assert new_build.id != existing.id
+    assert new_build.id == existing.id
     assert new_build.status is BuildStatus.QUEUED
     assert context.decision is BuildDecision.START_NEW
-    assert total_builds == 2
+    assert total_builds == 1
 
 
 @pytest.mark.asyncio()

@@ -26,6 +26,7 @@ class EngineSubprocessRunner:
         self._command = command
         self._env = env
         self.returncode: int | None = None
+        self._process: asyncio.subprocess.Process | None = None
 
     async def stream(self) -> AsyncIterator[StdoutFrame]:
         process = await asyncio.create_subprocess_exec(
@@ -34,6 +35,7 @@ class EngineSubprocessRunner:
             stderr=asyncio.subprocess.PIPE,
             env=self._env,
         )
+        self._process = process
         assert process.stdout is not None and process.stderr is not None
 
         async def drain(
@@ -85,10 +87,20 @@ class EngineSubprocessRunner:
                     )
                     tasks[next_task] = stream_name
 
-        async for frame in merged():
-            yield frame
+        try:
+            async for frame in merged():
+                yield frame
+            self.returncode = await process.wait()
+        except asyncio.CancelledError:
+            await self.terminate()
+            raise
 
-        self.returncode = await process.wait()
+    async def terminate(self) -> None:
+        process = self._process
+        if process is None or process.returncode is not None:
+            return
+        process.kill()
+        await process.wait()
 
 
 __all__ = ["EngineSubprocessRunner", "StdoutFrame"]

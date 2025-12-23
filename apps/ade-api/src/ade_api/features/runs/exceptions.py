@@ -9,6 +9,7 @@ __all__ = [
     "RunOutputMissingError",
     "RunOutputNotReadyError",
     "RunInputMissingError",
+    "RunQueueFullError",
 ]
 
 
@@ -34,3 +35,7 @@ class RunOutputNotReadyError(RuntimeError):
 
 class RunInputMissingError(RuntimeError):
     """Raised when a run input file cannot be located."""
+
+
+class RunQueueFullError(RuntimeError):
+    """Raised when the run queue is at capacity."""

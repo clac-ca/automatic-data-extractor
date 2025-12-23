@@ -22,7 +22,7 @@ This catalog mirrors the registry that will live in the database. Each permissio
 | `Workspace.Configurations.Read` | workspace | Read configurations | View configuration packages, drafts, and published versions. |
 | `Workspace.Configurations.ReadWrite` | workspace | Manage configurations | Create, edit, publish, revert, or delete configuration packages. |
 | `Workspace.Runs.Read` | workspace | Read runs | Inspect run history and status. |
-| `Workspace.Runs.ReadWrite` | workspace | Manage runs | Submit, cancel, retry, or reprioritise runs within the workspace. |
+| `Workspace.Runs.ReadWrite` | workspace | Manage runs | Submit, cancel, run again, or reprioritise runs within the workspace. |
 
 ## Admin UI sketch
 

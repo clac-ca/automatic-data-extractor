@@ -173,9 +173,6 @@ function formatEventRecord(event: Record<string, unknown>) {
       const mode = typeof data.mode === "string" ? data.mode : undefined;
       return <span className="break-words">{`Run queued${mode ? ` (${mode})` : ""}`}</span>;
     }
-    if (name === "run.waiting_for_build") {
-      return <span className="break-words">{`Waiting for build${reason ? ` (${reason})` : ""}`}</span>;
-    }
     if (name === "run.start") {
       const mode = typeof data.mode === "string" ? data.mode : undefined;
       return <span className="break-words">{`Run started${mode ? ` (${mode})` : ""}`}</span>;

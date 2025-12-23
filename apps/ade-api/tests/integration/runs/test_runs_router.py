@@ -4,8 +4,19 @@ import pytest
 from httpx import AsyncClient
 
 from ade_api.common.time import utc_now
+from ade_api.db.mixins import generate_uuid7
 from ade_api.infra.storage import workspace_run_root
-from ade_api.models import Configuration, ConfigurationStatus, Run, RunStatus
+from ade_api.models import (
+    Build,
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    Run,
+    RunStatus,
+)
 from ade_api.settings import Settings
 from tests.utils import login
 
@@ -36,21 +47,72 @@ async def test_workspace_run_listing_filters_by_status(
     session.add_all([configuration, other_configuration])
     await session.flush()
 
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        fingerprint="fingerprint",
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+    )
+    build_other = Build(
+        id=generate_uuid7(),
+        workspace_id=seed_identity.secondary_workspace_id,
+        configuration_id=other_configuration.id,
+        fingerprint="fingerprint-other",
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+    )
+    document = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace_id,
+        original_filename="input.csv",
+        content_type="text/csv",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/input.csv",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    document_other = Document(
+        id=generate_uuid7(),
+        workspace_id=seed_identity.secondary_workspace_id,
+        original_filename="other.csv",
+        content_type="text/csv",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/other.csv",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add_all([build, build_other, document, document_other])
+    await session.flush()
+
     run_ok = Run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
+        build_id=build.id,
+        input_document_id=document.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
     )
     run_failed = Run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
+        build_id=build.id,
+        input_document_id=document.id,
         status=RunStatus.FAILED,
         created_at=utc_now(),
     )
     run_other_workspace = Run(
         workspace_id=seed_identity.secondary_workspace_id,
         configuration_id=other_configuration.id,
+        build_id=build_other.id,
+        input_document_id=document_other.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
     )
@@ -94,9 +156,35 @@ async def test_run_output_endpoint_serves_file(
     session.add(configuration)
     await session.flush()
 
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace_id,
+        configuration_id=configuration.id,
+        fingerprint="fingerprint",
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+    )
+    document = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace_id,
+        original_filename="input.csv",
+        content_type="text/csv",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/input.csv",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add_all([build, document])
+    await session.flush()
+
     run = Run(
         workspace_id=workspace_id,
         configuration_id=configuration.id,
+        build_id=build.id,
+        input_document_id=document.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
         finished_at=utc_now(),
