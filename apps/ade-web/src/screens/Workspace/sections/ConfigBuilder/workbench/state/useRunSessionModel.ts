@@ -192,8 +192,7 @@ export function useRunSessionModel({
     [startJob],
   );
 
-  const runStatus: JobStreamStatus | "queued" | "waiting_for_build" | "building" =
-    jobStatus === "running" ? "running" : jobStatus;
+  const runStatus: JobStreamStatus = jobStatus;
 
   return useMemo(
     () => ({

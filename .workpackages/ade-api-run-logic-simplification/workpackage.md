@@ -24,12 +24,12 @@ We are simplifying ADE’s run/build orchestration so it is correct under concur
 ## Work Package Checklist
 
 * [x] Finalize “Pass 1” behavior decisions (statuses, limits scope, error codes)
-* [ ] Update schema in `apps/ade-api/migrations/versions/0001_initial_schema.py` (runs/builds invariants, remove retry fields)
-* [ ] Implement build dedupe by `(configuration_id, fingerprint)` with get-or-create logic
-* [ ] Implement a simple run queue (enforce `ADE_MAX_CONCURRENCY` / `ADE_QUEUE_SIZE`)
-* [ ] Implement timeouts + stuck-state cleanup (no external scheduler)
-* [ ] Update OpenAPI/TS types + frontend assumptions for new run/build semantics
-* [ ] Update docs (runs semantics, queue behavior, retry wording)
+* [x] Update schema in `apps/ade-api/migrations/versions/0001_initial_schema.py` (runs/builds invariants, remove retry fields) — migration + models aligned
+* [x] Implement build dedupe by `(configuration_id, fingerprint)` with get-or-create logic — unique constraint + get-or-create
+* [x] Implement a simple run queue (enforce `ADE_MAX_CONCURRENCY` / `ADE_QUEUE_SIZE`) — worker pool + queue guard
+* [x] Implement timeouts + stuck-state cleanup (no external scheduler) — build/run expiry + timeout handling
+* [x] Update OpenAPI/TS types + frontend assumptions for new run/build semantics — regenerated OpenAPI + UI updates
+* [x] Update docs (runs semantics, queue behavior, retry wording) — events/build/admin/reference docs updated
 
 > **Agent note:**
 > Add or remove checklist items as needed. Keep brief status notes inline, for example:
@@ -431,38 +431,38 @@ This checklist is specifically about confirming we actually removed complexity (
 
 Runs (router + service):
 
-* [ ] Remove per-request run execution via background tasks (delete `_execute_run_background` and `background_tasks.add_task` in `apps/ade-api/src/ade_api/features/runs/router.py`).
-* [ ] Remove “execute while streaming” behavior from HTTP streaming paths; streaming endpoints only stream persisted/live events and do not start engine processes.
-* [ ] Remove `RunStatus.WAITING_FOR_BUILD` and any logic that sets it (run always starts as `queued` until a worker claims it).
-* [ ] Remove retry semantics from the run model and service (`attempt`, `retry_of_run_id`).
-* [ ] Replace ad-hoc run execution triggers with a single worker entrypoint (one place that starts an engine process for a run).
+* [x] Remove per-request run execution via background tasks (delete `_execute_run_background` and `background_tasks.add_task` in `apps/ade-api/src/ade_api/features/runs/router.py`).
+* [x] Remove “execute while streaming” behavior from HTTP streaming paths; streaming endpoints only stream persisted/live events and do not start engine processes.
+* [x] Remove `RunStatus.WAITING_FOR_BUILD` and any logic that sets it (run always starts as `queued` until a worker claims it).
+* [x] Remove retry semantics from the run model and service (`attempt`, `retry_of_run_id`).
+* [x] Replace ad-hoc run execution triggers with a single worker entrypoint (one place that starts an engine process for a run).
 
 Builds (service):
 
-* [ ] Replace the build decision tree (`_resolve_build`) with a single get-or-create-by-fingerprint path plus claim semantics.
-* [ ] Remove process-local build runner registries (`_global_build_tasks`, `launch_build_if_needed`) and rely on database uniqueness + claim updates.
-* [ ] Ensure we do not “join” a build with a different fingerprint than the run expects.
+* [x] Replace the build decision tree (`_resolve_build`) with a single get-or-create-by-fingerprint path plus claim semantics.
+* [x] Remove process-local build runner registries (`_global_build_tasks`, `launch_build_if_needed`) and rely on database uniqueness + claim updates.
+* [x] Ensure we do not “join” a build with a different fingerprint than the run expects.
 
 Database / migrations:
 
-* [ ] Remove `runs.attempt`, `runs.retry_of_run_id`, and `ix_runs_retry_of` from `apps/ade-api/migrations/versions/0001_initial_schema.py`.
-* [ ] Make `runs.input_document_id` and `runs.build_id` non-null in `apps/ade-api/migrations/versions/0001_initial_schema.py`.
-* [ ] Remove `ux_builds_inflight_per_config` (the “one inflight build per configuration” partial index) from `apps/ade-api/migrations/versions/0001_initial_schema.py`.
-* [ ] Add unique `(builds.configuration_id, builds.fingerprint)` and make `builds.fingerprint` non-null in `apps/ade-api/migrations/versions/0001_initial_schema.py`.
+* [x] Remove `runs.attempt`, `runs.retry_of_run_id`, and `ix_runs_retry_of` from `apps/ade-api/migrations/versions/0001_initial_schema.py`.
+* [x] Make `runs.input_document_id` and `runs.build_id` non-null in `apps/ade-api/migrations/versions/0001_initial_schema.py`.
+* [x] Remove `ux_builds_inflight_per_config` (the “one inflight build per configuration” partial index) from `apps/ade-api/migrations/versions/0001_initial_schema.py`.
+* [x] Add unique `(builds.configuration_id, builds.fingerprint)` and make `builds.fingerprint` non-null in `apps/ade-api/migrations/versions/0001_initial_schema.py`.
 
 Settings enforcement:
 
-* [ ] Set `Settings.max_concurrency` default to `2` and ensure the worker pool size uses it (`apps/ade-api/src/ade_api/settings.py`).
-* [ ] Keep existing env vars; simplify parsing (integer seconds and ints only):
+* [x] Set `Settings.max_concurrency` default to `2` and ensure the worker pool size uses it (`apps/ade-api/src/ade_api/settings.py`).
+* [x] Keep existing env vars; simplify parsing (integer seconds and ints only):
   * `ADE_RUN_TIMEOUT_SECONDS` is an integer seconds value; remove duration-string parsing for it in `apps/ade-api/src/ade_api/settings.py`.
   * `ADE_BUILD_TIMEOUT` is an integer seconds value; remove duration-string parsing for it in `apps/ade-api/src/ade_api/settings.py`.
-* [ ] Return HTTP 429 with a stable error code (e.g., `run_queue_full`) when `Settings.queue_size` is exceeded.
-* [ ] Enforce `Settings.run_timeout_seconds` and `Settings.build_timeout` during execution and mark stuck records terminal during normal worker operation.
+* [x] Return HTTP 429 with a stable error code (e.g., `run_queue_full`) when `Settings.queue_size` is exceeded.
+* [x] Enforce `Settings.run_timeout_seconds` and `Settings.build_timeout` during execution and mark stuck records terminal during normal worker operation.
 
 Frontend/docs alignment:
 
-* [ ] Remove “retry run” wording and semantics from docs/UI; use “run again” = create a new run.
-* [ ] Ensure the UI derives “waiting for build” from build state/events, not from a run status field.
+* [x] Remove “retry run” wording and semantics from docs/UI; use “run again” = create a new run.
+* [x] Ensure the UI derives “waiting for build” from build state/events, not from a run status field.
 
 ---
 

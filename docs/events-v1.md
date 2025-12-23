@@ -35,7 +35,7 @@ Top-level keys match the engine schema; the API only adds optional context insid
 
 ## Flow (happy path)
 1. API creates a `RunEventStream` for `<runs_root>/<workspace>/<run_id>/logs/events.ndjson`.
-2. API emits `run.queued` (and `run.waiting_for_build` when applicable).
+2. API emits `run.queued`; runs remain queued while builds are pending.
 3. If a build is required, `BuildsService.stream_build` emits `build.*` + `console.line scope=build` events **into the same stream** before engine events.
 4. API spawns the engine with NDJSON stderr; each parsed line becomes an EventRecord, enriched with run/build/workspace IDs, persisted, and streamed to subscribers with server-generated SSE IDs.
 5. API emits `run.complete` once supervision finishes (success, failure, or cancellation).

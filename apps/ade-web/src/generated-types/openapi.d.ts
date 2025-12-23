@@ -2407,9 +2407,10 @@ export type components = {
             log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
              * Input Document Id
+             * Format: uuid
              * @description Document identifier to ingest.
              */
-            input_document_id?: string | null;
+            input_document_id: string;
             /**
              * Input Sheet Names
              * @description Optional worksheet names to ingest when processing XLSX files.
@@ -2565,8 +2566,12 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
-            /** Build Id */
-            build_id?: string | null;
+            /**
+             * Build Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            build_id: string;
             status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
@@ -2610,7 +2615,7 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
+        RunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
          * SafeModeStatus
          * @description Represents the current safe mode state.

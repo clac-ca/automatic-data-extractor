@@ -9,11 +9,12 @@ import mimetypes
 import os
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.events import (
@@ -47,6 +48,7 @@ from ade_api.infra.storage import (
 )
 from ade_api.infra.venv import apply_venv_to_env, venv_python_path
 from ade_api.models import (
+    Build,
     BuildStatus,
     Configuration,
     ConfigurationStatus,
@@ -63,6 +65,7 @@ from .exceptions import (
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
+    RunQueueFullError,
 )
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
@@ -219,13 +222,13 @@ class RunsService:
 
         configuration = await self._resolve_configuration(configuration_id)
 
-        # Optional primary input document descriptor
-        input_document_id = options.input_document_id or None
-        if input_document_id:
-            await self._require_document(
-                workspace_id=configuration.workspace_id,
-                document_id=input_document_id,
-            )
+        input_document_id = options.input_document_id
+        if not input_document_id:
+            raise RunInputMissingError("Input document is required to create a run")
+        await self._require_document(
+            workspace_id=configuration.workspace_id,
+            document_id=input_document_id,
+        )
 
         run_id = self._generate_run_id()
 
@@ -237,11 +240,14 @@ class RunsService:
             reason="on_demand",
         )
         build_id = build.id
-        run_status = (
-            RunStatus.WAITING_FOR_BUILD
-            if build.status is not BuildStatus.READY
-            else RunStatus.QUEUED
-        )
+        if build.status is not BuildStatus.READY:
+            await self._builds_service.launch_build_if_needed(
+                build=build,
+                reason="run_requested",
+                run_id=run_id,
+            )
+
+        await self._enforce_queue_capacity()
 
         selected_sheet_names = self._select_input_sheet_names(options)
 
@@ -249,9 +255,7 @@ class RunsService:
             id=run_id,
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            status=run_status,
-            attempt=1,
-            retry_of_run_id=None,
+            status=RunStatus.QUEUED,
             trace_id=str(run_id),
             input_document_id=input_document_id,
             input_sheet_names=selected_sheet_names or None,
@@ -276,16 +280,6 @@ class RunsService:
                 "options": options.model_dump(exclude_none=True),
             },
         )
-        if run.status is RunStatus.WAITING_FOR_BUILD:
-            await self._emit_api_event(
-                run=run,
-                type_="run.waiting_for_build",
-                payload={
-                    "status": "waiting_for_build",
-                    "reason": "build_not_ready",
-                    "build_id": str(build_id),
-                },
-            )
 
         logger.info(
             "run.prepare.success",
@@ -300,6 +294,186 @@ class RunsService:
             ),
         )
         return run
+
+    async def load_run_options(self, run: Run) -> RunCreateOptions:
+        """Rehydrate run options from the persisted run.queued event."""
+
+        payload: dict[str, Any] = {}
+        stream = self._event_stream_for_run(run)
+        try:
+            for event in stream.iter_persisted(after_sequence=0):
+                if event.get("event") == "run.queued":
+                    payload = (event.get("data") or {}).get("options") or {}
+                    break
+        except Exception:
+            payload = {}
+
+        if "input_document_id" not in payload and run.input_document_id:
+            payload["input_document_id"] = str(run.input_document_id)
+        if "input_sheet_names" not in payload and run.input_sheet_names:
+            payload["input_sheet_names"] = list(run.input_sheet_names)
+
+        try:
+            return RunCreateOptions(**payload)
+        except Exception:
+            logger.warning(
+                "run.options.load.failed",
+                extra=log_context(run_id=run.id),
+            )
+            return RunCreateOptions(
+                input_document_id=str(run.input_document_id),
+                input_sheet_names=list(run.input_sheet_names or []),
+            )
+
+    async def claim_next_run(self) -> Run | None:
+        candidate = await self._runs.next_queued_with_terminal_build()
+        if candidate is None:
+            return None
+        run, build_status = candidate
+        if build_status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
+            build = await self._builds_service.get_build_or_raise(
+                run.build_id,
+                workspace_id=run.workspace_id,
+            )
+            async for _ in self._fail_run_due_to_build(run=run, build=build):
+                pass
+            return None
+
+        claimed = await self._claim_run(run.id)
+        if not claimed:
+            return None
+        return await self._require_run(run.id)
+
+    async def expire_stuck_runs(self) -> int:
+        timeout_seconds = self._settings.run_timeout_seconds
+        if not timeout_seconds:
+            return 0
+        horizon = utc_now() - timedelta(seconds=timeout_seconds)
+        stmt = (
+            select(Run)
+            .where(
+                Run.status == RunStatus.RUNNING,
+                Run.started_at.is_not(None),
+                Run.started_at < horizon,
+            )
+            .order_by(Run.started_at.asc())
+        )
+        result = await self._session.execute(stmt)
+        runs = list(result.scalars().all())
+        if not runs:
+            return 0
+
+        message = f"Run timed out after {timeout_seconds}s"
+        for run in runs:
+            run_dir = self._run_dir_for_run(
+                workspace_id=run.workspace_id,
+                run_id=run.id,
+            )
+            paths_snapshot = self._finalize_paths(
+                run_dir=run_dir,
+                default_paths=RunPathsSnapshot(),
+            )
+            completion = await self._complete_run(
+                run,
+                status=RunStatus.FAILED,
+                exit_code=1,
+                error_message=message,
+            )
+            await self._emit_api_event(
+                run=completion,
+                type_="run.complete",
+                payload=self._run_completed_payload(
+                    run=completion,
+                    paths=paths_snapshot,
+                    failure_stage="run",
+                    failure_code="run_timeout",
+                    failure_message=message,
+                ),
+            )
+
+        logger.warning(
+            "run.stuck.expired",
+            extra=log_context(count=len(runs), timeout_seconds=timeout_seconds),
+        )
+        return len(runs)
+
+    async def expire_stuck_builds(self) -> int:
+        return await self._builds_service.expire_stuck_builds()
+
+    async def _enforce_queue_capacity(self) -> None:
+        limit = self._settings.queue_size
+        if not limit:
+            return
+        queued = await self._runs.count_queued()
+        if queued >= limit:
+            raise RunQueueFullError(f"Run queue is full (limit {limit})")
+
+    async def _claim_run(self, run_id: UUID) -> bool:
+        stmt = (
+            update(Run)
+            .where(Run.id == run_id, Run.status == RunStatus.QUEUED)
+            .values(status=RunStatus.RUNNING, started_at=utc_now())
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        return bool(result.rowcount)
+
+    async def _requeue_run(self, run: Run, *, reason: str) -> Run:
+        run.status = RunStatus.QUEUED
+        run.started_at = None
+        await self._session.commit()
+        await self._session.refresh(run)
+        logger.info(
+            "run.requeued",
+            extra=log_context(run_id=run.id, reason=reason),
+        )
+        return run
+
+    async def _fail_run_due_to_build(
+        self,
+        *,
+        run: Run,
+        build: Build,
+    ) -> AsyncIterator[EventRecord]:
+        failure_code = "build_failed" if build.status is BuildStatus.FAILED else "build_cancelled"
+        error_message = build.error_message or (
+            f"Configuration {build.configuration_id} build {build.status.value}"
+        )
+        yield await self._emit_api_event(
+            run=run,
+            type_="console.line",
+            payload={
+                "scope": "run",
+                "stream": "stderr",
+                "level": "error",
+                "message": error_message,
+            },
+        )
+        run_dir = self._run_dir_for_run(
+            workspace_id=run.workspace_id,
+            run_id=run.id,
+        )
+        paths_snapshot = self._finalize_paths(
+            run_dir=run_dir,
+            default_paths=RunPathsSnapshot(),
+        )
+        completion = await self._complete_run(
+            run,
+            status=RunStatus.FAILED,
+            exit_code=1,
+            error_message=error_message,
+        )
+        yield await self._emit_api_event(
+            run=completion,
+            type_="run.complete",
+            payload=self._run_completed_payload(
+                run=completion,
+                paths=paths_snapshot,
+                failure_stage="build",
+                failure_code=failure_code,
+                failure_message=error_message,
+            ),
+        )
 
     async def _execution_context_for_run(self, run_id: UUID) -> RunExecutionContext:
         run = await self._require_run(run_id)
@@ -316,9 +490,13 @@ class RunsService:
         self,
         *,
         run_id: UUID,
-        options: RunCreateOptions,
+        options: RunCreateOptions | None = None,
     ) -> None:
         """Execute the run, exhausting the event stream."""
+
+        if options is None:
+            run = await self._require_run(run_id)
+            options = await self.load_run_options(run)
 
         logger.info(
             "run.execute.start",
@@ -393,76 +571,13 @@ class RunsService:
             context.build_id,
             workspace_id=context.workspace_id,
         )
+        if build.status in (BuildStatus.FAILED, BuildStatus.CANCELLED):
+            async for event in self._fail_run_due_to_build(run=run, build=build):
+                yield event
+            return
         if build.status is not BuildStatus.READY:
-            await self._builds_service.launch_build_if_needed(
-                build=build,
-                reason="run_requested",
-                run_id=run.id,
-            )
-
-            run_stream = self._event_stream_for_run(run)
-            async for event in self._builds_service.stream_build_events(
-                build=build,
-                start_sequence=None,
-                timeout_seconds=float(self._settings.build_timeout.total_seconds()),
-            ):
-                forwarded = await run_stream.append(event)
-                self._log_event_debug(forwarded, origin="build")
-                yield forwarded
-
-            await self._session.refresh(build)
-            if build.status is not BuildStatus.READY:
-                error_message = build.error_message or (
-                    f"Configuration {build.configuration_id} build failed"
-                )
-                yield await self._emit_api_event(
-                    run=run,
-                    type_="console.line",
-                    payload={
-                        "scope": "run",
-                        "stream": "stderr",
-                        "level": "error",
-                        "message": error_message,
-                    },
-                )
-                run_dir = self._run_dir_for_run(
-                    workspace_id=run.workspace_id,
-                    run_id=run.id,
-                )
-                paths_snapshot = self._finalize_paths(
-                    run_dir=run_dir,
-                    default_paths=RunPathsSnapshot(),
-                )
-                completion = await self._complete_run(
-                    run,
-                    status=RunStatus.FAILED,
-                    exit_code=1,
-                    error_message=error_message,
-                )
-                yield await self._emit_api_event(
-                    run=completion,
-                    type_="run.complete",
-                    payload=self._run_completed_payload(
-                        run=completion,
-                        paths=paths_snapshot,
-                        failure_stage="build",
-                        failure_code="build_failed",
-                        failure_message=error_message,
-                    ),
-                )
-                return
-
-            build_done_message = "Configuration build completed; starting ADE run."
-            yield await self._emit_api_event(
-                run=run,
-                type_="console.line",
-                payload={
-                    "scope": "run",
-                    "stream": "stdout",
-                    "level": "info",
-                    "message": build_done_message,
-                },
-            )
+            await self._requeue_run(run, reason="build_not_ready")
+            return
 
         run = await self._transition_status(run, RunStatus.RUNNING)
         yield await self._emit_api_event(
@@ -1016,7 +1131,6 @@ class RunsService:
         run = await self._require_run(run_id)
         if run.status in {
             RunStatus.QUEUED,
-            RunStatus.WAITING_FOR_BUILD,
             RunStatus.RUNNING,
         }:
             raise RunOutputNotReadyError("Run output is not available until the run completes.")
@@ -1372,7 +1486,8 @@ class RunsService:
         run_dir = self._run_dir_for_run(workspace_id=run.workspace_id, run_id=run.id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        if not options.input_document_id:
+        input_document_id = options.input_document_id or run.input_document_id
+        if not input_document_id:
             logger.warning(
                 "run.engine.execute.input_missing",
                 extra=log_context(
@@ -1385,7 +1500,7 @@ class RunsService:
 
         staged_input = await self._stage_input_document(
             workspace_id=context.workspace_id,
-            document_id=options.input_document_id,
+            document_id=UUID(str(input_document_id)),
             run_dir=run_dir,
         )
 
@@ -1425,9 +1540,29 @@ class RunsService:
             processed_file=staged_input.name,
         )
 
-        # Stream stdout/stderr lines from the engine process.
-        async for frame in runner.stream():
-            yield frame
+        timeout_seconds = self._settings.run_timeout_seconds
+        try:
+            if timeout_seconds:
+                async with asyncio.timeout(timeout_seconds):
+                    async for frame in runner.stream():
+                        yield frame
+            else:
+                async for frame in runner.stream():
+                    yield frame
+        except TimeoutError:
+            await runner.terminate()
+            timeout_message = f"Run timed out after {timeout_seconds}s"
+            paths_snapshot = self._finalize_paths(
+                run_dir=run_dir,
+                default_paths=paths_snapshot,
+            )
+            yield RunExecutionResult(
+                status=RunStatus.FAILED,
+                return_code=None,
+                paths_snapshot=paths_snapshot,
+                error_message=timeout_message,
+            )
+            return
 
         # Process completion and summarize.
         return_code = runner.returncode if runner.returncode is not None else 1

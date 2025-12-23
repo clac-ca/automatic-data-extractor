@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,14 +31,7 @@ class Build(Base):
 
     __tablename__ = "builds"
     __table_args__ = (
-        Index(
-            "ux_builds_inflight_per_config",
-            "configuration_id",
-            unique=True,
-            postgresql_where=text("status in ('queued','building')"),
-            sqlite_where=text("status in ('queued','building')"),
-            mssql_where=text("status in ('queued','building')"),
-        ),
+        UniqueConstraint("configuration_id", "fingerprint", name="ux_builds_config_fingerprint"),
     )
 
     id: Mapped[UUID] = mapped_column(UUIDType(), primary_key=True, default=generate_uuid7)
@@ -51,7 +44,7 @@ class Build(Base):
         nullable=False,
         index=True,
     )
-    fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    fingerprint: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     engine_spec: Mapped[str | None] = mapped_column(String(255), nullable=True)
     engine_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     python_version: Mapped[str | None] = mapped_column(String(50), nullable=True)

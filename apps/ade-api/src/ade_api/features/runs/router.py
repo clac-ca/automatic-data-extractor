@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import mimetypes
 from collections.abc import AsyncIterator
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Path,
@@ -28,16 +27,12 @@ from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord, strip_sequence
 from ade_api.common.ids import UUIDStr
-from ade_api.common.logging import log_context
 from ade_api.common.pagination import PageParams
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf
-from ade_api.db.session import get_sessionmaker
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import RunStatus
-from ade_api.settings import Settings
 
-from .event_stream import get_run_event_streams
 from .exceptions import (
     RunDocumentMissingError,
     RunInputMissingError,
@@ -45,6 +40,7 @@ from .exceptions import (
     RunNotFoundError,
     RunOutputMissingError,
     RunOutputNotReadyError,
+    RunQueueFullError,
 )
 from .schemas import (
     RunCreateOptions,
@@ -80,39 +76,6 @@ def _event_bytes(event: EventRecord) -> bytes:
     return json_bytes(event) + b"\n"
 
 
-async def _execute_run_background(
-    run_id: str,
-    options_data: dict[str, Any],
-    settings_payload: dict[str, Any],
-) -> None:
-    """Run execution coroutine used for non-streaming requests."""
-
-    settings = Settings(**settings_payload)
-    session_factory = get_sessionmaker(settings=settings)
-    options = RunCreateOptions(**options_data)
-    event_streams = get_run_event_streams()
-    async with session_factory() as session:
-        service = RunsService(
-            session=session,
-            settings=settings,
-            event_streams=event_streams,
-            build_event_streams=event_streams,
-        )
-        try:
-            await service.run_to_completion(run_id=UUID(run_id), options=options)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.exception(
-                "run.background.failed",
-                extra=log_context(run_id=run_id),
-            )
-            async for event in service.handle_background_failure(
-                run_id=UUID(run_id),
-                options=options,
-                error=exc,
-            ):
-                # Force materialization to ensure events are emitted even though we ignore values.
-                _ = event
-
 
 @router.post(
     "/configurations/{configuration_id}/runs",
@@ -124,7 +87,6 @@ async def create_run_endpoint(
     *,
     configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
     payload: RunCreateRequest,
-    background_tasks: BackgroundTasks,
     service: RunsService = runs_service_dependency,
 ) -> RunResource:
     """Create a run for ``configuration_id`` and enqueue execution."""
@@ -140,15 +102,18 @@ async def create_run_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RunInputMissingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RunQueueFullError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": {
+                    "code": "run_queue_full",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
 
     resource = await service.to_resource(run)
-    options_dict = payload.options.model_dump()
-    background_tasks.add_task(
-        _execute_run_background,
-        str(run.id),
-        options_dict,
-        service.settings.model_dump(mode="python"),
-    )
     return resource
 
 

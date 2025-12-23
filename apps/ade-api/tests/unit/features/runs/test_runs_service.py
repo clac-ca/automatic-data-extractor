@@ -12,6 +12,7 @@ from ade_api.db.mixins import generate_uuid7
 from ade_api.features.builds.service import BuildDecision, BuildExecutionContext
 from ade_api.features.documents.storage import DocumentStorage
 from ade_api.features.runs.schemas import RunCreateOptions
+from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.service import (
     RunExecutionContext,
     RunExecutionResult,
@@ -157,6 +158,7 @@ async def _build_service(
         configuration_id=configuration.id,
         status=build_status,
         created_at=utc_now(),
+        fingerprint="fingerprint",
     )
     session.add(build)
     configuration.active_build_id = build.id
@@ -249,6 +251,25 @@ async def test_prepare_run_emits_queued_event(session, tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio()
+async def test_prepare_run_rejects_when_queue_is_full(
+    session,
+    tmp_path: Path,
+) -> None:
+    service, configuration, document, _fake_builds, settings = await _build_service(
+        session,
+        tmp_path,
+        build_status=BuildStatus.READY,
+    )
+    settings.queue_size = 1
+
+    options = RunCreateOptions(input_document_id=str(document.id))
+    await service.prepare_run(configuration_id=configuration.id, options=options)
+
+    with pytest.raises(RunQueueFullError):
+        await service.prepare_run(configuration_id=configuration.id, options=options)
+
+
+@pytest.mark.asyncio()
 async def test_execute_engine_sets_config_package_flag(
     session,
     tmp_path: Path,
@@ -296,67 +317,26 @@ async def test_execute_engine_sets_config_package_flag(
 
 
 @pytest.mark.asyncio()
-async def test_stream_run_waits_for_build_and_forwards_events(
+async def test_stream_run_requeues_if_build_not_ready(
     session,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    build_event = new_event_record(
-        event="build.start",
-        data={"status": "building"},
-    )
     service, configuration, document, fake_builds, _ = await _build_service(
         session,
         tmp_path,
         build_status=BuildStatus.QUEUED,
         build_decision=BuildDecision.START_NEW,
-        build_events=[build_event],
     )
-
-    async def fake_execute_engine(
-        self: RunsService,
-        *,
-        run,
-        context: RunExecutionContext,
-        options: RunCreateOptions,
-        safe_mode_enabled: bool = False,
-    ) -> AsyncIterator[RunExecutionResult]:
-        summary = await self._build_placeholder_summary(
-            run=run,
-            status=RunStatus.SUCCEEDED,
-            message="engine finished",
-        )
-        summary_json = self._serialize_summary(summary)
-        yield RunExecutionResult(
-            status=RunStatus.SUCCEEDED,
-            return_code=0,
-            summary_model=summary,
-            summary_json=summary_json,
-            paths_snapshot=RunPathsSnapshot(),
-            error_message=None,
-        )
-
-    monkeypatch.setattr(RunsService, "_execute_engine", fake_execute_engine)
 
     options = RunCreateOptions(input_document_id=str(document.id), force_rebuild=True)
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    assert run.status is RunStatus.WAITING_FOR_BUILD
-
     events = [event async for event in service.stream_run(run_id=run.id, options=options)]
-    event_types = [event["event"] for event in events]
-
-    assert "build.start" in event_types
-    assert any(
-        evt.get("event") == "console.line"
-        and (evt.get("data", {}).get("message") or "").startswith("Configuration build completed")
-        for evt in events
-    )
-    assert event_types[-1] == "run.complete"
+    assert events and events[0]["event"] == "run.queued"
 
     refreshed = await service.get_run(run.id)
     assert refreshed is not None
-    assert refreshed.status is RunStatus.SUCCEEDED
+    assert refreshed.status is RunStatus.QUEUED
     assert fake_builds.force_calls == [True]
 
 

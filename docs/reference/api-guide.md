@@ -65,7 +65,7 @@ Upload source files for extraction. All document routes are nested under the wor
 
 Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
-- `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; supports inline streaming or background execution depending on `stream`.
+- `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; requires `input_document_id` and supports inline streaming or background execution depending on `stream` (returns `429` with `run_queue_full` when the queue is full).
 - `GET /workspaces/{workspace_id}/runs` – list recent runs for a workspace, filterable by status or source document.
 - `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
 - `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).

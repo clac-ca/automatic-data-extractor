@@ -19,8 +19,8 @@ http --stream POST :8000/api/v1/configurations/$CONFIG_ID/runs stream:=true \
 
 Key things to watch while streaming:
 
-- The first `run.queued`/`run.start` events confirm the database row exists and provide the final
-  `run_id` for follow-up queries.
+- The first `run.queued` event confirms the database row exists and provides the final
+  `run_id` for follow-up queries; build events may follow before `run.start` while the build is prepared.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
 - `engine.run.summary` carries the authoritative run summary (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine

@@ -10,8 +10,10 @@ type RunCreateRequest = components["schemas"]["RunCreateRequest"];
 type RunCreatePathParams =
   paths["/api/v1/configurations/{configuration_id}/runs"]["post"]["parameters"]["path"];
 
-export type RunStreamOptions = Partial<RunCreateOptions>;
-const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
+export type RunStreamOptions = Partial<Omit<RunCreateOptions, "input_document_id">> & {
+  input_document_id: RunCreateOptions["input_document_id"];
+};
+const DEFAULT_RUN_OPTIONS: Omit<RunCreateOptions, "input_document_id"> = {
   dry_run: false,
   validate_only: false,
   force_rebuild: false,
@@ -21,11 +23,14 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
 
 export async function createRun(
   configId: string,
-  options: RunStreamOptions = {},
+  options: RunStreamOptions,
   signal?: AbortSignal,
 ): Promise<RunResource> {
   const pathParams: RunCreatePathParams = { configuration_id: configId };
   const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...options };
+  if (!mergedOptions.input_document_id) {
+    throw new Error("input_document_id is required to start a run.");
+  }
   const body: RunCreateRequest = { options: mergedOptions };
 
   const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
@@ -43,7 +48,7 @@ export async function createRun(
 
 export async function* streamRun(
   configId: string,
-  options: RunStreamOptions = {},
+  options: RunStreamOptions,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
   const runResource = await createRun(configId, options, signal);

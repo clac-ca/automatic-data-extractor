@@ -937,9 +937,30 @@ export function Workbench({
     if (!ready) {
       return;
     }
+    let document: DocumentRecord | null = null;
+    try {
+      const documents = await fetchRecentDocuments(workspaceId);
+      document = documents[0] ?? null;
+    } catch (error) {
+      notifyToast({
+        title: "Unable to load documents for validation.",
+        message: describeError(error),
+        intent: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+    if (!document) {
+      notifyToast({
+        title: "Upload a document to run validation.",
+        intent: "warning",
+        duration: 5000,
+      });
+      return;
+    }
     await startRun(
-      { validate_only: true },
-      { mode: "validation" },
+      { validate_only: true, input_document_id: document.id },
+      { mode: "validation", documentId: document.id, documentName: document.name },
       { prepare: prepareRun },
     );
   }, [
@@ -950,6 +971,8 @@ export function Workbench({
     saveDirtyTabsBeforeRun,
     startRun,
     prepareRun,
+    workspaceId,
+    notifyToast,
   ]);
 
   const handleRunExtraction = useCallback(
