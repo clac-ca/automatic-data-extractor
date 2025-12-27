@@ -5,6 +5,14 @@ import { resolveWorkspaceSection } from "../index";
 
 vi.mock("@screens/Workspace/sections/Overview", () => ({ default: () => <div>overview</div> }));
 vi.mock("@screens/Workspace/sections/Documents", () => ({ default: () => <div>documents</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV2", () => ({ default: () => <div>documents v2</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV3", () => ({ default: () => <div>documents v3</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV4", () => ({ default: () => <div>documents v4</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV5", () => ({ default: () => <div>documents v5</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV6", () => ({ default: () => <div>documents v6</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV7", () => ({ default: () => <div>documents v7</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV8", () => ({ default: () => <div>documents v8</div> }));
+vi.mock("@screens/Workspace/sections/DocumentsV9", () => ({ default: () => <div>documents v9</div> }));
 vi.mock("@screens/Workspace/sections/Documents/components/DocumentDetail", () => ({
   default: () => <div>document detail</div>,
 }));
@@ -33,6 +41,46 @@ describe("resolveWorkspaceSection", () => {
   it("returns the documents detail section when a document id is present", () => {
     const result = resolveWorkspaceSection(workspaceId, ["documents", "doc-22"], "", "");
     expect(result).toMatchObject({ kind: "content", key: "documents:doc-22" });
+  });
+
+  it("returns the documents v4 section for the documents-v4 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v4"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v4", fullHeight: true });
+  });
+
+  it("returns the documents v2 section for the documents-v2 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v2"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v2", fullHeight: true });
+  });
+
+  it("returns the documents v3 section for the documents-v3 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v3"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v3", fullHeight: true });
+  });
+
+  it("returns the documents v5 section for the documents-v5 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v5"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v5", fullHeight: true });
+  });
+
+  it("returns the documents v6 section for the documents-v6 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v6"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v6", fullHeight: true });
+  });
+
+  it("returns the documents v7 section for the documents-v7 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v7"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v7", fullHeight: true });
+  });
+
+  it("returns the documents v8 section for the documents-v8 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v8"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v8", fullHeight: true });
+  });
+
+  it("returns the documents v9 section for the documents-v9 slug", () => {
+    const result = resolveWorkspaceSection(workspaceId, ["documents-v9"], "", "");
+    expect(result).toMatchObject({ kind: "content", key: "documents-v9", fullHeight: true });
   });
 
   it("returns the config builder index and details", () => {
