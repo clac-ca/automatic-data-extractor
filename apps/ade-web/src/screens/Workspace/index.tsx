@@ -25,6 +25,14 @@ import { NotificationsProvider } from "@shared/notifications";
 
 import WorkspaceOverviewRoute from "@screens/Workspace/sections/Overview";
 import WorkspaceDocumentsRoute from "@screens/Workspace/sections/Documents";
+import WorkspaceDocumentsV2Route from "@screens/Workspace/sections/DocumentsV2";
+import WorkspaceDocumentsV3Route from "@screens/Workspace/sections/DocumentsV3";
+import WorkspaceDocumentsV4Route from "@screens/Workspace/sections/DocumentsV4";
+import WorkspaceDocumentsV5Route from "@screens/Workspace/sections/DocumentsV5";
+import WorkspaceDocumentsV6Route from "@screens/Workspace/sections/DocumentsV6";
+import WorkspaceDocumentsV7Route from "@screens/Workspace/sections/DocumentsV7";
+import WorkspaceDocumentsV8Route from "@screens/Workspace/sections/DocumentsV8";
+import WorkspaceDocumentsV9Route from "@screens/Workspace/sections/DocumentsV9";
 import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
 import WorkspaceRunsRoute from "@screens/Workspace/sections/Runs";
 import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
@@ -308,6 +316,13 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
   const isDocumentsSection = section?.kind === "content" && section.key.startsWith("documents");
+  const isDocumentsV2 = section?.kind === "content" && section.key === "documents-v2";
+  const isDocumentsV3 = section?.kind === "content" && section.key === "documents-v3";
+  const isDocumentsV4 = section?.kind === "content" && section.key === "documents-v4";
+  const isDocumentsV6 = section?.kind === "content" && section.key === "documents-v6";
+  const isDocumentsV7 = section?.kind === "content" && section.key === "documents-v7";
+  const isDocumentsV8 = section?.kind === "content" && section.key === "documents-v8";
+  const isDocumentsV9 = section?.kind === "content" && section.key === "documents-v9";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
@@ -349,7 +364,16 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         enableShortcut: true,
       }
     : undefined;
-  const topBarSearch = documentsSearch ?? workspaceSearch;
+  const topBarSearch =
+    isDocumentsV2 ||
+    isDocumentsV3 ||
+    isDocumentsV4 ||
+    isDocumentsV6 ||
+    isDocumentsV7 ||
+    isDocumentsV8 ||
+    isDocumentsV9
+      ? undefined
+      : documentsSearch ?? workspaceSearch;
 
   useEffect(() => {
     if (section?.kind === "redirect") {
@@ -532,6 +556,62 @@ export function resolveWorkspaceSection(
         element: <DocumentDetailRoute params={{ documentId: decodeURIComponent(second) }} />,
       };
     }
+    case "documents-v4":
+      return {
+        kind: "content",
+        key: "documents-v4",
+        element: <WorkspaceDocumentsV4Route />,
+        fullHeight: true,
+      };
+    case "documents-v2":
+      return {
+        kind: "content",
+        key: "documents-v2",
+        element: <WorkspaceDocumentsV2Route />,
+        fullHeight: true,
+      };
+    case "documents-v3":
+      return {
+        kind: "content",
+        key: "documents-v3",
+        element: <WorkspaceDocumentsV3Route />,
+        fullHeight: true,
+      };
+    case "documents-v5":
+      return {
+        kind: "content",
+        key: "documents-v5",
+        element: <WorkspaceDocumentsV5Route />,
+        fullHeight: true,
+      };
+    case "documents-v6":
+      return {
+        kind: "content",
+        key: "documents-v6",
+        element: <WorkspaceDocumentsV6Route />,
+        fullHeight: true,
+      };
+    case "documents-v7":
+      return {
+        kind: "content",
+        key: "documents-v7",
+        element: <WorkspaceDocumentsV7Route />,
+        fullHeight: true,
+      };
+    case "documents-v8":
+      return {
+        kind: "content",
+        key: "documents-v8",
+        element: <WorkspaceDocumentsV8Route />,
+        fullHeight: true,
+      };
+    case "documents-v9":
+      return {
+        kind: "content",
+        key: "documents-v9",
+        element: <WorkspaceDocumentsV9Route />,
+        fullHeight: true,
+      };
     case "runs":
       return { kind: "content", key: "runs", element: <WorkspaceRunsRoute /> };
     case "config-builder": {

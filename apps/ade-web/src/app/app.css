@@ -42,3 +42,64 @@ textarea {
 .focus-ring {
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50;
 }
+
+@keyframes docs-v4-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.docs-v4-animate {
+  animation: docs-v4-fade-up 500ms ease-out both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.documents-v7 .docs-v7-animate {
+  animation: docs-v7-fade-up 600ms ease forwards;
+  animation-delay: var(--delay, 0ms);
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.documents-v7 .docs-v7-shimmer {
+  background-size: 200% 100%;
+  animation: docs-v7-shimmer 1.6s linear infinite;
+}
+
+@keyframes docs-v7-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes docs-v7-shimmer {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .documents-v7 .docs-v7-animate {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .documents-v7 .docs-v7-shimmer {
+    animation: none;
+  }
+}
