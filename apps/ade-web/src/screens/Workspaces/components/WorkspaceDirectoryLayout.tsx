@@ -6,6 +6,7 @@ import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTop
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { DirectoryIcon } from "@ui/Icons";
+import { ModeToggle } from "@ui/ModeToggle";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
@@ -45,6 +46,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
           actions={actions ? <div className="flex items-center gap-2">{actions}</div> : undefined}
           trailing={
             <div className="flex items-center gap-2">
+              <ModeToggle />
               <ProfileDropdown
                 displayName={displayName}
                 email={email}

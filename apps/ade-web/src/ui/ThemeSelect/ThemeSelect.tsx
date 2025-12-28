@@ -1,29 +1,36 @@
 import clsx from "clsx";
 
-import { THEME_OPTIONS, type ThemePreference } from "@shared/theme";
+import { BUILTIN_THEMES, type ThemeId } from "@shared/theme";
 
 interface ThemeSelectProps {
-  readonly value: ThemePreference;
-  readonly onChange: (value: ThemePreference) => void;
+  readonly theme: ThemeId;
+  readonly onThemeChange: (value: ThemeId) => void;
+  readonly themes?: Array<{ id: ThemeId; label: string; description: string }>;
   readonly className?: string;
   readonly label?: string;
 }
 
-export function ThemeSelect({ value, onChange, className, label = "Appearance" }: ThemeSelectProps) {
+export function ThemeSelect({
+  theme,
+  onThemeChange,
+  themes = BUILTIN_THEMES,
+  className,
+  label = "Theme",
+}: ThemeSelectProps) {
   return (
     <div className={clsx("space-y-2", className)}>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <div role="radiogroup" aria-label={label} className="grid gap-2">
-        {THEME_OPTIONS.map((option) => {
-          const isSelected = option.value === value;
+        {themes.map((option) => {
+          const isSelected = option.id === theme;
           return (
             <button
-              key={option.value}
+              key={option.id}
               type="button"
               role="radio"
               aria-checked={isSelected}
               data-menu-item
-              onClick={() => onChange(option.value)}
+              onClick={() => onThemeChange(option.id)}
               className={clsx(
                 "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-medium transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",

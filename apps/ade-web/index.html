@@ -7,14 +7,17 @@
     <script>
       (function () {
         try {
-          var storageKey = "ade.ui.theme.preference";
-          var raw = window.localStorage ? window.localStorage.getItem(storageKey) : null;
-          var preference = raw === "light" || raw === "dark" || raw === "system" ? raw : "system";
+          var theme = window.localStorage ? window.localStorage.getItem("ade.theme") : null;
+          var modePref = window.localStorage ? window.localStorage.getItem("ade.mode") : null;
+          var resolvedTheme = theme && theme.length > 0 ? theme : "default";
+          var resolvedPref =
+            modePref === "light" || modePref === "dark" || modePref === "system" ? modePref : "system";
           var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var resolved = preference === "system" ? (prefersDark ? "dark" : "light") : preference;
+          var resolvedMode = resolvedPref === "system" ? (prefersDark ? "dark" : "light") : resolvedPref;
           var root = document.documentElement;
-          root.dataset.theme = resolved;
-          root.style.colorScheme = resolved === "dark" ? "dark" : "light";
+          root.dataset.theme = resolvedTheme;
+          root.dataset.mode = resolvedMode;
+          root.style.colorScheme = resolvedMode;
         } catch (error) {
           // no-op: allow app to hydrate and handle errors gracefully
         }

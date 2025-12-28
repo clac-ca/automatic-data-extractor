@@ -1,11 +1,14 @@
-import type { ThemePreference } from "./themeStorage";
+import type { ModePreference } from "./themeStorage";
 
-export type ThemeId = "light" | "dark";
+export type ThemeId = "default" | (string & {});
+export type ResolvedMode = "light" | "dark";
 
-export type { ThemePreference };
+export type { ModePreference };
 
-export const THEME_OPTIONS: Array<{
-  value: ThemePreference;
+export const DEFAULT_THEME_ID: ThemeId = "default";
+
+export const MODE_OPTIONS: Array<{
+  value: ModePreference;
   label: string;
   description: string;
 }> = [
@@ -14,27 +17,31 @@ export const THEME_OPTIONS: Array<{
   { value: "dark", label: "Dark", description: "Low-light friendly" },
 ];
 
-export function isDarkTheme(theme: ThemeId): boolean {
-  return theme === "dark";
+export const BUILTIN_THEMES: Array<{
+  id: ThemeId;
+  label: string;
+  description: string;
+}> = [{ id: DEFAULT_THEME_ID, label: "Default", description: "Balanced and familiar" }];
+
+export function isDarkMode(mode: ResolvedMode): boolean {
+  return mode === "dark";
 }
 
-export function resolveTheme(preference: ThemePreference, systemPrefersDark: boolean): ThemeId {
+export function resolveMode(preference: ModePreference, systemPrefersDark: boolean): ResolvedMode {
   if (preference === "system") {
     return systemPrefersDark ? "dark" : "light";
   }
   return preference;
 }
 
-export function applyThemeToDocument(theme: ThemeId): void {
+export function applyThemeToDocument(theme: ThemeId, mode: ResolvedMode): void {
   if (typeof document === "undefined") {
     return;
   }
   const root = document.documentElement;
-  root.dataset.mode = theme;
-  if (!root.dataset.theme) {
-    root.dataset.theme = "default";
-  }
-  root.style.colorScheme = isDarkTheme(theme) ? "dark" : "light";
+  root.dataset.theme = theme;
+  root.dataset.mode = mode;
+  root.style.colorScheme = isDarkMode(mode) ? "dark" : "light";
 }
 
 export { ThemeProvider } from "./ThemeProvider";

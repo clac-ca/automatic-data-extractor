@@ -1,13 +1,23 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { applyThemeToDocument, resolveTheme, type ThemeId } from "./index";
-import { readStoredThemePreference, writeThemePreference, type ThemePreference } from "./themeStorage";
+import { applyThemeToDocument, resolveMode, DEFAULT_THEME_ID, type ResolvedMode, type ThemeId } from "./index";
+import {
+  MODE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  readStoredModePreference,
+  readStoredThemePreference,
+  writeModePreference,
+  writeThemePreference,
+  type ModePreference,
+} from "./themeStorage";
 
 interface ThemeContextValue {
-  readonly preference: ThemePreference;
-  readonly resolvedTheme: ThemeId;
+  readonly theme: ThemeId;
+  readonly modePreference: ModePreference;
+  readonly resolvedMode: ResolvedMode;
   readonly systemPrefersDark: boolean;
-  readonly setPreference: (next: ThemePreference) => void;
+  readonly setTheme: (next: ThemeId) => void;
+  readonly setModePreference: (next: ModePreference) => void;
 }
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -15,8 +25,10 @@ export const ThemeContext = createContext<ThemeContextValue | null>(null);
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 
 export function ThemeProvider({ children }: { readonly children: ReactNode }) {
-  const storedPreference = useMemo(() => readStoredThemePreference(), []);
-  const [preference, setPreferenceState] = useState<ThemePreference>(storedPreference ?? "system");
+  const storedMode = useMemo(() => readStoredModePreference(), []);
+  const storedTheme = useMemo(() => readStoredThemePreference(), []);
+  const [modePreference, setModePreferenceState] = useState<ModePreference>(storedMode ?? "system");
+  const [theme, setThemeState] = useState<ThemeId>(storedTheme ?? DEFAULT_THEME_ID);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
       return false;
@@ -33,12 +45,10 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       setSystemPrefersDark(event.matches);
     };
 
-    if (preference === "system") {
-      if (typeof media.addEventListener === "function") {
-        media.addEventListener("change", handleChange);
-      } else if (typeof media.addListener === "function") {
-        media.addListener(handleChange);
-      }
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(handleChange);
     }
 
     setSystemPrefersDark(media.matches);
@@ -50,30 +60,71 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
         media.removeListener(handleChange);
       }
     };
-  }, [preference]);
+  }, []);
 
-  const resolvedTheme = useMemo(() => resolveTheme(preference, systemPrefersDark), [preference, systemPrefersDark]);
+  const resolvedMode = useMemo(
+    () => resolveMode(modePreference, systemPrefersDark),
+    [modePreference, systemPrefersDark],
+  );
 
   useEffect(() => {
-    applyThemeToDocument(resolvedTheme);
-  }, [resolvedTheme]);
+    applyThemeToDocument(theme, resolvedMode);
+  }, [resolvedMode, theme]);
 
   useEffect(() => {
-    writeThemePreference(preference);
-  }, [preference]);
+    writeThemePreference(theme);
+  }, [theme]);
 
-  const setPreference = useCallback((next: ThemePreference) => {
-    setPreferenceState(next);
+  useEffect(() => {
+    writeModePreference(modePreference);
+  }, [modePreference]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === MODE_STORAGE_KEY) {
+        const next = event.newValue;
+        if (next === "light" || next === "dark" || next === "system") {
+          setModePreferenceState(next);
+        } else if (next === null) {
+          setModePreferenceState("system");
+        }
+        return;
+      }
+      if (event.key === THEME_STORAGE_KEY) {
+        const next = event.newValue;
+        if (typeof next === "string" && next.length > 0) {
+          setThemeState(next as ThemeId);
+        } else if (next === null) {
+          setThemeState(DEFAULT_THEME_ID);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  const setTheme = useCallback((next: ThemeId) => {
+    setThemeState(next);
+  }, []);
+
+  const setModePreference = useCallback((next: ModePreference) => {
+    setModePreferenceState(next);
   }, []);
 
   const value = useMemo(
     () => ({
-      preference,
-      resolvedTheme,
+      theme,
+      modePreference,
+      resolvedMode,
       systemPrefersDark,
-      setPreference,
+      setTheme,
+      setModePreference,
     }),
-    [preference, resolvedTheme, setPreference, systemPrefersDark],
+    [modePreference, resolvedMode, setModePreference, setTheme, systemPrefersDark, theme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

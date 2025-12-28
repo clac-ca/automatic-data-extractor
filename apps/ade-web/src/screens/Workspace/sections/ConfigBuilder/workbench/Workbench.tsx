@@ -52,7 +52,7 @@ import { configurationKeys } from "@shared/configurations/keys";
 import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
-import { isDarkTheme, useTheme } from "@shared/theme";
+import { isDarkMode, useTheme } from "@shared/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@shared/api";
 import type { components } from "@schema";
@@ -316,8 +316,8 @@ export function Workbench({
   );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
   const theme = useTheme();
-  const menuAppearance = isDarkTheme(theme.resolvedTheme) ? "dark" : "light";
-  const editorThemeId = theme.resolvedTheme === "light" ? "vs-light" : "ade-dark";
+  const menuAppearance = isDarkMode(theme.resolvedMode) ? "dark" : "light";
+  const editorThemeId = theme.resolvedMode === "light" ? "vs-light" : "ade-dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [explorer, setExplorer] = useState(() => {
