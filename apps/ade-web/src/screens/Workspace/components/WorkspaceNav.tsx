@@ -138,6 +138,7 @@ export function WorkspaceNav({
       <div
         className={clsx(
           "absolute inset-y-0 left-0 z-40 flex flex-col bg-white",
+          "border-r border-slate-300/80",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
           !isPinned && panelExpanded && "shadow-xl",
