@@ -15,6 +15,7 @@ import DocumentsV6Screen from "@screens/DocumentsV6";
 import DocumentsV7Screen from "@screens/DocumentsV7";
 import DocumentsV8Screen from "@screens/DocumentsV8";
 import DocumentsV9Screen from "@screens/DocumentsV9";
+import DocumentsV10Screen from "@screens/DocumentsV10";
 import LogoutScreen from "@screens/Logout";
 import NotFoundScreen from "@screens/NotFound";
 
@@ -73,6 +74,8 @@ export function ScreenSwitch() {
       return <DocumentsV8Screen />;
     case "documents-v9":
       return <DocumentsV9Screen />;
+    case "documents-v10":
+      return <DocumentsV10Screen />;
     default:
       break;
   }

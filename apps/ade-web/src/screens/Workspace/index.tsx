@@ -33,6 +33,7 @@ import WorkspaceDocumentsV6Route from "@screens/Workspace/sections/DocumentsV6";
 import WorkspaceDocumentsV7Route from "@screens/Workspace/sections/DocumentsV7";
 import WorkspaceDocumentsV8Route from "@screens/Workspace/sections/DocumentsV8";
 import WorkspaceDocumentsV9Route from "@screens/Workspace/sections/DocumentsV9";
+import WorkspaceDocumentsV10Route from "@screens/Workspace/sections/DocumentsV10";
 import DocumentDetailRoute from "@screens/Workspace/sections/Documents/components/DocumentDetail";
 import WorkspaceRunsRoute from "@screens/Workspace/sections/Runs";
 import WorkspaceConfigsIndexRoute from "@screens/Workspace/sections/ConfigBuilder";
@@ -343,6 +344,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const isDocumentsV7 = section?.kind === "content" && section.key === "documents-v7";
   const isDocumentsV8 = section?.kind === "content" && section.key === "documents-v8";
   const isDocumentsV9 = section?.kind === "content" && section.key === "documents-v9";
+  const isDocumentsV10 = section?.kind === "content" && section.key === "documents-v10";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
@@ -391,7 +393,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     isDocumentsV6 ||
     isDocumentsV7 ||
     isDocumentsV8 ||
-    isDocumentsV9
+    isDocumentsV9 ||
+    isDocumentsV10
       ? undefined
       : documentsSearch ?? workspaceSearch;
 
@@ -630,6 +633,13 @@ export function resolveWorkspaceSection(
         kind: "content",
         key: "documents-v9",
         element: <WorkspaceDocumentsV9Route />,
+        fullHeight: true,
+      };
+    case "documents-v10":
+      return {
+        kind: "content",
+        key: "documents-v10",
+        element: <WorkspaceDocumentsV10Route />,
         fullHeight: true,
       };
     case "runs":

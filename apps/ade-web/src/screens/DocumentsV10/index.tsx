@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import clsx from "clsx";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { RequireSession } from "@shared/auth/components/RequireSession";
@@ -15,17 +14,17 @@ import { DocumentsGrid } from "./components/DocumentsGrid";
 import { DocumentsHeader } from "./components/DocumentsHeader";
 import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
-import { useDocumentsV9Model } from "./hooks/useDocumentsV9Model";
+import { useDocumentsV10Model } from "./hooks/useDocumentsV10Model";
 
-export default function DocumentsV9Screen() {
+export default function DocumentsV10Screen() {
   return (
     <RequireSession>
-      <DocumentsV9Redirect />
+      <DocumentsV10Redirect />
     </RequireSession>
   );
 }
 
-function DocumentsV9Redirect() {
+function DocumentsV10Redirect() {
   const location = useLocation();
   const navigate = useNavigate();
   const session = useSession();
@@ -50,7 +49,7 @@ function DocumentsV9Redirect() {
       return;
     }
 
-    const target = `/workspaces/${targetWorkspace.id}/documents-v9${location.search}${location.hash}`;
+    const target = `/workspaces/${targetWorkspace.id}/documents-v10${location.search}${location.hash}`;
     navigate(target, { replace: true });
   }, [
     location.hash,
@@ -72,7 +71,7 @@ function DocumentsV9Redirect() {
   return null;
 }
 
-export function DocumentsV9Workbench() {
+export function DocumentsV10Workbench() {
   const session = useSession();
   const { workspace } = useWorkspaceContext();
   const location = useLocation();
@@ -81,7 +80,7 @@ export function DocumentsV9Workbench() {
   const currentUserLabel = session.user.display_name || session.user.email || "You";
   const currentUserId = session.user.id;
 
-  const model = useDocumentsV9Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
+  const model = useDocumentsV10Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
   const handleClearFilters = () => {
     model.actions.setSearch("");
     model.actions.setBuiltInView("all");
@@ -107,6 +106,10 @@ export function DocumentsV9Workbench() {
   };
 
   const onActivate = (id: string) => {
+    if (model.state.activeId === id && model.state.previewOpen) {
+      onClosePreview();
+      return;
+    }
     const hadDoc = Boolean(urlDocId);
     setDocParam(id, hadDoc);
     model.actions.openPreview(id);
@@ -118,7 +121,7 @@ export function DocumentsV9Workbench() {
   };
 
   return (
-    <div className="documents-v9 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
+    <div className="documents-v10 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
       <DocumentsHeader
         search={model.state.search}
         onSearchChange={model.actions.setSearch}
@@ -130,13 +133,8 @@ export function DocumentsV9Workbench() {
         onFileInputChange={model.actions.handleFileInputChange}
       />
 
-      <div className={clsx("flex min-h-0 min-w-0 flex-1 flex-col", model.state.previewOpen && "lg:flex-row")}>
-        <section
-          className={clsx(
-            "flex min-h-0 min-w-0 flex-1 flex-col",
-            model.state.previewOpen && "lg:border-r lg:border-slate-200",
-          )}
-        >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DocumentsFiltersBar
             workspaceId={workspace.id}
             filters={model.state.filters}
@@ -182,6 +180,43 @@ export function DocumentsV9Workbench() {
                 onDownloadOriginal={model.actions.downloadOriginal}
                 onDownloadOutput={model.actions.downloadOutputFromRow}
                 onCopyLink={model.actions.copyLink}
+                expandedId={model.state.previewOpen ? model.state.activeId : null}
+                expandedContent={
+                  model.state.previewOpen ? (
+                    <DocumentsPreviewPane
+                      workspaceId={workspace.id}
+                      document={model.derived.activeDocument}
+                      now={model.derived.now}
+                      activeSheetId={model.state.activeSheetId}
+                      onSheetChange={model.actions.setActiveSheetId}
+                      runs={model.derived.runs}
+                      runsLoading={model.derived.runsLoading}
+                      selectedRunId={model.derived.selectedRunId}
+                      onSelectRun={model.actions.selectRun}
+                      activeRun={model.derived.activeRun}
+                      runLoading={model.derived.runLoading}
+                      outputUrl={model.derived.outputUrl}
+                      onDownloadOutput={model.actions.downloadOutput}
+                      onDownloadOriginal={model.actions.downloadOriginal}
+                      onReprocess={model.actions.reprocess}
+                      people={model.derived.people}
+                      currentUserKey={model.derived.currentUserKey}
+                      currentUserLabel={currentUserLabel}
+                      onAssign={model.actions.assignDocument}
+                      onPickUp={model.actions.pickUpDocument}
+                      onCopyLink={model.actions.copyLink}
+                      comments={model.derived.activeComments}
+                      onAddComment={model.actions.addComment}
+                      onEditComment={model.actions.editComment}
+                      onDeleteComment={model.actions.deleteComment}
+                      onTagsChange={model.actions.updateTagsOptimistic}
+                      workbook={model.derived.workbook}
+                      workbookLoading={model.derived.workbookLoading}
+                      workbookError={model.derived.workbookError}
+                      onClose={onClosePreview}
+                    />
+                  ) : null
+                }
               />
 
               <BulkActionBar
@@ -193,64 +228,69 @@ export function DocumentsV9Workbench() {
               />
             </>
           ) : (
-            <DocumentsBoard
-              columns={model.derived.boardColumns}
-              groupBy={model.state.groupBy}
-              onGroupByChange={model.actions.setGroupBy}
-              activeId={model.state.activeId}
-              onActivate={onActivate}
-              now={model.derived.now}
-              isLoading={model.derived.isLoading}
-              isError={model.derived.isError}
-              hasNextPage={model.derived.hasNextPage}
-              isFetchingNextPage={model.derived.isFetchingNextPage}
-              onLoadMore={model.actions.loadMore}
-              onRefresh={model.actions.refreshDocuments}
-              onUploadClick={model.actions.handleUploadClick}
-              onClearFilters={handleClearFilters}
-              showNoDocuments={model.derived.showNoDocuments}
-              showNoResults={model.derived.showNoResults}
-              people={model.derived.people}
-              onAssign={model.actions.assignDocument}
-              onPickUp={model.actions.pickUpDocument}
-            />
+            <>
+              <DocumentsBoard
+                columns={model.derived.boardColumns}
+                groupBy={model.state.groupBy}
+                onGroupByChange={model.actions.setGroupBy}
+                activeId={model.state.previewOpen ? model.state.activeId : null}
+                onActivate={onActivate}
+                now={model.derived.now}
+                isLoading={model.derived.isLoading}
+                isError={model.derived.isError}
+                hasNextPage={model.derived.hasNextPage}
+                isFetchingNextPage={model.derived.isFetchingNextPage}
+                onLoadMore={model.actions.loadMore}
+                onRefresh={model.actions.refreshDocuments}
+                onUploadClick={model.actions.handleUploadClick}
+                onClearFilters={handleClearFilters}
+                showNoDocuments={model.derived.showNoDocuments}
+                showNoResults={model.derived.showNoResults}
+                people={model.derived.people}
+                onAssign={model.actions.assignDocument}
+                onPickUp={model.actions.pickUpDocument}
+              />
+              {model.state.previewOpen ? (
+                <div className="border-t border-slate-200 bg-slate-50 px-6 pb-6 pt-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <DocumentsPreviewPane
+                      workspaceId={workspace.id}
+                      document={model.derived.activeDocument}
+                      now={model.derived.now}
+                      activeSheetId={model.state.activeSheetId}
+                      onSheetChange={model.actions.setActiveSheetId}
+                      runs={model.derived.runs}
+                      runsLoading={model.derived.runsLoading}
+                      selectedRunId={model.derived.selectedRunId}
+                      onSelectRun={model.actions.selectRun}
+                      activeRun={model.derived.activeRun}
+                      runLoading={model.derived.runLoading}
+                      outputUrl={model.derived.outputUrl}
+                      onDownloadOutput={model.actions.downloadOutput}
+                      onDownloadOriginal={model.actions.downloadOriginal}
+                      onReprocess={model.actions.reprocess}
+                      people={model.derived.people}
+                      currentUserKey={model.derived.currentUserKey}
+                      currentUserLabel={currentUserLabel}
+                      onAssign={model.actions.assignDocument}
+                      onPickUp={model.actions.pickUpDocument}
+                      onCopyLink={model.actions.copyLink}
+                      comments={model.derived.activeComments}
+                      onAddComment={model.actions.addComment}
+                      onEditComment={model.actions.editComment}
+                      onDeleteComment={model.actions.deleteComment}
+                      onTagsChange={model.actions.updateTagsOptimistic}
+                      workbook={model.derived.workbook}
+                      workbookLoading={model.derived.workbookLoading}
+                      workbookError={model.derived.workbookError}
+                      onClose={onClosePreview}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
         </section>
-
-        {model.state.previewOpen ? (
-          <DocumentsPreviewPane
-            workspaceId={workspace.id}
-            document={model.derived.activeDocument}
-            now={model.derived.now}
-            activeSheetId={model.state.activeSheetId}
-            onSheetChange={model.actions.setActiveSheetId}
-            runs={model.derived.runs}
-            runsLoading={model.derived.runsLoading}
-            selectedRunId={model.derived.selectedRunId}
-            onSelectRun={model.actions.selectRun}
-            activeRun={model.derived.activeRun}
-            runLoading={model.derived.runLoading}
-            outputUrl={model.derived.outputUrl}
-            onDownloadOutput={model.actions.downloadOutput}
-            onDownloadOriginal={model.actions.downloadOriginal}
-            onReprocess={model.actions.reprocess}
-            people={model.derived.people}
-            currentUserKey={model.derived.currentUserKey}
-            currentUserLabel={currentUserLabel}
-            onAssign={model.actions.assignDocument}
-            onPickUp={model.actions.pickUpDocument}
-            onCopyLink={model.actions.copyLink}
-            comments={model.derived.activeComments}
-            onAddComment={model.actions.addComment}
-            onEditComment={model.actions.editComment}
-            onDeleteComment={model.actions.deleteComment}
-            onTagsChange={model.actions.updateTagsOptimistic}
-            workbook={model.derived.workbook}
-            workbookLoading={model.derived.workbookLoading}
-            workbookError={model.derived.workbookError}
-            onClose={onClosePreview}
-          />
-        ) : null}
       </div>
 
       <SaveViewDialog open={model.state.saveViewOpen} onClose={model.actions.closeSaveView} onSave={model.actions.saveView} />

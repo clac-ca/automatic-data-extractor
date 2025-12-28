@@ -1,0 +1,312 @@
+import clsx from "clsx";
+import type { KeyboardEvent, ReactNode } from "react";
+
+import type { DocumentEntry, WorkspacePerson } from "../types";
+import { getDocumentOutputRun } from "../data";
+import { fileTypeLabel, formatRelativeTime } from "../utils";
+import { EmptyState } from "./EmptyState";
+import { ChatIcon, DocumentIcon, UserIcon } from "./icons";
+import { MappingBadge } from "./MappingBadge";
+import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
+import { RowActionsMenu } from "./RowActionsMenu";
+import { StatusPill } from "./StatusPill";
+
+const INTERACTIVE_SELECTOR =
+  "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
+
+function isInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest(INTERACTIVE_SELECTOR));
+}
+
+export function DocumentsGrid({
+  documents,
+  activeId,
+  selectedIds,
+  onSelect,
+  onSelectAll,
+  onClearSelection,
+  allVisibleSelected,
+  onActivate,
+  onUploadClick,
+  onClearFilters,
+  showNoDocuments,
+  showNoResults,
+  isLoading,
+  isError,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  onRefresh,
+  now,
+  onKeyNavigate,
+
+  people,
+  onAssign,
+  onPickUp,
+
+  onDownloadOriginal,
+  onDownloadOutput,
+  onCopyLink,
+  expandedId,
+  expandedContent,
+}: {
+  documents: DocumentEntry[];
+  activeId: string | null;
+  selectedIds: Set<string>;
+  onSelect: (id: string) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  allVisibleSelected: boolean;
+  onActivate: (id: string) => void;
+  onUploadClick: () => void;
+  onClearFilters: () => void;
+  showNoDocuments: boolean;
+  showNoResults: boolean;
+  isLoading: boolean;
+  isError: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
+  onRefresh: () => void;
+  now: number;
+  onKeyNavigate: (event: KeyboardEvent<HTMLDivElement>) => void;
+
+  people: WorkspacePerson[];
+  onAssign: (documentId: string, assigneeKey: string | null) => void;
+  onPickUp: (documentId: string) => void;
+
+  onDownloadOriginal: (doc: DocumentEntry | null) => void;
+  onDownloadOutput: (doc: DocumentEntry) => void;
+  onCopyLink: (doc: DocumentEntry | null) => void;
+  expandedId?: string | null;
+  expandedContent?: ReactNode;
+}) {
+  const hasSelectable = documents.some((doc) => doc.record);
+  const showLoading = isLoading && documents.length === 0;
+  const showError = isError && documents.length === 0;
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+        <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
+          <div>
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(event) => (event.target.checked ? onSelectAll() : onClearSelection())}
+              aria-label="Select all visible documents"
+              disabled={!hasSelectable}
+            />
+          </div>
+          <div>Document</div>
+          <div>Status</div>
+          <div>Assignee</div>
+          <div>Tags</div>
+          <div className="text-right">Updated</div>
+          <div className="text-right">Actions</div>
+        </div>
+      </div>
+
+      <div
+        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
+        onKeyDown={onKeyNavigate}
+        tabIndex={0}
+        role="list"
+      >
+        {showLoading ? (
+          <div className="py-8">
+            <EmptyState title="Loading documents" description="Fetching the latest processing activity." />
+          </div>
+        ) : showError ? (
+          <div className="py-8">
+            <EmptyState
+              title="Unable to load documents"
+              description="We could not refresh this view. Try again."
+              action={{ label: "Try again", onClick: onRefresh }}
+            />
+          </div>
+        ) : showNoDocuments ? (
+          <div className="py-8">
+            <EmptyState
+              title="No documents yet"
+              description="Upload your first batch to start processing."
+              action={{ label: "Upload files", onClick: onUploadClick }}
+            />
+          </div>
+        ) : showNoResults ? (
+          <div className="py-8">
+            <EmptyState
+              title="No results"
+              description="Try clearing filters or adjusting the search."
+              action={{ label: "Clear filters", onClick: onClearFilters }}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {documents.map((doc) => {
+              const isSelectable = Boolean(doc.record);
+              const outputRun = getDocumentOutputRun(doc.record);
+              const canDownloadOutput = Boolean(outputRun?.run_id);
+              const isUnassigned = !doc.assigneeKey;
+              const isExpanded = Boolean(expandedContent && expandedId === doc.id);
+              const isActive = Boolean(isExpanded && activeId === doc.id);
+              const previewId = `documents-v10-preview-${doc.id}`;
+
+              return (
+                <div key={doc.id} className="border-b border-slate-100">
+                  <div
+                    role="listitem"
+                    onClick={(event) => {
+                      if (isInteractiveTarget(event.target)) return;
+                      onActivate(doc.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      if (event.currentTarget !== event.target) return;
+                      event.preventDefault();
+                      onActivate(doc.id);
+                    }}
+                    className={clsx(
+                      "grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
+                      isActive ? "bg-brand-50" : "hover:bg-slate-50",
+                    )}
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-controls={isExpanded ? previewId : undefined}
+                  >
+                    <div>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(doc.id)}
+                        onChange={() => {
+                          if (isSelectable) onSelect(doc.id);
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Select ${doc.name}`}
+                        disabled={!isSelectable}
+                      />
+                    </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
+                      <DocumentIcon className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
+                      <p className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                          {fileTypeLabel(doc.fileType)}
+                        </span>
+                        <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
+                        {doc.commentCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                            <ChatIcon className="h-3.5 w-3.5" />
+                            {doc.commentCount}
+                          </span>
+                        ) : null}
+                        {doc.uploader ? <span className="text-[11px] text-slate-400">{doc.uploader}</span> : null}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <StatusPill status={doc.status} />
+                    <MappingBadge mapping={doc.mapping} />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50">
+                      <UserIcon className="h-3.5 w-3.5 text-slate-500" />
+                    </span>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700">
+                        {doc.assigneeLabel ?? "Unassigned"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        {isUnassigned ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPickUp(doc.id);
+                            }}
+                            className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                          >
+                            Pick up
+                          </button>
+                        ) : null}
+                        <div data-ignore-row-click className="min-w-0">
+                          <PeoplePicker
+                            people={people}
+                            value={[doc.assigneeKey ?? unassignedKey()]}
+                            onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                            placeholder="Assign..."
+                            includeUnassigned
+                            buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-500">
+                    {doc.tags.length > 0 ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+                        {doc.tags[0]}
+                        {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">No tags</span>
+                    )}
+                  </div>
+
+                  <div className="text-right text-xs text-slate-500">{formatRelativeTime(now, doc.updatedAt)}</div>
+
+                    <div className="flex justify-end" data-ignore-row-click>
+                      <RowActionsMenu
+                        onDownloadOutput={() => onDownloadOutput(doc)}
+                        onDownloadOriginal={() => onDownloadOriginal(doc)}
+                        onCopyLink={() => onCopyLink(doc)}
+                        outputDisabled={!canDownloadOutput}
+                        originalDisabled={!doc.record}
+                        copyDisabled={!doc.record}
+                      />
+                    </div>
+                  </div>
+
+                  {isExpanded ? (
+                    <div
+                      id={previewId}
+                      role="region"
+                      aria-label={`Preview details for ${doc.name}`}
+                      className="bg-slate-50/60 px-6 pb-4 pt-2"
+                    >
+                      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        {expandedContent}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+
+            {hasNextPage ? (
+              <div className="flex justify-center py-4">
+                <button
+                  type="button"
+                  onClick={onLoadMore}
+                  className="rounded-md text-xs font-semibold text-brand-600 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:text-slate-400"
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? "Loading more..." : "Load more"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

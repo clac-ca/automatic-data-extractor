@@ -53,6 +53,7 @@ type WorkspaceSectionId =
   | "documents-v7"
   | "documents-v8"
   | "documents-v9"
+  | "documents-v10"
   | "runs"
   | "config-builder"
   | "settings";
@@ -118,6 +119,12 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     id: "documents-v9",
     path: "documents-v9",
     label: "Documents v9",
+    icon: DocumentsIcon,
+  },
+  {
+    id: "documents-v10",
+    path: "documents-v10",
+    label: "Documents v10",
     icon: DocumentsIcon,
   },
   {
