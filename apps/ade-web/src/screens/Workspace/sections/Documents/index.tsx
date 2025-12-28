@@ -56,17 +56,16 @@ import { Input } from "@ui/Input";
 type DocumentStatus = components["schemas"]["DocumentStatus"];
 type DocumentRecord = components["schemas"]["DocumentOut"];
 type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
-type RunSubmissionOptions = components["schemas"]["RunCreateOptions"];
+type RunSubmissionOptions = components["schemas"]["RunCreateOptionsBase"];
 type RunSubmissionPayload = {
-  readonly configId: string;
+  readonly configId: components["schemas"]["RunWorkspaceCreateRequest"]["configuration_id"];
+  readonly documentId: string;
   readonly options: RunSubmissionOptions;
 };
-type RunBatchPathParams =
-  paths["/api/v1/configurations/{configuration_id}/runs/batch"]["post"]["parameters"]["path"];
 type RunBatchCreateOptions = components["schemas"]["RunBatchCreateOptions"];
-type RunBatchCreateRequest = components["schemas"]["RunBatchCreateRequest"];
+type RunBatchCreateRequest = components["schemas"]["RunWorkspaceBatchCreateRequest"];
 type RunBatchSubmissionPayload = {
-  readonly configId: RunBatchPathParams["configuration_id"];
+  readonly configId: RunBatchCreateRequest["configuration_id"];
   readonly documentIds: readonly string[];
   readonly options?: RunBatchCreateOptions;
 };
@@ -429,7 +428,10 @@ export default function WorkspaceDocumentsRoute() {
         [item.id]: { status: "pending" },
       }));
 
-      createRun(runOnUploadConfigId, { input_document_id: documentId })
+      createRun(workspace.id, {
+        input_document_id: documentId,
+        configuration_id: runOnUploadConfigId ?? undefined,
+      })
         .then((run) => {
           setRunOnUploadStates((current) => ({
             ...current,
@@ -444,7 +446,7 @@ export default function WorkspaceDocumentsRoute() {
           }));
         });
     }
-  }, [runOnUploadAvailable, runOnUploadConfigId, safeModeLoading, uploadQueue.items]);
+  }, [runOnUploadAvailable, runOnUploadConfigId, safeModeLoading, uploadQueue.items, workspace.id]);
 
   /* ----------------------------- URL sync ----------------------------- */
   useEffect(() => {
@@ -931,10 +933,14 @@ function useSubmitRun(workspaceId: string) {
   const queryClient = useQueryClient();
 
   return useMutation<RunResource, Error, RunSubmissionPayload>({
-    mutationFn: async ({ configId, options }) => {
-      const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
-        params: { path: { configuration_id: configId } },
-        body: { options },
+    mutationFn: async ({ configId, documentId, options }) => {
+      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs", {
+        params: { path: { workspace_id: workspaceId } },
+        body: {
+          input_document_id: documentId,
+          configuration_id: configId ?? undefined,
+          options,
+        },
       });
       if (!data) throw new Error("Expected run payload.");
       return data as RunResource;
@@ -959,11 +965,11 @@ function useSubmitRunsBatch(workspaceId: string) {
       };
       const body: RunBatchCreateRequest = {
         document_ids: [...documentIds],
+        configuration_id: configId ?? undefined,
         options: options ?? baseRunOptions,
       };
-      const pathParams: RunBatchPathParams = { configuration_id: configId };
-      const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs/batch", {
-        params: { path: pathParams },
+      const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs/batch", {
+        params: { path: { workspace_id: workspaceId } },
         body,
       });
       if (!data) {
@@ -2680,7 +2686,8 @@ function RunExtractionDrawerContent({
     submitRun.mutate(
       {
         configId: selectedConfig.id,
-        options: { ...runOptions, input_document_id: documentRecord.id },
+        documentId: documentRecord.id,
+        options: runOptions,
       },
       {
         onSuccess: (run) => {

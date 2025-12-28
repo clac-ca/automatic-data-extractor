@@ -1122,8 +1122,12 @@ function useDocumentsV8Model({
       return;
     }
     const targets = Array.from(selectedIds);
-    Promise.all(targets.map((id) => updateTags(id, { add: ["priority"] })))
+    void client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/tags", {
+      params: { path: { workspace_id: workspaceId } },
+      body: { document_ids: targets, add: ["priority"] },
+    })
       .then(() => {
+        queryClient.invalidateQueries({ queryKey: documentsV8Keys.workspace(workspaceId) });
         notifyToast({
           title: "Tags updated",
           description: `${targets.length} document${targets.length === 1 ? "" : "s"} tagged priority.`,
@@ -1137,7 +1141,7 @@ function useDocumentsV8Model({
           intent: "warning",
         });
       });
-  }, [notifyToast, selectedIds, updateTags]);
+  }, [notifyToast, queryClient, selectedIds, workspaceId]);
 
   const bulkRetry = useCallback(() => {
     notifyToast({
@@ -1152,13 +1156,10 @@ function useDocumentsV8Model({
       return;
     }
     const ids = Array.from(selectedIds);
-    Promise.all(
-      ids.map((documentId) =>
-        client.DELETE("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
-          params: { path: { workspace_id: workspaceId, document_id: documentId } },
-        }),
-      ),
-    )
+    void client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/delete", {
+      params: { path: { workspace_id: workspaceId } },
+      body: { document_ids: ids },
+    })
       .then(() => {
         queryClient.invalidateQueries({ queryKey: documentsV8Keys.workspace(workspaceId) });
         setSelectedIds(new Set());

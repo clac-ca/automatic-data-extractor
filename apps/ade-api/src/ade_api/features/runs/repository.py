@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, desc, func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.pagination import Page, paginate_sql
+from ade_api.common.types import OrderBy
 from ade_api.models import Build, BuildStatus, Run, RunStatus
+
+from .filters import RunFilters, apply_run_filters
 
 __all__ = ["RunsRepository"]
 
@@ -30,8 +32,8 @@ class RunsRepository:
         *,
         workspace_id: UUID,
         configuration_id: UUID | None,
-        statuses: Sequence[RunStatus] | None,
-        input_document_id: UUID | None,
+        filters: RunFilters,
+        order_by: OrderBy,
         page: int,
         page_size: int,
         include_total: bool,
@@ -41,10 +43,7 @@ class RunsRepository:
         stmt: Select = select(Run).where(Run.workspace_id == workspace_id)
         if configuration_id:
             stmt = stmt.where(Run.configuration_id == configuration_id)
-        if statuses:
-            stmt = stmt.where(Run.status.in_(statuses))
-        if input_document_id:
-            stmt = stmt.where(Run.input_document_id == input_document_id)
+        stmt = apply_run_filters(stmt, filters)
 
         return await paginate_sql(
             self._session,
@@ -52,7 +51,7 @@ class RunsRepository:
             page=page,
             page_size=page_size,
             include_total=include_total,
-            order_by=[desc(Run.created_at)],
+            order_by=order_by,
         )
 
     async def count_queued(self) -> int:

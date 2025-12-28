@@ -37,6 +37,10 @@ from .exceptions import (
 )
 from .filters import DocumentFilters
 from .schemas import (
+    DocumentBatchDeleteRequest,
+    DocumentBatchDeleteResponse,
+    DocumentBatchTagsRequest,
+    DocumentBatchTagsResponse,
     DocumentOut,
     DocumentPage,
     DocumentSheet,
@@ -96,24 +100,39 @@ get_sort_order = make_sort_dependency(
 
 _FILTER_KEYS = {
     "q",
+    "status",
     "status_in",
+    "run_status",
     "source_in",
     "tags",
+    "tag_mode",
     "tags_match",
     "tags_not",
     "tags_empty",
     "uploader",
+    "uploader_id",
     "uploader_id_in",
+    "uploader_email",
+    "folder_id",
+    "created_after",
+    "created_before",
+    "updated_after",
+    "updated_before",
     "created_at_from",
     "created_at_to",
     "last_run_from",
     "last_run_to",
     "byte_size_from",
     "byte_size_to",
+    "file_type",
+    "has_output",
 }
 
 
-def get_document_filters(request: Request) -> DocumentFilters:
+def get_document_filters(
+    request: Request,
+    filters: Annotated[DocumentFilters, Depends()],
+) -> DocumentFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
     extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
@@ -129,13 +148,7 @@ def get_document_filters(request: Request) -> DocumentFilters:
         ]
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
-    raw: dict[str, Any] = {}
-    for key in allowed:
-        values = request.query_params.getlist(key)
-        if not values:
-            continue
-        raw[key] = values if len(values) > 1 else values[0]
-    return DocumentFilters.model_validate(raw)
+    return filters
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -325,6 +338,49 @@ async def patch_document_tags(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
 
+@router.post(
+    "/batch/tags",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchTagsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update tags on multiple documents",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update tags.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Tag payload is invalid.",
+        },
+    },
+)
+async def patch_document_tags_batch(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchTagsRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentBatchTagsResponse:
+    try:
+        documents = await service.patch_document_tags_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+            add=payload.add,
+            remove=payload.remove,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentTagsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+    return DocumentBatchTagsResponse(documents=documents)
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentOut,
@@ -456,6 +512,42 @@ async def delete_document(
         )
     except DocumentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/batch/delete",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchDeleteResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Soft delete multiple documents",
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to delete documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document deletion.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+    },
+)
+async def delete_documents_batch(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchDeleteRequest,
+    service: DocumentsServiceDep,
+    actor: DocumentManager,
+) -> DocumentBatchDeleteResponse:
+    try:
+        deleted_ids = await service.delete_documents_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+            actor=actor,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return DocumentBatchDeleteResponse(document_ids=deleted_ids)
 
 
 TagCatalogSort = Literal["name", "-count"]

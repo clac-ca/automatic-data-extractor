@@ -10,71 +10,81 @@ import {
 } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { ApiError } from "@shared/api";
 import { useNotifications } from "@shared/notifications";
 import { uploadWorkspaceDocument, type DocumentUploadResponse } from "@shared/documents";
 import { useUploadQueue } from "@shared/uploads/queue";
-import { fetchRun, runOutputUrl, type RunResource } from "@shared/runs/api";
 
 import {
   DOCUMENTS_PAGE_SIZE,
-  documentsV9Keys,
-  downloadProcessedOutput,
   buildDocumentEntry,
   buildUploadEntry,
+  createRunForDocument,
+  documentsV9Keys,
+  downloadRunOutput,
+  downloadWorkspaceDocumentOriginal,
   fetchWorkbookPreview,
   fetchWorkspaceDocuments,
+  fetchWorkspaceRunsForDocument,
+  getDocumentOutputRun,
+  patchWorkspaceDocumentTags,
+  patchWorkspaceDocumentTagsBatch,
+  runHasDownloadableOutput,
+  runOutputDownloadUrl,
 } from "../data";
+
 import type {
   BoardColumn,
   BoardGroup,
   DocumentEntry,
-  DocumentPage,
+  DocumentsFilters,
+  DocumentsSavedView,
   DocumentStatus,
+  RunResource,
   ViewMode,
   WorkbookPreview,
 } from "../types";
-
-type StatusFilterValue = DocumentStatus | "all";
+import { parseTimestamp, stableId } from "../utils";
 
 type WorkbenchState = {
   viewMode: ViewMode;
   groupBy: BoardGroup;
-  boardHideEmpty: boolean;
-
+  hideEmptyColumns: boolean;
+  sort: string | null;
   search: string;
-  statusFilter: StatusFilterValue;
+  filters: DocumentsFilters;
+
+  activeViewKey: string; // builtin:* or saved:*
+  savedViews: DocumentsSavedView[];
 
   selectedIds: Set<string>;
   activeId: string | null;
   previewOpen: boolean;
+
+  activeRunId: string | null;
   activeSheetId: string | null;
 };
 
 type WorkbenchDerived = {
   now: number;
-
   documents: DocumentEntry[];
-  filteredDocuments: DocumentEntry[]; // search-filtered (before status filter)
-  sortedDocuments: DocumentEntry[]; // search + status-filtered + sorted
+  visibleDocuments: DocumentEntry[];
+  activeDocument: DocumentEntry | null;
+
+  boardColumns: BoardColumn[];
 
   statusCounts: Record<DocumentStatus, number>;
-  filteredTotal: number;
-
-  selectedCount: number;
-  selectedReadyCount: number;
-
-  activeDocument: DocumentEntry | null;
-  boardColumns: BoardColumn[];
 
   isLoading: boolean;
   isError: boolean;
-  isRefreshing: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  lastSyncedAt: number | null;
 
+  // Runs
+  runs: RunResource[];
+  runsLoading: boolean;
   activeRun: RunResource | null;
-  runLoading: boolean;
+
   outputUrl: string | null;
   workbook: WorkbookPreview | null;
   workbookLoading: boolean;
@@ -84,7 +94,8 @@ type WorkbenchDerived = {
   showNoResults: boolean;
   allVisibleSelected: boolean;
 
-  hasFilters: boolean;
+  activeViewLabel: string;
+  showSaveView: boolean;
 };
 
 type WorkbenchRefs = {
@@ -94,13 +105,21 @@ type WorkbenchRefs = {
 
 type WorkbenchActions = {
   setSearch: (value: string) => void;
-
-  setStatusFilter: (value: StatusFilterValue) => void;
-  clearFilters: () => void;
-
   setViewMode: (value: ViewMode) => void;
   setGroupBy: (value: BoardGroup) => void;
-  setBoardHideEmpty: (value: boolean) => void;
+  setHideEmptyColumns: (value: boolean) => void;
+  setSort: (value: string | null) => void;
+
+  toggleStatusFilter: (status: DocumentStatus) => void;
+  toggleFileTypeFilter: (type: DocumentsFilters["fileTypes"][number]) => void;
+  setTagMode: (mode: DocumentsFilters["tagMode"]) => void;
+  toggleTagFilter: (tag: string) => void;
+  clearFilters: () => void;
+
+  selectBuiltInView: (id: "all" | "ready" | "processing" | "failed") => void;
+  selectSavedView: (id: string) => void;
+  saveCurrentView: (name: string) => void;
+  deleteSavedView: (id: string) => void;
 
   toggleSelect: (id: string) => void;
   selectAllVisible: () => void;
@@ -109,12 +128,23 @@ type WorkbenchActions = {
   openPreview: (id: string) => void;
   closePreview: () => void;
 
+  setActiveRunId: (id: string) => void;
   setActiveSheetId: (id: string) => void;
+
   handleUploadClick: () => void;
   handleFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 
-  downloadDocument: (doc: DocumentEntry | null) => void;
-  downloadSelected: () => void;
+  downloadOriginal: (doc: DocumentEntry) => void;
+  downloadOutputFromRow: (doc: DocumentEntry) => void;
+  downloadOutputFromPreview: (doc: DocumentEntry, run: RunResource | null) => void;
+
+  reprocessDocument: (doc: DocumentEntry) => void;
+
+  toggleTagOnDocument: (doc: DocumentEntry, tag: string) => void;
+
+  bulkAddTagPrompt: () => void;
+  bulkDownloadOriginals: () => void;
+  bulkReprocess: () => void;
 
   refreshDocuments: () => void;
   loadMore: () => void;
@@ -129,52 +159,71 @@ export type WorkbenchModel = {
   actions: WorkbenchActions;
 };
 
-const BOARD_UNASSIGNED_ID = "__board_unassigned__";
-const BOARD_UNTAGGED_ID = "__board_untagged__";
 const STATUS_ORDER: DocumentStatus[] = ["queued", "processing", "ready", "failed", "archived"];
 
-const STORAGE_KEYS = {
-  viewMode: "ade:documentsV9:viewMode",
-  groupBy: "ade:documentsV9:groupBy",
-  boardHideEmpty: "ade:documentsV9:boardHideEmpty",
-  statusFilter: "ade:documentsV9:statusFilter",
-} as const;
+const STORAGE_KEY_PREFIX = "ade.documents.v9.views";
 
-function safeReadStorage(key: string): string | null {
+function loadSavedViews(workspaceId: string): DocumentsSavedView[] {
+  if (typeof window === "undefined") return [];
+  const key = `${STORAGE_KEY_PREFIX}.${workspaceId}`;
   try {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(key);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DocumentsSavedView[];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
-function safeWriteStorage(key: string, value: string) {
-  try {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(key, value);
-  } catch {
-    // ignore
+function persistSavedViews(workspaceId: string, views: DocumentsSavedView[]) {
+  if (typeof window === "undefined") return;
+  const key = `${STORAGE_KEY_PREFIX}.${workspaceId}`;
+  window.localStorage.setItem(key, JSON.stringify(views));
+}
+
+function defaultFilters(): DocumentsFilters {
+  return { statuses: [], fileTypes: [], tags: [], tagMode: "any" };
+}
+
+function resolveApiErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    const detail = error.problem?.detail as unknown;
+    if (typeof detail === "string" && detail.length > 0) {
+      return detail;
+    }
+    if (detail && typeof detail === "object" && "error" in detail) {
+      const message = (detail as { error?: { message?: string } }).error?.message;
+      if (message) {
+        return message;
+      }
+    }
+    return error.message;
   }
-}
-
-function parseStatusFilter(value: string | null): StatusFilterValue {
-  if (!value) return "all";
-  if (value === "all") return "all";
-  if (value === "queued" || value === "processing" || value === "ready" || value === "failed" || value === "archived") {
-    return value;
+  if (error instanceof Error) {
+    return error.message;
   }
-  return "all";
+  return fallback;
 }
 
-function parseBoardGroup(value: string | null): BoardGroup {
-  if (value === "status" || value === "tag" || value === "uploader") return value;
-  return "status";
+function isActiveConfigurationMissing(error: unknown) {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+  return error.problem?.detail === "active_configuration_not_found";
 }
 
-function parseViewMode(value: string | null): ViewMode {
-  if (value === "grid" || value === "board") return value;
-  return "grid";
+function isSameViewState(a: DocumentsSavedView["state"], b: DocumentsSavedView["state"]) {
+  const normalize = (s: DocumentsSavedView["state"]) => ({
+    ...s,
+    filters: {
+      ...s.filters,
+      statuses: [...s.filters.statuses].slice().sort(),
+      fileTypes: [...s.filters.fileTypes].slice().sort(),
+      tags: [...s.filters.tags].slice().sort(),
+    },
+  });
+  return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
 }
 
 export function useDocumentsV9Model({
@@ -187,25 +236,37 @@ export function useDocumentsV9Model({
   const { notifyToast } = useNotifications();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<ViewMode>(() => parseViewMode(safeReadStorage(STORAGE_KEYS.viewMode)));
-  const [groupBy, setGroupBy] = useState<BoardGroup>(() => parseBoardGroup(safeReadStorage(STORAGE_KEYS.groupBy)));
-  const [boardHideEmpty, setBoardHideEmpty] = useState<boolean>(() => safeReadStorage(STORAGE_KEYS.boardHideEmpty) !== "0");
-
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [groupBy, setGroupBy] = useState<BoardGroup>("status");
+  const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
+  const [sort, setSort] = useState<string | null>("-created_at");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(() =>
-    parseStatusFilter(safeReadStorage(STORAGE_KEYS.statusFilter)),
-  );
+  const [filters, setFilters] = useState<DocumentsFilters>(() => defaultFilters());
+
+  const [savedViews, setSavedViews] = useState<DocumentsSavedView[]>(() => loadSavedViews(workspaceId));
+  const [activeViewKey, setActiveViewKey] = useState<string>("builtin:all");
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+
   const [now, setNow] = useState(() => Date.now());
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    setSavedViews(loadSavedViews(workspaceId));
+  }, [workspaceId]);
+
+  useEffect(() => {
+    persistSavedViews(workspaceId, savedViews);
+  }, [savedViews, workspaceId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30000);
@@ -216,41 +277,47 @@ export function useDocumentsV9Model({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "/") {
         const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
-          return;
-        }
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
         event.preventDefault();
         searchRef.current?.focus();
       }
-      if (event.key === "Escape") {
-        setPreviewOpen(false);
-      }
+      if (event.key === "Escape") setPreviewOpen(false);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Persist view preferences
-  useEffect(() => safeWriteStorage(STORAGE_KEYS.viewMode, viewMode), [viewMode]);
-  useEffect(() => safeWriteStorage(STORAGE_KEYS.groupBy, groupBy), [groupBy]);
-  useEffect(() => safeWriteStorage(STORAGE_KEYS.boardHideEmpty, boardHideEmpty ? "1" : "0"), [boardHideEmpty]);
-  useEffect(() => safeWriteStorage(STORAGE_KEYS.statusFilter, statusFilter), [statusFilter]);
-
   const startUpload = useCallback(
-    (
-      file: File,
-      handlers: { onProgress: (progress: { loaded: number; total: number | null; percent: number | null }) => void },
-    ) => uploadWorkspaceDocument(workspaceId, file, { onProgress: handlers.onProgress }),
+    (file: File, handlers: { onProgress: (progress: { loaded: number; total: number | null; percent: number | null }) => void }) =>
+      uploadWorkspaceDocument(workspaceId, file, { onProgress: handlers.onProgress }),
     [workspaceId],
   );
 
-  const uploadQueue = useUploadQueue<DocumentUploadResponse>({
-    startUpload,
-  });
+  const uploadQueue = useUploadQueue<DocumentUploadResponse>({ startUpload });
 
-  const sort = "-created_at";
-  const documentsQuery = useInfiniteQuery<DocumentPage>({
-    queryKey: documentsV9Keys.list(workspaceId, sort),
+  const normalizedSearch = search.trim();
+  const normalizedFilters = useMemo<DocumentsFilters>(
+    () => ({
+      statuses: [...filters.statuses].slice().sort(),
+      fileTypes: [...filters.fileTypes].slice().sort(),
+      tags: [...filters.tags].slice().sort(),
+      tagMode: filters.tagMode,
+    }),
+    [filters],
+  );
+
+  const listKey = useMemo(
+    () =>
+      documentsV9Keys.list(workspaceId, {
+        sort,
+        search: normalizedSearch,
+        filters: normalizedFilters,
+      }),
+    [normalizedFilters, normalizedSearch, sort, workspaceId],
+  );
+
+  const documentsQuery = useInfiniteQuery({
+    queryKey: listKey,
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
       fetchWorkspaceDocuments(
@@ -259,6 +326,8 @@ export function useDocumentsV9Model({
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
           pageSize: DOCUMENTS_PAGE_SIZE,
+          search: normalizedSearch,
+          filters: normalizedFilters,
         },
         signal,
       ),
@@ -284,11 +353,7 @@ export function useDocumentsV9Model({
       }
       if (item.status === "failed" && item.error && !handledUploadsRef.current.has(`fail-${item.id}`)) {
         handledUploadsRef.current.add(`fail-${item.id}`);
-        notifyToast({
-          title: "Upload failed",
-          description: item.error,
-          intent: "danger",
-        });
+        notifyToast({ title: "Upload failed", description: item.error, intent: "danger" });
       }
     });
   }, [notifyToast, queryClient, uploadQueue.items, workspaceId]);
@@ -298,9 +363,7 @@ export function useDocumentsV9Model({
     uploadQueue.items.forEach((item) => {
       const createdAt = uploadCreatedAtRef.current.get(item.id) ?? Date.now();
       if (item.status === "succeeded" && item.response) {
-        if (documentsById.has(item.response.id)) {
-          return;
-        }
+        if (documentsById.has(item.response.id)) return;
         entries.push(buildDocumentEntry(item.response, { upload: item }));
         return;
       }
@@ -309,85 +372,70 @@ export function useDocumentsV9Model({
     return entries;
   }, [currentUserLabel, documentsById, uploadQueue.items]);
 
+  const normalizedSearchLower = normalizedSearch.toLowerCase();
+  const filteredUploadEntries = useMemo(() => {
+    if (uploadEntries.length === 0) return [];
+    const hasSearch = normalizedSearchLower.length >= 2;
+    return uploadEntries.filter((doc) => {
+      if (hasSearch) {
+        const haystack = [doc.name, doc.uploader ?? "", doc.tags.join(" ")].join(" ").toLowerCase();
+        if (!haystack.includes(normalizedSearchLower)) return false;
+      }
+
+      if (filters.statuses.length > 0 && !filters.statuses.includes(doc.status)) {
+        return false;
+      }
+
+      if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) {
+        return false;
+      }
+
+      if (filters.tags.length > 0) {
+        if (filters.tagMode === "all") {
+          return filters.tags.every((t) => doc.tags.includes(t));
+        }
+        return doc.tags.some((t) => filters.tags.includes(t));
+      }
+
+      return true;
+    });
+  }, [filters, normalizedSearchLower, uploadEntries]);
+
   const apiEntries = useMemo(() => documentsRaw.map((doc) => buildDocumentEntry(doc)), [documentsRaw]);
-  const documents = useMemo(() => [...uploadEntries, ...apiEntries], [uploadEntries, apiEntries]);
+  const documents = useMemo(() => [...filteredUploadEntries, ...apiEntries], [filteredUploadEntries, apiEntries]);
   const documentsByEntryId = useMemo(() => new Map(documents.map((doc) => [doc.id, doc])), [documents]);
 
+  // Keep selected ids valid
   useEffect(() => {
     setSelectedIds((previous) => {
       const next = new Set<string>();
       previous.forEach((id) => {
-        if (documentsByEntryId.has(id)) {
-          next.add(id);
-        }
+        if (documentsByEntryId.has(id)) next.add(id);
       });
       return next;
     });
   }, [documentsByEntryId]);
 
-  // If the active doc disappears, clear active + close preview (prevents phantom preview)
+  // Active doc handling
   useEffect(() => {
-    if (!activeId) {
-      return;
-    }
-    if (!documentsByEntryId.has(activeId)) {
+    if (documents.length === 0) {
       setActiveId(null);
       setPreviewOpen(false);
+      return;
     }
-  }, [activeId, documentsByEntryId]);
+    if (!activeId || !documentsByEntryId.has(activeId)) {
+      setActiveId(documents[0].id);
+    }
+  }, [activeId, documents, documentsByEntryId]);
 
   const activeDocument = useMemo(
     () => (activeId ? documentsByEntryId.get(activeId) ?? null : null),
     [activeId, documentsByEntryId],
   );
 
-  const activeRunId = activeDocument?.record?.last_run?.run_id ?? null;
-  const runQuery = useQuery<RunResource | null>({
-    queryKey: activeRunId ? documentsV9Keys.run(activeRunId) : [...documentsV9Keys.root(), "run", "none"],
-    queryFn: ({ signal }) => (activeRunId ? fetchRun(activeRunId, signal) : Promise.resolve(null)),
-    enabled: Boolean(activeRunId),
-    staleTime: 15_000,
-    refetchInterval: (data) => {
-      const status = data?.status ?? null;
-      if (status === "running" || status === "queued") {
-        return 3000;
-      }
-      return false;
-    },
-  });
+  const visibleDocuments = documents;
 
-  const outputUrl = runQuery.data ? runOutputUrl(runQuery.data) : null;
-  const workbookQuery = useQuery<WorkbookPreview>({
-    queryKey: outputUrl ? documentsV9Keys.workbook(outputUrl) : [...documentsV9Keys.root(), "workbook", "none"],
-    queryFn: ({ signal }) =>
-      outputUrl ? fetchWorkbookPreview(outputUrl, signal) : Promise.reject(new Error("No output URL")),
-    enabled: Boolean(outputUrl),
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    setActiveSheetId(null);
-  }, [activeDocument?.id]);
-
-  useEffect(() => {
-    if (workbookQuery.data?.sheets.length) {
-      setActiveSheetId(workbookQuery.data.sheets[0].name);
-    }
-  }, [workbookQuery.data?.sheets]);
-
-  const normalizedSearch = search.trim().toLowerCase();
-
-  // Search-filtered (for counts + status breakdown)
-  const filteredDocuments = useMemo(() => {
-    if (!normalizedSearch) {
-      return documents;
-    }
-    return documents.filter((doc) => {
-      const haystack = [doc.name, doc.uploader ?? "", doc.tags.join(" ")].join(" ").toLowerCase();
-      return haystack.includes(normalizedSearch);
-    });
-  }, [documents, normalizedSearch]);
-
+  // Status counts for sidebar
   const statusCounts = useMemo(() => {
     const counts: Record<DocumentStatus, number> = {
       queued: 0,
@@ -396,122 +444,272 @@ export function useDocumentsV9Model({
       failed: 0,
       archived: 0,
     };
-    filteredDocuments.forEach((doc) => {
-      counts[doc.status] += 1;
+    documents.forEach((d) => {
+      counts[d.status] += 1;
     });
     return counts;
-  }, [filteredDocuments]);
+  }, [documents]);
 
-  // Apply status filter
-  const statusFilteredDocuments = useMemo(() => {
-    if (statusFilter === "all") return filteredDocuments;
-    return filteredDocuments.filter((doc) => doc.status === statusFilter);
-  }, [filteredDocuments, statusFilter]);
+  // Runs for active document (only when we have a real document record id).
+  const activeDocumentIdForRuns = activeDocument?.record?.id ?? null;
 
-  const sortedDocuments = useMemo(
-    () => [...statusFilteredDocuments].sort((a, b) => b.createdAt - a.createdAt || a.name.localeCompare(b.name)),
-    [statusFilteredDocuments],
-  );
+  const runsQuery = useQuery({
+    queryKey: activeDocumentIdForRuns
+      ? documentsV9Keys.runsForDocument(workspaceId, activeDocumentIdForRuns)
+      : [...documentsV9Keys.workspace(workspaceId), "runs", "none"],
+    queryFn: ({ signal }) =>
+      activeDocumentIdForRuns
+        ? fetchWorkspaceRunsForDocument(workspaceId, activeDocumentIdForRuns, { page: 1, pageSize: 50 }, signal)
+        : Promise.resolve({ items: [], page: 1, page_size: 50, has_next: false, has_previous: false }),
+    enabled: Boolean(activeDocumentIdForRuns) && previewOpen,
+    staleTime: 5_000,
+    refetchInterval: previewOpen ? 7_500 : false,
+  });
 
-  // Prevent opening preview for a doc that is not currently visible (e.g. filters changed)
+  const runs = useMemo(() => {
+    const items = runsQuery.data?.items ?? [];
+    return items
+      .slice()
+      .sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
+  }, [runsQuery.data?.items]);
+
+  // Choose default active run when doc changes.
   useEffect(() => {
-    if (!activeId) return;
-    if (previewOpen) return;
-    const visibleIds = new Set(sortedDocuments.map((doc) => doc.id));
-    if (!visibleIds.has(activeId)) {
-      setActiveId(null);
-    }
-  }, [activeId, previewOpen, sortedDocuments]);
+    if (!previewOpen) return;
+    setActiveRunId((prev) => {
+      const existing = prev && runs.some((r) => r.id === prev) ? prev : null;
+      if (existing) return existing;
+
+      const preferred = activeDocument?.record?.last_run?.run_id ?? null;
+      if (preferred && runs.some((r) => r.id === preferred)) return preferred;
+
+      return runs[0]?.id ?? null;
+    });
+  }, [activeDocument?.id, previewOpen, runs]);
+
+  const activeRun = useMemo(() => {
+    if (!activeRunId) return null;
+    return runs.find((r) => r.id === activeRunId) ?? null;
+  }, [activeRunId, runs]);
+
+  const outputUrl = useMemo(() => {
+    if (!activeRun) return null;
+    if (!runHasDownloadableOutput(activeRun)) return null;
+    return runOutputDownloadUrl(activeRun);
+  }, [activeRun]);
+
+  const workbookQuery = useQuery<WorkbookPreview>({
+    queryKey: outputUrl ? documentsV9Keys.workbook(outputUrl) : [...documentsV9Keys.root(), "workbook", "none"],
+    queryFn: ({ signal }) => (outputUrl ? fetchWorkbookPreview(outputUrl, signal) : Promise.reject(new Error("No output URL"))),
+    enabled: Boolean(outputUrl) && previewOpen,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    setActiveSheetId(null);
+  }, [activeDocument?.id, activeRunId]);
+
+  useEffect(() => {
+    if (workbookQuery.data?.sheets.length) setActiveSheetId(workbookQuery.data.sheets[0].name);
+  }, [workbookQuery.data?.sheets]);
 
   const boardColumns = useMemo<BoardColumn[]>(() => {
     if (groupBy === "status") {
       return STATUS_ORDER.map((status) => ({
         id: status,
         label: statusLabel(status),
-        items: sortedDocuments.filter((doc) => doc.status === status),
+        items: visibleDocuments.filter((doc) => doc.status === status),
       }));
     }
     if (groupBy === "tag") {
       const tagSet = new Set<string>();
-      sortedDocuments.forEach((doc) => doc.tags.forEach((tag) => tagSet.add(tag)));
+      visibleDocuments.forEach((doc) => doc.tags.forEach((tag) => tagSet.add(tag)));
       const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
       const columns = tags.map((tag) => ({
         id: tag,
         label: tag,
-        items: sortedDocuments.filter((doc) => doc.tags.includes(tag)),
+        items: visibleDocuments.filter((doc) => doc.tags.includes(tag)),
       }));
       columns.push({
-        id: BOARD_UNTAGGED_ID,
+        id: "__untagged__",
         label: "Untagged",
-        items: sortedDocuments.filter((doc) => doc.tags.length === 0),
+        items: visibleDocuments.filter((doc) => doc.tags.length === 0),
       });
       return columns;
     }
+
     const uploaderSet = new Set<string>();
-    sortedDocuments.forEach((doc) => {
-      if (doc.uploader) {
-        uploaderSet.add(doc.uploader);
-      }
+    visibleDocuments.forEach((doc) => {
+      if (doc.uploader) uploaderSet.add(doc.uploader);
     });
     const uploaders = Array.from(uploaderSet).sort((a, b) => a.localeCompare(b));
     const columns = uploaders.map((uploader) => ({
       id: uploader,
       label: uploader,
-      items: sortedDocuments.filter((doc) => doc.uploader === uploader),
+      items: visibleDocuments.filter((doc) => doc.uploader === uploader),
     }));
     columns.push({
-      id: BOARD_UNASSIGNED_ID,
+      id: "__unassigned__",
       label: "Unassigned",
-      items: sortedDocuments.filter((doc) => !doc.uploader),
+      items: visibleDocuments.filter((doc) => !doc.uploader),
     });
     return columns;
-  }, [groupBy, sortedDocuments]);
+  }, [groupBy, visibleDocuments]);
 
   const selectableIds = useMemo(
-    () => sortedDocuments.filter((doc) => doc.record).map((doc) => doc.id),
-    [sortedDocuments],
+    () => visibleDocuments.filter((doc) => doc.record).map((doc) => doc.id),
+    [visibleDocuments],
   );
   const allVisibleSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const hasActiveFilters =
+    normalizedSearch.length >= 2 ||
+    filters.statuses.length > 0 ||
+    filters.fileTypes.length > 0 ||
+    filters.tags.length > 0;
+  const showNoDocuments = documents.length === 0 && !hasActiveFilters;
+  const showNoResults = documents.length === 0 && hasActiveFilters;
 
-  const showNoDocuments = documents.length === 0;
-  const showNoResults = documents.length > 0 && sortedDocuments.length === 0;
+  // Active view label + save view visibility
+  const activeViewLabel = useMemo(() => {
+    if (activeViewKey.startsWith("saved:")) {
+      const id = activeViewKey.replace("saved:", "");
+      const view = savedViews.find((v) => v.id === id);
+      return view ? `Saved view · ${view.name}` : "Saved view";
+    }
+    if (activeViewKey === "builtin:ready") return "View · Ready";
+    if (activeViewKey === "builtin:processing") return "View · Processing";
+    if (activeViewKey === "builtin:failed") return "View · Failed";
+    return "All documents";
+  }, [activeViewKey, savedViews]);
 
-  const hasFilters = Boolean(search.trim().length > 0 || statusFilter !== "all");
+  const showSaveView = useMemo(() => {
+    const currentState: DocumentsSavedView["state"] = {
+      search,
+      sort,
+      viewMode,
+      groupBy,
+      filters,
+    };
 
-  const selectedCount = selectedIds.size;
+    if (activeViewKey.startsWith("saved:")) {
+      const id = activeViewKey.replace("saved:", "");
+      const view = savedViews.find((v) => v.id === id);
+      if (!view) return true;
+      return !isSameViewState(view.state, currentState);
+    }
+    // From builtin views: allow saving anytime if anything is “non-default”.
+    const nonDefault =
+      search.trim().length > 0 ||
+      (sort ?? "-created_at") !== "-created_at" ||
+      viewMode !== "grid" ||
+      groupBy !== "status" ||
+      filters.statuses.length > 0 ||
+      filters.fileTypes.length > 0 ||
+      filters.tags.length > 0;
+    return nonDefault;
+  }, [activeViewKey, filters, groupBy, savedViews, search, sort, viewMode]);
 
-  const selectedReadyCount = useMemo(() => {
-    let count = 0;
-    selectedIds.forEach((id) => {
-      const doc = documentsByEntryId.get(id);
-      if (!doc?.record) return;
-      if (doc.status !== "ready") return;
-      if (!doc.record.last_run?.run_id) return;
-      count += 1;
-    });
-    return count;
-  }, [documentsByEntryId, selectedIds]);
-
+  // Actions
   const setSearchValue = useCallback((value: string) => setSearch(value), []);
-  const setStatusFilterValue = useCallback((value: StatusFilterValue) => setStatusFilter(value), []);
-
-  const clearFilters = useCallback(() => {
-    setSearch("");
-    setStatusFilter("all");
-  }, []);
-
   const setViewModeValue = useCallback((value: ViewMode) => setViewMode(value), []);
   const setGroupByValue = useCallback((value: BoardGroup) => setGroupBy(value), []);
-  const setBoardHideEmptyValue = useCallback((value: boolean) => setBoardHideEmpty(value), []);
+  const setHideEmptyColumnsValue = useCallback((value: boolean) => setHideEmptyColumns(value), []);
+  const setSortValue = useCallback((value: string | null) => setSort(value), []);
+
+  const toggleStatusFilter = useCallback((status: DocumentStatus) => {
+    setFilters((prev) => {
+      const exists = prev.statuses.includes(status);
+      return { ...prev, statuses: exists ? prev.statuses.filter((s) => s !== status) : [...prev.statuses, status] };
+    });
+  }, []);
+
+  const toggleFileTypeFilter = useCallback((type: DocumentsFilters["fileTypes"][number]) => {
+    setFilters((prev) => {
+      const exists = prev.fileTypes.includes(type);
+      return { ...prev, fileTypes: exists ? prev.fileTypes.filter((t) => t !== type) : [...prev.fileTypes, type] };
+    });
+  }, []);
+
+  const setTagMode = useCallback((mode: DocumentsFilters["tagMode"]) => {
+    setFilters((prev) => ({ ...prev, tagMode: mode }));
+  }, []);
+
+  const toggleTagFilter = useCallback((tag: string) => {
+    setFilters((prev) => {
+      const exists = prev.tags.includes(tag);
+      return { ...prev, tags: exists ? prev.tags.filter((t) => t !== tag) : [...prev.tags, tag] };
+    });
+  }, []);
+
+  const clearFilters = useCallback(() => setFilters(defaultFilters()), []);
+
+  const selectBuiltInView = useCallback((id: "all" | "ready" | "processing" | "failed") => {
+    setActiveViewKey(`builtin:${id}`);
+    // Convention: builtin views are shortcuts; we set status filters accordingly and keep other filters visible.
+    setFilters((prev) => {
+      if (id === "all") return { ...prev, statuses: [] };
+      if (id === "ready") return { ...prev, statuses: ["ready"] };
+      if (id === "failed") return { ...prev, statuses: ["failed"] };
+      // processing = queued + processing
+      return { ...prev, statuses: ["queued", "processing"] };
+    });
+  }, []);
+
+  const selectSavedView = useCallback(
+    (id: string) => {
+      const view = savedViews.find((v) => v.id === id);
+      if (!view) return;
+      setActiveViewKey(`saved:${id}`);
+      setSearch(view.state.search);
+      setSort(view.state.sort);
+      setViewMode(view.state.viewMode);
+      setGroupBy(view.state.groupBy);
+      setFilters(view.state.filters);
+    },
+    [savedViews],
+  );
+
+  const saveCurrentView = useCallback(
+    (name: string) => {
+      const state: DocumentsSavedView["state"] = { search, sort, viewMode, groupBy, filters };
+      const nowTs = Date.now();
+
+      setSavedViews((prev) => {
+        // If currently on a saved view, update it; otherwise create new.
+        if (activeViewKey.startsWith("saved:")) {
+          const id = activeViewKey.replace("saved:", "");
+          const next = prev.map((v) => (v.id === id ? { ...v, name, state, updatedAt: nowTs } : v));
+          return next;
+        }
+        const nextView: DocumentsSavedView = {
+          id: stableId(),
+          name,
+          createdAt: nowTs,
+          updatedAt: nowTs,
+          state,
+        };
+        setActiveViewKey(`saved:${nextView.id}`);
+        return [nextView, ...prev];
+      });
+
+      notifyToast({ title: "View saved", description: name, intent: "success" });
+    },
+    [activeViewKey, filters, groupBy, notifyToast, search, sort, viewMode],
+  );
+
+  const deleteSavedView = useCallback(
+    (id: string) => {
+      setSavedViews((prev) => prev.filter((v) => v.id !== id));
+      if (activeViewKey === `saved:${id}`) setActiveViewKey("builtin:all");
+    },
+    [activeViewKey],
+  );
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((previous) => {
       const next = new Set(previous);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -520,28 +718,21 @@ export function useDocumentsV9Model({
     setSelectedIds(new Set(selectableIds));
   }, [selectableIds]);
 
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const openPreview = useCallback((id: string) => {
     setActiveId(id);
     setPreviewOpen(true);
   }, []);
 
-  const closePreview = useCallback(() => {
-    setPreviewOpen(false);
-  }, []);
+  const closePreview = useCallback(() => setPreviewOpen(false), []);
 
-  const setActiveSheetIdValue = useCallback((id: string) => {
-    setActiveSheetId(id);
-  }, []);
+  const setActiveRunIdValue = useCallback((id: string) => setActiveRunId(id), []);
+  const setActiveSheetIdValue = useCallback((id: string) => setActiveSheetId(id), []);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
-      if (!files || files.length === 0) {
-        return;
-      }
+      if (!files || files.length === 0) return;
       const nextItems = uploadQueue.enqueue(Array.from(files));
       const nowTimestamp = Date.now();
       nextItems.forEach((item, index) => {
@@ -556,10 +747,7 @@ export function useDocumentsV9Model({
     [notifyToast, uploadQueue],
   );
 
-  const handleUploadClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
+  const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
   const handleFileInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       handleFiles(event.target.files);
@@ -568,198 +756,257 @@ export function useDocumentsV9Model({
     [handleFiles],
   );
 
-  const downloadDocument = useCallback(
-    (doc: DocumentEntry | null) => {
-      if (!doc?.record) {
-        return;
-      }
-      if (doc.status !== "ready") {
-        notifyToast({
-          title: "Output not ready",
-          description: "Processing needs to finish before downloading the normalized XLSX.",
-          intent: "warning",
-        });
-        return;
-      }
-      if (!doc.record.last_run?.run_id) {
-        notifyToast({
-          title: "No processed output",
-          description: "This document does not have a completed run to download yet.",
-          intent: "warning",
-        });
-        return;
-      }
-      void downloadProcessedOutput(doc.record.last_run.run_id, doc.name)
-        .then((filename) => {
-          notifyToast({
-            title: "Download started",
-            description: filename,
-            intent: "success",
-          });
-        })
-        .catch((error) => {
+  const downloadOriginal = useCallback(
+    (doc: DocumentEntry) => {
+      if (!doc.record) return;
+      void downloadWorkspaceDocumentOriginal(workspaceId, doc.record.id, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
           notifyToast({
             title: "Download failed",
-            description: error instanceof Error ? error.message : "Unable to download the processed XLSX.",
+            description: error instanceof Error ? error.message : "Unable to download file.",
             intent: "danger",
-          });
-        });
+          }),
+        );
+    },
+    [notifyToast, workspaceId],
+  );
+
+  const downloadOutputFromRow = useCallback(
+    (doc: DocumentEntry) => {
+      const runId = getDocumentOutputRun(doc.record)?.run_id ?? null;
+      if (!doc.record || !runId) {
+        notifyToast({ title: "Output not ready", description: "Open the document to see run history.", intent: "warning" });
+        return;
+      }
+      void downloadRunOutput(runId, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
+          notifyToast({
+            title: "Download failed",
+            description: error instanceof Error ? error.message : "Unable to download output.",
+            intent: "danger",
+          }),
+        );
     },
     [notifyToast],
   );
 
-  const downloadSelected = useCallback(() => {
-    const selectedDocs: DocumentEntry[] = [];
-    selectedIds.forEach((id) => {
-      const doc = documentsByEntryId.get(id);
-      if (doc) selectedDocs.push(doc);
-    });
-
-    const readyDocs = selectedDocs.filter(
-      (doc) => doc.record && doc.status === "ready" && Boolean(doc.record.last_run?.run_id),
-    );
-
-    if (readyDocs.length === 0) {
-      notifyToast({
-        title: "Nothing to download",
-        description: "Select at least one Ready document with a processed output.",
-        intent: "warning",
-      });
-      return;
-    }
-
-    notifyToast({
-      title: "Starting downloads",
-      description: `${readyDocs.length} processed file${readyDocs.length === 1 ? "" : "s"}`,
-      intent: "success",
-    });
-
-    void (async () => {
-      for (const doc of readyDocs) {
-        const runId = doc.record?.last_run?.run_id;
-        if (!runId) continue;
-        try {
-          await downloadProcessedOutput(runId, doc.name);
-        } catch (error) {
+  const downloadOutputFromPreview = useCallback(
+    (doc: DocumentEntry, run: RunResource | null) => {
+      if (!doc.record) return;
+      const runId = run?.status === "succeeded" ? run.id : getDocumentOutputRun(doc.record)?.run_id ?? null;
+      if (!runId) {
+        notifyToast({ title: "Output not ready", description: "Select a successful run to download output.", intent: "warning" });
+        return;
+      }
+      void downloadRunOutput(runId, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
           notifyToast({
             title: "Download failed",
-            description: error instanceof Error ? error.message : `Unable to download ${doc.name}.`,
+            description: error instanceof Error ? error.message : "Unable to download output.",
+            intent: "danger",
+          }),
+        );
+    },
+    [notifyToast],
+  );
+
+  const reprocessDocument = useCallback(
+    (doc: DocumentEntry) => {
+      if (!doc.record) return;
+
+      void createRunForDocument(workspaceId, doc.record.id)
+        .then((run) => {
+          notifyToast({
+            title: "Reprocess started",
+            description: `Run ${run.id.slice(0, 8)}… queued`,
+            intent: "success",
+          });
+          queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsV9Keys.runsForDocument(workspaceId, doc.record!.id) });
+        })
+        .catch((error) => {
+          if (isActiveConfigurationMissing(error)) {
+            notifyToast({
+              title: "No active configuration",
+              description: "Activate a configuration for this workspace before reprocessing.",
+              intent: "warning",
+            });
+            return;
+          }
+          notifyToast({
+            title: "Reprocess failed",
+            description: resolveApiErrorMessage(error, "Unable to start a new run."),
             intent: "danger",
           });
-        }
-      }
-    })();
-  }, [documentsByEntryId, notifyToast, selectedIds]);
+        });
+    },
+    [notifyToast, queryClient, workspaceId],
+  );
 
-  const refreshDocuments = useCallback(() => {
-    void documentsQuery.refetch();
-  }, [documentsQuery]);
+  const toggleTagOnDocument = useCallback(
+    (doc: DocumentEntry, tag: string) => {
+      if (!doc.record) return;
+      const hasTag = doc.tags.includes(tag);
+      const patch = hasTag ? { remove: [tag] } : { add: [tag] };
 
+      void patchWorkspaceDocumentTags(workspaceId, doc.record.id, patch)
+        .then((updated) => {
+          // Patch query cache in-place for immediate UI updates (no full refetch).
+          queryClient.setQueryData(listKey, (existing: any) => {
+            if (!existing?.pages) return existing;
+            return {
+              ...existing,
+              pages: existing.pages.map((p: any) => ({
+                ...p,
+                items: (p.items ?? []).map((item: any) => (item.id === updated.id ? updated : item)),
+              })),
+            };
+          });
+        })
+        .catch((error) => {
+          notifyToast({
+            title: "Tag update failed",
+            description: error instanceof Error ? error.message : "Unable to update tags.",
+            intent: "danger",
+          });
+        });
+    },
+    [listKey, notifyToast, queryClient, workspaceId],
+  );
+
+  const bulkAddTagPrompt = useCallback(() => {
+    const tag = window.prompt("Add tag to selected documents:");
+    const value = (tag ?? "").trim();
+    if (!value) return;
+
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+
+    void patchWorkspaceDocumentTagsBatch(
+      workspaceId,
+      docs.map((doc) => doc.record!.id),
+      { add: [value] },
+    )
+      .then(() => {
+        notifyToast({ title: "Tags applied", description: `${value} added`, intent: "success" });
+        queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
+      })
+      .catch((error) => {
+        notifyToast({
+          title: "Bulk tag failed",
+          description: error instanceof Error ? error.message : "Unable to apply tags.",
+          intent: "danger",
+        });
+      });
+  }, [notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId]);
+
+  const bulkDownloadOriginals = useCallback(() => {
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+    docs.forEach((d) => {
+      void downloadWorkspaceDocumentOriginal(workspaceId, d.record!.id, d.name).catch(() => undefined);
+    });
+    notifyToast({ title: "Downloads started", description: `${docs.length} originals`, intent: "success" });
+  }, [notifyToast, selectedIds, visibleDocuments, workspaceId]);
+
+  const bulkReprocess = useCallback(() => {
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+    docs.forEach((d) => reprocessDocument(d));
+  }, [reprocessDocument, selectedIds, visibleDocuments]);
+
+  const refreshDocuments = useCallback(() => void documentsQuery.refetch(), [documentsQuery]);
   const loadMore = useCallback(() => {
-    if (documentsQuery.hasNextPage) {
-      void documentsQuery.fetchNextPage();
-    }
+    if (documentsQuery.hasNextPage) void documentsQuery.fetchNextPage();
   }, [documentsQuery]);
 
   const handleKeyNavigate = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (sortedDocuments.length === 0) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, button, a, [role='button'], [role='menuitem']")) {
         return;
       }
-
-      // Only treat Enter/Space at the container level (not when focused on a row/checkbox).
-      const isContainerTarget = event.target === event.currentTarget;
-
-      if ((event.key === "Enter" || event.key === " ") && isContainerTarget) {
-        event.preventDefault();
-        const nextId = activeId ?? sortedDocuments[0].id;
-        setActiveId(nextId);
-        setPreviewOpen(true);
-        return;
-      }
-
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
-        return;
-      }
+      if (visibleDocuments.length === 0) return;
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 
       event.preventDefault();
-      const currentIndex = activeId ? sortedDocuments.findIndex((doc) => doc.id === activeId) : -1;
-
+      const currentIndex = visibleDocuments.findIndex((doc) => doc.id === activeId);
       if (currentIndex < 0) {
-        setActiveId(sortedDocuments[0].id);
+        setActiveId(visibleDocuments[0].id);
         return;
       }
 
       const nextIndex =
         event.key === "ArrowDown"
-          ? Math.min(sortedDocuments.length - 1, currentIndex + 1)
+          ? Math.min(visibleDocuments.length - 1, currentIndex + 1)
           : Math.max(0, currentIndex - 1);
 
-      setActiveId(sortedDocuments[nextIndex].id);
+      setActiveId(visibleDocuments[nextIndex].id);
     },
-    [activeId, sortedDocuments],
+    [activeId, visibleDocuments],
   );
-
-  const lastSyncedAt = documentsQuery.dataUpdatedAt ? documentsQuery.dataUpdatedAt : null;
 
   return {
     state: {
       viewMode,
       groupBy,
-      boardHideEmpty,
+      hideEmptyColumns,
+      sort,
       search,
-      statusFilter,
+      filters,
+      activeViewKey,
+      savedViews,
       selectedIds,
       activeId,
       previewOpen,
+      activeRunId,
       activeSheetId,
     },
     derived: {
       now,
       documents,
-      filteredDocuments,
-      sortedDocuments,
-
-      statusCounts,
-      filteredTotal: filteredDocuments.length,
-
-      selectedCount,
-      selectedReadyCount,
-
+      visibleDocuments,
       activeDocument,
       boardColumns,
+      statusCounts,
       isLoading: documentsQuery.isLoading,
       isError: documentsQuery.isError,
-      isRefreshing: documentsQuery.isFetching,
       hasNextPage: Boolean(documentsQuery.hasNextPage),
       isFetchingNextPage: documentsQuery.isFetchingNextPage,
-      lastSyncedAt,
-
-      activeRun: runQuery.data ?? null,
-      runLoading: runQuery.isFetching,
+      runs,
+      runsLoading: runsQuery.isFetching,
+      activeRun,
       outputUrl,
       workbook: workbookQuery.data ?? null,
       workbookLoading: workbookQuery.isLoading,
       workbookError: workbookQuery.isError,
-
       showNoDocuments,
       showNoResults,
       allVisibleSelected,
-      hasFilters,
+      activeViewLabel,
+      showSaveView,
     },
-    refs: {
-      searchRef,
-      fileInputRef,
-    },
+    refs: { searchRef, fileInputRef },
     actions: {
       setSearch: setSearchValue,
-
-      setStatusFilter: setStatusFilterValue,
-      clearFilters,
-
       setViewMode: setViewModeValue,
       setGroupBy: setGroupByValue,
-      setBoardHideEmpty: setBoardHideEmptyValue,
+      setHideEmptyColumns: setHideEmptyColumnsValue,
+      setSort: setSortValue,
+
+      toggleStatusFilter,
+      toggleFileTypeFilter,
+      setTagMode,
+      toggleTagFilter,
+      clearFilters,
+
+      selectBuiltInView,
+      selectSavedView,
+      saveCurrentView,
+      deleteSavedView,
 
       toggleSelect,
       selectAllVisible,
@@ -768,16 +1015,25 @@ export function useDocumentsV9Model({
       openPreview,
       closePreview,
 
+      setActiveRunId: setActiveRunIdValue,
       setActiveSheetId: setActiveSheetIdValue,
+
       handleUploadClick,
       handleFileInputChange,
 
-      downloadDocument,
-      downloadSelected,
+      downloadOriginal,
+      downloadOutputFromRow,
+      downloadOutputFromPreview,
+
+      reprocessDocument,
+      toggleTagOnDocument,
+
+      bulkAddTagPrompt,
+      bulkDownloadOriginals,
+      bulkReprocess,
 
       refreshDocuments,
       loadMore,
-
       handleKeyNavigate,
     },
   };

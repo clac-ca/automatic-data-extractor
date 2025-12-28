@@ -3690,6 +3690,244 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "tag_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "any",
+                    "all"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag Mode"
+            }
+          },
+          {
+            "name": "tags_empty",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tags Empty"
+            }
+          },
+          {
+            "name": "uploader",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uploader"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "updated_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated After"
+            }
+          },
+          {
+            "name": "updated_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated Before"
+            }
+          },
+          {
+            "name": "last_run_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Run From"
+            }
+          },
+          {
+            "name": "last_run_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Run To"
+            }
+          },
+          {
+            "name": "byte_size_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Byte Size From"
+            }
+          },
+          {
+            "name": "byte_size_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Byte Size To"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -3708,6 +3946,15 @@
             "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3924,6 +4171,90 @@
           },
           "404": {
             "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update tags on multiple documents",
+        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
           },
           "422": {
             "description": "Tag payload is invalid."
@@ -4231,6 +4562,97 @@
           },
           "422": {
             "description": "The workbook exists but could not be parsed for worksheets."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/delete": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Soft delete multiple documents",
+        "operationId": "delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to delete documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document deletion."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -6577,22 +6999,21 @@
             }
           },
           {
-            "name": "status",
+            "name": "q",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunStatus"
-                  }
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Q"
             }
           },
           {
@@ -6612,8 +7033,85 @@
               ],
               "title": "Input Document Id"
             }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name",
+              "title": "Sort"
+            },
+            "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6733,6 +7231,87 @@
       }
     },
     "/api/v1/workspaces/{workspace_id}/runs": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Workspace Run Endpoint",
+        "description": "Create a run for ``workspace_id`` and enqueue execution.",
+        "operationId": "create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunWorkspaceCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
       "get": {
         "tags": [
           "runs"
@@ -6786,22 +7365,21 @@
             }
           },
           {
-            "name": "status",
+            "name": "q",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunStatus"
-                  }
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Q"
             }
           },
           {
@@ -6821,8 +7399,85 @@
               ],
               "title": "Input Document Id"
             }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name",
+              "title": "Sort"
+            },
+            "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6830,6 +7485,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/runs/batch": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Workspace Runs Batch Endpoint",
+        "description": "Create multiple runs for ``workspace_id`` and enqueue execution.",
+        "operationId": "create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunWorkspaceBatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunBatchCreateResponse"
                 }
               }
             }
@@ -8055,6 +8793,224 @@
         ],
         "title": "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
       },
+      "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
+      },
+      "Body_list_documents_api_v1_workspaces__workspace_id__documents_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Status"
+          },
+          "source_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentSource"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source In"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "tags_not": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags Not"
+          },
+          "uploader_id": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Id"
+          },
+          "uploader_email": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Email"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
+      },
+      "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
+      },
       "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put": {
         "properties": {
           "file": {
@@ -8648,21 +9604,119 @@
         ],
         "title": "DirectoryWriteResponse"
       },
-      "DocumentLastRun": {
+      "DocumentBatchDeleteRequest": {
         "properties": {
-          "run_id": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to delete (soft delete, all-or-nothing)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "DocumentBatchDeleteRequest",
+        "description": "Payload for soft-deleting multiple documents."
+      },
+      "DocumentBatchDeleteResponse": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "title": "Document Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchDeleteResponse",
+        "description": "Response envelope for batch deletions."
+      },
+      "DocumentBatchTagsRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to update tags for (all-or-nothing)."
+          },
+          "add": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Add",
+            "description": "Tags to add to each document."
+          },
+          "remove": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove",
+            "description": "Tags to remove from each document."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "DocumentBatchTagsRequest",
+        "description": "Payload for updating tags on multiple documents."
+      },
+      "DocumentBatchTagsResponse": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchTagsResponse",
+        "description": "Response envelope for batch tag updates."
+      },
+      "DocumentLastRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
             "title": "Run Id",
-            "description": "Latest run identifier when the execution was streamed directly."
+            "description": "Latest run identifier for the execution."
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -8696,6 +9750,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "run_id",
           "status"
         ],
         "title": "DocumentLastRun",
@@ -8827,6 +9882,17 @@
               }
             ],
             "description": "Latest run execution associated with the document when available."
+          },
+          "last_successful_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest successful run execution associated with the document when available."
           }
         },
         "additionalProperties": false,
@@ -10313,11 +11379,92 @@
             "title": "Log Level",
             "description": "Engine log level passed as --log-level to ade_engine."
           },
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Optional worksheet names to ingest when processing XLSX files."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Opaque metadata to propagate with run telemetry."
+          },
           "input_document_id": {
             "type": "string",
             "format": "uuid",
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_document_id"
+        ],
+        "title": "RunCreateOptions",
+        "description": "Execution toggles for a single ADE run."
+      },
+      "RunCreateOptionsBase": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "validate_only": {
+            "type": "boolean",
+            "title": "Validate Only",
+            "default": false
+          },
+          "force_rebuild": {
+            "type": "boolean",
+            "title": "Force Rebuild",
+            "description": "If true, rebuild the configuration environment before running.",
+            "default": false
+          },
+          "debug": {
+            "type": "boolean",
+            "title": "Debug",
+            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
+            "default": false
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine."
           },
           "input_sheet_names": {
             "anyOf": [
@@ -10352,10 +11499,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "input_document_id"
-        ],
-        "title": "RunCreateOptions",
+        "title": "RunCreateOptionsBase",
         "description": "Optional execution toggles for ADE runs."
       },
       "RunCreateRequest": {
@@ -10924,6 +12068,79 @@
         ],
         "title": "RunStatus",
         "description": "Lifecycle states for ADE runs."
+      },
+      "RunWorkspaceBatchCreateRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to enqueue as individual runs (all-or-nothing)."
+          },
+          "configuration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Id",
+            "description": "Optional configuration identifier (defaults to the active configuration)."
+          },
+          "options": {
+            "$ref": "#/components/schemas/RunBatchCreateOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "RunWorkspaceBatchCreateRequest",
+        "description": "Payload accepted by the workspace batch run creation endpoint."
+      },
+      "RunWorkspaceCreateRequest": {
+        "properties": {
+          "input_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Input Document Id",
+            "description": "Document identifier to ingest."
+          },
+          "configuration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Id",
+            "description": "Optional configuration identifier (defaults to the active configuration)."
+          },
+          "options": {
+            "$ref": "#/components/schemas/RunCreateOptionsBase"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_document_id"
+        ],
+        "title": "RunWorkspaceCreateRequest",
+        "description": "Payload accepted by the workspace run creation endpoint."
       },
       "SafeModeStatus": {
         "properties": {

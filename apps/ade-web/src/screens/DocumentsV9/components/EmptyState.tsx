@@ -14,7 +14,7 @@ export function EmptyState({
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       <p className="text-sm text-slate-500">{description}</p>
       {action ? (
-        <Button type="button" onClick={action.onClick} size="sm" className="text-xs">
+        <Button type="button" onClick={action.onClick} size="sm">
           {action.label}
         </Button>
       ) : null}

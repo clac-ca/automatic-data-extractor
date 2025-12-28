@@ -23,6 +23,7 @@ export type RunCompletionInfo = {
 };
 
 interface UseRunSessionModelOptions {
+  readonly workspaceId: string;
   readonly configId: string;
   readonly runId: string | null;
   readonly seed?: WorkbenchDataSeed;
@@ -45,6 +46,7 @@ function normalizeRunStatus(value?: string | null): RunStatus {
 }
 
 export function useRunSessionModel({
+  workspaceId,
   configId,
   runId,
   seed,
@@ -63,6 +65,7 @@ export function useRunSessionModel({
     clearConsole,
     startJob,
   } = useJobStreamController({
+    workspaceId,
     configId,
     onJobIdChange: onRunIdChange,
     seed: seed ? { console: seed.console } : undefined,

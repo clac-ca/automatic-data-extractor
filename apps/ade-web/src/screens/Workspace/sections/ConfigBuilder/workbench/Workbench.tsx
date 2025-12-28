@@ -299,6 +299,7 @@ export function Workbench({
     clearConsole,
     startRun,
   } = useRunSessionModel({
+    workspaceId,
     configId,
     runId,
     seed,

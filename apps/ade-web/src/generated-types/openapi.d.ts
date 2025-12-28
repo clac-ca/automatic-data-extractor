@@ -619,6 +619,23 @@ export type paths = {
         patch: operations["patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update tags on multiple documents */
+        post: operations["patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -665,6 +682,23 @@ export type paths = {
         get: operations["list_document_sheets_endpoint_api_v1_workspaces__workspace_id__documents__document_id__sheets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Soft delete multiple documents */
+        post: operations["delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1001,7 +1035,31 @@ export type paths = {
         /** List Workspace Runs Endpoint */
         get: operations["list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Workspace Run Endpoint
+         * @description Create a run for ``workspace_id`` and enqueue execution.
+         */
+        post: operations["create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/runs/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Workspace Runs Batch Endpoint
+         * @description Create multiple runs for ``workspace_id`` and enqueue execution.
+         */
+        post: operations["create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1462,6 +1520,39 @@ export type components = {
              */
             file: string;
         };
+        /** Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get */
+        Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get: {
+            /** Status */
+            status?: components["schemas"]["RunStatus"][] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
+        /** Body_list_documents_api_v1_workspaces__workspace_id__documents_get */
+        Body_list_documents_api_v1_workspaces__workspace_id__documents_get: {
+            /** Status */
+            status?: components["schemas"]["DocumentStatus"][] | null;
+            /** Run Status */
+            run_status?: components["schemas"]["RunStatus"][] | null;
+            /** Source In */
+            source_in?: components["schemas"]["DocumentSource"][] | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Tags Not */
+            tags_not?: string[] | null;
+            /** Uploader Id */
+            uploader_id?: string[] | null;
+            /** Uploader Email */
+            uploader_email?: string[] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
+        /** Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get */
+        Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
+            /** Status */
+            status?: components["schemas"]["RunStatus"][] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
         /** Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put */
         Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
             /**
@@ -1746,15 +1837,64 @@ export type components = {
             created: boolean;
         };
         /**
+         * DocumentBatchDeleteRequest
+         * @description Payload for soft-deleting multiple documents.
+         */
+        DocumentBatchDeleteRequest: {
+            /**
+             * Document Ids
+             * @description Documents to delete (soft delete, all-or-nothing).
+             */
+            document_ids: string[];
+        };
+        /**
+         * DocumentBatchDeleteResponse
+         * @description Response envelope for batch deletions.
+         */
+        DocumentBatchDeleteResponse: {
+            /** Document Ids */
+            document_ids?: string[];
+        };
+        /**
+         * DocumentBatchTagsRequest
+         * @description Payload for updating tags on multiple documents.
+         */
+        DocumentBatchTagsRequest: {
+            /**
+             * Document Ids
+             * @description Documents to update tags for (all-or-nothing).
+             */
+            document_ids: string[];
+            /**
+             * Add
+             * @description Tags to add to each document.
+             */
+            add?: string[] | null;
+            /**
+             * Remove
+             * @description Tags to remove from each document.
+             */
+            remove?: string[] | null;
+        };
+        /**
+         * DocumentBatchTagsResponse
+         * @description Response envelope for batch tag updates.
+         */
+        DocumentBatchTagsResponse: {
+            /** Documents */
+            documents?: components["schemas"]["DocumentOut"][];
+        };
+        /**
          * DocumentLastRun
          * @description Minimal representation of the last engine execution for a document.
          */
         DocumentLastRun: {
             /**
              * Run Id
-             * @description Latest run identifier when the execution was streamed directly.
+             * Format: uuid
+             * @description Latest run identifier for the execution.
              */
-            run_id?: string | null;
+            run_id: string;
             status: components["schemas"]["RunStatus"];
             /**
              * Run At
@@ -1829,6 +1969,8 @@ export type components = {
             uploader?: components["schemas"]["UploaderOut"] | null;
             /** @description Latest run execution associated with the document when available. */
             last_run?: components["schemas"]["DocumentLastRun"] | null;
+            /** @description Latest successful run execution associated with the document when available. */
+            last_successful_run?: components["schemas"]["DocumentLastRun"] | null;
         };
         /**
          * DocumentPage
@@ -2517,7 +2659,7 @@ export type components = {
         };
         /**
          * RunCreateOptions
-         * @description Optional execution toggles for ADE runs.
+         * @description Execution toggles for a single ADE run.
          */
         RunCreateOptions: {
             /**
@@ -2548,11 +2690,56 @@ export type components = {
              */
             log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
+             * Input Sheet Names
+             * @description Optional worksheet names to ingest when processing XLSX files.
+             */
+            input_sheet_names?: string[] | null;
+            /**
+             * Metadata
+             * @description Opaque metadata to propagate with run telemetry.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+            /**
              * Input Document Id
              * Format: uuid
              * @description Document identifier to ingest.
              */
             input_document_id: string;
+        };
+        /**
+         * RunCreateOptionsBase
+         * @description Optional execution toggles for ADE runs.
+         */
+        RunCreateOptionsBase: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Validate Only
+             * @default false
+             */
+            validate_only: boolean;
+            /**
+             * Force Rebuild
+             * @description If true, rebuild the configuration environment before running.
+             * @default false
+             */
+            force_rebuild: boolean;
+            /**
+             * Debug
+             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
+             * @default false
+             */
+            debug: boolean;
+            /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
              * Input Sheet Names
              * @description Optional worksheet names to ingest when processing XLSX files.
@@ -2758,6 +2945,41 @@ export type components = {
          * @enum {string}
          */
         RunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+        /**
+         * RunWorkspaceBatchCreateRequest
+         * @description Payload accepted by the workspace batch run creation endpoint.
+         */
+        RunWorkspaceBatchCreateRequest: {
+            /**
+             * Document Ids
+             * @description Documents to enqueue as individual runs (all-or-nothing).
+             */
+            document_ids: string[];
+            /**
+             * Configuration Id
+             * @description Optional configuration identifier (defaults to the active configuration).
+             */
+            configuration_id?: string | null;
+            options?: components["schemas"]["RunBatchCreateOptions"];
+        };
+        /**
+         * RunWorkspaceCreateRequest
+         * @description Payload accepted by the workspace run creation endpoint.
+         */
+        RunWorkspaceCreateRequest: {
+            /**
+             * Input Document Id
+             * Format: uuid
+             * @description Document identifier to ingest.
+             */
+            input_document_id: string;
+            /**
+             * Configuration Id
+             * @description Optional configuration identifier (defaults to the active configuration).
+             */
+            configuration_id?: string | null;
+            options?: components["schemas"]["RunCreateOptionsBase"];
+        };
         /**
          * SafeModeStatus
          * @description Represents the current safe mode state.
@@ -5226,6 +5448,20 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
+                q?: string | null;
+                tag_mode?: ("any" | "all") | null;
+                tags_empty?: boolean | null;
+                uploader?: string | null;
+                folder_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                updated_after?: string | null;
+                updated_before?: string | null;
+                last_run_from?: string | null;
+                last_run_to?: string | null;
+                byte_size_from?: number | null;
+                byte_size_to?: number | null;
+                has_output?: boolean | null;
                 /** @description CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name */
                 sort?: string | null;
             };
@@ -5236,7 +5472,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_documents_api_v1_workspaces__workspace_id__documents_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5463,6 +5703,63 @@ export interface operations {
             };
         };
     };
+    patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchTagsResponse"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     read_document_api_v1_workspaces__workspace_id__documents__document_id__get: {
         parameters: {
             query?: never;
@@ -5664,6 +5961,65 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchDeleteResponse"];
+                };
+            };
+            /** @description Authentication required to delete documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document deletion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -6582,8 +6938,13 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                status?: components["schemas"]["RunStatus"][] | null;
+                q?: string | null;
                 input_document_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                has_output?: boolean | null;
+                /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
+                sort?: string | null;
             };
             header?: never;
             path: {
@@ -6592,7 +6953,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6696,8 +7061,13 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                status?: components["schemas"]["RunStatus"][] | null;
+                q?: string | null;
                 input_document_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                has_output?: boolean | null;
+                /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
+                sort?: string | null;
             };
             header?: never;
             path: {
@@ -6706,7 +7076,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6715,6 +7089,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkspaceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkspaceBatchCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunBatchCreateResponse"];
                 };
             };
             /** @description Validation Error */

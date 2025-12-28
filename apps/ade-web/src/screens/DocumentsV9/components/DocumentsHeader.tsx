@@ -4,11 +4,8 @@ import clsx from "clsx";
 import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";
 
-import type { DocumentStatus, ViewMode } from "../types";
-import { formatRelativeTime } from "../utils";
-import { BoardIcon, DocumentIcon, GridIcon, RefreshIcon, SearchIcon, UploadIcon } from "./icons";
-
-type StatusFilterValue = DocumentStatus | "all";
+import type { ViewMode } from "../types";
+import { BoardIcon, DocumentIcon, GridIcon, SearchIcon, UploadIcon } from "./icons";
 
 export function DocumentsHeader({
   search,
@@ -16,54 +13,29 @@ export function DocumentsHeader({
   searchRef,
   viewMode,
   onViewModeChange,
+  sort,
+  onSortChange,
   onUploadClick,
   fileInputRef,
   onFileInputChange,
-
-  now,
-  lastSyncedAt,
-  isRefreshing,
-  onRefresh,
-
-  statusFilter,
-  statusCounts,
-  filteredTotal,
-  onStatusFilterChange,
-
-  hasFilters,
-  onClearFilters,
+  activeViewLabel,
+  showSaveView,
+  onSaveViewClick,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: MutableRefObject<HTMLInputElement | null>;
   viewMode: ViewMode;
   onViewModeChange: (value: ViewMode) => void;
+  sort: string | null;
+  onSortChange: (value: string | null) => void;
   onUploadClick: () => void;
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
-
-  now: number;
-  lastSyncedAt: number | null;
-  isRefreshing: boolean;
-  onRefresh: () => void;
-
-  statusFilter: StatusFilterValue;
-  statusCounts: Record<DocumentStatus, number>;
-  filteredTotal: number;
-  onStatusFilterChange: (value: StatusFilterValue) => void;
-
-  hasFilters: boolean;
-  onClearFilters: () => void;
+  activeViewLabel: string;
+  showSaveView: boolean;
+  onSaveViewClick: () => void;
 }) {
-  const filters: Array<{ key: StatusFilterValue; label: string; count: number }> = [
-    { key: "all", label: "All", count: filteredTotal },
-    { key: "ready", label: "Ready", count: statusCounts.ready },
-    { key: "failed", label: "Failed", count: statusCounts.failed },
-    { key: "processing", label: "Processing", count: statusCounts.processing },
-    { key: "queued", label: "Queued", count: statusCounts.queued },
-    { key: "archived", label: "Archived", count: statusCounts.archived },
-  ];
-
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
@@ -73,7 +45,7 @@ export function DocumentsHeader({
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-slate-900">Documents</h1>
-            <p className="text-xs text-slate-500">Clean grid, fast preview</p>
+            <p className="text-xs text-slate-500">{activeViewLabel}</p>
           </div>
         </div>
 
@@ -90,20 +62,41 @@ export function DocumentsHeader({
               ref={searchRef}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search by name, uploader, or tag ( / )"
+              placeholder="Search by filename, uploader, or tag"
               className="pl-9"
             />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs shadow-sm">
+          <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm md:flex">
+            <span className="text-slate-500">Sort</span>
+            <select
+              value={sort ?? ""}
+              onChange={(e) => onSortChange(e.target.value || null)}
+              aria-label="Sort documents"
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
+            >
+              <option value="-created_at">Newest</option>
+              <option value="created_at">Oldest</option>
+              <option value="name">Name (A–Z)</option>
+              <option value="-last_run_at">Recently processed</option>
+            </select>
+          </div>
+
+          {showSaveView ? (
+            <Button type="button" size="sm" variant="secondary" onClick={onSaveViewClick}>
+              Save view
+            </Button>
+          ) : null}
+
+          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
             <Button
               type="button"
               size="sm"
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("grid")}
-              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "grid" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("rounded-md", viewMode === "grid" ? "shadow-sm" : "text-slate-500")}
               aria-pressed={viewMode === "grid"}
               aria-label="Grid view"
             >
@@ -115,7 +108,7 @@ export function DocumentsHeader({
               size="sm"
               variant={viewMode === "board" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("board")}
-              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "board" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("rounded-md", viewMode === "board" ? "shadow-sm" : "text-slate-500")}
               aria-pressed={viewMode === "board"}
               aria-label="Board view"
             >
@@ -124,63 +117,11 @@ export function DocumentsHeader({
             </Button>
           </div>
 
-          <Button
-            type="button"
-            size="md"
-            variant="ghost"
-            onClick={onRefresh}
-            aria-label="Refresh"
-            disabled={isRefreshing}
-            className="h-10 w-10 p-0"
-          >
-            <RefreshIcon className={clsx("h-4 w-4", isRefreshing && "animate-spin")} />
-          </Button>
-
           <Button type="button" onClick={onUploadClick} size="md" className="gap-2">
             <UploadIcon className="h-4 w-4" />
             Upload
           </Button>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={onFileInputChange} />
-        </div>
-      </div>
-
-      <div className="border-t border-slate-100 bg-white px-6 py-2">
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="flex items-center gap-2 font-semibold text-slate-500">
-            <span>Status</span>
-            <div className="flex flex-wrap items-center rounded-full border border-slate-200 bg-slate-50 p-1">
-              {filters.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => onStatusFilterChange(filter.key)}
-                  className={clsx(
-                    "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition",
-                    statusFilter === filter.key
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800",
-                  )}
-                  aria-pressed={statusFilter === filter.key}
-                >
-                  {filter.label}
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                    {filter.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-slate-500">
-            {lastSyncedAt ? <span>Synced {formatRelativeTime(now, lastSyncedAt)}</span> : null}
-            {hasFilters ? (
-              <Button type="button" size="sm" variant="ghost" onClick={onClearFilters} className="text-xs">
-                Clear filters
-              </Button>
-            ) : (
-              <span className="text-slate-400">Tip: ↑/↓ to navigate · Enter to preview</span>
-            )}
-          </div>
         </div>
       </div>
     </header>

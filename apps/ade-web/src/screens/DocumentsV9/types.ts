@@ -9,9 +9,40 @@ export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
 export type ListDocumentsQuery =
   paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"];
 
+export type RunResource = components["schemas"]["RunResource"];
+export type RunPage = components["schemas"]["RunPage"];
+export type RunStatus = components["schemas"]["RunStatus"];
+
+export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
+export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
+
 export type DocumentStatus = "queued" | "processing" | "ready" | "failed" | "archived";
 export type ViewMode = "grid" | "board";
 export type BoardGroup = "status" | "tag" | "uploader";
+
+export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
+export type TagMode = "any" | "all";
+
+export type DocumentsFilters = {
+  statuses: DocumentStatus[];
+  fileTypes: FileType[];
+  tags: string[];
+  tagMode: TagMode;
+};
+
+export type DocumentsSavedView = {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  state: {
+    search: string;
+    sort: string | null;
+    viewMode: ViewMode;
+    groupBy: BoardGroup;
+    filters: DocumentsFilters;
+  };
+};
 
 export type MappingHealth = {
   attention: number;
@@ -34,6 +65,7 @@ export type DocumentEntry = {
   createdAt: number;
   updatedAt: number;
   size: string;
+  fileType: FileType;
   stage?: string;
   progress?: number;
   error?: DocumentError;

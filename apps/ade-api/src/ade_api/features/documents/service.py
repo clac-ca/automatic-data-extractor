@@ -22,7 +22,15 @@ from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
 from ade_api.common.types import OrderBy
 from ade_api.infra.storage import workspace_documents_root
-from ade_api.models import Document, DocumentSource, DocumentStatus, DocumentTag, Run, User
+from ade_api.models import (
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    DocumentTag,
+    Run,
+    RunStatus,
+    User,
+)
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -392,6 +400,39 @@ class DocumentsService:
             ),
         )
 
+    async def delete_documents_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        actor: User | None = None,
+    ) -> list[UUID]:
+        """Soft delete multiple documents and remove stored files."""
+
+        ordered_ids = list(dict.fromkeys(document_ids))
+        if not ordered_ids:
+            return []
+
+        actor_id: UUID | None = actor.id if actor is not None else None
+        documents = await self._require_documents(
+            workspace_id=workspace_id,
+            document_ids=ordered_ids,
+        )
+
+        now = datetime.now(tz=UTC)
+        for document in documents:
+            document.deleted_at = now
+            if actor is not None:
+                document.deleted_by_user_id = actor_id
+
+        await self._session.flush()
+
+        storage = self._storage_for(workspace_id)
+        for document in documents:
+            await storage.delete(document.stored_uri)
+
+        return ordered_ids
+
     async def replace_document_tags(
         self,
         *,
@@ -447,6 +488,49 @@ class DocumentsService:
         await self._session.flush()
 
         return DocumentOut.model_validate(document)
+
+    async def patch_document_tags_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> list[DocumentOut]:
+        """Add or remove tags on multiple documents."""
+
+        if not add and not remove:
+            raise InvalidDocumentTagsError("add or remove is required")
+
+        try:
+            normalized_add = normalize_tag_list(add or [])
+            normalized_remove = normalize_tag_list(remove or [])
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        ordered_ids = list(dict.fromkeys(document_ids))
+        documents = await self._require_documents(
+            workspace_id=workspace_id,
+            document_ids=ordered_ids,
+        )
+        document_by_id = {doc.id: doc for doc in documents}
+
+        for document in documents:
+            existing = {tag.tag for tag in document.tags}
+            next_tags = (existing | set(normalized_add)) - set(normalized_remove)
+            if len(next_tags) > MAX_TAGS_PER_DOCUMENT:
+                raise InvalidDocumentTagsError(f"Too many tags; max {MAX_TAGS_PER_DOCUMENT}.")
+
+            to_remove = existing - next_tags
+            if to_remove:
+                document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
+            to_add = next_tags - existing
+            for tag in to_add:
+                document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+
+        await self._session.flush()
+
+        return [DocumentOut.model_validate(document_by_id[doc_id]) for doc_id in ordered_ids]
 
     async def list_tag_catalog(
         self,
@@ -536,6 +620,37 @@ class DocumentsService:
             raise DocumentNotFoundError(document_id)
         return document
 
+    async def _require_documents(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+    ) -> list[Document]:
+        if not document_ids:
+            return []
+
+        stmt = (
+            self._repository.base_query(workspace_id)
+            .where(Document.deleted_at.is_(None))
+            .where(Document.id.in_(document_ids))
+        )
+        result = await self._session.execute(stmt)
+        documents = list(result.scalars())
+        found = {doc.id for doc in documents}
+        missing = [document_id for document_id in document_ids if document_id not in found]
+        if missing:
+            logger.warning(
+                "document.require_documents.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=str(missing[0]),
+                    missing_count=len(missing),
+                ),
+            )
+            raise DocumentNotFoundError(missing[0])
+
+        return documents
+
     async def _attach_last_runs(
         self,
         workspace_id: UUID,
@@ -550,8 +665,13 @@ class DocumentsService:
             workspace_id=workspace_id,
             documents=documents,
         )
+        last_successful_runs = await self._latest_successful_runs(
+            workspace_id=workspace_id,
+            documents=documents,
+        )
         for document in documents:
             document.last_run = last_runs.get(document.id)
+            document.last_successful_run = last_successful_runs.get(document.id)
             if document.last_run and document.last_run.run_at:
                 document.last_run_at = document.last_run.run_at
 
@@ -607,8 +727,69 @@ class DocumentsService:
                 summary=row.get("summary"),
             )
             latest[document_id] = DocumentLastRun(
-                run_id=row.get("run_id"),
-                status=row.get("status"),
+                run_id=row["run_id"],
+                status=row["status"],
+                run_at=run_at,
+                message=message,
+            )
+
+        return latest
+
+    async def _latest_successful_runs(
+        self,
+        *,
+        workspace_id: UUID,
+        documents: Sequence[DocumentOut],
+    ) -> dict[UUID, DocumentLastRun]:
+        doc_ids = [doc.id for doc in documents]
+        if not doc_ids:
+            return {}
+
+        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
+        ranked_runs = (
+            select(
+                Run.input_document_id.label("document_id"),
+                Run.id.label("run_id"),
+                Run.status.label("status"),
+                Run.error_message.label("error_message"),
+                Run.summary.label("summary"),
+                Run.finished_at.label("finished_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=timestamp.desc(),
+                )
+                .label("rank"),
+            )
+            .where(
+                Run.workspace_id == workspace_id,
+                Run.input_document_id.is_not(None),
+                Run.input_document_id.in_(doc_ids),
+                Run.status == RunStatus.SUCCEEDED,
+            )
+            .subquery()
+        )
+
+        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
+        result = await self._session.execute(stmt)
+
+        latest: dict[UUID, DocumentLastRun] = {}
+        for row in result.mappings():
+            document_id = row["document_id"]
+            if not isinstance(document_id, UUID):
+                document_id = UUID(str(document_id))
+            run_at = self._ensure_utc(
+                row.get("finished_at") or row.get("started_at") or row.get("created_at")
+            )
+            message = self._last_run_message(
+                error_message=row.get("error_message"),
+                summary=row.get("summary"),
+            )
+            latest[document_id] = DocumentLastRun(
+                run_id=row["run_id"],
+                status=row["status"],
                 run_at=run_at,
                 message=message,
             )

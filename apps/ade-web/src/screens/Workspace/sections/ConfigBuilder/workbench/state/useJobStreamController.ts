@@ -20,6 +20,7 @@ type StartJobExtras = {
 };
 
 type UseJobStreamControllerOptions = {
+  readonly workspaceId: string;
   readonly configId: string;
   readonly onJobIdChange?: (jobId: string | null) => void;
   readonly seed?: {
@@ -30,6 +31,7 @@ type UseJobStreamControllerOptions = {
 };
 
 export function useJobStreamController({
+  workspaceId,
   configId,
   onJobIdChange,
   seed,
@@ -167,7 +169,11 @@ export function useJobStreamController({
 
       let resolvedJobId: string | null = null;
       try {
-        const run = await createRun(configId, options, controller.signal);
+        const run = await createRun(
+          workspaceId,
+          { ...options, configuration_id: configId },
+          controller.signal,
+        );
         resolvedJobId = run.id;
         setJobId(run.id);
         onJobIdChange?.(run.id);
@@ -196,7 +202,7 @@ export function useJobStreamController({
         }
       }
     },
-    [clearConsole, configId, jobInProgress, onJobIdChange, pushError, pushEvent, stopStreaming],
+    [clearConsole, configId, jobInProgress, onJobIdChange, pushError, pushEvent, stopStreaming, workspaceId],
   );
 
   return useMemo(

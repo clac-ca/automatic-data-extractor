@@ -74,6 +74,10 @@ class DocumentOut(BaseSchema):
         default=None,
         description="Latest run execution associated with the document when available.",
     )
+    last_successful_run: DocumentLastRun | None = Field(
+        default=None,
+        description="Latest successful run execution associated with the document when available.",
+    )
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -123,6 +127,52 @@ class DocumentTagsPatch(BaseSchema):
         return self
 
 
+class DocumentBatchTagsRequest(BaseSchema):
+    """Payload for updating tags on multiple documents."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        description="Documents to update tags for (all-or-nothing).",
+    )
+    add: list[str] | None = Field(
+        default=None,
+        description="Tags to add to each document.",
+    )
+    remove: list[str] | None = Field(
+        default=None,
+        description="Tags to remove from each document.",
+    )
+
+    @model_validator(mode="after")
+    def _ensure_changes(self) -> "DocumentBatchTagsRequest":
+        if not (self.add or self.remove):
+            raise ValueError("add or remove is required")
+        return self
+
+
+class DocumentBatchTagsResponse(BaseSchema):
+    """Response envelope for batch tag updates."""
+
+    documents: list["DocumentOut"] = Field(default_factory=list)
+
+
+class DocumentBatchDeleteRequest(BaseSchema):
+    """Payload for soft-deleting multiple documents."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        description="Documents to delete (soft delete, all-or-nothing).",
+    )
+
+
+class DocumentBatchDeleteResponse(BaseSchema):
+    """Response envelope for batch deletions."""
+
+    document_ids: list[UUIDStr] = Field(default_factory=list)
+
+
 class TagCatalogItem(BaseSchema):
     """Tag entry with document counts."""
 
@@ -137,10 +187,7 @@ class TagCatalogPage(Page[TagCatalogItem]):
 class DocumentLastRun(BaseSchema):
     """Minimal representation of the last engine execution for a document."""
 
-    run_id: UUIDStr | None = Field(
-        default=None,
-        description="Latest run identifier when the execution was streamed directly.",
-    )
+    run_id: UUIDStr = Field(description="Latest run identifier for the execution.")
     status: RunStatus
     run_at: datetime | None = Field(
         default=None,
@@ -166,6 +213,10 @@ class DocumentSheet(BaseSchema):
 
 
 __all__ = [
+    "DocumentBatchDeleteRequest",
+    "DocumentBatchDeleteResponse",
+    "DocumentBatchTagsRequest",
+    "DocumentBatchTagsResponse",
     "DocumentLastRun",
     "DocumentOut",
     "DocumentPage",

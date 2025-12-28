@@ -332,7 +332,10 @@ export default function WorkspaceDocumentsV4Route() {
 
   const runDocumentMutation = useMutation({
     mutationFn: async (payload: { documentId: string; configurationId: string }) =>
-      createRun(payload.configurationId, { input_document_id: payload.documentId }),
+      createRun(workspace.id, {
+        input_document_id: payload.documentId,
+        configuration_id: payload.configurationId,
+      }),
     onSuccess: (run, variables) => {
       notifyToast({
         title: "Run started",
@@ -358,7 +361,10 @@ export default function WorkspaceDocumentsV4Route() {
   const retryLastRunMutation = useMutation({
     mutationFn: async (payload: { documentId: string; lastRunId: string }) => {
       const run = await fetchRun(payload.lastRunId);
-      return createRun(run.configuration_id, { input_document_id: payload.documentId });
+      return createRun(workspace.id, {
+        input_document_id: payload.documentId,
+        configuration_id: run.configuration_id,
+      });
     },
     onSuccess: (run, variables) => {
       notifyToast({

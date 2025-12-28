@@ -25,6 +25,7 @@ from ade_api.common.events import (
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
+from ade_api.common.types import OrderBy
 from ade_api.common.time import utc_now
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
@@ -69,8 +70,10 @@ from .exceptions import (
 )
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
+from .filters import RunFilters
 from .schemas import (
     RunBatchCreateOptions,
+    RunCreateOptionsBase,
     RunCreateOptions,
     RunInput,
     RunLinks,
@@ -296,6 +299,29 @@ class RunsService:
         )
         return run
 
+    async def prepare_run_for_workspace(
+        self,
+        *,
+        workspace_id: UUID,
+        input_document_id: UUID,
+        configuration_id: UUID | None,
+        options: RunCreateOptionsBase | None = None,
+    ) -> Run:
+        """Create a run for the workspace, resolving the active configuration if needed."""
+
+        configuration = await self._resolve_workspace_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        run_options = self._merge_run_options(
+            input_document_id=input_document_id,
+            options=options,
+        )
+        return await self.prepare_run(
+            configuration_id=configuration.id,
+            options=run_options,
+        )
+
     async def prepare_runs_batch(
         self,
         *,
@@ -395,6 +421,26 @@ class RunsService:
             ),
         )
         return runs
+
+    async def prepare_runs_batch_for_workspace(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        configuration_id: UUID | None,
+        options: RunBatchCreateOptions,
+    ) -> list[Run]:
+        """Create batch runs for the workspace, resolving the active configuration if needed."""
+
+        configuration = await self._resolve_workspace_configuration(
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+        )
+        return await self.prepare_runs_batch(
+            configuration_id=configuration.id,
+            document_ids=document_ids,
+            options=options,
+        )
 
     async def load_run_options(self, run: Run) -> RunCreateOptions:
         """Rehydrate run options from the persisted run.queued event."""
@@ -886,8 +932,8 @@ class RunsService:
         *,
         workspace_id: UUID,
         configuration_id: UUID | None = None,
-        statuses: Sequence[RunStatus] | None,
-        input_document_id: UUID | None,
+        filters: RunFilters,
+        order_by: OrderBy,
         page: int,
         page_size: int,
         include_total: bool,
@@ -899,8 +945,8 @@ class RunsService:
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                statuses=[s.value for s in statuses] if statuses else None,
-                input_document_id=input_document_id,
+                filters=filters.model_dump(exclude_none=True),
+                order_by=str(order_by),
                 page=page,
                 page_size=page_size,
                 include_total=include_total,
@@ -910,8 +956,8 @@ class RunsService:
         page_result = await self._runs.list_by_workspace(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
-            statuses=statuses,
-            input_document_id=input_document_id,
+            filters=filters,
+            order_by=order_by,
             page=page,
             page_size=page_size,
             include_total=include_total,
@@ -943,8 +989,8 @@ class RunsService:
         self,
         *,
         configuration_id: UUID,
-        statuses: Sequence[RunStatus] | None,
-        input_document_id: UUID | None,
+        filters: RunFilters,
+        order_by: OrderBy,
         page: int,
         page_size: int,
         include_total: bool,
@@ -955,8 +1001,8 @@ class RunsService:
         return await self.list_runs(
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
-            statuses=statuses,
-            input_document_id=input_document_id,
+            filters=filters,
+            order_by=order_by,
             page=page,
             page_size=page_size,
             include_total=include_total,
@@ -2095,6 +2141,46 @@ class RunsService:
             )
         return configuration
 
+    async def _resolve_workspace_configuration(
+        self,
+        *,
+        workspace_id: UUID,
+        configuration_id: UUID | None,
+    ) -> Configuration:
+        if configuration_id is None:
+            configuration = await self._configs.get_active(workspace_id)
+            if configuration is None:
+                logger.warning(
+                    "run.config.resolve.active_missing",
+                    extra=log_context(workspace_id=workspace_id),
+                )
+                raise ConfigurationNotFoundError("active_configuration_not_found")
+        else:
+            configuration = await self._configs.get(
+                workspace_id=workspace_id,
+                configuration_id=configuration_id,
+            )
+            if configuration is None:
+                logger.warning(
+                    "run.config.resolve.not_found",
+                    extra=log_context(
+                        workspace_id=workspace_id,
+                        configuration_id=configuration_id,
+                    ),
+                )
+                raise ConfigurationNotFoundError(configuration_id)
+
+        if configuration.status == ConfigurationStatus.ARCHIVED:
+            logger.warning(
+                "run.config.resolve.archived",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    status=configuration.status.value,
+                ),
+            )
+        return configuration
+
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
             run.started_at = run.started_at or utc_now()
@@ -2231,6 +2317,15 @@ class RunsService:
         if not modes:
             return None
         return "Run options: " + ", ".join(modes)
+
+    @staticmethod
+    def _merge_run_options(
+        *,
+        input_document_id: UUID,
+        options: RunCreateOptionsBase | None,
+    ) -> RunCreateOptions:
+        payload = options.model_dump(exclude_none=True) if options else {}
+        return RunCreateOptions(input_document_id=input_document_id, **payload)
 
     async def _safe_mode_status(self) -> SafeModeStatus:
         if self._safe_mode_service is not None:

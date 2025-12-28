@@ -291,11 +291,11 @@ async function ensureRunStream(runId: string) {
 }
 
 export async function startRunJob(
-  configId: string,
+  workspaceId: string,
   options: RunStreamOptions,
   metadata?: RunJobState["metadata"] & { mode?: RunJobMode },
 ): Promise<RunJobState> {
-  const resource = await createRun(configId, options);
+  const resource = await createRun(workspaceId, options);
   const runId = resource.id;
   const mode = metadata?.mode;
   const startedAt = new Date().toISOString();

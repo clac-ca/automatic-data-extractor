@@ -26,8 +26,9 @@ from ade_api.api.deps import (
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord, strip_sequence
-from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import PageParams
+from ade_api.common.sorting import make_sort_dependency
+from ade_api.common.types import OrderBy
 from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
@@ -42,21 +43,24 @@ from .exceptions import (
     RunOutputNotReadyError,
     RunQueueFullError,
 )
+from .filters import RunFilters
 from .schemas import (
     RunBatchCreateRequest,
     RunBatchCreateResponse,
     RunCreateRequest,
     RunEventsPage,
-    RunFilters,
     RunInput,
     RunOutput,
     RunPage,
     RunResource,
+    RunWorkspaceBatchCreateRequest,
+    RunWorkspaceCreateRequest,
 )
 from .service import (
     DEFAULT_EVENTS_PAGE_LIMIT,
     RunsService,
 )
+from .sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
 
 router = APIRouter(
     tags=["runs"],
@@ -65,12 +69,42 @@ router = APIRouter(
 runs_service_dependency = Depends(get_runs_service)
 logger = logging.getLogger(__name__)
 
+get_sort_order = make_sort_dependency(
+    allowed=SORT_FIELDS,
+    default=DEFAULT_SORT,
+    id_field=ID_FIELD,
+)
 
-async def resolve_run_filters(
-    status: Annotated[list[RunStatus] | None, Query()] = None,
-    input_document_id: Annotated[UUIDStr | None, Query()] = None,
+_FILTER_KEYS = {
+    "q",
+    "status",
+    "input_document_id",
+    "created_after",
+    "created_before",
+    "file_type",
+    "has_output",
+}
+
+
+def get_run_filters(
+    request: Request,
+    filters: Annotated[RunFilters, Depends()],
 ) -> RunFilters:
-    return RunFilters(status=status, input_document_id=input_document_id)
+    allowed = _FILTER_KEYS
+    allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
+    extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
+    if extras:
+        detail = [
+            {
+                "type": "extra_forbidden",
+                "loc": ["query", key],
+                "msg": "Extra inputs are not permitted",
+                "input": request.query_params.get(key),
+            }
+            for key in extras
+        ]
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    return filters
 
 
 def _event_bytes(event: EventRecord) -> bytes:
@@ -157,6 +191,88 @@ async def create_runs_batch_endpoint(
     return RunBatchCreateResponse(runs=resources)
 
 
+@router.post(
+    "/workspaces/{workspace_id}/runs",
+    response_model=RunResource,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Security(require_csrf)],
+)
+async def create_workspace_run_endpoint(
+    *,
+    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
+    payload: RunWorkspaceCreateRequest,
+    service: RunsService = runs_service_dependency,
+) -> RunResource:
+    """Create a run for ``workspace_id`` and enqueue execution."""
+
+    try:
+        run = await service.prepare_run_for_workspace(
+            workspace_id=workspace_id,
+            configuration_id=payload.configuration_id,
+            input_document_id=payload.input_document_id,
+            options=payload.options,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunInputMissingError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RunQueueFullError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": {
+                    "code": "run_queue_full",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+
+    resource = await service.to_resource(run)
+    return resource
+
+
+@router.post(
+    "/workspaces/{workspace_id}/runs/batch",
+    response_model=RunBatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Security(require_csrf)],
+)
+async def create_workspace_runs_batch_endpoint(
+    *,
+    workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
+    payload: RunWorkspaceBatchCreateRequest,
+    service: RunsService = runs_service_dependency,
+) -> RunBatchCreateResponse:
+    """Create multiple runs for ``workspace_id`` and enqueue execution."""
+
+    try:
+        runs = await service.prepare_runs_batch_for_workspace(
+            workspace_id=workspace_id,
+            configuration_id=payload.configuration_id,
+            document_ids=payload.document_ids,
+            options=payload.options,
+        )
+    except ConfigurationNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunDocumentMissingError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RunQueueFullError as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": {
+                    "code": "run_queue_full",
+                    "message": str(exc),
+                }
+            },
+        ) from exc
+
+    resources = [await service.to_resource(run) for run in runs]
+    return RunBatchCreateResponse(runs=resources)
+
+
 @router.get(
     "/configurations/{configuration_id}/runs",
     response_model=RunPage,
@@ -165,15 +281,15 @@ async def create_runs_batch_endpoint(
 async def list_configuration_runs_endpoint(
     configuration_id: Annotated[UUID, Path(description="Configuration identifier")],
     page: Annotated[PageParams, Depends()],
-    filters: Annotated[RunFilters, Depends(resolve_run_filters)],
+    filters: Annotated[RunFilters, Depends(get_run_filters)],
+    order_by: Annotated[OrderBy, Depends(get_sort_order)],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
-    statuses = [RunStatus(value) for value in filters.status] if filters.status else None
     try:
         return await service.list_runs_for_configuration(
             configuration_id=configuration_id,
-            statuses=statuses,
-            input_document_id=filters.input_document_id,
+            filters=filters,
+            order_by=order_by,
             page=page.page,
             page_size=page.page_size,
             include_total=page.include_total,
@@ -190,14 +306,14 @@ async def list_configuration_runs_endpoint(
 async def list_workspace_runs_endpoint(
     workspace_id: Annotated[UUID, Path(description="Workspace identifier")],
     page: Annotated[PageParams, Depends()],
-    filters: Annotated[RunFilters, Depends(resolve_run_filters)],
+    filters: Annotated[RunFilters, Depends(get_run_filters)],
+    order_by: Annotated[OrderBy, Depends(get_sort_order)],
     service: RunsService = runs_service_dependency,
 ) -> RunPage:
-    statuses = [RunStatus(value) for value in filters.status] if filters.status else None
     return await service.list_runs(
         workspace_id=workspace_id,
-        statuses=statuses,
-        input_document_id=filters.input_document_id,
+        filters=filters,
+        order_by=order_by,
         page=page.page,
         page_size=page.page_size,
         include_total=page.include_total,

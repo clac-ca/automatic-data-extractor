@@ -19,10 +19,12 @@ RunLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 __all__ = [
     "RunBatchCreateOptions",
     "RunBatchCreateRequest",
+    "RunWorkspaceBatchCreateRequest",
     "RunBatchCreateResponse",
+    "RunCreateOptionsBase",
     "RunCreateOptions",
     "RunCreateRequest",
-    "RunFilters",
+    "RunWorkspaceCreateRequest",
     "RunInput",
     "RunLinks",
     "RunOutput",
@@ -32,7 +34,7 @@ __all__ = [
 ]
 
 
-class RunCreateOptions(BaseSchema):
+class RunCreateOptionsBase(BaseSchema):
     """Optional execution toggles for ADE runs."""
 
     dry_run: bool = False
@@ -49,10 +51,6 @@ class RunCreateOptions(BaseSchema):
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
     )
-    input_document_id: UUIDStr = Field(
-        ...,
-        description="Document identifier to ingest.",
-    )
     input_sheet_names: list[str] | None = Field(
         default=None,
         description="Optional worksheet names to ingest when processing XLSX files.",
@@ -63,10 +61,33 @@ class RunCreateOptions(BaseSchema):
     )
 
 
+class RunCreateOptions(RunCreateOptionsBase):
+    """Execution toggles for a single ADE run."""
+
+    input_document_id: UUIDStr = Field(
+        ...,
+        description="Document identifier to ingest.",
+    )
+
+
 class RunCreateRequest(BaseSchema):
     """Payload accepted by the run creation endpoint."""
 
     options: RunCreateOptions = Field(default_factory=RunCreateOptions)
+
+
+class RunWorkspaceCreateRequest(BaseSchema):
+    """Payload accepted by the workspace run creation endpoint."""
+
+    input_document_id: UUIDStr = Field(
+        ...,
+        description="Document identifier to ingest.",
+    )
+    configuration_id: UUIDStr | None = Field(
+        default=None,
+        description="Optional configuration identifier (defaults to the active configuration).",
+    )
+    options: RunCreateOptionsBase = Field(default_factory=RunCreateOptionsBase)
 
 
 class RunBatchCreateOptions(BaseSchema):
@@ -99,6 +120,21 @@ class RunBatchCreateRequest(BaseSchema):
         ...,
         min_length=1,
         description="Documents to enqueue as individual runs (all-or-nothing).",
+    )
+    options: RunBatchCreateOptions = Field(default_factory=RunBatchCreateOptions)
+
+
+class RunWorkspaceBatchCreateRequest(BaseSchema):
+    """Payload accepted by the workspace batch run creation endpoint."""
+
+    document_ids: list[UUIDStr] = Field(
+        ...,
+        min_length=1,
+        description="Documents to enqueue as individual runs (all-or-nothing).",
+    )
+    configuration_id: UUIDStr | None = Field(
+        default=None,
+        description="Optional configuration identifier (defaults to the active configuration).",
     )
     options: RunBatchCreateOptions = Field(default_factory=RunBatchCreateOptions)
 
@@ -181,19 +217,6 @@ class RunResource(BaseSchema):
     events_url: str | None = None
     events_stream_url: str | None = None
     events_download_url: str | None = None
-
-
-class RunFilters(BaseSchema):
-    """Query parameters for filtering workspace-scoped run listings."""
-
-    status: list[RunStatus] | None = Field(
-        default=None,
-        description="Optional run statuses to include (filters out others).",
-    )
-    input_document_id: UUIDStr | None = Field(
-        default=None,
-        description="Limit runs to those started for the given document.",
-    )
 
 
 class RunPage(Page[RunResource]):

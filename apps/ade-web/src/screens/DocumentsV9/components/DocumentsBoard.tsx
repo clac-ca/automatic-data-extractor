@@ -79,7 +79,7 @@ export function DocumentsBoard({
                   type="button"
                   onClick={() => onGroupByChange(group)}
                   className={clsx(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition",
+                    "rounded-full px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
                     groupBy === group ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
                   )}
                   aria-pressed={groupBy === group}
@@ -94,7 +94,7 @@ export function DocumentsBoard({
             type="button"
             onClick={() => onHideEmptyColumnsChange(!hideEmptyColumns)}
             className={clsx(
-              "rounded-full border px-3 py-1 text-xs font-semibold transition",
+              "rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
               hideEmptyColumns
                 ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
                 : "border-slate-200 bg-white text-slate-500 hover:text-slate-800",
@@ -161,7 +161,7 @@ export function DocumentsBoard({
                           }
                         }}
                         className={clsx(
-                          "flex cursor-pointer flex-col gap-3 rounded-2xl border bg-white px-3 py-3 shadow-sm transition",
+                          "flex cursor-pointer flex-col gap-3 rounded-2xl border bg-white px-3 py-3 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
                           activeId === doc.id ? "border-brand-400" : "border-slate-200 hover:border-brand-300",
                         )}
                         role="button"
@@ -209,7 +209,7 @@ export function DocumentsBoard({
           <button
             type="button"
             onClick={onLoadMore}
-            className="text-xs font-semibold text-brand-600"
+            className="rounded-md text-xs font-semibold text-brand-600 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:text-slate-400"
             disabled={isFetchingNextPage}
           >
             {isFetchingNextPage ? "Loading more..." : "Load more"}
