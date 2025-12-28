@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 
 import clsx from "clsx";
 
@@ -170,6 +170,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const safeModeEnabled = safeMode.data?.enabled ?? false;
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
   const shortcutHint = useShortcutHint();
+  const [topBarHeight, setTopBarHeight] = useState(0);
+  const topBarRef = useRef<HTMLDivElement | null>(null);
   const workspaceNavItems = useMemo(
     () => getWorkspacePrimaryNavigation(workspace),
     [workspace],
@@ -266,6 +268,30 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     }
   }, [immersiveWorkbenchActive]);
 
+  useLayoutEffect(() => {
+    if (immersiveWorkbenchActive) {
+      setTopBarHeight(0);
+      return;
+    }
+    const node = topBarRef.current;
+    if (!node) return;
+
+    const update = () => {
+      const next = Math.round(node.getBoundingClientRect().height);
+      setTopBarHeight((prev) => (prev === next ? prev : next));
+    };
+
+    update();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => update());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [immersiveWorkbenchActive]);
+
   const handleWorkspaceSearchSubmit = useCallback(() => {
     if (!workspaceSearchNormalized) {
       return;
@@ -291,8 +317,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const openMobileNav = useCallback(() => setIsMobileNavOpen(true), []);
   const closeMobileNav = useCallback(() => setIsMobileNavOpen(false), []);
 
+  const workspaceSwitcherLabel = `Switch workspace: ${workspace.name}`;
+  const workspaceInitials = getWorkspaceInitials(workspace.name);
+
   const topBarBrand = (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <button
         type="button"
         onClick={openMobileNav}
@@ -300,6 +329,28 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         aria-label="Open workspace navigation"
       >
         <MenuIcon />
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate("/workspaces")}
+        aria-label={workspaceSwitcherLabel}
+        title={workspaceSwitcherLabel}
+        className={clsx(
+          "group inline-flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-left shadow-sm transition",
+          "hover:border-slate-300 hover:bg-slate-50",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        )}
+      >
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-white shadow-sm transition-colors group-hover:bg-brand-600">
+          {workspaceInitials}
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-semibold text-slate-900">{workspace.name}</span>
+          <span className="hidden text-xs text-slate-500 sm:block">Switch workspace</span>
+        </span>
+        <span className="hidden text-slate-400 sm:inline-flex" aria-hidden>
+          <ChevronDownIcon />
+        </span>
       </button>
     </div>
   );
@@ -407,80 +458,88 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <AboutVersionsModal open={isVersionsModalOpen} onClose={() => setIsVersionsModalOpen(false)} />
       <div
         className={clsx(
-          "flex min-w-0 bg-slate-50 text-slate-900",
+          "flex min-w-0 flex-col bg-slate-50 text-slate-900",
           fullHeightLayout ? "h-screen overflow-hidden" : "min-h-screen",
         )}
+        style={{ "--workspace-topbar-height": `${topBarHeight}px` } as CSSProperties}
       >
         {!immersiveWorkbenchActive ? (
-          <WorkspaceNav
-            workspace={workspace}
-            items={workspaceNavItems}
-            isPinned={isNavPinned}
-            onTogglePinned={() => setIsNavPinned((current) => !current)}
-            onGoToWorkspaces={() => navigate("/workspaces")}
-          />
-        ) : null}
-        <div className="flex flex-1 min-w-0 flex-col">
-          {!immersiveWorkbenchActive ? (
+          <div ref={topBarRef}>
             <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={topBarSearch} />
+          </div>
+        ) : null}
+        <div className={clsx("relative flex min-w-0 flex-1", fullHeightLayout ? "min-h-0" : "")}>
+          {!immersiveWorkbenchActive ? (
+            <WorkspaceNav
+              workspace={workspace}
+              items={workspaceNavItems}
+              isPinned={isNavPinned}
+              onTogglePinned={() => setIsNavPinned((current) => !current)}
+            />
           ) : null}
-          {!immersiveWorkbenchActive && isMobileNavOpen ? (
-            <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
-              <button
-                type="button"
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-                onClick={closeMobileNav}
-                aria-label="Close navigation"
-              />
-              <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
-                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
-                    <span className="text-xs text-slate-400">Workspace navigation</span>
+          <div className="flex flex-1 min-w-0 flex-col">
+            {!immersiveWorkbenchActive && isMobileNavOpen ? (
+              <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                  onClick={closeMobileNav}
+                  aria-label="Close navigation"
+                />
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
+                      <span className="text-xs text-slate-400">Workspace navigation</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeMobileNav}
+                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-500"
+                      aria-label="Close navigation"
+                    >
+                      <CloseIcon />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeMobileNav}
-                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-500"
-                    aria-label="Close navigation"
-                  >
-                    <CloseIcon />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto px-3 py-4">
-                  <WorkspaceNavList items={workspaceNavItems} onNavigate={closeMobileNav} showHeading={false} />
+                  <div className="flex-1 overflow-y-auto px-3 py-4">
+                    <WorkspaceNavList items={workspaceNavItems} onNavigate={closeMobileNav} showHeading={false} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
-          <div className="relative flex flex-1 min-w-0 overflow-hidden" key={`section-${section.key}`}>
-            <main
-              id="main-content"
-              tabIndex={-1}
-              className={clsx(
-                "relative flex-1 min-w-0",
-                fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",
-              )}
-            >
-              <div
+            ) : null}
+            <div className="relative flex flex-1 min-w-0 overflow-hidden" key={`section-${section.key}`}>
+              <main
+                id="main-content"
+                tabIndex={-1}
                 className={clsx(
-                  fullHeightLayout
-                    ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
-                    : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
+                  "relative flex-1 min-w-0",
+                  fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",
                 )}
               >
-                {safeModeEnabled ? (
-                  <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
-                    <Alert tone="warning" heading="Safe mode active">
-                      {safeModeDetail}
-                    </Alert>
+                <div
+                  className={clsx(
+                    fullHeightLayout
+                      ? "flex w-full flex-1 min-h-0 flex-col px-0 py-0"
+                      : "mx-auto flex w-full max-w-7xl flex-col px-4 py-6",
+                  )}
+                >
+                  {safeModeEnabled ? (
+                    <div className={clsx("mb-4", fullHeightLayout ? "px-6 pt-4" : "")}>
+                      <Alert tone="warning" heading="Safe mode active">
+                        {safeModeDetail}
+                      </Alert>
+                    </div>
+                  ) : null}
+                  <div
+                    className={clsx(
+                      fullHeightLayout ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col",
+                    )}
+                  >
+                    {section.element}
                   </div>
-                ) : null}
-                <div className={clsx(fullHeightLayout ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col")}>
-                  {section.element}
                 </div>
-              </div>
-            </main>
+              </main>
+            </div>
           </div>
         </div>
       </div>
@@ -522,6 +581,21 @@ function buildCanonicalPath(pathname: string, search: string, resolvedId: string
   const trailing = pathname.startsWith(base) ? pathname.slice(base.length) : "";
   const normalized = trailing && trailing !== "/" ? trailing : `/${defaultWorkspaceSection.path}`;
   return `/workspaces/${resolvedId}${normalized}${search}`;
+}
+
+function getWorkspaceInitials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "WS";
+  const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
+  return initials.join("").toUpperCase();
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function MenuIcon() {

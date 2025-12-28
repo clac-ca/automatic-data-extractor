@@ -23,7 +23,6 @@ export interface WorkspaceNavProps {
   readonly isPinned: boolean;
   readonly onTogglePinned: () => void;
   readonly items?: readonly WorkspaceNavigationItem[];
-  readonly onGoToWorkspaces: () => void;
 }
 
 export function WorkspaceNav({
@@ -31,7 +30,6 @@ export function WorkspaceNav({
   isPinned,
   onTogglePinned,
   items,
-  onGoToWorkspaces,
 }: WorkspaceNavProps) {
   const allItems = items ?? getWorkspacePrimaryNavigation(workspace);
 
@@ -122,17 +120,16 @@ export function WorkspaceNav({
   // - Pinned: layout becomes drawer width (pushes content).
   const layoutWidth = isPinned ? NAV_DRAWER_WIDTH : NAV_RAIL_WIDTH;
   const panelWidth = panelExpanded ? NAV_DRAWER_WIDTH : NAV_RAIL_WIDTH;
-
-  const workspaceInitials = getWorkspaceInitials(workspace.name);
+  const navHeight = "calc(100vh - var(--workspace-topbar-height, 0px))";
 
   return (
     <aside
       className={clsx(
-        "relative hidden h-screen flex-shrink-0 bg-white lg:flex",
+        "relative hidden h-full min-h-0 flex-shrink-0 bg-white lg:flex",
         "border-r border-slate-200",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
-      style={{ width: layoutWidth, willChange: "width" }}
+      style={{ width: layoutWidth, height: navHeight, willChange: "width" }}
       aria-label="Primary workspace navigation"
       data-pinned={isPinned ? "true" : "false"}
       data-expanded={panelExpanded ? "true" : "false"}
@@ -170,14 +167,11 @@ export function WorkspaceNav({
         data-workspace-nav-panel="true"
       >
         <WorkspaceNavPanel
-          workspace={workspace}
-          workspaceInitials={workspaceInitials}
           items={navItems}
           settingsItem={settingsItem}
           expanded={panelExpanded}
           isPinned={isPinned}
           onTogglePinned={onTogglePinned}
-          onGoToWorkspaces={onGoToWorkspaces}
         />
       </div>
     </aside>
@@ -185,77 +179,22 @@ export function WorkspaceNav({
 }
 
 function WorkspaceNavPanel({
-  workspace,
-  workspaceInitials,
   items,
   settingsItem,
   expanded,
   isPinned,
   onTogglePinned,
-  onGoToWorkspaces,
 }: {
-  readonly workspace: WorkspaceProfile;
-  readonly workspaceInitials: string;
   readonly items: readonly WorkspaceNavigationItem[];
   readonly settingsItem?: WorkspaceNavigationItem;
   readonly expanded: boolean;
   readonly isPinned: boolean;
   readonly onTogglePinned: () => void;
-  readonly onGoToWorkspaces: () => void;
 }) {
-  const switcherLabel = `Switch workspace: ${workspace.name}`;
   const variant: NavVariant = expanded ? "drawer" : "rail";
 
   return (
     <>
-      {/* Header */}
-      <div className={clsx("border-b border-slate-200", expanded ? "px-3 py-3" : "px-2 py-2")}>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onGoToWorkspaces}
-            aria-label={switcherLabel}
-            title={!expanded ? switcherLabel : workspace.name}
-            className={clsx(
-              "group relative flex w-full items-center rounded-xl transition-colors",
-              "hover:bg-slate-50",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-              expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-            )}
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-white shadow-sm transition-colors group-hover:bg-brand-600">
-              {workspaceInitials}
-            </span>
-
-            {/* Animated details (fade/slide + max-width) */}
-            <span
-              className={clsx(
-                "min-w-0 overflow-hidden",
-                "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
-                expanded ? "ml-3 max-w-[12rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-              )}
-              aria-hidden={!expanded}
-            >
-              <span className="block truncate text-sm font-semibold text-slate-900">{workspace.name}</span>
-              <span className="block text-xs text-slate-500">Switch workspace</span>
-            </span>
-
-            <span
-              className={clsx(
-                "overflow-hidden text-slate-400",
-                "transition-[max-width,opacity,transform] duration-200 motion-reduce:transition-none",
-                expanded ? "ml-2 max-w-[1.25rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-              )}
-              aria-hidden={!expanded}
-            >
-              <ChevronDownIcon />
-            </span>
-
-            {!expanded ? <RailTooltip label={workspace.name} /> : null}
-          </button>
-        </div>
-      </div>
-
       {/* Nav */}
       <nav className={clsx("flex-1 overflow-y-auto", "overflow-x-visible", expanded ? "px-3 py-4" : "px-2 py-3")} aria-label="Workspace sections">
         <WorkspaceNavList items={items} variant={variant} />
@@ -526,14 +465,6 @@ function pickWorkspaceSettingsItem(items: readonly WorkspaceNavigationItem[]) {
   return byLabel;
 }
 
-function ChevronDownIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function GearIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
@@ -567,11 +498,4 @@ function UnpinIcon() {
       <path d="M6 16 14 8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-}
-
-function getWorkspaceInitials(name: string) {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "WS";
-  const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
-  return initials.join("").toUpperCase();
 }
