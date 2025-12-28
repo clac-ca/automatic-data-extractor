@@ -14,17 +14,17 @@ import { DocumentsGrid } from "./components/DocumentsGrid";
 import { DocumentsHeader } from "./components/DocumentsHeader";
 import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
-import { useDocumentsV10Model } from "./hooks/useDocumentsV10Model";
+import { useDocumentsModel } from "./hooks/useDocumentsModel";
 
-export default function DocumentsV10Screen() {
+export default function DocumentsScreen() {
   return (
     <RequireSession>
-      <DocumentsV10Redirect />
+      <DocumentsRedirect />
     </RequireSession>
   );
 }
 
-function DocumentsV10Redirect() {
+function DocumentsRedirect() {
   const location = useLocation();
   const navigate = useNavigate();
   const session = useSession();
@@ -49,7 +49,7 @@ function DocumentsV10Redirect() {
       return;
     }
 
-    const target = `/workspaces/${targetWorkspace.id}/documents-v10${location.search}${location.hash}`;
+    const target = `/workspaces/${targetWorkspace.id}/documents${location.search}${location.hash}`;
     navigate(target, { replace: true });
   }, [
     location.hash,
@@ -71,7 +71,7 @@ function DocumentsV10Redirect() {
   return null;
 }
 
-export function DocumentsV10Workbench() {
+export function DocumentsWorkbench() {
   const session = useSession();
   const { workspace } = useWorkspaceContext();
   const location = useLocation();
@@ -80,7 +80,7 @@ export function DocumentsV10Workbench() {
   const currentUserLabel = session.user.display_name || session.user.email || "You";
   const currentUserId = session.user.id;
 
-  const model = useDocumentsV10Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
+  const model = useDocumentsModel({ currentUserLabel, currentUserId, workspaceId: workspace.id });
   const [detailsRequestId, setDetailsRequestId] = useState<string | null>(null);
   const handleClearFilters = () => {
     setSearchParam("");
@@ -160,7 +160,7 @@ export function DocumentsV10Workbench() {
   );
 
   return (
-    <div className="documents-v10 flex min-h-0 flex-1 flex-col bg-background text-foreground">
+    <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
         viewMode={model.state.viewMode}
         onViewModeChange={model.actions.setViewMode}

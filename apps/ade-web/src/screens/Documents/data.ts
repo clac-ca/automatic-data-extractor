@@ -31,18 +31,17 @@ export const DOCUMENTS_PAGE_SIZE = 50;
 export const MAX_PREVIEW_ROWS = 200;
 export const MAX_PREVIEW_COLUMNS = 24;
 
-export const documentsV9Keys = {
-  root: () => ["documents-v9"] as const,
-  workspace: (workspaceId: string) => [...documentsV9Keys.root(), workspaceId] as const,
-  list: (workspaceId: string, sort: string | null) =>
-    [...documentsV9Keys.workspace(workspaceId), "list", { sort }] as const,
-  members: (workspaceId: string) => [...documentsV9Keys.workspace(workspaceId), "members"] as const,
+export const documentsKeys = {
+  root: () => ["documents"] as const,
+  workspace: (workspaceId: string) => [...documentsKeys.root(), workspaceId] as const,
+  list: (workspaceId: string, sort: string | null) => [...documentsKeys.workspace(workspaceId), "list", { sort }] as const,
+  members: (workspaceId: string) => [...documentsKeys.workspace(workspaceId), "members"] as const,
   document: (workspaceId: string, documentId: string) =>
-    [...documentsV9Keys.workspace(workspaceId), "document", documentId] as const,
+    [...documentsKeys.workspace(workspaceId), "document", documentId] as const,
   runsForDocument: (workspaceId: string, documentId: string) =>
-    [...documentsV9Keys.workspace(workspaceId), "runs", { input_document_id: documentId }] as const,
-  run: (runId: string) => [...documentsV9Keys.root(), "run", runId] as const,
-  workbook: (url: string) => [...documentsV9Keys.root(), "workbook", url] as const,
+    [...documentsKeys.workspace(workspaceId), "runs", { input_document_id: documentId }] as const,
+  run: (runId: string) => [...documentsKeys.root(), "run", runId] as const,
+  workbook: (url: string) => [...documentsKeys.root(), "workbook", url] as const,
 };
 
 export async function fetchWorkspaceDocuments(

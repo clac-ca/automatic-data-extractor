@@ -30,7 +30,7 @@ export function TagPicker({
   const canSearch = effectiveQuery.length >= 2;
 
   const tagsQuery = useQuery<TagCatalogPage>({
-    queryKey: ["documents-v9", workspaceId, "tags", { q: canSearch ? effectiveQuery : "" }],
+    queryKey: ["documents", workspaceId, "tags", { q: canSearch ? effectiveQuery : "" }],
     queryFn: async ({ signal }) => {
       const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/tags", {
         params: {

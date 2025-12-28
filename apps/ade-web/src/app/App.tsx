@@ -8,14 +8,7 @@ import SetupScreen from "@screens/Setup";
 import WorkspacesScreen from "@screens/Workspaces";
 import WorkspaceCreateScreen from "@screens/Workspaces/New";
 import WorkspaceScreen from "@screens/Workspace";
-import DocumentsV3Screen from "@screens/DocumentsV3";
-import DocumentsV4Screen from "@screens/DocumentsV4";
-import DocumentsV5Screen from "@screens/DocumentsV5";
-import DocumentsV6Screen from "@screens/DocumentsV6";
-import DocumentsV7Screen from "@screens/DocumentsV7";
-import DocumentsV8Screen from "@screens/DocumentsV8";
-import DocumentsV9Screen from "@screens/DocumentsV9";
-import DocumentsV10Screen from "@screens/DocumentsV10";
+import DocumentsScreen from "@screens/Documents";
 import LogoutScreen from "@screens/Logout";
 import NotFoundScreen from "@screens/NotFound";
 
@@ -60,22 +53,8 @@ export function ScreenSwitch() {
         return <WorkspaceCreateScreen />;
       }
       return <WorkspaceScreen />;
-    case "documents-v3":
-      return <DocumentsV3Screen />;
-    case "documents-v4":
-      return <DocumentsV4Screen />;
-    case "documents-v5":
-      return <DocumentsV5Screen />;
-    case "documents-v6":
-      return <DocumentsV6Screen />;
-    case "documents-v7":
-      return <DocumentsV7Screen />;
-    case "documents-v8":
-      return <DocumentsV8Screen />;
-    case "documents-v9":
-      return <DocumentsV9Screen />;
-    case "documents-v10":
-      return <DocumentsV10Screen />;
+    case "documents":
+      return <DocumentsScreen />;
     default:
       break;
   }

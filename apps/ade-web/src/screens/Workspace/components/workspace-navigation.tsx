@@ -45,15 +45,6 @@ const SettingsIcon = createIcon(
 
 type WorkspaceSectionId =
   | "documents"
-  | "documents-v2"
-  | "documents-v3"
-  | "documents-v4"
-  | "documents-v5"
-  | "documents-v6"
-  | "documents-v7"
-  | "documents-v8"
-  | "documents-v9"
-  | "documents-v10"
   | "runs"
   | "config-builder"
   | "settings";
@@ -71,60 +62,6 @@ const workspaceSections: readonly WorkspaceSectionDescriptor[] = [
     id: "documents",
     path: "documents",
     label: "Documents",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v2",
-    path: "documents-v2",
-    label: "Documents v2",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v3",
-    path: "documents-v3",
-    label: "Documents v3",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v4",
-    path: "documents-v4",
-    label: "Documents v4",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v5",
-    path: "documents-v5",
-    label: "Documents v5",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v6",
-    path: "documents-v6",
-    label: "Documents v6",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v7",
-    path: "documents-v7",
-    label: "Documents v7",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v8",
-    path: "documents-v8",
-    label: "Documents v8",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v9",
-    path: "documents-v9",
-    label: "Documents v9",
-    icon: DocumentsIcon,
-  },
-  {
-    id: "documents-v10",
-    path: "documents-v10",
-    label: "Documents v10",
     icon: DocumentsIcon,
   },
   {

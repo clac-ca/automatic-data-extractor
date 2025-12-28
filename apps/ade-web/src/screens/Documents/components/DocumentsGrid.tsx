@@ -157,7 +157,7 @@ export function DocumentsGrid({
               const isUnassigned = !doc.assigneeKey;
               const isExpanded = Boolean(expandedContent && expandedId === doc.id);
               const isActive = Boolean(isExpanded && activeId === doc.id);
-              const previewId = `documents-v10-preview-${doc.id}`;
+              const previewId = `documents-preview-${doc.id}`;
               const hasNotes = doc.commentCount > 0;
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
 

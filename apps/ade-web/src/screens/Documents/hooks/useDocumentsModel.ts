@@ -21,7 +21,7 @@ import {
   DOCUMENTS_PAGE_SIZE,
   buildDocumentEntry,
   createRunForDocument,
-  documentsV10Keys,
+  documentsKeys,
   downloadOriginalDocument,
   downloadRunOutput,
   downloadRunOutputById,
@@ -199,6 +199,14 @@ const DEFAULT_FILTERS: DocumentsFilters = {
 };
 
 const UNASSIGNED_KEY = "__unassigned__";
+const DOCUMENTS_STORAGE_KEYS = {
+  views: (workspaceId: string) => `ade.documents.views.${workspaceId}`,
+  viewsLegacy: (workspaceId: string) => `ade.documents.v10.views.${workspaceId}`,
+  assignments: (workspaceId: string) => `ade.documents.assignments.${workspaceId}`,
+  assignmentsLegacy: (workspaceId: string) => `ade.documents.v10.assignments.${workspaceId}`,
+  comments: (workspaceId: string) => `ade.documents.comments.${workspaceId}`,
+  commentsLegacy: (workspaceId: string) => `ade.documents.v10.comments.${workspaceId}`,
+};
 
 function safeJsonParse<T>(value: string | null): T | null {
   if (!value) return null;
@@ -211,7 +219,9 @@ function safeJsonParse<T>(value: string | null): T | null {
 
 function loadSavedViews(workspaceId: string): SavedView[] {
   if (typeof window === "undefined") return [];
-  const raw = window.localStorage.getItem(`ade.documents.v10.views.${workspaceId}`);
+  const raw =
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.views(workspaceId)) ??
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.viewsLegacy(workspaceId));
   const parsed = safeJsonParse<SavedView[]>(raw);
   if (!parsed) return [];
   return parsed.map((v) => ({
@@ -227,34 +237,38 @@ function loadSavedViews(workspaceId: string): SavedView[] {
 
 function storeSavedViews(workspaceId: string, views: SavedView[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(`ade.documents.v10.views.${workspaceId}`, JSON.stringify(views));
+  window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.views(workspaceId), JSON.stringify(views));
 }
 
 function loadAssignments(workspaceId: string): Record<string, string | null> {
   if (typeof window === "undefined") return {};
-  const raw = window.localStorage.getItem(`ade.documents.v10.assignments.${workspaceId}`);
+  const raw =
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.assignments(workspaceId)) ??
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.assignmentsLegacy(workspaceId));
   const parsed = safeJsonParse<Record<string, string | null>>(raw);
   return parsed ?? {};
 }
 
 function storeAssignments(workspaceId: string, map: Record<string, string | null>) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(`ade.documents.v10.assignments.${workspaceId}`, JSON.stringify(map));
+  window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.assignments(workspaceId), JSON.stringify(map));
 }
 
 function loadComments(workspaceId: string): Record<string, DocumentComment[]> {
   if (typeof window === "undefined") return {};
-  const raw = window.localStorage.getItem(`ade.documents.v10.comments.${workspaceId}`);
+  const raw =
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.comments(workspaceId)) ??
+    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.commentsLegacy(workspaceId));
   const parsed = safeJsonParse<Record<string, DocumentComment[]>>(raw);
   return parsed ?? {};
 }
 
 function storeComments(workspaceId: string, map: Record<string, DocumentComment[]>) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(`ade.documents.v10.comments.${workspaceId}`, JSON.stringify(map));
+  window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.comments(workspaceId), JSON.stringify(map));
 }
 
-export function useDocumentsV10Model({
+export function useDocumentsModel({
   workspaceId,
   currentUserLabel,
   currentUserId,
@@ -324,7 +338,7 @@ export function useDocumentsV10Model({
   });
 
   const sort = "-created_at";
-  const listKey = useMemo(() => documentsV10Keys.list(workspaceId, sort), [sort, workspaceId]);
+  const listKey = useMemo(() => documentsKeys.list(workspaceId, sort), [sort, workspaceId]);
 
   const documentsQuery = useInfiniteQuery<DocumentPage>({
     queryKey: listKey,
@@ -357,7 +371,7 @@ export function useDocumentsV10Model({
     uploadQueue.items.forEach((item) => {
       if (item.status === "succeeded" && item.response && !handledUploadsRef.current.has(item.id)) {
         handledUploadsRef.current.add(item.id);
-        queryClient.invalidateQueries({ queryKey: documentsV10Keys.workspace(workspaceId) });
+        queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
       }
       if (item.status === "failed" && item.error && !handledUploadsRef.current.has(`fail-${item.id}`)) {
         handledUploadsRef.current.add(`fail-${item.id}`);
@@ -375,7 +389,7 @@ export function useDocumentsV10Model({
 
       void createRun(workspaceId, { input_document_id: item.response.id })
         .then(() => {
-          queryClient.invalidateQueries({ queryKey: documentsV10Keys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : "Unable to start a run for this upload.";
@@ -434,7 +448,7 @@ export function useDocumentsV10Model({
   const apiEntriesBase = useMemo(() => documentsRaw.map((doc) => buildDocumentEntry(doc)), [documentsRaw]);
 
   const membersQuery = useQuery({
-    queryKey: documentsV10Keys.members(workspaceId),
+    queryKey: documentsKeys.members(workspaceId),
     queryFn: ({ signal }) => fetchWorkspaceMembers(workspaceId, signal),
     enabled: Boolean(workspaceId),
     staleTime: 60_000,
@@ -478,8 +492,8 @@ export function useDocumentsV10Model({
   const activeDocQuery = useQuery({
     queryKey:
       activeId && workspaceId
-        ? documentsV10Keys.document(workspaceId, activeId)
-        : [...documentsV10Keys.root(), "document", "none"],
+        ? documentsKeys.document(workspaceId, activeId)
+        : [...documentsKeys.root(), "document", "none"],
     queryFn: ({ signal }) => (activeId ? fetchWorkspaceDocumentById(workspaceId, activeId, signal) : Promise.reject()),
     enabled: Boolean(activeId && workspaceId) && !documentsById.has(activeId ?? ""),
     staleTime: 30_000,
@@ -648,8 +662,8 @@ export function useDocumentsV10Model({
 
   const runsQuery = useQuery({
     queryKey: activeDocumentIdForRuns
-      ? documentsV10Keys.runsForDocument(workspaceId, activeDocumentIdForRuns)
-      : [...documentsV10Keys.workspace(workspaceId), "runs", "none"],
+      ? documentsKeys.runsForDocument(workspaceId, activeDocumentIdForRuns)
+      : [...documentsKeys.workspace(workspaceId), "runs", "none"],
     queryFn: ({ signal }) =>
       activeDocumentIdForRuns
         ? fetchWorkspaceRunsForDocument(workspaceId, activeDocumentIdForRuns, signal)
@@ -689,7 +703,7 @@ export function useDocumentsV10Model({
   }, [activeRun]);
 
   const workbookQuery = useQuery<WorkbookPreview>({
-    queryKey: outputUrl ? documentsV10Keys.workbook(outputUrl) : [...documentsV10Keys.root(), "workbook", "none"],
+    queryKey: outputUrl ? documentsKeys.workbook(outputUrl) : [...documentsKeys.root(), "workbook", "none"],
     queryFn: ({ signal }) => (outputUrl ? fetchWorkbookPreview(outputUrl, signal) : Promise.reject(new Error("No output URL"))),
     enabled: Boolean(outputUrl) && previewOpen,
     staleTime: 30_000,
@@ -899,7 +913,7 @@ export function useDocumentsV10Model({
               })),
             };
           });
-          queryClient.invalidateQueries({ queryKey: documentsV10Keys.document(workspaceId, updated.id) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, updated.id) });
         })
         .catch((error) => {
           notifyToast({
@@ -1071,7 +1085,7 @@ export function useDocumentsV10Model({
       void createRunForDocument(activeRun.configuration_id, doc.record.id)
         .then((created) => {
           notifyToast({ title: "Reprocess queued", description: `Run ${shortId(created.id)}`, intent: "success" });
-          queryClient.invalidateQueries({ queryKey: documentsV10Keys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
         })
         .catch((error) =>
           notifyToast({
@@ -1114,7 +1128,7 @@ export function useDocumentsV10Model({
     )
       .then(() => {
         notifyToast({ title: "Tags applied", description: `${value} added`, intent: "success" });
-        queryClient.invalidateQueries({ queryKey: documentsV10Keys.workspace(workspaceId) });
+        queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
       })
       .catch((error) => {
         notifyToast({
