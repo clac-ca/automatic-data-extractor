@@ -70,7 +70,7 @@ export function MappingBadge({
     <span
       className={clsx(
         "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-        "border-amber-200 bg-amber-50 text-amber-700",
+        "border-warning-200 bg-warning-50 text-warning-700",
       )}
     >
       <AlertIcon className="h-3 w-3" />

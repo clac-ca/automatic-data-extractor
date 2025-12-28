@@ -1904,7 +1904,7 @@ export function Workbench({
                     {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
                   </p>
                   {!canMakeActive && files.isDirty ? (
-                    <p className="text-xs font-medium text-amber-500">Save changes before making active.</p>
+                    <p className="text-xs font-medium text-warning-500">Save changes before making active.</p>
                   ) : null}
                 </div>
                 <Button
@@ -2143,7 +2143,7 @@ export function Workbench({
                 <p className="text-sm font-medium text-danger-600">Only draft configurations can be replaced.</p>
               ) : null}
               {files.isDirty ? (
-                <p className="text-sm font-medium text-amber-700">You have unsaved changes that will be lost.</p>
+                <p className="text-sm font-medium text-warning-700">You have unsaved changes that will be lost.</p>
               ) : null}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -2435,9 +2435,9 @@ function WorkbenchChrome({
   const surfaceClass = "border-border bg-card text-foreground";
   const metaTextClass = "text-muted-foreground";
   const saveButtonClass =
-    "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-muted disabled:text-muted-foreground";
+    "bg-success-600 text-on-success hover:bg-success-500 disabled:bg-muted disabled:text-muted-foreground";
   const runButtonClass =
-    "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
+    "bg-brand-600 text-on-brand hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
 
   return (
@@ -2781,7 +2781,7 @@ function RunExtractionDialog({
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
+                            className="h-4 w-4 rounded border-border text-success-600 focus:ring-success-500"
                             checked={checked}
                             onChange={() => toggleWorksheet(sheet.name)}
                           />
@@ -2887,7 +2887,7 @@ function ChromeIconButton({
 
 function WorkbenchBadgeIcon() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-white shadow-[0_12px_24px_rgb(var(--color-shadow)/0.35)]">
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-on-brand shadow-[0_12px_24px_rgb(var(--sys-color-shadow)/0.35)]">
       <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
         <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
         <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />

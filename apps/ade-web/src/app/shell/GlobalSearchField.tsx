@@ -221,12 +221,12 @@ export function GlobalSearchField({
     variant === "minimal"
       ? clsx(
           "rounded-xl border border-border bg-card/90 shadow-sm ring-1 ring-inset ring-border/40",
-          "transition focus-within:border-brand-400 focus-within:shadow-[0_18px_45px_-35px_rgb(var(--color-shadow)/0.4)]",
+          "transition focus-within:border-brand-400 focus-within:shadow-[0_18px_45px_-35px_rgb(var(--sys-color-shadow)/0.4)]",
         )
       : clsx(
           "rounded-xl border border-border/70 bg-gradient-to-r from-card/95 via-muted/80 to-card/95",
-          "shadow-[0_20px_45px_-30px_rgb(var(--color-shadow)/0.6)] ring-1 ring-inset ring-border/30 transition",
-          "focus-within:border-brand-400 focus-within:shadow-[0_25px_55px_-35px_rgb(var(--color-shadow)/0.55)] sm:rounded-2xl",
+          "shadow-[0_20px_45px_-30px_rgb(var(--sys-color-shadow)/0.6)] ring-1 ring-inset ring-border/30 transition",
+          "focus-within:border-brand-400 focus-within:shadow-[0_25px_55px_-35px_rgb(var(--sys-color-shadow)/0.55)] sm:rounded-2xl",
         );
 
   return (
@@ -262,7 +262,7 @@ export function GlobalSearchField({
         className={clsx(
           "group/search overflow-hidden",
           variantClasses,
-          showDropdown && variant === "default" && "focus-within:shadow-[0_35px_80px_-40px_rgb(var(--color-shadow)/0.55)]",
+          showDropdown && variant === "default" && "focus-within:shadow-[0_35px_80px_-40px_rgb(var(--sys-color-shadow)/0.55)]",
         )}
       >
         <form
@@ -342,7 +342,7 @@ export function GlobalSearchField({
       </div>
 
       {showDropdown ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-[0_35px_80px_-40px_rgb(var(--color-shadow)/0.55)] ring-1 ring-inset ring-border/30">
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-[0_35px_80px_-40px_rgb(var(--sys-color-shadow)/0.55)] ring-1 ring-inset ring-border/30">
           {hasSuggestions ? (
             <ul id={suggestionsListId} role="listbox" aria-label="Search suggestions" className="divide-y divide-border/60">
               {suggestions.map((suggestion, index) => {

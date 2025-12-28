@@ -115,13 +115,13 @@ export function SettingsLayout({
                           ? {
                               active: "bg-danger-50 text-danger-700 ring-danger-100",
                               idle: "hover:bg-danger-50/60 text-danger-700",
-                              badgeActive: "bg-danger-500 text-white",
+                              badgeActive: "bg-danger-500 text-on-danger",
                               badgeIdle: "bg-danger-100 text-danger-700 group-hover:bg-danger-200",
                             }
                           : {
                               active: "bg-brand-50 text-brand-700 ring-brand-100",
                               idle: "hover:bg-background text-foreground",
-                              badgeActive: "bg-brand-500 text-white",
+                              badgeActive: "bg-brand-500 text-on-brand",
                               badgeIdle: "bg-muted text-muted-foreground group-hover:bg-muted",
                             };
 

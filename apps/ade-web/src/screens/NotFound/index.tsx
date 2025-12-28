@@ -15,7 +15,7 @@ export default function NotFoundScreen() {
         <div className="flex justify-center gap-3 text-sm">
           <Link
             to="/"
-            className="focus-ring inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white transition hover:bg-brand-700"
+            className="focus-ring inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 font-semibold text-on-brand transition hover:bg-brand-700"
           >
             Return home
           </Link>

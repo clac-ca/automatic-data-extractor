@@ -30,7 +30,10 @@ export function applyThemeToDocument(theme: ThemeId): void {
     return;
   }
   const root = document.documentElement;
-  root.dataset.theme = theme;
+  root.dataset.mode = theme;
+  if (!root.dataset.theme) {
+    root.dataset.theme = "default";
+  }
   root.style.colorScheme = isDarkTheme(theme) ? "dark" : "light";
 }
 

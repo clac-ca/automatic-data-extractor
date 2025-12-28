@@ -1,53 +1,250 @@
-:root {
-  color-scheme: light;
-  --color-background: 248 250 252;
-  --color-foreground: 15 23 42;
-  --color-card: 255 255 255;
-  --color-card-foreground: 15 23 42;
-  --color-popover: 255 255 255;
-  --color-popover-foreground: 15 23 42;
-  --color-muted: 241 245 249;
-  --color-muted-foreground: 100 116 139;
-  --color-border: 226 232 240;
-  --color-border-strong: 203 213 225;
-  --color-ring: 99 102 241;
-  --color-overlay: 15 23 42;
-  --color-shadow: 15 23 42;
-  --color-brand-50: 238 242 255;
-  --color-brand-100: 224 231 255;
-  --color-brand-200: 199 210 254;
-  --color-brand-300: 165 180 252;
-  --color-brand-400: 129 140 248;
-  --color-brand-500: 99 102 241;
-  --color-brand-600: 79 70 229;
-  --color-brand-700: 67 56 202;
-  --color-brand-800: 55 48 163;
-  --color-brand-900: 49 46 129;
+/**
+ * ADE Theme Tokens (multi-theme + multi-mode)
+ *
+ * Token tiers:
+ *   --ref-*  = reference palettes (raw values; do NOT use directly in UI)
+ *   --sys-*  = semantic/system roles (what UI components should use)
+ *   --comp-* = component-specific tokens (editor/terminal/filetype)
+ *
+ * Axes:
+ *   data-theme = "default" | "ocean" | "user-123" | ...
+ *   data-mode  = "light" | "dark"
+ *
+ * Why this structure:
+ * - Aligns with common design-token practice: palettes vs semantic roles.
+ * - Avoids "reversed ramps" in dark mode.
+ * - Supports user-generated themes and system preferences (light/dark/dynamic/contrast).
+ */
+
+/* -----------------------------------------------------------------------------
+   1) REFERENCE PALETTES (theme-specific, mode-agnostic)
+   -------------------------------------------------------------------------- */
+
+/* Default theme reference palettes.
+   You can add more themes by overriding only these --ref-* tokens under
+   :root[data-theme="ocean"] { ... } etc. */
+:root,
+:root[data-theme="default"] {
+  /* Neutral ramp (Slate-like). Keep consistent across all modes. */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 248 250 252;
+  --ref-neutral-100: 241 245 249;
+  --ref-neutral-200: 226 232 240;
+  --ref-neutral-300: 203 213 225;
+  --ref-neutral-400: 148 163 184;
+  --ref-neutral-500: 100 116 139;
+  --ref-neutral-600: 71 85 105;
+  --ref-neutral-700: 51 65 85;
+  --ref-neutral-800: 30 41 59;
+  --ref-neutral-900: 15 23 42;
+  --ref-neutral-950: 2 6 23;
+
+  /* Accent ramp (formerly "brand"). Keep the ramp consistent; change semantics per mode. */
+  --ref-accent-50: 238 242 255;
+  --ref-accent-100: 224 231 255;
+  --ref-accent-200: 199 210 254;
+  --ref-accent-300: 165 180 252;
+  --ref-accent-400: 129 140 248;
+  --ref-accent-500: 99 102 241;
+  --ref-accent-600: 79 70 229;
+  --ref-accent-700: 67 56 202;
+  --ref-accent-800: 55 48 163;
+  --ref-accent-900: 49 46 129;
+
+  /* Status ramps (keep 50 lightest -> 900 darkest in ALL modes). */
+  --ref-success-50: 236 253 243;
+  --ref-success-100: 209 250 223;
+  --ref-success-200: 166 244 197;
+  --ref-success-300: 108 233 166;
+  --ref-success-400: 50 213 131;
+  --ref-success-500: 18 183 106;
+  --ref-success-600: 3 152 85;
+  --ref-success-700: 2 122 72;
+  --ref-success-800: 5 96 58;
+  --ref-success-900: 5 79 49;
+
+  --ref-warning-50: 255 251 235;
+  --ref-warning-100: 254 243 199;
+  --ref-warning-200: 253 230 138;
+  --ref-warning-300: 252 211 77;
+  --ref-warning-400: 251 191 36;
+  --ref-warning-500: 245 158 11;
+  --ref-warning-600: 217 119 6;
+  --ref-warning-700: 180 83 9;
+  --ref-warning-800: 146 64 14;
+  --ref-warning-900: 120 53 15;
+
+  --ref-danger-50: 254 242 242;
+  --ref-danger-100: 254 226 226;
+  --ref-danger-200: 254 202 202;
+  --ref-danger-300: 252 165 165;
+  --ref-danger-400: 248 113 113;
+  --ref-danger-500: 239 68 68;
+  --ref-danger-600: 220 38 38;
+  --ref-danger-700: 185 28 28;
+  --ref-danger-800: 153 27 27;
+  --ref-danger-900: 127 29 29;
+
+  --ref-info-50: 240 249 255;
+  --ref-info-100: 224 242 254;
+  --ref-info-200: 186 230 253;
+  --ref-info-300: 125 211 252;
+  --ref-info-400: 56 189 248;
+  --ref-info-500: 14 165 233;
+  --ref-info-600: 2 132 199;
+  --ref-info-700: 3 105 161;
+  --ref-info-800: 7 89 133;
+  --ref-info-900: 12 74 110;
+
+  /* Filetype/syntax colors (component palette; test contrast against BOTH modes). */
+  --ref-file-json: 241 208 107;
+  --ref-file-py: 81 154 186;
+  --ref-file-ts: 81 154 186;
+  --ref-file-tsx: 81 154 186;
+  --ref-file-js: 244 209 61;
+  --ref-file-jsx: 81 154 186;
+  --ref-file-md: 78 201 176;
+  --ref-file-env: 181 206 168;
+  --ref-file-txt: 156 220 254;
+  --ref-file-lock: 197 134 192;
 }
 
-:root[data-theme="dark"] {
+/* -----------------------------------------------------------------------------
+   2) SYSTEM TOKENS (mode-specific semantic mapping)
+   -------------------------------------------------------------------------- */
+
+/* LIGHT MODE (default) */
+:root,
+:root[data-mode="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --sys-color-bg: var(--ref-neutral-50);              /* app canvas */
+  --sys-color-surface: var(--ref-neutral-0);          /* cards/panels */
+  --sys-color-surface-elevated: var(--ref-neutral-0); /* popovers/menus (use shadows for elevation) */
+  --sys-color-surface-muted: var(--ref-neutral-100);  /* subtle fills, table zebra, etc. */
+
+  /* Text */
+  --sys-color-fg: var(--ref-neutral-900);
+  --sys-color-fg-muted: var(--ref-neutral-600);
+  --sys-color-fg-subtle: var(--ref-neutral-500);
+
+  /* Borders & focus */
+  --sys-color-border: var(--ref-neutral-200);
+  --sys-color-border-strong: var(--ref-neutral-300);
+  --sys-color-ring: var(--ref-accent-500);
+
+  /* Scrim/shadow colors: use with alpha in components */
+  --sys-color-overlay: var(--ref-neutral-900);
+  --sys-color-shadow: var(--ref-neutral-900);
+
+  /* Primary action (accent)
+     NOTE: these are semantic interaction tokens (not "palette steps"). */
+  --sys-color-accent: var(--ref-accent-600);
+  --sys-color-accent-hover: var(--ref-accent-700);
+  --sys-color-accent-active: var(--ref-accent-800);
+  --sys-color-on-accent: 255 255 255;
+
+  /* Status (solid fills) */
+  --sys-color-success: var(--ref-success-600);
+  --sys-color-on-success: 255 255 255;
+
+  --sys-color-warning: var(--ref-warning-500);
+  --sys-color-on-warning: var(--ref-neutral-900);
+
+  --sys-color-danger: var(--ref-danger-600);
+  --sys-color-on-danger: 255 255 255;
+
+  --sys-color-info: var(--ref-info-600);
+  --sys-color-on-info: 255 255 255;
+
+  /* Component: Editor */
+  --comp-editor-bg: var(--sys-color-bg);
+  --comp-editor-fg: var(--sys-color-fg);
+  --comp-editor-cursor: var(--sys-color-ring);
+  --comp-editor-line-highlight: var(--ref-neutral-200);
+  --comp-editor-line-number: var(--ref-neutral-500);
+  --comp-editor-selection: var(--ref-accent-100);
+  --comp-editor-selection-inactive: var(--ref-neutral-200);
+  --comp-editor-gutter: var(--ref-neutral-100);
+
+  /* Component: Terminal */
+  --comp-terminal-bg: var(--ref-neutral-900);
+  --comp-terminal-fg: var(--ref-neutral-200);
+  --comp-terminal-muted: var(--ref-neutral-400);
+  --comp-terminal-border: var(--ref-neutral-700);
+
+  /* Component: Filetypes */
+  --comp-file-json: var(--ref-file-json);
+  --comp-file-py: var(--ref-file-py);
+  --comp-file-ts: var(--ref-file-ts);
+  --comp-file-tsx: var(--ref-file-tsx);
+  --comp-file-js: var(--ref-file-js);
+  --comp-file-jsx: var(--ref-file-jsx);
+  --comp-file-md: var(--ref-file-md);
+  --comp-file-env: var(--ref-file-env);
+  --comp-file-txt: var(--ref-file-txt);
+  --comp-file-lock: var(--ref-file-lock);
+}
+
+/* DARK MODE */
+:root[data-mode="dark"] {
   color-scheme: dark;
-  --color-background: 15 19 29;
-  --color-foreground: 236 241 248;
-  --color-card: 22 27 39;
-  --color-card-foreground: 236 241 248;
-  --color-popover: 26 32 46;
-  --color-popover-foreground: 236 241 248;
-  --color-muted: 30 38 54;
-  --color-muted-foreground: 180 190 205;
-  --color-border: 46 54 72;
-  --color-border-strong: 62 72 92;
-  --color-ring: 91 124 250;
-  --color-overlay: 2 6 18;
-  --color-shadow: 0 0 0;
-  --color-brand-50: 26 34 61;
-  --color-brand-100: 33 42 82;
-  --color-brand-200: 42 54 109;
-  --color-brand-300: 52 69 143;
-  --color-brand-400: 66 90 184;
-  --color-brand-500: 79 110 224;
-  --color-brand-600: 91 124 250;
-  --color-brand-700: 107 139 255;
-  --color-brand-800: 136 167 255;
-  --color-brand-900: 179 198 255;
+
+  /* Android guidance explicitly describes dark surfaces as "dark grays / low tonal values"
+     (vs pure black) to reduce luminance while preserving hierarchy. */
+  --sys-color-bg: var(--ref-neutral-900);
+  --sys-color-surface: var(--ref-neutral-800);
+  --sys-color-surface-elevated: var(--ref-neutral-800);
+  --sys-color-surface-muted: var(--ref-neutral-700);
+
+  --sys-color-fg: var(--ref-neutral-200);
+  --sys-color-fg-muted: var(--ref-neutral-400);
+  --sys-color-fg-subtle: var(--ref-neutral-500);
+
+  --sys-color-border: var(--ref-neutral-700);
+  --sys-color-border-strong: var(--ref-neutral-600);
+
+  /* Slightly brighter ring in dark mode for clear focus visibility */
+  --sys-color-ring: var(--ref-accent-400);
+
+  --sys-color-overlay: var(--ref-neutral-950);
+  --sys-color-shadow: var(--ref-neutral-950);
+
+  /* Primary action (accent): bump brightness a step for dark surfaces */
+  --sys-color-accent: var(--ref-accent-500);
+  --sys-color-accent-hover: var(--ref-accent-400);
+  --sys-color-accent-active: var(--ref-accent-600);
+  --sys-color-on-accent: 255 255 255;
+
+  /* Status: use brighter tones so state reads on dark surfaces */
+  --sys-color-success: var(--ref-success-500);
+  --sys-color-on-success: var(--ref-neutral-950);
+
+  --sys-color-warning: var(--ref-warning-400);
+  --sys-color-on-warning: var(--ref-neutral-950);
+
+  --sys-color-danger: var(--ref-danger-500);
+  --sys-color-on-danger: 255 255 255;
+
+  --sys-color-info: var(--ref-info-500);
+  --sys-color-on-info: var(--ref-neutral-950);
+
+  /* Editor */
+  --comp-editor-bg: var(--ref-neutral-900);
+  --comp-editor-fg: var(--sys-color-fg);
+  --comp-editor-cursor: var(--sys-color-ring);
+  --comp-editor-line-highlight: var(--ref-neutral-800);
+  --comp-editor-line-number: var(--ref-neutral-500);
+  --comp-editor-selection: var(--ref-neutral-700);
+  --comp-editor-selection-inactive: var(--ref-neutral-800);
+  --comp-editor-gutter: var(--ref-neutral-900);
+
+  /* Terminal */
+  --comp-terminal-bg: var(--ref-neutral-950);
+  --comp-terminal-fg: var(--ref-neutral-200);
+  --comp-terminal-muted: var(--ref-neutral-400);
+  --comp-terminal-border: var(--ref-neutral-800);
+
+  /* Filetypes unchanged (they should be audited once against dark terminal/editor bg) */
 }

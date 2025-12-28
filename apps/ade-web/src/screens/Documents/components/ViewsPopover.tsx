@@ -165,7 +165,7 @@ export function ViewsPopover({
                           event.stopPropagation();
                           onDeleteSavedView(view.id);
                         }}
-                        className="ml-2 hidden text-xs font-semibold text-muted-foreground hover:text-rose-600 group-hover:inline"
+                        className="ml-2 hidden text-xs font-semibold text-muted-foreground hover:text-danger-600 group-hover:inline"
                         aria-label={`Delete view ${view.name}`}
                       >
                         Delete

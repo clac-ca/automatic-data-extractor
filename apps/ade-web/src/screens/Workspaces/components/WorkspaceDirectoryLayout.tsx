@@ -32,7 +32,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
               onClick={() => navigate("/workspaces")}
               className="focus-ring inline-flex items-center gap-3 rounded-xl border border-transparent bg-card px-3 py-2 text-left text-sm font-semibold text-foreground shadow-sm transition hover:border-border"
             >
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-on-brand shadow-sm">
                 <DirectoryIcon className="h-5 w-5" aria-hidden />
               </span>
               <span className="flex flex-col leading-tight">

@@ -160,20 +160,20 @@ export function ContextMenu({
       ? {
           bg: "bg-popover text-foreground",
           border: "border-border/70",
-          shadow: "shadow-[0_12px_28px_rgb(var(--color-shadow)/0.5)]",
+          shadow: "shadow-[0_12px_28px_rgb(var(--sys-color-shadow)/0.5)]",
           item: "hover:bg-muted focus-visible:bg-muted",
           disabled: "text-muted-foreground",
-          danger: "text-danger-300 hover:text-white hover:bg-danger-600 focus-visible:bg-danger-600",
+          danger: "text-danger-300 hover:text-on-danger hover:bg-danger-600 focus-visible:bg-danger-600",
           shortcut: "text-muted-foreground",
           separator: "border-border/60",
         }
       : {
           bg: "bg-popover text-foreground",
           border: "border-border/80",
-          shadow: "shadow-[0_12px_28px_rgb(var(--color-shadow)/0.18)]",
+          shadow: "shadow-[0_12px_28px_rgb(var(--sys-color-shadow)/0.18)]",
           item: "hover:bg-muted focus-visible:bg-muted",
           disabled: "text-muted-foreground",
-          danger: "text-danger-600 hover:text-white hover:bg-danger-600 focus-visible:bg-danger-600",
+          danger: "text-danger-600 hover:text-on-danger hover:bg-danger-600 focus-visible:bg-danger-600",
           shortcut: "text-muted-foreground",
           separator: "border-border/70",
         };

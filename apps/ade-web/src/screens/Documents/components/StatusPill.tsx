@@ -12,18 +12,18 @@ const STATUS_STYLES: Record<
 > = {
   ready: {
     label: "Ready",
-    pill: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    dot: "bg-emerald-500",
+    pill: "border-success-200 bg-success-50 text-success-700",
+    dot: "bg-success-500",
   },
   processing: {
     label: "Processing",
-    pill: "border-amber-200 bg-amber-50 text-amber-700",
-    dot: "bg-amber-500",
+    pill: "border-warning-200 bg-warning-50 text-warning-700",
+    dot: "bg-warning-500",
   },
   failed: {
     label: "Failed",
-    pill: "border-rose-200 bg-rose-50 text-rose-700",
-    dot: "bg-rose-500",
+    pill: "border-danger-200 bg-danger-50 text-danger-700",
+    dot: "bg-danger-500",
   },
   queued: {
     label: "Queued",

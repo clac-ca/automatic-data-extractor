@@ -157,7 +157,7 @@ function Metric({
   intent?: "default" | "warn" | "ok";
 }) {
   const color =
-    intent === "warn" ? "text-amber-700" : intent === "ok" ? "text-emerald-700" : "text-foreground";
+    intent === "warn" ? "text-warning-700" : intent === "ok" ? "text-success-700" : "text-foreground";
   return (
     <div className="rounded border border-border bg-background px-2 py-1">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>

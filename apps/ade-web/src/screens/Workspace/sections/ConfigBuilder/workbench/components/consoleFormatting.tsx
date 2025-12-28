@@ -106,10 +106,10 @@ function highlightJson(text: string) {
     }
     const token = match[0];
     const className = match[1]
-      ? "text-sky-300"
+      ? "text-info-300"
       : match[2]
-        ? "text-amber-300"
-        : "text-rose-300";
+        ? "text-warning-300"
+        : "text-danger-300";
     parts.push(
       <span key={`json-${key++}`} className={className}>
         {token}

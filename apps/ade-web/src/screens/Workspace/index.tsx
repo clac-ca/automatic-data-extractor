@@ -331,7 +331,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
       >
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-white shadow-sm transition-colors group-hover:bg-brand-600">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-on-brand shadow-sm transition-colors group-hover:bg-brand-600">
           {workspaceInitials}
         </span>
         <span className="flex min-w-0 flex-col">
@@ -466,7 +466,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                   onClick={closeMobileNav}
                   aria-label="Close navigation"
                 />
-                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-border/70 bg-gradient-to-b from-card via-background to-card/95 shadow-[0_45px_90px_-50px_rgb(var(--color-shadow)/0.85)]">
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-border/70 bg-gradient-to-b from-card via-background to-card/95 shadow-[0_45px_90px_-50px_rgb(var(--sys-color-shadow)/0.85)]">
                   <div className="flex items-center justify-between border-b border-border px-4 py-3">
                     <div className="flex flex-col leading-tight">
                       <span className="text-sm font-semibold text-foreground">{workspace.name}</span>

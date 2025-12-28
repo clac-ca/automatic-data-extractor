@@ -8,9 +8,9 @@ import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePi
 
 const STATUS_DOT: Record<string, string> = {
   queued: "bg-muted-foreground",
-  processing: "bg-amber-500",
-  ready: "bg-emerald-500",
-  failed: "bg-rose-500",
+  processing: "bg-warning-500",
+  ready: "bg-success-500",
+  failed: "bg-danger-500",
   archived: "bg-muted",
 };
 

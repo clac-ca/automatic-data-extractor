@@ -55,7 +55,7 @@ export function EditorPane({
               <p>{tab.error ?? "Unable to load the file."}</p>
               <button
                 type="button"
-                className="rounded bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
+                className="rounded bg-brand-600 px-3 py-1 text-xs font-medium text-on-brand hover:bg-brand-500"
                 onClick={() => (onRetryTabLoad ? onRetryTabLoad(tab.id) : onSelectTab(tab.id))}
               >
                 Retry loading

@@ -72,12 +72,12 @@ export function DangerSettingsPage() {
             {feedback}
           </Alert>
         ) : null}
-        <p className="mt-3 text-sm text-amber-700">
+        <p className="mt-3 text-sm text-warning-700">
           All workspace configurations, documents, runs, and history will be removed.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="rounded-2xl border border-warning-100 bg-warning-50 p-4 text-sm text-warning-800">
         <p className="font-semibold">Looking for ADE safe mode?</p>
         <p className="mt-1">
           Safe mode is a system-wide control. Manage it from the system settings area instead of workspace settings.

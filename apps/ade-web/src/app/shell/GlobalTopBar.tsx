@@ -74,7 +74,7 @@ export function GlobalTopBar({
         "border-b border-border/80",
         "bg-card/95 backdrop-blur supports-[backdrop-filter]:backdrop-blur-xl",
         "transition-shadow duration-200 motion-reduce:transition-none",
-        isScrolled ? "shadow-[0_12px_40px_-30px_rgb(var(--color-shadow)/0.45)]" : "shadow-none",
+        isScrolled ? "shadow-[0_12px_40px_-30px_rgb(var(--sys-color-shadow)/0.45)]" : "shadow-none",
       )}
       role="banner"
     >

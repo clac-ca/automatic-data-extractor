@@ -76,7 +76,7 @@ export function BottomPanel({
             >
               Problems
               {hasProblems ? (
-                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
+                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-danger-600 px-1 text-[10px] font-semibold text-on-danger">
                   {validation.messages.length}
                 </span>
               ) : null}

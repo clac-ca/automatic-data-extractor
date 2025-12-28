@@ -170,7 +170,7 @@ export function CommentsPanel({
                               <button
                                 type="button"
                                 onClick={() => onDelete(c.id)}
-                                className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                                className="text-xs font-semibold text-danger-600 hover:text-danger-700"
                               >
                                 Delete
                               </button>

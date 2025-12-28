@@ -193,7 +193,7 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
           }
         }}
       >
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-white shadow-sm">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-on-brand shadow-sm">
           {initials}
         </span>
         <span className="hidden min-w-0 flex-col sm:flex">
@@ -222,7 +222,7 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
                       left: menuPosition.left,
                       position: "fixed",
                       zIndex: 90,
-                      backgroundColor: "rgb(var(--color-popover))",
+                      backgroundColor: "rgb(var(--sys-color-surface-elevated))",
                     }
                   : { top: 0, left: 0, visibility: "hidden" }
               }

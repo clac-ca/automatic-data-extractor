@@ -64,7 +64,7 @@ export function EditorTab({
           "relative flex min-w-[3rem] max-w-[16rem] items-center gap-2 overflow-hidden rounded-t-lg border px-2 py-1.5 pr-8 text-sm font-medium transition-[background-color,border-color,color] duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isActive
-            ? "border-border border-b-card bg-card text-foreground shadow-[0_1px_0_rgb(var(--color-shadow)/0.08)]"
+            ? "border-border border-b-card bg-card text-foreground shadow-[0_1px_0_rgb(var(--sys-color-shadow)/0.08)]"
             : "border-transparent border-b-border text-muted-foreground hover:border-border hover:bg-card/70 hover:text-foreground",
           isPinned ? "min-w-[4rem] max-w-[8rem] justify-center" : "min-w-[9rem] justify-start px-3",
         )}

@@ -41,22 +41,22 @@ interface ExplorerThemeTokens {
 }
 
 const EXPLORER_TOKENS: ExplorerThemeTokens = {
-  surface: "rgb(var(--color-card))",
-  border: "rgb(var(--color-border))",
-  heading: "rgb(var(--color-foreground))",
-  label: "rgb(var(--color-muted-foreground))",
-  textPrimary: "rgb(var(--color-foreground))",
-  textMuted: "rgb(var(--color-muted-foreground))",
-  rowHover: "rgb(var(--color-muted))",
+  surface: "rgb(var(--sys-color-surface))",
+  border: "rgb(var(--sys-color-border))",
+  heading: "rgb(var(--sys-color-fg))",
+  label: "rgb(var(--sys-color-fg-muted))",
+  textPrimary: "rgb(var(--sys-color-fg))",
+  textMuted: "rgb(var(--sys-color-fg-muted))",
+  rowHover: "rgb(var(--sys-color-surface-muted))",
   folderActiveBg: "transparent",
-  selectionBg: "rgb(var(--color-muted))",
-  selectionText: "rgb(var(--color-foreground))",
-  badgeActive: "rgb(var(--color-ring))",
-  badgeOpen: "rgb(var(--color-muted-foreground))",
-  folderIcon: "rgb(var(--color-ring))",
-  folderIconActive: "rgb(var(--color-ring))",
-  chevronIdle: "rgb(var(--color-muted-foreground))",
-  chevronActive: "rgb(var(--color-foreground))",
+  selectionBg: "rgb(var(--sys-color-surface-muted))",
+  selectionText: "rgb(var(--sys-color-fg))",
+  badgeActive: "rgb(var(--sys-color-ring))",
+  badgeOpen: "rgb(var(--sys-color-fg-muted))",
+  folderIcon: "rgb(var(--sys-color-ring))",
+  folderIconActive: "rgb(var(--sys-color-ring))",
+  chevronIdle: "rgb(var(--sys-color-fg-muted))",
+  chevronActive: "rgb(var(--sys-color-fg))",
 };
 
 const EXPLORER_THEME_TOKENS: Record<ExplorerTheme, ExplorerThemeTokens> = {
@@ -696,7 +696,7 @@ export function Explorer({
               )}
               style={{
                 borderColor: tokens.badgeActive,
-                backgroundColor: "rgb(var(--color-card) / 0.85)",
+                backgroundColor: "rgb(var(--sys-color-surface) / 0.85)",
               }}
               aria-hidden={!dropActive}
             >
@@ -934,21 +934,21 @@ function ExplorerNode({
 }
 
 const FILE_ICON_COLORS: Record<string, string> = {
-  json: "text-[#f1d06b]",
-  py: "text-[#519aba]",
-  ts: "text-[#519aba]",
-  tsx: "text-[#519aba]",
-  js: "text-[#f4d13d]",
-  jsx: "text-[#519aba]",
-  md: "text-[#4ec9b0]",
-  env: "text-[#b5cea8]",
-  txt: "text-[#9cdcfe]",
-  lock: "text-[#c586c0]",
+  json: "text-filetype-json",
+  py: "text-filetype-py",
+  ts: "text-filetype-ts",
+  tsx: "text-filetype-tsx",
+  js: "text-filetype-js",
+  jsx: "text-filetype-jsx",
+  md: "text-filetype-md",
+  env: "text-filetype-env",
+  txt: "text-filetype-txt",
+  lock: "text-filetype-lock",
 };
 
 function getFileAccent(name: string, language?: string) {
   if (language === "python") {
-    return "text-sky-300";
+    return "text-filetype-py";
   }
   const segments = name.toLowerCase().split(".");
   const extension = segments.length > 1 ? segments.pop() ?? "" : "";
@@ -1204,7 +1204,7 @@ function CreateEntryRow({
           type="button"
           className={clsx(
             "rounded-sm px-2 py-1 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            isSubmitting ? "cursor-wait bg-muted text-muted-foreground" : "bg-brand-600 text-white hover:bg-brand-500",
+            isSubmitting ? "cursor-wait bg-muted text-muted-foreground" : "bg-brand-600 text-on-brand hover:bg-brand-500",
           )}
           onClick={handleSubmit}
           disabled={isSubmitting}

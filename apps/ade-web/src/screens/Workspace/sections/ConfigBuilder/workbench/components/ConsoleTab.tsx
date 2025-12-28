@@ -172,41 +172,41 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-card font-mono text-[13px] leading-relaxed text-foreground shadow-[0_8px_24px_rgb(var(--color-shadow)/0.25)]">
-      <div className="flex flex-col border-b border-border bg-gradient-to-r from-card via-muted to-card">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-terminal-border bg-terminal font-mono text-[13px] leading-relaxed text-terminal-foreground shadow-[0_8px_24px_rgb(var(--sys-color-shadow)/0.25)]">
+      <div className="flex flex-col border-b border-terminal-border bg-gradient-to-r from-terminal/95 via-terminal/80 to-terminal/95">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2">
-          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            <span className="font-semibold tracking-[0.3em] text-foreground">ADE</span>
-            <span className="text-muted-foreground">Terminal</span>
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.22em] text-terminal-muted">
+            <span className="font-semibold tracking-[0.3em] text-terminal-foreground">ADE</span>
+            <span className="text-terminal-muted">Terminal</span>
             {statusLabel ? (
-              <span className="rounded border border-border bg-muted px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-foreground/80">
+              <span className="rounded border border-terminal-border bg-terminal/70 px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-terminal-foreground/80">
                 {statusLabel}
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <label className="flex items-center gap-1 text-muted-foreground" title="Filter logs by scope">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-terminal-muted">
+            <label className="flex items-center gap-1 text-terminal-muted" title="Filter logs by scope">
               Origin
               <select
                 value={filters.origin}
                 onChange={(event) =>
                   setFilters((prev) => ({ ...prev, origin: event.target.value as ConsoleFilters["origin"] }))
                 }
-                className="rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground shadow-sm focus:border-ring focus:outline-none"
+                className="rounded border border-terminal-border bg-terminal/80 px-2 py-1 text-[11px] text-terminal-foreground shadow-sm focus:border-ring focus:outline-none"
               >
 	                <option value="all">All</option>
 	                <option value="run">Run</option>
 	                <option value="build">Build</option>
 	              </select>
             </label>
-            <label className="flex items-center gap-1 text-muted-foreground" title="Filter by severity">
+            <label className="flex items-center gap-1 text-terminal-muted" title="Filter by severity">
               Level
               <select
                 value={filters.level}
                 onChange={(event) =>
                   setFilters((prev) => ({ ...prev, level: event.target.value as ConsoleFilters["level"] }))
                 }
-                className="rounded border border-border bg-card px-2 py-1 text-[11px] text-foreground shadow-sm focus:border-ring focus:outline-none"
+                className="rounded border border-terminal-border bg-terminal/80 px-2 py-1 text-[11px] text-terminal-foreground shadow-sm focus:border-ring focus:outline-none"
               >
                 <option value="all">All</option>
                 <option value="debug">Debug</option>
@@ -222,15 +222,15 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               className={clsx(
                 "rounded px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 follow
-                  ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-500"
-                  : "border border-border bg-transparent text-muted-foreground hover:border-border-strong hover:text-foreground",
+                  ? "border border-success-500/60 bg-success-500/10 text-success-500"
+                  : "border border-terminal-border bg-transparent text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground",
               )}
               title="Auto-scroll to newest logs"
             >
               {follow ? "Following" : "Follow"}
             </button>
             <div className="flex items-center gap-2" title="Toggle between parsed view and raw NDJSON">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">View</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-terminal-muted">View</span>
               <div role="radiogroup" aria-label="Console view mode" className="flex items-center gap-1">
                 <button
                   type="button"
@@ -240,8 +240,8 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   className={clsx(
                     "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-ring",
                     viewMode === "parsed"
-                      ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-500"
-                      : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+                      ? "border-success-500/70 bg-success-500/10 text-success-500"
+                      : "border-terminal-border text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground",
                   )}
                 >
                   Parsed
@@ -254,8 +254,8 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   className={clsx(
                     "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition focus:outline-none focus:ring-1 focus:ring-ring",
                     viewMode === "ndjson"
-                      ? "border-emerald-500/70 bg-emerald-500/10 text-emerald-500"
-                      : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground",
+                      ? "border-success-500/70 bg-success-500/10 text-success-500"
+                      : "border-terminal-border text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground",
                   )}
                 >
                   NDJSON
@@ -268,8 +268,8 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               className={clsx(
                 "rounded border px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] transition",
                 copied
-                  ? "border border-emerald-500/60 bg-emerald-500/10 text-emerald-500"
-                  : "border border-border bg-transparent text-muted-foreground hover:border-border-strong hover:text-foreground",
+                  ? "border border-success-500/60 bg-success-500/10 text-success-500"
+                  : "border border-terminal-border bg-transparent text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground",
               )}
               disabled={!hasConsoleLines}
               title={clipboardAvailable ? "Copy visible console output" : "Copy may be blocked by browser permissions"}
@@ -279,7 +279,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
             <button
               type="button"
               onClick={() => onClearConsole?.()}
-              className="rounded border border-border bg-muted px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition hover:border-border-strong hover:text-foreground"
+              className="rounded border border-terminal-border bg-terminal/70 px-2 py-[6px] text-[11px] font-semibold uppercase tracking-[0.14em] text-terminal-muted transition hover:border-terminal-border/80 hover:text-terminal-foreground"
               title="Clear console output"
             >
               Clear
@@ -287,22 +287,22 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
           </div>
         </div>
         {latestRun ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted px-4 py-1.5 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-terminal-border bg-terminal/80 px-4 py-1.5 text-[11px] text-terminal-muted">
             <div className="flex min-w-0 items-center gap-2">
               <StatusDot status={latestRun.status} />
               <span className="truncate" title={latestRun.runId}>
                 Run {latestRun.runId}
               </span>
-              <span className="truncate text-muted-foreground">
+              <span className="truncate text-terminal-muted">
                 {latestRun.documentName ?? "Document not recorded"}
                 {describeSheetSelection(latestRun.sheetNames) ? ` · ${describeSheetSelection(latestRun.sheetNames)}` : ""}
               </span>
               {latestRun.durationMs != null ? (
-                <span className="text-muted-foreground">· {formatRunDuration(latestRun.durationMs)}</span>
+                <span className="text-terminal-muted">· {formatRunDuration(latestRun.durationMs)}</span>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Downloads</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-terminal-muted">Downloads</span>
               <RunArtifactLink
                 href={latestRun.outputUrl}
                 label={latestRun.outputFilename ? `Output (${latestRun.outputFilename})` : "Output"}
@@ -328,7 +328,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-auto bg-card"
+        className="flex-1 overflow-auto bg-terminal"
       >
         {hasConsoleLines ? (
           <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
@@ -353,7 +353,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   key={key}
                   data-index={virtualRow.index}
                   ref={rowVirtualizer.measureElement}
-                  className="group flex items-start gap-3 border-b border-border/60 px-3 py-[2px] transition hover:bg-muted last:border-b-0"
+                  className="group flex items-start gap-3 border-b border-terminal-border/60 px-3 py-[2px] transition hover:bg-terminal/70 last:border-b-0"
 	                  style={{
 	                    position: "absolute",
 	                    top: 0,
@@ -364,7 +364,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                 >
                   <div className="flex min-w-0 flex-1 items-baseline gap-2">
                     {renderTimestamp(line.timestamp)}
-                    <span className="shrink-0 w-12 text-right font-mono text-[11px] leading-snug text-muted-foreground/70">
+                    <span className="shrink-0 w-12 text-right font-mono text-[11px] leading-snug text-terminal-muted/70">
                       {originLabel(line.origin)}
                     </span>
                     <span
@@ -387,7 +387,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                       <button
                         type="button"
                         onClick={() => openInspector(line)}
-                        className="ml-2 shrink-0 rounded border border-border bg-muted px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground opacity-0 transition hover:border-border-strong hover:text-foreground group-hover:opacity-100"
+                        className="ml-2 shrink-0 rounded border border-terminal-border bg-terminal/70 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.12em] text-terminal-muted opacity-0 transition hover:border-terminal-border/80 hover:text-terminal-foreground group-hover:opacity-100"
                         title="Inspect pretty JSON"
                       >
                         JSON
@@ -405,14 +405,14 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
 	        )}
 	      </div>
       {inspectorOpen && inspectedLine?.raw && typeof inspectedLine.raw === "object" ? (
-        <div className="border-t border-border bg-card">
-          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="border-t border-terminal-border bg-terminal">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[11px] text-terminal-muted">
             <div className="min-w-0 truncate">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Inspector</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-terminal-muted">Inspector</span>
               {inspectedLine.timestamp ? (
-                <span className="ml-2 text-muted-foreground">[{displayTimestamp(inspectedLine.timestamp)}]</span>
+                <span className="ml-2 text-terminal-muted">[{displayTimestamp(inspectedLine.timestamp)}]</span>
               ) : null}
-              <span className="ml-2 text-muted-foreground">{originLabel(inspectedLine.origin)}</span>
+              <span className="ml-2 text-terminal-muted">{originLabel(inspectedLine.origin)}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -424,7 +424,7 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
                   setJsonCopied(ok);
                   if (ok) window.setTimeout(() => setJsonCopied(false), 1500);
                 }}
-                className="rounded border border-border bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:border-border-strong hover:text-foreground"
+                className="rounded border border-terminal-border bg-terminal/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground"
                 title="Copy pretty JSON"
               >
                 {jsonCopied ? "Copied" : "Copy JSON"}
@@ -432,16 +432,14 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
               <button
                 type="button"
                 onClick={closeInspector}
-                className="rounded border border-border bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:border-border-strong hover:text-foreground"
+                className="rounded border border-terminal-border bg-terminal/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground"
                 title="Close inspector"
               >
                 Close
               </button>
             </div>
           </div>
-          <div
-            className="max-h-[260px] overflow-auto bg-muted px-3 pb-3"
-          >
+          <div className="max-h-[260px] overflow-auto bg-terminal/80 px-3 pb-3">
             {renderPrettyJson(inspectedLine.raw)}
           </div>
         </div>
@@ -452,9 +450,9 @@ export function ConsoleTab({ console, latestRun, onClearConsole, runStatus }: Co
 
 function EmptyState({ title, description }: { readonly title: string; readonly description: string }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center text-[13px] text-muted-foreground">
-      <p className="tracking-wide text-muted-foreground">{title}</p>
-      <p className="text-[12px] leading-relaxed text-muted-foreground">{description}</p>
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-8 text-center text-[13px] text-terminal-muted">
+      <p className="tracking-wide text-terminal-muted">{title}</p>
+      <p className="text-[12px] leading-relaxed text-terminal-muted">{description}</p>
     </div>
   );
 }
@@ -463,12 +461,12 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
   const cancelled = isCancelledStatus(status);
   const tone =
     status === "succeeded"
-      ? "bg-emerald-500"
+      ? "bg-success-500"
       : status === "running" || status === "queued"
-        ? "bg-amber-400"
+        ? "bg-warning-400"
         : cancelled
-          ? "bg-muted-foreground"
-          : "bg-rose-500";
+          ? "bg-terminal-muted"
+          : "bg-danger-500";
 
   return <span className={clsx("inline-block h-2.5 w-2.5 rounded-full", tone)} aria-hidden />;
 }
@@ -476,13 +474,13 @@ function StatusDot({ status }: { readonly status: WorkbenchRunSummary["status"] 
 function consoleMessageClass(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-amber-500";
+      return "text-warning-500";
     case "error":
-      return "text-rose-500";
+      return "text-danger-500";
     case "success":
-      return "text-emerald-500";
+      return "text-success-500";
     default:
-      return "text-foreground";
+      return "text-terminal-foreground";
   }
 }
 
@@ -511,12 +509,12 @@ function renderTimestamp(timestamp?: string) {
   const formatted = displayTimestamp(timestamp);
   if (!formatted) {
     return (
-      <span className="shrink-0 tabular-nums text-[11px] leading-snug text-muted-foreground/70" aria-hidden>
+      <span className="shrink-0 tabular-nums text-[11px] leading-snug text-terminal-muted/70" aria-hidden>
         ·
       </span>
     );
   }
-  return <span className="shrink-0 tabular-nums text-[11px] leading-snug text-muted-foreground/80">[{formatted}]</span>;
+  return <span className="shrink-0 tabular-nums text-[11px] leading-snug text-terminal-muted/80">[{formatted}]</span>;
 }
 
 function levelBadge(level: WorkbenchConsoleLine["level"]) {
@@ -535,13 +533,13 @@ function levelBadge(level: WorkbenchConsoleLine["level"]) {
 function prefixTone(level: WorkbenchConsoleLine["level"]) {
   switch (level) {
     case "warning":
-      return "text-amber-500";
+      return "text-warning-500";
     case "error":
-      return "text-rose-500";
+      return "text-danger-500";
     case "success":
-      return "text-emerald-500";
+      return "text-success-500";
     default:
-      return "text-muted-foreground/70";
+      return "text-terminal-muted/70";
   }
 }
 
@@ -607,8 +605,8 @@ function RunArtifactLink({
   const available = typeof href === "string" && href.trim().length > 0;
   const base =
     "inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition";
-  const enabledClass = "border-border bg-muted text-muted-foreground hover:border-border-strong hover:text-foreground";
-  const disabledClass = "border-border bg-muted/60 text-muted-foreground/60 cursor-not-allowed";
+  const enabledClass = "border-terminal-border bg-terminal/70 text-terminal-muted hover:border-terminal-border/80 hover:text-terminal-foreground";
+  const disabledClass = "border-terminal-border bg-terminal/60 text-terminal-muted/60 cursor-not-allowed";
 
   if (!available) {
     return (
@@ -628,7 +626,7 @@ function RunArtifactLink({
 
 function DownloadIcon() {
   return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-muted-foreground" fill="none" aria-hidden>
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-terminal-muted" fill="none" aria-hidden>
       <path
         d="M10 3v8m0 0 3-3m-3 3-3-3"
         stroke="currentColor"
