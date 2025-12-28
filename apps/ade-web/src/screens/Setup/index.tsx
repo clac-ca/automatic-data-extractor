@@ -65,16 +65,16 @@ export default function SetupScreen() {
 
   if (setupQuery.isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <p className="text-sm text-slate-600">Loading setup status…</p>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <p className="text-sm text-muted-foreground">Loading setup status…</p>
       </div>
     );
   }
 
   if (setupQuery.isError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 px-6 text-center">
-        <p className="text-sm text-slate-600">We couldn't check whether ADE requires initial setup.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-sm text-muted-foreground">We couldn't check whether ADE requires initial setup.</p>
         <Button variant="secondary" onClick={() => setupQuery.refetch()}>Try again</Button>
       </div>
     );
@@ -124,14 +124,14 @@ export default function SetupScreen() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center bg-slate-50 px-6 py-16">
-      <div className="rounded-2xl border border-slate-200 bg-white p-10 shadow-soft">
+    <div className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center bg-background px-6 py-16">
+      <div className="rounded-2xl border border-border bg-card p-10 shadow-soft">
         <header className="space-y-3 text-center">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
             First-run configuration
           </p>
-          <h1 className="text-3xl font-semibold text-slate-900">Create the first administrator</h1>
-          <p className="text-sm text-slate-600">
+          <h1 className="text-3xl font-semibold text-foreground">Create the first administrator</h1>
+          <p className="text-sm text-muted-foreground">
             Provide credentials for the inaugural administrator account. We'll redirect after completion.
           </p>
         </header>

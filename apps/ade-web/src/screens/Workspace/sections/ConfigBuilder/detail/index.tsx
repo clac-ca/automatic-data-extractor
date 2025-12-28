@@ -307,12 +307,12 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Configuration</p>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-slate-900">{config.display_name}</h1>
+              <h1 className="text-xl font-semibold text-foreground">{config.display_name}</h1>
               <StatusPill status={config.status} />
             </div>
           </div>
@@ -334,9 +334,9 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         </header>
 
         {!isDraft ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-semibold text-slate-900">Read-only configuration</p>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="rounded-lg border border-border bg-background p-4">
+            <p className="text-sm font-semibold text-foreground">Read-only configuration</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               Active and archived configurations can’t be edited. Duplicate this configuration to create a draft you can change.
             </p>
             <div className="mt-3">
@@ -349,28 +349,28 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
 
         <dl className="grid gap-4 md:grid-cols-2">
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Config ID</dt>
-            <dd className="text-sm text-slate-700">{config.id}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Config ID</dt>
+            <dd className="text-sm text-foreground">{config.id}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status</dt>
-            <dd className="text-sm text-slate-700">{normalizeConfigStatus(config.status)}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</dt>
+            <dd className="text-sm text-foreground">{normalizeConfigStatus(config.status)}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Updated</dt>
-            <dd className="text-sm text-slate-700">{formatTimestamp(config.updated_at)}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Updated</dt>
+            <dd className="text-sm text-foreground">{formatTimestamp(config.updated_at)}</dd>
           </div>
           {config.activated_at ? (
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Activated</dt>
-              <dd className="text-sm text-slate-700">{formatTimestamp(config.activated_at)}</dd>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activated</dt>
+              <dd className="text-sm text-foreground">{formatTimestamp(config.activated_at)}</dd>
             </div>
           ) : null}
         </dl>
       </section>
-      <section className="flex-1 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6">
-        <h2 className="text-base font-semibold text-slate-800">Overview</h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+      <section className="flex-1 rounded-2xl border border-dashed border-border-strong bg-background p-6">
+        <h2 className="text-base font-semibold text-foreground">Overview</h2>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           The refreshed config workbench will eventually surface manifest summaries, validation history, and deployment metrics
           here. For now this page offers a quick launch point into the editor while we rebuild the experience.
         </p>
@@ -431,18 +431,18 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         confirmDisabled={makeActiveState?.stage === "checking" || makeActiveConfig.isPending}
       >
         {makeActiveState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-slate-600">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveState?.stage === "issues" ? (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="text-sm text-foreground">Issues:</p>
+            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-background p-3 text-xs text-foreground">
               {makeActiveState.issues.map((issue) => (
                 <li key={`${issue.path}:${issue.message}`} className="space-y-1">
                   <p className="font-semibold">{issue.path}</p>
-                  <p className="text-slate-600">{issue.message}</p>
+                  <p className="text-muted-foreground">{issue.message}</p>
                 </li>
               ))}
             </ul>

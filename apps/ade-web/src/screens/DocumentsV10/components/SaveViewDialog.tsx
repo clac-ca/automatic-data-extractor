@@ -20,13 +20,13 @@ export function SaveViewDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-        <p className="text-sm font-semibold text-slate-900">Save view</p>
-        <p className="mt-1 text-xs text-slate-500">Save your current filters as a reusable view.</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/30 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+        <p className="text-sm font-semibold text-foreground">Save view</p>
+        <p className="mt-1 text-xs text-muted-foreground">Save your current filters as a reusable view.</p>
 
         <div className="mt-4">
-          <label className="text-xs font-semibold text-slate-500">View name</label>
+          <label className="text-xs font-semibold text-muted-foreground">View name</label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}

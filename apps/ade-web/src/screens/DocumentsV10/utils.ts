@@ -59,8 +59,7 @@ export function normalizeCell(value: unknown) {
 }
 
 export function normalizeRow(row: string[], length: number) {
-  if (row.length >= length) return row;
-  return row.concat(Array.from({ length: length - row.length }, () => ""));
+  return Array.from({ length }, (_, index) => row[index] ?? "");
 }
 
 export function buildHeaders(raw: string[], totalColumns: number) {

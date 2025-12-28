@@ -79,11 +79,11 @@ export function ConfirmDialog({
   const toneStyles =
     tone === "danger"
       ? {
-          badge: "bg-danger-100 text-danger-700",
+          badge: "bg-danger-500/15 text-danger-400",
           confirmVariant: "danger" as const,
         }
       : {
-          badge: "bg-brand-50 text-brand-700",
+          badge: "bg-brand-500/10 text-brand-500",
           confirmVariant: "primary" as const,
         };
 
@@ -91,7 +91,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 px-4">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/50"
+        className="absolute inset-0 bg-overlay/50"
         onClick={onCancel}
         aria-label="Close dialog"
       />
@@ -100,7 +100,7 @@ export function ConfirmDialog({
           role="dialog"
           aria-modal="true"
           aria-label={title}
-          className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+          className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl"
           ref={dialogRef}
         >
           <div className="space-y-2">
@@ -112,8 +112,8 @@ export function ConfirmDialog({
             >
               Confirm
             </p>
-            <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
-            {description ? <p className="text-sm text-slate-600">{description}</p> : null}
+            <h3 className="text-xl font-semibold text-foreground">{title}</h3>
+            {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
 
           {children ? <div className="mt-4 space-y-3">{children}</div> : null}
@@ -139,4 +139,3 @@ export function ConfirmDialog({
     document.body,
   );
 }
-

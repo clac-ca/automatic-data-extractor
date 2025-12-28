@@ -15,8 +15,8 @@ const VARIANT_STYLE: Record<ButtonVariant, string> = {
   primary:
     "bg-brand-600 text-white hover:bg-brand-700 focus-visible:ring-brand-500 disabled:bg-brand-300",
   secondary:
-    "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-400 disabled:text-slate-400",
-  ghost: "bg-transparent text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-300",
+    "bg-card text-muted-foreground border border-border hover:bg-muted focus-visible:ring-ring disabled:text-muted-foreground",
+  ghost: "bg-transparent text-muted-foreground hover:bg-muted focus-visible:ring-ring",
   danger:
     "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500 disabled:bg-rose-300",
 };
@@ -50,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isDisabled}
         aria-busy={isLoading || undefined}
         className={clsx(
-          "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 disabled:cursor-not-allowed",
+          "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed",
           VARIANT_STYLE[variant],
           SIZE_STYLE[size],
           className,

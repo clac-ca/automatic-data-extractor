@@ -42,7 +42,7 @@ export function DocumentsFiltersBar({
     filters.statuses.length + filters.fileTypes.length + filters.tags.length + filters.assignees.length;
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <ViewsPopover
           activeViewId={activeViewId}
@@ -67,18 +67,18 @@ export function DocumentsFiltersBar({
                 assignees: [],
               })
             }
-            className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             Clear filters
           </button>
         ) : (
-          <span className="text-xs text-slate-400">No filters applied</span>
+          <span className="text-xs text-muted-foreground">No filters applied</span>
         )}
       </div>
 
-      <div className="text-xs text-slate-500">
-        Showing <span className="font-semibold text-slate-900">{showingCount}</span> of{" "}
-        <span className="font-semibold text-slate-900">{totalCount}</span>
+      <div className="text-xs text-muted-foreground">
+        Showing <span className="font-semibold text-foreground">{showingCount}</span> of{" "}
+        <span className="font-semibold text-foreground">{totalCount}</span>
       </div>
     </div>
   );

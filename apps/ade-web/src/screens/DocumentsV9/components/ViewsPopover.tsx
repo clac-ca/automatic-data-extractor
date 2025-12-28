@@ -69,23 +69,23 @@ export function ViewsPopover({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-brand-300"
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:border-brand-300"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
         <span>Views</span>
-        <span className="max-w-[10rem] truncate text-[11px] font-medium text-slate-400">{activeLabel}</span>
-        <span className="text-slate-400" aria-hidden>
+        <span className="max-w-[10rem] truncate text-[11px] font-medium text-muted-foreground">{activeLabel}</span>
+        <span className="text-muted-foreground" aria-hidden>
           v
         </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-[22rem] rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="absolute left-0 z-30 mt-2 w-[22rem] rounded-2xl border border-border bg-card p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Views</p>
-              <p className="mt-1 text-xs text-slate-500">Switch between built-in and saved views.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Views</p>
+              <p className="mt-1 text-xs text-muted-foreground">Switch between built-in and saved views.</p>
             </div>
             <button
               type="button"
@@ -93,20 +93,20 @@ export function ViewsPopover({
                 setOpen(false);
                 onOpenSaveDialog();
               }}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-brand-300"
+              className="rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:border-brand-300"
             >
               Save current view
             </button>
           </div>
 
           {activeViewId === "custom" ? (
-            <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            <div className="mt-3 rounded-xl border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground">
               You are on a custom view. Save it to reuse later.
             </div>
           ) : null}
 
           <div className="mt-4">
-            <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Built-in
             </div>
             <div className="flex flex-col gap-1">
@@ -120,11 +120,11 @@ export function ViewsPopover({
                   }}
                   className={clsx(
                     "flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
-                    activeViewId === view.id ? "bg-brand-50 text-brand-800" : "hover:bg-slate-50 text-slate-700",
+                    activeViewId === view.id ? "bg-brand-50 text-brand-800" : "hover:bg-background text-foreground",
                   )}
                 >
                   <span className="font-semibold">{view.label}</span>
-                  <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                  <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
                     {view.count}
                   </span>
                 </button>
@@ -133,18 +133,18 @@ export function ViewsPopover({
           </div>
 
           <div className="mt-5">
-            <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Saved
             </div>
             {savedViews.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-slate-500">No saved views yet.</div>
+              <div className="px-3 py-2 text-xs text-muted-foreground">No saved views yet.</div>
             ) : (
               <div className="flex flex-col gap-1">
                 {savedViews
                   .slice()
                   .sort((a, b) => b.updatedAt - a.updatedAt)
                   .map((view) => (
-                    <div key={view.id} className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-50">
+                    <div key={view.id} className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-background">
                       <button
                         type="button"
                         onClick={() => {
@@ -153,7 +153,7 @@ export function ViewsPopover({
                         }}
                         className={clsx(
                           "min-w-0 flex-1 truncate text-left text-sm font-semibold",
-                          activeViewId === view.id ? "text-brand-800" : "text-slate-700",
+                          activeViewId === view.id ? "text-brand-800" : "text-foreground",
                         )}
                         title={view.name}
                       >
@@ -165,7 +165,7 @@ export function ViewsPopover({
                           event.stopPropagation();
                           onDeleteSavedView(view.id);
                         }}
-                        className="ml-2 hidden text-xs font-semibold text-slate-400 hover:text-rose-600 group-hover:inline"
+                        className="ml-2 hidden text-xs font-semibold text-muted-foreground hover:text-rose-600 group-hover:inline"
                         aria-label={`Delete view ${view.name}`}
                       >
                         Delete

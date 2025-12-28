@@ -24,8 +24,6 @@ import { PanelResizeHandle } from "./components/PanelResizeHandle";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
-import { useEditorThemePreference } from "./state/useEditorThemePreference";
-import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type {
   WorkbenchDataSeed,
   WorkbenchUploadFile,
@@ -54,6 +52,7 @@ import { configurationKeys } from "@shared/configurations/keys";
 import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
+import { isDarkTheme, useTheme } from "@shared/theme";
 import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@shared/api";
 import type { components } from "@schema";
@@ -84,18 +83,11 @@ const buildTabStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.tabs`;
 const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
-const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.editor-theme`;
 const buildExplorerExpandedStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.explorer.expanded`;
 const buildLayoutStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.layout`;
 
-const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
 
 const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
   explorer: "",
@@ -323,8 +315,9 @@ export function Workbench({
     [workspaceId, configId],
   );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
-  const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
-  const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
+  const theme = useTheme();
+  const menuAppearance = isDarkTheme(theme.resolvedTheme) ? "dark" : "light";
+  const editorThemeId = theme.resolvedTheme === "light" ? "vs-light" : "ade-dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [explorer, setExplorer] = useState(() => {
@@ -1700,17 +1693,10 @@ export function Workbench({
 
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
-    const items: ContextMenuItem[] = THEME_MENU_OPTIONS.map((option) => ({
-      id: `theme-${option.value}`,
-      label: `${option.label} theme`,
-      icon: editorTheme.preference === option.value ? <MenuIconCheck /> : blankIcon,
-      onSelect: () => editorTheme.setPreference(option.value),
-    }));
-    items.push(
+    return [
       {
         id: "toggle-explorer",
         label: explorer.collapsed ? "Show Explorer" : "Hide Explorer",
-        dividerAbove: true,
         icon: explorer.collapsed ? blankIcon : <MenuIconCheck />,
         onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
       },
@@ -1720,10 +1706,8 @@ export function Workbench({
         icon: outputCollapsed ? blankIcon : <MenuIconCheck />,
         onSelect: handleToggleOutput,
       },
-    );
-    return items;
+    ];
   }, [
-    editorTheme,
     explorer.collapsed,
     outputCollapsed,
     handleToggleOutput,
@@ -1842,36 +1826,15 @@ export function Workbench({
       />
     );
   }
-  const rootSurfaceClass = isMaximized
-    ? menuAppearance === "dark"
-      ? "bg-[#0f111a] text-white"
-      : "bg-slate-50 text-slate-900"
-    : menuAppearance === "dark"
-      ? "bg-transparent text-white"
-      : "bg-transparent text-slate-900";
-  const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
-  const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
+  const rootSurfaceClass = isMaximized ? "bg-background text-foreground" : "bg-transparent text-foreground";
   const windowFrameClass = isMaximized
-    ? clsx(
-        "fixed inset-0 z-[90] flex flex-col",
-        menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
-      )
-    : clsx(
-        "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-        menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
-      );
-  const collapsedConsoleTheme =
-    menuAppearance === "dark"
-      ? {
-          bar: "border-[#1f2431] bg-[#0f111a] text-slate-200",
-          hint: "text-slate-400",
-          button: "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
-        }
-      : {
-          bar: "border-slate-300 bg-white text-slate-700",
-          hint: "text-slate-500",
-          button: "border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-400",
-        };
+    ? "fixed inset-0 z-[90] flex flex-col bg-background text-foreground"
+    : "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
+  const collapsedConsoleTheme = {
+    bar: "border-border bg-card text-foreground",
+    hint: "text-muted-foreground",
+    button: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
+  };
 
   return (
     <div
@@ -1879,7 +1842,7 @@ export function Workbench({
       onDragOver={handleWorkbenchDragOver}
       onDrop={handleWorkbenchDrop}
     >
-      {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
+      {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
           configName={configName}
@@ -1914,12 +1877,7 @@ export function Workbench({
         />
         {!usingSeed ? (
           <div
-            className={clsx(
-              "border-b px-4 py-3",
-              menuAppearance === "dark"
-                ? "border-white/10 bg-[#0f111a] text-slate-200"
-                : "border-slate-200 bg-slate-50 text-slate-700",
-            )}
+            className="border-b border-border bg-card px-4 py-3 text-foreground"
             role="status"
             aria-live="polite"
           >
@@ -1927,7 +1885,7 @@ export function Workbench({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <p className="text-sm font-semibold">Read-only configuration</p>
-                  <p className={clsx("text-xs", menuAppearance === "dark" ? "text-slate-300" : "text-slate-600")}>
+                  <p className="text-xs text-muted-foreground">
                     {filesQuery.data?.status === "active"
                       ? "Active configurations can’t be edited. Duplicate this configuration to create a draft you can change."
                       : "Archived configurations can’t be edited. Duplicate this configuration to create a draft you can change."}
@@ -1941,7 +1899,7 @@ export function Workbench({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-0.5">
                   <p className="text-sm font-semibold">Draft configuration</p>
-                  <p className={clsx("text-xs", menuAppearance === "dark" ? "text-slate-300" : "text-slate-600")}>
+                  <p className="text-xs text-muted-foreground">
                     Make this draft active to use it for extraction runs.
                     {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
                   </p>
@@ -2030,7 +1988,7 @@ export function Workbench({
             </>
           ) : null}
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ backgroundColor: editorSurface, color: editorText }}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card text-card-foreground">
           <div
             className="grid min-h-0 min-w-0 flex-1"
             style={{
@@ -2060,7 +2018,7 @@ export function Workbench({
               onPinTab={files.pinTab}
               onUnpinTab={files.unpinTab}
               onSelectRecentTab={files.selectRecentTab}
-              editorTheme={editorTheme.resolvedTheme}
+              editorTheme={editorThemeId}
               menuAppearance={menuAppearance}
               canSaveFiles={canSaveFiles}
               readOnly={isReadOnlyConfig}
@@ -2140,6 +2098,7 @@ export function Workbench({
                 onClearConsole={handleClearConsole}
                 runStatus={derivedRunStatus}
                 onToggleCollapse={handleToggleOutput}
+                appearance={menuAppearance}
               />
             )}
           </div>
@@ -2165,18 +2124,18 @@ export function Workbench({
         className="hidden"
       />
       {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="replace-config-title"
           >
             <div className="space-y-2">
-              <h2 id="replace-config-title" className="text-lg font-semibold text-slate-900">
+              <h2 id="replace-config-title" className="text-lg font-semibold text-foreground">
                 Import from zip
               </h2>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Importing will replace this configuration’s current code with the uploaded archive. Unsaved editor changes
                 will be discarded.
               </p>
@@ -2274,18 +2233,18 @@ export function Workbench({
         confirmDisabled={makeActiveDialogState?.stage === "checking" || makeActiveConfig.isPending}
       >
         {makeActiveDialogState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-slate-600">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveDialogState?.stage === "issues" ? (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="text-sm text-foreground">Issues:</p>
+            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
               {makeActiveDialogState.issues.map((issue) => (
                 <li key={`${issue.path}:${issue.message}`} className="space-y-1">
                   <p className="font-semibold">{issue.path}</p>
-                  <p className="text-slate-600">{issue.message}</p>
+                  <p className="text-muted-foreground">{issue.message}</p>
                 </li>
               ))}
             </ul>
@@ -2324,8 +2283,8 @@ export function Workbench({
       >
         {uploadPlan ? (
           <div className="space-y-3">
-            <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-              <p className="font-semibold text-slate-900">Will overwrite:</p>
+            <div className="max-h-56 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+              <p className="font-semibold text-foreground">Will overwrite:</p>
               <ul className="mt-2 space-y-1">
                 {uploadPlan.conflicts.slice(0, 20).map((item) => (
                   <li key={item.targetPath} className="break-all">
@@ -2334,17 +2293,17 @@ export function Workbench({
                 ))}
               </ul>
               {uploadPlan.conflicts.length > 20 ? (
-                <p className="mt-2 text-[11px] text-slate-500">And {uploadPlan.conflicts.length - 20} more…</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">And {uploadPlan.conflicts.length - 20} more…</p>
               ) : null}
             </div>
             {uploadPlan.skipped.length > 0 ? (
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-muted-foreground">
                 {uploadPlan.skipped.length} item{uploadPlan.skipped.length === 1 ? "" : "s"} will be skipped due to invalid
                 paths or size limits.
               </p>
             ) : null}
             {uploadPlan.items.length > uploadPlan.conflicts.length ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground">
                 <p className="font-medium">Prefer not to overwrite?</p>
                 <Button
                   size="sm"
@@ -2397,10 +2356,7 @@ interface SidePanelPlaceholderProps {
 
 function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderProps) {
   const label = ACTIVITY_LABELS[view] || "Coming soon";
-  const surfaceClass =
-    appearance === "dark"
-      ? "border-[#111111] bg-[#1e1e1e] text-slate-300"
-      : "border-slate-200 bg-slate-50 text-slate-600";
+  const surfaceClass = "border-border bg-muted text-muted-foreground";
   return (
     <div
       className={clsx(
@@ -2417,7 +2373,7 @@ function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderP
 
 function MenuIconCheck() {
   return (
-    <svg className="h-4 w-4 text-[#4fc1ff]" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg className="h-4 w-4 text-brand-400" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -2476,17 +2432,12 @@ function WorkbenchChrome({
   readonly onCloseWindow: () => void;
   readonly actionsBusy?: boolean;
 }) {
-  const dark = appearance === "dark";
-  const surfaceClass = dark
-    ? "border-white/10 bg-[#151821] text-white"
-    : "border-slate-200 bg-white text-slate-900";
-  const metaTextClass = dark ? "text-white/60" : "text-slate-500";
-  const saveButtonClass = dark
-    ? "bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30 disabled:bg-white/10 disabled:text-white/30"
-    : "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-slate-200 disabled:text-slate-500";
-  const runButtonClass = dark
-    ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
-    : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
+  const surfaceClass = "border-border bg-card text-foreground";
+  const metaTextClass = "text-muted-foreground";
+  const saveButtonClass =
+    "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-muted disabled:text-muted-foreground";
+  const runButtonClass =
+    "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
 
   return (
@@ -2545,7 +2496,7 @@ function WorkbenchChrome({
           menuClassName={clsx(
             runButtonClass,
             "rounded-l-none px-2",
-            dark ? "border-white/20" : "border-slate-300",
+            "border-border-strong",
           )}
           menuAriaLabel="Open test options"
           onPrimaryClick={() => onRunExtraction(false)}
@@ -2584,7 +2535,7 @@ function WorkbenchChrome({
         <div
           className={clsx(
             "flex items-center gap-2 border-l pl-3",
-            appearance === "dark" ? "border-white/20" : "border-slate-200/70",
+            "border-border/70",
           )}
         >
           <ChromeIconButton
@@ -2706,17 +2657,17 @@ function RunExtractionDialog({
   const sheetsAvailable = sheetOptions.length > 0;
 
   const content = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
       >
         <header className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Select a document</h2>
-            <p className="text-sm text-slate-500">
+            <h2 className="text-lg font-semibold text-foreground">Select a document</h2>
+            <p className="text-sm text-muted-foreground">
               Choose a workspace document and optional worksheet before running a test.
             </p>
           </div>
@@ -2728,20 +2679,20 @@ function RunExtractionDialog({
         {documentsQuery.isError ? (
           <Alert tone="danger">Unable to load documents. Try again later.</Alert>
         ) : documentsQuery.isLoading ? (
-          <p className="text-sm text-slate-500">Loading documents…</p>
+          <p className="text-sm text-muted-foreground">Loading documents…</p>
         ) : documents.length === 0 ? (
-          <p className="text-sm text-slate-500">Upload a document in the workspace to run the extractor.</p>
+          <p className="text-sm text-muted-foreground">Upload a document in the workspace to run the extractor.</p>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700" htmlFor="builder-run-document-select">
+              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-document-select">
                 Document
               </label>
               <Select
                 id="builder-run-document-select"
                 value={selectedDocumentId}
                 onChange={(event) => setSelectedDocumentId(event.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="w-full"
               >
                 {documents.map((document) => (
                   <option key={document.id} value={document.id}>
@@ -2750,40 +2701,40 @@ function RunExtractionDialog({
                 ))}
               </Select>
               {selectedDocument ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·{" "}
                   {(selectedDocument.byte_size ?? 0).toLocaleString()} bytes
                 </p>
               ) : null}
             </div>
 
-	            <div className="space-y-2">
-	              <label className="text-sm font-medium text-slate-700" htmlFor="builder-run-log-level-select">
-	                Log level
-	              </label>
-	              <Select
-	                id="builder-run-log-level-select"
-	                value={logLevel}
-	                onChange={(event) => setLogLevel(event.target.value as RunLogLevel)}
-	                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-	              >
-	                {RUN_LOG_LEVEL_OPTIONS.map((option) => (
-	                  <option key={option.value} value={option.value}>
-	                    {option.label}
-	                  </option>
-	                ))}
-	              </Select>
-	              <p className="text-xs text-slate-500">Controls the engine runtime verbosity for this run.</p>
-	            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-log-level-select">
+                Log level
+              </label>
+              <Select
+                id="builder-run-log-level-select"
+                value={logLevel}
+                onChange={(event) => setLogLevel(event.target.value as RunLogLevel)}
+                className="w-full"
+              >
+                {RUN_LOG_LEVEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">Controls the engine runtime verbosity for this run.</p>
+            </div>
 
-	            <div className="space-y-2">
-	              <p className="text-sm font-medium text-slate-700">Worksheet</p>
-	              {sheetQuery.isLoading ? (
-	                <p className="text-sm text-slate-500">Loading worksheets…</p>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Worksheet</p>
+              {sheetQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading worksheets…</p>
               ) : sheetQuery.isError ? (
                 <Alert tone="warning">
                   <div className="space-y-2">
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-foreground">
                       Worksheet metadata is temporarily unavailable. The run will process the entire file unless you retry and
                       pick specific sheets.
                     </p>
@@ -2802,12 +2753,12 @@ function RunExtractionDialog({
                     </div>
                   </div>
                 </Alert>
-	              ) : sheetsAvailable ? (
-	                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+              ) : sheetsAvailable ? (
+                <div className="space-y-3 rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-slate-700">Worksheets</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-medium text-foreground">Worksheets</p>
+                      <p className="text-xs text-muted-foreground">
                         {normalizedSheetSelection.length === 0
                           ? "All worksheets will be processed by default. Select specific sheets to narrow the run."
                           : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
@@ -2820,17 +2771,17 @@ function RunExtractionDialog({
                     </Button>
                   </div>
 
-                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-200 p-2">
+                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-border p-2">
                     {sheetOptions.map((sheet) => {
                       const checked = normalizedSheetSelection.includes(sheet.name);
                       return (
                         <label
                           key={`${sheet.index}-${sheet.name}`}
-                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-foreground hover:bg-muted"
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
                             checked={checked}
                             onChange={() => toggleWorksheet(sheet.name)}
                           />
@@ -2843,12 +2794,12 @@ function RunExtractionDialog({
                     })}
                   </div>
                 </div>
-	              ) : (
-	                <p className="text-sm text-slate-500">This file will be ingested directly.</p>
-	              )}
-	            </div>
-	          </div>
-	        )}
+              ) : (
+                <p className="text-sm text-muted-foreground">This file will be ingested directly.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <footer className="mt-6 flex items-center justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
@@ -2859,15 +2810,15 @@ function RunExtractionDialog({
               if (!selectedDocument) {
                 return;
               }
-		              onRun({
-		                documentId: selectedDocument.id,
-		                documentName: selectedDocument.name,
-		                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
-		                logLevel,
-		              });
-		            }}
-		            disabled={runDisabled}
-		          >
+              onRun({
+                documentId: selectedDocument.id,
+                documentName: selectedDocument.name,
+                sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+                logLevel,
+              });
+            }}
+            disabled={runDisabled}
+          >
             Start test run
           </Button>
         </footer>
@@ -2912,11 +2863,9 @@ function ChromeIconButton({
   readonly active?: boolean;
   readonly disabled?: boolean;
 }) {
-  const dark = appearance === "dark";
-  const baseClass = dark
-    ? "text-white/70 hover:text-white hover:bg-white/5 hover:border-white/20 focus-visible:ring-white/40"
-    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300 focus-visible:ring-slate-400/40";
-  const activeClass = dark ? "text-white border-white/30 bg-white/10" : "text-slate-900 border-slate-300 bg-slate-200/70";
+  const baseClass =
+    "text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border-strong focus-visible:ring-ring/40";
+  const activeClass = "text-foreground border-border-strong bg-muted";
   return (
     <button
       type="button"
@@ -2938,7 +2887,7 @@ function ChromeIconButton({
 
 function WorkbenchBadgeIcon() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#4fc1ff] via-[#2d7dff] to-[#7c4dff] text-white shadow-lg shadow-[#10121f]">
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-white shadow-[0_12px_24px_rgb(var(--color-shadow)/0.35)]">
       <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
         <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
         <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />

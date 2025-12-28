@@ -16,9 +16,9 @@ export function BulkActionBar({
   if (count <= 0) return null;
 
   return (
-    <div className="sticky bottom-0 z-10 shrink-0 border-t border-slate-200 bg-white px-6 py-3">
+    <div className="sticky bottom-0 z-10 shrink-0 border-t border-border bg-card px-6 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-slate-700">
+        <div className="text-sm text-foreground">
           <span className="font-semibold">{count}</span> selected
         </div>
         <div className="flex flex-wrap items-center gap-2">

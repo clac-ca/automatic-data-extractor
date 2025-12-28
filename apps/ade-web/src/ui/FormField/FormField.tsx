@@ -42,7 +42,7 @@ export function FormField({
       {label ? (
         <label
           htmlFor={controlId}
-          className="text-sm font-medium text-slate-700"
+          className="text-sm font-medium text-foreground"
           aria-required={required || undefined}
         >
           {label}
@@ -62,7 +62,7 @@ export function FormField({
           })
         : children}
       {hint ? (
-        <p id={hintId} className="text-xs text-slate-500">
+        <p id={hintId} className="text-xs text-muted-foreground">
           {hint}
         </p>
       ) : null}

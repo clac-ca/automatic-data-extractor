@@ -127,9 +127,9 @@ const STATUS_META: Record<
 > = {
   uploaded: {
     label: "Uploaded",
-    dot: "bg-slate-400",
-    text: "text-slate-600",
-    badge: "bg-slate-100 text-slate-600",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
+    badge: "bg-muted text-muted-foreground",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
         <path d="M10 13V4" strokeLinecap="round" />
@@ -178,9 +178,9 @@ const STATUS_META: Record<
   },
   archived: {
     label: "Archived",
-    dot: "bg-slate-300",
-    text: "text-slate-500",
-    badge: "bg-slate-100 text-slate-500",
+    dot: "bg-muted",
+    text: "text-muted-foreground",
+    badge: "bg-muted text-muted-foreground",
     icon: ({ className }) => (
       <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
         <path d="M6 8h8" strokeLinecap="round" />
@@ -486,7 +486,7 @@ export default function WorkspaceDocumentsV2Route() {
   return (
     <section className="relative flex min-h-0 flex-1 min-w-0 flex-col gap-6 px-4 py-6 lg:flex-row lg:gap-8 lg:px-8">
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-card to-muted" />
         <div className="absolute -left-10 top-6 h-40 w-40 rounded-full bg-sky-100/70 blur-3xl" />
         <div className="absolute right-6 top-20 h-52 w-52 rounded-full bg-emerald-100/70 blur-3xl" />
       </div>
@@ -496,15 +496,15 @@ export default function WorkspaceDocumentsV2Route() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
+                <span className="rounded-full bg-foreground px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-background">
                   Documents v2
                 </span>
                 {activeSavedView ? (
                   <span className="text-xs font-semibold text-emerald-700">View: {activeSavedView.name}</span>
                 ) : null}
               </div>
-              <h1 className="text-2xl font-semibold text-slate-900">Document workspace</h1>
-              <p className="text-sm text-slate-500">
+              <h1 className="text-2xl font-semibold text-foreground">Document workspace</h1>
+              <p className="text-sm text-muted-foreground">
                 {documentCountSummary} documents - outcomes and exceptions surfaced in real time.
               </p>
               {activeSavedView ? (
@@ -514,7 +514,7 @@ export default function WorkspaceDocumentsV2Route() {
                 <p
                   className={clsx(
                     "text-xs font-semibold",
-                    uploadState.status === "error" ? "text-rose-600" : "text-slate-500",
+                    uploadState.status === "error" ? "text-rose-600" : "text-muted-foreground",
                   )}
                 >
                   {uploadStatusMessage}
@@ -539,10 +539,10 @@ export default function WorkspaceDocumentsV2Route() {
           />
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-[0_28px_60px_-45px_rgba(15,23,42,0.55)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <span className="font-semibold text-slate-700">Queue</span>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-[0_28px_60px_-45px_rgb(var(--color-shadow)/0.55)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">Queue</span>
               <span>-</span>
               <span>
                 {queueSelection.kind === "queue"
@@ -556,7 +556,7 @@ export default function WorkspaceDocumentsV2Route() {
                 onChange={setSearchValue}
                 onClear={() => setSearchValue("")}
               />
-              <div className="text-xs text-slate-400">{listContextLabel}</div>
+              <div className="text-xs text-muted-foreground">{listContextLabel}</div>
             </div>
           </div>
 
@@ -605,7 +605,7 @@ export default function WorkspaceDocumentsV2Route() {
                 />
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-0 bg-slate-50/95 text-xs uppercase text-slate-400">
+                  <thead className="sticky top-0 z-0 bg-background/95 text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="w-10 px-3 py-2 text-left">
                         <SelectAllCheckbox
@@ -642,8 +642,8 @@ export default function WorkspaceDocumentsV2Route() {
                         <tr
                           key={doc.id}
                           className={clsx(
-                            "border-b border-slate-100 transition-colors",
-                            active ? "bg-slate-100/70" : "hover:bg-slate-50",
+                            "border-b border-border transition-colors",
+                            active ? "bg-muted/70" : "hover:bg-background",
                           )}
                           onClick={() => setActiveDocumentId(doc.id)}
                         >
@@ -665,8 +665,8 @@ export default function WorkspaceDocumentsV2Route() {
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <FileIcon className="h-4 w-4 text-slate-400" />
-                              <span className="font-medium text-slate-900">{doc.name}</span>
+                              <FileIcon className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium text-foreground">{doc.name}</span>
                               {needsAttention ? (
                                 <span
                                   className="inline-flex h-2 w-2 rounded-full bg-amber-400"
@@ -682,18 +682,18 @@ export default function WorkspaceDocumentsV2Route() {
                                 tags.map((tag) => (
                                   <span
                                     key={tag}
-                                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
+                                    className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                                   >
                                     {tag}
                                   </span>
                                 ))
                               ) : (
-                                <span className="text-xs text-slate-300">No tags</span>
+                                <span className="text-xs text-muted-foreground">No tags</span>
                               )}
-                              {overflow > 0 ? <span className="text-xs text-slate-400">+{overflow}</span> : null}
+                              {overflow > 0 ? <span className="text-xs text-muted-foreground">+{overflow}</span> : null}
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-xs text-slate-500">{formatRelativeTime(updatedAt)}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">{formatRelativeTime(updatedAt)}</td>
                           <td className="px-3 py-2">
                             <div className={clsx("flex items-center gap-2 text-xs font-semibold", statusMeta.text)}>
                               <span className={clsx("h-2.5 w-2.5 rounded-full", statusMeta.dot)} />
@@ -708,7 +708,7 @@ export default function WorkspaceDocumentsV2Route() {
               )}
             </div>
             {documentsQuery.hasNextPage ? (
-              <div className="flex justify-center border-t border-slate-200 bg-slate-50/60 px-3 py-2">
+              <div className="flex justify-center border-t border-border bg-background/60 px-3 py-2">
                 <Button
                   type="button"
                   variant="ghost"
@@ -723,7 +723,7 @@ export default function WorkspaceDocumentsV2Route() {
         </div>
       </div>
 
-      <aside className="flex min-h-[18rem] w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_32px_70px_-50px_rgba(15,23,42,0.6)] lg:w-[min(28rem,38vw)]">
+      <aside className="flex min-h-[18rem] w-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-[0_32px_70px_-50px_rgb(var(--color-shadow)/0.6)] lg:w-[min(28rem,38vw)]">
         <DocumentInspector workspaceId={workspace.id} document={activeDocument} />
       </aside>
       <input
@@ -770,8 +770,8 @@ function QueueBar({
               className={clsx(
                 "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition",
                 active
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-600 hover:bg-slate-100",
+                  ? "bg-foreground text-background"
+                  : "bg-card text-muted-foreground hover:bg-muted",
               )}
               onClick={() => onSelectQueue(queue.id)}
             >
@@ -780,7 +780,7 @@ function QueueBar({
                 <span
                   className={clsx(
                     "rounded-full px-2 py-0.5 text-xs font-semibold",
-                    active ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700",
+                    active ? "bg-card/20 text-white" : "bg-amber-100 text-amber-700",
                   )}
                 >
                   {needsAttentionCount}
@@ -812,16 +812,16 @@ function SavedViewsMenu({ activeViewId, onSelectView }: SavedViewsMenuProps) {
     <details
       ref={menuRef}
       className={clsx(
-        "relative rounded-full border border-slate-200 bg-white text-sm",
+        "relative rounded-full border border-border bg-card text-sm",
         activeView ? "border-emerald-200 bg-emerald-50/70" : "",
       )}
     >
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full px-3 py-1.5 font-semibold text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden [&::marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full px-3 py-1.5 font-semibold text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden [&::marker]:hidden">
         <span>{activeView ? activeView.name : "Saved views"}</span>
         <ChevronIcon className="h-4 w-4" />
       </summary>
-      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-        <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Saved views</div>
+      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-72 rounded-2xl border border-border bg-card p-3 shadow-xl">
+        <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved views</div>
         <div className="space-y-1">
           {SAVED_VIEWS.map((view) => (
             <button
@@ -829,7 +829,7 @@ function SavedViewsMenu({ activeViewId, onSelectView }: SavedViewsMenuProps) {
               type="button"
               className={clsx(
                 "flex w-full flex-col gap-1 rounded-xl px-3 py-2 text-left text-sm transition",
-                view.id === activeViewId ? "bg-emerald-50 text-emerald-700" : "hover:bg-slate-50",
+                view.id === activeViewId ? "bg-emerald-50 text-emerald-700" : "hover:bg-background",
               )}
               onClick={() => {
                 onSelectView(view.id);
@@ -838,8 +838,8 @@ function SavedViewsMenu({ activeViewId, onSelectView }: SavedViewsMenuProps) {
                 }
               }}
             >
-              <span className="font-semibold text-slate-800">{view.name}</span>
-              <span className="text-xs text-slate-400">{view.description}</span>
+              <span className="font-semibold text-foreground">{view.name}</span>
+              <span className="text-xs text-muted-foreground">{view.description}</span>
             </button>
           ))}
         </div>
@@ -876,14 +876,14 @@ function BulkActionOverlay({
   return (
     <div
       className={clsx(
-        "pointer-events-none absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-slate-200/70 bg-slate-50/95 px-4 py-2 text-sm transition-opacity",
+        "pointer-events-none absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-border/70 bg-background/95 px-4 py-2 text-sm transition-opacity",
         visibleCount > 0 ? "opacity-100" : "opacity-0",
       )}
       aria-hidden={visibleCount === 0}
     >
       <div className="pointer-events-auto flex w-full flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-slate-700">{visibleCount} selected</span>
+          <span className="font-semibold text-foreground">{visibleCount} selected</span>
           {tagMode ? (
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-[12rem]">
@@ -907,7 +907,7 @@ function BulkActionOverlay({
             <>
               <button
                 type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400"
+                className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground"
                 disabled
                 title="Retry runs is coming soon."
               >
@@ -915,14 +915,14 @@ function BulkActionOverlay({
               </button>
               <button
                 type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground"
                 onClick={onStartTag}
               >
                 Tag
               </button>
               <button
                 type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-400"
+                className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground"
                 disabled
                 title="Archive is not available yet."
               >
@@ -933,7 +933,7 @@ function BulkActionOverlay({
         </div>
         <button
           type="button"
-          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500"
+          className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground"
           onClick={onClear}
           disabled={tagBusy}
         >
@@ -947,12 +947,12 @@ function BulkActionOverlay({
 function EmptyState({ title, description }: { readonly title: string; readonly description: string }) {
   return (
     <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 px-6 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
         <InboxIcon className="h-6 w-6" />
       </div>
       <div>
-        <p className="text-base font-semibold text-slate-700">{title}</p>
-        <p className="text-sm text-slate-400">{description}</p>
+        <p className="text-base font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   );
@@ -960,7 +960,7 @@ function EmptyState({ title, description }: { readonly title: string; readonly d
 
 function TableSkeleton() {
   return (
-    <div className="p-6 text-sm text-slate-400">
+    <div className="p-6 text-sm text-muted-foreground">
       Loading documents...
     </div>
   );
@@ -977,7 +977,7 @@ function SearchField({
 }) {
   return (
     <div className="relative w-60">
-      <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -994,7 +994,7 @@ function SearchField({
       {value ? (
         <button
           type="button"
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-600"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground hover:text-muted-foreground"
           onClick={onClear}
           aria-label="Clear search"
         >
@@ -1018,7 +1018,7 @@ function OptionsMenu({
     return (
       <button
         type="button"
-        className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-300"
+        className="rounded-full border border-emerald-200 bg-card px-3 py-1 text-xs font-semibold text-emerald-300"
         disabled
       >
         {label}
@@ -1028,11 +1028,11 @@ function OptionsMenu({
 
   return (
     <details ref={menuRef} className="relative">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white [&::-webkit-details-marker]:hidden [&::marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full border border-emerald-200 bg-card px-3 py-1 text-xs font-semibold text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden [&::marker]:hidden">
         <span>{label}</span>
         <ChevronIcon className="h-4 w-4" />
       </summary>
-      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+      <div className="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-56 rounded-2xl border border-border bg-card p-2 shadow-xl">
         <div className="space-y-1">
           {items.map((item) => (
             <button
@@ -1040,7 +1040,7 @@ function OptionsMenu({
               type="button"
               className={clsx(
                 "flex w-full flex-col gap-0.5 rounded-xl px-3 py-2 text-left text-sm transition",
-                item.disabled ? "cursor-not-allowed text-slate-300" : "text-slate-600 hover:bg-slate-50",
+                item.disabled ? "cursor-not-allowed text-muted-foreground" : "text-muted-foreground hover:bg-background",
               )}
               onClick={() => {
                 if (item.disabled) {
@@ -1053,9 +1053,9 @@ function OptionsMenu({
               }}
               disabled={item.disabled}
             >
-              <span className="font-semibold text-slate-800">{item.label}</span>
+              <span className="font-semibold text-foreground">{item.label}</span>
               {item.description ? (
-                <span className="text-xs text-slate-400">{item.description}</span>
+                <span className="text-xs text-muted-foreground">{item.description}</span>
               ) : null}
             </button>
           ))}
@@ -1098,7 +1098,7 @@ function DocumentInspector({
     : run?.status === "failed"
       ? "bg-rose-100 text-rose-700"
       : run?.status === "cancelled"
-        ? "bg-slate-100 text-slate-500"
+        ? "bg-muted text-muted-foreground"
         : "bg-amber-100 text-amber-700";
 
   const previewAvailable = Boolean(outputReady && previewCapability?.kind !== "unsupported");
@@ -1121,12 +1121,12 @@ function DocumentInspector({
   if (!document) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
           <SearchIcon className="h-6 w-6" />
         </div>
         <div>
-          <p className="text-base font-semibold text-slate-700">Select a document</p>
-          <p className="text-sm text-slate-400">Choose a row to review status, output, and history.</p>
+          <p className="text-base font-semibold text-foreground">Select a document</p>
+          <p className="text-sm text-muted-foreground">Choose a row to review status, output, and history.</p>
         </div>
       </div>
     );
@@ -1159,11 +1159,11 @@ function DocumentInspector({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-slate-200/80 px-5 py-4">
+      <div className="border-b border-border/80 px-5 py-4">
         <div className="flex items-start gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Summary</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-900">{document.name}</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Summary</p>
+            <h2 className="mt-1 text-xl font-semibold text-foreground">{document.name}</h2>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1172,22 +1172,22 @@ function DocumentInspector({
             {statusDetail}
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-500">
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
           <div>
-            <p className="text-xs uppercase text-slate-400">Uploaded</p>
-            <p className="font-semibold text-slate-700">{formatRelativeTime(document.created_at)}</p>
+            <p className="text-xs uppercase text-muted-foreground">Uploaded</p>
+            <p className="font-semibold text-foreground">{formatRelativeTime(document.created_at)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-400">Uploader</p>
-            <p className="font-semibold text-slate-700">{formatUploaderLabel(document)}</p>
+            <p className="text-xs uppercase text-muted-foreground">Uploader</p>
+            <p className="font-semibold text-foreground">{formatUploaderLabel(document)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-400">File size</p>
-            <p className="font-semibold text-slate-700">{formatBytes(document.byte_size)}</p>
+            <p className="text-xs uppercase text-muted-foreground">File size</p>
+            <p className="font-semibold text-foreground">{formatBytes(document.byte_size)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-slate-400">Updated</p>
-            <p className="font-semibold text-slate-700">{formatRelativeTime(resolveDocumentActivityTime(document, run))}</p>
+            <p className="text-xs uppercase text-muted-foreground">Updated</p>
+            <p className="font-semibold text-foreground">{formatRelativeTime(resolveDocumentActivityTime(document, run))}</p>
           </div>
         </div>
         <div className="mt-4">
@@ -1200,15 +1200,15 @@ function DocumentInspector({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Outcome</p>
-              <h3 className="text-lg font-semibold text-slate-900">Processed output</h3>
+              <h3 className="text-lg font-semibold text-foreground">Processed output</h3>
             </div>
             <span className="text-xs font-semibold text-emerald-700">Primary</span>
           </div>
           {outputMeta ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100/80 bg-white/80 px-3 py-2">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-100/80 bg-card/80 px-3 py-2">
               <div>
-                <p className="text-sm font-semibold text-slate-800">{outputFilename}</p>
-                <p className="text-xs text-slate-500">
+                <p className="text-sm font-semibold text-foreground">{outputFilename}</p>
+                <p className="text-xs text-muted-foreground">
                   {formatOutputLabel(outputFormat)} - {outputSize}
                 </p>
               </div>
@@ -1252,9 +1252,9 @@ function DocumentInspector({
             </Button>
             <OptionsMenu label="More options" items={outputMenuItems} />
           </div>
-          <div ref={previewContainerRef} className="mt-4 rounded-xl border border-emerald-100/80 bg-white/80 p-3">
+          <div ref={previewContainerRef} className="mt-4 rounded-xl border border-emerald-100/80 bg-card/80 p-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Preview</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
               {outputDownloadUrl ? (
                 <button
                   type="button"
@@ -1264,7 +1264,7 @@ function DocumentInspector({
                   Full screen
                 </button>
               ) : (
-                <span className="text-xs text-slate-400">Full screen</span>
+                <span className="text-xs text-muted-foreground">Full screen</span>
               )}
             </div>
             <PreviewPanel
@@ -1279,10 +1279,10 @@ function DocumentInspector({
 
         <section>
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">History</h3>
-            <span className="text-xs text-slate-400">Latest run</span>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">History</h3>
+            <span className="text-xs text-muted-foreground">Latest run</span>
           </div>
-          <ol className="mt-3 space-y-4 border-l border-slate-200 pl-4">
+          <ol className="mt-3 space-y-4 border-l border-border pl-4">
             {historyItems.map((event, index) => (
               <li key={`${event.label}-${index}`} className="relative">
                 <span
@@ -1291,8 +1291,8 @@ function DocumentInspector({
                     historyToneClass(event.tone),
                   )}
                 />
-                <div className="text-sm font-semibold text-slate-700">{event.label}</div>
-                <div className="text-xs text-slate-400">{event.timestamp}</div>
+                <div className="text-sm font-semibold text-foreground">{event.label}</div>
+                <div className="text-xs text-muted-foreground">{event.timestamp}</div>
               </li>
             ))}
           </ol>
@@ -1355,19 +1355,19 @@ function TagEditor({
   if (!isEditing) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tags</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
         {tagList.length ? (
           tagList.map((tag) => (
-            <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+            <span key={tag} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
               {tag}
             </span>
           ))
         ) : (
-          <span className="text-xs text-slate-400">No tags</span>
+          <span className="text-xs text-muted-foreground">No tags</span>
         )}
         <button
           type="button"
-          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-500"
+          className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground"
           onClick={() => setIsEditing(true)}
         >
           Edit tags
@@ -1379,8 +1379,8 @@ function TagEditor({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tags</span>
-        <span className="text-xs text-slate-400">{normalizedDraftTags.length} selected</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
+        <span className="text-xs text-muted-foreground">{normalizedDraftTags.length} selected</span>
       </div>
       <Input
         value={draftValue}
@@ -1433,7 +1433,7 @@ function PreviewPanel({
   readonly errorMessage: string | null;
 }) {
   if (!output || !output.ready) {
-    return <p className="mt-3 text-sm text-slate-400">Preview will be available once output is generated.</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">Preview will be available once output is generated.</p>;
   }
 
   if (errorMessage) {
@@ -1441,12 +1441,12 @@ function PreviewPanel({
   }
 
   if (previewCapability?.kind === "unsupported") {
-    return <p className="mt-3 text-sm text-slate-400">{previewCapability.reason}</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">{previewCapability.reason}</p>;
   }
 
   if (previewCapability?.kind === "pdf") {
     return (
-      <div className="mt-3 flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">
+      <div className="mt-3 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
         <FileIcon className="h-6 w-6" />
         PDF preview available in full screen.
       </div>
@@ -1454,16 +1454,16 @@ function PreviewPanel({
   }
 
   if (loading) {
-    return <p className="mt-3 text-sm text-slate-400">Loading preview...</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">Loading preview...</p>;
   }
 
   if (!preview) {
-    return <p className="mt-3 text-sm text-slate-400">Preview is not available for this output.</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">Preview is not available for this output.</p>;
   }
 
   if (preview.kind === "json") {
     return (
-      <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100">
+      <pre className="mt-3 overflow-x-auto rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
         {preview.snippet}
       </pre>
     );
@@ -1471,9 +1471,9 @@ function PreviewPanel({
 
   if (preview.kind === "table") {
     return (
-      <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+      <div className="mt-3 overflow-hidden rounded-lg border border-border">
         <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-slate-400">
+          <thead className="bg-background text-muted-foreground">
             <tr>
               {preview.columns.map((column) => (
                 <th key={column} className="px-2 py-2 text-left font-semibold">
@@ -1484,9 +1484,9 @@ function PreviewPanel({
           </thead>
           <tbody>
             {preview.rows.map((row, rowIndex) => (
-              <tr key={`${rowIndex}-${row[0] ?? "row"}`} className="border-t border-slate-100">
+              <tr key={`${rowIndex}-${row[0] ?? "row"}`} className="border-t border-border">
                 {row.map((cell, cellIndex) => (
-                  <td key={`${rowIndex}-${cellIndex}`} className="px-2 py-2 text-slate-600">
+                  <td key={`${rowIndex}-${cellIndex}`} className="px-2 py-2 text-muted-foreground">
                     {cell}
                   </td>
                 ))}
@@ -1500,7 +1500,7 @@ function PreviewPanel({
 
   if (preview.kind === "pdf") {
     return (
-      <div className="mt-3 flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">
+      <div className="mt-3 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
         <FileIcon className="h-6 w-6" />
         PDF preview available in full screen.
       </div>
@@ -1508,10 +1508,10 @@ function PreviewPanel({
   }
 
   if (preview.kind === "unsupported") {
-    return <p className="mt-3 text-sm text-slate-400">{preview.reason}</p>;
+    return <p className="mt-3 text-sm text-muted-foreground">{preview.reason}</p>;
   }
 
-  return <p className="mt-3 text-sm text-slate-400">Preview is not available for this output.</p>;
+  return <p className="mt-3 text-sm text-muted-foreground">Preview is not available for this output.</p>;
 }
 
 function historyToneClass(tone: DocumentHistoryItem["tone"]) {
@@ -1523,7 +1523,7 @@ function historyToneClass(tone: DocumentHistoryItem["tone"]) {
     case "error":
       return "bg-rose-500";
     default:
-      return "bg-slate-300";
+      return "bg-muted";
   }
 }
 
@@ -1550,7 +1550,7 @@ function SelectAllCheckbox({
       type="checkbox"
       checked={checked}
       onChange={onChange}
-      className="h-4 w-4 rounded border-slate-300 text-slate-900"
+      className="h-4 w-4 rounded border-border-strong text-foreground"
       aria-label="Select all documents"
     />
   );
@@ -1562,7 +1562,7 @@ function RowCheckbox({ checked, onChange }: { readonly checked: boolean; readonl
       type="checkbox"
       checked={checked}
       onChange={onChange}
-      className="h-4 w-4 rounded border-slate-300 text-slate-900"
+      className="h-4 w-4 rounded border-border-strong text-foreground"
       aria-label="Select document"
     />
   );

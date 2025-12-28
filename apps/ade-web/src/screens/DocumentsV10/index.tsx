@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { RequireSession } from "@shared/auth/components/RequireSession";
@@ -81,6 +81,7 @@ export function DocumentsV10Workbench() {
   const currentUserId = session.user.id;
 
   const model = useDocumentsV10Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
+  const [detailsRequestId, setDetailsRequestId] = useState<string | null>(null);
   const handleClearFilters = () => {
     setSearchParam("");
     model.actions.setSearch("");
@@ -145,10 +146,21 @@ export function DocumentsV10Workbench() {
   const onClosePreview = () => {
     setDocParam(null, false);
     model.actions.closePreview();
+    setDetailsRequestId(null);
   };
 
+  const onOpenDetails = useCallback(
+    (id: string) => {
+      const hadDoc = Boolean(urlDocId);
+      setDocParam(id, hadDoc);
+      model.actions.openPreview(id);
+      setDetailsRequestId(id);
+    },
+    [model.actions, setDocParam, urlDocId],
+  );
+
   return (
-    <div className="documents-v10 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
+    <div className="documents-v10 flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
         viewMode={model.state.viewMode}
         onViewModeChange={model.actions.setViewMode}
@@ -204,6 +216,9 @@ export function DocumentsV10Workbench() {
                 onDownloadOriginal={model.actions.downloadOriginal}
                 onDownloadOutput={model.actions.downloadOutputFromRow}
                 onCopyLink={model.actions.copyLink}
+                onReprocess={(doc) => model.actions.reprocess(doc)}
+                onOpenDetails={onOpenDetails}
+                onClosePreview={onClosePreview}
                 expandedId={model.state.previewOpen ? model.state.activeId : null}
                 expandedContent={
                   model.state.previewOpen ? (
@@ -238,6 +253,8 @@ export function DocumentsV10Workbench() {
                       workbookLoading={model.derived.workbookLoading}
                       workbookError={model.derived.workbookError}
                       onClose={onClosePreview}
+                      detailsRequestId={detailsRequestId}
+                      onDetailsRequestHandled={() => setDetailsRequestId(null)}
                     />
                   ) : null
                 }
@@ -275,8 +292,8 @@ export function DocumentsV10Workbench() {
                 onPickUp={model.actions.pickUpDocument}
               />
               {model.state.previewOpen ? (
-                <div className="border-t border-slate-200 bg-slate-50 px-6 pb-6 pt-4">
-                  <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="border-t border-border bg-background px-6 pb-6 pt-4">
+                  <div className="rounded-2xl border border-border bg-card shadow-sm">
                     <DocumentsPreviewPane
                       workspaceId={workspace.id}
                       document={model.derived.activeDocument}
@@ -308,6 +325,8 @@ export function DocumentsV10Workbench() {
                       workbookLoading={model.derived.workbookLoading}
                       workbookError={model.derived.workbookError}
                       onClose={onClosePreview}
+                      detailsRequestId={detailsRequestId}
+                      onDetailsRequestHandled={() => setDetailsRequestId(null)}
                     />
                   </div>
                 </div>

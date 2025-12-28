@@ -60,7 +60,7 @@ export function RequireSession({ children }: RequireSessionProps) {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
         <p>Loading your workspace…</p>
       </div>
     );
@@ -68,11 +68,11 @@ export function RequireSession({ children }: RequireSessionProps) {
 
   if (isError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 text-center text-sm text-slate-500">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
         <p>We were unable to confirm your session.</p>
         <button
           onClick={() => refetch()}
-          className="focus-ring rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100"
+          className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 font-semibold text-muted-foreground hover:bg-muted"
         >
           Try again
         </button>
@@ -83,7 +83,7 @@ export function RequireSession({ children }: RequireSessionProps) {
   if (!session) {
     if (shouldCheckSetup && isSetupPending) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+        <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
           <p>Preparing initial setup…</p>
         </div>
       );
@@ -91,11 +91,11 @@ export function RequireSession({ children }: RequireSessionProps) {
 
     if (shouldCheckSetup && isSetupError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 text-center text-sm text-slate-500">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center text-sm text-muted-foreground">
           <p>We were unable to check whether ADE is ready.</p>
           <button
             onClick={() => refetchSetupStatus()}
-            className="focus-ring rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100"
+            className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 font-semibold text-muted-foreground hover:bg-muted"
           >
             Try again
           </button>

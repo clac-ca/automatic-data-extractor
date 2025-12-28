@@ -125,8 +125,8 @@ export function WorkspaceNav({
   return (
     <aside
       className={clsx(
-        "relative hidden min-h-0 flex-shrink-0 bg-white lg:flex",
-        "border-r border-slate-200",
+        "relative hidden min-h-0 flex-shrink-0 bg-card lg:flex",
+        "border-r border-border",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
       style={{ width: layoutWidth, height: navHeight, willChange: "width" }}
@@ -137,8 +137,8 @@ export function WorkspaceNav({
       {/* The panel is absolutely positioned so it can expand over the page without shifting layout when unpinned */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-white",
-          "border-r border-slate-300/80",
+          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-card",
+          "border-r border-border",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
           !isPinned && panelExpanded && "shadow-xl",
@@ -202,7 +202,7 @@ function WorkspaceNavPanel({
       </nav>
 
       {/* Footer */}
-      <div className={clsx("border-t border-slate-200", expanded ? "px-3 py-3" : "px-2 py-2")}>
+      <div className={clsx("border-t border-border", expanded ? "px-3 py-3" : "px-2 py-2")}>
         <div className={clsx("flex flex-col", expanded ? "gap-1.5" : "gap-2")}>
           {settingsItem ? <WorkspaceSettingsLink item={settingsItem} expanded={expanded} /> : null}
           <NavPinButton isPinned={isPinned} expanded={expanded} onToggle={onTogglePinned} />
@@ -232,7 +232,7 @@ export function WorkspaceNavList({
   return (
     <>
       {showHeading && expanded ? (
-        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-slate-400/90">
+        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-muted-foreground">
           Workspace
         </p>
       ) : null}
@@ -258,9 +258,9 @@ export function WorkspaceNavList({
                 clsx(
                   "group relative flex w-full items-center rounded-lg",
                   "transition-colors duration-150 motion-reduce:transition-none",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
                   expanded ? "px-3 py-2" : "justify-center px-2 py-2",
-                  isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100",
+                  isActive ? "bg-brand-500/10 text-brand-600" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )
               }
             >
@@ -270,13 +270,13 @@ export function WorkspaceNavList({
                     className={clsx(
                       "flex h-10 w-10 items-center justify-center rounded-xl",
                       "transition-colors duration-150 motion-reduce:transition-none",
-                      isActive ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 group-hover:bg-slate-200",
+                      isActive ? "bg-brand-500/15 text-brand-600" : "bg-muted text-muted-foreground group-hover:bg-muted/80",
                     )}
                   >
                     <item.icon
                       className={clsx(
                         "h-5 w-5 transition-colors duration-150",
-                        isActive ? "text-brand-600" : "text-slate-500",
+                        isActive ? "text-brand-600" : "text-muted-foreground",
                       )}
                       aria-hidden
                     />
@@ -322,9 +322,9 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
         clsx(
           "group relative flex w-full items-center rounded-lg",
           "transition-colors duration-150 motion-reduce:transition-none",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
           expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-          isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-800",
+          isActive ? "bg-brand-500/10 text-brand-600" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )
       }
     >
@@ -334,7 +334,7 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
             className={clsx(
               "flex h-10 w-10 items-center justify-center rounded-xl",
               "transition-colors duration-150 motion-reduce:transition-none",
-              isActive ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200",
+              isActive ? "bg-brand-500/15 text-brand-600" : "bg-muted text-muted-foreground group-hover:bg-muted/80",
             )}
             aria-hidden
           >
@@ -382,14 +382,14 @@ function NavPinButton({
       className={clsx(
         "group relative flex w-full items-center rounded-lg",
         "transition-colors duration-150 motion-reduce:transition-none",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
         expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-        "text-slate-600 hover:bg-slate-100 hover:text-slate-800",
+        "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       <span
         className={clsx(
-          "flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors duration-150 group-hover:bg-slate-200",
+          "flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors duration-150 group-hover:bg-muted/80",
         )}
         aria-hidden
       >
@@ -406,7 +406,7 @@ function NavPinButton({
         aria-hidden={!expanded}
       >
         {isPinned ? "Pinned" : "Pin sidebar"}
-        <span className="ml-2 text-[0.7rem] font-semibold text-slate-400">{shortcutHint}</span>
+        <span className="ml-2 text-[0.7rem] font-semibold text-muted-foreground">{shortcutHint}</span>
       </span>
 
       {!expanded ? <RailTooltip label={label} /> : null}
@@ -423,7 +423,7 @@ function RailTooltip({ label }: { readonly label: string }) {
     <span
       className={clsx(
         "pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap",
-        "rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-lg",
+        "rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-lg",
         "opacity-0 transition-opacity duration-150 motion-reduce:transition-none",
         "group-hover:opacity-100 group-focus-visible:opacity-100",
       )}

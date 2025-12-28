@@ -55,7 +55,7 @@ export function MappingBadge({
 
   if (isPendingOnly) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
         <ClockIcon className="h-3 w-3" />
         Mapping pending
       </span>

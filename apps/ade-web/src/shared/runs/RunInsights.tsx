@@ -18,51 +18,51 @@ export function RunSummaryView({ summary }: { summary: Partial<RunSummary> }) {
         <Metric label="Issues" value={totalIssues ?? "—"} intent={issuesIntent} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded border border-slate-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Fields</p>
-          {fields.length === 0 ? <p className="text-xs text-slate-500">No field mappings recorded.</p> : (
-            <ul className="mt-2 space-y-1 text-xs text-slate-700">
+        <div className="rounded border border-border bg-card px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fields</p>
+          {fields.length === 0 ? <p className="text-xs text-muted-foreground">No field mappings recorded.</p> : (
+            <ul className="mt-2 space-y-1 text-xs text-foreground">
               {topFields.map((field) => (
                 <li key={field.field} className="flex items-center justify-between gap-3">
-                  <span className="truncate font-semibold text-slate-800">
+                  <span className="truncate font-semibold text-foreground">
                     {field.label || field.field} {field.required ? "• required" : ""}
                   </span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-muted-foreground">
                     {field.mapped ? "mapped" : "unmapped"}
                     {typeof field.tables_mapped === "number" ? ` · ${field.tables_mapped} tables` : ""}
                   </span>
                 </li>
               ))}
               {fields.length > topFields.length ? (
-                <li className="text-[11px] text-slate-500">
+                <li className="text-[11px] text-muted-foreground">
                   +{fields.length - topFields.length} more fields
                 </li>
               ) : null}
             </ul>
           )}
         </div>
-        <div className="rounded border border-slate-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Columns</p>
+        <div className="rounded border border-border bg-card px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Columns</p>
           {columns.length === 0 ? (
-            <p className="text-xs text-slate-500">No column details recorded.</p>
+            <p className="text-xs text-muted-foreground">No column details recorded.</p>
           ) : (
-            <ul className="mt-2 space-y-1 text-xs text-slate-700">
+            <ul className="mt-2 space-y-1 text-xs text-foreground">
               {topColumns.map((column) => (
                 <li key={column.header_normalized} className="flex items-center justify-between gap-3">
-                  <span className="truncate font-semibold text-slate-800">{column.header}</span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="truncate font-semibold text-foreground">{column.header}</span>
+                  <span className="text-[11px] text-muted-foreground">
                     {column.mapped ? "mapped" : "unmapped"} · {column.occurrences?.tables_seen ?? "—"} tables
                   </span>
                 </li>
               ))}
               {columns.length > topColumns.length ? (
-                <li className="text-[11px] text-slate-500">
+                <li className="text-[11px] text-muted-foreground">
                   +{columns.length - topColumns.length} more headers
                 </li>
               ) : null}
             </ul>
           )}
-          <div className="mt-2 text-[11px] text-slate-600">
+          <div className="mt-2 text-[11px] text-muted-foreground">
             Distinct headers mapped: {counts?.columns?.distinct_headers_mapped ?? "—"} /{" "}
             {counts?.columns?.distinct_headers ?? "—"}
           </div>
@@ -74,7 +74,7 @@ export function RunSummaryView({ summary }: { summary: Partial<RunSummary> }) {
 
 export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
   if (!events.length) {
-    return <p className="text-xs text-slate-500">No telemetry events captured.</p>;
+    return <p className="text-xs text-muted-foreground">No telemetry events captured.</p>;
   }
 
   const levelCounts = events.reduce<Record<string, number>>((acc, event) => {
@@ -88,11 +88,11 @@ export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+      <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
         {Object.entries(levelCounts).map(([level, count]) => (
           <span
             key={level}
-            className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700"
+            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-semibold text-foreground"
           >
             {level}: {count}
           </span>
@@ -102,7 +102,7 @@ export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
         {recentEvents.map((event) => (
           <li
             key={`${event.timestamp}-${event.event}`}
-            className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-800"
+            className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
           >
             {(() => {
               const message = typeof event.message === "string" ? event.message.trim() : undefined;
@@ -110,11 +110,11 @@ export function TelemetrySummary({ events }: { events: RunStreamEvent[] }) {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{event.event}</span>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[11px] text-muted-foreground">
                       {formatTimestamp(event.timestamp ?? event.created_at ?? "unknown")}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600">
+                  <p className="text-[11px] text-muted-foreground">
                     {message ? message : `Level: ${levelFor(event)}`}
                   </p>
                 </>
@@ -157,10 +157,10 @@ function Metric({
   intent?: "default" | "warn" | "ok";
 }) {
   const color =
-    intent === "warn" ? "text-amber-700" : intent === "ok" ? "text-emerald-700" : "text-slate-700";
+    intent === "warn" ? "text-amber-700" : intent === "ok" ? "text-emerald-700" : "text-foreground";
   return (
-    <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="rounded border border-border bg-background px-2 py-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className={`text-sm font-semibold ${color}`}>{value}</p>
     </div>
   );

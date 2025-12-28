@@ -169,15 +169,15 @@ const STATUS_STYLES: Record<
   },
   queued: {
     label: "Queued",
-    pill: "border-slate-200 bg-slate-50 text-slate-600",
-    dot: "bg-slate-400",
-    text: "text-slate-600",
+    pill: "border-border bg-background text-muted-foreground",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
   },
   archived: {
     label: "Archived",
-    pill: "border-slate-200 bg-slate-100 text-slate-500",
-    dot: "bg-slate-400",
-    text: "text-slate-500",
+    pill: "border-border bg-muted text-muted-foreground",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
   },
 };
 
@@ -269,7 +269,7 @@ export function DocumentsV8Workbench() {
   const model = useDocumentsV8Model({ currentUserLabel, workspaceId: workspace.id });
 
   return (
-    <div className="documents-v8 flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <div className="documents-v8 flex min-h-screen flex-col bg-background text-foreground">
       <WorkbenchHeader
         search={model.state.search}
         onSearchChange={model.actions.setSearch}
@@ -291,7 +291,7 @@ export function DocumentsV8Workbench() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <section className="flex min-h-0 flex-1 flex-col border-r border-slate-200 bg-slate-50">
+        <section className="flex min-h-0 flex-1 flex-col border-r border-border bg-background">
           <WorkbenchFilters
             statusFilter={model.state.statusFilter}
             statusCounts={model.derived.statusCounts}
@@ -373,7 +373,7 @@ export function DocumentsV8Workbench() {
           </div>
         </section>
 
-        <aside className="flex min-h-0 w-full flex-col bg-white lg:w-[38%]">
+        <aside className="flex min-h-0 w-full flex-col bg-card lg:w-[38%]">
           <InspectorPanel
             document={model.derived.activeDocument}
             now={model.derived.now}
@@ -1428,15 +1428,15 @@ function WorkbenchHeader({
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="border-b border-border bg-card">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted text-foreground">
             <DocumentIcon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-slate-900">Documents</h1>
-            <p className="text-xs text-slate-500">Work items for normalization and delivery</p>
+            <h1 className="text-lg font-semibold text-foreground">Documents</h1>
+            <p className="text-xs text-muted-foreground">Work items for normalization and delivery</p>
           </div>
         </div>
 
@@ -1445,7 +1445,7 @@ function WorkbenchHeader({
             Search documents
           </label>
           <div className="relative w-full">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
               <SearchIcon className="h-4 w-4" />
             </span>
             <Input
@@ -1460,13 +1460,13 @@ function WorkbenchHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs shadow-sm">
+          <div className="flex items-center rounded-lg border border-border bg-background p-1 text-xs shadow-sm">
             <Button
               type="button"
               size="sm"
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("grid")}
-              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "grid" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "grid" ? "shadow-sm" : "text-muted-foreground")}
               aria-pressed={viewMode === "grid"}
               aria-label="Grid view"
             >
@@ -1478,7 +1478,7 @@ function WorkbenchHeader({
               size="sm"
               variant={viewMode === "board" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("board")}
-              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "board" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "board" ? "shadow-sm" : "text-muted-foreground")}
               aria-pressed={viewMode === "board"}
               aria-label="Board view"
             >
@@ -1565,11 +1565,11 @@ function WorkbenchFilters({
   totalVisible: number;
 }) {
   return (
-    <div className="border-b border-slate-200 bg-white px-6 py-4">
+    <div className="border-b border-border bg-card px-6 py-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Work queue</p>
-          <p className="text-sm font-semibold text-slate-900">{totalVisible} documents in view</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Work queue</p>
+          <p className="text-sm font-semibold text-foreground">{totalVisible} documents in view</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {STATUS_FILTERS.map((filter) => (
@@ -1581,12 +1581,12 @@ function WorkbenchFilters({
                 "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition",
                 statusFilter === filter.id
                   ? "border-brand-300 bg-brand-50 text-brand-700"
-                  : "border-transparent bg-slate-100 text-slate-500 hover:text-slate-800",
+                  : "border-transparent bg-muted text-muted-foreground hover:text-foreground",
               )}
               aria-pressed={statusFilter === filter.id}
             >
               {filter.label}
-              <span className="text-[11px] text-slate-500">{numberFormatter.format(statusCounts[filter.id])}</span>
+              <span className="text-[11px] text-muted-foreground">{numberFormatter.format(statusCounts[filter.id])}</span>
             </button>
           ))}
         </div>
@@ -1594,7 +1594,7 @@ function WorkbenchFilters({
 
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500">Uploader</span>
+          <span className="text-xs font-semibold text-muted-foreground">Uploader</span>
           <Select value={ownerFilter} onChange={(event) => onOwnerChange(event.target.value)} className="w-40 text-xs">
             <option value={OWNER_FILTER_ALL}>All uploaders</option>
             {ownerOptions.map((owner) => (
@@ -1607,9 +1607,9 @@ function WorkbenchFilters({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500">Tags</span>
+          <span className="text-xs font-semibold text-muted-foreground">Tags</span>
           {tagOptions.length === 0 ? (
-            <span className="text-xs text-slate-400">No tags yet</span>
+            <span className="text-xs text-muted-foreground">No tags yet</span>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               {tagOptions.map((tag) => {
@@ -1623,7 +1623,7 @@ function WorkbenchFilters({
                       "rounded-full border px-3 py-1 text-xs font-semibold transition",
                       isSelected
                         ? "border-brand-300 bg-brand-50 text-brand-700"
-                        : "border-transparent bg-slate-100 text-slate-500 hover:text-slate-800",
+                        : "border-transparent bg-muted text-muted-foreground hover:text-foreground",
                     )}
                     aria-pressed={isSelected}
                   >
@@ -1661,10 +1661,10 @@ function WorkbenchBulkBar({
   onArchive: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/80 px-6 py-3 text-xs">
-      <div className="flex items-center gap-2 font-semibold text-slate-900">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/80 px-6 py-3 text-xs">
+      <div className="flex items-center gap-2 font-semibold text-foreground">
         <span>{selectedCount} selected</span>
-        <button type="button" onClick={onClear} className="text-slate-500">
+        <button type="button" onClick={onClear} className="text-muted-foreground">
           Clear
         </button>
       </div>
@@ -1754,14 +1754,14 @@ function DocumentsGrid({
       aria-label="Document list drop zone"
     >
       {isDragging ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-          <div className="rounded-2xl border border-dashed border-brand-400 bg-white px-6 py-4 text-sm font-semibold text-brand-700 shadow-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-sm">
+          <div className="rounded-2xl border border-dashed border-brand-400 bg-card px-6 py-4 text-sm font-semibold text-brand-700 shadow-sm">
             Drop files to upload into this workspace
           </div>
         </div>
       ) : null}
 
-      <div className="hidden border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400 md:grid md:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.6fr)]">
+      <div className="hidden border-b border-border bg-card px-6 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground md:grid md:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.6fr)]">
         <div>
           <input
             type="checkbox"
@@ -1822,8 +1822,8 @@ function DocumentsGrid({
                     }
                   }}
                   className={clsx(
-                    "group flex flex-col gap-3 rounded-2xl border bg-white px-4 py-3 shadow-sm transition md:grid md:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center",
-                    activeId === doc.id ? "border-brand-400" : "border-slate-200 hover:border-brand-300",
+                    "group flex flex-col gap-3 rounded-2xl border bg-card px-4 py-3 shadow-sm transition md:grid md:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center",
+                    activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
                   )}
                 >
                   <div className="flex items-center">
@@ -1842,31 +1842,31 @@ function DocumentsGrid({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
-                      <DocumentIcon className="h-4 w-4 text-slate-500" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background">
+                      <DocumentIcon className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
-                      <p className="text-xs text-slate-500">Uploaded {formatRelativeTime(now, doc.createdAt)}</p>
+                      <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
+                      <p className="text-xs text-muted-foreground">Uploaded {formatRelativeTime(now, doc.createdAt)}</p>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <StatusPill status={doc.status} />
                     {doc.status === "processing" && doc.progress !== undefined ? (
-                      <span className="text-[11px] text-slate-500">
+                      <span className="text-[11px] text-muted-foreground">
                         {doc.progress ?? 0}% - {doc.stage ?? "Processing"}
                       </span>
                     ) : null}
                     {doc.status === "processing" && doc.progress === undefined && doc.stage ? (
-                      <span className="text-[11px] text-slate-500">{doc.stage}</span>
+                      <span className="text-[11px] text-muted-foreground">{doc.stage}</span>
                     ) : null}
                     <MappingBadge mapping={doc.mapping} />
                   </div>
 
-                  <div className="text-xs font-semibold text-slate-500">{doc.owner ?? "Unassigned"}</div>
+                  <div className="text-xs font-semibold text-muted-foreground">{doc.owner ?? "Unassigned"}</div>
 
-                  <div className="flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     {doc.tags.length === 0 ? (
                       <span className="text-[11px]">No tags</span>
                     ) : (
@@ -1874,19 +1874,19 @@ function DocumentsGrid({
                         {doc.tags.slice(0, 2).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold"
+                            className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold"
                           >
                             {tag}
                           </span>
                         ))}
                         {doc.tags.length > 2 ? (
-                          <span className="text-[11px] text-slate-400">+{doc.tags.length - 2}</span>
+                          <span className="text-[11px] text-muted-foreground">+{doc.tags.length - 2}</span>
                         ) : null}
                       </>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-slate-500 md:justify-end">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground md:justify-end">
                     <span>{formatRelativeTime(now, doc.updatedAt)}</span>
                     <div className="flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
                       <Button
@@ -1991,10 +1991,10 @@ function DocumentsBoard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-3 text-xs">
-        <div className="flex items-center gap-2 font-semibold text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-6 py-3 text-xs">
+        <div className="flex items-center gap-2 font-semibold text-muted-foreground">
           <span>Group by</span>
-          <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 px-1 py-1">
+          <div className="flex items-center rounded-full border border-border bg-background px-1 py-1">
             {BOARD_GROUPS.map((group) => (
               <button
                 key={group.id}
@@ -2002,7 +2002,7 @@ function DocumentsBoard({
                 onClick={() => onGroupByChange(group.id)}
                 className={clsx(
                   "rounded-full px-3 py-1 text-xs font-semibold transition",
-                  groupBy === group.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                  groupBy === group.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-pressed={groupBy === group.id}
               >
@@ -2011,12 +2011,12 @@ function DocumentsBoard({
             ))}
           </div>
         </div>
-        <span className="text-slate-500">{helperText}</span>
+        <span className="text-muted-foreground">{helperText}</span>
       </div>
 
       <div className="flex-1 overflow-x-auto px-6 py-4">
         {showLoading ? (
-          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+          <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border bg-card text-sm text-muted-foreground">
             Loading board columns...
           </div>
         ) : showError ? (
@@ -2037,15 +2037,15 @@ function DocumentsBoard({
                         aria-hidden
                       />
                     ) : groupBy === "owner" ? (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-700">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
                         {column.label === "Unassigned" ? "?" : getInitials(column.label)}
                       </span>
                     ) : (
-                      <TagIcon className="h-4 w-4 text-slate-400" />
+                      <TagIcon className="h-4 w-4 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{column.label}</p>
-                      <p className="text-xs text-slate-500">{column.items.length} items</p>
+                      <p className="text-sm font-semibold text-foreground">{column.label}</p>
+                      <p className="text-xs text-muted-foreground">{column.items.length} items</p>
                     </div>
                   </div>
                   <Button
@@ -2063,7 +2063,7 @@ function DocumentsBoard({
                 <div
                   className={clsx(
                     "flex min-h-[12rem] flex-1 flex-col gap-3 rounded-2xl border border-dashed px-3 py-3 transition",
-                    activeDropColumn === column.id ? "border-brand-400 bg-brand-50" : "border-slate-200 bg-white",
+                    activeDropColumn === column.id ? "border-brand-400 bg-brand-50" : "border-border bg-card",
                   )}
                   onDragOver={(event) => onDragOverColumn(column.id, event)}
                   onDragLeave={onDragLeaveColumn}
@@ -2071,7 +2071,7 @@ function DocumentsBoard({
                   aria-label={`Board column ${column.label}`}
                 >
                   {column.items.length === 0 ? (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-xs text-slate-400">
+                    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                       <p>No items yet</p>
                       <p>Drop files here to upload</p>
                     </div>
@@ -2092,8 +2092,8 @@ function DocumentsBoard({
                           }}
                           onClick={() => onActivate(doc.id)}
                           className={clsx(
-                            "flex flex-col gap-3 rounded-2xl border bg-white px-3 py-3 shadow-sm transition",
-                            activeId === doc.id ? "border-brand-400" : "border-slate-200 hover:border-brand-300",
+                            "flex flex-col gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm transition",
+                            activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
                             !isDraggable && "cursor-default",
                           )}
                           role="button"
@@ -2102,15 +2102,15 @@ function DocumentsBoard({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-slate-900">{doc.name}</p>
-                              <p className="text-xs text-slate-500">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
+                              <p className="text-sm font-semibold text-foreground">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
                             </div>
                             <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_STYLES[doc.status].dot)} aria-hidden />
                           </div>
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                             <span className="font-semibold">{doc.owner ?? "Unassigned"}</span>
                             {doc.tags.length > 0 ? (
-                              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5">
                                 {doc.tags[0]}
                                 {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
                               </span>
@@ -2133,7 +2133,7 @@ function DocumentsBoard({
       </div>
 
       {hasNextPage ? (
-        <div className="flex justify-center border-t border-slate-200 bg-white px-6 py-3">
+        <div className="flex justify-center border-t border-border bg-card px-6 py-3">
           <Button
             type="button"
             size="sm"
@@ -2197,13 +2197,13 @@ function InspectorPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Preview</p>
-          <h2 className="truncate text-lg font-semibold text-slate-900">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Preview</p>
+          <h2 className="truncate text-lg font-semibold text-foreground">
             {document ? document.name : "Select a document"}
           </h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {document ? (
               <>
                 <StatusPill status={document.status} />
@@ -2251,30 +2251,30 @@ function InspectorPanel({
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
         {!document ? (
-          <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
-            <p className="text-sm font-semibold text-slate-900">Preview is ready when you are.</p>
+          <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background px-6 text-center text-sm text-muted-foreground">
+            <p className="text-sm font-semibold text-foreground">Preview is ready when you are.</p>
             <p>Select a document from the left to inspect its processed output.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-6">
-            <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+            <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Summary</h3>
-                <span className="text-xs text-slate-500">Updated {formatRelativeTime(now, document.updatedAt)}</span>
+                <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Summary</h3>
+                <span className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, document.updatedAt)}</span>
               </div>
               <dl className="mt-4 grid gap-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-500">Uploader</dt>
-                  <dd className="font-semibold text-slate-900">{document.owner ?? "Unassigned"}</dd>
+                  <dt className="text-muted-foreground">Uploader</dt>
+                  <dd className="font-semibold text-foreground">{document.owner ?? "Unassigned"}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-500">Tags</dt>
+                  <dt className="text-muted-foreground">Tags</dt>
                   <dd className="flex flex-wrap items-center justify-end gap-2 text-xs">
                     {document.tags.length === 0 ? (
-                      <span className="text-slate-500">No tags</span>
+                      <span className="text-muted-foreground">No tags</span>
                     ) : (
                       document.tags.map((tag) => (
-                        <span key={tag} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold">
+                        <span key={tag} className="rounded-full border border-border bg-background px-2 py-0.5 font-semibold">
                           {tag}
                         </span>
                       ))
@@ -2282,31 +2282,31 @@ function InspectorPanel({
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-slate-500">Mapping health</dt>
-                  <dd className="text-right text-xs font-semibold text-slate-900">
+                  <dt className="text-muted-foreground">Mapping health</dt>
+                  <dd className="text-right text-xs font-semibold text-foreground">
                     {getMappingHealthLabel(document.mapping)}
                   </dd>
                 </div>
                 {document.status === "processing" && document.progress !== undefined ? (
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-slate-500">Progress</dt>
-                    <dd className="text-xs font-semibold text-slate-900">
+                    <dt className="text-muted-foreground">Progress</dt>
+                    <dd className="text-xs font-semibold text-foreground">
                       {document.progress ?? 0}% - {document.stage ?? "Processing"}
                     </dd>
                   </div>
                 ) : null}
                 {document.status === "processing" && document.progress === undefined && document.stage ? (
                   <div className="flex items-center justify-between gap-3">
-                    <dt className="text-slate-500">Stage</dt>
-                    <dd className="text-xs font-semibold text-slate-900">{document.stage}</dd>
+                    <dt className="text-muted-foreground">Stage</dt>
+                    <dd className="text-xs font-semibold text-foreground">{document.stage}</dd>
                   </div>
                 ) : null}
               </dl>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+            <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Processed output</h3>
+                <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Processed output</h3>
                 <Button
                   type="button"
                   size="sm"
@@ -2322,33 +2322,33 @@ function InspectorPanel({
               </div>
 
               {document.status === "ready" ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-900">{outputFilename}</span>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{outputFilename}</span>
                   {outputSummary ? <span>{outputSummary}</span> : null}
                 </div>
               ) : null}
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50">
+              <div className="mt-4 rounded-2xl border border-border bg-background">
                 {document.status === "ready" ? (
                   !outputUrl ? (
-                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-                      <p className="font-semibold text-slate-900">Output link unavailable</p>
+                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+                      <p className="font-semibold text-foreground">Output link unavailable</p>
                       <p>We could not load the processed output link yet. Try again in a moment.</p>
                     </div>
                   ) : workbookLoading ? (
-                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-                      <p className="font-semibold text-slate-900">Loading preview</p>
+                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+                      <p className="font-semibold text-foreground">Loading preview</p>
                       <p>Fetching the processed workbook for review.</p>
                     </div>
                   ) : workbookError ? (
-                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-                      <p className="font-semibold text-slate-900">Preview unavailable</p>
+                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+                      <p className="font-semibold text-foreground">Preview unavailable</p>
                       <p>The XLSX is ready to download, but we could not render the preview.</p>
                     </div>
                   ) : activeSheet ? (
                     <div>
                       <TabsRoot value={selectedSheetId} onValueChange={onSheetChange}>
-                        <TabsList className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
+                        <TabsList className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
                           {sheets.map((sheet) => (
                             <TabsTrigger
                               key={sheet.name}
@@ -2356,8 +2356,8 @@ function InspectorPanel({
                               className={clsx(
                                 "rounded-full px-3 py-1 font-semibold transition",
                                 selectedSheetId === sheet.name
-                                  ? "bg-white text-slate-900 shadow-sm"
-                                  : "text-slate-500 hover:text-slate-800",
+                                  ? "bg-card text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
                               )}
                             >
                               {sheet.name}
@@ -2371,20 +2371,20 @@ function InspectorPanel({
                         ))}
                       </TabsRoot>
                       {(activeSheet.truncatedRows || activeSheet.truncatedColumns) && (
-                        <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-500">
+                        <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
                           Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows and{" "}
                           {Math.min(activeSheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-                      <p className="font-semibold text-slate-900">Preview unavailable for this output</p>
+                    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+                      <p className="font-semibold text-foreground">Preview unavailable for this output</p>
                       <p>The processed XLSX is ready to download, but we cannot render a preview here.</p>
                     </div>
                   )
                 ) : document.status === "failed" ? (
-                  <div className="flex flex-col gap-3 px-4 py-6 text-sm text-slate-500">
+                  <div className="flex flex-col gap-3 px-4 py-6 text-sm text-muted-foreground">
                     <p className="font-semibold text-rose-600">{document.error?.summary ?? "Processing failed"}</p>
                     <p>{document.error?.detail ?? "We could not complete normalization for this file."}</p>
                     <div className="flex flex-wrap gap-2">
@@ -2395,16 +2395,16 @@ function InspectorPanel({
                         Fix mapping (soon)
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500">{document.error?.nextStep ?? "Retry now or fix mapping later."}</p>
+                    <p className="text-xs text-muted-foreground">{document.error?.nextStep ?? "Retry now or fix mapping later."}</p>
                   </div>
                 ) : document.status === "archived" ? (
-                  <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-                    <p className="font-semibold text-slate-900">Archived</p>
+                  <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground">Archived</p>
                     <p>This document is archived and no longer in the active workflow.</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3 px-4 py-6 text-sm text-slate-500">
-                    <p className="font-semibold text-slate-900">
+                  <div className="flex flex-col gap-3 px-4 py-6 text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground">
                       {isUploading
                         ? "Uploading to workspace"
                         : document.status === "processing"
@@ -2415,7 +2415,7 @@ function InspectorPanel({
                       {document.stage ?? (isUploading ? "Uploading file" : "Preparing normalized output")}
                     </p>
                     {document.progress !== undefined ? (
-                      <div className="h-2 overflow-hidden rounded-full bg-white">
+                      <div className="h-2 overflow-hidden rounded-full bg-card">
                         <div
                           className="h-full bg-gradient-to-r from-brand-200 via-brand-500 to-brand-200"
                           style={{ width: `${document.progress}%` }}
@@ -2427,9 +2427,9 @@ function InspectorPanel({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-              <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">History</h3>
-              <div className="mt-4 flex flex-col gap-3 text-xs text-slate-500">
+            <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+              <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">History</h3>
+              <div className="mt-4 flex flex-col gap-3 text-xs text-muted-foreground">
                 {document.history.length > 0 ? (
                   document.history.map((event) => (
                     <div key={event.id} className="flex items-start gap-3">
@@ -2442,11 +2442,11 @@ function InspectorPanel({
                               ? "bg-amber-500"
                               : event.tone === "danger"
                                 ? "bg-rose-500"
-                                : "bg-slate-400",
+                                : "bg-muted-foreground",
                         )}
                       />
                       <div className="flex flex-1 items-center justify-between gap-3">
-                        <span className="font-semibold text-slate-900">{event.label}</span>
+                        <span className="font-semibold text-foreground">{event.label}</span>
                         <span>{formatTime(event.at)}</span>
                       </div>
                     </div>
@@ -2454,7 +2454,7 @@ function InspectorPanel({
                 ) : (
                   <p>No recent activity yet.</p>
                 )}
-                {runLoading ? <p className="text-[11px] text-slate-400">Refreshing run status…</p> : null}
+                {runLoading ? <p className="text-[11px] text-muted-foreground">Refreshing run status…</p> : null}
               </div>
             </section>
           </div>
@@ -2474,9 +2474,9 @@ function EmptyState({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white px-8 py-12 text-center">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="text-sm text-slate-500">{description}</p>
+    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-card px-8 py-12 text-center">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="text-sm text-muted-foreground">{description}</p>
       {action ? (
         <Button type="button" onClick={action.onClick} size="sm" className="text-xs">
           {action.label}
@@ -2499,7 +2499,7 @@ function StatusPill({ status }: { status: DocumentStatus }) {
 function MappingBadge({ mapping }: { mapping: MappingHealth }) {
   if (mapping.pending && mapping.attention === 0 && mapping.unmapped === 0) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
         <AlertIcon className="h-3 w-3" />
         Mapping pending
       </span>
@@ -2519,7 +2519,7 @@ function MappingBadge({ mapping }: { mapping: MappingHealth }) {
 function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
   return (
     <table className="min-w-full text-left text-xs">
-      <thead className="sticky top-0 bg-slate-100 text-slate-500">
+      <thead className="sticky top-0 bg-muted text-muted-foreground">
         <tr>
           {sheet.headers.map((column, index) => (
             <th key={`${column}-${index}`} className="px-3 py-2 font-semibold uppercase tracking-wide">
@@ -2530,9 +2530,9 @@ function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
       </thead>
       <tbody>
         {sheet.rows.map((row, rowIndex) => (
-          <tr key={`${sheet.name}-${rowIndex}`} className="border-t border-slate-200">
+          <tr key={`${sheet.name}-${rowIndex}`} className="border-t border-border">
             {row.map((cell, cellIndex) => (
-              <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-slate-900">
+              <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-foreground">
                 {cell}
               </td>
             ))}

@@ -83,14 +83,14 @@ export function GeneralSettingsPage() {
       {feedback ? <Alert tone={feedback.tone}>{feedback.message}</Alert> : null}
 
       <form
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"
+        className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft"
         onSubmit={submit}
         noValidate
       >
         <div className="space-y-6 p-6">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-slate-900">Workspace identity</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg font-semibold text-foreground">Workspace identity</h3>
+            <p className="text-sm text-muted-foreground">
               Update the name and slug. Changes apply immediately across navigation and shared links.
             </p>
           </div>
@@ -141,11 +141,11 @@ export function GeneralSettingsPage() {
         </SaveBar>
       </form>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-slate-900">Default workspace</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg font-semibold text-foreground">Default workspace</h3>
+            <p className="text-sm text-muted-foreground">
               Choose the workspace you land on first after signing in. This only affects your account.
             </p>
           </div>
@@ -169,7 +169,7 @@ export function GeneralSettingsPage() {
             {isDefault ? "Default workspace" : "Make default"}
           </Button>
         </div>
-        <p className="mt-3 text-sm text-slate-600">
+        <p className="mt-3 text-sm text-muted-foreground">
           {isDefault
             ? "This workspace is already your default."
             : "You can switch the default workspace at any time."}

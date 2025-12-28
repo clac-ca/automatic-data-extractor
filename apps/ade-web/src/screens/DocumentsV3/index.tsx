@@ -55,7 +55,7 @@ const THEME_STYLE = {
   "--v3-accent-soft": "#d6efe7",
   "--v3-warning": "#d97706",
   "--v3-danger": "#b42318",
-  "--v3-shadow": "0 32px 80px -60px rgba(15, 23, 42, 0.65)",
+  "--v3-shadow": "0 32px 80px -60px rgb(var(--color-shadow) / 0.65)",
   background: "radial-gradient(120% 120% at 5% 0%, #fff4e3 0%, #f5f1ea 45%, #efe9e0 100%)",
 } as CSSProperties;
 
@@ -96,11 +96,11 @@ const STATUS_STYLES: Record<
   },
   uploaded: {
     label: "Queued",
-    pill: "border-slate-200 bg-slate-50 text-slate-600",
-    stripe: "bg-slate-400",
-    icon: "text-slate-500",
-    badge: "bg-slate-50/80 border-slate-200",
-    text: "text-slate-600",
+    pill: "border-border bg-background text-muted-foreground",
+    stripe: "bg-muted-foreground",
+    icon: "text-muted-foreground",
+    badge: "bg-background/80 border-border",
+    text: "text-muted-foreground",
   },
 };
 
@@ -438,7 +438,7 @@ export function DocumentsV3Content() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-full border border-[color:var(--v3-line)] bg-white/80 px-4 py-2 text-sm shadow-sm">
+            <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-full border border-[color:var(--v3-line)] bg-card/80 px-4 py-2 text-sm shadow-sm">
               <SearchIcon className="h-4 w-4 text-[color:var(--v3-muted)]" />
               <input
                 type="text"
@@ -473,7 +473,7 @@ export function DocumentsV3Content() {
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-[color:var(--v3-muted)] transition hover:border-[color:var(--v3-line)] hover:bg-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--v3-accent)]"
+                  className="rounded-full border border-transparent px-3 py-1 text-xs font-semibold text-[color:var(--v3-muted)] transition hover:border-[color:var(--v3-line)] hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--v3-accent)]"
                 >
                   Reset
                 </button>
@@ -484,7 +484,7 @@ export function DocumentsV3Content() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 text-xs text-[color:var(--v3-muted)]">
               <StatusRhythm documents={DOCUMENTS} />
-              <span className="rounded-full border border-[color:var(--v3-line)] bg-white/70 px-3 py-1">
+              <span className="rounded-full border border-[color:var(--v3-line)] bg-card/70 px-3 py-1">
                 System mood: {systemMood}
               </span>
               <span>{systemMessage}</span>
@@ -567,7 +567,7 @@ function DocumentRow({ doc, index, expanded, selected, onToggleExpand, onToggleS
 
   return (
     <article
-      className="docs-v3-animate relative overflow-hidden rounded-2xl border border-[color:var(--v3-line)] bg-white/80"
+      className="docs-v3-animate relative overflow-hidden rounded-2xl border border-[color:var(--v3-line)] bg-card/80"
       style={{ "--delay": `${180 + index * 70}ms` } as CSSProperties}
     >
       <span className={clsx("absolute left-0 top-0 h-full w-1.5", statusStyle.stripe)} aria-hidden />
@@ -604,7 +604,7 @@ function DocumentRow({ doc, index, expanded, selected, onToggleExpand, onToggleS
                   {doc.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-[color:var(--v3-line)] bg-white/70 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]"
+                      className="rounded-full border border-[color:var(--v3-line)] bg-card/70 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]"
                     >
                       {tag}
                     </span>
@@ -625,7 +625,7 @@ function DocumentRow({ doc, index, expanded, selected, onToggleExpand, onToggleS
             <button
               type="button"
               onClick={onToggleExpand}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--v3-line)] bg-white/80 text-[color:var(--v3-muted)] transition hover:bg-[color:var(--v3-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--v3-accent)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--v3-line)] bg-card/80 text-[color:var(--v3-muted)] transition hover:bg-[color:var(--v3-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--v3-accent)]"
               aria-label={expanded ? `Collapse ${doc.name}` : `Expand ${doc.name}`}
               aria-expanded={expanded}
             >
@@ -680,7 +680,7 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
 
     return (
       <div id={panelId} className="mt-4 space-y-4">
-        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-white/90 p-4">
+        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-card/90 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]">
@@ -729,7 +729,7 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <div className="rounded-2xl border border-[color:var(--v3-line)] bg-white/80 p-4">
+          <div className="rounded-2xl border border-[color:var(--v3-line)] bg-card/80 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]">Run notes</p>
             <div className="mt-3 grid gap-2 text-xs text-[color:var(--v3-muted)]">
               <div className="flex items-center justify-between">
@@ -766,7 +766,7 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
   if (doc.status === "processing") {
     return (
       <div id={panelId} className="mt-4 space-y-4">
-        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-white/90 p-4">
+        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-card/90 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]">
@@ -828,7 +828,7 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
             </ActionButton>
           </div>
         </div>
-        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-white/80 p-4">
+        <div className="rounded-2xl border border-[color:var(--v3-line)] bg-card/80 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]">
             Last attempt
           </p>
@@ -847,7 +847,7 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
   }
 
   return (
-    <div id={panelId} className="mt-4 rounded-2xl border border-[color:var(--v3-line)] bg-white/80 p-4">
+    <div id={panelId} className="mt-4 rounded-2xl border border-[color:var(--v3-line)] bg-card/80 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--v3-muted)]">Queued</p>
       <h3 className="mt-2 text-lg font-semibold text-[color:var(--v3-ink)]">Waiting for a processing slot</h3>
       <p className="text-sm text-[color:var(--v3-muted)]">
@@ -866,13 +866,13 @@ function DocumentExpanded({ doc, panelId }: { readonly doc: DocumentEntry; reado
 
 function PreviewTable({ output }: { readonly output: DocumentOutput }) {
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-[color:var(--v3-line)] bg-white">
+    <div className="mt-4 overflow-hidden rounded-xl border border-[color:var(--v3-line)] bg-card">
       <div className="flex items-center justify-between border-b border-[color:var(--v3-line)] bg-[color:var(--v3-surface-muted)] px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-[color:var(--v3-muted)]">
         <span>Preview</span>
         {output.note ? <span>{output.note}</span> : null}
       </div>
       <table className="w-full text-left text-xs">
-        <thead className="bg-white">
+        <thead className="bg-card">
           <tr>
             {output.columnsPreview.map((column) => (
               <th
@@ -946,14 +946,14 @@ function FilterChip({ label, count, status, active, onClick }: FilterChipProps) 
       className={clsx(
         "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--v3-accent)]",
         active
-          ? clsx("border-transparent bg-white/90 shadow-sm", style.text)
-          : "border-[color:var(--v3-line)] bg-white/70 text-[color:var(--v3-muted)]",
+          ? clsx("border-transparent bg-card/90 shadow-sm", style.text)
+          : "border-[color:var(--v3-line)] bg-card/70 text-[color:var(--v3-muted)]",
       )}
       aria-pressed={active}
     >
       <span className={clsx("h-2 w-2 rounded-full", style.stripe)} aria-hidden />
       {label}
-      <span className="rounded-full bg-white px-2 py-0.5 text-[0.6rem] font-semibold text-[color:var(--v3-muted)]">
+      <span className="rounded-full bg-card px-2 py-0.5 text-[0.6rem] font-semibold text-[color:var(--v3-muted)]">
         {count}
       </span>
     </button>
@@ -1012,7 +1012,7 @@ function SystemPulseCard({ processing, failed }: { readonly processing: number; 
 
 function EmptyState({ onReset }: { readonly onReset?: () => void }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[color:var(--v3-line)] bg-white/70 px-6 py-10 text-center">
+    <div className="rounded-2xl border border-dashed border-[color:var(--v3-line)] bg-card/70 px-6 py-10 text-center">
       <p className="text-lg font-semibold text-[color:var(--v3-ink)]">No documents in view</p>
       <p className="mt-2 text-sm text-[color:var(--v3-muted)]">
         Try clearing filters or upload a new file to start the flow.

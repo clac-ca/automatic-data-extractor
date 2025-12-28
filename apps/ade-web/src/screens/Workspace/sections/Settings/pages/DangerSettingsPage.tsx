@@ -43,11 +43,11 @@ export function DangerSettingsPage() {
         description="Delete this workspace when it is no longer needed."
       />
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-slate-900">Delete workspace</h3>
-            <p className="text-sm text-slate-600">
+            <h3 className="text-lg font-semibold text-foreground">Delete workspace</h3>
+            <p className="text-sm text-muted-foreground">
               Permanently remove this workspace and all associated data. This action cannot be undone.
             </p>
           </div>
@@ -113,7 +113,7 @@ export function DangerSettingsPage() {
             disabled={deleteWorkspaceMutation.isPending}
           />
         </FormField>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
             Enter <strong>{workspace.slug}</strong> to confirm deletion.
           </p>
       </ConfirmDialog>

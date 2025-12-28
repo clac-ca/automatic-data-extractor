@@ -15,7 +15,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     <Suspense
       fallback={
         <div className={clsx("relative h-full w-full", className)}>
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Loading editor…
           </div>
         </div>

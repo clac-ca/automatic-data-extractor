@@ -36,7 +36,7 @@ export function EditorPane({
 
   if (!activeTab) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a file from the explorer to begin editing.
       </div>
     );
@@ -47,11 +47,11 @@ export function EditorPane({
       {tabs.map((tab) => (
         <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 min-w-0 flex-1">
           {tab.status === "loading" ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               Loading {tab.name}…
             </div>
           ) : tab.status === "error" ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
               <p>{tab.error ?? "Unable to load the file."}</p>
               <button
                 type="button"

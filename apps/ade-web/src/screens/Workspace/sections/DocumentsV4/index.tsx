@@ -69,7 +69,7 @@ const V4_THEME_STYLE = {
   "--v4-warning": "#c4752a",
   "--v4-success": "#1f7a54",
   "--v4-danger": "#b42318",
-  "--v4-shadow": "0 30px 70px -55px rgba(15, 23, 42, 0.65)",
+  "--v4-shadow": "0 30px 70px -55px rgb(var(--color-shadow) / 0.65)",
   background: "radial-gradient(120% 120% at 5% 0%, #fef6e7 0%, #eef2f7 45%, #e8edf3 100%)",
 } as CSSProperties;
 
@@ -1426,7 +1426,7 @@ function MobileDetailOverlay({ children, onClose }: { readonly children: ReactNo
   return (
     <div className="fixed inset-0 z-50 flex lg:hidden" role="dialog" aria-modal="true">
       <button type="button" className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Close detail panel" />
-      <div className="relative ml-auto flex h-full w-[min(26rem,100%)] max-w-md flex-col border-l border-[color:var(--v4-line)] bg-[color:var(--v4-surface)] shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
+      <div className="relative ml-auto flex h-full w-[min(26rem,100%)] max-w-md flex-col border-l border-[color:var(--v4-line)] bg-[color:var(--v4-surface)] shadow-[0_45px_90px_-50px_rgb(var(--color-shadow)/0.85)]">
         {children}
       </div>
     </div>
@@ -1751,7 +1751,7 @@ function statusPillClass(status: DocumentStatus) {
     case "uploaded":
       return "bg-amber-100 text-amber-700";
     default:
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
   }
 }
 
@@ -1764,9 +1764,9 @@ function runStatusPillClass(status: RunStatus) {
     case "running":
       return "bg-sky-100 text-sky-700";
     case "queued":
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
     default:
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
   }
 }
 

@@ -39,15 +39,14 @@ export function BottomPanel({
   const theme =
     appearance === "dark"
       ? {
-          surface: "border-[#1f2431] bg-[#0f111a] text-slate-100",
-          header: "border-[#1f2431] bg-[#0f111a]",
-          hideButton:
-            "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
+          surface: "border-border bg-card text-foreground",
+          header: "border-border bg-card",
+          hideButton: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
         }
       : {
-          surface: "border-slate-200 bg-slate-50 text-slate-800",
-          header: "border-slate-200 bg-slate-50",
-          hideButton: "border-slate-300 bg-white text-slate-700 hover:border-slate-400",
+          surface: "border-border bg-muted text-foreground",
+          header: "border-border bg-muted",
+          hideButton: "border-border-strong bg-card text-foreground hover:border-border-strong hover:bg-muted",
         };
 
   return (

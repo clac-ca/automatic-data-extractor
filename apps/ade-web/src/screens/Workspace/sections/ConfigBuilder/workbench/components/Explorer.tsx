@@ -40,49 +40,31 @@ interface ExplorerThemeTokens {
   readonly chevronActive: string;
 }
 
-const EXPLORER_THEME_TOKENS: Record<ExplorerTheme, ExplorerThemeTokens> = {
-  dark: {
-    surface: "#1e1e1e",
-    border: "#252526",
-    heading: "#cccccc",
-    label: "#999999",
-    textPrimary: "#f3f3f3",
-    textMuted: "#c5c5c5",
-    rowHover: "#2a2d2e",
-    folderActiveBg: "transparent",
-    selectionBg: "#2f3136",
-    selectionText: "#f8f8f8",
-    badgeActive: "#4fc1ff",
-    badgeOpen: "#858585",
-    folderIcon: "#c8ae7d",
-    folderIconActive: "#e0c08e",
-    chevronIdle: "#7a7a7a",
-    chevronActive: "#d4d4d4",
-  },
-  light: {
-    surface: "#f3f3f3",
-    border: "#d4d4d4",
-    heading: "#616161",
-    label: "#8a8a8a",
-    textPrimary: "#1e1e1e",
-    textMuted: "#555555",
-    rowHover: "#e8e8e8",
-    folderActiveBg: "transparent",
-    selectionBg: "#dcdcdc",
-    selectionText: "#0f172a",
-    badgeActive: "#0e639c",
-    badgeOpen: "#6b6b6b",
-    folderIcon: "#c0933a",
-    folderIconActive: "#a67c32",
-    chevronIdle: "#7a7a7a",
-    chevronActive: "#3c3c3c",
-  },
+const EXPLORER_TOKENS: ExplorerThemeTokens = {
+  surface: "rgb(var(--color-card))",
+  border: "rgb(var(--color-border))",
+  heading: "rgb(var(--color-foreground))",
+  label: "rgb(var(--color-muted-foreground))",
+  textPrimary: "rgb(var(--color-foreground))",
+  textMuted: "rgb(var(--color-muted-foreground))",
+  rowHover: "rgb(var(--color-muted))",
+  folderActiveBg: "transparent",
+  selectionBg: "rgb(var(--color-muted))",
+  selectionText: "rgb(var(--color-foreground))",
+  badgeActive: "rgb(var(--color-ring))",
+  badgeOpen: "rgb(var(--color-muted-foreground))",
+  folderIcon: "rgb(var(--color-ring))",
+  folderIconActive: "rgb(var(--color-ring))",
+  chevronIdle: "rgb(var(--color-muted-foreground))",
+  chevronActive: "rgb(var(--color-foreground))",
 };
 
-const FOCUS_RING_CLASS: Record<ExplorerTheme, string> = {
-  dark: "focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:ring-offset-2 focus-visible:ring-offset-[#252526]",
-  light: "focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+const EXPLORER_THEME_TOKENS: Record<ExplorerTheme, ExplorerThemeTokens> = {
+  dark: EXPLORER_TOKENS,
+  light: EXPLORER_TOKENS,
 };
+
+const FOCUS_RING_CLASS = "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
 function collectFolderIds(node: WorkbenchFileNode): Set<string> {
   const ids = new Set<string>();
@@ -601,7 +583,7 @@ export function Explorer({
   ]);
 
   const tokens = EXPLORER_THEME_TOKENS[theme];
-  const focusRingClass = FOCUS_RING_CLASS[theme];
+  const focusRingClass = FOCUS_RING_CLASS;
   const rootChildren = useMemo(() => tree.children ?? [], [tree]);
   const menuAppearance = theme === "dark" ? "dark" : "light";
   const dropTargetLabel = useMemo(() => {
@@ -630,7 +612,7 @@ export function Explorer({
       >
         <div
           className="flex items-center justify-between border-b px-3 py-2"
-          style={{ borderColor: tokens.border, backgroundColor: theme === "dark" ? "#181818" : "#ececec" }}
+          style={{ borderColor: tokens.border, backgroundColor: tokens.rowHover }}
         >
           <div className="flex items-center gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: tokens.heading }}>
@@ -648,10 +630,8 @@ export function Explorer({
             onClick={onHide}
             aria-label="Hide explorer"
             className={clsx(
-              "flex h-7 w-7 items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]",
-              theme === "dark"
-                ? "text-slate-300 hover:bg-white/10 hover:text-white"
-                : "text-slate-600 hover:bg-black/10 hover:text-slate-900",
+              "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "hover:bg-muted hover:text-foreground",
             )}
           >
             <HideSidebarIcon />
@@ -716,15 +696,14 @@ export function Explorer({
               )}
               style={{
                 borderColor: tokens.badgeActive,
-                backgroundColor: theme === "dark" ? "rgba(15, 17, 26, 0.75)" : "rgba(255, 255, 255, 0.85)",
+                backgroundColor: "rgb(var(--color-card) / 0.85)",
               }}
               aria-hidden={!dropActive}
             >
               <div className="flex items-center gap-3">
                 <span
                   className={clsx(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-full border",
-                    theme === "dark" ? "border-white/10 bg-white/5" : "border-slate-200 bg-white",
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card/80",
                   )}
                   style={{ color: tokens.badgeActive }}
                 >
@@ -938,7 +917,7 @@ function ExplorerNode({
         className={clsx(
           "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition hover:bg-[var(--tree-hover-bg)]",
           focusRingClass,
-          isActive && "shadow-inner shadow-[#00000033]",
+          isActive && "shadow-inner shadow-black/10",
           isDeleting && "opacity-60",
         )}
         style={fileStyle}
@@ -976,7 +955,7 @@ function getFileAccent(name: string, language?: string) {
   if (extension && FILE_ICON_COLORS[extension]) {
     return FILE_ICON_COLORS[extension];
   }
-  return "text-slate-400";
+  return "text-muted-foreground";
 }
 
 function ChevronIcon({ open, tokens }: { readonly open: boolean; readonly tokens: ExplorerThemeTokens }) {
@@ -1165,7 +1144,7 @@ function MenuIconDelete() {
 }
 
 function CreateEntryRow({
-  appearance,
+  appearance: _appearance,
   onSubmit,
   onCancel,
   onChange,
@@ -1194,17 +1173,12 @@ function CreateEntryRow({
     onSubmit(value.trim());
   }, [onSubmit, value]);
 
-  const muted = appearance === "dark" ? "text-slate-300" : "text-slate-600";
-  const bg = appearance === "dark" ? "#232323" : "#e8e8e8";
-  const border = appearance === "dark" ? "#2f2f2f" : "#d4d4d4";
+  const muted = "text-muted-foreground";
 
   return (
-    <div
-      className="rounded-md border px-2 py-1"
-      style={{ backgroundColor: bg, borderColor: border }}
-    >
+    <div className="rounded-md border border-border bg-muted px-2 py-1">
       <div className="flex items-center gap-2">
-        <span className="inline-flex w-4 justify-center text-[#4fc1ff]">{icon ?? <MenuIconNewFile />}</span>
+        <span className="inline-flex w-4 justify-center text-brand-500">{icon ?? <MenuIconNewFile />}</span>
         <input
           ref={inputRef}
           value={value}
@@ -1222,15 +1196,15 @@ function CreateEntryRow({
               onCancel();
             }
           }}
-          className="flex-1 rounded-sm border border-transparent bg-white/80 px-2 py-1 text-[13px] text-slate-900 outline-none focus:border-[#007acc]"
+          className="flex-1 rounded-sm border border-transparent bg-card/80 px-2 py-1 text-[13px] text-foreground outline-none focus:border-ring"
           placeholder={placeholder}
           disabled={isSubmitting}
         />
         <button
           type="button"
           className={clsx(
-            "rounded-sm px-2 py-1 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]",
-            isSubmitting ? "cursor-wait bg-slate-300 text-slate-500" : "bg-[#007acc] text-white hover:bg-[#0e78c6]",
+            "rounded-sm px-2 py-1 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isSubmitting ? "cursor-wait bg-muted text-muted-foreground" : "bg-brand-600 text-white hover:bg-brand-500",
           )}
           onClick={handleSubmit}
           disabled={isSubmitting}
@@ -1239,7 +1213,7 @@ function CreateEntryRow({
         </button>
         <button
           type="button"
-          className="rounded-sm px-2 py-1 text-[12px] font-semibold text-slate-500 transition hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]"
+          className="rounded-sm px-2 py-1 text-[12px] font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onCancel}
           disabled={isSubmitting}
         >

@@ -40,7 +40,7 @@ export function PanelResizeHandle({
         )}
         aria-hidden
       >
-        <div className={clsx(isVertical ? "h-full w-px" : "h-px w-full", "bg-slate-400/50")} />
+        <div className={clsx(isVertical ? "h-full w-px" : "h-px w-full", "bg-muted-foreground/50")} />
       </div>
       {onToggle && !isVertical ? (
         <button
@@ -49,7 +49,7 @@ export function PanelResizeHandle({
             event.stopPropagation();
             onToggle();
           }}
-          className="absolute right-1/2 top-1/2 h-5 w-5 -translate-y-1/2 translate-x-[40%] rounded bg-slate-800/70 text-[10px] text-slate-100 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100 focus:outline-none"
+          className="absolute right-1/2 top-1/2 h-5 w-5 -translate-y-1/2 translate-x-[40%] rounded bg-foreground/70 text-[10px] text-background opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100 focus:outline-none"
           aria-label={collapsed ? "Show console" : "Hide console"}
           title={collapsed ? "Show console" : "Hide console"}
         >

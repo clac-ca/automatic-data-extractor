@@ -116,12 +116,12 @@ export function DocumentsPreviewPane({
   const hasOutput = activeRun?.status === "succeeded" && Boolean(outputUrl);
 
   return (
-    <aside className="flex min-h-0 min-w-0 w-full flex-col border-l border-slate-200 bg-white lg:w-[44%]">
-      <div className="shrink-0 border-b border-slate-200 px-6 py-5">
+    <aside className="flex min-h-0 min-w-0 w-full flex-col border-l border-border bg-card lg:w-[44%]">
+      <div className="shrink-0 border-b border-border px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Preview</p>
-            <h2 className="truncate text-lg font-semibold text-slate-900">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Preview</p>
+            <h2 className="truncate text-lg font-semibold text-foreground">
               {document ? document.name : "Select a document"}
             </h2>
           </div>
@@ -138,13 +138,13 @@ export function DocumentsPreviewPane({
           </Button>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {document ? (
             <>
               <StatusPill status={document.status} />
               <MappingBadge mapping={document.mapping} />
               {document.commentCount > 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground">
                   <ChatIcon className="h-3.5 w-3.5" />
                   {document.commentCount} notes
                 </span>
@@ -207,14 +207,14 @@ export function DocumentsPreviewPane({
         ) : null}
 
         {document ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background px-4 py-3">
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white">
-                <UserIcon className="h-4 w-4 text-slate-500" />
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card">
+                <UserIcon className="h-4 w-4 text-muted-foreground" />
               </span>
               <div>
-                <p className="text-xs text-slate-500">Assignee</p>
-                <p className="text-sm font-semibold text-slate-900">{document.assigneeLabel ?? "Unassigned"}</p>
+                <p className="text-xs text-muted-foreground">Assignee</p>
+                <p className="text-sm font-semibold text-foreground">{document.assigneeLabel ?? "Unassigned"}</p>
               </div>
             </div>
 
@@ -244,19 +244,19 @@ export function DocumentsPreviewPane({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         {!document ? (
-          <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
-            <p className="text-sm font-semibold text-slate-900">Preview is ready when you are.</p>
+          <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background px-6 text-center text-sm text-muted-foreground">
+            <p className="text-sm font-semibold text-foreground">Preview is ready when you are.</p>
             <p>Select a document from the grid to inspect its output and collaborate.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-5">
             <TabsRoot value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-              <TabsList className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+              <TabsList className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2 text-xs">
                 <TabsTrigger
                   value="output"
                   className={clsx(
                     "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "output" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                    tab === "output" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Output
@@ -265,7 +265,7 @@ export function DocumentsPreviewPane({
                   value="notes"
                   className={clsx(
                     "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "notes" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                    tab === "notes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Notes {document.commentCount > 0 ? `(${document.commentCount})` : ""}
@@ -274,7 +274,7 @@ export function DocumentsPreviewPane({
                   value="details"
                   className={clsx(
                     "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "details" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                    tab === "details" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Details
@@ -282,29 +282,29 @@ export function DocumentsPreviewPane({
               </TabsList>
 
               <TabsContent value="output" className="mt-5">
-                <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Run history</h3>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Run history</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {runsLoading ? "Loading runs..." : `${runs.length} run${runs.length === 1 ? "" : "s"} found`}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-slate-500">Selected run:</span>
-                      <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
+                      <span className="text-xs text-muted-foreground">Selected run:</span>
+                      <div className="rounded-full border border-border bg-background px-2 py-1 text-xs font-semibold text-foreground">
                         {selectedRunId ? shortId(selectedRunId) : "Latest"}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 max-h-44 overflow-auto rounded-2xl border border-slate-200 bg-slate-50">
+                  <div className="mt-3 max-h-44 overflow-auto rounded-2xl border border-border bg-background">
                     {runsLoading ? (
-                      <div className="px-4 py-4 text-sm text-slate-500">Loading runs...</div>
+                      <div className="px-4 py-4 text-sm text-muted-foreground">Loading runs...</div>
                     ) : runOptions.length === 0 ? (
-                      <div className="px-4 py-4 text-sm text-slate-500">No runs yet.</div>
+                      <div className="px-4 py-4 text-sm text-muted-foreground">No runs yet.</div>
                     ) : (
-                      <div className="divide-y divide-slate-200">
+                      <div className="divide-y divide-border">
                         {runOptions.slice(0, 10).map((run) => {
                           const active = run.id === (selectedRunId ?? runOptions[0]?.id);
                           return (
@@ -314,18 +314,18 @@ export function DocumentsPreviewPane({
                               onClick={() => onSelectRun(run.id)}
                               className={clsx(
                                 "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition",
-                                active ? "bg-white" : "hover:bg-slate-100",
+                                active ? "bg-card" : "hover:bg-muted",
                               )}
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-semibold text-slate-900">
+                                <p className="truncate font-semibold text-foreground">
                                   {shortId(run.id)} - {run.status.toUpperCase()}
                                 </p>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-xs text-muted-foreground">
                                   Created {formatRelativeTime(now, Date.parse(run.created_at))}
                                 </p>
                               </div>
-                              <span className="text-xs font-semibold text-slate-500">
+                              <span className="text-xs font-semibold text-muted-foreground">
                                 {run.output?.has_output ? "Output ready" : "No output"}
                               </span>
                             </button>
@@ -336,9 +336,9 @@ export function DocumentsPreviewPane({
                   </div>
                 </section>
 
-                <section className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <section className="mt-5 rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Processed output</h3>
+                    <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Processed output</h3>
                     <Button
                       type="button"
                       size="sm"
@@ -352,13 +352,13 @@ export function DocumentsPreviewPane({
                   </div>
 
                   {hasOutput ? (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-900">{outputFilename}</span>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">{outputFilename}</span>
                       {outputSummary ? <span>{outputSummary}</span> : null}
                     </div>
                   ) : null}
 
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50">
+                  <div className="mt-4 rounded-2xl border border-border bg-background">
                     {hasOutput ? (
                       !outputUrl ? (
                         <PreviewMessage title="Output link unavailable">
@@ -373,7 +373,7 @@ export function DocumentsPreviewPane({
                       ) : activeSheet ? (
                         <div>
                           <TabsRoot value={selectedSheetId} onValueChange={onSheetChange}>
-                            <TabsList className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
+                            <TabsList className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
                               {sheets.map((sheet) => (
                                 <TabsTrigger
                                   key={sheet.name}
@@ -381,8 +381,8 @@ export function DocumentsPreviewPane({
                                   className={clsx(
                                     "rounded-full px-3 py-1 font-semibold transition",
                                     selectedSheetId === sheet.name
-                                      ? "bg-white text-slate-900 shadow-sm"
-                                      : "text-slate-500 hover:text-slate-800",
+                                      ? "bg-card text-foreground shadow-sm"
+                                      : "text-muted-foreground hover:text-foreground",
                                   )}
                                 >
                                   {sheet.name}
@@ -396,7 +396,7 @@ export function DocumentsPreviewPane({
                             ))}
                           </TabsRoot>
                           {(activeSheet.truncatedRows || activeSheet.truncatedColumns) && (
-                            <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-500">
+                            <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
                               Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows and{" "}
                               {Math.min(activeSheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
                             </div>
@@ -436,20 +436,20 @@ export function DocumentsPreviewPane({
               </TabsContent>
 
               <TabsContent value="details" className="mt-5">
-                <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Summary</h3>
-                    <span className="text-xs text-slate-500">Updated {formatRelativeTime(now, document.updatedAt)}</span>
+                    <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Summary</h3>
+                    <span className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, document.updatedAt)}</span>
                   </div>
 
                   <dl className="mt-4 grid gap-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Uploader</dt>
-                      <dd className="font-semibold text-slate-900">{document.uploader ?? "Unassigned"}</dd>
+                      <dt className="text-muted-foreground">Uploader</dt>
+                      <dd className="font-semibold text-foreground">{document.uploader ?? "Unassigned"}</dd>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Tags</dt>
+                      <dt className="text-muted-foreground">Tags</dt>
                       <dd className="flex justify-end" title="Tags are shared and saved to the document">
                         <TagPicker
                           workspaceId={workspaceId}
@@ -467,7 +467,7 @@ export function DocumentsPreviewPane({
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Mapping</dt>
+                      <dt className="text-muted-foreground">Mapping</dt>
                       <dd className="flex justify-end">
                         <MappingBadge mapping={document.mapping} />
                       </dd>
@@ -475,9 +475,9 @@ export function DocumentsPreviewPane({
                   </dl>
                 </section>
 
-                <section className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Link</h3>
-                  <p className="mt-3 text-xs text-slate-500">Copy a share link so teammates land directly on this document.</p>
+                <section className="mt-5 rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+                  <h3 className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Link</h3>
+                  <p className="mt-3 text-xs text-muted-foreground">Copy a share link so teammates land directly on this document.</p>
                   <div className="mt-3">
                     <Button type="button" size="sm" variant="secondary" className="gap-2 text-xs" onClick={() => onCopyLink(document)}>
                       <LinkIcon className="h-4 w-4" />
@@ -496,8 +496,8 @@ export function DocumentsPreviewPane({
 
 function PreviewMessage({ title, children }: { title: string; children: string }) {
   return (
-    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-      <p className="font-semibold text-slate-900">{title}</p>
+    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-muted-foreground">
+      <p className="font-semibold text-foreground">{title}</p>
       <p>{children}</p>
     </div>
   );
@@ -506,7 +506,7 @@ function PreviewMessage({ title, children }: { title: string; children: string }
 function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
   return (
     <table className="min-w-full text-left text-xs">
-      <thead className="sticky top-0 bg-slate-100 text-slate-500">
+      <thead className="sticky top-0 bg-muted text-muted-foreground">
         <tr>
           {sheet.headers.map((column, index) => (
             <th key={`${column}-${index}`} className="px-3 py-2 font-semibold uppercase tracking-wide">
@@ -517,9 +517,9 @@ function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
       </thead>
       <tbody>
         {sheet.rows.map((row, rowIndex) => (
-          <tr key={`${sheet.name}-${rowIndex}`} className="border-t border-slate-200">
+          <tr key={`${sheet.name}-${rowIndex}`} className="border-t border-border">
             {row.map((cell, cellIndex) => (
-              <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-slate-900">
+              <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-foreground">
                 {cell}
               </td>
             ))}

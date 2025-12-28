@@ -220,7 +220,7 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
   return (
     <div
       className={clsx(
-        "pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl backdrop-blur",
+        "pointer-events-auto w-full max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl",
         intentTheme.container,
         intentTheme.border,
       )}
@@ -230,9 +230,9 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
           {toast.icon ?? renderNotificationIcon(toast.intent)}
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <p className="text-sm font-semibold leading-snug text-white">{toast.title}</p>
+          <p className="text-sm font-semibold leading-snug text-foreground">{toast.title}</p>
           {toast.description ? (
-            <p className="mt-1 text-xs leading-relaxed text-white/70">{toast.description}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{toast.description}</p>
           ) : null}
           {toast.actions.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -244,7 +244,6 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
                     action.onSelect();
                     onDismiss(toast.id);
                   }}
-                  appearance="dark"
                 />
               ))}
             </div>
@@ -253,7 +252,7 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
         {toast.dismissible ? (
           <button
             type="button"
-            className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            className="ml-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label="Dismiss notification"
             onClick={() => onDismiss(toast.id)}
           >
@@ -262,7 +261,7 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
         ) : null}
       </div>
       {autoDismiss && toast.duration ? (
-        <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/10">
+        <div className="mt-4 h-1 overflow-hidden rounded-full bg-foreground/10">
           <div
             className={clsx("h-full rounded-full", intentTheme.progress)}
             style={{ width: `${progress}%`, transition: `width ${toast.duration}ms linear` }}
@@ -295,7 +294,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
   return (
     <div
       className={clsx(
-        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-lg shadow-black/30 backdrop-blur-sm sm:min-w-[300px]",
+        "pointer-events-auto w-full max-w-sm rounded-lg border px-3.5 py-2.5 shadow-[0_16px_32px_rgb(var(--color-shadow)/0.35)] sm:min-w-[300px]",
         theme.container,
         theme.border,
       )}
@@ -307,7 +306,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="text-[13px] font-semibold leading-tight">{banner.title}</p>
           {banner.description ? (
-            <p className="text-[12px] leading-relaxed text-white/75">{banner.description}</p>
+            <p className="text-[12px] leading-relaxed text-muted-foreground">{banner.description}</p>
           ) : null}
           {banner.actions.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -321,7 +320,6 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
                       onDismiss(banner.id);
                     }
                   }}
-                  appearance="light"
                 />
               ))}
             </div>
@@ -331,7 +329,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
           <button
             type="button"
             className={clsx(
-              "ml-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-white/70 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30",
+              "ml-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
               theme.dismiss,
             )}
             aria-label="Dismiss notification"
@@ -342,7 +340,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
         ) : null}
       </div>
       {autoDismiss && banner.duration ? (
-        <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/10">
+        <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-foreground/10">
           <div
             className={clsx("h-full rounded-full", theme.progress)}
             style={{ width: `${progress}%`, transition: `width ${banner.duration}ms linear` }}
@@ -356,21 +354,13 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
 function NotificationActionButton({
   action,
   onPress,
-  appearance,
 }: {
   readonly action: NotificationAction;
   readonly onPress: () => void;
-  readonly appearance: "light" | "dark";
 }) {
   const variant = action.variant ?? "secondary";
-  const base =
-    appearance === "dark"
-      ? "border-white/15 text-white/90 hover:bg-white/10 focus-visible:ring-white/30"
-      : "border-white/20 text-white hover:bg-white/10 focus-visible:ring-white/30";
-  const primary =
-    appearance === "dark"
-      ? "bg-white text-slate-900 hover:bg-slate-100 focus-visible:ring-white/40"
-      : "bg-white text-slate-900 hover:bg-slate-100 focus-visible:ring-white/40";
+  const base = "border-border/60 text-foreground hover:bg-muted focus-visible:ring-ring/40";
+  const primary = "bg-foreground text-background hover:bg-foreground/90 focus-visible:ring-ring/50";
   return (
     <button
       type="button"
@@ -403,27 +393,27 @@ const TOAST_THEMES: Record<
   { container: string; border: string; icon: string; progress: string }
 > = {
   info: {
-    container: "bg-[#0b1220]/95 text-white",
-    border: "border-white/5",
-    icon: "bg-sky-500/15 text-sky-200",
+    container: "bg-popover text-foreground",
+    border: "border-border/70",
+    icon: "bg-sky-500/15 text-sky-500",
     progress: "bg-gradient-to-r from-sky-500 to-blue-400",
   },
   success: {
-    container: "bg-[#031b16]/95 text-emerald-50",
-    border: "border-emerald-500/20",
-    icon: "bg-emerald-500/15 text-emerald-200",
+    container: "bg-popover text-foreground",
+    border: "border-border/70",
+    icon: "bg-emerald-500/15 text-emerald-500",
     progress: "bg-gradient-to-r from-emerald-400 to-lime-400",
   },
   warning: {
-    container: "bg-[#211604]/95 text-amber-50",
-    border: "border-amber-500/25",
-    icon: "bg-amber-400/20 text-amber-100",
+    container: "bg-popover text-foreground",
+    border: "border-border/70",
+    icon: "bg-amber-400/20 text-amber-500",
     progress: "bg-gradient-to-r from-amber-400 to-orange-400",
   },
   danger: {
-    container: "bg-[#22060b]/95 text-rose-50",
-    border: "border-rose-500/30",
-    icon: "bg-rose-500/15 text-rose-100",
+    container: "bg-popover text-foreground",
+    border: "border-border/70",
+    icon: "bg-rose-500/15 text-rose-500",
     progress: "bg-gradient-to-r from-rose-500 to-rose-400",
   },
 };
@@ -433,32 +423,32 @@ const BANNER_THEMES: Record<
   { container: string; border: string; icon: string; progress: string; dismiss: string }
 > = {
   info: {
-    container: "bg-[#101828]/85 text-white",
-    border: "border-white/10",
-    icon: "bg-sky-500/15 text-sky-200",
+    container: "bg-popover text-foreground",
+    border: "border-border/60",
+    icon: "bg-sky-500/15 text-sky-500",
     progress: "bg-gradient-to-r from-sky-500 to-blue-400",
-    dismiss: "hover:bg-white/10",
+    dismiss: "hover:bg-muted",
   },
   success: {
-    container: "bg-[#0d1c17]/85 text-emerald-50",
-    border: "border-emerald-500/15",
-    icon: "bg-emerald-500/15 text-emerald-200",
+    container: "bg-popover text-foreground",
+    border: "border-border/60",
+    icon: "bg-emerald-500/15 text-emerald-500",
     progress: "bg-gradient-to-r from-emerald-400 to-lime-400",
-    dismiss: "hover:bg-white/10",
+    dismiss: "hover:bg-muted",
   },
   warning: {
-    container: "bg-[#1b1507]/85 text-amber-50",
-    border: "border-amber-500/25",
-    icon: "bg-amber-500/15 text-amber-100",
+    container: "bg-popover text-foreground",
+    border: "border-border/60",
+    icon: "bg-amber-500/15 text-amber-500",
     progress: "bg-gradient-to-r from-amber-400 to-orange-400",
-    dismiss: "hover:bg-white/10",
+    dismiss: "hover:bg-muted",
   },
   danger: {
-    container: "bg-[#200912]/85 text-rose-50",
-    border: "border-rose-500/25",
-    icon: "bg-rose-500/15 text-rose-100",
+    container: "bg-popover text-foreground",
+    border: "border-border/60",
+    icon: "bg-rose-500/15 text-rose-500",
     progress: "bg-gradient-to-r from-rose-500 to-rose-400",
-    dismiss: "hover:bg-white/10",
+    dismiss: "hover:bg-muted",
   },
 };
 

@@ -767,7 +767,7 @@ export default function WorkspaceDocumentsRoute() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-sm text-slate-700">
+        <div className="overflow-hidden rounded-xl border border-border bg-card text-sm text-foreground">
           {documentsQuery.isLoading ? (
             <div className="p-4">
               <SkeletonList />
@@ -805,7 +805,7 @@ export default function WorkspaceDocumentsRoute() {
                 />
               </div>
               {documentsQuery.hasNextPage ? (
-                <div className="flex justify-center border-t border-slate-200 bg-slate-50/60 px-3 py-2">
+                <div className="flex justify-center border-t border-border bg-background/60 px-3 py-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -1199,15 +1199,15 @@ function DocumentsHeader({
 
   return (
     <section
-      className="rounded-xl border border-slate-200 bg-white/95 p-3 sm:p-4"
+      className="rounded-xl border border-border bg-card/95 p-3 sm:p-4"
       aria-label="Documents header and filters"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold text-slate-900 sm:text-xl">
+          <h1 className="truncate text-lg font-semibold text-foreground sm:text-xl">
             {workspaceName ? `${workspaceName} documents` : "Documents"}
           </h1>
-          <p className="text-xs text-slate-500">{subtitle}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -1217,8 +1217,8 @@ function DocumentsHeader({
             className={clsx(
               "rounded border border-transparent px-3 py-1 text-sm font-medium",
               isDefault
-                ? "cursor-default text-slate-300"
-                : "text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900",
+                ? "cursor-default text-muted-foreground"
+                : "text-muted-foreground hover:border-border hover:bg-background hover:text-foreground",
             )}
           >
             Reset
@@ -1236,7 +1236,7 @@ function DocumentsHeader({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+        <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
           <span>Run on upload</span>
           <button
             type="button"
@@ -1249,13 +1249,13 @@ function DocumentsHeader({
             title={toggleDisabled ? disabledReason ?? undefined : undefined}
             className={clsx(
               "relative h-6 w-11 rounded-full border transition",
-              runOnUploadEnabled ? "border-emerald-500 bg-emerald-500" : "border-slate-200 bg-slate-200",
+              runOnUploadEnabled ? "border-emerald-500 bg-emerald-500" : "border-border bg-muted",
               toggleDisabled && "opacity-60",
             )}
           >
             <span
               className={clsx(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition",
+                "absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition",
                 runOnUploadEnabled ? "left-5" : "left-0.5",
               )}
             />
@@ -1264,7 +1264,7 @@ function DocumentsHeader({
 
         <div className="min-w-[220px]">
           {configurationsLoading ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
               Loading configurations…
             </div>
           ) : configurationsError ? (
@@ -1285,14 +1285,14 @@ function DocumentsHeader({
               ))}
             </Select>
           ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
               No configurations available.
             </div>
           )}
         </div>
 
         {showUploadSummary ? (
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             {uploadSummary.inFlightCount > 0
               ? `Uploading ${uploadSummary.inFlightCount} file${
                   uploadSummary.inFlightCount === 1 ? "" : "s"
@@ -1313,7 +1313,7 @@ function DocumentsHeader({
       </div>
 
       {disabledReason && !runOnUploadEnabled ? (
-        <p className="mt-2 text-xs text-slate-500">{disabledReason}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{disabledReason}</p>
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1340,13 +1340,13 @@ function DocumentsHeader({
         </Select>
         <span
           className={clsx(
-            "ml-auto inline-flex items-center gap-1 text-[11px] text-slate-500",
+            "ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground",
             isFetching ? "opacity-100" : "opacity-0",
           )}
           role="status"
           aria-live="polite"
         >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
           Updating…
         </span>
       </div>
@@ -1488,7 +1488,7 @@ function BatchRunDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/50"
+        className="absolute inset-0 bg-overlay/50"
         onClick={onClose}
         aria-label="Close dialog"
       />
@@ -1499,40 +1499,40 @@ function BatchRunDialog({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="relative w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-2xl"
       >
         <header className="space-y-1">
-          <h2 id={titleId} className="text-lg font-semibold text-slate-900">
+          <h2 id={titleId} className="text-lg font-semibold text-foreground">
             Run extraction on selected documents
           </h2>
-          <p id={descriptionId} className="text-xs text-slate-500">
+          <p id={descriptionId} className="text-xs text-muted-foreground">
             {documentIds.length.toLocaleString()} document{documentIds.length === 1 ? "" : "s"} selected.
           </p>
         </header>
 
-        <div className="mt-4 space-y-4 text-sm text-slate-600">
+        <div className="mt-4 space-y-4 text-sm text-muted-foreground">
           {safeModeEnabled ? <Alert tone="warning">{safeModeDetail}</Alert> : null}
           {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
 
           {createdRuns ? (
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Batch queued</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Batch queued</p>
               <div className="space-y-2">
                 {createdRuns.length === 0 ? (
-                  <p className="text-xs text-slate-500">No runs were created.</p>
+                  <p className="text-xs text-muted-foreground">No runs were created.</p>
                 ) : (
                   createdRuns.map((run) => {
                     const documentId = run.input?.document_id ?? null;
                     const document = documentId ? documentsById.get(documentId) ?? null : null;
                     const title = document?.name ?? (documentId ? `Document ${documentId}` : "Document");
                     return (
-                      <div key={run.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div key={run.id} className="rounded-lg border border-border bg-background px-3 py-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold text-slate-800" title={title}>
+                            <p className="text-sm font-semibold text-foreground" title={title}>
                               {title}
                             </p>
-                            <p className="text-xs text-slate-500">{run.id}</p>
+                            <p className="text-xs text-muted-foreground">{run.id}</p>
                           </div>
                           {document ? (
                             <Button size="sm" variant="ghost" onClick={() => onViewRun(document, run.id)}>
@@ -1549,9 +1549,9 @@ function BatchRunDialog({
           ) : (
             <>
               <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Configuration</p>
                 {configurationsLoading ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                     Loading configurations…
                   </div>
                 ) : configurationsError ? (
@@ -1575,7 +1575,7 @@ function BatchRunDialog({
                   <Alert tone="info">No configurations available. Create one before running extraction.</Alert>
                 )}
               </section>
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <p className="rounded-lg border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                 Batch runs process the entire document. Sheet selection is not available for this action.
               </p>
             </>
@@ -1624,7 +1624,7 @@ function DocumentsViewTabs({ view, onChange }: { view: DocumentsView; onChange: 
               "rounded-full px-3 py-1 text-xs font-medium transition",
               active
                 ? "bg-brand-600 text-white shadow-sm"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900",
+                : "bg-muted text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
             title={preset.description}
           >
@@ -1669,7 +1669,7 @@ function StatusFilterControl({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-300"
+        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground shadow-sm hover:border-border-strong"
         aria-haspopup="true"
         aria-expanded={open}
       >
@@ -1677,8 +1677,8 @@ function StatusFilterControl({
         <ChevronDownIcon className="h-3 w-3" />
       </button>
       {open ? (
-        <div className="absolute z-30 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl">
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="absolute z-30 mt-2 w-60 rounded-xl border border-border bg-card p-3 text-sm shadow-xl">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Status filters</span>
             <button
               type="button"
@@ -1688,23 +1688,23 @@ function StatusFilterControl({
               }}
               className={clsx(
                 "text-[11px]",
-                hasSelection ? "text-slate-500 underline underline-offset-4" : "text-slate-300",
+                hasSelection ? "text-muted-foreground underline underline-offset-4" : "text-muted-foreground",
               )}
             >
               Clear
             </button>
           </div>
-          <ul className="space-y-1 text-xs text-slate-600">
+          <ul className="space-y-1 text-xs text-muted-foreground">
             {statusEntries.map(([status, label]) => {
               const active = selectedStatuses.has(status);
               return (
                 <li key={status}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-50">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 hover:bg-background">
                     <input
                       type="checkbox"
                       checked={active}
                       onChange={() => onToggleStatus(status)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      className="h-3.5 w-3.5 rounded border-border-strong text-brand-600 focus:ring-brand-500"
                     />
                       <span className="truncate">{label}</span>
                   </label>
@@ -1794,14 +1794,14 @@ function DocumentsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full table-fixed border-separate border-spacing-0 text-sm text-slate-700">
-        <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          <tr className="border-b border-slate-200">
+      <table className="min-w-full table-fixed border-separate border-spacing-0 text-sm text-foreground">
+        <thead className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border">
             <th scope="col" className="w-10 px-2 py-2">
               <input
                 ref={headerCheckboxRef}
                 type="checkbox"
-                className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="h-4 w-4 rounded border border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 checked={allSelected}
                 onChange={onToggleAll}
                 disabled={disableSelection || selectableIds.length === 0}
@@ -1822,7 +1822,7 @@ function DocumentsTable({
             const upload = row.upload;
             const isSelected = document ? selectedIds.has(document.id) : false;
             const hasActiveUpload = Boolean(upload) && upload.status !== "succeeded";
-            const rowTone = isSelected ? "bg-brand-50/50" : hasActiveUpload ? "bg-slate-50/60" : "bg-white";
+            const rowTone = isSelected ? "bg-brand-50/50" : hasActiveUpload ? "bg-background/60" : "bg-card";
             const uploaderLabel = document
               ? document.uploader?.name ?? document.uploader?.email ?? "—"
               : resolvedUserLabel;
@@ -1832,14 +1832,14 @@ function DocumentsTable({
               <tr
                 key={row.key}
                 className={clsx(
-                  "border-b border-slate-200 last:border-b-0 transition-colors hover:bg-slate-50",
+                  "border-b border-border last:border-b-0 transition-colors hover:bg-background",
                   rowTone,
                 )}
               >
                 <td className="px-2 py-2 align-middle">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    className="h-4 w-4 rounded border border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     checked={isSelected}
                     onChange={() => {
                       if (document) {
@@ -1849,18 +1849,18 @@ function DocumentsTable({
                     disabled={disableSelection || !document}
                   />
                 </td>
-                <td className="px-2 py-2 align-middle font-mono text-xs text-slate-500">
+                <td className="px-2 py-2 align-middle font-mono text-xs text-muted-foreground">
                   {document ? document.id.slice(-6) : "—"}
                 </td>
                 <td className="px-2 py-2 align-middle">
                   <div className="min-w-0">
                     <div
-                      className="truncate font-semibold text-slate-900"
+                      className="truncate font-semibold text-foreground"
                       title={document?.name ?? upload?.file.name}
                     >
                       {document?.name ?? upload?.file.name ?? "Untitled file"}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       {document
                         ? formatFileDescription(document)
                         : upload
@@ -1868,17 +1868,17 @@ function DocumentsTable({
                           : "Pending upload"}
                     </div>
                     {documentTags.length ? (
-                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
                         {documentTags.slice(0, 3).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600"
+                            className="rounded-full bg-muted px-2 py-0.5 font-semibold text-muted-foreground"
                           >
                             #{tag}
                           </span>
                         ))}
                         {documentTags.length > 3 ? (
-                          <span className="px-1 text-[10px] text-slate-400">
+                          <span className="px-1 text-[10px] text-muted-foreground">
                             +{documentTags.length - 3}
                           </span>
                         ) : null}
@@ -1890,19 +1890,19 @@ function DocumentsTable({
                   {document ? (
                     <time
                       dateTime={document.created_at}
-                      className="block text-xs text-slate-600"
+                      className="block text-xs text-muted-foreground"
                       title={uploadedFormatter.format(new Date(document.created_at))}
                     >
                       {formatUploadedAt(document)}
                     </time>
                   ) : upload ? (
-                    <span className="block text-xs text-slate-500">
+                    <span className="block text-xs text-muted-foreground">
                       {formatUploadTimestamp(upload)}
                     </span>
                   ) : null}
                 </td>
                 <td className="px-2 py-2 align-middle">
-                  <span className="block truncate text-xs text-slate-600">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {uploaderLabel}
                   </span>
                 </td>
@@ -1916,7 +1916,7 @@ function DocumentsTable({
                   ) : document ? (
                     renderRunStatus ? renderRunStatus(document) : null
                   ) : (
-                    <span className="text-xs text-slate-400">—</span>
+                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </td>
                 <td className="px-2 py-2 align-middle">
@@ -2019,7 +2019,7 @@ function DocumentActionsMenu({
         type="button"
         onClick={() => onDownload?.(document)}
         className={clsx(
-          "px-2 py-1 text-xs font-medium text-slate-600 underline underline-offset-4 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+          "px-2 py-1 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
           downloading && "opacity-60"
         )}
         disabled={disabled || downloading}
@@ -2103,7 +2103,7 @@ function UploadRunStatus({
 }) {
   if (runState.status === "pending") {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         <SpinnerIcon className="h-3.5 w-3.5" />
         Queueing run…
       </span>
@@ -2115,7 +2115,7 @@ function UploadRunStatus({
       <div className="flex flex-col gap-1 text-xs">
         <span className="text-emerald-700">Run queued</span>
         {runState.runId ? (
-          <span className="text-[11px] text-slate-400">{runState.runId}</span>
+          <span className="text-[11px] text-muted-foreground">{runState.runId}</span>
         ) : null}
         {document && runState.runId && onViewRun ? (
           <button
@@ -2154,12 +2154,12 @@ function UploadStatusCell({ upload }: { upload: UploadItem }) {
         {statusLabel}
       </span>
       {canShowProgress ? (
-        <div className="space-y-1 text-[11px] text-slate-500">
+        <div className="space-y-1 text-[11px] text-muted-foreground">
           <div className="flex items-center justify-between">
             <span>{progressText}</span>
             <span>{upload.progress.percent}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-slate-100">
+          <div className="h-1.5 w-full rounded-full bg-muted">
             <div
               className="h-1.5 rounded-full bg-brand-500 transition"
               style={{ width: `${upload.progress.percent}%` }}
@@ -2304,9 +2304,9 @@ function uploadStatusBadgeClass(status: UploadItem["status"]) {
     case "uploading":
       return "bg-brand-100 text-brand-700";
     case "cancelled":
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-muted text-foreground";
   }
 }
 
@@ -2323,9 +2323,9 @@ function statusBadgeClass(status: DocumentRecord["status"]) {
     case "failed":
       return "bg-danger-100 text-danger-700";
     case "archived":
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-muted text-foreground";
   }
 }
 
@@ -2346,7 +2346,7 @@ function SpinnerIcon({ className }: { className?: string }) {
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      className={clsx("animate-spin text-slate-500", className)}
+      className={clsx("animate-spin text-muted-foreground", className)}
       role="presentation"
     >
       <circle
@@ -2713,7 +2713,7 @@ function RunExtractionDrawerContent({
         type="button"
         tabIndex={-1}
         aria-hidden="true"
-        className="flex-1 bg-slate-900/30 backdrop-blur-sm"
+        className="flex-1 bg-overlay/30 backdrop-blur-sm"
         onClick={onClose}
       />
       <aside
@@ -2723,26 +2723,26 @@ function RunExtractionDrawerContent({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="relative flex h-full w-[min(28rem,92vw)] flex-col border-l border-slate-200 bg-white shadow-2xl"
+        className="relative flex h-full w-[min(28rem,92vw)] flex-col border-l border-border bg-card shadow-2xl"
       >
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <header className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 id={titleId} className="text-lg font-semibold text-slate-900">Run extraction</h2>
-            <p id={descriptionId} className="text-xs text-slate-500">Prepare and submit a processing run.</p>
+            <h2 id={titleId} className="text-lg font-semibold text-foreground">Run extraction</h2>
+            <p id={descriptionId} className="text-xs text-muted-foreground">Prepare and submit a processing run.</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} disabled={submitRun.isPending}>
             Close
           </Button>
         </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm text-slate-600">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm text-muted-foreground">
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Document</p>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="font-semibold text-slate-800" title={documentRecord.name}>{documentRecord.name}</p>
-              <p className="text-xs text-slate-500">Uploaded {new Date(documentRecord.created_at).toLocaleString()}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Document</p>
+            <div className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="font-semibold text-foreground" title={documentRecord.name}>{documentRecord.name}</p>
+              <p className="text-xs text-muted-foreground">Uploaded {new Date(documentRecord.created_at).toLocaleString()}</p>
               {documentRecord.last_run_at ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Last run {new Date(documentRecord.last_run_at).toLocaleString()}
                 </p>
               ) : null}
@@ -2754,9 +2754,9 @@ function RunExtractionDrawerContent({
           </section>
 
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Configuration</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Configuration</p>
             {configurationsQuery.isLoading ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                 Loading configurations…
               </div>
             ) : configurationsQuery.isError ? (
@@ -2806,12 +2806,12 @@ function RunExtractionDrawerContent({
           </section>
 
           <section className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Advanced options</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Advanced options</p>
             {sheetQuery.isLoading ? (
-              <p className="text-xs text-slate-500">Loading worksheets…</p>
+              <p className="text-xs text-muted-foreground">Loading worksheets…</p>
             ) : sheetParseFailed ? (
               <Alert tone="warning">
-                <p className="text-xs text-slate-700">
+                <p className="text-xs text-foreground">
                   Worksheet inspection failed for this file. ADE will process the full document and
                   sheet selection is disabled.
                 </p>
@@ -2819,7 +2819,7 @@ function RunExtractionDrawerContent({
             ) : sheetQuery.isError ? (
               <Alert tone="warning">
                 <div className="space-y-2">
-                  <p className="text-xs text-slate-700">
+                  <p className="text-xs text-foreground">
                     Worksheet metadata is temporarily unavailable. The run will process the entire
                     file unless you retry and pick specific sheets.
                   </p>
@@ -2847,8 +2847,8 @@ function RunExtractionDrawerContent({
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-slate-600">Worksheets</p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-xs font-medium text-muted-foreground">Worksheets</p>
+                    <p className="text-[11px] text-muted-foreground">
                       {normalizedSheetSelection.length === 0
                         ? "All worksheets will be processed by default. Select any subset to narrow the run."
                         : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
@@ -2866,17 +2866,17 @@ function RunExtractionDrawerContent({
                   </Button>
                 </div>
 
-                <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-200 p-2">
+                <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-border p-2">
                   {sheetOptions.map((sheet) => {
                     const checked = normalizedSheetSelection.includes(sheet.name);
                     return (
                       <label
                         key={`${sheet.index}-${sheet.name}`}
-                        className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                        className="flex items-center gap-2 rounded px-2 py-1 text-sm text-foreground hover:bg-muted"
                       >
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="h-4 w-4 rounded border-border-strong text-emerald-600 focus:ring-emerald-500"
                           checked={checked}
                           onChange={() => toggleWorksheet(sheet.name)}
                         />
@@ -2890,7 +2890,7 @@ function RunExtractionDrawerContent({
                 </div>
               </div>
             ) : (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              <p className="rounded-lg border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                 This document does not expose multiple worksheets, so ADE will ingest the uploaded file directly.
               </p>
             )}
@@ -2898,68 +2898,68 @@ function RunExtractionDrawerContent({
 
           {activeRunId ? (
             <section className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest run</p>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest run</p>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="font-semibold text-slate-800" title={activeRunId}>
+                    <p className="font-semibold text-foreground" title={activeRunId}>
                       Run {activeRunId}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Status: {runStatus ?? "loading…"}
                     </p>
                   </div>
-                  {runRunning ? <SpinnerIcon className="h-4 w-4 text-slate-500" /> : null}
+                  {runRunning ? <SpinnerIcon className="h-4 w-4 text-muted-foreground" /> : null}
                 </div>
 
                 {logsUrl ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
                       href={logsUrl}
-                      className="inline-flex items-center rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      className="inline-flex items-center rounded border border-border-strong px-3 py-1 text-xs font-semibold text-foreground transition hover:bg-muted"
                     >
                       Download logs
                     </a>
                   </div>
                 ) : null}
 
-                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Output</p>
+                <div className="mt-3 rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs font-semibold text-foreground">Output</p>
                   {runQuery.isFetching && !outputUrl ? (
-                    <p className="text-xs text-slate-500">Loading output…</p>
+                    <p className="text-xs text-muted-foreground">Loading output…</p>
                   ) : outputUrl ? (
-                    <div className="mt-1 flex items-center justify-between gap-2 break-all rounded border border-slate-100 px-2 py-1 text-xs text-slate-700">
+                    <div className="mt-1 flex items-center justify-between gap-2 break-all rounded border border-border px-2 py-1 text-xs text-foreground">
                       <a href={outputUrl} className="text-emerald-700 hover:underline">
                         {outputPath?.split("/").pop() ?? "Download output"}
                       </a>
-                      {outputPath ? <span className="text-[11px] text-slate-500">{outputPath}</span> : null}
+                      {outputPath ? <span className="text-[11px] text-muted-foreground">{outputPath}</span> : null}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Output will appear here after the run completes.</p>
+                    <p className="text-xs text-muted-foreground">Output will appear here after the run completes.</p>
                   )}
 	                </div>
-	                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-	                  <p className="text-xs font-semibold text-slate-700">Run summary</p>
+	                <div className="mt-3 rounded-md border border-border bg-card px-3 py-2">
+	                  <p className="text-xs font-semibold text-foreground">Run summary</p>
 	                  {telemetryQuery.isLoading ? (
-	                    <p className="text-xs text-slate-500">Loading summary…</p>
+	                    <p className="text-xs text-muted-foreground">Loading summary…</p>
 	                  ) : telemetryQuery.isError ? (
 	                    <p className="text-xs text-rose-600">Unable to load run summary.</p>
 	                  ) : summary ? (
 	                    <RunSummaryView summary={summary} />
 	                  ) : (
-	                    <p className="text-xs text-slate-500">Summary not available.</p>
+	                    <p className="text-xs text-muted-foreground">Summary not available.</p>
 	                  )}
 	                </div>
-                <div className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-xs font-semibold text-slate-700">Telemetry summary</p>
+                <div className="mt-3 rounded-md border border-border bg-card px-3 py-2">
+                  <p className="text-xs font-semibold text-foreground">Telemetry summary</p>
                   {telemetryQuery.isLoading ? (
-                    <p className="text-xs text-slate-500">Loading telemetry…</p>
+                    <p className="text-xs text-muted-foreground">Loading telemetry…</p>
                   ) : telemetryQuery.isError ? (
                     <p className="text-xs text-rose-600">Unable to load telemetry events.</p>
                   ) : telemetryEvents.length > 0 ? (
                     <TelemetrySummary events={telemetryEvents} />
                   ) : (
-                    <p className="text-xs text-slate-500">No telemetry events captured.</p>
+                    <p className="text-xs text-muted-foreground">No telemetry events captured.</p>
                   )}
                 </div>
               </div>
@@ -2970,7 +2970,7 @@ function RunExtractionDrawerContent({
           {errorMessage ? <Alert tone="danger">{errorMessage}</Alert> : null}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+        <footer className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={submitRun.isPending}>
             Cancel
           </Button>
@@ -3081,7 +3081,7 @@ function DocumentTagsEditor({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tags</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</p>
         {isDirty ? (
           <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Unsaved</span>
         ) : (
@@ -3094,12 +3094,12 @@ function DocumentTagsEditor({
           draftTags.map((tag) => (
             <span
               key={tag}
-              className="group inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+              className="group inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-foreground"
             >
               #{tag}
               <button
                 type="button"
-                className="rounded-full px-1 text-[10px] text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="rounded-full px-1 text-[10px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 onClick={() => removeTag(tag)}
                 aria-label={`Remove tag ${tag}`}
               >
@@ -3108,7 +3108,7 @@ function DocumentTagsEditor({
             </span>
           ))
         ) : (
-          <span className="text-xs text-slate-400">No tags yet.</span>
+          <span className="text-xs text-muted-foreground">No tags yet.</span>
         )}
       </div>
 
@@ -3144,13 +3144,13 @@ function DocumentTagsEditor({
 
       {suggestedTags.length ? (
         <div className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Suggested</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Suggested</p>
           <div className="flex flex-wrap gap-1">
             {suggestedTags.map((tag) => (
               <button
                 key={tag}
                 type="button"
-                className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:border-border-strong hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 onClick={() => addTags(tag)}
               >
                 +{tag}
@@ -3262,20 +3262,20 @@ function DropAnywhereOverlay({
         active ? "opacity-100" : "opacity-0"
       )}
     >
-      <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-overlay/25 backdrop-blur-[2px]" />
       <div className="absolute inset-0 flex items-center justify-center p-6">
-        <div className="pointer-events-none rounded-2xl border border-white/70 bg-white/90 px-6 py-5 shadow-2xl">
+        <div className="pointer-events-none rounded-2xl border border-border/70 bg-card/90 px-6 py-5 shadow-2xl">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white shadow">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-card shadow">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 text-foreground" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M12 16V4" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M6 10l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </span>
             <div className="text-center sm:text-left">
-              <p className="text-base font-semibold text-slate-900">Drop to upload</p>
-              <p className="text-sm text-slate-600">
+              <p className="text-base font-semibold text-foreground">Drop to upload</p>
+              <p className="text-sm text-muted-foreground">
                 Files will upload to <span className="font-medium">{workspaceName ?? "this workspace"}</span>
               </p>
             </div>
@@ -3293,11 +3293,11 @@ function SkeletonList() {
     <div className="space-y-3" aria-hidden>
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-4">
-          <div className="h-4 w-4 rounded bg-slate-100" />
-          <div className="h-4 flex-1 rounded bg-slate-100" />
-          <div className="h-4 w-24 rounded bg-slate-100" />
-          <div className="h-4 w-40 rounded bg-slate-100" />
-          <div className="h-8 w-40 rounded bg-slate-100" />
+          <div className="h-4 w-4 rounded bg-muted" />
+          <div className="h-4 flex-1 rounded bg-muted" />
+          <div className="h-4 w-24 rounded bg-muted" />
+          <div className="h-4 w-40 rounded bg-muted" />
+          <div className="h-8 w-40 rounded bg-muted" />
         </div>
       ))}
     </div>
@@ -3332,7 +3332,7 @@ function BulkBar({
       : undefined;
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 text-sm text-slate-700 shadow-lg backdrop-blur">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 p-3 text-sm text-foreground shadow-lg backdrop-blur">
         <span className="mr-2"><strong>{count}</strong> selected</span>
         <Button variant="ghost" size="sm" onClick={onClear}>Clear</Button>
         <div className="ml-auto flex items-center gap-2">
@@ -3351,15 +3351,15 @@ function BulkBar({
 function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-        <svg className="h-6 w-6 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background">
+        <svg className="h-6 w-6 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M12 16V4" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M6 10l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-      <p className="text-base font-semibold text-slate-900">No documents yet</p>
-      <p className="max-w-md text-sm text-slate-600">Tap Upload or drag files anywhere in the window.</p>
+      <p className="text-base font-semibold text-foreground">No documents yet</p>
+      <p className="max-w-md text-sm text-muted-foreground">Tap Upload or drag files anywhere in the window.</p>
       <Button onClick={onUploadClick} className="w-full sm:w-auto">Upload</Button>
     </div>
   );
@@ -3384,7 +3384,7 @@ function extractRunSummaryFromTelemetry(events: RunStreamEvent[]): Partial<RunSu
 
 function DocumentRunStatus({ document }: { document: DocumentRecord }) {
   const lastRun = document.last_run;
-  if (!lastRun) return <span className="text-xs text-slate-400">No runs yet</span>;
+  if (!lastRun) return <span className="text-xs text-muted-foreground">No runs yet</span>;
 
   return (
     <div className="flex flex-col gap-1">
@@ -3396,10 +3396,10 @@ function DocumentRunStatus({ document }: { document: DocumentRecord }) {
       >
         {formatRunStatus(lastRun.status as RunStatus)}
         {lastRun.run_at ? (
-          <span className="ml-1 font-normal text-slate-500">{formatRelativeTime(lastRun.run_at)}</span>
+          <span className="ml-1 font-normal text-muted-foreground">{formatRelativeTime(lastRun.run_at)}</span>
         ) : null}
       </span>
-      {lastRun.message ? <span className="text-[11px] text-slate-500">{lastRun.message}</span> : null}
+      {lastRun.message ? <span className="text-[11px] text-muted-foreground">{lastRun.message}</span> : null}
     </div>
   );
 }
@@ -3413,7 +3413,7 @@ function runStatusBadgeClass(status: RunStatus) {
     case "running":
       return "bg-brand-100 text-brand-700";
     default:
-      return "bg-slate-200 text-slate-700";
+      return "bg-muted text-foreground";
   }
 }
 

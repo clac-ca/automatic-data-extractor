@@ -27,13 +27,13 @@ const STATUS_STYLES: Record<
   },
   queued: {
     label: "Queued",
-    pill: "border-slate-200 bg-slate-50 text-slate-600",
-    dot: "bg-slate-400",
+    pill: "border-border bg-background text-muted-foreground",
+    dot: "bg-muted-foreground",
   },
   archived: {
     label: "Archived",
-    pill: "border-slate-200 bg-slate-100 text-slate-500",
-    dot: "bg-slate-400",
+    pill: "border-border bg-muted text-muted-foreground",
+    dot: "bg-muted-foreground",
   },
 };
 

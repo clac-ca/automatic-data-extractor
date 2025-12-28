@@ -1,20 +1,34 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: ["class", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
+        background: "rgb(var(--color-background) / <alpha-value>)",
+        foreground: "rgb(var(--color-foreground) / <alpha-value>)",
+        card: "rgb(var(--color-card) / <alpha-value>)",
+        "card-foreground": "rgb(var(--color-card-foreground) / <alpha-value>)",
+        popover: "rgb(var(--color-popover) / <alpha-value>)",
+        "popover-foreground": "rgb(var(--color-popover-foreground) / <alpha-value>)",
+        muted: "rgb(var(--color-muted) / <alpha-value>)",
+        "muted-foreground": "rgb(var(--color-muted-foreground) / <alpha-value>)",
+        border: "rgb(var(--color-border) / <alpha-value>)",
+        "border-strong": "rgb(var(--color-border-strong) / <alpha-value>)",
+        ring: "rgb(var(--color-ring) / <alpha-value>)",
+        overlay: "rgb(var(--color-overlay) / <alpha-value>)",
+        shadow: "rgb(var(--color-shadow) / <alpha-value>)",
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
-          300: "#a5b4fc",
-          400: "#818cf8",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#3730a3",
-          900: "#312e81",
+          50: "rgb(var(--color-brand-50) / <alpha-value>)",
+          100: "rgb(var(--color-brand-100) / <alpha-value>)",
+          200: "rgb(var(--color-brand-200) / <alpha-value>)",
+          300: "rgb(var(--color-brand-300) / <alpha-value>)",
+          400: "rgb(var(--color-brand-400) / <alpha-value>)",
+          500: "rgb(var(--color-brand-500) / <alpha-value>)",
+          600: "rgb(var(--color-brand-600) / <alpha-value>)",
+          700: "rgb(var(--color-brand-700) / <alpha-value>)",
+          800: "rgb(var(--color-brand-800) / <alpha-value>)",
+          900: "rgb(var(--color-brand-900) / <alpha-value>)",
         },
         success: {
           50: "#ecfdf3",
@@ -54,7 +68,7 @@ export default {
         },
       },
       boxShadow: {
-        soft: "0 20px 45px -25px rgba(15, 23, 42, 0.45)",
+        soft: "0 20px 45px -25px rgb(var(--color-shadow) / 0.45)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

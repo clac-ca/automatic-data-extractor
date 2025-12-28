@@ -118,7 +118,7 @@ export function DocumentsV9Workbench() {
   };
 
   return (
-    <div className="documents-v9 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
+    <div className="documents-v9 flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
         search={model.state.search}
         onSearchChange={model.actions.setSearch}
@@ -134,7 +134,7 @@ export function DocumentsV9Workbench() {
         <section
           className={clsx(
             "flex min-h-0 min-w-0 flex-1 flex-col",
-            model.state.previewOpen && "lg:border-r lg:border-slate-200",
+            model.state.previewOpen && "lg:border-r lg:border-border",
           )}
         >
           <DocumentsFiltersBar

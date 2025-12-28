@@ -26,7 +26,7 @@ export function RowActionsMenu({
     <>
       <button
         type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:bg-background"
         onClick={(event) => {
           event.stopPropagation();
           setPosition({ x: event.clientX, y: event.clientY });

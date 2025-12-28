@@ -75,16 +75,16 @@ export default function LoginScreen() {
 
   if (sessionLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <p className="text-sm text-slate-600">Checking your session…</p>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <p className="text-sm text-muted-foreground">Checking your session…</p>
       </div>
     );
   }
 
   if (sessionError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 px-6 text-center">
-        <p className="text-sm text-slate-600">We were unable to verify your session. Refresh the page to try again.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-sm text-muted-foreground">We were unable to verify your session. Refresh the page to try again.</p>
         <Button variant="secondary" onClick={() => sessionQuery.refetch()}>Retry</Button>
       </div>
     );
@@ -92,16 +92,16 @@ export default function LoginScreen() {
 
   if (setupQuery.isPending && shouldCheckSetup) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <p className="text-sm text-slate-600">Preparing initial setup…</p>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <p className="text-sm text-muted-foreground">Preparing initial setup…</p>
       </div>
     );
   }
 
   if (setupQuery.isError && shouldCheckSetup) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 px-6 text-center">
-        <p className="text-sm text-slate-600">We were unable to check whether ADE is ready.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-sm text-muted-foreground">We were unable to check whether ADE is ready.</p>
         <Button variant="secondary" onClick={() => setupQuery.refetch()}>Try again</Button>
       </div>
     );
@@ -148,12 +148,12 @@ export default function LoginScreen() {
   const isProvidersLoading = providersQuery.isLoading || providersQuery.isFetching;
 
   return (
-    <div className="mx-auto flex min-h-screen flex-col justify-center bg-slate-50 px-6 py-16">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-10 shadow-soft">
+    <div className="mx-auto flex min-h-screen flex-col justify-center bg-background px-6 py-16">
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card p-10 shadow-soft">
         <header className="space-y-2 text-center">
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Welcome back</p>
-          <h1 className="text-3xl font-semibold text-slate-900">Sign in to ADE</h1>
-          <p className="text-sm text-slate-600">
+          <h1 className="text-3xl font-semibold text-foreground">Sign in to ADE</h1>
+          <p className="text-sm text-muted-foreground">
             Enter your email and password or continue with a connected provider.
           </p>
         </header>
@@ -162,8 +162,8 @@ export default function LoginScreen() {
 
         {isProvidersLoading ? (
           <div className="mt-6 space-y-3">
-            <div className="h-10 animate-pulse rounded-lg bg-slate-100" />
-            <div className="h-10 animate-pulse rounded-lg bg-slate-100" />
+            <div className="h-10 animate-pulse rounded-lg bg-muted" />
+            <div className="h-10 animate-pulse rounded-lg bg-muted" />
           </div>
         ) : providers.length > 0 ? (
           <div className="mt-6 space-y-3">
@@ -171,7 +171,7 @@ export default function LoginScreen() {
               <a
                 key={provider.id}
                 href={provider.start_url ?? "#"}
-                className="flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                className="flex w-full items-center justify-center rounded-lg border border-border-strong bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 Continue with {provider.label}
               </a>

@@ -60,7 +60,7 @@ export function EditorArea({
 
   if (!hasTabs || !activeTab) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a file from the explorer to begin editing.
       </div>
     );

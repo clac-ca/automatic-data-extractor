@@ -111,7 +111,7 @@ function WorkspaceContent() {
 
   if (workspacesQuery.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <PageState title="Loading workspace" variant="loading" />
       </div>
     );
@@ -119,7 +119,7 @@ function WorkspaceContent() {
 
   if (workspacesQuery.isError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <PageState
           title="Unable to load workspace"
           description="We were unable to fetch workspace information. Refresh the page to try again."
@@ -127,7 +127,7 @@ function WorkspaceContent() {
         />
         <button
           type="button"
-          className="focus-ring rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+          className="focus-ring rounded-lg border border-border-strong bg-card px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
           onClick={() => workspacesQuery.refetch()}
         >
           Retry
@@ -187,7 +187,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         id: item.id,
         label: item.label,
         description: `Jump to ${item.label}`,
-        icon: <item.icon className="h-4 w-4 text-slate-400" aria-hidden />,
+        icon: <item.icon className="h-4 w-4 text-muted-foreground" aria-hidden />,
       })),
     [workspaceNavItems],
   );
@@ -325,7 +325,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <button
         type="button"
         onClick={openMobileNav}
-        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-600 shadow-sm lg:hidden"
+        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground shadow-sm lg:hidden"
         aria-label="Open workspace navigation"
       >
         <MenuIcon />
@@ -336,19 +336,19 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         aria-label={workspaceSwitcherLabel}
         title={workspaceSwitcherLabel}
         className={clsx(
-          "group inline-flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-left shadow-sm transition",
-          "hover:border-slate-300 hover:bg-slate-50",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+          "group inline-flex min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-card px-3 py-2 text-left shadow-sm transition",
+          "hover:border-border-strong hover:bg-background",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         )}
       >
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-white shadow-sm transition-colors group-hover:bg-brand-600">
           {workspaceInitials}
         </span>
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-slate-900">{workspace.name}</span>
-          <span className="hidden text-xs text-slate-500 sm:block">Switch workspace</span>
+          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
+          <span className="hidden text-xs text-muted-foreground sm:block">Switch workspace</span>
         </span>
-        <span className="hidden text-slate-400 sm:inline-flex" aria-hidden>
+        <span className="hidden text-muted-foreground sm:inline-flex" aria-hidden>
           <ChevronDownIcon />
         </span>
       </button>
@@ -458,7 +458,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <AboutVersionsModal open={isVersionsModalOpen} onClose={() => setIsVersionsModalOpen(false)} />
       <div
         className={clsx(
-          "flex min-w-0 flex-col bg-slate-50 text-slate-900",
+          "flex min-w-0 flex-col bg-background text-foreground",
           fullHeightLayout ? "h-screen overflow-hidden" : "min-h-screen",
         )}
         style={{ "--workspace-topbar-height": `${topBarHeight}px` } as CSSProperties}
@@ -482,20 +482,20 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
               <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
                 <button
                   type="button"
-                  className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                  className="absolute inset-0 bg-overlay/40 backdrop-blur-sm"
                   onClick={closeMobileNav}
                   aria-label="Close navigation"
                 />
-                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-slate-100/70 bg-gradient-to-b from-white via-slate-50 to-white/95 shadow-[0_45px_90px_-50px_rgba(15,23,42,0.85)]">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-border/70 bg-gradient-to-b from-card via-background to-card/95 shadow-[0_45px_90px_-50px_rgb(var(--color-shadow)/0.85)]">
+                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
                     <div className="flex flex-col leading-tight">
-                      <span className="text-sm font-semibold text-slate-900">{workspace.name}</span>
-                      <span className="text-xs text-slate-400">Workspace navigation</span>
+                      <span className="text-sm font-semibold text-foreground">{workspace.name}</span>
+                      <span className="text-xs text-muted-foreground">Workspace navigation</span>
                     </div>
                     <button
                       type="button"
                       onClick={closeMobileNav}
-                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 bg-white text-slate-500"
+                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground"
                       aria-label="Close navigation"
                     >
                       <CloseIcon />

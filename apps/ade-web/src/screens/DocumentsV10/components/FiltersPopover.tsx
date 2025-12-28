@@ -55,23 +55,23 @@ export function FiltersPopover({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-brand-300"
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:border-brand-300"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
         Filters
         {activeCount > 0 ? (
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+          <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
             {activeCount}
           </span>
         ) : null}
-        <span className="text-slate-400" aria-hidden>
+        <span className="text-muted-foreground" aria-hidden>
           v
         </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-[22rem] rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="absolute left-0 z-30 mt-2 w-[22rem] rounded-2xl border border-border bg-card p-4 shadow-lg">
           <div className="flex flex-col gap-4">
             <FilterGroup label="Status">
               <FilterPills
@@ -102,7 +102,7 @@ export function FiltersPopover({
 
             <FilterGroup label="Tags">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                <div className="flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1">
                   {(["any", "all"] as TagMode[]).map((mode) => (
                     <button
                       key={mode}
@@ -110,8 +110,8 @@ export function FiltersPopover({
                       className={clsx(
                         "rounded-full px-2 py-0.5 text-[11px] font-semibold transition",
                         filters.tagMode === mode
-                          ? "bg-white text-slate-900 shadow-sm"
-                          : "text-slate-500 hover:text-slate-800",
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
                       )}
                       onClick={() => onChange({ ...filters, tagMode: mode })}
                     >
@@ -145,7 +145,7 @@ export function FiltersPopover({
               />
             </FilterGroup>
 
-            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between border-t border-border pt-3">
               <button
                 type="button"
                 onClick={() =>
@@ -157,7 +157,7 @@ export function FiltersPopover({
                     assignees: [],
                   })
                 }
-                className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
                 Clear filters
               </button>
@@ -179,7 +179,7 @@ export function FiltersPopover({
 function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold text-slate-500">{label}</div>
+      <div className="mb-2 text-xs font-semibold text-muted-foreground">{label}</div>
       {children}
     </div>
   );
@@ -210,7 +210,7 @@ function FilterPills<T extends string>({
               "rounded-full border px-2 py-0.5 text-[11px] font-semibold transition",
               active
                 ? "border-brand-200 bg-brand-50 text-brand-700"
-                : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800",
+                : "border-transparent text-muted-foreground hover:bg-background hover:text-foreground",
             )}
           >
             {text}

@@ -517,7 +517,7 @@ export default function WorkspaceConfigsIndexRoute() {
         description="Copy a starter template into this workspace to begin editing detectors, hooks, and manifests."
         action={
           <div className="space-y-6 text-left">
-            <form onSubmit={handleCreate} className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <form onSubmit={handleCreate} className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
               <FormField label="Configuration name" required>
                 <Input
                   value={displayName}
@@ -532,10 +532,10 @@ export default function WorkspaceConfigsIndexRoute() {
                 Create from template
               </Button>
             </form>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="space-y-1">
-                <h2 className="text-base font-semibold text-slate-900">Import configuration</h2>
-                <p className="text-sm text-slate-500">Upload an ADE export (.zip) to create a new draft configuration.</p>
+                <h2 className="text-base font-semibold text-foreground">Import configuration</h2>
+                <p className="text-sm text-muted-foreground">Upload an ADE export (.zip) to create a new draft configuration.</p>
               </div>
               <form onSubmit={handleImport} className="mt-3 space-y-4">
                 <FormField label="Configuration name" required>
@@ -555,7 +555,7 @@ export default function WorkspaceConfigsIndexRoute() {
                     disabled={importConfig.isPending}
                   />
                   {importFile ? (
-                    <p className="mt-1 text-xs text-slate-500" aria-live="polite">
+                    <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
                       {importFile.name}
                     </p>
                   ) : null}
@@ -574,11 +574,11 @@ export default function WorkspaceConfigsIndexRoute() {
 
   return (
     <div className="grid gap-6 p-4 lg:grid-cols-[minmax(0,2fr),minmax(0,1fr)]">
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Configurations</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-xl font-semibold text-foreground">Configurations</h1>
+            <p className="text-sm text-muted-foreground">
               Manage draft, active, and archived configurations for this workspace.
             </p>
           </div>
@@ -589,23 +589,23 @@ export default function WorkspaceConfigsIndexRoute() {
           ) : null}
         </header>
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active configuration</p>
+          <div className="rounded-xl border border-border">
+            <div className="border-b border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active configuration</p>
             </div>
             {activeConfiguration ? (
-              <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-slate-50">
+              <div className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background">
                 <button
                   type="button"
-                  className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   onClick={() => handleOpenConfig(activeConfiguration.id)}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold text-slate-900">{activeConfiguration.display_name}</h2>
+                    <h2 className="text-lg font-semibold text-foreground">{activeConfiguration.display_name}</h2>
                     <StatusPill status={activeConfiguration.status} />
-                    <span className="text-xs text-slate-500">Used for extraction runs</span>
+                    <span className="text-xs text-muted-foreground">Used for extraction runs</span>
                   </div>
-                  <p className="text-sm text-slate-500">Updated {formatTimestamp(activeConfiguration.updated_at)}</p>
+                  <p className="text-sm text-muted-foreground">Updated {formatTimestamp(activeConfiguration.updated_at)}</p>
                 </button>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button
@@ -624,35 +624,35 @@ export default function WorkspaceConfigsIndexRoute() {
               </div>
             ) : (
               <div className="space-y-2 p-4">
-                <p className="text-sm font-semibold text-slate-900">No active configuration</p>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm font-semibold text-foreground">No active configuration</p>
+                <p className="text-sm text-muted-foreground">
                   Extraction runs will be blocked until you make a draft configuration active.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Drafts ({draftConfigurations.length})</p>
+          <div className="rounded-xl border border-border">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Drafts ({draftConfigurations.length})</p>
               {draftConfigurations.length === 0 && activeConfiguration ? (
-                <p className="text-xs text-slate-500">Duplicate Active to start editing.</p>
+                <p className="text-xs text-muted-foreground">Duplicate Active to start editing.</p>
               ) : null}
             </div>
             {draftConfigurations.length ? (
-              <div className="divide-y divide-slate-200">
+              <div className="divide-y divide-border">
                 {draftConfigurations.map((config) => (
                   <div
                     key={config.id}
-                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-slate-50"
+                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background"
                   >
                     <button
                       type="button"
-                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       onClick={() => handleOpenConfig(config.id)}
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-slate-900">{config.display_name}</h3>
+                        <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
                         <StatusPill status={config.status} />
                         {lastOpenedConfig?.id === config.id ? (
                           <span className="text-xs font-medium uppercase tracking-wide text-brand-600">
@@ -660,7 +660,7 @@ export default function WorkspaceConfigsIndexRoute() {
                           </span>
                         ) : null}
                       </div>
-                      <p className="text-sm text-slate-500">Updated {formatTimestamp(config.updated_at)}</p>
+                      <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
                     </button>
                     <div className="flex flex-wrap items-center justify-end gap-2">
                       <Button
@@ -681,33 +681,33 @@ export default function WorkspaceConfigsIndexRoute() {
                 ))}
               </div>
             ) : (
-              <div className="p-4 text-sm text-slate-600">No draft configurations.</div>
+              <div className="p-4 text-sm text-muted-foreground">No draft configurations.</div>
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="rounded-xl border border-border">
+            <div className="border-b border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Archived ({archivedConfigurations.length})
               </p>
             </div>
 	            {archivedConfigurations.length ? (
-	              <div className="divide-y divide-slate-200">
+	              <div className="divide-y divide-border">
 	                {archivedConfigurations.map((config) => (
 	                  <div
 	                    key={config.id}
-	                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-slate-50"
+	                    className="grid gap-3 p-4 md:grid-cols-[minmax(0,2fr),auto] md:items-center hover:bg-background"
 	                  >
 	                    <button
 	                      type="button"
-	                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+	                      className="cursor-pointer space-y-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 	                      onClick={() => handleOpenConfig(config.id)}
 	                    >
 	                      <div className="flex flex-wrap items-center gap-2">
-	                        <h3 className="text-base font-semibold text-slate-900">{config.display_name}</h3>
+	                        <h3 className="text-base font-semibold text-foreground">{config.display_name}</h3>
 	                        <StatusPill status={config.status} />
 	                      </div>
-	                      <p className="text-sm text-slate-500">Updated {formatTimestamp(config.updated_at)}</p>
+	                      <p className="text-sm text-muted-foreground">Updated {formatTimestamp(config.updated_at)}</p>
 	                    </button>
 	                    <div className="flex flex-wrap items-center justify-end gap-2">
 	                      <Button
@@ -727,16 +727,16 @@ export default function WorkspaceConfigsIndexRoute() {
 	                ))}
 	              </div>
 	            ) : (
-	              <div className="p-4 text-sm text-slate-600">No archived configurations.</div>
+	              <div className="p-4 text-sm text-muted-foreground">No archived configurations.</div>
 	            )}
 	          </div>
         </div>
       </section>
 
-      <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <aside className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-slate-900">New configuration</h2>
-          <p className="text-sm text-slate-500">Copy the starter template to begin editing detectors, hooks, and manifests.</p>
+          <h2 className="text-lg font-semibold text-foreground">New configuration</h2>
+          <p className="text-sm text-muted-foreground">Copy the starter template to begin editing detectors, hooks, and manifests.</p>
         </div>
         <form onSubmit={handleCreate} className="space-y-4">
           <FormField label="Configuration name" required>
@@ -753,10 +753,10 @@ export default function WorkspaceConfigsIndexRoute() {
             Create from template
           </Button>
         </form>
-        <div className="border-t border-slate-200 pt-4">
+        <div className="border-t border-border pt-4">
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-slate-900">Import configuration</h2>
-            <p className="text-sm text-slate-500">Upload an ADE export (.zip) to create a new draft configuration.</p>
+            <h2 className="text-lg font-semibold text-foreground">Import configuration</h2>
+            <p className="text-sm text-muted-foreground">Upload an ADE export (.zip) to create a new draft configuration.</p>
           </div>
           <form onSubmit={handleImport} className="mt-3 space-y-4">
             <FormField label="Configuration name" required>
@@ -776,7 +776,7 @@ export default function WorkspaceConfigsIndexRoute() {
                 disabled={importConfig.isPending}
               />
               {importFile ? (
-                <p className="mt-1 text-xs text-slate-500" aria-live="polite">
+                <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
                   {importFile.name}
                 </p>
               ) : null}
@@ -844,18 +844,18 @@ export default function WorkspaceConfigsIndexRoute() {
         confirmDisabled={makeActiveDialogState?.stage === "checking" || makeActiveConfig.isPending}
       >
         {makeActiveDialogState?.stage === "checking" ? (
-          <div className="flex items-center gap-3 text-sm text-slate-600">
-            <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600" aria-hidden="true" />
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
             <span>Validating…</span>
           </div>
         ) : makeActiveDialogState?.stage === "issues" ? (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700">Issues:</p>
-            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="text-sm text-foreground">Issues:</p>
+            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-background p-3 text-xs text-foreground">
               {makeActiveDialogState.issues.map((issue) => (
                 <li key={`${issue.path}:${issue.message}`} className="space-y-1">
                   <p className="font-semibold">{issue.path}</p>
-                  <p className="text-slate-600">{issue.message}</p>
+                  <p className="text-muted-foreground">{issue.message}</p>
                 </li>
               ))}
             </ul>

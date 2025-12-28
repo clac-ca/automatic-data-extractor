@@ -94,16 +94,16 @@ export function TagPicker({
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
         className={clsx(
-          "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 disabled:cursor-not-allowed disabled:opacity-60",
+          "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
           disabled
-            ? "border-slate-200 bg-slate-50 text-slate-400"
-            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+            ? "border-border bg-background text-muted-foreground"
+            : "border-border bg-card text-foreground hover:bg-background",
         )}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
         {selected.length === 0 ? (
-          <span className="text-slate-500">{placeholder}</span>
+          <span className="text-muted-foreground">{placeholder}</span>
         ) : (
           <span>
             {selected.slice(0, 2).join(", ")}
@@ -114,7 +114,7 @@ export function TagPicker({
 
       {open ? (
         <div
-          className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-[18rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-lg"
+          className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-[18rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
           data-ignore-row-click="true"
         >
           <div className="mb-2">
@@ -125,7 +125,7 @@ export function TagPicker({
               className="h-9"
               autoFocus
             />
-            <div className="mt-1 text-[11px] text-slate-400">
+            <div className="mt-1 text-[11px] text-muted-foreground">
               Type 2+ characters to search existing tags.
             </div>
           </div>
@@ -137,7 +137,7 @@ export function TagPicker({
                   key={t}
                   type="button"
                   onClick={() => onToggle(t)}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:text-rose-700"
+                  className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-foreground hover:text-rose-700"
                   title="Remove tag"
                 >
                   {t} ×
@@ -146,22 +146,22 @@ export function TagPicker({
             </div>
           ) : null}
 
-          <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-100">
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-border">
             {createCandidate ? (
               <button
                 type="button"
                 onClick={() => onToggle(createCandidate)}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-foreground hover:bg-background"
               >
                 <span>Create “{createCandidate}”</span>
-                <span className="text-[11px] text-slate-400">new</span>
+                <span className="text-[11px] text-muted-foreground">new</span>
               </button>
             ) : null}
 
             {tagsQuery.isLoading ? (
-              <div className="px-3 py-3 text-xs text-slate-500">Loading tags…</div>
+              <div className="px-3 py-3 text-xs text-muted-foreground">Loading tags…</div>
             ) : items.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-500">
+              <div className="px-3 py-3 text-xs text-muted-foreground">
                 {canSearch ? "No matches." : "No tags yet."}
               </div>
             ) : (
@@ -174,18 +174,18 @@ export function TagPicker({
                     onClick={() => onToggle(item.tag)}
                     className={clsx(
                       "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold transition",
-                      isSelected ? "bg-brand-50 text-slate-900" : "text-slate-700 hover:bg-slate-50",
+                      isSelected ? "bg-brand-50 text-foreground" : "text-foreground hover:bg-background",
                     )}
                   >
                     <span className="truncate">{item.tag}</span>
-                    <span className="ml-3 text-[11px] text-slate-400">{item.document_count}</span>
+                    <span className="ml-3 text-[11px] text-muted-foreground">{item.document_count}</span>
                   </button>
                 );
               })
             )}
           </div>
 
-          <div className="mt-2 text-[11px] text-slate-400">
+          <div className="mt-2 text-[11px] text-muted-foreground">
             Click a tag to toggle it.
           </div>
         </div>

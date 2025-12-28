@@ -192,7 +192,7 @@ const absoluteTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", t
 function statusBadge(status: DocumentStatus) {
   switch (status) {
     case "uploaded":
-      return { label: "Queued", classes: "bg-slate-100 text-slate-700" };
+      return { label: "Queued", classes: "bg-muted text-foreground" };
     case "processing":
       return { label: "Processing", classes: "bg-amber-100 text-amber-800" };
     case "processed":
@@ -200,9 +200,9 @@ function statusBadge(status: DocumentStatus) {
     case "failed":
       return { label: "Needs attention", classes: "bg-rose-100 text-rose-800" };
     case "archived":
-      return { label: "Archived", classes: "bg-slate-100 text-slate-600" };
+      return { label: "Archived", classes: "bg-muted text-muted-foreground" };
     default:
-      return { label: status, classes: "bg-slate-100 text-slate-700" };
+      return { label: status, classes: "bg-muted text-foreground" };
   }
 }
 
@@ -838,27 +838,27 @@ export default function WorkspaceDocumentsV5Route() {
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 overflow-hidden bg-slate-50"
+      className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       {dragActive ? (
-        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-slate-900/10 backdrop-blur-[2px]">
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 px-10 py-8 shadow-xl">
-            <div className="text-sm font-semibold text-slate-900">Drop files to upload</div>
-            <div className="mt-1 text-xs text-slate-500">They’ll appear here as soon as they’re received.</div>
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-overlay/10 backdrop-blur-[2px]">
+          <div className="rounded-3xl border border-border/80 bg-card/90 px-10 py-8 shadow-xl">
+            <div className="text-sm font-semibold text-foreground">Drop files to upload</div>
+            <div className="mt-1 text-xs text-muted-foreground">They’ll appear here as soon as they’re received.</div>
           </div>
         </div>
       ) : null}
 
-      <div className="flex w-[min(30rem,42%)] min-w-[22rem] flex-col border-r border-slate-200/70 bg-white">
-        <div className="border-b border-slate-200/70 px-5 pb-4 pt-5">
+      <div className="flex w-[min(30rem,42%)] min-w-[22rem] flex-col border-r border-border/70 bg-card">
+        <div className="border-b border-border/70 px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-semibold text-slate-900">Documents v5</h1>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                <h1 className="truncate text-base font-semibold text-foreground">Documents v5</h1>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
                   {selectedCountLabel}
                 </span>
                 {demoMode ? (
@@ -867,7 +867,7 @@ export default function WorkspaceDocumentsV5Route() {
                   </span>
                 ) : null}
               </div>
-              <div className="mt-1 text-xs text-slate-500">Upload, review, preview, download processed output.</div>
+              <div className="mt-1 text-xs text-muted-foreground">Upload, review, preview, download processed output.</div>
             </div>
             <div className="flex items-center gap-2">
               {demoMode ? (
@@ -889,7 +889,7 @@ export default function WorkspaceDocumentsV5Route() {
                   onClick={() => setStateFilter(filter.id)}
                   className={clsx(
                     "focus-ring rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                    active ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                    active ? "bg-foreground text-background" : "bg-muted text-foreground hover:bg-muted",
                   )}
                 >
                   {filter.label}
@@ -905,11 +905,11 @@ export default function WorkspaceDocumentsV5Route() {
                   key={tag}
                   type="button"
                   onClick={() => removeFilterTag(tag)}
-                  className="focus-ring inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                  className="focus-ring inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
                   title="Remove tag filter"
                 >
                   <span>{tag}</span>
-                  <span aria-hidden="true" className="text-slate-400">
+                  <span aria-hidden="true" className="text-muted-foreground">
                     ×
                   </span>
                 </button>
@@ -935,7 +935,7 @@ export default function WorkspaceDocumentsV5Route() {
                   }}
                   placeholder="Filter tags…"
                   disabled={demoMode}
-                  className="h-9 rounded-full border-slate-200 bg-slate-50 px-4 text-xs focus-visible:ring-slate-300"
+                  className="h-9 rounded-full border-border bg-background px-4 text-xs focus-visible:ring-ring"
                 />
 	                {selectedTags.length > 0 || state !== "all" ? (
 	                  <button
@@ -950,14 +950,14 @@ export default function WorkspaceDocumentsV5Route() {
 	                        return nextParams;
 	                      });
 	                    }}
-	                    className="focus-ring rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+	                    className="focus-ring rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-background"
 	                  >
                     Clear
                   </button>
                 ) : null}
               </div>
             </div>
-            <div className="mt-2 text-[11px] text-slate-400">Search uses the top bar. Tags filter supports Enter/Backspace.</div>
+            <div className="mt-2 text-[11px] text-muted-foreground">Search uses the top bar. Tags filter supports Enter/Backspace.</div>
           </div>
         </div>
 
@@ -1003,8 +1003,8 @@ export default function WorkspaceDocumentsV5Route() {
 function EmptyListState({ onUseDemo }: { readonly onUseDemo?: (() => void) | undefined }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 py-12 text-center">
-      <div className="text-sm font-semibold text-slate-900">No documents yet</div>
-      <div className="mt-2 max-w-sm text-sm text-slate-500">
+      <div className="text-sm font-semibold text-foreground">No documents yet</div>
+      <div className="mt-2 max-w-sm text-sm text-muted-foreground">
         Drag & drop files into this window, or use Upload. Processed outputs will always be the primary download.
       </div>
       {onUseDemo ? (
@@ -1070,24 +1070,24 @@ function DocumentRow({
       onClick={onClick}
       className={clsx(
         "focus-ring group flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3 text-left transition",
-        selected ? "bg-slate-900 text-white" : "bg-white hover:bg-slate-50",
+        selected ? "bg-foreground text-background" : "bg-card hover:bg-background",
       )}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className={clsx("truncate text-sm font-semibold", selected ? "text-white" : "text-slate-900")}>
+          <div className={clsx("truncate text-sm font-semibold", selected ? "text-white" : "text-foreground")}>
             {document.name}
           </div>
           <span
             className={clsx(
               "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-              selected ? "bg-white/15 text-white" : badge.classes,
+              selected ? "bg-card/15 text-white" : badge.classes,
             )}
           >
             {badge.label}
           </span>
         </div>
-        <div className={clsx("mt-1 flex flex-wrap items-center gap-2 text-[11px]", selected ? "text-white/70" : "text-slate-500")}>
+        <div className={clsx("mt-1 flex flex-wrap items-center gap-2 text-[11px]", selected ? "text-background/70" : "text-muted-foreground")}>
           <span>{formatBytes(document.byte_size)}</span>
           {updatedAt ? (
             <>
@@ -1103,7 +1103,7 @@ function DocumentRow({
                 key={tag}
                 className={clsx(
                   "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                  selected ? "bg-white/10 text-white/85" : "bg-slate-100 text-slate-600",
+                  selected ? "bg-card/10 text-background/85" : "bg-muted text-muted-foreground",
                 )}
               >
                 {tag}
@@ -1113,7 +1113,7 @@ function DocumentRow({
               <span
                 className={clsx(
                   "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                  selected ? "bg-white/10 text-white/70" : "bg-slate-100 text-slate-500",
+                  selected ? "bg-card/10 text-background/70" : "bg-muted text-muted-foreground",
                 )}
               >
                 +{tags.length - 4}
@@ -1122,7 +1122,7 @@ function DocumentRow({
           </div>
         ) : null}
       </div>
-      <div className={clsx("mt-0.5 text-[11px] font-semibold", selected ? "text-white/60" : "text-slate-300")}>
+      <div className={clsx("mt-0.5 text-[11px] font-semibold", selected ? "text-background/60" : "text-muted-foreground")}>
         {selected ? "Selected" : ""}
       </div>
     </button>
@@ -1147,16 +1147,16 @@ function UploadShelf({
   const visible = [...active, ...completed].slice(0, 4);
 
   return (
-    <div className="border-t border-slate-200/70 bg-white px-4 py-3">
+    <div className="border-t border-border/70 bg-card px-4 py-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-xs font-semibold text-slate-700">
+        <div className="text-xs font-semibold text-foreground">
           Uploads
-          {active.length > 0 ? <span className="ml-1 text-slate-400">({active.length} active)</span> : null}
+          {active.length > 0 ? <span className="ml-1 text-muted-foreground">({active.length} active)</span> : null}
         </div>
         {completed.length > 0 ? (
           <button
             type="button"
-            className="focus-ring text-xs font-semibold text-slate-500 hover:text-slate-700"
+            className="focus-ring text-xs font-semibold text-muted-foreground hover:text-foreground"
             onClick={onClearCompleted}
           >
             Clear completed
@@ -1165,11 +1165,11 @@ function UploadShelf({
       </div>
       <div className="mt-2 flex flex-col gap-2">
         {visible.map((item) => (
-          <div key={item.id} className="rounded-2xl bg-slate-50 px-3 py-2">
+          <div key={item.id} className="rounded-2xl bg-background px-3 py-2">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-slate-700">{item.file.name}</div>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
+                <div className="truncate text-xs font-semibold text-foreground">{item.file.name}</div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                   <span>{item.status === "queued" ? "Queued" : item.status === "uploading" ? "Uploading" : item.status === "succeeded" ? "Uploaded" : item.status === "failed" ? "Failed" : "Cancelled"}</span>
                   <span aria-hidden="true">·</span>
                   <span>{item.progress.percent}%</span>
@@ -1179,7 +1179,7 @@ function UploadShelf({
                 {item.status === "uploading" || item.status === "queued" ? (
                   <button
                     type="button"
-                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-white"
+                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-card"
                     onClick={() => onCancel(item.id)}
                   >
                     Cancel
@@ -1188,7 +1188,7 @@ function UploadShelf({
                 {item.status === "failed" ? (
                   <button
                     type="button"
-                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-white"
+                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-card"
                     onClick={() => onRetry(item.id)}
                   >
                     Retry
@@ -1197,7 +1197,7 @@ function UploadShelf({
                 {item.status === "succeeded" || item.status === "failed" || item.status === "cancelled" ? (
                   <button
                     type="button"
-                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-slate-400 hover:bg-white hover:text-slate-600"
+                    className="focus-ring rounded-full px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-card hover:text-muted-foreground"
                     onClick={() => onRemove(item.id)}
                     aria-label="Remove upload"
                   >
@@ -1206,11 +1206,11 @@ function UploadShelf({
                 ) : null}
               </div>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card">
               <div
                 className={clsx(
                   "h-full rounded-full transition-all",
-                  item.status === "failed" ? "bg-rose-400" : item.status === "cancelled" ? "bg-slate-300" : "bg-brand-500",
+                  item.status === "failed" ? "bg-rose-400" : item.status === "cancelled" ? "bg-muted" : "bg-brand-500",
                 )}
                 style={{ width: `${Math.min(100, Math.max(0, item.progress.percent))}%` }}
               />
@@ -1219,7 +1219,7 @@ function UploadShelf({
           </div>
         ))}
         {items.length > visible.length ? (
-          <div className="text-[11px] text-slate-400">And {items.length - visible.length} more…</div>
+          <div className="text-[11px] text-muted-foreground">And {items.length - visible.length} more…</div>
         ) : null}
       </div>
     </div>
@@ -1265,8 +1265,8 @@ function Inspector({
     return (
       <div className="flex flex-1 items-center justify-center px-10 text-center">
         <div>
-          <div className="text-sm font-semibold text-slate-900">Select a document</div>
-          <div className="mt-2 max-w-sm text-sm text-slate-500">
+          <div className="text-sm font-semibold text-foreground">Select a document</div>
+          <div className="mt-2 max-w-sm text-sm text-muted-foreground">
             Preview the processed output, then download it with confidence.
           </div>
         </div>
@@ -1287,17 +1287,17 @@ function Inspector({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-slate-200/70 bg-white px-6 py-5">
+      <div className="border-b border-border/70 bg-card px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="truncate text-base font-semibold text-slate-900">{document.name}</div>
+              <div className="truncate text-base font-semibold text-foreground">{document.name}</div>
               <span className={clsx("rounded-full px-2 py-0.5 text-[11px] font-semibold", badge.classes)}>{badge.label}</span>
               {demoMode ? (
                 <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">Demo</span>
               ) : null}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
               <span>{formatBytes(document.byte_size)}</span>
               <span aria-hidden="true">·</span>
               <span>Uploaded {absoluteTime.format(new Date(document.created_at))}</span>
@@ -1323,7 +1323,7 @@ function Inspector({
             <a
               href={processedReady && run ? runOutputDownloadUrl(run.id) : undefined}
               className={clsx(
-                "focus-ring inline-flex h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50",
+                "focus-ring inline-flex h-8 items-center justify-center rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-background",
                 !processedReady ? "pointer-events-none opacity-40" : "",
               )}
               target="_blank"
@@ -1337,7 +1337,7 @@ function Inspector({
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <a
             href={originalUrl}
-            className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
             target="_blank"
             rel="noreferrer"
           >
@@ -1346,7 +1346,7 @@ function Inspector({
           {runLogs ? (
             <a
               href={runLogs}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground"
               target="_blank"
               rel="noreferrer"
             >
@@ -1354,18 +1354,18 @@ function Inspector({
             </a>
           ) : null}
           {hasInlineRun ? (
-            <span className="text-xs text-slate-400">Last run linked</span>
+            <span className="text-xs text-muted-foreground">Last run linked</span>
           ) : null}
         </div>
 
         <div className="mt-5">
           <TabsRoot value={tab} onValueChange={(value) => onTabChange(value as "preview" | "details")}>
-            <TabsList className="inline-flex rounded-xl bg-slate-100 p-1">
+            <TabsList className="inline-flex rounded-xl bg-muted p-1">
               <TabsTrigger
                 value="preview"
                 className={clsx(
                   "focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                  tab === "preview" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+                  tab === "preview" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Preview
@@ -1374,7 +1374,7 @@ function Inspector({
                 value="details"
                 className={clsx(
                   "focus-ring rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                  tab === "details" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
+                  tab === "details" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Details
@@ -1404,9 +1404,9 @@ function Inspector({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-6 py-6">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-background px-6 py-6">
         {tab === "preview" ? (
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-muted-foreground">
             {processedFilename ? `Processed file: ${processedFilename}` : processedContentType ? `Type: ${processedContentType}` : ""}
           </div>
         ) : null}
@@ -1522,9 +1522,9 @@ function PreviewPanel({
 
   if (previewTooLarge && !previewAllowed) {
     return (
-      <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-        <div className="text-sm font-semibold text-slate-900">Large output</div>
-        <div className="mt-2 text-sm text-slate-500">
+      <div className="rounded-3xl border border-border/70 bg-card p-6">
+        <div className="text-sm font-semibold text-foreground">Large output</div>
+        <div className="mt-2 text-sm text-muted-foreground">
           This output is large. Load a preview anyway?
         </div>
         <div className="mt-4">
@@ -1544,9 +1544,9 @@ function PreviewPanel({
           ? "Processing… output will appear here automatically."
           : "No processed output yet.";
     return (
-      <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-        <div className="text-sm font-semibold text-slate-900">Processed output</div>
-        <div className="mt-2 text-sm text-slate-500">{note}</div>
+      <div className="rounded-3xl border border-border/70 bg-card p-6">
+        <div className="text-sm font-semibold text-foreground">Processed output</div>
+        <div className="mt-2 text-sm text-muted-foreground">{note}</div>
       </div>
     );
   }
@@ -1579,16 +1579,16 @@ function PreviewPanel({
 function DemoPreview({ demo }: { readonly demo: DemoOutput }) {
   if (demo.kind === "none") {
     return (
-      <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-        <div className="text-sm font-semibold text-slate-900">Processed output</div>
-        <div className="mt-2 text-sm text-slate-500">{demo.note ?? "No output."}</div>
+      <div className="rounded-3xl border border-border/70 bg-card p-6">
+        <div className="text-sm font-semibold text-foreground">Processed output</div>
+        <div className="mt-2 text-sm text-muted-foreground">{demo.note ?? "No output."}</div>
       </div>
     );
   }
 
   if (demo.kind === "json") {
     return (
-      <pre className="overflow-auto rounded-3xl border border-slate-200/70 bg-slate-950 px-5 py-4 text-xs text-slate-100">
+      <pre className="overflow-auto rounded-3xl border border-border/70 bg-muted px-5 py-4 text-xs text-muted-foreground">
         {demo.text ?? ""}
       </pre>
     );
@@ -1602,9 +1602,9 @@ function DemoPreview({ demo }: { readonly demo: DemoOutput }) {
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-      <div className="text-sm font-semibold text-slate-900">Preview unavailable</div>
-      <div className="mt-2 text-sm text-slate-500">Demo preview for this type is not configured.</div>
+    <div className="rounded-3xl border border-border/70 bg-card p-6">
+      <div className="text-sm font-semibold text-foreground">Preview unavailable</div>
+      <div className="mt-2 text-sm text-muted-foreground">Demo preview for this type is not configured.</div>
     </div>
   );
 }
@@ -1625,7 +1625,7 @@ function BlobPreview({ kind, filename, contentType, blob }: { readonly kind: str
 
   if (kind === "pdf") {
     return url ? (
-      <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white">
+      <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
         <iframe title={filename} src={url} className="h-[70vh] w-full" />
       </div>
     ) : (
@@ -1642,9 +1642,9 @@ function BlobPreview({ kind, filename, contentType, blob }: { readonly kind: str
   }
 
   return (
-    <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-      <div className="text-sm font-semibold text-slate-900">Preview unavailable</div>
-      <div className="mt-2 text-sm text-slate-500">This file type can be downloaded, but isn’t previewed inline yet.</div>
+    <div className="rounded-3xl border border-border/70 bg-card p-6">
+      <div className="text-sm font-semibold text-foreground">Preview unavailable</div>
+      <div className="mt-2 text-sm text-muted-foreground">This file type can be downloaded, but isn’t previewed inline yet.</div>
     </div>
   );
 }
@@ -1696,14 +1696,14 @@ function TextPreview({ blob, tryFormat }: { readonly blob: Blob; readonly tryFor
       // ignore
     }
     return (
-      <pre className="overflow-auto rounded-3xl border border-slate-200/70 bg-slate-950 px-5 py-4 text-xs text-slate-100">
+      <pre className="overflow-auto rounded-3xl border border-border/70 bg-muted px-5 py-4 text-xs text-muted-foreground">
         {formatted}
       </pre>
     );
   }
 
   return (
-    <pre className="overflow-auto rounded-3xl border border-slate-200/70 bg-slate-950 px-5 py-4 text-xs text-slate-100">
+    <pre className="overflow-auto rounded-3xl border border-border/70 bg-muted px-5 py-4 text-xs text-muted-foreground">
       {text}
     </pre>
   );
@@ -1711,13 +1711,13 @@ function TextPreview({ blob, tryFormat }: { readonly blob: Blob; readonly tryFor
 
 function TablePreview({ header, rows }: { readonly header: readonly string[]; readonly rows: readonly string[][] }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200/70 bg-white">
+    <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
       <div className="overflow-auto">
         <table className="min-w-full text-sm">
-          <thead className="sticky top-0 bg-slate-50">
+          <thead className="sticky top-0 bg-background">
             <tr>
               {header.map((cell, index) => (
-                <th key={`${cell}-${index}`} className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-left text-xs font-semibold text-slate-600">
+                <th key={`${cell}-${index}`} className="whitespace-nowrap border-b border-border px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
                   {cell || `Column ${index + 1}`}
                 </th>
               ))}
@@ -1725,9 +1725,9 @@ function TablePreview({ header, rows }: { readonly header: readonly string[]; re
           </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="odd:bg-white even:bg-slate-50/60">
+              <tr key={rowIndex} className="odd:bg-card even:bg-background/60">
                 {row.map((cell, cellIndex) => (
-                  <td key={cellIndex} className="whitespace-nowrap border-b border-slate-100 px-4 py-2 text-xs text-slate-700">
+                  <td key={cellIndex} className="whitespace-nowrap border-b border-border px-4 py-2 text-xs text-foreground">
                     {cell}
                   </td>
                 ))}
@@ -1746,8 +1746,8 @@ function DetailsPanel({ workspaceId, document, run }: { readonly workspaceId: st
   return (
     <div className="flex flex-col gap-5">
       <TagEditor workspaceId={workspaceId} document={document} />
-      <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Metadata</div>
+      <div className="rounded-3xl border border-border/70 bg-card px-5 py-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Metadata</div>
         <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
           <DetailRow label="Status" value={statusBadge(document.status).label} />
           <DetailRow label="Size" value={formatBytes(document.byte_size)} />
@@ -1758,8 +1758,8 @@ function DetailsPanel({ workspaceId, document, run }: { readonly workspaceId: st
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest Run</div>
+      <div className="rounded-3xl border border-border/70 bg-card px-5 py-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest Run</div>
         <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
           <DetailRow label="Run status" value={run?.status ?? document.last_run?.status ?? "—"} />
           <DetailRow label="Output ready" value={run?.output?.ready ? "Yes" : "No"} />
@@ -1773,9 +1773,9 @@ function DetailsPanel({ workspaceId, document, run }: { readonly workspaceId: st
 
 function DetailRow({ label, value }: { readonly label: string; readonly value: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-      <div className="text-xs font-semibold text-slate-500">{label}</div>
-      <div className="text-right text-xs font-semibold text-slate-700">{value}</div>
+    <div className="flex items-start justify-between gap-3 rounded-2xl bg-background px-4 py-3">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className="text-right text-xs font-semibold text-foreground">{value}</div>
     </div>
   );
 }
@@ -1844,10 +1844,10 @@ function TagEditor({ workspaceId, document }: { readonly workspaceId: string; re
   );
 
   return (
-    <div className="rounded-3xl border border-slate-200/70 bg-white px-5 py-4">
+    <div className="rounded-3xl border border-border/70 bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tags</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tags</div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {tags.length ? (
               tags.map((tag) => (
@@ -1855,22 +1855,22 @@ function TagEditor({ workspaceId, document }: { readonly workspaceId: string; re
                   key={tag}
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="focus-ring inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                  className="focus-ring inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
                   title="Remove tag"
                 >
                   <span>{tag}</span>
-                  <span aria-hidden="true" className="text-slate-400">
+                  <span aria-hidden="true" className="text-muted-foreground">
                     ×
                   </span>
                 </button>
               ))
             ) : (
-              <span className="text-sm text-slate-500">No tags yet.</span>
+              <span className="text-sm text-muted-foreground">No tags yet.</span>
             )}
           </div>
         </div>
         <div className="shrink-0">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Add</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add</div>
           <div className="mt-2 flex items-center gap-2">
             <label className="sr-only" htmlFor="documents-v5-tag-editor">
               Add a tag
@@ -1886,7 +1886,7 @@ function TagEditor({ workspaceId, document }: { readonly workspaceId: string; re
                 }
               }}
               placeholder="New tag"
-              className="h-9 w-44 rounded-full border-slate-200 bg-slate-50 px-4 text-xs focus-visible:ring-slate-300"
+              className="h-9 w-44 rounded-full border-border bg-background px-4 text-xs focus-visible:ring-ring"
               disabled={patchMutation.isPending}
             />
             <Button variant="secondary" size="sm" disabled={!normalized} onClick={() => addTag(draft)}>
@@ -1898,14 +1898,14 @@ function TagEditor({ workspaceId, document }: { readonly workspaceId: string; re
 
       {suggestions.length > 0 ? (
         <div className="mt-4">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Suggestions</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Suggestions</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((item) => (
               <button
                 key={item.tag}
                 type="button"
                 onClick={() => addTag(item.tag)}
-                className="focus-ring rounded-full bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                className="focus-ring rounded-full bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted"
                 disabled={patchMutation.isPending}
               >
                 {item.tag}

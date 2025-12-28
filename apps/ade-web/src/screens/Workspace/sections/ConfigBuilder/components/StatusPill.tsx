@@ -17,7 +17,7 @@ export function StatusPill({ status }: { readonly status: ConfigurationStatus })
       ? "bg-emerald-100 text-emerald-700"
       : normalized === "draft"
         ? "bg-amber-100 text-amber-700"
-        : "bg-slate-200 text-slate-700";
+        : "bg-muted text-foreground";
   return (
     <span
       className={clsx(

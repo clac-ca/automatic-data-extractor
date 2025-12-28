@@ -135,7 +135,7 @@ function WorkspacesIndexContent() {
 
   if (workspacesQuery.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <PageState title="Loading workspaces" variant="loading" />
       </div>
     );
@@ -143,7 +143,7 @@ function WorkspacesIndexContent() {
 
   if (workspacesQuery.isError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <PageState
           title="We couldn't load your workspaces"
           description="Refresh the page or try again later."
@@ -187,12 +187,12 @@ function WorkspacesIndexContent() {
         />
       </div>
     ) : (
-      <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-soft">
         <header>
-          <h1 id="page-title" className="text-2xl font-semibold text-slate-900">
+          <h1 id="page-title" className="text-2xl font-semibold text-foreground">
             Workspaces
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Select a workspace to jump straight into documents.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Select a workspace to jump straight into documents.</p>
         </header>
         {setDefaultError ? (
           <Alert tone="danger" heading="We couldn't update your default workspace">
@@ -207,7 +207,7 @@ function WorkspacesIndexContent() {
             return (
               <div
                 key={workspace.id}
-                className="group relative rounded-xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 focus-within:ring-offset-white"
+                className="group relative rounded-xl border border-border bg-card p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 focus-within:ring-offset-background"
               >
                 <button
                   type="button"
@@ -217,12 +217,12 @@ function WorkspacesIndexContent() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1 pr-24">
-                      <h2 className="text-lg font-semibold text-slate-900">{workspace.name}</h2>
-                      <p className="text-sm text-slate-500">Slug: {workspace.slug}</p>
+                      <h2 className="text-lg font-semibold text-foreground">{workspace.name}</h2>
+                      <p className="text-sm text-muted-foreground">Slug: {workspace.slug}</p>
                     </div>
                   </div>
-                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Permissions</p>
-                  <p className="text-sm text-slate-600">
+                  <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">Permissions</p>
+                  <p className="text-sm text-muted-foreground">
                     {workspace.permissions.length > 0 ? workspace.permissions.join(", ") : "None"}
                   </p>
                 </button>
@@ -262,12 +262,12 @@ function WorkspacesIndexContent() {
 function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
   return (
     <div className="space-y-6">
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace tips</p>
-          <h2 className="text-sm font-semibold text-slate-900">Why multiple workspaces?</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspace tips</p>
+          <h2 className="text-sm font-semibold text-foreground">Why multiple workspaces?</h2>
         </header>
-        <p className="text-xs text-slate-500 leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           Segment teams by business unit or client, control access with roles, and tailor extraction settings per
           workspace. Everything stays organised and secure.
         </p>
@@ -277,12 +277,12 @@ function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreat
           </Button>
         ) : null}
       </section>
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Need a hand?</p>
-          <h2 className="text-sm font-semibold text-slate-900">Workspace setup checklist</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Need a hand?</p>
+          <h2 className="text-sm font-semibold text-foreground">Workspace setup checklist</h2>
         </header>
-        <ul className="space-y-2 text-xs text-slate-600">
+        <ul className="space-y-2 text-xs text-muted-foreground">
           <li>Add at least one additional administrator.</li>
           <li>Review configurations before uploading production files.</li>
           <li>Review workspace permissions for external collaborators.</li>
@@ -295,9 +295,9 @@ function DirectorySidebar({ canCreate, onCreate }: { canCreate: boolean; onCreat
 
 function EmptyStateCreate({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-soft">
-      <h1 id="page-title" className="text-2xl font-semibold text-slate-900">No workspaces yet</h1>
-      <p className="mt-2 text-sm text-slate-600">
+    <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-border-strong bg-card p-10 text-center shadow-soft">
+      <h1 id="page-title" className="text-2xl font-semibold text-foreground">No workspaces yet</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
         Create your first workspace to start uploading configuration sets and documents.
       </p>
       <Button variant="primary" onClick={onCreate} className="mt-6">

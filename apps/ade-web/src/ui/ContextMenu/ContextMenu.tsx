@@ -158,24 +158,24 @@ export function ContextMenu({
   const palette =
     appearance === "dark"
       ? {
-          bg: "bg-[#1f1f1f] text-[#f3f3f3]",
-          border: "border-[#3c3c3c]",
-          shadow: "shadow-[0_12px_28px_rgba(0,0,0,0.55)]",
-          item: "hover:bg-[#094771] focus-visible:bg-[#094771]",
-          disabled: "text-[#7a7a7a]",
-          danger: "text-[#f48771] hover:text-white hover:bg-[#be1a1a] focus-visible:bg-[#be1a1a]",
-          shortcut: "text-[#9f9f9f]",
-          separator: "border-[#3f3f3f]",
+          bg: "bg-popover text-foreground",
+          border: "border-border/70",
+          shadow: "shadow-[0_12px_28px_rgb(var(--color-shadow)/0.5)]",
+          item: "hover:bg-muted focus-visible:bg-muted",
+          disabled: "text-muted-foreground",
+          danger: "text-danger-300 hover:text-white hover:bg-danger-600 focus-visible:bg-danger-600",
+          shortcut: "text-muted-foreground",
+          separator: "border-border/60",
         }
       : {
-          bg: "bg-[#fdfdfd] text-[#1f1f1f]",
-          border: "border-[#cfcfcf]",
-          shadow: "shadow-[0_12px_28px_rgba(0,0,0,0.15)]",
-          item: "hover:bg-[#dfe9f6] focus-visible:bg-[#dfe9f6]",
-          disabled: "text-[#9c9c9c]",
-          danger: "text-[#b02020] hover:bg-[#fde7e7] focus-visible:bg-[#fde7e7]",
-          shortcut: "text-[#6d6d6d]",
-          separator: "border-[#e0e0e0]",
+          bg: "bg-popover text-foreground",
+          border: "border-border/80",
+          shadow: "shadow-[0_12px_28px_rgb(var(--color-shadow)/0.18)]",
+          item: "hover:bg-muted focus-visible:bg-muted",
+          disabled: "text-muted-foreground",
+          danger: "text-danger-600 hover:text-white hover:bg-danger-600 focus-visible:bg-danger-600",
+          shortcut: "text-muted-foreground",
+          separator: "border-border/70",
         };
 
   return createPortal(
@@ -183,7 +183,7 @@ export function ContextMenu({
       ref={menuRef}
       role="menu"
       className={clsx(
-        "z-[60] min-w-[200px] rounded-sm border backdrop-blur-sm",
+        "z-[60] min-w-[200px] rounded-sm border",
         palette.bg,
         palette.border,
         palette.shadow,

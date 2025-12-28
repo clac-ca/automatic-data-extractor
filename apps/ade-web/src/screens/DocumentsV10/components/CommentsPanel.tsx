@@ -119,24 +119,24 @@ export function CommentsPanel({
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-        <p className="font-semibold text-slate-900">Notes and comments</p>
+      <div className="rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
+        <p className="font-semibold text-foreground">Notes and comments</p>
         <p className="mt-1">
           Use <span className="font-semibold">@</span> to mention teammates (e.g. <span className="font-semibold">@{"{Jane Doe}"}</span>).
           Mentions are styled now and can power notifications later.
         </p>
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           (For now, notes are stored locally per browser until backend syncing is added.)
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="flex-1 overflow-auto rounded-2xl border border-border bg-card">
         {comments.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-slate-500">
+          <div className="px-4 py-6 text-sm text-muted-foreground">
             No notes yet. Add the first note to capture context for the team.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {comments
               .slice()
               .sort((a, b) => a.createdAt - b.createdAt)
@@ -147,8 +147,8 @@ export function CommentsPanel({
                   <div key={c.id} className="px-4 py-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{c.authorLabel}</p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-sm font-semibold text-foreground">{c.authorLabel}</p>
+                        <p className="text-[11px] text-muted-foreground">
                           {formatRelativeTime(now, c.createdAt)}
                           {c.updatedAt !== c.createdAt ? " - edited" : ""}
                         </p>
@@ -163,7 +163,7 @@ export function CommentsPanel({
                                   setEditingId(c.id);
                                   setEditingBody(c.body);
                                 }}
-                                className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                                className="text-xs font-semibold text-muted-foreground hover:text-foreground"
                               >
                                 Edit
                               </button>
@@ -185,7 +185,7 @@ export function CommentsPanel({
                         <textarea
                           value={editingBody}
                           onChange={(e) => setEditingBody(e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-300"
+                          className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand-300"
                           rows={3}
                         />
                         <div className="mt-2 flex items-center gap-2">
@@ -216,7 +216,7 @@ export function CommentsPanel({
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                      <div className="mt-3 whitespace-pre-wrap text-sm text-foreground">
                         {renderWithMentions(c.body).map((p, idx) =>
                           typeof p === "string" ? (
                             <span key={idx}>{p}</span>
@@ -239,8 +239,8 @@ export function CommentsPanel({
         )}
       </div>
 
-      <div className="relative rounded-2xl border border-slate-200 bg-white px-4 py-4">
-        <p className="text-xs font-semibold text-slate-500">Add a note</p>
+      <div className="relative rounded-2xl border border-border bg-card px-4 py-4">
+        <p className="text-xs font-semibold text-muted-foreground">Add a note</p>
         <div className="mt-2">
           <textarea
             ref={textareaRef}
@@ -274,13 +274,13 @@ export function CommentsPanel({
               }
             }}
             placeholder={`Write a note... (author: ${currentUserLabel})`}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-300"
+            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-brand-300"
             rows={3}
           />
 
           {query && mentionCandidates.length > 0 ? (
-            <div className="absolute bottom-[5.5rem] left-4 right-4 z-20 rounded-2xl border border-slate-200 bg-white shadow-lg">
-              <div className="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500">
+            <div className="absolute bottom-[5.5rem] left-4 right-4 z-20 rounded-2xl border border-border bg-card shadow-lg">
+              <div className="border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
                 Mention someone (Enter to select, Esc to close)
               </div>
               <div className="max-h-56 overflow-auto p-2">
@@ -294,11 +294,11 @@ export function CommentsPanel({
                     }}
                     className={clsx(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
-                      idx === activeIndex ? "bg-brand-50" : "hover:bg-slate-50",
+                      idx === activeIndex ? "bg-brand-50" : "hover:bg-background",
                     )}
                   >
-                    <span className="font-semibold text-slate-900">{p.label}</span>
-                    <span className="text-xs text-slate-400">{p.kind === "user" ? "Member" : ""}</span>
+                    <span className="font-semibold text-foreground">{p.label}</span>
+                    <span className="text-xs text-muted-foreground">{p.kind === "user" ? "Member" : ""}</span>
                   </button>
                 ))}
               </div>
@@ -306,7 +306,7 @@ export function CommentsPanel({
           ) : null}
 
           <div className="mt-2 flex items-center justify-between">
-            <p className="text-[11px] text-slate-500">Tip: Ctrl/Cmd+Enter to submit</p>
+            <p className="text-[11px] text-muted-foreground">Tip: Ctrl/Cmd+Enter to submit</p>
             <Button type="button" size="sm" onClick={submit} disabled={!draft.trim()}>
               Post note
             </Button>

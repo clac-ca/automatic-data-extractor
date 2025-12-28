@@ -1,19 +1,21 @@
 import clsx from "clsx";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@ui/Button";
+import { ContextMenu } from "@ui/ContextMenu";
+import { Select } from "@ui/Select";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 import type { RunResource } from "@schema";
 
 import { MAX_PREVIEW_COLUMNS, MAX_PREVIEW_ROWS } from "../data";
 import type { DocumentComment, DocumentEntry, WorkspacePerson, WorkbookPreview, WorkbookSheet } from "../types";
-import { buildNormalizedFilename, formatBytes, formatRelativeTime, numberFormatter, shortId } from "../utils";
-import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, RefreshIcon, UserIcon } from "./icons";
+import { columnLabel, formatRelativeTime, shortId } from "../utils";
+import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon, UserIcon } from "./icons";
 import { CommentsPanel } from "./CommentsPanel";
-import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
-import { StatusPill } from "./StatusPill";
 import { TagPicker } from "./TagPicker";
+
+type DetailsPanelTab = "details" | "notes";
 
 export function DocumentsPreviewPane({
   workspaceId,
@@ -23,7 +25,7 @@ export function DocumentsPreviewPane({
   onSheetChange,
 
   runs,
-  runsLoading,
+  runsLoading: _runsLoading,
   selectedRunId,
   onSelectRun,
   activeRun,
@@ -52,6 +54,8 @@ export function DocumentsPreviewPane({
   workbookError,
 
   onClose,
+  detailsRequestId,
+  onDetailsRequestHandled,
 }: {
   workspaceId: string;
   document: DocumentEntry | null;
@@ -90,442 +94,609 @@ export function DocumentsPreviewPane({
   workbookError: boolean;
 
   onClose: () => void;
+  detailsRequestId?: string | null;
+  onDetailsRequestHandled?: () => void;
 }) {
-  const [tab, setTab] = useState<"output" | "notes" | "details">("output");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsTab, setDetailsTab] = useState<DetailsPanelTab>("details");
+
+  // Close details when switching documents (keeps the preview feeling stable/intentional)
+  useEffect(() => {
+    setDetailsOpen(false);
+    setDetailsTab("details");
+  }, [document?.id]);
 
   const sheets = workbook?.sheets ?? [];
   const selectedSheetId = activeSheetId ?? sheets[0]?.name ?? "";
   const activeSheet = sheets.find((sheet) => sheet.name === selectedSheetId) ?? sheets[0];
 
-  const canDownloadOutput = Boolean(document?.record && outputUrl);
-  const canDownloadOriginal = Boolean(document?.record);
-  const canReprocess = Boolean(document?.record && activeRun?.configuration_id);
-
-  const outputMeta = activeRun?.output;
-  const outputFilename = document ? outputMeta?.filename ?? buildNormalizedFilename(document.name) : "";
-  const outputSize = outputMeta?.size_bytes && outputMeta.size_bytes > 0 ? formatBytes(outputMeta.size_bytes) : null;
-  const outputSheetSummary = activeSheet
-    ? `${numberFormatter.format(activeSheet.totalRows)} rows - ${numberFormatter.format(activeSheet.totalColumns)} cols`
-    : null;
-  const outputSummary = [outputSize, outputSheetSummary].filter(Boolean).join(" - ");
-
   const runOptions = useMemo(() => {
     return runs.slice().sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   }, [runs]);
 
-  const hasOutput = activeRun?.status === "succeeded" && Boolean(outputUrl);
+  const effectiveRun = activeRun ?? (selectedRunId ? runOptions.find((r) => r.id === selectedRunId) ?? null : null) ?? runOptions[0] ?? null;
+
+  const hasOutput = effectiveRun?.status === "succeeded" && Boolean(outputUrl);
+
+  const canDownloadOutput = Boolean(document?.record && outputUrl);
+  const canDownloadOriginal = Boolean(document?.record);
+  const canReprocess = Boolean(document?.record && activeRun?.configuration_id);
+
+  const openDetails = (tab: DetailsPanelTab) => {
+    setDetailsTab(tab);
+    setDetailsOpen(true);
+  };
+
+  useEffect(() => {
+    if (!detailsRequestId || detailsRequestId !== document?.id) return;
+    setDetailsTab("details");
+    setDetailsOpen(true);
+    onDetailsRequestHandled?.();
+  }, [detailsRequestId, document?.id, onDetailsRequestHandled]);
 
   return (
-    <div className="flex min-h-0 min-w-0 w-full flex-col">
-      <div className="shrink-0 border-b border-slate-200 px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Preview</p>
-            <h2 className="truncate text-lg font-semibold text-slate-900">
-              {document ? document.name : "Select a document"}
-            </h2>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 shrink-0 px-0"
-            onClick={onClose}
-            aria-label="Close preview"
-            title="Close preview"
-          >
-            <CloseIcon className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          {document ? (
-            <>
-              <StatusPill status={document.status} />
-              <MappingBadge mapping={document.mapping} />
-              {document.commentCount > 0 ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                  <ChatIcon className="h-3.5 w-3.5" />
-                  {document.commentCount} notes
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span>Choose a file to inspect output, assign ownership, and leave notes.</span>
-          )}
-        </div>
-
-        {document ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="gap-2 text-xs"
-              onClick={() => onCopyLink(document)}
-              disabled={!document?.record}
-            >
-              <LinkIcon className="h-4 w-4" />
-              Copy link
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="gap-2 text-xs"
-              onClick={() => onDownloadOriginal(document)}
-              disabled={!canDownloadOriginal}
-            >
-              <DownloadIcon className="h-4 w-4" />
-              Original
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              className="gap-2 text-xs"
-              onClick={() => onDownloadOutput(document)}
-              disabled={!canDownloadOutput}
-            >
-              <DownloadIcon className="h-4 w-4" />
-              Output
-            </Button>
-
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="gap-2 text-xs"
-              onClick={() => onReprocess(document)}
-              disabled={!canReprocess}
-            >
-              <RefreshIcon className="h-4 w-4" />
-              Reprocess
-            </Button>
-          </div>
-        ) : null}
-
-        {document ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white">
-                <UserIcon className="h-4 w-4 text-slate-500" />
-              </span>
-              <div>
-                <p className="text-xs text-slate-500">Assignee</p>
-                <p className="text-sm font-semibold text-slate-900">{document.assigneeLabel ?? "Unassigned"}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!document.assigneeKey ? (
-                <Button type="button" size="sm" onClick={() => onPickUp(document.id)} className="text-xs">
-                  Pick up
-                </Button>
-              ) : document.assigneeKey !== currentUserKey ? (
-                <Button type="button" size="sm" variant="secondary" onClick={() => onPickUp(document.id)} className="text-xs">
-                  Assign to me
-                </Button>
-              ) : null}
-
-              <PeoplePicker
-                people={people}
-                value={[document.assigneeKey ?? unassignedKey()]}
-                onChange={(keys) => onAssign(document.id, normalizeSingleAssignee(keys))}
-                placeholder="Assign..."
-                includeUnassigned
-                buttonClassName="min-w-0 max-w-[14rem] text-xs"
-              />
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+    <div className="relative flex min-h-0 w-full flex-col">
+      {/* Body: preview-first */}
+      <div className="px-6 py-2">
         {!document ? (
-          <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
-            <p className="text-sm font-semibold text-slate-900">Preview is ready when you are.</p>
-            <p>Select a document from the grid to inspect its output and collaborate.</p>
+          <div className="flex min-h-[14rem] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background px-6 text-center text-sm text-muted-foreground">
+            <p className="text-sm font-semibold text-foreground">Preview is ready when you are.</p>
+            <p>Select a document from the list to see its processed output.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
-            <TabsRoot value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
-              <TabsList className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                <TabsTrigger
-                  value="output"
-                  className={clsx(
-                    "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "output" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
-                  )}
-                >
-                  Output
-                </TabsTrigger>
-                <TabsTrigger
-                  value="notes"
-                  className={clsx(
-                    "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "notes" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
-                  )}
-                >
-                  Notes {document.commentCount > 0 ? `(${document.commentCount})` : ""}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="details"
-                  className={clsx(
-                    "rounded-full px-3 py-1 font-semibold transition",
-                    tab === "details" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
-                  )}
-                >
-                  Details
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="output" className="mt-5">
-                <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Run history</h3>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {runsLoading ? "Loading runs..." : `${runs.length} run${runs.length === 1 ? "" : "s"} found`}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-slate-500">Selected run:</span>
-                      <div className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700">
-                        {selectedRunId ? shortId(selectedRunId) : "Latest"}
-                      </div>
-                    </div>
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="relative bg-background/40">
+              <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2">
+                {runOptions.length > 1 ? (
+                  <div className="pointer-events-auto">
+                    <Select
+                      value={selectedRunId ?? runOptions[0]?.id ?? ""}
+                      onChange={(event) => onSelectRun(event.target.value)}
+                      className="h-7 min-w-[9rem] text-[11px] shadow-sm"
+                      aria-label="Select run"
+                    >
+                      {runOptions.map((run) => (
+                        <option key={run.id} value={run.id}>
+                          {shortId(run.id)} · {formatRunStatus(run.status)}
+                        </option>
+                      ))}
+                    </Select>
                   </div>
+                ) : null}
+                <div className="pointer-events-auto">
+                  <PreviewActionsMenu
+                    document={document}
+                    canDownloadOutput={canDownloadOutput}
+                    canDownloadOriginal={canDownloadOriginal}
+                    canReprocess={canReprocess}
+                    onDownloadOutput={onDownloadOutput}
+                    onDownloadOriginal={onDownloadOriginal}
+                    onCopyLink={onCopyLink}
+                    onReprocess={onReprocess}
+                    onOpenDetails={() => openDetails("details")}
+                    onOpenNotes={() => openDetails("notes")}
+                    onClosePreview={onClose}
+                  />
+                </div>
+              </div>
 
-                  <div className="mt-3 max-h-44 overflow-auto rounded-2xl border border-slate-200 bg-slate-50">
-                    {runsLoading ? (
-                      <div className="px-4 py-4 text-sm text-slate-500">Loading runs...</div>
-                    ) : runOptions.length === 0 ? (
-                      <div className="px-4 py-4 text-sm text-slate-500">No runs yet.</div>
-                    ) : (
-                      <div className="divide-y divide-slate-200">
-                        {runOptions.slice(0, 10).map((run) => {
-                          const active = run.id === (selectedRunId ?? runOptions[0]?.id);
-                          return (
-                            <button
-                              key={run.id}
-                              type="button"
-                              onClick={() => onSelectRun(run.id)}
+              {hasOutput ? (
+                !outputUrl ? (
+                  <PreviewMessage title="Output link unavailable">
+                    We could not load the processed output link yet. Try again in a moment.
+                  </PreviewMessage>
+                ) : workbookLoading ? (
+                  <PreviewMessage title="Loading preview">
+                    Fetching the processed workbook for review.
+                  </PreviewMessage>
+                ) : workbookError ? (
+                  <PreviewMessage title="Preview unavailable">
+                    The XLSX is ready to download, but we could not render the preview.
+                  </PreviewMessage>
+                ) : activeSheet ? (
+                  <div>
+                    <TabsRoot value={selectedSheetId} onValueChange={onSheetChange}>
+                      {sheets.map((sheet) => (
+                        <TabsContent key={sheet.name} value={sheet.name} className="max-h-[30rem] overflow-auto">
+                          <PreviewTable sheet={sheet} />
+                        </TabsContent>
+                      ))}
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-card px-3 py-1">
+                        <TabsList className="flex flex-wrap items-center gap-1 overflow-x-auto text-[11px] text-muted-foreground">
+                          {sheets.map((sheet) => (
+                            <TabsTrigger
+                              key={sheet.name}
+                              value={sheet.name}
                               className={clsx(
-                                "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition",
-                                active ? "bg-white" : "hover:bg-slate-100",
+                                "rounded-t-md border border-transparent px-3 py-1 font-semibold transition",
+                                selectedSheetId === sheet.name
+                                  ? "-mt-px border-border bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
                               )}
                             >
-                              <div className="min-w-0">
-                                <p className="truncate font-semibold text-slate-900">
-                                  {shortId(run.id)} - {run.status.toUpperCase()}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  Created {formatRelativeTime(now, Date.parse(run.created_at))}
-                                </p>
-                              </div>
-                              <span className="text-xs font-semibold text-slate-500">
-                                {run.output?.has_output ? "Output ready" : "No output"}
-                              </span>
-                            </button>
-                          );
-                        })}
+                              {sheet.name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
                       </div>
-                    )}
+                    </TabsRoot>
+
+                    {(activeSheet.truncatedRows || activeSheet.truncatedColumns) ? (
+                      <div className="border-t border-border bg-card px-4 py-2 text-[11px] text-muted-foreground">
+                        Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows and{" "}
+                        {Math.min(activeSheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
+                      </div>
+                    ) : null}
                   </div>
-                </section>
-
-                <section className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Processed output</h3>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-2 text-xs"
-                      onClick={() => onDownloadOutput(document)}
-                      disabled={!canDownloadOutput}
-                    >
-                      <DownloadIcon className="h-4 w-4" />
-                      Download output XLSX
-                    </Button>
-                  </div>
-
-                  {hasOutput ? (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-900">{outputFilename}</span>
-                      {outputSummary ? <span>{outputSummary}</span> : null}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50">
-                    {hasOutput ? (
-                      !outputUrl ? (
-                        <PreviewMessage title="Output link unavailable">
-                          We could not load the processed output link yet. Try again in a moment.
-                        </PreviewMessage>
-                      ) : workbookLoading ? (
-                        <PreviewMessage title="Loading preview">Fetching the processed workbook for review.</PreviewMessage>
-                      ) : workbookError ? (
-                        <PreviewMessage title="Preview unavailable">
-                          The XLSX is ready to download, but we could not render the preview.
-                        </PreviewMessage>
-                      ) : activeSheet ? (
-                        <div>
-                          <TabsRoot value={selectedSheetId} onValueChange={onSheetChange}>
-                            <TabsList className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 text-xs">
-                              {sheets.map((sheet) => (
-                                <TabsTrigger
-                                  key={sheet.name}
-                                  value={sheet.name}
-                                  className={clsx(
-                                    "rounded-full px-3 py-1 font-semibold transition",
-                                    selectedSheetId === sheet.name
-                                      ? "bg-white text-slate-900 shadow-sm"
-                                      : "text-slate-500 hover:text-slate-800",
-                                  )}
-                                >
-                                  {sheet.name}
-                                </TabsTrigger>
-                              ))}
-                            </TabsList>
-                            {sheets.map((sheet) => (
-                              <TabsContent key={sheet.name} value={sheet.name} className="max-h-[28rem] overflow-auto">
-                                <PreviewTable sheet={sheet} />
-                              </TabsContent>
-                            ))}
-                          </TabsRoot>
-                          {(activeSheet.truncatedRows || activeSheet.truncatedColumns) && (
-                            <div className="border-t border-slate-200 px-4 py-2 text-[11px] text-slate-500">
-                              Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows and{" "}
-                              {Math.min(activeSheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <PreviewMessage title="Preview unavailable">
-                          The processed XLSX is ready to download, but we cannot render a preview here.
-                        </PreviewMessage>
-                      )
-                    ) : activeRun?.status === "failed" ? (
-                      <PreviewMessage title={activeRun.failure_message ?? "Run failed"}>
-                        {activeRun.failure_stage ?? "We could not complete normalization for this file."}
-                      </PreviewMessage>
-                    ) : runLoading ? (
-                      <PreviewMessage title="Loading run output">Fetching the latest run status.</PreviewMessage>
-                    ) : (
-                      <PreviewMessage title="Processing output">
-                        {document.stage ?? "Preparing normalized output"}
-                      </PreviewMessage>
-                    )}
-                  </div>
-                </section>
-              </TabsContent>
-
-              <TabsContent value="notes" className="mt-5">
-                <CommentsPanel
-                  now={now}
-                  comments={comments}
-                  people={people}
-                  currentUserKey={currentUserKey}
-                  currentUserLabel={currentUserLabel}
-                  onAdd={(body, mentions) => onAddComment(document.id, body, mentions)}
-                  onEdit={(commentId, body, mentions) => onEditComment(document.id, commentId, body, mentions)}
-                  onDelete={(commentId) => onDeleteComment(document.id, commentId)}
-                />
-              </TabsContent>
-
-              <TabsContent value="details" className="mt-5">
-                <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Summary</h3>
-                    <span className="text-xs text-slate-500">Updated {formatRelativeTime(now, document.updatedAt)}</span>
-                  </div>
-
-                  <dl className="mt-4 grid gap-3 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Uploader</dt>
-                      <dd className="font-semibold text-slate-900">{document.uploader ?? "Unassigned"}</dd>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Tags</dt>
-                      <dd className="flex justify-end" title="Tags are shared and saved to the document">
-                        <TagPicker
-                          workspaceId={workspaceId}
-                          selected={document.tags}
-                          onToggle={(tag) => {
-                            const nextTags = document.tags.includes(tag)
-                              ? document.tags.filter((t) => t !== tag)
-                              : [...document.tags, tag];
-                            onTagsChange(document.id, nextTags);
-                          }}
-                          placeholder={document.tags.length ? "Edit tags" : "Add tags"}
-                          disabled={!document.record}
-                        />
-                      </dd>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-slate-500">Mapping</dt>
-                      <dd className="flex justify-end">
-                        <MappingBadge mapping={document.mapping} />
-                      </dd>
-                    </div>
-                  </dl>
-                </section>
-
-                <section className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                  <h3 className="text-xs uppercase tracking-[0.2em] text-slate-400">Link</h3>
-                  <p className="mt-3 text-xs text-slate-500">Copy a share link so teammates land directly on this document.</p>
-                  <div className="mt-3">
-                    <Button type="button" size="sm" variant="secondary" className="gap-2 text-xs" onClick={() => onCopyLink(document)}>
-                      <LinkIcon className="h-4 w-4" />
-                      Copy link
-                    </Button>
-                  </div>
-                </section>
-              </TabsContent>
-            </TabsRoot>
+                ) : (
+                  <PreviewMessage title="Preview unavailable">
+                    The processed XLSX is ready to download, but we cannot render a preview here.
+                  </PreviewMessage>
+                )
+              ) : effectiveRun?.status === "failed" ? (
+                <PreviewMessage title={effectiveRun.failure_message ?? "Run failed"}>
+                  {effectiveRun.failure_stage ?? "We could not complete normalization for this file."}
+                </PreviewMessage>
+              ) : runLoading ? (
+                <PreviewMessage title="Loading run output">
+                  Fetching the latest run status.
+                </PreviewMessage>
+              ) : (
+                <PreviewMessage title="Processing output">
+                  {document.stage ?? "Preparing normalized output"}
+                </PreviewMessage>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Details drawer (progressive disclosure) */}
+      {detailsOpen && document ? (
+        <DetailsDrawer
+          tab={detailsTab}
+          onTabChange={setDetailsTab}
+          document={document}
+          workspaceId={workspaceId}
+          now={now}
+          people={people}
+          currentUserKey={currentUserKey}
+          currentUserLabel={currentUserLabel}
+          onAssign={onAssign}
+          onPickUp={onPickUp}
+          onTagsChange={onTagsChange}
+          comments={comments}
+          onAddComment={onAddComment}
+          onEditComment={onEditComment}
+          onDeleteComment={onDeleteComment}
+          onClose={() => setDetailsOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
 function PreviewMessage({ title, children }: { title: string; children: string }) {
   return (
-    <div className="flex flex-col gap-2 px-4 py-6 text-sm text-slate-500">
-      <p className="font-semibold text-slate-900">{title}</p>
+    <div className="flex flex-col gap-2 px-4 py-4 text-sm text-muted-foreground">
+      <p className="font-semibold text-foreground">{title}</p>
       <p>{children}</p>
     </div>
   );
 }
 
+type RunStatus = RunResource["status"];
+
+const RUN_STATUS_STYLES: Record<
+  RunStatus,
+  {
+    label: string;
+  }
+> = {
+  queued: {
+    label: "Queued",
+  },
+  running: {
+    label: "Running",
+  },
+  succeeded: {
+    label: "Succeeded",
+  },
+  failed: {
+    label: "Failed",
+  },
+  cancelled: {
+    label: "Cancelled",
+  },
+};
+
+function formatRunStatus(status: RunStatus) {
+  return RUN_STATUS_STYLES[status]?.label ?? status;
+}
+
 function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
+  const columnCount = sheet.headers.length;
+
   return (
     <table className="min-w-full text-left text-xs">
-      <thead className="sticky top-0 bg-slate-100 text-slate-500">
+      <thead className="sticky top-0 z-10 border-b border-border bg-background/95 text-muted-foreground backdrop-blur">
         <tr>
-          {sheet.headers.map((column, index) => (
-            <th key={`${column}-${index}`} className="px-3 py-2 font-semibold uppercase tracking-wide">
-              {column}
-            </th>
-          ))}
+          {Array.from({ length: columnCount }).map((_, index) => {
+            const column = sheet.headers[index] ?? "";
+            const label = column || columnLabel(index);
+            return (
+              <th
+                key={`${sheet.name}-h-${index}`}
+                className="px-3 py-2 text-[11px] font-semibold"
+                title={label}
+              >
+                {label}
+              </th>
+            );
+          })}
         </tr>
       </thead>
-      <tbody>
+      <tbody className="bg-card">
         {sheet.rows.map((row, rowIndex) => (
-          <tr key={`${sheet.name}-${rowIndex}`} className="border-t border-slate-200">
-            {row.map((cell, cellIndex) => (
-              <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-slate-900">
-                {cell}
-              </td>
-            ))}
+          <tr key={`${sheet.name}-${rowIndex}`} className={clsx("border-t border-border", rowIndex % 2 === 1 && "bg-background/40")}>
+            {Array.from({ length: columnCount }).map((_, cellIndex) => {
+              const cell = row[cellIndex] ?? "";
+              return (
+                <td
+                  key={`${sheet.name}-${rowIndex}-${cellIndex}`}
+                  className="max-w-[22rem] truncate px-3 py-2 text-foreground"
+                  title={cell}
+                >
+                  {cell}
+                </td>
+              );
+            })}
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  disabled,
+  ariaLabel,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  ariaLabel: string;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={title ?? ariaLabel}
+      className={clsx(
+        "inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent bg-transparent text-muted-foreground transition",
+        "hover:border-border hover:bg-background hover:text-muted-foreground",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-card disabled:hover:text-muted-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PreviewActionsMenu({
+  document,
+  canDownloadOutput,
+  canDownloadOriginal,
+  canReprocess,
+  onDownloadOutput,
+  onDownloadOriginal,
+  onCopyLink,
+  onReprocess,
+  onOpenDetails,
+  onOpenNotes,
+  onClosePreview,
+}: {
+  document: DocumentEntry;
+  canDownloadOutput: boolean;
+  canDownloadOriginal: boolean;
+  canReprocess: boolean;
+  onDownloadOutput: (doc: DocumentEntry | null) => void;
+  onDownloadOriginal: (doc: DocumentEntry | null) => void;
+  onCopyLink: (doc: DocumentEntry | null) => void;
+  onReprocess: (doc: DocumentEntry | null) => void;
+  onOpenDetails: () => void;
+  onOpenNotes: () => void;
+  onClosePreview: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition hover:bg-background"
+        onClick={(event) => {
+          event.stopPropagation();
+          setPosition({ x: event.clientX, y: event.clientY });
+          setOpen(true);
+        }}
+        aria-label="Preview actions"
+      >
+        <MoreIcon className="h-4 w-4" />
+      </button>
+
+      <ContextMenu
+        open={open}
+        position={position}
+        onClose={() => setOpen(false)}
+        appearance="light"
+        items={[
+          {
+            id: "open-details",
+            label: "Open details",
+            onSelect: onOpenDetails,
+            icon: <UserIcon className="h-4 w-4" />,
+          },
+          {
+            id: "open-notes",
+            label: "Open notes",
+            onSelect: onOpenNotes,
+            icon: <ChatIcon className="h-4 w-4" />,
+          },
+          {
+            id: "download-output",
+            label: "Download output",
+            onSelect: () => onDownloadOutput(document),
+            disabled: !canDownloadOutput,
+            icon: <DownloadIcon className="h-4 w-4" />,
+            dividerAbove: true,
+          },
+          {
+            id: "download-original",
+            label: "Download original",
+            onSelect: () => onDownloadOriginal(document),
+            disabled: !canDownloadOriginal,
+            icon: <DownloadIcon className="h-4 w-4" />,
+          },
+          {
+            id: "copy-link",
+            label: "Copy link",
+            onSelect: () => onCopyLink(document),
+            disabled: !document.record,
+            icon: <LinkIcon className="h-4 w-4" />,
+          },
+          {
+            id: "reprocess",
+            label: "Reprocess",
+            onSelect: () => onReprocess(document),
+            disabled: !canReprocess,
+            icon: <RefreshIcon className="h-4 w-4" />,
+          },
+          {
+            id: "close-preview",
+            label: "Close preview",
+            onSelect: onClosePreview,
+            icon: <CloseIcon className="h-4 w-4" />,
+            dividerAbove: true,
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+function DetailsDrawer({
+  tab,
+  onTabChange,
+  document,
+  workspaceId,
+  now,
+  people,
+  currentUserKey,
+  currentUserLabel,
+  onAssign,
+  onPickUp,
+  onTagsChange,
+  comments,
+  onAddComment,
+  onEditComment,
+  onDeleteComment,
+  onClose,
+}: {
+  tab: DetailsPanelTab;
+  onTabChange: (tab: DetailsPanelTab) => void;
+
+  document: DocumentEntry;
+  workspaceId: string;
+  now: number;
+
+  people: WorkspacePerson[];
+  currentUserKey: string;
+  currentUserLabel: string;
+
+  onAssign: (documentId: string, assigneeKey: string | null) => void;
+  onPickUp: (documentId: string) => void;
+  onTagsChange: (documentId: string, nextTags: string[]) => void;
+
+  comments: DocumentComment[];
+  onAddComment: (docId: string, body: string, mentions: { key: string; label: string }[]) => void;
+  onEditComment: (docId: string, commentId: string, body: string, mentions: { key: string; label: string }[]) => void;
+  onDeleteComment: (docId: string, commentId: string) => void;
+
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute inset-0 z-20"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          // Close the drawer first; prevent the global “close preview” Esc handler from firing.
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-overlay/10"
+        onClick={onClose}
+        role="presentation"
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div
+        className="absolute inset-y-0 right-0 flex w-full max-w-[26rem] flex-col border-l border-border bg-card shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Document details"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">Details</p>
+            <p className="truncate text-[11px] text-muted-foreground" title={document.name}>
+              {document.name}
+            </p>
+          </div>
+          <IconButton ariaLabel="Close details" title="Close" onClick={onClose}>
+            <CloseIcon className="h-4 w-4" />
+          </IconButton>
+        </div>
+
+        <div className="border-b border-border bg-background px-3 py-2">
+          <div className="flex items-center gap-2 text-xs">
+            {(["details", "notes"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onTabChange(key)}
+                className={clsx(
+                  "rounded-full px-3 py-1 font-semibold transition",
+                  tab === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={tab === key}
+              >
+                {key === "details" ? "Details" : `Notes${document.commentCount ? ` (${document.commentCount})` : ""}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto px-4 py-4">
+          {tab === "details" ? (
+            <div className="flex flex-col gap-5">
+              <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background">
+                    <UserIcon className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Assignee</p>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {document.assigneeLabel ?? "Unassigned"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {!document.assigneeKey ? (
+                    <Button type="button" size="sm" onClick={() => onPickUp(document.id)} className="text-xs">
+                      Pick up
+                    </Button>
+                  ) : document.assigneeKey !== currentUserKey ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onPickUp(document.id)}
+                      className="text-xs"
+                    >
+                      Assign to me
+                    </Button>
+                  ) : null}
+
+                  <PeoplePicker
+                    people={people}
+                    value={[document.assigneeKey ?? unassignedKey()]}
+                    onChange={(keys) => onAssign(document.id, normalizeSingleAssignee(keys))}
+                    placeholder="Assign…"
+                    includeUnassigned
+                    buttonClassName="min-w-0 max-w-[16rem] text-xs"
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Metadata</h3>
+                  <span className="text-[11px] text-muted-foreground">Updated {formatRelativeTime(now, document.updatedAt)}</span>
+                </div>
+
+                <dl className="mt-4 grid gap-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">Uploader</dt>
+                    <dd className="font-semibold text-foreground">{document.uploader ?? "Unassigned"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">Size</dt>
+                    <dd className="font-semibold text-foreground">{document.size}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className="rounded-2xl border border-border bg-card px-4 py-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Tags</h3>
+                  <span className="text-[11px] text-muted-foreground">Shared</span>
+                </div>
+
+                <div className="mt-3">
+                  <TagPicker
+                    workspaceId={workspaceId}
+                    selected={document.tags}
+                    onToggle={(tag) => {
+                      const nextTags = document.tags.includes(tag)
+                        ? document.tags.filter((t) => t !== tag)
+                        : [...document.tags, tag];
+                      onTagsChange(document.id, nextTags);
+                    }}
+                    placeholder={document.tags.length ? "Edit tags" : "Add tags"}
+                    disabled={!document.record}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground">Tip</p>
+                <p className="mt-1">
+                  Keep the preview clean: use <span className="font-semibold">Notes</span> for context,
+                  and <span className="font-semibold">Tags</span> for retrieval.
+                </p>
+              </section>
+            </div>
+          ) : (
+            <CommentsPanel
+              now={now}
+              comments={comments}
+              people={people}
+              currentUserKey={currentUserKey}
+              currentUserLabel={currentUserLabel}
+              onAdd={(body, mentions) => onAddComment(document.id, body, mentions)}
+              onEdit={(commentId, body, mentions) => onEditComment(document.id, commentId, body, mentions)}
+              onDelete={(commentId) => onDeleteComment(document.id, commentId)}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

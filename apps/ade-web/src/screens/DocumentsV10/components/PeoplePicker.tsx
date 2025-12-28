@@ -90,7 +90,7 @@ export function PeoplePicker({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          "inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition",
+          "inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition",
           disabled ? "opacity-60" : "hover:border-brand-300",
           buttonClassName,
         )}
@@ -98,30 +98,30 @@ export function PeoplePicker({
         <span
           className={clsx(
             "min-w-0 truncate",
-            selectedLabels.length === 0 ? "text-slate-500" : "text-slate-900",
+            selectedLabels.length === 0 ? "text-muted-foreground" : "text-foreground",
           )}
         >
           {buttonText}
         </span>
-        <span className="text-slate-400" aria-hidden>
+        <span className="text-muted-foreground" aria-hidden>
           v
         </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-slate-200 bg-white shadow-lg">
-          <div className="border-b border-slate-100 p-2">
+        <div className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg">
+          <div className="border-b border-border p-2">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search people..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-brand-300"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-300"
               autoFocus
             />
           </div>
           <div className="max-h-72 overflow-auto p-2">
             {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-500">No matches.</div>
+              <div className="px-3 py-3 text-xs text-muted-foreground">No matches.</div>
             ) : (
               filtered.map((person) => {
                 const selected = value.includes(person.key);
@@ -132,12 +132,12 @@ export function PeoplePicker({
                     onClick={() => toggle(person.key)}
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                      selected ? "bg-brand-50" : "hover:bg-slate-50",
+                      selected ? "bg-brand-50" : "hover:bg-background",
                     )}
                   >
-                    <span className="min-w-0 truncate font-semibold text-slate-900">{person.label}</span>
+                    <span className="min-w-0 truncate font-semibold text-foreground">{person.label}</span>
                     {multiple ? (
-                      <span className={clsx("text-xs font-semibold", selected ? "text-brand-700" : "text-slate-400")}>
+                      <span className={clsx("text-xs font-semibold", selected ? "text-brand-700" : "text-muted-foreground")}>
                         {selected ? "Selected" : "Select"}
                       </span>
                     ) : null}
@@ -148,11 +148,11 @@ export function PeoplePicker({
           </div>
 
           {multiple && value.length > 0 ? (
-            <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+            <div className="flex items-center justify-between border-t border-border px-3 py-2">
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground"
               >
                 Clear
               </button>

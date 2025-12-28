@@ -186,7 +186,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
           snippetSuggestions: "inline",
         }}
         loading={
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Loading editor…
           </div>
         }

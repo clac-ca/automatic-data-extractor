@@ -125,15 +125,15 @@ const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
 };
 
 const DISPLAY_STATUS_META: Record<DisplayStatus, { label: string; tone: string }> = {
-  uploaded: { label: "Uploaded", tone: "bg-slate-400" },
+  uploaded: { label: "Uploaded", tone: "bg-muted-foreground" },
   processing: { label: "Processing", tone: "bg-amber-500" },
   processed: { label: "Processed", tone: "bg-emerald-500" },
   failed: { label: "Failed", tone: "bg-rose-500" },
-  archived: { label: "Archived", tone: "bg-slate-300" },
-  queued: { label: "Queued", tone: "bg-slate-400" },
+  archived: { label: "Archived", tone: "bg-muted" },
+  queued: { label: "Queued", tone: "bg-muted-foreground" },
   uploading: { label: "Uploading", tone: "bg-sky-500" },
   "failed-upload": { label: "Upload failed", tone: "bg-rose-500" },
-  cancelled: { label: "Cancelled", tone: "bg-slate-300" },
+  cancelled: { label: "Cancelled", tone: "bg-muted" },
 };
 
 const GRID_TEMPLATE =
@@ -569,7 +569,7 @@ export default function WorkspaceDocumentsV6Route() {
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-50"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
       onDragEnter={handleDragEnter}
       onDragOver={(event) => {
         if (isFileTransfer(event.dataTransfer.types)) {
@@ -596,7 +596,7 @@ export default function WorkspaceDocumentsV6Route() {
         />
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-0 flex-1 flex-col border-b border-slate-200 bg-white lg:border-b-0 lg:border-r">
+        <div className="flex min-h-0 flex-1 flex-col border-b border-border bg-card lg:border-b-0 lg:border-r">
           {view === "board" ? (
             <BoardControls groupBy={groupBy} onGroupChange={handleGroupChange} />
           ) : null}
@@ -644,7 +644,7 @@ export default function WorkspaceDocumentsV6Route() {
             ) : null}
           </div>
         </div>
-        <div className="flex min-h-0 w-full flex-col bg-slate-50 lg:w-[420px] lg:max-w-[42%]">
+        <div className="flex min-h-0 w-full flex-col bg-background lg:w-[420px] lg:max-w-[42%]">
           <DocumentInspector
             document={activeDocument}
             mapping={activeDocument ? deriveMappingHealth(activeDocument) : null}
@@ -681,16 +681,16 @@ function DocumentsTopBar({
   readonly onUploadClick: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-6 py-4">
+    <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-6 py-4">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-slate-900">Documents</h1>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+        <h1 className="text-lg font-semibold text-foreground">Documents</h1>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
           v6
         </span>
       </div>
       <div className="flex min-w-[220px] flex-1 items-center gap-2">
         <div className="relative flex w-full max-w-xl items-center">
-          <SearchIcon className="pointer-events-none absolute left-3 h-4 w-4 text-slate-400" />
+          <SearchIcon className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
@@ -725,8 +725,8 @@ function BoardControls({
   readonly onGroupChange: (value: BoardGroupBy) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-6 py-3 text-sm">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/70 px-6 py-3 text-sm">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Group by
       </div>
       <SegmentedControl
@@ -752,7 +752,7 @@ function SegmentedControl<T extends string>({
   readonly onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex items-center rounded-full border border-slate-200 bg-white p-1 text-sm shadow-sm">
+    <div className="flex items-center rounded-full border border-border bg-card p-1 text-sm shadow-sm">
       {options.map((option) => (
         <button
           key={option.id}
@@ -761,8 +761,8 @@ function SegmentedControl<T extends string>({
           className={clsx(
             "rounded-full px-3 py-1.5 text-xs font-semibold transition",
             value === option.id
-              ? "bg-slate-900 text-white"
-              : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >
           {option.label}
@@ -786,10 +786,10 @@ function BulkActionsBar({
   readonly onAction: (label: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/90 px-6 py-3 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/90 px-6 py-3 text-sm">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-slate-900">{selectedCount} selected</span>
-        {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+        <span className="text-sm font-semibold text-foreground">{selectedCount} selected</span>
+        {message ? <span className="text-xs text-muted-foreground">{message}</span> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => onAction("Assign owner")}>
@@ -812,7 +812,7 @@ function BulkActionsBar({
         <button
           type="button"
           onClick={onClear}
-          className="text-xs font-semibold text-slate-400 hover:text-slate-600"
+          className="text-xs font-semibold text-muted-foreground hover:text-muted-foreground"
         >
           Clear
         </button>
@@ -845,7 +845,7 @@ function DocumentsGrid({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         <div
-          className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-400"
+          className="sticky top-0 z-10 border-b border-border bg-background text-xs font-semibold uppercase tracking-wide text-muted-foreground"
           style={{ gridTemplateColumns: GRID_TEMPLATE }}
         >
           <div className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: GRID_TEMPLATE }}>
@@ -854,7 +854,7 @@ function DocumentsGrid({
                 type="checkbox"
                 checked={allSelected}
                 onChange={(event) => onToggleAll(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                className="h-4 w-4 rounded border-border-strong text-brand-600 focus:ring-brand-500"
                 aria-label="Select all documents"
               />
             </div>
@@ -866,7 +866,7 @@ function DocumentsGrid({
             <div aria-hidden />
           </div>
         </div>
-        <div className="divide-y divide-slate-200">
+        <div className="divide-y divide-border">
           {items.map((item) => (
             <DocumentRow
               key={item.id}
@@ -911,7 +911,7 @@ function DocumentRow({
       }}
       className={clsx(
         "group grid cursor-pointer items-center gap-3 px-4 py-3 text-sm transition",
-        active ? "bg-slate-900/5" : "hover:bg-slate-50",
+        active ? "bg-overlay/5" : "hover:bg-background",
       )}
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
     >
@@ -922,15 +922,15 @@ function DocumentRow({
           checked={selected}
           onChange={(event) => onToggleSelection(item.id, event.target.checked)}
           onClick={(event) => event.stopPropagation()}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 disabled:opacity-40"
+          className="h-4 w-4 rounded border-border-strong text-brand-600 focus:ring-brand-500 disabled:opacity-40"
           aria-label={`Select ${item.name}`}
         />
       </div>
       <div className="flex min-w-0 items-center gap-3">
-        <FileIcon className="h-5 w-5 text-slate-400" />
+        <FileIcon className="h-5 w-5 text-muted-foreground" />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{item.name}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <div className="truncate text-sm font-semibold text-foreground">{item.name}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <MappingBadge mapping={item.mapping} />
             {item.needsAttention ? (
               <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600">
@@ -940,22 +940,22 @@ function DocumentRow({
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <span className={clsx("h-2 w-2 rounded-full", status.tone)} aria-hidden />
         <span>{status.label}</span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-slate-500">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {item.owner ? <Avatar size="sm" name={item.owner.name} email={item.owner.email ?? undefined} /> : null}
         <span className="truncate">{item.owner?.name ?? "Unassigned"}</span>
       </div>
       <div className="flex flex-wrap gap-1.5">
         <TagList tags={item.tags} />
       </div>
-      <div className="text-xs text-slate-500">{formatRelativeTime(item.updatedAt)}</div>
+      <div className="text-xs text-muted-foreground">{formatRelativeTime(item.updatedAt)}</div>
       <div className="flex justify-end">
         <button
           type="button"
-          className="rounded-full p-1 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100"
+          className="rounded-full p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-muted-foreground group-hover:opacity-100"
           onClick={(event) => event.stopPropagation()}
           aria-label="More actions"
         >
@@ -996,7 +996,7 @@ function DocumentsBoard({
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex min-h-0 flex-1 overflow-x-auto bg-slate-50">
+      <div className="flex min-h-0 flex-1 overflow-x-auto bg-background">
         <div className="flex min-h-0 flex-1 gap-4 px-6 py-4">
           {columns.map((column) => (
             <BoardColumn
@@ -1068,8 +1068,8 @@ function BoardColumn({
     <div
       ref={setNodeRef}
       className={clsx(
-        "flex min-h-0 w-72 flex-shrink-0 flex-col rounded-2xl border bg-white shadow-sm",
-        highlight ? "border-brand-400 ring-2 ring-brand-200" : "border-slate-200",
+        "flex min-h-0 w-72 flex-shrink-0 flex-col rounded-2xl border bg-card shadow-sm",
+        highlight ? "border-brand-400 ring-2 ring-brand-200" : "border-border",
       )}
       onDragOver={(event) => {
         if (isFileTransfer(event.dataTransfer.types)) {
@@ -1084,16 +1084,16 @@ function BoardColumn({
       }}
       onDrop={handleDrop}
     >
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           {column.tone ? <span className={clsx("h-2 w-2 rounded-full", column.tone)} aria-hidden /> : null}
-          <span className="text-sm font-semibold text-slate-900">{column.label}</span>
+          <span className="text-sm font-semibold text-foreground">{column.label}</span>
         </div>
-        <span className="text-xs font-semibold text-slate-400">{column.items.length}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{column.items.length}</span>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
         {column.items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-xs text-slate-500">
+          <div className="rounded-xl border border-dashed border-border bg-background px-3 py-4 text-xs text-muted-foreground">
             Drop files here or drag cards into this column.
           </div>
         ) : (
@@ -1129,23 +1129,23 @@ function BoardCard({
       {...listeners}
       onClick={onClick}
       className={clsx(
-        "rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition",
-        onClick ? "cursor-pointer hover:border-slate-300" : "cursor-grab",
+        "rounded-xl border border-border bg-card p-3 shadow-sm transition",
+        onClick ? "cursor-pointer hover:border-border-strong" : "cursor-grab",
         isDragging && "opacity-60",
         compact && "p-2",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{item.name}</div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+          <div className="truncate text-sm font-semibold text-foreground">{item.name}</div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <span className={clsx("h-2 w-2 rounded-full", status.tone)} aria-hidden />
             <span>{status.label}</span>
           </div>
         </div>
         {item.owner ? <Avatar size="sm" name={item.owner.name} email={item.owner.email ?? undefined} /> : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
         <TagList tags={item.tags} max={1} />
         <MappingBadge mapping={item.mapping} />
         {item.processedReady ? (
@@ -1171,21 +1171,21 @@ function BoardCardPreview({
   return (
     <div
       className={clsx(
-        "rounded-xl border border-slate-200 bg-white p-3 shadow-sm",
+        "rounded-xl border border-border bg-card p-3 shadow-sm",
         compact && "p-2",
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-900">{item.name}</div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+          <div className="truncate text-sm font-semibold text-foreground">{item.name}</div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <span className={clsx("h-2 w-2 rounded-full", status.tone)} aria-hidden />
             <span>{status.label}</span>
           </div>
         </div>
         {item.owner ? <Avatar size="sm" name={item.owner.name} email={item.owner.email ?? undefined} /> : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
         <TagList tags={item.tags} max={1} />
         <MappingBadge mapping={item.mapping} />
         {item.processedReady ? (
@@ -1272,8 +1272,8 @@ function DocumentInspector({
   if (!document) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-        <div className="text-sm font-semibold text-slate-900">Select a document</div>
-        <div className="mt-2 text-sm text-slate-500">
+        <div className="text-sm font-semibold text-foreground">Select a document</div>
+        <div className="mt-2 text-sm text-muted-foreground">
           Preview processed outputs, inspect details, and download the normalized XLSX.
         </div>
       </div>
@@ -1282,26 +1282,26 @@ function DocumentInspector({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-slate-200 bg-white px-6 py-5">
+      <div className="border-b border-border bg-card px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span
                 className={clsx(
                   "h-2.5 w-2.5 rounded-full",
-                  appliedStatus ? getStatusTone(appliedStatus) : "bg-slate-300",
+                  appliedStatus ? getStatusTone(appliedStatus) : "bg-muted",
                 )}
                 aria-hidden
               />
-              <h2 className="truncate text-base font-semibold text-slate-900">{document.name}</h2>
+              <h2 className="truncate text-base font-semibold text-foreground">{document.name}</h2>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{appliedStatus ? DOCUMENT_STATUS_LABELS[appliedStatus] : "Unknown"}</span>
-              <span aria-hidden className="text-slate-300">
+              <span aria-hidden className="text-muted-foreground">
                 -
               </span>
               <span>{formatBytes(document.byte_size)}</span>
-              <span aria-hidden className="text-slate-300">
+              <span aria-hidden className="text-muted-foreground">
                 -
               </span>
               <span>Updated {formatRelativeTime(document.updated_at)}</span>
@@ -1322,7 +1322,7 @@ function DocumentInspector({
                 const rect = event.currentTarget.getBoundingClientRect();
                 setMenuPosition({ x: rect.right + 8, y: rect.bottom });
               }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-background"
               aria-label="More actions"
             >
               <MoreIcon className="h-4 w-4" />
@@ -1333,22 +1333,22 @@ function DocumentInspector({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         {notice ? (
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+          <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-2 text-xs text-muted-foreground">
             {notice}
           </div>
         ) : null}
         <MappingSummary mapping={mapping} />
-        <div className="mt-5 rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-4 py-3">
+        <div className="mt-5 rounded-3xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-4 py-3">
             <TabsRoot value={tab} onValueChange={setTab}>
-              <TabsList className="flex items-center gap-1 rounded-2xl bg-slate-100 p-1">
+              <TabsList className="flex items-center gap-1 rounded-2xl bg-muted p-1">
                 <TabsTrigger
                   value="preview"
                   className={clsx(
                     "flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition",
                     tab === "preview"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700",
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Preview
@@ -1358,8 +1358,8 @@ function DocumentInspector({
                   className={clsx(
                     "flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition",
                     tab === "details"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700",
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Details
@@ -1369,8 +1369,8 @@ function DocumentInspector({
                   className={clsx(
                     "flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition",
                     tab === "history"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700",
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   History
@@ -1418,7 +1418,7 @@ function DocumentInspector({
 function MappingSummary({ mapping }: { readonly mapping: MappingHealth | null }) {
   if (!mapping) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+      <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
         Mapping health will appear here once processing completes.
       </div>
     );
@@ -1431,17 +1431,17 @@ function MappingSummary({ mapping }: { readonly mapping: MappingHealth | null })
       : mapping.status === "warning"
         ? "text-amber-600"
         : mapping.status === "pending"
-          ? "text-slate-500"
+          ? "text-muted-foreground"
           : "text-emerald-600";
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Mapping health</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mapping health</div>
         <div className={clsx("mt-1 text-sm font-semibold", mappingTone)}>
           {mapping.score === null ? "Mapping pending" : `Mapping: ${mapping.score}%`}
         </div>
-        <div className="mt-1 text-xs text-slate-500">
+        <div className="mt-1 text-xs text-muted-foreground">
           {mapping.score === null
             ? "Waiting for the latest run to score mappings."
             : mapping.issues > 0 || mapping.unmapped > 0
@@ -1547,9 +1547,9 @@ function PreviewPlaceholder({
   readonly onAction?: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <div className="text-sm text-slate-500">{description}</div>
+    <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-border bg-background px-6 py-8 text-center">
+      <div className="text-sm font-semibold text-foreground">{title}</div>
+      <div className="text-sm text-muted-foreground">{description}</div>
       {actionLabel ? (
         <div className="flex justify-center">
           <Button size="sm" variant="secondary" onClick={onAction}>
@@ -1563,9 +1563,9 @@ function PreviewPlaceholder({
 
 function PreviewLoading() {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background px-6 py-8 text-center">
       <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-      <div className="text-sm text-slate-500">Loading processed workbook...</div>
+      <div className="text-sm text-muted-foreground">Loading processed workbook...</div>
     </div>
   );
 }
@@ -1657,34 +1657,34 @@ function XlsxPreview({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+      <div className="rounded-2xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
               Processed output
             </div>
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="mt-1 text-xs text-muted-foreground">
               This is the normalized XLSX output ready for download.
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             {outputMeta?.filename ? <span>{outputMeta.filename}</span> : null}
             {outputMeta?.size_bytes ? (
               <span>{formatBytes(outputMeta.size_bytes)}</span>
             ) : null}
-            {runStatus ? <span className="rounded-full bg-slate-100 px-2 py-0.5">{runStatus}</span> : null}
+            {runStatus ? <span className="rounded-full bg-muted px-2 py-0.5">{runStatus}</span> : null}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Sheets
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={findQuery}
                 onChange={(event) => setFindQuery(event.target.value)}
@@ -1699,13 +1699,13 @@ function XlsxPreview({
                   matches.length ? (current + 1) % matches.length : 0,
                 )
               }
-              className="rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
+              className="rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-background"
             >
               {matches.length ? `${activeMatchIndex + 1}/${matches.length}` : "No matches"}
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
           {sheets.map((entry) => (
             <button
               key={entry.name}
@@ -1714,8 +1714,8 @@ function XlsxPreview({
               className={clsx(
                 "rounded-full px-3 py-1 text-xs font-semibold transition",
                 entry.name === sheet.name
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-500 hover:bg-slate-100",
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted",
               )}
             >
               {entry.name}
@@ -1725,7 +1725,7 @@ function XlsxPreview({
         <div className="max-h-[28rem] overflow-auto">
           <div className="min-w-max">
             <div
-              className="sticky top-0 z-10 grid border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500"
+              className="sticky top-0 z-10 grid border-b border-border bg-background text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               style={{
                 gridTemplateColumns: `repeat(${sheet.headers.length}, minmax(160px,1fr))`,
               }}
@@ -1746,7 +1746,7 @@ function XlsxPreview({
                     rowRefs.current.delete(rowIndex);
                   }
                 }}
-                className="grid border-b border-slate-100 text-sm text-slate-700"
+                className="grid border-b border-border text-sm text-foreground"
                 style={{
                   gridTemplateColumns: `repeat(${sheet.headers.length}, minmax(160px,1fr))`,
                 }}
@@ -1765,7 +1765,7 @@ function XlsxPreview({
               </div>
             ))}
             {(sheet.truncatedRows || sheet.truncatedColumns) && (
-              <div className="px-4 py-3 text-xs text-slate-500">
+              <div className="px-4 py-3 text-xs text-muted-foreground">
                 Showing first {Math.min(sheet.totalRows, MAX_PREVIEW_ROWS)} rows and {Math.min(sheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
               </div>
             )}
@@ -1791,7 +1791,7 @@ function DocumentDetails({
   const resolvedTags = tags.length > 0 ? tags : document.tags ?? [];
 
   return (
-    <div className="space-y-3 text-sm text-slate-600">
+    <div className="space-y-3 text-sm text-muted-foreground">
       <DetailRow label="Status" value={DOCUMENT_STATUS_LABELS[status]} />
       <DetailRow label="Owner" value={resolvedOwner?.name ?? "Unassigned"} />
       <DetailRow label="Size" value={formatBytes(document.byte_size)} />
@@ -1811,7 +1811,7 @@ function DocumentHistory({
   readonly lastRun: DocumentLastRun | null | undefined;
 }) {
   return (
-    <div className="space-y-4 text-sm text-slate-600">
+    <div className="space-y-4 text-sm text-muted-foreground">
       <HistoryRow
         title="Uploaded"
         description={`Uploaded by ${document.uploader?.name ?? document.uploader?.email ?? "Unknown"}`}
@@ -1833,8 +1833,8 @@ function DocumentHistory({
 function DetailRow({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div className="flex items-center justify-between gap-6">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="text-right font-medium text-slate-700">{value}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-right font-medium text-foreground">{value}</div>
     </div>
   );
 }
@@ -1849,10 +1849,10 @@ function HistoryRow({
   readonly timestamp: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <div className="mt-1 text-sm text-slate-500">{description}</div>
-      <div className="mt-1 text-xs text-slate-400">{new Date(timestamp).toLocaleString()}</div>
+    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+      <div className="text-sm font-semibold text-foreground">{title}</div>
+      <div className="mt-1 text-sm text-muted-foreground">{description}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{new Date(timestamp).toLocaleString()}</div>
     </div>
   );
 }
@@ -1894,23 +1894,23 @@ function NoResultsState({ query, onClear }: { readonly query: string; readonly o
 function GridSkeleton() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <div className="border-b border-border bg-background px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Loading documents...
       </div>
-      <div className="divide-y divide-slate-200">
+      <div className="divide-y divide-border">
         {Array.from({ length: 8 }).map((_, index) => (
           <div
             key={index}
             className="grid items-center gap-3 px-4 py-3"
             style={{ gridTemplateColumns: GRID_TEMPLATE }}
           >
-            <div className="h-4 w-4 rounded bg-slate-200" />
-            <div className="h-3 w-40 rounded bg-slate-200" />
-            <div className="h-3 w-20 rounded bg-slate-200" />
-            <div className="h-3 w-24 rounded bg-slate-200" />
-            <div className="h-3 w-24 rounded bg-slate-200" />
-            <div className="h-3 w-16 rounded bg-slate-200" />
-            <div className="h-3 w-6 rounded bg-slate-200" />
+            <div className="h-4 w-4 rounded bg-muted" />
+            <div className="h-3 w-40 rounded bg-muted" />
+            <div className="h-3 w-20 rounded bg-muted" />
+            <div className="h-3 w-24 rounded bg-muted" />
+            <div className="h-3 w-24 rounded bg-muted" />
+            <div className="h-3 w-16 rounded bg-muted" />
+            <div className="h-3 w-6 rounded bg-muted" />
           </div>
         ))}
       </div>
@@ -1923,11 +1923,11 @@ function BoardSkeleton() {
     <div className="flex min-h-0 flex-1 overflow-x-auto px-6 py-4">
       <div className="flex gap-4">
         {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="flex h-72 w-72 flex-col rounded-2xl border border-slate-200 bg-white p-4">
-            <div className="h-3 w-32 rounded bg-slate-200" />
+          <div key={index} className="flex h-72 w-72 flex-col rounded-2xl border border-border bg-card p-4">
+            <div className="h-3 w-32 rounded bg-muted" />
             <div className="mt-3 flex-1 space-y-3">
               {Array.from({ length: 3 }).map((__, cardIndex) => (
-                <div key={cardIndex} className="h-16 rounded-xl bg-slate-100" />
+                <div key={cardIndex} className="h-16 rounded-xl bg-muted" />
               ))}
             </div>
           </div>
@@ -1939,7 +1939,7 @@ function BoardSkeleton() {
 
 function LoadMoreFooter({ isLoading, onLoadMore }: { readonly isLoading: boolean; readonly onLoadMore: () => void }) {
   return (
-    <div className="border-t border-slate-200 bg-white px-6 py-3 text-center">
+    <div className="border-t border-border bg-card px-6 py-3 text-center">
       <Button
         variant="ghost"
         size="sm"
@@ -1955,10 +1955,10 @@ function LoadMoreFooter({ isLoading, onLoadMore }: { readonly isLoading: boolean
 
 function UploadOverlay() {
   return (
-    <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm">
-      <div className="rounded-3xl border border-slate-200 bg-white px-8 py-6 text-center shadow-[0_30px_70px_-60px_rgba(15,23,42,0.7)]">
-        <div className="text-sm font-semibold text-slate-900">Drop to upload</div>
-        <div className="mt-1 text-sm text-slate-500">We will start processing immediately.</div>
+    <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-overlay/20 backdrop-blur-sm">
+      <div className="rounded-3xl border border-border bg-card px-8 py-6 text-center shadow-[0_30px_70px_-60px_rgb(var(--color-shadow)/0.7)]">
+        <div className="text-sm font-semibold text-foreground">Drop to upload</div>
+        <div className="mt-1 text-sm text-muted-foreground">We will start processing immediately.</div>
       </div>
     </div>
   );
@@ -1966,7 +1966,7 @@ function UploadOverlay() {
 
 function TagList({ tags, max = 2 }: { readonly tags: readonly string[]; readonly max?: number }) {
   if (!tags || tags.length === 0) {
-    return <span className="text-xs text-slate-400">Unlabeled</span>;
+    return <span className="text-xs text-muted-foreground">Unlabeled</span>;
   }
   const visible = tags.slice(0, max);
   const remaining = tags.length - visible.length;
@@ -1976,13 +1976,13 @@ function TagList({ tags, max = 2 }: { readonly tags: readonly string[]; readonly
       {visible.map((tag) => (
         <span
           key={tag}
-          className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+          className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
         >
           {tag}
         </span>
       ))}
       {remaining > 0 ? (
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">+{remaining}</span>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">+{remaining}</span>
       ) : null}
     </div>
   );
@@ -1991,7 +1991,7 @@ function TagList({ tags, max = 2 }: { readonly tags: readonly string[]; readonly
 function MappingBadge({ mapping }: { readonly mapping: MappingHealth | null }) {
   if (!mapping || mapping.score === null) {
     return (
-      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">Mapping pending</span>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Mapping pending</span>
     );
   }
   const tone =

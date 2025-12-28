@@ -83,8 +83,8 @@ export function DocumentsGrid({
   const showError = isError && documents.length === 0;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
+      <div className="shrink-0 border-b border-border bg-card px-6 py-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
         <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
           <div>
             <input
@@ -105,7 +105,7 @@ export function DocumentsGrid({
       </div>
 
       <div
-        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
+        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
         role="list"
@@ -139,7 +139,7 @@ export function DocumentsGrid({
             />
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             {documents.map((doc) => {
               const isSelectable = Boolean(doc.record);
               const outputRun = getDocumentOutputRun(doc.record);
@@ -161,8 +161,8 @@ export function DocumentsGrid({
                     onActivate(doc.id);
                   }}
                   className={clsx(
-                    "grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
-                    activeId === doc.id ? "bg-brand-50" : "hover:bg-slate-50",
+                    "grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    activeId === doc.id ? "bg-brand-50" : "hover:bg-background",
                   )}
                   tabIndex={0}
                 >
@@ -180,23 +180,23 @@ export function DocumentsGrid({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
-                      <DocumentIcon className="h-4 w-4 text-slate-500" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
+                      <DocumentIcon className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
-                      <p className="flex items-center gap-2 text-xs text-slate-500">
-                        <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                      <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
+                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                           {fileTypeLabel(doc.fileType)}
                         </span>
                         <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
                         {doc.commentCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                             <ChatIcon className="h-3.5 w-3.5" />
                             {doc.commentCount}
                           </span>
                         ) : null}
-                        {doc.uploader ? <span className="text-[11px] text-slate-400">{doc.uploader}</span> : null}
+                        {doc.uploader ? <span className="text-[11px] text-muted-foreground">{doc.uploader}</span> : null}
                       </p>
                     </div>
                   </div>
@@ -207,12 +207,12 @@ export function DocumentsGrid({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50">
-                      <UserIcon className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
+                      <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
                     </span>
 
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-slate-700">
+                      <p className="truncate text-xs font-semibold text-foreground">
                         {doc.assigneeLabel ?? "Unassigned"}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -242,18 +242,18 @@ export function DocumentsGrid({
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-muted-foreground">
                     {doc.tags.length > 0 ? (
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+                      <span className="rounded-full border border-border bg-background px-2 py-0.5">
                         {doc.tags[0]}
                         {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
                       </span>
                     ) : (
-                      <span className="text-slate-400">No tags</span>
+                      <span className="text-muted-foreground">No tags</span>
                     )}
                   </div>
 
-                  <div className="text-right text-xs text-slate-500">{formatRelativeTime(now, doc.updatedAt)}</div>
+                  <div className="text-right text-xs text-muted-foreground">{formatRelativeTime(now, doc.updatedAt)}</div>
 
                   <div className="flex justify-end" data-ignore-row-click>
                     <RowActionsMenu
@@ -274,7 +274,7 @@ export function DocumentsGrid({
                 <button
                   type="button"
                   onClick={onLoadMore}
-                  className="rounded-md text-xs font-semibold text-brand-600 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:text-slate-400"
+                  className="rounded-md text-xs font-semibold text-brand-600 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:text-muted-foreground"
                   disabled={isFetchingNextPage}
                 >
                   {isFetchingNextPage ? "Loading more..." : "Load more"}

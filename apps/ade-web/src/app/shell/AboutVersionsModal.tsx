@@ -58,7 +58,7 @@ export function AboutVersionsModal({ open, onClose }: AboutVersionsModalProps) {
 
   const content = (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4"
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -71,15 +71,15 @@ export function AboutVersionsModal({ open, onClose }: AboutVersionsModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="about-versions-heading"
-        className="w-full max-w-xl rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xl"
+        className="w-full max-w-xl rounded-2xl border border-border/80 bg-card p-6 shadow-2xl"
       >
         <header className="mb-6 flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">About</p>
-            <h2 id="about-versions-heading" className="text-xl font-semibold text-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">About</p>
+            <h2 id="about-versions-heading" className="text-xl font-semibold text-foreground">
               ADE versions
             </h2>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               Installed versions for this ADE deployment across the web UI and backend runtime.
             </p>
           </div>
@@ -121,13 +121,13 @@ function VersionRow({
   readonly hint: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted px-4 py-3">
       <div className="flex flex-col">
-        <span className="text-sm font-semibold text-slate-900">{label}</span>
-        <span className="text-xs text-slate-500">{hint}</span>
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{hint}</span>
       </div>
       <div className="flex items-center gap-2">
-        <code className="rounded bg-slate-900/90 px-2.5 py-1 text-xs font-mono text-white shadow-sm">{value}</code>
+        <code className="rounded bg-foreground px-2.5 py-1 text-xs font-mono text-background shadow-sm">{value}</code>
       </div>
     </div>
   );

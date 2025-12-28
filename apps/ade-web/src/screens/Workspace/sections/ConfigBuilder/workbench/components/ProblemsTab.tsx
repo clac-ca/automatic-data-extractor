@@ -6,7 +6,7 @@ export function ProblemsTab({ validation }: { readonly validation: WorkbenchVali
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>{statusLabel}</span>
         {validation.lastRunAt ? <span>Last run {formatRelative(validation.lastRunAt)}</span> : null}
       </div>
@@ -15,7 +15,7 @@ export function ProblemsTab({ validation }: { readonly validation: WorkbenchVali
           {validation.messages.map((item, index) => (
             <li key={`${item.level}-${item.path ?? index}-${index}`} className={validationMessageClass(item.level)}>
               {item.path ? (
-                <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   {item.path}
                 </span>
               ) : null}
@@ -24,7 +24,7 @@ export function ProblemsTab({ validation }: { readonly validation: WorkbenchVali
           ))}
         </ul>
       ) : (
-        <p className="text-xs leading-relaxed text-slate-500">{fallbackMessage}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{fallbackMessage}</p>
       )}
     </div>
   );
@@ -37,7 +37,7 @@ function validationMessageClass(level: WorkbenchValidationState["messages"][numb
     case "warning":
       return "text-amber-600";
     default:
-      return "text-slate-600";
+      return "text-muted-foreground";
   }
 }
 

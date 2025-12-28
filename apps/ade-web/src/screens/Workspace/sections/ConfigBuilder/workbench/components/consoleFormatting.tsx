@@ -36,7 +36,7 @@ export function formatConsoleLineNdjson(line: WorkbenchConsoleLine): string | nu
 
 export function renderPrettyJson(value: unknown) {
   if (value == null) {
-    return <span className="text-slate-500">null</span>;
+    return <span className="text-muted-foreground">null</span>;
   }
   let pretty: string;
   try {
@@ -45,7 +45,7 @@ export function renderPrettyJson(value: unknown) {
     pretty = String(value);
   }
   return (
-    <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[#d4d4d4]">
+    <pre className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-foreground">
       {highlightJson(pretty)}
     </pre>
   );
@@ -71,7 +71,7 @@ function renderPlainText(message: string) {
       <div className="flex flex-col gap-[2px]">
         <span className="break-words">{firstLine || " "}</span>
         {rest.length > 0 ? (
-          <pre className="whitespace-pre-wrap break-words border-l border-[#2f2f2f] pl-3 text-[12px] leading-snug text-[#9da5b4]">
+          <pre className="whitespace-pre-wrap break-words border-l border-border pl-3 text-[12px] leading-snug text-muted-foreground">
             {rest.join("\n")}
           </pre>
         ) : null}
@@ -86,7 +86,7 @@ function renderPlainText(message: string) {
 
   const pretty = JSON.stringify(parsed, null, 2);
   return (
-    <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-[#d4d4d4]">
+    <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
       {highlightJson(pretty)}
     </pre>
   );

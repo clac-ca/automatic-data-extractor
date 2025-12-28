@@ -124,7 +124,7 @@ const THEME_STYLE: CSSProperties = {
   "--v7-warn": "#b45309",
   "--v7-danger": "#b91c1c",
   "--v7-success": "#15803d",
-  "--v7-shadow": "0 24px 60px -50px rgba(15, 23, 42, 0.45)",
+  "--v7-shadow": "0 24px 60px -50px rgb(var(--color-shadow) / 0.45)",
   background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
 } as CSSProperties;
 
@@ -157,9 +157,9 @@ const STATUS_STYLES: Record<
   },
   queued: {
     label: "Queued",
-    pill: "border-slate-200 bg-slate-50 text-slate-600",
-    dot: "bg-slate-400",
-    text: "text-slate-600",
+    pill: "border-border bg-background text-muted-foreground",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
   },
 };
 
@@ -974,7 +974,7 @@ export function DocumentsV7Workbench() {
   return (
     <div className="documents-v7 relative min-h-screen text-[color:var(--v7-ink)]" style={THEME_STYLE}>
       <div className="relative flex min-h-screen flex-col">
-        <header className="docs-v7-animate sticky top-0 z-20 border-b border-[color:var(--v7-border)] bg-white/90 backdrop-blur">
+        <header className="docs-v7-animate sticky top-0 z-20 border-b border-[color:var(--v7-border)] bg-card/90 backdrop-blur">
           <div className="flex flex-wrap items-center gap-4 px-6 py-4 lg:px-10">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--v7-border)] bg-[color:var(--v7-accent-soft)] text-[color:var(--v7-accent-strong)] shadow-sm">
@@ -1006,7 +1006,7 @@ export function DocumentsV7Workbench() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center rounded-lg border border-[color:var(--v7-border)] bg-white p-1 text-xs shadow-sm">
+              <div className="flex items-center rounded-lg border border-[color:var(--v7-border)] bg-card p-1 text-xs shadow-sm">
                 <Button
                   type="button"
                   size="sm"
@@ -1126,7 +1126,7 @@ export function DocumentsV7Workbench() {
                       "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition",
                       statusFilter === filter.id
                         ? "border-[color:var(--v7-accent)] bg-[color:var(--v7-accent-soft)] text-[color:var(--v7-accent-strong)]"
-                        : "border-transparent bg-white text-[color:var(--v7-muted)] hover:text-[color:var(--v7-ink)]",
+                        : "border-transparent bg-card text-[color:var(--v7-muted)] hover:text-[color:var(--v7-ink)]",
                     )}
                     aria-pressed={statusFilter === filter.id}
                   >
@@ -1174,7 +1174,7 @@ export function DocumentsV7Workbench() {
                             "rounded-full border px-3 py-1 text-xs font-semibold transition",
                             isSelected
                               ? "border-[color:var(--v7-accent)] bg-[color:var(--v7-accent-soft)] text-[color:var(--v7-accent-strong)]"
-                              : "border-transparent bg-white text-[color:var(--v7-muted)] hover:text-[color:var(--v7-ink)]",
+                              : "border-transparent bg-card text-[color:var(--v7-muted)] hover:text-[color:var(--v7-ink)]",
                           )}
                           aria-pressed={isSelected}
                         >
@@ -1198,7 +1198,7 @@ export function DocumentsV7Workbench() {
             </div>
 
             {selectedCount > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--v7-border)] bg-white/70 px-6 py-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--v7-border)] bg-card/70 px-6 py-3 text-xs">
                 <div className="flex items-center gap-2 font-semibold text-[color:var(--v7-ink)]">
                   <span>{selectedCount} selected</span>
                   <button type="button" onClick={handleClearSelection} className="text-[color:var(--v7-muted)]">
@@ -1232,8 +1232,8 @@ export function DocumentsV7Workbench() {
                   aria-label="Document list drop zone"
                 >
                   {isGridDragging ? (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-                      <div className="rounded-2xl border border-dashed border-[color:var(--v7-accent)] bg-white px-6 py-4 text-sm font-semibold text-[color:var(--v7-accent-strong)] shadow-sm">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/70 backdrop-blur-sm">
+                      <div className="rounded-2xl border border-dashed border-[color:var(--v7-accent)] bg-card px-6 py-4 text-sm font-semibold text-[color:var(--v7-accent-strong)] shadow-sm">
                         Drop files to upload into this workspace
                       </div>
                     </div>
@@ -1285,8 +1285,8 @@ export function DocumentsV7Workbench() {
                             className={clsx(
                               "group flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-sm transition md:grid md:grid-cols-[auto_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] md:items-center",
                               activeId === doc.id
-                                ? "border-[color:var(--v7-accent)] bg-white"
-                                : "border-[color:var(--v7-border)] bg-white/80 hover:border-[color:var(--v7-accent)]",
+                                ? "border-[color:var(--v7-accent)] bg-card"
+                                : "border-[color:var(--v7-border)] bg-card/80 hover:border-[color:var(--v7-accent)]",
                             )}
                           >
                             <div className="flex items-center">
@@ -1382,7 +1382,7 @@ export function DocumentsV7Workbench() {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--v7-border)] px-6 py-3 text-xs">
                     <div className="flex items-center gap-2 font-semibold text-[color:var(--v7-muted)]">
                       <span>Group by</span>
-                      <div className="flex items-center rounded-full border border-[color:var(--v7-border)] bg-white px-1 py-1">
+                      <div className="flex items-center rounded-full border border-[color:var(--v7-border)] bg-card px-1 py-1">
                         {BOARD_GROUPS.map((group) => (
                           <button
                             key={group.id}
@@ -1441,7 +1441,7 @@ export function DocumentsV7Workbench() {
                               "flex min-h-[12rem] flex-1 flex-col gap-3 rounded-2xl border border-dashed px-3 py-3 transition",
                               activeDropColumn === column.id
                                 ? "border-[color:var(--v7-accent)] bg-[color:var(--v7-accent-soft)]/40"
-                                : "border-[color:var(--v7-border)] bg-white/80",
+                                : "border-[color:var(--v7-border)] bg-card/80",
                             )}
                             onDragOver={(event) => {
                               event.preventDefault();
@@ -1467,7 +1467,7 @@ export function DocumentsV7Workbench() {
                                   }}
                                   onClick={() => setActiveId(doc.id)}
                                   className={clsx(
-                                    "flex flex-col gap-3 rounded-2xl border bg-white px-3 py-3 shadow-sm transition",
+                                    "flex flex-col gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm transition",
                                     activeId === doc.id ? "border-[color:var(--v7-accent)]" : "border-[color:var(--v7-border)] hover:border-[color:var(--v7-accent)]",
                                   )}
                                   role="button"
@@ -1507,7 +1507,7 @@ export function DocumentsV7Workbench() {
             </div>
           </section>
 
-          <aside className="docs-v7-animate flex min-h-0 w-full flex-col bg-white lg:w-[38%]">
+          <aside className="docs-v7-animate flex min-h-0 w-full flex-col bg-card lg:w-[38%]">
             <div className="flex items-start justify-between gap-4 border-b border-[color:var(--v7-border)] px-6 py-5">
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--v7-muted)]">Preview</p>
@@ -1568,7 +1568,7 @@ export function DocumentsV7Workbench() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
-                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-white px-4 py-4 shadow-sm">
+                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-card px-4 py-4 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs uppercase tracking-[0.2em] text-[color:var(--v7-muted)]">Summary</h3>
                       <span className="text-xs text-[color:var(--v7-muted)]">Updated {formatRelativeTime(now, activeDocument.updatedAt)}</span>
@@ -1607,7 +1607,7 @@ export function DocumentsV7Workbench() {
                     </dl>
                   </section>
 
-                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-white px-4 py-4 shadow-sm">
+                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-card px-4 py-4 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs uppercase tracking-[0.2em] text-[color:var(--v7-muted)]">Processed output</h3>
                       <Button
@@ -1713,7 +1713,7 @@ export function DocumentsV7Workbench() {
                             {activeDocument.stage ?? "Preparing normalized output"} -{" "}
                             {activeDocument.etaMinutes ? `${activeDocument.etaMinutes} min ETA` : "Updating soon"}
                           </p>
-                          <div className="h-2 overflow-hidden rounded-full bg-white">
+                          <div className="h-2 overflow-hidden rounded-full bg-card">
                             <div className="docs-v7-shimmer h-full bg-[linear-gradient(90deg,var(--v7-accent-soft),var(--v7-accent),var(--v7-accent-soft))]" style={{ width: `${activeDocument.progress ?? 12}%` }} />
                           </div>
                         </div>
@@ -1721,7 +1721,7 @@ export function DocumentsV7Workbench() {
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-white px-4 py-4 shadow-sm">
+                  <section className="rounded-2xl border border-[color:var(--v7-border)] bg-card px-4 py-4 shadow-sm">
                     <h3 className="text-xs uppercase tracking-[0.2em] text-[color:var(--v7-muted)]">History</h3>
                     <div className="mt-4 flex flex-col gap-3 text-xs text-[color:var(--v7-muted)]">
                       {activeDocument.history.map((event) => (
@@ -1735,7 +1735,7 @@ export function DocumentsV7Workbench() {
                                   ? "bg-amber-500"
                                   : event.tone === "danger"
                                     ? "bg-rose-500"
-                                    : "bg-slate-400",
+                                    : "bg-muted-foreground",
                             )}
                           />
                           <div className="flex flex-1 items-center justify-between gap-3">
@@ -1766,7 +1766,7 @@ function EmptyState({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--v7-border)] bg-white/70 px-8 py-12 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--v7-border)] bg-card/70 px-8 py-12 text-center">
       <p className="text-sm font-semibold text-[color:var(--v7-ink)]">{title}</p>
       <p className="text-sm text-[color:var(--v7-muted)]">{description}</p>
       {action ? (
