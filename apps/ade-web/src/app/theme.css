@@ -7,25 +7,24 @@
  *   --comp-* = component-specific tokens (editor/terminal/filetype)
  *
  * Axes:
- *   data-theme = "default" | "ocean" | "user-123" | ...
+ *   data-theme = "default" | "ocean" | "forest" | "sunset" | "rose" | "grape" | "sand" | "carbon" | ...
  *   data-mode  = "light" | "dark"
  *
- * Why this structure:
- * - Aligns with common design-token practice: palettes vs semantic roles.
- * - Avoids "reversed ramps" in dark mode.
- * - Supports user-generated themes and system preferences (light/dark/dynamic/contrast).
+ * Notes:
+ * - Keep 50 -> 900 ramps in the same direction in BOTH modes (do not reverse ramps).
+ * - Prefer theme-level overrides of --ref-* only; keep --sys-* stable for consistency.
+ * - Ensure accent fills + on-accent meet contrast targets for text (WCAG guidance).
+ * - Keep color-scheme in sync with mode for native controls rendering.
  */
 
 /* -----------------------------------------------------------------------------
    1) REFERENCE PALETTES (theme-specific, mode-agnostic)
    -------------------------------------------------------------------------- */
 
-/* Default theme reference palettes.
-   You can add more themes by overriding only these --ref-* tokens under
-   :root[data-theme="ocean"] { ... } etc. */
+/* Default theme reference palettes (Slate-like neutrals + Indigo accent). */
 :root,
 :root[data-theme="default"] {
-  /* Neutral ramp (Slate-like). Keep consistent across all modes. */
+  /* Neutral ramp (cool slate) */
   --ref-neutral-0: 255 255 255;
   --ref-neutral-50: 248 250 252;
   --ref-neutral-100: 241 245 249;
@@ -39,7 +38,7 @@
   --ref-neutral-900: 15 23 42;
   --ref-neutral-950: 2 6 23;
 
-  /* Accent ramp (formerly "brand"). Keep the ramp consistent; change semantics per mode. */
+  /* Accent ramp (Indigo) */
   --ref-accent-50: 238 242 255;
   --ref-accent-100: 224 231 255;
   --ref-accent-200: 199 210 254;
@@ -51,7 +50,7 @@
   --ref-accent-800: 55 48 163;
   --ref-accent-900: 49 46 129;
 
-  /* Status ramps (keep 50 lightest -> 900 darkest in ALL modes). */
+  /* Status ramps (consistent across themes; 50 lightest -> 900 darkest). */
   --ref-success-50: 236 253 243;
   --ref-success-100: 209 250 223;
   --ref-success-200: 166 244 197;
@@ -96,7 +95,7 @@
   --ref-info-800: 7 89 133;
   --ref-info-900: 12 74 110;
 
-  /* Filetype/syntax colors (component palette; test contrast against BOTH modes). */
+  /* Filetype colors (audit contrast against BOTH editor + terminal backgrounds). */
   --ref-file-json: 241 208 107;
   --ref-file-py: 81 154 186;
   --ref-file-ts: 81 154 186;
@@ -110,43 +109,175 @@
 }
 
 /* -----------------------------------------------------------------------------
+   1b) THEME OVERRIDES (override ONLY --ref-*; modes map semantics)
+   -------------------------------------------------------------------------- */
+
+/* OCEAN - Cyan accent on Slate neutrals (crisp, modern, tech). */
+:root[data-theme="ocean"] {
+  --ref-accent-50: 236 254 255;
+  --ref-accent-100: 207 250 254;
+  --ref-accent-200: 165 243 252;
+  --ref-accent-300: 103 232 249;
+  --ref-accent-400: 34 211 238;
+  --ref-accent-500: 6 182 212;
+  --ref-accent-600: 8 145 178;
+  --ref-accent-700: 14 116 144;
+  --ref-accent-800: 21 94 117;
+  --ref-accent-900: 22 78 99;
+}
+
+/* FOREST - Emerald accent on Slate neutrals (calm, success-forward). */
+:root[data-theme="forest"] {
+  --ref-accent-50: 236 253 245;
+  --ref-accent-100: 209 250 229;
+  --ref-accent-200: 167 243 208;
+  --ref-accent-300: 110 231 183;
+  --ref-accent-400: 52 211 153;
+  --ref-accent-500: 16 185 129;
+  --ref-accent-600: 5 150 105;
+  --ref-accent-700: 4 120 87;
+  --ref-accent-800: 6 95 70;
+  --ref-accent-900: 6 78 59;
+}
+
+/* SUNSET - Orange accent on Slate neutrals (energetic, warm, friendly). */
+:root[data-theme="sunset"] {
+  --ref-accent-50: 255 247 237;
+  --ref-accent-100: 255 237 213;
+  --ref-accent-200: 254 215 170;
+  --ref-accent-300: 253 186 116;
+  --ref-accent-400: 251 146 60;
+  --ref-accent-500: 249 115 22;
+  --ref-accent-600: 234 88 12;
+  --ref-accent-700: 194 65 12;
+  --ref-accent-800: 154 52 18;
+  --ref-accent-900: 124 45 18;
+}
+
+/* ROSE - Rose accent on Slate neutrals (bold, expressive). */
+:root[data-theme="rose"] {
+  --ref-accent-50: 255 241 242;
+  --ref-accent-100: 255 228 230;
+  --ref-accent-200: 254 205 211;
+  --ref-accent-300: 253 164 175;
+  --ref-accent-400: 251 113 133;
+  --ref-accent-500: 244 63 94;
+  --ref-accent-600: 225 29 72;
+  --ref-accent-700: 190 18 60;
+  --ref-accent-800: 159 18 57;
+  --ref-accent-900: 136 19 55;
+}
+
+/* GRAPE - Violet accent on Slate neutrals (premium, creative pro). */
+:root[data-theme="grape"] {
+  --ref-accent-50: 245 243 255;
+  --ref-accent-100: 237 233 254;
+  --ref-accent-200: 221 214 254;
+  --ref-accent-300: 196 181 253;
+  --ref-accent-400: 167 139 250;
+  --ref-accent-500: 139 92 246;
+  --ref-accent-600: 124 58 237;
+  --ref-accent-700: 109 40 217;
+  --ref-accent-800: 91 33 182;
+  --ref-accent-900: 76 29 149;
+}
+
+/* SAND - Warm Stone neutrals + Teal accent (editorial, paper and ink). */
+:root[data-theme="sand"] {
+  /* Neutral ramp: Tailwind Stone */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 250 250 249;
+  --ref-neutral-100: 245 245 244;
+  --ref-neutral-200: 231 229 228;
+  --ref-neutral-300: 214 211 209;
+  --ref-neutral-400: 168 162 158;
+  --ref-neutral-500: 120 113 108;
+  --ref-neutral-600: 87 83 78;
+  --ref-neutral-700: 68 64 60;
+  --ref-neutral-800: 41 37 36;
+  --ref-neutral-900: 28 25 23;
+  --ref-neutral-950: 12 10 9;
+
+  /* Accent ramp: Tailwind Teal */
+  --ref-accent-50: 240 253 250;
+  --ref-accent-100: 204 251 241;
+  --ref-accent-200: 153 246 228;
+  --ref-accent-300: 94 234 212;
+  --ref-accent-400: 45 212 191;
+  --ref-accent-500: 20 184 166;
+  --ref-accent-600: 13 148 136;
+  --ref-accent-700: 15 118 110;
+  --ref-accent-800: 17 94 89;
+  --ref-accent-900: 19 78 74;
+}
+
+/* CARBON - Neutral Zinc + Blue accent (minimal, enterprise clean). */
+:root[data-theme="carbon"] {
+  /* Neutral ramp: Tailwind Zinc */
+  --ref-neutral-0: 255 255 255;
+  --ref-neutral-50: 250 250 250;
+  --ref-neutral-100: 244 244 245;
+  --ref-neutral-200: 228 228 231;
+  --ref-neutral-300: 212 212 216;
+  --ref-neutral-400: 161 161 170;
+  --ref-neutral-500: 113 113 122;
+  --ref-neutral-600: 82 82 91;
+  --ref-neutral-700: 63 63 70;
+  --ref-neutral-800: 39 39 42;
+  --ref-neutral-900: 24 24 27;
+  --ref-neutral-950: 9 9 11;
+
+  /* Accent ramp: Tailwind Blue */
+  --ref-accent-50: 239 246 255;
+  --ref-accent-100: 219 234 254;
+  --ref-accent-200: 191 219 254;
+  --ref-accent-300: 147 197 253;
+  --ref-accent-400: 96 165 250;
+  --ref-accent-500: 59 130 246;
+  --ref-accent-600: 37 99 235;
+  --ref-accent-700: 29 78 216;
+  --ref-accent-800: 30 64 175;
+  --ref-accent-900: 30 58 138;
+}
+
+/* -----------------------------------------------------------------------------
    2) SYSTEM TOKENS (mode-specific semantic mapping)
    -------------------------------------------------------------------------- */
 
-/* LIGHT MODE (default) */
+/* LIGHT MODE */
 :root,
 :root[data-mode="light"] {
   color-scheme: light;
 
   /* Surfaces */
-  --sys-color-bg: var(--ref-neutral-50);              /* app canvas */
-  --sys-color-surface: var(--ref-neutral-0);          /* cards/panels */
-  --sys-color-surface-elevated: var(--ref-neutral-0); /* popovers/menus (use shadows for elevation) */
-  --sys-color-surface-muted: var(--ref-neutral-100);  /* subtle fills, table zebra, etc. */
+  --sys-color-bg: var(--ref-neutral-50);               /* app canvas */
+  --sys-color-surface: var(--ref-neutral-0);           /* cards/panels */
+  --sys-color-surface-elevated: var(--ref-neutral-0);  /* popovers/menus */
+  --sys-color-surface-muted: var(--ref-neutral-100);   /* subtle fills, table zebra */
 
   /* Text */
   --sys-color-fg: var(--ref-neutral-900);
   --sys-color-fg-muted: var(--ref-neutral-600);
   --sys-color-fg-subtle: var(--ref-neutral-500);
 
-  /* Borders & focus */
+  /* Borders and focus */
   --sys-color-border: var(--ref-neutral-200);
   --sys-color-border-strong: var(--ref-neutral-300);
   --sys-color-ring: var(--ref-accent-500);
 
-  /* Scrim/shadow colors: use with alpha in components */
+  /* Scrim/shadow colors (use with alpha at point of use) */
   --sys-color-overlay: var(--ref-neutral-900);
   --sys-color-shadow: var(--ref-neutral-900);
 
   /* Primary action (accent)
-     NOTE: these are semantic interaction tokens (not "palette steps"). */
-  --sys-color-accent: var(--ref-accent-600);
-  --sys-color-accent-hover: var(--ref-accent-700);
-  --sys-color-accent-active: var(--ref-accent-800);
+     Use a darker step so white text remains accessible across ALL bundled themes. */
+  --sys-color-accent: var(--ref-accent-700);
+  --sys-color-accent-hover: var(--ref-accent-800);
+  --sys-color-accent-active: var(--ref-accent-900);
   --sys-color-on-accent: 255 255 255;
 
   /* Status (solid fills) */
-  --sys-color-success: var(--ref-success-600);
+  --sys-color-success: var(--ref-success-700);
   --sys-color-on-success: 255 255 255;
 
   --sys-color-warning: var(--ref-warning-500);
@@ -155,10 +286,10 @@
   --sys-color-danger: var(--ref-danger-600);
   --sys-color-on-danger: 255 255 255;
 
-  --sys-color-info: var(--ref-info-600);
+  --sys-color-info: var(--ref-info-700);
   --sys-color-on-info: 255 255 255;
 
-  /* Component: Editor */
+  /* Component: Editor (kept neutral + accent-driven selection) */
   --comp-editor-bg: var(--sys-color-bg);
   --comp-editor-fg: var(--sys-color-fg);
   --comp-editor-cursor: var(--sys-color-ring);
@@ -168,7 +299,7 @@
   --comp-editor-selection-inactive: var(--ref-neutral-200);
   --comp-editor-gutter: var(--ref-neutral-100);
 
-  /* Component: Terminal */
+  /* Component: Terminal (dark even in light mode; consistent dev feel) */
   --comp-terminal-bg: var(--ref-neutral-900);
   --comp-terminal-fg: var(--ref-neutral-200);
   --comp-terminal-muted: var(--ref-neutral-400);
@@ -191,52 +322,55 @@
 :root[data-mode="dark"] {
   color-scheme: dark;
 
-  /* Android guidance explicitly describes dark surfaces as "dark grays / low tonal values"
-     (vs pure black) to reduce luminance while preserving hierarchy. */
+  /* Surfaces */
   --sys-color-bg: var(--ref-neutral-900);
   --sys-color-surface: var(--ref-neutral-800);
   --sys-color-surface-elevated: var(--ref-neutral-800);
   --sys-color-surface-muted: var(--ref-neutral-700);
 
+  /* Text */
   --sys-color-fg: var(--ref-neutral-200);
   --sys-color-fg-muted: var(--ref-neutral-400);
   --sys-color-fg-subtle: var(--ref-neutral-500);
 
+  /* Borders and focus */
   --sys-color-border: var(--ref-neutral-700);
   --sys-color-border-strong: var(--ref-neutral-600);
 
-  /* Slightly brighter ring in dark mode for clear focus visibility */
+  /* Brighter ring in dark mode so focus is obvious on low-luminance surfaces */
   --sys-color-ring: var(--ref-accent-400);
 
   --sys-color-overlay: var(--ref-neutral-950);
   --sys-color-shadow: var(--ref-neutral-950);
 
-  /* Primary action (accent): bump brightness a step for dark surfaces */
-  --sys-color-accent: var(--ref-accent-500);
-  --sys-color-accent-hover: var(--ref-accent-400);
-  --sys-color-accent-active: var(--ref-accent-600);
+  /* Primary action (accent) - keep accessible with white text */
+  --sys-color-accent: var(--ref-accent-700);
+  --sys-color-accent-hover: var(--ref-accent-800);
+  --sys-color-accent-active: var(--ref-accent-900);
   --sys-color-on-accent: 255 255 255;
 
-  /* Status: use brighter tones so state reads on dark surfaces */
-  --sys-color-success: var(--ref-success-500);
-  --sys-color-on-success: var(--ref-neutral-950);
+  /* Status (solid fills) */
+  --sys-color-success: var(--ref-success-700);
+  --sys-color-on-success: 255 255 255;
 
   --sys-color-warning: var(--ref-warning-400);
   --sys-color-on-warning: var(--ref-neutral-950);
 
-  --sys-color-danger: var(--ref-danger-500);
+  --sys-color-danger: var(--ref-danger-600);
   --sys-color-on-danger: 255 255 255;
 
-  --sys-color-info: var(--ref-info-500);
-  --sys-color-on-info: var(--ref-neutral-950);
+  --sys-color-info: var(--ref-info-700);
+  --sys-color-on-info: 255 255 255;
 
-  /* Editor */
+  /* Editor
+     Dark-mode selection uses an accent-dark step so it belongs to the theme,
+     without relying on alpha blending (important for non-alpha token usage). */
   --comp-editor-bg: var(--ref-neutral-900);
   --comp-editor-fg: var(--sys-color-fg);
   --comp-editor-cursor: var(--sys-color-ring);
   --comp-editor-line-highlight: var(--ref-neutral-800);
   --comp-editor-line-number: var(--ref-neutral-500);
-  --comp-editor-selection: var(--ref-neutral-700);
+  --comp-editor-selection: var(--ref-accent-900);
   --comp-editor-selection-inactive: var(--ref-neutral-800);
   --comp-editor-gutter: var(--ref-neutral-900);
 
@@ -246,5 +380,5 @@
   --comp-terminal-muted: var(--ref-neutral-400);
   --comp-terminal-border: var(--ref-neutral-800);
 
-  /* Filetypes unchanged (they should be audited once against dark terminal/editor bg) */
+  /* Filetypes unchanged (validate contrast vs terminal/editor backgrounds) */
 }

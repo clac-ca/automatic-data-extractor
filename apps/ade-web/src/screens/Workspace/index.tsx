@@ -14,6 +14,7 @@ import { createScopedStorage } from "@shared/storage";
 import { GlobalTopBar } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { ModeToggle } from "@ui/ModeToggle";
+import { ThemePicker } from "@ui/ThemePicker";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { WorkspaceNav, WorkspaceNavList } from "@screens/Workspace/components/WorkspaceNav";
 import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens/Workspace/components/workspace-navigation";
@@ -352,6 +353,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const topBarTrailing = (
     <div className="flex items-center gap-2">
       <ModeToggle />
+      <ThemePicker />
       <ProfileDropdown
         displayName={displayName}
         email={email}

@@ -17,6 +17,7 @@ interface ThemeContextValue {
   readonly resolvedMode: ResolvedMode;
   readonly systemPrefersDark: boolean;
   readonly setTheme: (next: ThemeId) => void;
+  readonly setPreviewTheme: (next: ThemeId | null) => void;
   readonly setModePreference: (next: ModePreference) => void;
 }
 
@@ -29,6 +30,7 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
   const storedTheme = useMemo(() => readStoredThemePreference(), []);
   const [modePreference, setModePreferenceState] = useState<ModePreference>(storedMode ?? "system");
   const [theme, setThemeState] = useState<ThemeId>(storedTheme ?? DEFAULT_THEME_ID);
+  const [previewTheme, setPreviewThemeState] = useState<ThemeId | null>(null);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
       return false;
@@ -67,9 +69,11 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
     [modePreference, systemPrefersDark],
   );
 
+  const effectiveTheme = previewTheme ?? theme;
+
   useEffect(() => {
-    applyThemeToDocument(theme, resolvedMode);
-  }, [resolvedMode, theme]);
+    applyThemeToDocument(effectiveTheme, resolvedMode);
+  }, [effectiveTheme, resolvedMode]);
 
   useEffect(() => {
     writeThemePreference(theme);
@@ -97,8 +101,10 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
         const next = event.newValue;
         if (typeof next === "string" && next.length > 0) {
           setThemeState(next as ThemeId);
+          setPreviewThemeState(null);
         } else if (next === null) {
           setThemeState(DEFAULT_THEME_ID);
+          setPreviewThemeState(null);
         }
       }
     };
@@ -109,6 +115,11 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
 
   const setTheme = useCallback((next: ThemeId) => {
     setThemeState(next);
+    setPreviewThemeState(null);
+  }, []);
+
+  const setPreviewTheme = useCallback((next: ThemeId | null) => {
+    setPreviewThemeState(next);
   }, []);
 
   const setModePreference = useCallback((next: ModePreference) => {
@@ -122,9 +133,10 @@ export function ThemeProvider({ children }: { readonly children: ReactNode }) {
       resolvedMode,
       systemPrefersDark,
       setTheme,
+      setPreviewTheme,
       setModePreference,
     }),
-    [modePreference, resolvedMode, setModePreference, setTheme, systemPrefersDark, theme],
+    [modePreference, resolvedMode, setModePreference, setPreviewTheme, setTheme, systemPrefersDark, theme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

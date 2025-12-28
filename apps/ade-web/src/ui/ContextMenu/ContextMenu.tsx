@@ -20,6 +20,7 @@ export interface ContextMenuItem {
   readonly disabled?: boolean;
   readonly danger?: boolean;
   readonly dividerAbove?: boolean;
+  readonly onHover?: () => void;
 }
 
 export interface ContextMenuProps {
@@ -28,6 +29,7 @@ export interface ContextMenuProps {
   readonly onClose: () => void;
   readonly items: readonly ContextMenuItem[];
   readonly appearance?: "light" | "dark";
+  readonly onPointerLeave?: () => void;
 }
 
 const MENU_WIDTH = 232;
@@ -40,6 +42,7 @@ export function ContextMenu({
   onClose,
   items,
   appearance = "dark",
+  onPointerLeave,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -189,6 +192,7 @@ export function ContextMenu({
         palette.shadow,
       )}
       style={{ top: coords.y, left: coords.x, position: "fixed" }}
+      onPointerLeave={onPointerLeave}
     >
       <ul className="py-1" role="none">
         {items.map((item, index) => {
@@ -224,6 +228,7 @@ export function ContextMenu({
                   onMouseEnter={() => {
                     if (!disabled) {
                       setActiveIndex(index);
+                      item.onHover?.();
                     }
                   }}
                   disabled={disabled}

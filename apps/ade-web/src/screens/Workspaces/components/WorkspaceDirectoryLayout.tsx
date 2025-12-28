@@ -7,6 +7,7 @@ import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { DirectoryIcon } from "@ui/Icons";
 import { ModeToggle } from "@ui/ModeToggle";
+import { ThemePicker } from "@ui/ThemePicker";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
@@ -47,6 +48,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
           trailing={
             <div className="flex items-center gap-2">
               <ModeToggle />
+              <ThemePicker />
               <ProfileDropdown
                 displayName={displayName}
                 email={email}

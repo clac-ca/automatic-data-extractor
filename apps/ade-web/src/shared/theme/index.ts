@@ -1,3 +1,4 @@
+import { BUILT_IN_THEMES, type BuiltInTheme } from "./themes";
 import type { ModePreference } from "./themeStorage";
 
 export type ThemeId = "default" | (string & {});
@@ -17,11 +18,9 @@ export const MODE_OPTIONS: Array<{
   { value: "dark", label: "Dark", description: "Low-light friendly" },
 ];
 
-export const BUILTIN_THEMES: Array<{
-  id: ThemeId;
-  label: string;
-  description: string;
-}> = [{ id: DEFAULT_THEME_ID, label: "Default", description: "Balanced and familiar" }];
+export const BUILTIN_THEMES = BUILT_IN_THEMES satisfies BuiltInTheme[];
+
+export type { BuiltInTheme };
 
 export function isDarkMode(mode: ResolvedMode): boolean {
   return mode === "dark";

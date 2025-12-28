@@ -3,8 +3,6 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useNavigate } from "@app/nav/history";
-import { useTheme } from "@shared/theme";
-import { ThemeSelect } from "@ui/ThemeSelect";
 
 interface ProfileDropdownAction {
   readonly id: string;
@@ -38,8 +36,6 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
-
   const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
 
   const closeMenu = useCallback((opts?: { restoreFocus?: boolean }) => {
@@ -282,10 +278,6 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
                   </li>
                 ))}
               </ul>
-
-              <div className="mt-2 border-t border-border pt-3">
-                <ThemeSelect theme={theme} onThemeChange={setTheme} />
-              </div>
 
               <div className="mt-3 border-t border-border pt-3">
                 <button
