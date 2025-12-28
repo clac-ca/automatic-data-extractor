@@ -344,7 +344,6 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const isDocumentsV7 = section?.kind === "content" && section.key === "documents-v7";
   const isDocumentsV8 = section?.kind === "content" && section.key === "documents-v8";
   const isDocumentsV9 = section?.kind === "content" && section.key === "documents-v9";
-  const isDocumentsV10 = section?.kind === "content" && section.key === "documents-v10";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
@@ -387,14 +386,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       }
     : undefined;
   const topBarSearch =
-    isDocumentsV2 ||
-    isDocumentsV3 ||
-    isDocumentsV4 ||
-    isDocumentsV6 ||
-    isDocumentsV7 ||
-    isDocumentsV8 ||
-    isDocumentsV9 ||
-    isDocumentsV10
+    isDocumentsV2 || isDocumentsV3 || isDocumentsV4 || isDocumentsV6 || isDocumentsV7 || isDocumentsV8 || isDocumentsV9
       ? undefined
       : documentsSearch ?? workspaceSearch;
 
@@ -463,6 +455,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           ) : null}
           <div className="relative flex flex-1 min-w-0 overflow-hidden" key={`section-${section.key}`}>
             <main
+              id="main-content"
+              tabIndex={-1}
               className={clsx(
                 "relative flex-1 min-w-0",
                 fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",

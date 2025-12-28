@@ -2,24 +2,17 @@ import { type ChangeEvent, type MutableRefObject } from "react";
 import clsx from "clsx";
 
 import { Button } from "@ui/Button";
-import { Input } from "@ui/Input";
 
 import type { ViewMode } from "../types";
-import { BoardIcon, DocumentIcon, GridIcon, SearchIcon, UploadIcon } from "./icons";
+import { BoardIcon, DocumentIcon, GridIcon, UploadIcon } from "./icons";
 
 export function DocumentsHeader({
-  search,
-  onSearchChange,
-  searchRef,
   viewMode,
   onViewModeChange,
   onUploadClick,
   fileInputRef,
   onFileInputChange,
 }: {
-  search: string;
-  onSearchChange: (value: string) => void;
-  searchRef: MutableRefObject<HTMLInputElement | null>;
   viewMode: ViewMode;
   onViewModeChange: (value: ViewMode) => void;
   onUploadClick: () => void;
@@ -29,7 +22,7 @@ export function DocumentsHeader({
   return (
     <header className="shrink-0 border-b border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-700">
             <DocumentIcon className="h-5 w-5" />
           </div>
@@ -39,26 +32,7 @@ export function DocumentsHeader({
           </div>
         </div>
 
-        <div className="flex min-w-[260px] flex-1 items-center">
-          <label className="sr-only" htmlFor="documents-v10-search">
-            Search documents
-          </label>
-          <div className="relative w-full">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              <SearchIcon className="h-4 w-4" />
-            </span>
-            <Input
-              id="documents-v10-search"
-              ref={searchRef}
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search by name, uploader, assignee, or tag"
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center gap-3">
           <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs shadow-sm">
             <Button
               type="button"

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import clsx from "clsx";
 
 import { useNavigate } from "@app/nav/history";
-import clsx from "clsx";
 
 interface ProfileDropdownAction {
   readonly id: string;
@@ -17,59 +17,81 @@ interface ProfileDropdownProps {
   readonly actions?: readonly ProfileDropdownAction[];
 }
 
-export function ProfileDropdown({
-  displayName,
-  email,
-  actions = [],
-}: ProfileDropdownProps) {
+const MENU_ANIMATION_MS = 140;
+
+export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDropdownProps) {
+  const menuId = useId();
+
   const [open, setOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
   const [isSigningOut, setIsSigningOut] = useState(false);
+
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
   const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
 
-  const closeMenu = useCallback(() => setOpen(false), []);
+  const closeMenu = useCallback((opts?: { restoreFocus?: boolean }) => {
+    setOpen(false);
 
+    // For Esc: restore focus to trigger (Radix-like behavior).
+    if (opts?.restoreFocus) {
+      requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+    }
+  }, []);
+
+  // Mount/unmount with a small transition for “polish”.
   useEffect(() => {
-    if (!open) {
-      return undefined;
+    if (open) {
+      setIsMounted(true);
+      requestAnimationFrame(() => setIsVisible(true));
+      return;
     }
 
-    const handlePointer = (event: MouseEvent | TouchEvent) => {
+    // Start exit transition
+    setIsVisible(false);
+    const t = window.setTimeout(() => setIsMounted(false), MENU_ANIMATION_MS);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (!target) {
-        return;
-      }
-      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) {
-        return;
-      }
+      if (!target) return;
+
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+
+      // Click outside: close without stealing focus.
       closeMenu();
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        closeMenu();
+        closeMenu({ restoreFocus: true });
       }
     };
 
-    window.addEventListener("mousedown", handlePointer);
-    window.addEventListener("touchstart", handlePointer, { passive: true });
+    window.addEventListener("pointerdown", handlePointerDown, { passive: true });
     window.addEventListener("keydown", handleEscape);
+
     return () => {
-      window.removeEventListener("mousedown", handlePointer);
-      window.removeEventListener("touchstart", handlePointer);
+      window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
     };
   }, [closeMenu, open]);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const firstMenuItem = menuRef.current?.querySelector<HTMLButtonElement>("button[data-menu-item]");
-    firstMenuItem?.focus({ preventScroll: true });
+    if (!open) return;
+
+    requestAnimationFrame(() => {
+      const firstMenuItem = menuRef.current?.querySelector<HTMLButtonElement>("button[data-menu-item]");
+      firstMenuItem?.focus({ preventScroll: true });
+    });
   }, [open]);
 
   const handleMenuAction = useCallback(
@@ -81,23 +103,51 @@ export function ProfileDropdown({
   );
 
   const handleSignOut = useCallback(async () => {
-    if (isSigningOut) {
-      return;
-    }
+    if (isSigningOut) return;
+
     closeMenu();
     setIsSigningOut(true);
     navigate("/logout", { replace: true });
   }, [closeMenu, isSigningOut, navigate]);
+
+  const focusMenuItem = (index: number) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[data-menu-item]") ?? []);
+    if (items.length === 0) return;
+    const clamped = ((index % items.length) + items.length) % items.length;
+    items[clamped]?.focus({ preventScroll: true });
+  };
+
+  const moveFocus = (delta: number) => {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button[data-menu-item]") ?? []);
+    if (items.length === 0) return;
+
+    const active = document.activeElement as HTMLButtonElement | null;
+    const currentIndex = active ? items.indexOf(active) : -1;
+    const nextIndex = currentIndex === -1 ? 0 : currentIndex + delta;
+    focusMenuItem(nextIndex);
+  };
 
   return (
     <div className="relative">
       <button
         ref={triggerRef}
         type="button"
-        className="focus-ring inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-left text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
+        className={clsx(
+          "focus-ring inline-flex items-center gap-3 rounded-xl border bg-white px-2.5 py-1.5 text-left text-sm font-semibold text-slate-700 shadow-sm transition",
+          "hover:border-slate-300 hover:text-slate-900",
+          open ? "border-brand-200 ring-2 ring-brand-500/10" : "border-slate-200",
+        )}
         aria-haspopup="menu"
+        aria-controls={menuId}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
+        onKeyDown={(e) => {
+          // Open with Enter/Space/ArrowDown like native menus.
+          if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
       >
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-white shadow-sm">
           {initials}
@@ -106,19 +156,52 @@ export function ProfileDropdown({
           <span className="truncate text-sm font-semibold text-slate-900">{displayName}</span>
           <span className="truncate text-xs text-slate-400">{email}</span>
         </span>
-        <ChevronIcon className={clsx("text-slate-400 transition-transform", open && "rotate-180")} />
+        <ChevronIcon className={clsx("text-slate-400 transition-transform duration-150", open && "rotate-180")} />
       </button>
 
-      {open ? (
+      {isMounted ? (
         <div
           ref={menuRef}
+          id={menuId}
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-72 origin-top-right rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl"
+          className={clsx(
+            "absolute right-0 z-50 mt-2 w-72 origin-top-right rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl",
+            "transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+            isVisible ? "opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 -translate-y-1 scale-[0.98]",
+          )}
+          onKeyDown={(e) => {
+            // Arrow key navigation (Radix-like).
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              moveFocus(1);
+              return;
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              moveFocus(-1);
+              return;
+            }
+            if (e.key === "Home") {
+              e.preventDefault();
+              focusMenuItem(0);
+              return;
+            }
+            if (e.key === "End") {
+              e.preventDefault();
+              focusMenuItem(Number.MAX_SAFE_INTEGER);
+              return;
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeMenu({ restoreFocus: true });
+            }
+          }}
         >
           <div className="px-2 pb-2">
             <p className="text-sm font-semibold text-slate-900">Signed in as</p>
             <p className="truncate text-xs text-slate-500">{email}</p>
           </div>
+
           <ul className="space-y-1" role="none">
             {actions.map((action) => (
               <li key={action.id} role="none">
@@ -142,6 +225,7 @@ export function ProfileDropdown({
               </li>
             ))}
           </ul>
+
           <div className="mt-2 border-t border-slate-200 pt-2">
             <button
               type="button"
@@ -166,24 +250,15 @@ function deriveInitials(source: string) {
     .split(" ")
     .map((part) => part.trim())
     .filter(Boolean);
-  if (parts.length === 0) {
-    return "•";
-  }
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
+
+  if (parts.length === 0) return "•";
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
 }
 
 function Spinner() {
   return (
-    <svg
-      className="h-4 w-4 animate-spin text-brand-600"
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-    >
+    <svg className="h-4 w-4 animate-spin text-brand-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
       <path d="M10 3a7 7 0 1 1-7 7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

@@ -119,7 +119,6 @@ type WorkbenchDerived = {
 };
 
 type WorkbenchRefs = {
-  searchRef: MutableRefObject<HTMLInputElement | null>;
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
 };
 
@@ -288,7 +287,6 @@ export function useDocumentsV10Model({
 
   const [now, setNow] = useState(() => Date.now());
 
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
@@ -301,12 +299,6 @@ export function useDocumentsV10Model({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "/") {
-        const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
       if (event.key === "Escape") setPreviewOpen(false);
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1206,7 +1198,6 @@ export function useDocumentsV10Model({
       counts,
     },
     refs: {
-      searchRef,
       fileInputRef,
     },
     actions: {

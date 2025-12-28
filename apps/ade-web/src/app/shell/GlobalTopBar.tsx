@@ -1,10 +1,7 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import clsx from "clsx";
 
-import {
-  GlobalSearchField,
-  type GlobalSearchFieldProps,
-} from "./GlobalSearchField";
+import { GlobalSearchField, type GlobalSearchFieldProps } from "./GlobalSearchField";
 
 export type {
   GlobalSearchFilter,
@@ -21,6 +18,12 @@ interface GlobalTopBarProps {
   readonly secondaryContent?: ReactNode;
 }
 
+/**
+ * Polished “app shell” top bar:
+ * - sticky, lightweight, with subtle elevation once content scrolls underneath
+ * - predictable layout: left (brand/primary), center (search), right (utility/actions)
+ * - z-index above overlay sidebars
+ */
 export function GlobalTopBar({
   brand,
   leading,
@@ -29,37 +32,91 @@ export function GlobalTopBar({
   search,
   secondaryContent,
 }: GlobalTopBarProps) {
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let ticking = false;
+
+    const update = () => {
+      ticking = false;
+      const next = window.scrollY > 0;
+      setIsScrolled((prev) => (prev === next ? prev : next));
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const showSearch = Boolean(search);
+
   const searchProps = search
     ? {
         ...search,
-        className: clsx(
-          "order-last w-full lg:order-none lg:max-w-2xl lg:justify-self-center",
-          search.className,
-        ),
+        // Default to a top-bar-friendly look unless caller overrides.
+        variant: search.variant ?? "minimal",
+        className: clsx("order-last w-full lg:order-none", search.className),
       }
     : undefined;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-gradient-to-b from-white/95 via-slate-50/70 to-white/90 shadow-[0_12px_40px_-30px_rgba(15,23,42,0.8)] backdrop-blur supports-[backdrop-filter]:backdrop-blur-xl">
+    <header
+      className={clsx(
+        "sticky top-0 z-50",
+        "border-b border-slate-200/80",
+        "bg-white/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-xl",
+        "transition-shadow duration-200 motion-reduce:transition-none",
+        isScrolled ? "shadow-[0_12px_40px_-30px_rgba(15,23,42,0.55)]" : "shadow-none",
+      )}
+      role="banner"
+    >
+      {/* Skip link (small detail, big polish for keyboard users) */}
+      <a
+        href="#main-content"
+        className={clsx(
+          "sr-only",
+          "focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-[60]",
+          "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow",
+          "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-white",
+        )}
+      >
+        Skip to content
+      </a>
+
       <div className="flex flex-col gap-3 px-4 py-3 sm:px-6 lg:px-10">
         <div
           className={clsx(
             "flex min-h-[3.5rem] w-full flex-wrap items-center gap-3 sm:gap-4",
-            showSearch ? "lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-8" : "justify-between",
+            showSearch
+              ? // Center search stays visually centered and stable.
+                "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_minmax(0,1fr)] lg:items-center lg:gap-8"
+              : "justify-between",
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-none">
             {brand}
             {leading}
           </div>
+
           {searchProps ? <GlobalSearchField {...searchProps} /> : null}
+
           <div className="flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
             {actions}
             {trailing}
           </div>
         </div>
-        {secondaryContent ? <div className="flex flex-wrap items-center gap-2">{secondaryContent}</div> : null}
+
+        {secondaryContent ? (
+          <div className="flex flex-wrap items-center gap-2">{secondaryContent}</div>
+        ) : null}
       </div>
     </header>
   );

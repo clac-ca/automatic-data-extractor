@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { RequireSession } from "@shared/auth/components/RequireSession";
@@ -82,9 +82,15 @@ export function DocumentsV10Workbench() {
 
   const model = useDocumentsV10Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
   const handleClearFilters = () => {
+    setSearchParam("");
     model.actions.setSearch("");
     model.actions.setBuiltInView("all");
   };
+
+  const urlSearch = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("q") ?? "";
+  }, [location.search]);
 
   const urlDocId = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -92,9 +98,30 @@ export function DocumentsV10Workbench() {
   }, [location.search]);
 
   useEffect(() => {
+    if (urlSearch !== model.state.search) {
+      model.actions.setSearch(urlSearch);
+    }
+  }, [model.actions.setSearch, model.state.search, urlSearch]);
+
+  useEffect(() => {
     if (!urlDocId) return;
     model.actions.openPreview(urlDocId);
   }, [urlDocId]);
+
+  const setSearchParam = useCallback(
+    (value: string, replace = true) => {
+      const params = new URLSearchParams(location.search);
+      if (value) {
+        params.set("q", value);
+      } else {
+        params.delete("q");
+      }
+      const nextSearch = params.toString();
+      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
+      navigate(target, { replace });
+    },
+    [location.hash, location.pathname, location.search, navigate],
+  );
 
   const setDocParam = (docId: string | null, replace = false) => {
     const params = new URLSearchParams(location.search);
@@ -123,9 +150,6 @@ export function DocumentsV10Workbench() {
   return (
     <div className="documents-v10 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
       <DocumentsHeader
-        search={model.state.search}
-        onSearchChange={model.actions.setSearch}
-        searchRef={model.refs.searchRef}
         viewMode={model.state.viewMode}
         onViewModeChange={model.actions.setViewMode}
         onUploadClick={model.actions.handleUploadClick}

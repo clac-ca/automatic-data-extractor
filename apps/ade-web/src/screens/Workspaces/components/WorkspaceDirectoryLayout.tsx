@@ -60,7 +60,7 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             </div>
           }
         />
-        <main className="flex flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} className="flex flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-6xl px-4 py-8">
             <div className={`grid gap-6 ${sidePanel ? "lg:grid-cols-[minmax(0,1fr)_280px]" : ""}`}>
               <div>{children}</div>
