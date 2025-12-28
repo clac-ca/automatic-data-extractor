@@ -116,34 +116,47 @@ export function DocumentsPreviewPane({
   const hasOutput = activeRun?.status === "succeeded" && Boolean(outputUrl);
 
   return (
-    <aside className="flex min-h-0 w-full flex-col border-l border-slate-200 bg-white lg:w-[44%]">
-      <div className="border-b border-slate-200 px-6 py-5">
+    <aside className="flex min-h-0 min-w-0 w-full flex-col border-l border-slate-200 bg-white lg:w-[44%]">
+      <div className="shrink-0 border-b border-slate-200 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Preview</p>
             <h2 className="truncate text-lg font-semibold text-slate-900">
               {document ? document.name : "Select a document"}
             </h2>
-
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              {document ? (
-                <>
-                  <StatusPill status={document.status} />
-                  <MappingBadge mapping={document.mapping} />
-                  {document.commentCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
-                      <ChatIcon className="h-3.5 w-3.5" />
-                      {document.commentCount} notes
-                    </span>
-                  ) : null}
-                </>
-              ) : (
-                <span>Choose a file to inspect output, assign ownership, and leave notes.</span>
-              )}
-            </div>
           </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 px-0"
+            onClick={onClose}
+            aria-label="Close preview"
+            title="Close preview"
+          >
+            <CloseIcon className="h-4 w-4" />
+          </Button>
+        </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {document ? (
+            <>
+              <StatusPill status={document.status} />
+              <MappingBadge mapping={document.mapping} />
+              {document.commentCount > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                  <ChatIcon className="h-3.5 w-3.5" />
+                  {document.commentCount} notes
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span>Choose a file to inspect output, assign ownership, and leave notes.</span>
+          )}
+        </div>
+
+        {document ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
@@ -190,13 +203,8 @@ export function DocumentsPreviewPane({
               <RefreshIcon className="h-4 w-4" />
               Reprocess
             </Button>
-
-            <Button type="button" size="sm" variant="ghost" className="gap-2 text-xs" onClick={onClose}>
-              <CloseIcon className="h-4 w-4" />
-              Close
-            </Button>
           </div>
-        </div>
+        ) : null}
 
         {document ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -227,14 +235,14 @@ export function DocumentsPreviewPane({
                 onChange={(keys) => onAssign(document.id, normalizeSingleAssignee(keys))}
                 placeholder="Assign..."
                 includeUnassigned
-                buttonClassName="text-xs"
+                buttonClassName="min-w-0 max-w-[14rem] text-xs"
               />
             </div>
           </div>
         ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         {!document ? (
           <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">
             <p className="text-sm font-semibold text-slate-900">Preview is ready when you are.</p>

@@ -119,7 +119,7 @@ export function DocumentsV9Workbench() {
   };
 
   return (
-    <div className="documents-v9 flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <div className="documents-v9 flex min-h-0 flex-1 flex-col bg-slate-50 text-slate-900">
       <DocumentsHeader
         search={model.state.search}
         onSearchChange={model.actions.setSearch}
@@ -131,7 +131,7 @@ export function DocumentsV9Workbench() {
         onFileInputChange={model.actions.handleFileInputChange}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
         <DocumentsSidebar
           activeViewId={model.state.activeViewId}
           onSetBuiltInView={(id) => model.actions.setBuiltInView(id)}
@@ -142,9 +142,9 @@ export function DocumentsV9Workbench() {
           counts={model.derived.counts}
         />
 
-        <div className={clsx("flex min-h-0 flex-1 flex-col", model.state.previewOpen && "lg:flex-row")}
+        <div className={clsx("flex min-h-0 min-w-0 flex-1 flex-col", model.state.previewOpen && "lg:flex-row")}
         >
-          <section className={clsx("flex min-h-0 flex-1 flex-col", model.state.previewOpen && "lg:border-r lg:border-slate-200")}
+          <section className={clsx("flex min-h-0 min-w-0 flex-1 flex-col", model.state.previewOpen && "lg:border-r lg:border-slate-200")}
           >
             <DocumentsFiltersBar
               workspaceId={workspace.id}

@@ -27,7 +27,7 @@ export function DocumentsHeader({
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="shrink-0 border-b border-slate-200 bg-white">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-700">

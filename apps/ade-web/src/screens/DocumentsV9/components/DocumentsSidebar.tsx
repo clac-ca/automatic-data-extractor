@@ -41,8 +41,8 @@ export function DocumentsSidebar({
   ];
 
   return (
-    <aside className="flex w-full flex-col border-r border-slate-200 bg-white lg:w-72">
-      <div className="border-b border-slate-200 px-4 py-4">
+    <aside className="flex min-h-0 min-w-0 w-full flex-col border-r border-slate-200 bg-white lg:w-72 lg:shrink-0">
+      <div className="shrink-0 border-b border-slate-200 px-4 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Views</p>
         <p className="mt-2 text-xs text-slate-500">
           Use views to focus work. Assignment and notes make this a shared workspace.
@@ -56,7 +56,7 @@ export function DocumentsSidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto px-2 py-3">
+      <div className="flex-1 min-h-0 overflow-auto px-2 py-3">
         <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Built-in
         </div>
@@ -118,7 +118,7 @@ export function DocumentsSidebar({
         )}
       </div>
 
-      <div className="border-t border-slate-200 px-4 py-3 text-[11px] text-slate-500">
+      <div className="shrink-0 border-t border-slate-200 px-4 py-3 text-[11px] text-slate-500">
         Tip: Use <span className="font-semibold">Unassigned</span> to triage, then <span className="font-semibold">Pick up</span> to own.
       </div>
     </aside>

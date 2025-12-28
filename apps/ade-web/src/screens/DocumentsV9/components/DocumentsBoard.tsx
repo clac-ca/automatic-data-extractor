@@ -64,8 +64,8 @@ export function DocumentsBoard({
   const showError = isError && totalItems === 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-3 text-xs">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-slate-50">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-3 text-xs">
         <div className="flex items-center gap-2 font-semibold text-slate-500">
           <span>Group by</span>
           <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 px-1 py-1">
@@ -88,7 +88,7 @@ export function DocumentsBoard({
         <span className="text-slate-500">Select a card to open the preview.</span>
       </div>
 
-      <div className="flex-1 overflow-x-auto px-6 py-4">
+      <div className="flex-1 min-h-0 overflow-auto px-6 py-4">
         {showLoading ? (
           <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
             Loading board...
@@ -163,14 +163,14 @@ export function DocumentsBoard({
                                 event.stopPropagation();
                                 onPickUp(doc.id);
                               }}
-                              className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700"
+                              className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700"
                             >
                               Pick up
                             </button>
                           ) : null}
                           <div
                             onClick={(event) => event.stopPropagation()}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-1 py-0.5"
+                            className="min-w-0 rounded-full border border-slate-200 bg-slate-50 px-1 py-0.5"
                           >
                             <PeoplePicker
                               people={people}
@@ -178,7 +178,7 @@ export function DocumentsBoard({
                               onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                               placeholder="Assign..."
                               includeUnassigned
-                              buttonClassName="border-0 bg-transparent shadow-none px-2 py-0 text-[11px]"
+                              buttonClassName="min-w-0 max-w-[11rem] border-0 bg-transparent px-2 py-0 text-[11px] shadow-none"
                             />
                           </div>
                         </div>
@@ -206,7 +206,7 @@ export function DocumentsBoard({
       </div>
 
       {hasNextPage ? (
-        <div className="flex justify-center border-t border-slate-200 bg-white px-6 py-3">
+        <div className="flex shrink-0 justify-center border-t border-slate-200 bg-white px-6 py-3">
           <button type="button" onClick={onLoadMore} className="text-xs font-semibold text-brand-600" disabled={isFetchingNextPage}>
             {isFetchingNextPage ? "Loading more..." : "Load more"}
           </button>

@@ -20,7 +20,7 @@ export function DocumentsFiltersBar({
     filters.statuses.length + filters.fileTypes.length + filters.tags.length + filters.assignees.length;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <FiltersPopover workspaceId={workspaceId} filters={filters} onChange={onChange} people={people} />
 

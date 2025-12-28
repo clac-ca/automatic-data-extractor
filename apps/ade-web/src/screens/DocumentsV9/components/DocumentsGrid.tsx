@@ -83,8 +83,8 @@ export function DocumentsGrid({
   const showError = isError && documents.length === 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white">
-      <div className="border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
         <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
           <div>
             <input
@@ -105,7 +105,7 @@ export function DocumentsGrid({
       </div>
 
       <div
-        className="flex-1 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
+        className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
         role="list"
@@ -215,7 +215,7 @@ export function DocumentsGrid({
                       <p className="truncate text-xs font-semibold text-slate-700">
                         {doc.assigneeLabel ?? "Unassigned"}
                       </p>
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         {isUnassigned ? (
                           <button
                             type="button"
@@ -223,19 +223,19 @@ export function DocumentsGrid({
                               event.stopPropagation();
                               onPickUp(doc.id);
                             }}
-                            className="text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                            className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
                           >
                             Pick up
                           </button>
                         ) : null}
-                        <div data-ignore-row-click>
+                        <div data-ignore-row-click className="min-w-0">
                           <PeoplePicker
                             people={people}
                             value={[doc.assigneeKey ?? unassignedKey()]}
                             onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                             placeholder="Assign..."
                             includeUnassigned
-                            buttonClassName="px-2 py-1 text-[11px]"
+                            buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
                           />
                         </div>
                       </div>

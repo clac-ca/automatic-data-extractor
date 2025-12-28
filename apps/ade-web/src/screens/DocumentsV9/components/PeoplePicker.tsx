@@ -90,12 +90,19 @@ export function PeoplePicker({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition",
+          "inline-flex min-w-0 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition",
           disabled ? "opacity-60" : "hover:border-brand-300",
           buttonClassName,
         )}
       >
-        <span className={clsx(selectedLabels.length === 0 ? "text-slate-500" : "text-slate-900")}>{buttonText}</span>
+        <span
+          className={clsx(
+            "min-w-0 truncate",
+            selectedLabels.length === 0 ? "text-slate-500" : "text-slate-900",
+          )}
+        >
+          {buttonText}
+        </span>
         <span className="text-slate-400" aria-hidden>
           v
         </span>
