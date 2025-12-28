@@ -5,13 +5,13 @@ export function BulkActionBar({
   onClear,
   onAddTag,
   onDownloadOriginals,
-  onReprocess,
+  onDownloadOutputs,
 }: {
   count: number;
   onClear: () => void;
   onAddTag: () => void;
   onDownloadOriginals: () => void;
-  onReprocess: () => void;
+  onDownloadOutputs: () => void;
 }) {
   if (count <= 0) return null;
 
@@ -25,11 +25,11 @@ export function BulkActionBar({
           <Button size="sm" type="button" variant="secondary" onClick={onAddTag}>
             Add tags
           </Button>
+          <Button size="sm" type="button" variant="secondary" onClick={onDownloadOutputs}>
+            Download outputs
+          </Button>
           <Button size="sm" type="button" variant="secondary" onClick={onDownloadOriginals}>
             Download originals
-          </Button>
-          <Button size="sm" type="button" onClick={onReprocess}>
-            Reprocess
           </Button>
           <Button size="sm" type="button" variant="ghost" onClick={onClear}>
             Clear

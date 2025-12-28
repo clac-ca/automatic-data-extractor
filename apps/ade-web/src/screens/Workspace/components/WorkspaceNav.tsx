@@ -1,77 +1,77 @@
-import { NavLink } from "@app/nav/Link";
 import clsx from "clsx";
 
+import { NavLink } from "@app/nav/Link";
 import { getWorkspacePrimaryNavigation, type WorkspaceNavigationItem } from "@screens/Workspace/components/workspace-navigation";
 import type { WorkspaceProfile } from "@shared/workspaces";
 
-const COLLAPSED_NAV_WIDTH = "4.25rem";
-const EXPANDED_NAV_WIDTH = "18.75rem";
+const NAV_RAIL_WIDTH = "4.5rem";
+const NAV_DRAWER_WIDTH = "16rem";
 
 export interface WorkspaceNavProps {
   readonly workspace: WorkspaceProfile;
-  readonly collapsed: boolean;
-  readonly onToggleCollapse: () => void;
+  readonly isPinned: boolean;
+  readonly onTogglePinned: () => void;
   readonly items?: readonly WorkspaceNavigationItem[];
   readonly onGoToWorkspaces: () => void;
 }
 
-export function WorkspaceNav({ workspace, collapsed, onToggleCollapse, items, onGoToWorkspaces }: WorkspaceNavProps) {
+export function WorkspaceNav({ workspace, isPinned, onTogglePinned, items, onGoToWorkspaces }: WorkspaceNavProps) {
   const navItems = items ?? getWorkspacePrimaryNavigation(workspace);
   const workspaceInitials = getWorkspaceInitials(workspace.name);
+  const variant: NavVariant = isPinned ? "drawer" : "rail";
+  const isExpanded = variant === "drawer";
+  const navWidth = isExpanded ? NAV_DRAWER_WIDTH : NAV_RAIL_WIDTH;
+  const switcherLabel = `Switch workspace: ${workspace.name}`;
 
   return (
     <aside
-      className="hidden h-screen flex-shrink-0 bg-gradient-to-b from-slate-50/80 via-white to-slate-50/60 px-3 py-4 transition-[width] duration-200 ease-out lg:flex"
-      style={{ width: collapsed ? COLLAPSED_NAV_WIDTH : EXPANDED_NAV_WIDTH }}
+      className="relative hidden h-screen flex-shrink-0 border-r border-slate-200 bg-white transition-[width] duration-200 ease-out lg:flex"
+      style={{ width: navWidth }}
       aria-label="Primary workspace navigation"
     >
-      <div
-        className={clsx(
-          "flex h-full w-full flex-col rounded-[1.7rem] border border-white/70 bg-white/90 shadow-[0_25px_60px_-40px_rgba(15,23,42,0.7)] ring-1 ring-slate-100/60 backdrop-blur-sm",
-          collapsed ? "items-center gap-4 px-2 py-5" : "gap-5 px-4 py-6",
-        )}
-      >
-        <div
-          className={clsx(
-            "flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-3 py-4 text-sm font-semibold text-slate-700 shadow-inner shadow-white/60",
-            collapsed ? "flex-col text-center text-xs" : "",
-          )}
-        >
+      <div className="flex h-full w-full flex-col">
+        <div className={clsx("border-b border-slate-200", isExpanded ? "px-3 py-3" : "px-2 py-2")}>
           <button
             type="button"
             onClick={onGoToWorkspaces}
-            className="flex flex-1 items-center gap-3 text-left"
+            aria-label={switcherLabel}
+            title={workspace.name}
+            className={clsx(
+              "group flex w-full rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+              isExpanded ? "items-center gap-3 px-2 py-2 hover:bg-slate-50" : "flex-col items-center gap-1 px-1 py-2 hover:bg-slate-50",
+            )}
           >
-            <span
-              className={clsx(
-                "inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold uppercase text-white shadow-[0_10px_25px_-10px_rgba(79,70,229,0.7)]",
-                collapsed && "h-9 w-9 text-xs",
-              )}
-            >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-white shadow-sm transition group-hover:bg-brand-600">
               {workspaceInitials}
             </span>
-            {collapsed ? (
-              <span className="sr-only">{workspace.name}</span>
-            ) : (
-              <div className="min-w-0">
-                <p className="truncate">{workspace.name}</p>
-                <p className="text-xs font-normal text-slate-500">Switch workspace</p>
+            {isExpanded ? (
+              <div className="min-w-0 flex-1 text-left">
+                <p className="truncate text-sm font-semibold text-slate-900">{workspace.name}</p>
+                <p className="text-xs text-slate-500">Switch workspace</p>
               </div>
+            ) : (
+              <span className="text-[0.58rem] font-semibold uppercase tracking-[0.28em] text-slate-400">
+                Workspace
+              </span>
             )}
-          </button>
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-slate-500 hover:border-brand-200 hover:text-brand-600"
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-            aria-expanded={!collapsed}
-          >
-            {collapsed ? <ExpandIcon /> : <CollapseIcon />}
+            {isExpanded ? (
+              <span className="text-slate-400 transition group-hover:text-slate-600" aria-hidden>
+                <ChevronDownIcon />
+              </span>
+            ) : null}
           </button>
         </div>
-        <nav className="mt-4 flex-1 overflow-y-auto pr-1" aria-label="Workspace sections">
-          <WorkspaceNavList items={navItems} collapsed={collapsed} />
+
+        <nav
+          className={clsx("flex-1 overflow-y-auto", isExpanded ? "px-3 py-4" : "px-2 py-3")}
+          aria-label="Workspace sections"
+        >
+          <WorkspaceNavList items={navItems} variant={variant} />
         </nav>
+
+        <div className={clsx("border-t border-slate-200", isExpanded ? "px-3 py-3" : "px-2 py-2")}>
+          <NavToggleButton isExpanded={isExpanded} onToggle={onTogglePinned} />
+        </div>
       </div>
     </aside>
   );
@@ -79,7 +79,7 @@ export function WorkspaceNav({ workspace, collapsed, onToggleCollapse, items, on
 
 interface WorkspaceNavListProps {
   readonly items: readonly WorkspaceNavigationItem[];
-  readonly collapsed?: boolean;
+  readonly variant?: NavVariant;
   readonly onNavigate?: () => void;
   readonly className?: string;
   readonly showHeading?: boolean;
@@ -87,62 +87,62 @@ interface WorkspaceNavListProps {
 
 export function WorkspaceNavList({
   items,
-  collapsed = false,
+  variant = "drawer",
   onNavigate,
   className,
   showHeading = true,
 }: WorkspaceNavListProps) {
+  const isExpanded = variant === "drawer";
+
   return (
     <>
-      {showHeading && !collapsed ? (
-        <p className="mb-3 px-1 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-slate-400/90">Workspace</p>
+      {showHeading && isExpanded ? (
+        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-slate-400/90">
+          Workspace
+        </p>
       ) : null}
-      <ul className={clsx("flex flex-col gap-1.5", collapsed ? "items-center" : undefined, className)}>
+      <ul className={clsx("flex flex-col", isExpanded ? "gap-1.5" : "gap-2", className)}>
         {items.map((item) => (
           <li key={item.id} className="w-full">
             <NavLink
               to={item.href}
               end={!(item.matchPrefix ?? false)}
-              title={collapsed ? item.label : undefined}
+              title={!isExpanded ? item.label : undefined}
               onClick={onNavigate}
               className={({ isActive }) =>
                 clsx(
-                  "group relative flex w-full items-center rounded-2xl border border-transparent text-sm font-medium text-slate-600 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white/80",
-                  collapsed ? "h-11 justify-center px-0" : "gap-3 px-3 py-2.5",
-                  isActive
-                    ? "border-brand-100 bg-white/90 text-slate-900 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.55)]"
-                    : "border-transparent hover:border-slate-200 hover:bg-white/70",
+                  "group w-full rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                  isExpanded
+                    ? "flex items-center gap-3 px-3 py-2 text-sm font-semibold"
+                    : "flex flex-col items-center gap-1.5 px-2 py-2 text-[0.65rem] font-medium",
+                  isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100",
                 )
               }
             >
               {({ isActive }) => (
                 <>
                   <span
-                    aria-hidden
                     className={clsx(
-                      "absolute left-1.5 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-brand-400 to-brand-500 opacity-0 transition-opacity duration-150",
-                      collapsed && "hidden",
-                      isActive ? "opacity-100" : "group-hover:opacity-60",
-                    )}
-                  />
-                  <span
-                    aria-hidden
-                    className={clsx(
-                      "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition",
-                      collapsed && "h-9 w-9 rounded-lg",
-                      isActive ? "bg-brand-50 text-brand-600" : "group-hover:bg-slate-100/80",
+                      "flex h-9 w-9 items-center justify-center rounded-lg transition",
+                      isActive ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500 group-hover:bg-slate-200",
                     )}
                   >
                     <item.icon
                       className={clsx(
-                        "h-5 w-5 flex-shrink-0 transition-colors duration-150",
+                        "h-5 w-5 transition-colors duration-150",
                         isActive ? "text-brand-600" : "text-slate-500",
                       )}
+                      aria-hidden
                     />
                   </span>
-                  <div className={clsx("flex min-w-0 flex-col text-left", collapsed && "sr-only")}>
-                    <span className="truncate text-sm font-semibold text-slate-900">{item.label}</span>
-                  </div>
+                  <span
+                    className={clsx(
+                      "block w-full min-w-0 truncate text-center leading-tight",
+                      isExpanded && "text-left",
+                    )}
+                  >
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>
@@ -150,6 +150,42 @@ export function WorkspaceNavList({
         ))}
       </ul>
     </>
+  );
+}
+
+type NavVariant = "rail" | "drawer";
+
+function NavToggleButton({ isExpanded, onToggle }: { readonly isExpanded: boolean; readonly onToggle: () => void }) {
+  const label = isExpanded ? "Collapse navigation" : "Expand navigation";
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-expanded={isExpanded}
+      title={label}
+      className={clsx(
+        "group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-xs font-semibold text-slate-500 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        isExpanded ? "justify-start" : "flex-col gap-1 text-[0.65rem]",
+        "hover:bg-slate-100 hover:text-slate-700",
+      )}
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-slate-200">
+        {isExpanded ? <CollapseIcon /> : <ExpandIcon />}
+      </span>
+      <span className={clsx("block min-w-0 truncate", !isExpanded && "text-center")}>
+        {isExpanded ? "Collapse" : "Expand"}
+      </span>
+    </button>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

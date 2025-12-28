@@ -189,23 +189,43 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
     [workspaceNavItems],
   );
 
-  const navStorage = useMemo(
+  const navPinnedStorage = useMemo(
+    () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navPinned`),
+    [workspace.id],
+  );
+  const navCollapsedStorage = useMemo(
     () => createScopedStorage(`ade.ui.workspace.${workspace.id}.navCollapsed`),
     [workspace.id],
   );
-  const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
-    const stored = navStorage.get<boolean>();
-    return typeof stored === "boolean" ? stored : false;
+  const [isNavPinned, setIsNavPinned] = useState(() => {
+    const pinned = navPinnedStorage.get<boolean>();
+    if (typeof pinned === "boolean") {
+      return pinned;
+    }
+    const collapsed = navCollapsedStorage.get<boolean>();
+    if (typeof collapsed === "boolean") {
+      return !collapsed;
+    }
+    return false;
   });
 
   useEffect(() => {
-    const stored = navStorage.get<boolean>();
-    setIsNavCollapsed(typeof stored === "boolean" ? stored : false);
-  }, [navStorage]);
+    const pinned = navPinnedStorage.get<boolean>();
+    if (typeof pinned === "boolean") {
+      setIsNavPinned(pinned);
+      return;
+    }
+    const collapsed = navCollapsedStorage.get<boolean>();
+    if (typeof collapsed === "boolean") {
+      setIsNavPinned(!collapsed);
+    } else {
+      setIsNavPinned(false);
+    }
+  }, [navPinnedStorage, navCollapsedStorage]);
 
   useEffect(() => {
-    navStorage.set(isNavCollapsed);
-  }, [isNavCollapsed, navStorage]);
+    navPinnedStorage.set(isNavPinned);
+  }, [isNavPinned, navPinnedStorage]);
 
   useEffect(() => {
     setWorkspaceSearchQuery("");
@@ -400,8 +420,8 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           <WorkspaceNav
             workspace={workspace}
             items={workspaceNavItems}
-            collapsed={isNavCollapsed}
-            onToggleCollapse={() => setIsNavCollapsed((current) => !current)}
+            isPinned={isNavPinned}
+            onTogglePinned={() => setIsNavPinned((current) => !current)}
             onGoToWorkspaces={() => navigate("/workspaces")}
           />
         ) : null}

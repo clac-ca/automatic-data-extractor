@@ -82,6 +82,51 @@ export function columnLabel(index: number) {
   return `Column ${label}`;
 }
 
+export function shortId(value: string, length = 8) {
+  if (!value) return "";
+  return value.slice(0, Math.max(4, length));
+}
+
+export async function copyToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+export function fileTypeFromName(name: string): FileType {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".xlsx")) return "xlsx";
+  if (lower.endsWith(".xls")) return "xls";
+  if (lower.endsWith(".csv")) return "csv";
+  if (lower.endsWith(".pdf")) return "pdf";
+  return "unknown";
+}
+
+export function fileTypeLabel(type: FileType) {
+  switch (type) {
+    case "xlsx":
+      return "XLSX";
+    case "xls":
+      return "XLS";
+    case "csv":
+      return "CSV";
+    case "pdf":
+      return "PDF";
+    default:
+      return "File";
+  }
+}
+
 export function fileExtension(name: string) {
   const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
   return match?.[1] ?? "";

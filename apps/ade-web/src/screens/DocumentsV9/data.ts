@@ -1,6 +1,5 @@
 import { client } from "@shared/api/client";
-import type { UploadQueueItem } from "@shared/uploads/queue";
-import type { DocumentUploadResponse } from "@shared/documents";
+import type { RunResource } from "@schema";
 
 import type {
   ApiDocumentStatus,
@@ -9,10 +8,10 @@ import type {
   DocumentPage,
   DocumentRecord,
   DocumentStatus,
-  DocumentsFilters,
+  FileType,
+  ListDocumentsQuery,
   MappingHealth,
-  RunPage,
-  RunResource,
+  WorkspaceMemberPage,
   WorkbookPreview,
   WorkbookSheet,
 } from "./types";
@@ -20,8 +19,8 @@ import {
   buildHeaders,
   buildNormalizedFilename,
   extractFilename,
+  fileTypeFromName,
   formatBytes,
-  inferFileType,
   normalizeCell,
   normalizeRow,
   parseTimestamp,
@@ -35,40 +34,27 @@ export const MAX_PREVIEW_COLUMNS = 24;
 export const documentsV9Keys = {
   root: () => ["documents-v9"] as const,
   workspace: (workspaceId: string) => [...documentsV9Keys.root(), workspaceId] as const,
-  list: (
-    workspaceId: string,
-    options: { sort: string | null; search: string; filters: DocumentsFilters },
-  ) => [...documentsV9Keys.workspace(workspaceId), "list", options] as const,
-  workbook: (url: string) => [...documentsV9Keys.root(), "workbook", url] as const,
+  list: (workspaceId: string, sort: string | null) =>
+    [...documentsV9Keys.workspace(workspaceId), "list", { sort }] as const,
+  members: (workspaceId: string) => [...documentsV9Keys.workspace(workspaceId), "members"] as const,
+  document: (workspaceId: string, documentId: string) =>
+    [...documentsV9Keys.workspace(workspaceId), "document", documentId] as const,
   runsForDocument: (workspaceId: string, documentId: string) =>
-    [...documentsV9Keys.workspace(workspaceId), "runs", { documentId }] as const,
+    [...documentsV9Keys.workspace(workspaceId), "runs", { input_document_id: documentId }] as const,
+  run: (runId: string) => [...documentsV9Keys.root(), "run", runId] as const,
+  workbook: (url: string) => [...documentsV9Keys.root(), "workbook", url] as const,
 };
 
 export async function fetchWorkspaceDocuments(
   workspaceId: string,
-  options: {
-    sort: string | null;
-    page: number;
-    pageSize: number;
-    search: string;
-    filters: DocumentsFilters;
-  },
+  options: { sort: string | null; page: number; pageSize: number },
   signal?: AbortSignal,
 ): Promise<DocumentPage> {
-  const trimmedSearch = options.search.trim();
-  const statusFilters = mapUiStatusesToApi(options.filters.statuses);
-  const fileTypeFilters = options.filters.fileTypes.filter((type) => type !== "unknown");
-  const query = {
+  const query: ListDocumentsQuery = {
     sort: options.sort ?? undefined,
     page: options.page > 0 ? options.page : 1,
     page_size: options.pageSize > 0 ? options.pageSize : DOCUMENTS_PAGE_SIZE,
     include_total: false,
-    ...(trimmedSearch.length >= 2 ? { q: trimmedSearch } : {}),
-    ...(statusFilters.length > 0 ? { status: statusFilters } : {}),
-    ...(fileTypeFilters.length > 0 ? { file_type: fileTypeFilters } : {}),
-    ...(options.filters.tags.length > 0
-      ? { tags: options.filters.tags, tag_mode: options.filters.tagMode }
-      : {}),
   };
 
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
@@ -80,42 +66,164 @@ export async function fetchWorkspaceDocuments(
   return data;
 }
 
+export async function fetchWorkspaceDocumentById(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<DocumentRecord> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+    signal,
+  });
+  if (!data) throw new Error("Expected document payload.");
+  return data;
+}
+
+export async function fetchWorkspaceMembers(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceMemberPage> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/members", {
+    params: { path: { workspace_id: workspaceId } },
+    signal,
+  });
+  if (!data) throw new Error("Expected workspace member page payload.");
+  return data;
+}
+
 export async function fetchWorkspaceRunsForDocument(
   workspaceId: string,
   documentId: string,
-  options: { page: number; pageSize: number },
   signal?: AbortSignal,
-): Promise<RunPage> {
-  const query = {
-    page: options.page > 0 ? options.page : 1,
-    page_size: options.pageSize > 0 ? options.pageSize : 50,
-    include_total: false,
-    input_document_id: documentId,
-  };
-
+): Promise<RunResource[]> {
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/runs", {
-    params: { path: { workspace_id: workspaceId }, query },
+    params: {
+      path: { workspace_id: workspaceId },
+      query: { page: 1, page_size: 25, include_total: false, input_document_id: documentId },
+    },
     signal,
   });
 
   if (!data) throw new Error("Expected run page payload.");
-  return data;
+  return data.items ?? [];
 }
 
-export async function createRunForDocument(
-  workspaceId: string,
-  documentId: string,
-): Promise<RunResource> {
-  const body = {
-    input_document_id: documentId,
-  };
+export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): Promise<WorkbookPreview> {
+  const response = await fetch(url, { credentials: "include", signal });
+  if (!response.ok) throw new Error("Unable to fetch processed workbook.");
 
-  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs", {
-    params: { path: { workspace_id: workspaceId } },
-    body,
+  const buffer = await response.arrayBuffer();
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(buffer, { type: "array" });
+
+  const sheets = workbook.SheetNames.map((name) => {
+    const worksheet = workbook.Sheets[name];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false }) as unknown[][];
+    const totalRows = rows.length;
+    const totalColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const truncatedRows = totalRows > MAX_PREVIEW_ROWS;
+    const truncatedColumns = totalColumns > MAX_PREVIEW_COLUMNS;
+
+    const visibleRows = rows
+      .slice(0, MAX_PREVIEW_ROWS)
+      .map((row) => row.slice(0, MAX_PREVIEW_COLUMNS).map((cell) => normalizeCell(cell)));
+
+    const columnCount = Math.max(visibleRows[0]?.length ?? 0, totalColumns, 1);
+    const headers = buildHeaders(visibleRows[0] ?? [], columnCount);
+    const bodyRows = visibleRows.slice(1).map((row) => normalizeRow(row as string[], headers.length));
+
+    return {
+      name,
+      headers,
+      rows: bodyRows as string[][],
+      totalRows,
+      totalColumns,
+      truncatedRows,
+      truncatedColumns,
+    } satisfies WorkbookSheet;
   });
 
-  if (!data) throw new Error("Expected run resource.");
+  return { sheets };
+}
+
+export function buildDocumentEntry(document: DocumentRecord): DocumentEntry {
+  const status = mapApiStatus(document.status);
+  const uploader = deriveUploaderLabel(document);
+  const createdAt = parseTimestamp(document.created_at);
+  const updatedAt = parseTimestamp(document.updated_at);
+  const stage = buildStageLabel(status, document.last_run);
+  const mapping = deriveMappingHealth(document);
+
+  const fileType: FileType = fileTypeFromName(document.name);
+
+  return {
+    id: document.id,
+    name: document.name,
+    status,
+    fileType,
+    uploader,
+    tags: document.tags ?? [],
+    createdAt,
+    updatedAt,
+    size: formatBytes(document.byte_size),
+    stage,
+    error: status === "failed" ? buildDocumentError(document) : undefined,
+    mapping,
+
+    // Collaborative defaults (overridden by model)
+    assigneeKey: null,
+    assigneeLabel: null,
+    commentCount: 0,
+
+    record: document,
+  };
+}
+
+export async function downloadOriginalDocument(
+  workspaceId: string,
+  documentId: string,
+  fallbackName: string,
+): Promise<string> {
+  const response = await fetch(`/api/v1/workspaces/${workspaceId}/documents/${documentId}/download`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Unable to download original file.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? fallbackName;
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export async function downloadRunOutput(outputDownloadUrl: string, fallbackName: string): Promise<string> {
+  const response = await fetch(outputDownloadUrl, { credentials: "include" });
+  if (!response.ok) throw new Error("Unable to download processed output.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? buildNormalizedFilename(fallbackName);
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export async function downloadRunOutputById(runId: string, fallbackName: string): Promise<string> {
+  const response = await fetch(`/api/v1/runs/${runId}/output/download`, { credentials: "include" });
+  if (!response.ok) throw new Error("Unable to download processed output.");
+  const blob = await response.blob();
+  const filename = extractFilename(response.headers.get("content-disposition")) ?? buildNormalizedFilename(fallbackName);
+  triggerDownload(blob, filename);
+  return filename;
+}
+
+export async function createRunForDocument(configurationId: string, documentId: string): Promise<RunResource> {
+  const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
+    params: { path: { configuration_id: configurationId } },
+    body: {
+      options: {
+        dry_run: false,
+        validate_only: false,
+        force_rebuild: false,
+        debug: false,
+        input_document_id: documentId,
+      },
+    },
+  });
+
+  if (!data) throw new Error("Unable to create run.");
   return data;
 }
 
@@ -148,9 +256,7 @@ export async function patchWorkspaceDocumentTagsBatch(
 }
 
 export function runOutputDownloadUrl(run: RunResource): string | null {
-  // Prefer server-provided direct/signed URL if present.
   if (run.output?.download_url) return run.output.download_url;
-  // Otherwise use the authenticated API link.
   if (run.links?.output_download) return run.links.output_download;
   return null;
 }
@@ -168,137 +274,6 @@ export function getDocumentOutputRun(document: DocumentRecord | null | undefined
   return null;
 }
 
-export async function downloadRunOutput(runId: string, fallbackName: string): Promise<string> {
-  const url = `/api/v1/runs/${runId}/output/download`;
-  return downloadFileFromUrl(url, buildNormalizedFilename(fallbackName));
-}
-
-export async function downloadWorkspaceDocumentOriginal(
-  workspaceId: string,
-  documentId: string,
-  fallbackName: string,
-): Promise<string> {
-  const url = `/api/v1/workspaces/${workspaceId}/documents/${documentId}/download`;
-  return downloadFileFromUrl(url, fallbackName);
-}
-
-async function downloadFileFromUrl(url: string, fallbackName: string): Promise<string> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) throw new Error("Unable to download file.");
-  const blob = await response.blob();
-  const filename = extractFilename(response.headers.get("content-disposition")) ?? fallbackName;
-  triggerDownload(blob, filename);
-  return filename;
-}
-
-export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): Promise<WorkbookPreview> {
-  const response = await fetch(url, { credentials: "include", signal });
-  if (!response.ok) throw new Error("Unable to fetch workbook for preview.");
-  const buffer = await response.arrayBuffer();
-
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "array" });
-
-  const sheets = workbook.SheetNames.map((name) => {
-    const worksheet = workbook.Sheets[name];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false }) as unknown[][];
-    const totalRows = rows.length;
-    const totalColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
-    const truncatedRows = totalRows > MAX_PREVIEW_ROWS;
-    const truncatedColumns = totalColumns > MAX_PREVIEW_COLUMNS;
-
-    const visibleRows = rows
-      .slice(0, MAX_PREVIEW_ROWS)
-      .map((row) => row.slice(0, MAX_PREVIEW_COLUMNS).map((cell) => normalizeCell(cell)));
-
-    const columnCount = Math.max(visibleRows[0]?.length ?? 0, totalColumns, 1);
-    const headers = buildHeaders(visibleRows[0] ?? [], columnCount);
-    const bodyRows = visibleRows.slice(1).map((row) => normalizeRow(row, headers.length));
-
-    return {
-      name,
-      headers,
-      rows: bodyRows,
-      totalRows,
-      totalColumns,
-      truncatedRows,
-      truncatedColumns,
-    } satisfies WorkbookSheet;
-  });
-
-  return { sheets };
-}
-
-export function buildDocumentEntry(
-  document: DocumentRecord,
-  options: { upload?: UploadQueueItem<DocumentUploadResponse> } = {},
-): DocumentEntry {
-  const status = mapApiStatus(document.status);
-  const uploader = deriveUploaderLabel(document);
-  const createdAt = parseTimestamp(document.created_at);
-  const updatedAt = parseTimestamp(document.updated_at);
-  const stage = buildStageLabel(status, document.last_run);
-  const mapping = deriveMappingHealth(document);
-  const fileType = inferFileType(document.name, document.content_type ?? null);
-
-  return {
-    id: document.id,
-    name: document.name,
-    status,
-    uploader,
-    tags: document.tags ?? [],
-    createdAt,
-    updatedAt,
-    size: formatBytes(document.byte_size),
-    fileType,
-    stage,
-    error: status === "failed" ? buildDocumentError(document) : undefined,
-    mapping,
-    record: document,
-    upload: options.upload,
-  };
-}
-
-export function buildUploadEntry(
-  item: UploadQueueItem<DocumentUploadResponse>,
-  uploaderLabel: string,
-  createdAt: number,
-): DocumentEntry {
-  const isFailed = item.status === "failed";
-  const isUploading = item.status === "uploading";
-
-  const status: DocumentStatus = isFailed ? "failed" : isUploading ? "processing" : "queued";
-  const progress = isUploading ? item.progress.percent : undefined;
-  const stage = isFailed ? "Upload failed" : isUploading ? "Uploading" : "Queued for upload";
-  const error = isFailed
-    ? {
-        summary: item.error ?? "Upload failed",
-        detail: "We could not upload this file. Check the connection and retry.",
-        nextStep: "Retry now or remove the upload.",
-      }
-    : undefined;
-
-  const fileType = inferFileType(item.file.name);
-
-  return {
-    id: item.id,
-    name: item.file.name,
-    status,
-    uploader: uploaderLabel,
-    tags: [],
-    createdAt,
-    updatedAt: createdAt,
-    size: formatBytes(item.file.size),
-    fileType,
-    progress,
-    stage,
-    error,
-    mapping: { attention: 0, unmapped: 0, pending: true },
-    record: item.response,
-    upload: item,
-  };
-}
-
 export function mapApiStatus(status: ApiDocumentStatus): DocumentStatus {
   switch (status) {
     case "processed":
@@ -310,27 +285,10 @@ export function mapApiStatus(status: ApiDocumentStatus): DocumentStatus {
     case "archived":
       return "archived";
     case "uploaded":
+      return "queued";
     default:
       return "queued";
   }
-}
-
-function mapUiStatusesToApi(statuses: DocumentStatus[]): ApiDocumentStatus[] {
-  return statuses.map((status) => {
-    switch (status) {
-      case "ready":
-        return "processed";
-      case "processing":
-        return "processing";
-      case "failed":
-        return "failed";
-      case "archived":
-        return "archived";
-      case "queued":
-      default:
-        return "uploaded";
-    }
-  });
 }
 
 export function deriveUploaderLabel(document: DocumentRecord): string | null {
@@ -346,7 +304,7 @@ export function deriveUploaderLabel(document: DocumentRecord): string | null {
 function readOwnerFromMetadata(metadata: Record<string, unknown>): string | null {
   const ownerName = typeof metadata.owner === "string" ? metadata.owner : undefined;
   const ownerEmail = typeof metadata.owner_email === "string" ? metadata.owner_email : undefined;
-  return ownerName ?? ownerEmail ?? null;
+  return ownerName || ownerEmail ? ownerName ?? ownerEmail ?? null : null;
 }
 
 export function deriveMappingHealth(document: DocumentRecord): MappingHealth {
@@ -377,7 +335,10 @@ function readMappingFromMetadata(metadata: Record<string, unknown>): MappingHeal
 
   const attention = typeof metadata.mapping_issues === "number" ? metadata.mapping_issues : null;
   const unmapped = typeof metadata.unmapped_columns === "number" ? metadata.unmapped_columns : null;
-  if (attention !== null || unmapped !== null) return { attention: attention ?? 0, unmapped: unmapped ?? 0 };
+  if (attention !== null || unmapped !== null) {
+    return { attention: attention ?? 0, unmapped: unmapped ?? 0 };
+  }
+
   return null;
 }
 
@@ -385,7 +346,7 @@ function buildStageLabel(status: DocumentStatus, lastRun: DocumentLastRun | null
   if (status === "queued") return "Queued for processing";
   if (status === "processing") {
     if (lastRun?.status === "queued") return "Queued for processing";
-    return "Processing in progress";
+    return "Processing output";
   }
   return undefined;
 }
@@ -395,14 +356,14 @@ function buildDocumentError(document: DocumentRecord) {
   return {
     summary: message ?? "Processing failed",
     detail: message ?? "We could not complete normalization for this file.",
-    nextStep: "Reprocess now or inspect run details.",
+    nextStep: "Retry now or fix mapping later.",
   };
 }
 
 export function buildStatusDescription(status: DocumentStatus, run?: RunResource | null) {
   switch (status) {
     case "ready":
-      return "Processed output is available.";
+      return "Processed XLSX ready to download.";
     case "processing":
       if (run?.status === "queued") return "Queued for processing.";
       if (run?.status === "running") return "Processing in progress.";

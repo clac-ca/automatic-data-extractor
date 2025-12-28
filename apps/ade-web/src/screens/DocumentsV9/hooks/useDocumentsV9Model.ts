@@ -10,21 +10,24 @@ import {
 } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError } from "@shared/api";
 import { useNotifications } from "@shared/notifications";
 import { uploadWorkspaceDocument, type DocumentUploadResponse } from "@shared/documents";
 import { useUploadQueue } from "@shared/uploads/queue";
 
+import type { RunResource } from "@schema";
+
 import {
   DOCUMENTS_PAGE_SIZE,
   buildDocumentEntry,
-  buildUploadEntry,
   createRunForDocument,
   documentsV9Keys,
+  downloadOriginalDocument,
   downloadRunOutput,
-  downloadWorkspaceDocumentOriginal,
+  downloadRunOutputById,
   fetchWorkbookPreview,
+  fetchWorkspaceDocumentById,
   fetchWorkspaceDocuments,
+  fetchWorkspaceMembers,
   fetchWorkspaceRunsForDocument,
   getDocumentOutputRun,
   patchWorkspaceDocumentTags,
@@ -32,37 +35,34 @@ import {
   runHasDownloadableOutput,
   runOutputDownloadUrl,
 } from "../data";
-
 import type {
   BoardColumn,
   BoardGroup,
+  DocumentComment,
   DocumentEntry,
   DocumentsFilters,
-  DocumentsSavedView,
+  DocumentPage,
   DocumentStatus,
-  RunResource,
+  SavedView,
   ViewMode,
   WorkbookPreview,
+  WorkspacePerson,
 } from "../types";
-import { parseTimestamp, stableId } from "../utils";
+import { copyToClipboard, fileTypeFromName, formatBytes, parseTimestamp, shortId } from "../utils";
 
 type WorkbenchState = {
   viewMode: ViewMode;
   groupBy: BoardGroup;
-  hideEmptyColumns: boolean;
-  sort: string | null;
   search: string;
-  filters: DocumentsFilters;
-
-  activeViewKey: string; // builtin:* or saved:*
-  savedViews: DocumentsSavedView[];
-
   selectedIds: Set<string>;
   activeId: string | null;
   previewOpen: boolean;
-
-  activeRunId: string | null;
   activeSheetId: string | null;
+
+  filters: DocumentsFilters;
+  activeViewId: string;
+  saveViewOpen: boolean;
+  selectedRunId: string | null;
 };
 
 type WorkbenchDerived = {
@@ -73,29 +73,48 @@ type WorkbenchDerived = {
 
   boardColumns: BoardColumn[];
 
-  statusCounts: Record<DocumentStatus, number>;
-
   isLoading: boolean;
   isError: boolean;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
 
+  // People
+  people: WorkspacePerson[];
+  currentUserKey: string;
+
   // Runs
   runs: RunResource[];
   runsLoading: boolean;
+  selectedRunId: string | null;
   activeRun: RunResource | null;
+  runLoading: boolean;
 
+  // Output preview
   outputUrl: string | null;
   workbook: WorkbookPreview | null;
   workbookLoading: boolean;
   workbookError: boolean;
 
+  // Empty states
   showNoDocuments: boolean;
   showNoResults: boolean;
   allVisibleSelected: boolean;
 
-  activeViewLabel: string;
-  showSaveView: boolean;
+  // Saved views
+  savedViews: SavedView[];
+
+  // Notes
+  activeComments: DocumentComment[];
+
+  // Counts for sidebar
+  counts: {
+    total: number;
+    mine: number;
+    unassigned: number;
+    ready: number;
+    processing: number;
+    failed: number;
+  };
 };
 
 type WorkbenchRefs = {
@@ -107,19 +126,6 @@ type WorkbenchActions = {
   setSearch: (value: string) => void;
   setViewMode: (value: ViewMode) => void;
   setGroupBy: (value: BoardGroup) => void;
-  setHideEmptyColumns: (value: boolean) => void;
-  setSort: (value: string | null) => void;
-
-  toggleStatusFilter: (status: DocumentStatus) => void;
-  toggleFileTypeFilter: (type: DocumentsFilters["fileTypes"][number]) => void;
-  setTagMode: (mode: DocumentsFilters["tagMode"]) => void;
-  toggleTagFilter: (tag: string) => void;
-  clearFilters: () => void;
-
-  selectBuiltInView: (id: "all" | "ready" | "processing" | "failed") => void;
-  selectSavedView: (id: string) => void;
-  saveCurrentView: (name: string) => void;
-  deleteSavedView: (id: string) => void;
 
   toggleSelect: (id: string) => void;
   selectAllVisible: () => void;
@@ -128,28 +134,51 @@ type WorkbenchActions = {
   openPreview: (id: string) => void;
   closePreview: () => void;
 
-  setActiveRunId: (id: string) => void;
   setActiveSheetId: (id: string) => void;
 
   handleUploadClick: () => void;
   handleFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 
-  downloadOriginal: (doc: DocumentEntry) => void;
-  downloadOutputFromRow: (doc: DocumentEntry) => void;
-  downloadOutputFromPreview: (doc: DocumentEntry, run: RunResource | null) => void;
-
-  reprocessDocument: (doc: DocumentEntry) => void;
-
-  toggleTagOnDocument: (doc: DocumentEntry, tag: string) => void;
-
-  bulkAddTagPrompt: () => void;
-  bulkDownloadOriginals: () => void;
-  bulkReprocess: () => void;
-
   refreshDocuments: () => void;
   loadMore: () => void;
 
   handleKeyNavigate: (event: KeyboardEvent<HTMLDivElement>) => void;
+
+  // Filters & views
+  setFilters: (next: DocumentsFilters) => void;
+  setBuiltInView: (id: string) => void;
+  selectSavedView: (viewId: string) => void;
+  openSaveView: () => void;
+  closeSaveView: () => void;
+  saveView: (name: string) => void;
+  deleteView: (viewId: string) => void;
+
+  // Tags (persisted)
+  updateTagsOptimistic: (documentId: string, nextTags: string[]) => void;
+
+  // Assignment (local-first)
+  assignDocument: (documentId: string, assigneeKey: string | null) => void;
+  pickUpDocument: (documentId: string) => void;
+
+  // Notes (local-first)
+  addComment: (documentId: string, body: string, mentions: { key: string; label: string }[]) => void;
+  editComment: (documentId: string, commentId: string, body: string, mentions: { key: string; label: string }[]) => void;
+  deleteComment: (documentId: string, commentId: string) => void;
+
+  // Runs
+  selectRun: (runId: string) => void;
+
+  // Downloads & link
+  downloadOutput: (doc: DocumentEntry | null) => void;
+  downloadOutputFromRow: (doc: DocumentEntry) => void;
+  downloadOriginal: (doc: DocumentEntry | null) => void;
+  reprocess: (doc: DocumentEntry | null) => void;
+  copyLink: (doc: DocumentEntry | null) => void;
+
+  // Bulk actions
+  bulkAddTagPrompt: () => void;
+  bulkDownloadOriginals: () => void;
+  bulkDownloadOutputs: () => void;
 };
 
 export type WorkbenchModel = {
@@ -161,97 +190,100 @@ export type WorkbenchModel = {
 
 const STATUS_ORDER: DocumentStatus[] = ["queued", "processing", "ready", "failed", "archived"];
 
-const STORAGE_KEY_PREFIX = "ade.documents.v9.views";
+const DEFAULT_FILTERS: DocumentsFilters = {
+  statuses: [],
+  fileTypes: [],
+  tags: [],
+  tagMode: "any",
+  assignees: [],
+};
 
-function loadSavedViews(workspaceId: string): DocumentsSavedView[] {
-  if (typeof window === "undefined") return [];
-  const key = `${STORAGE_KEY_PREFIX}.${workspaceId}`;
+const UNASSIGNED_KEY = "__unassigned__";
+
+function safeJsonParse<T>(value: string | null): T | null {
+  if (!value) return null;
   try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as DocumentsSavedView[];
-    return Array.isArray(parsed) ? parsed : [];
+    return JSON.parse(value) as T;
   } catch {
-    return [];
+    return null;
   }
 }
 
-function persistSavedViews(workspaceId: string, views: DocumentsSavedView[]) {
-  if (typeof window === "undefined") return;
-  const key = `${STORAGE_KEY_PREFIX}.${workspaceId}`;
-  window.localStorage.setItem(key, JSON.stringify(views));
-}
-
-function defaultFilters(): DocumentsFilters {
-  return { statuses: [], fileTypes: [], tags: [], tagMode: "any" };
-}
-
-function resolveApiErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof ApiError) {
-    const detail = error.problem?.detail as unknown;
-    if (typeof detail === "string" && detail.length > 0) {
-      return detail;
-    }
-    if (detail && typeof detail === "object" && "error" in detail) {
-      const message = (detail as { error?: { message?: string } }).error?.message;
-      if (message) {
-        return message;
-      }
-    }
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return fallback;
-}
-
-function isActiveConfigurationMissing(error: unknown) {
-  if (!(error instanceof ApiError)) {
-    return false;
-  }
-  return error.problem?.detail === "active_configuration_not_found";
-}
-
-function isSameViewState(a: DocumentsSavedView["state"], b: DocumentsSavedView["state"]) {
-  const normalize = (s: DocumentsSavedView["state"]) => ({
-    ...s,
+function loadSavedViews(workspaceId: string): SavedView[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(`ade.documents.v9.views.${workspaceId}`);
+  const parsed = safeJsonParse<SavedView[]>(raw);
+  if (!parsed) return [];
+  return parsed.map((v) => ({
+    ...v,
     filters: {
-      ...s.filters,
-      statuses: [...s.filters.statuses].slice().sort(),
-      fileTypes: [...s.filters.fileTypes].slice().sort(),
-      tags: [...s.filters.tags].slice().sort(),
+      ...DEFAULT_FILTERS,
+      ...(v.filters ?? {}),
+      tagMode: v.filters?.tagMode ?? "any",
+      assignees: v.filters?.assignees ?? [],
     },
-  });
-  return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b));
+  }));
+}
+
+function storeSavedViews(workspaceId: string, views: SavedView[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`ade.documents.v9.views.${workspaceId}`, JSON.stringify(views));
+}
+
+function loadAssignments(workspaceId: string): Record<string, string | null> {
+  if (typeof window === "undefined") return {};
+  const raw = window.localStorage.getItem(`ade.documents.v9.assignments.${workspaceId}`);
+  const parsed = safeJsonParse<Record<string, string | null>>(raw);
+  return parsed ?? {};
+}
+
+function storeAssignments(workspaceId: string, map: Record<string, string | null>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`ade.documents.v9.assignments.${workspaceId}`, JSON.stringify(map));
+}
+
+function loadComments(workspaceId: string): Record<string, DocumentComment[]> {
+  if (typeof window === "undefined") return {};
+  const raw = window.localStorage.getItem(`ade.documents.v9.comments.${workspaceId}`);
+  const parsed = safeJsonParse<Record<string, DocumentComment[]>>(raw);
+  return parsed ?? {};
+}
+
+function storeComments(workspaceId: string, map: Record<string, DocumentComment[]>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`ade.documents.v9.comments.${workspaceId}`, JSON.stringify(map));
 }
 
 export function useDocumentsV9Model({
   workspaceId,
   currentUserLabel,
+  currentUserId,
 }: {
   workspaceId: string;
   currentUserLabel: string;
+  currentUserId: string;
 }): WorkbenchModel {
   const { notifyToast } = useNotifications();
   const queryClient = useQueryClient();
 
+  const currentUserKey = `user:${currentUserId}`;
+
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [groupBy, setGroupBy] = useState<BoardGroup>("status");
-  const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
-  const [sort, setSort] = useState<string | null>("-created_at");
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<DocumentsFilters>(() => defaultFilters());
-
-  const [savedViews, setSavedViews] = useState<DocumentsSavedView[]>(() => loadSavedViews(workspaceId));
-  const [activeViewKey, setActiveViewKey] = useState<string>("builtin:all");
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  const [filters, setFilters] = useState<DocumentsFilters>(DEFAULT_FILTERS);
+  const [activeViewId, setActiveViewId] = useState<string>("all");
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews(workspaceId));
+  const [assignments, setAssignments] = useState<Record<string, string | null>>(() => loadAssignments(workspaceId));
+  const [commentsByDocId, setCommentsByDocId] = useState<Record<string, DocumentComment[]>>(() => loadComments(workspaceId));
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -259,14 +291,6 @@ export function useDocumentsV9Model({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    setSavedViews(loadSavedViews(workspaceId));
-  }, [workspaceId]);
-
-  useEffect(() => {
-    persistSavedViews(workspaceId, savedViews);
-  }, [savedViews, workspaceId]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30000);
@@ -287,36 +311,28 @@ export function useDocumentsV9Model({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    setSavedViews(loadSavedViews(workspaceId));
+    setAssignments(loadAssignments(workspaceId));
+    setCommentsByDocId(loadComments(workspaceId));
+  }, [workspaceId]);
+
   const startUpload = useCallback(
-    (file: File, handlers: { onProgress: (progress: { loaded: number; total: number | null; percent: number | null }) => void }) =>
-      uploadWorkspaceDocument(workspaceId, file, { onProgress: handlers.onProgress }),
+    (
+      file: File,
+      handlers: { onProgress: (progress: { loaded: number; total: number | null; percent: number | null }) => void },
+    ) => uploadWorkspaceDocument(workspaceId, file, { onProgress: handlers.onProgress }),
     [workspaceId],
   );
 
-  const uploadQueue = useUploadQueue<DocumentUploadResponse>({ startUpload });
+  const uploadQueue = useUploadQueue<DocumentUploadResponse>({
+    startUpload,
+  });
 
-  const normalizedSearch = search.trim();
-  const normalizedFilters = useMemo<DocumentsFilters>(
-    () => ({
-      statuses: [...filters.statuses].slice().sort(),
-      fileTypes: [...filters.fileTypes].slice().sort(),
-      tags: [...filters.tags].slice().sort(),
-      tagMode: filters.tagMode,
-    }),
-    [filters],
-  );
+  const sort = "-created_at";
+  const listKey = useMemo(() => documentsV9Keys.list(workspaceId, sort), [sort, workspaceId]);
 
-  const listKey = useMemo(
-    () =>
-      documentsV9Keys.list(workspaceId, {
-        sort,
-        search: normalizedSearch,
-        filters: normalizedFilters,
-      }),
-    [normalizedFilters, normalizedSearch, sort, workspaceId],
-  );
-
-  const documentsQuery = useInfiniteQuery({
+  const documentsQuery = useInfiniteQuery<DocumentPage>({
     queryKey: listKey,
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
@@ -326,8 +342,6 @@ export function useDocumentsV9Model({
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
           pageSize: DOCUMENTS_PAGE_SIZE,
-          search: normalizedSearch,
-          filters: normalizedFilters,
         },
         signal,
       ),
@@ -362,50 +376,133 @@ export function useDocumentsV9Model({
     const entries: DocumentEntry[] = [];
     uploadQueue.items.forEach((item) => {
       const createdAt = uploadCreatedAtRef.current.get(item.id) ?? Date.now();
+      const fileName = item.file.name;
       if (item.status === "succeeded" && item.response) {
         if (documentsById.has(item.response.id)) return;
-        entries.push(buildDocumentEntry(item.response, { upload: item }));
+        entries.push(buildDocumentEntry(item.response));
         return;
       }
-      entries.push(buildUploadEntry(item, currentUserLabel, createdAt));
+
+      const status: DocumentStatus =
+        item.status === "failed" ? "failed" : item.status === "uploading" ? "processing" : "queued";
+
+      entries.push({
+        id: item.id,
+        name: fileName,
+        status,
+        fileType: fileTypeFromName(fileName),
+        uploader: currentUserLabel,
+        tags: [],
+        createdAt,
+        updatedAt: createdAt,
+        size: formatBytes(item.file.size),
+        stage: item.status === "failed" ? "Upload failed" : item.status === "uploading" ? "Uploading" : "Queued for upload",
+        progress: item.status === "uploading" ? item.progress.percent : undefined,
+        error:
+          item.status === "failed"
+            ? {
+                summary: item.error ?? "Upload failed",
+                detail: "We could not upload this file. Check the connection and retry.",
+                nextStep: "Retry now or remove the upload.",
+              }
+            : undefined,
+        mapping: { attention: 0, unmapped: 0, pending: true },
+
+        assigneeKey: assignments[item.id] ?? null,
+        assigneeLabel: null,
+        commentCount: (commentsByDocId[item.id] ?? []).length,
+
+        record: item.response,
+        upload: item,
+      });
     });
     return entries;
-  }, [currentUserLabel, documentsById, uploadQueue.items]);
+  }, [assignments, commentsByDocId, currentUserLabel, documentsById, uploadQueue.items]);
 
-  const normalizedSearchLower = normalizedSearch.toLowerCase();
-  const filteredUploadEntries = useMemo(() => {
-    if (uploadEntries.length === 0) return [];
-    const hasSearch = normalizedSearchLower.length >= 2;
-    return uploadEntries.filter((doc) => {
-      if (hasSearch) {
-        const haystack = [doc.name, doc.uploader ?? "", doc.tags.join(" ")].join(" ").toLowerCase();
-        if (!haystack.includes(normalizedSearchLower)) return false;
-      }
+  const apiEntriesBase = useMemo(() => documentsRaw.map((doc) => buildDocumentEntry(doc)), [documentsRaw]);
 
-      if (filters.statuses.length > 0 && !filters.statuses.includes(doc.status)) {
-        return false;
-      }
+  const membersQuery = useQuery({
+    queryKey: documentsV9Keys.members(workspaceId),
+    queryFn: ({ signal }) => fetchWorkspaceMembers(workspaceId, signal),
+    enabled: Boolean(workspaceId),
+    staleTime: 60_000,
+  });
 
-      if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) {
-        return false;
-      }
+  const people = useMemo<WorkspacePerson[]>(() => {
+    const set = new Map<string, WorkspacePerson>();
+    set.set(currentUserKey, { key: currentUserKey, label: currentUserLabel, kind: "user", userId: currentUserId });
 
-      if (filters.tags.length > 0) {
-        if (filters.tagMode === "all") {
-          return filters.tags.every((t) => doc.tags.includes(t));
-        }
-        return doc.tags.some((t) => filters.tags.includes(t));
-      }
-
-      return true;
+    const members = membersQuery.data?.items ?? [];
+    members.forEach((m) => {
+      const key = `user:${m.user_id}`;
+      const label = m.user_id === currentUserId ? currentUserLabel : `Member ${shortId(m.user_id)}`;
+      if (!set.has(key)) set.set(key, { key, label, kind: "user", userId: m.user_id });
     });
-  }, [filters, normalizedSearchLower, uploadEntries]);
 
-  const apiEntries = useMemo(() => documentsRaw.map((doc) => buildDocumentEntry(doc)), [documentsRaw]);
-  const documents = useMemo(() => [...filteredUploadEntries, ...apiEntries], [filteredUploadEntries, apiEntries]);
-  const documentsByEntryId = useMemo(() => new Map(documents.map((doc) => [doc.id, doc])), [documents]);
+    apiEntriesBase.forEach((d) => {
+      if (d.uploader) {
+        const key = `label:${d.uploader}`;
+        if (!set.has(key)) set.set(key, { key, label: d.uploader, kind: "label" });
+      }
+    });
 
-  // Keep selected ids valid
+    return Array.from(set.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [apiEntriesBase, currentUserId, currentUserKey, currentUserLabel, membersQuery.data?.items]);
+
+  const peopleByKey = useMemo(() => new Map(people.map((p) => [p.key, p])), [people]);
+
+  const assigneeLabelForKey = useCallback(
+    (key: string | null) => {
+      if (!key) return null;
+      const found = peopleByKey.get(key);
+      if (found) return found.label;
+      if (key.startsWith("user:")) return `Member ${shortId(key.slice(5))}`;
+      if (key.startsWith("label:")) return key.slice(6);
+      return key;
+    },
+    [peopleByKey],
+  );
+
+  const activeDocQuery = useQuery({
+    queryKey:
+      activeId && workspaceId
+        ? documentsV9Keys.document(workspaceId, activeId)
+        : [...documentsV9Keys.root(), "document", "none"],
+    queryFn: ({ signal }) => (activeId ? fetchWorkspaceDocumentById(workspaceId, activeId, signal) : Promise.reject()),
+    enabled: Boolean(activeId && workspaceId) && !documentsById.has(activeId ?? ""),
+    staleTime: 30_000,
+  });
+
+  const pinnedActiveEntry = useMemo(() => {
+    if (!activeDocQuery.data) return null;
+    return buildDocumentEntry(activeDocQuery.data);
+  }, [activeDocQuery.data]);
+
+  const baseDocuments = useMemo(() => {
+    const all = [...uploadEntries, ...apiEntriesBase];
+    if (pinnedActiveEntry && !all.some((d) => d.id === pinnedActiveEntry.id)) {
+      return [pinnedActiveEntry, ...all];
+    }
+    return all;
+  }, [apiEntriesBase, pinnedActiveEntry, uploadEntries]);
+
+  const documents = useMemo<DocumentEntry[]>(() => {
+    return baseDocuments.map((doc) => {
+      const overrideAssignee = assignments[doc.id] ?? null;
+      const assigneeKey = overrideAssignee ?? doc.assigneeKey ?? null;
+      const commentCount = (commentsByDocId[doc.id] ?? []).length;
+
+      return {
+        ...doc,
+        assigneeKey,
+        assigneeLabel: assigneeLabelForKey(assigneeKey),
+        commentCount,
+      };
+    });
+  }, [assignments, assigneeLabelForKey, baseDocuments, commentsByDocId]);
+
+  const documentsByEntryId = useMemo(() => new Map(documents.map((d) => [d.id, d])), [documents]);
+
   useEffect(() => {
     setSelectedIds((previous) => {
       const next = new Set<string>();
@@ -416,11 +513,9 @@ export function useDocumentsV9Model({
     });
   }, [documentsByEntryId]);
 
-  // Active doc handling
   useEffect(() => {
     if (documents.length === 0) {
       setActiveId(null);
-      setPreviewOpen(false);
       return;
     }
     if (!activeId || !documentsByEntryId.has(activeId)) {
@@ -433,85 +528,46 @@ export function useDocumentsV9Model({
     [activeId, documentsByEntryId],
   );
 
-  const visibleDocuments = documents;
+  const visibleDocuments = useMemo(() => {
+    const searchValue = search.trim().toLowerCase();
+    const hasSearch = searchValue.length >= 2;
 
-  // Status counts for sidebar
-  const statusCounts = useMemo(() => {
-    const counts: Record<DocumentStatus, number> = {
-      queued: 0,
-      processing: 0,
-      ready: 0,
-      failed: 0,
-      archived: 0,
-    };
-    documents.forEach((d) => {
-      counts[d.status] += 1;
+    return documents.filter((doc) => {
+      if (hasSearch) {
+        const haystack = [
+          doc.name,
+          doc.uploader ?? "",
+          doc.tags.join(" "),
+          doc.assigneeLabel ?? "",
+          doc.assigneeKey ?? "",
+          doc.fileType,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(searchValue)) return false;
+      }
+
+      if (filters.statuses.length > 0 && !filters.statuses.includes(doc.status)) return false;
+      if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) return false;
+
+      if (filters.tags.length > 0) {
+        if (filters.tagMode === "all") {
+          if (!filters.tags.every((t) => doc.tags.includes(t))) return false;
+        } else if (!filters.tags.some((t) => doc.tags.includes(t))) {
+          return false;
+        }
+      }
+
+      if (filters.assignees.length > 0) {
+        const includeUnassigned = filters.assignees.includes(UNASSIGNED_KEY);
+        const assignedMatch = doc.assigneeKey ? filters.assignees.includes(doc.assigneeKey) : false;
+        const unassignedMatch = !doc.assigneeKey && includeUnassigned;
+        if (!assignedMatch && !unassignedMatch) return false;
+      }
+
+      return true;
     });
-    return counts;
-  }, [documents]);
-
-  // Runs for active document (only when we have a real document record id).
-  const activeDocumentIdForRuns = activeDocument?.record?.id ?? null;
-
-  const runsQuery = useQuery({
-    queryKey: activeDocumentIdForRuns
-      ? documentsV9Keys.runsForDocument(workspaceId, activeDocumentIdForRuns)
-      : [...documentsV9Keys.workspace(workspaceId), "runs", "none"],
-    queryFn: ({ signal }) =>
-      activeDocumentIdForRuns
-        ? fetchWorkspaceRunsForDocument(workspaceId, activeDocumentIdForRuns, { page: 1, pageSize: 50 }, signal)
-        : Promise.resolve({ items: [], page: 1, page_size: 50, has_next: false, has_previous: false }),
-    enabled: Boolean(activeDocumentIdForRuns) && previewOpen,
-    staleTime: 5_000,
-    refetchInterval: previewOpen ? 7_500 : false,
-  });
-
-  const runs = useMemo(() => {
-    const items = runsQuery.data?.items ?? [];
-    return items
-      .slice()
-      .sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
-  }, [runsQuery.data?.items]);
-
-  // Choose default active run when doc changes.
-  useEffect(() => {
-    if (!previewOpen) return;
-    setActiveRunId((prev) => {
-      const existing = prev && runs.some((r) => r.id === prev) ? prev : null;
-      if (existing) return existing;
-
-      const preferred = activeDocument?.record?.last_run?.run_id ?? null;
-      if (preferred && runs.some((r) => r.id === preferred)) return preferred;
-
-      return runs[0]?.id ?? null;
-    });
-  }, [activeDocument?.id, previewOpen, runs]);
-
-  const activeRun = useMemo(() => {
-    if (!activeRunId) return null;
-    return runs.find((r) => r.id === activeRunId) ?? null;
-  }, [activeRunId, runs]);
-
-  const outputUrl = useMemo(() => {
-    if (!activeRun) return null;
-    if (!runHasDownloadableOutput(activeRun)) return null;
-    return runOutputDownloadUrl(activeRun);
-  }, [activeRun]);
-
-  const workbookQuery = useQuery<WorkbookPreview>({
-    queryKey: outputUrl ? documentsV9Keys.workbook(outputUrl) : [...documentsV9Keys.root(), "workbook", "none"],
-    queryFn: ({ signal }) => (outputUrl ? fetchWorkbookPreview(outputUrl, signal) : Promise.reject(new Error("No output URL"))),
-    enabled: Boolean(outputUrl) && previewOpen,
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    setActiveSheetId(null);
-  }, [activeDocument?.id, activeRunId]);
-
-  useEffect(() => {
-    if (workbookQuery.data?.sheets.length) setActiveSheetId(workbookQuery.data.sheets[0].name);
-  }, [workbookQuery.data?.sheets]);
+  }, [documents, filters, search]);
 
   const boardColumns = useMemo<BoardColumn[]>(() => {
     if (groupBy === "status") {
@@ -549,161 +605,95 @@ export function useDocumentsV9Model({
       items: visibleDocuments.filter((doc) => doc.uploader === uploader),
     }));
     columns.push({
-      id: "__unassigned__",
+      id: "__unassigned_uploader__",
       label: "Unassigned",
       items: visibleDocuments.filter((doc) => !doc.uploader),
     });
     return columns;
   }, [groupBy, visibleDocuments]);
 
-  const selectableIds = useMemo(
-    () => visibleDocuments.filter((doc) => doc.record).map((doc) => doc.id),
-    [visibleDocuments],
-  );
+  const selectableIds = useMemo(() => visibleDocuments.filter((doc) => doc.record).map((doc) => doc.id), [visibleDocuments]);
   const allVisibleSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
-  const hasActiveFilters =
-    normalizedSearch.length >= 2 ||
-    filters.statuses.length > 0 ||
-    filters.fileTypes.length > 0 ||
-    filters.tags.length > 0;
-  const showNoDocuments = documents.length === 0 && !hasActiveFilters;
-  const showNoResults = documents.length === 0 && hasActiveFilters;
 
-  // Active view label + save view visibility
-  const activeViewLabel = useMemo(() => {
-    if (activeViewKey.startsWith("saved:")) {
-      const id = activeViewKey.replace("saved:", "");
-      const view = savedViews.find((v) => v.id === id);
-      return view ? `Saved view · ${view.name}` : "Saved view";
-    }
-    if (activeViewKey === "builtin:ready") return "View · Ready";
-    if (activeViewKey === "builtin:processing") return "View · Processing";
-    if (activeViewKey === "builtin:failed") return "View · Failed";
-    return "All documents";
-  }, [activeViewKey, savedViews]);
+  const showNoDocuments = documents.length === 0;
+  const showNoResults = documents.length > 0 && visibleDocuments.length === 0;
 
-  const showSaveView = useMemo(() => {
-    const currentState: DocumentsSavedView["state"] = {
-      search,
-      sort,
-      viewMode,
-      groupBy,
-      filters,
-    };
+  const counts = useMemo(() => {
+    const mine = documents.filter((d) => d.assigneeKey === currentUserKey).length;
+    const unassigned = documents.filter((d) => !d.assigneeKey).length;
+    const ready = documents.filter((d) => d.status === "ready").length;
+    const processing = documents.filter((d) => d.status === "processing" || d.status === "queued").length;
+    const failed = documents.filter((d) => d.status === "failed").length;
+    return { total: documents.length, mine, unassigned, ready, processing, failed };
+  }, [currentUserKey, documents]);
 
-    if (activeViewKey.startsWith("saved:")) {
-      const id = activeViewKey.replace("saved:", "");
-      const view = savedViews.find((v) => v.id === id);
-      if (!view) return true;
-      return !isSameViewState(view.state, currentState);
-    }
-    // From builtin views: allow saving anytime if anything is “non-default”.
-    const nonDefault =
-      search.trim().length > 0 ||
-      (sort ?? "-created_at") !== "-created_at" ||
-      viewMode !== "grid" ||
-      groupBy !== "status" ||
-      filters.statuses.length > 0 ||
-      filters.fileTypes.length > 0 ||
-      filters.tags.length > 0;
-    return nonDefault;
-  }, [activeViewKey, filters, groupBy, savedViews, search, sort, viewMode]);
+  const activeComments = useMemo(() => {
+    if (!activeDocument) return [];
+    return commentsByDocId[activeDocument.id] ?? [];
+  }, [activeDocument, commentsByDocId]);
 
-  // Actions
+  const activeDocumentIdForRuns = activeDocument?.record?.id ?? null;
+
+  const runsQuery = useQuery({
+    queryKey: activeDocumentIdForRuns
+      ? documentsV9Keys.runsForDocument(workspaceId, activeDocumentIdForRuns)
+      : [...documentsV9Keys.workspace(workspaceId), "runs", "none"],
+    queryFn: ({ signal }) =>
+      activeDocumentIdForRuns
+        ? fetchWorkspaceRunsForDocument(workspaceId, activeDocumentIdForRuns, signal)
+        : Promise.resolve([]),
+    enabled: Boolean(activeDocumentIdForRuns) && previewOpen,
+    staleTime: 5_000,
+    refetchInterval: previewOpen ? 7_500 : false,
+  });
+
+  const runs = useMemo(() => {
+    const items = runsQuery.data ?? [];
+    return items.slice().sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
+  }, [runsQuery.data]);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    setSelectedRunId((prev) => {
+      const existing = prev && runs.some((r) => r.id === prev) ? prev : null;
+      if (existing) return existing;
+
+      const preferred = activeDocument?.record?.last_run?.run_id ?? null;
+      if (preferred && runs.some((r) => r.id === preferred)) return preferred;
+
+      return runs[0]?.id ?? null;
+    });
+  }, [activeDocument?.id, previewOpen, runs]);
+
+  const activeRun = useMemo(() => {
+    if (!selectedRunId) return null;
+    return runs.find((r) => r.id === selectedRunId) ?? null;
+  }, [runs, selectedRunId]);
+
+  const outputUrl = useMemo(() => {
+    if (!activeRun) return null;
+    if (!runHasDownloadableOutput(activeRun)) return null;
+    return runOutputDownloadUrl(activeRun);
+  }, [activeRun]);
+
+  const workbookQuery = useQuery<WorkbookPreview>({
+    queryKey: outputUrl ? documentsV9Keys.workbook(outputUrl) : [...documentsV9Keys.root(), "workbook", "none"],
+    queryFn: ({ signal }) => (outputUrl ? fetchWorkbookPreview(outputUrl, signal) : Promise.reject(new Error("No output URL"))),
+    enabled: Boolean(outputUrl) && previewOpen,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    setActiveSheetId(null);
+  }, [activeDocument?.id, selectedRunId]);
+
+  useEffect(() => {
+    if (workbookQuery.data?.sheets.length) setActiveSheetId(workbookQuery.data.sheets[0].name);
+  }, [workbookQuery.data?.sheets]);
+
   const setSearchValue = useCallback((value: string) => setSearch(value), []);
   const setViewModeValue = useCallback((value: ViewMode) => setViewMode(value), []);
   const setGroupByValue = useCallback((value: BoardGroup) => setGroupBy(value), []);
-  const setHideEmptyColumnsValue = useCallback((value: boolean) => setHideEmptyColumns(value), []);
-  const setSortValue = useCallback((value: string | null) => setSort(value), []);
-
-  const toggleStatusFilter = useCallback((status: DocumentStatus) => {
-    setFilters((prev) => {
-      const exists = prev.statuses.includes(status);
-      return { ...prev, statuses: exists ? prev.statuses.filter((s) => s !== status) : [...prev.statuses, status] };
-    });
-  }, []);
-
-  const toggleFileTypeFilter = useCallback((type: DocumentsFilters["fileTypes"][number]) => {
-    setFilters((prev) => {
-      const exists = prev.fileTypes.includes(type);
-      return { ...prev, fileTypes: exists ? prev.fileTypes.filter((t) => t !== type) : [...prev.fileTypes, type] };
-    });
-  }, []);
-
-  const setTagMode = useCallback((mode: DocumentsFilters["tagMode"]) => {
-    setFilters((prev) => ({ ...prev, tagMode: mode }));
-  }, []);
-
-  const toggleTagFilter = useCallback((tag: string) => {
-    setFilters((prev) => {
-      const exists = prev.tags.includes(tag);
-      return { ...prev, tags: exists ? prev.tags.filter((t) => t !== tag) : [...prev.tags, tag] };
-    });
-  }, []);
-
-  const clearFilters = useCallback(() => setFilters(defaultFilters()), []);
-
-  const selectBuiltInView = useCallback((id: "all" | "ready" | "processing" | "failed") => {
-    setActiveViewKey(`builtin:${id}`);
-    // Convention: builtin views are shortcuts; we set status filters accordingly and keep other filters visible.
-    setFilters((prev) => {
-      if (id === "all") return { ...prev, statuses: [] };
-      if (id === "ready") return { ...prev, statuses: ["ready"] };
-      if (id === "failed") return { ...prev, statuses: ["failed"] };
-      // processing = queued + processing
-      return { ...prev, statuses: ["queued", "processing"] };
-    });
-  }, []);
-
-  const selectSavedView = useCallback(
-    (id: string) => {
-      const view = savedViews.find((v) => v.id === id);
-      if (!view) return;
-      setActiveViewKey(`saved:${id}`);
-      setSearch(view.state.search);
-      setSort(view.state.sort);
-      setViewMode(view.state.viewMode);
-      setGroupBy(view.state.groupBy);
-      setFilters(view.state.filters);
-    },
-    [savedViews],
-  );
-
-  const saveCurrentView = useCallback(
-    (name: string) => {
-      const state: DocumentsSavedView["state"] = { search, sort, viewMode, groupBy, filters };
-      const nowTs = Date.now();
-
-      setSavedViews((prev) => {
-        // If currently on a saved view, update it; otherwise create new.
-        if (activeViewKey.startsWith("saved:")) {
-          const id = activeViewKey.replace("saved:", "");
-          const next = prev.map((v) => (v.id === id ? { ...v, name, state, updatedAt: nowTs } : v));
-          return next;
-        }
-        const nextView: DocumentsSavedView = {
-          id: stableId(),
-          name,
-          createdAt: nowTs,
-          updatedAt: nowTs,
-          state,
-        };
-        setActiveViewKey(`saved:${nextView.id}`);
-        return [nextView, ...prev];
-      });
-
-      notifyToast({ title: "View saved", description: name, intent: "success" });
-    },
-    [activeViewKey, filters, groupBy, notifyToast, search, sort, viewMode],
-  );
-
-  const deleteSavedView = useCallback(
-    (id: string) => {
-      setSavedViews((prev) => prev.filter((v) => v.id !== id));
-      if (activeViewKey === `saved:${id}`) setActiveViewKey("builtin:all");
-    },
-    [activeViewKey],
-  );
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((previous) => {
@@ -714,10 +704,7 @@ export function useDocumentsV9Model({
     });
   }, []);
 
-  const selectAllVisible = useCallback(() => {
-    setSelectedIds(new Set(selectableIds));
-  }, [selectableIds]);
-
+  const selectAllVisible = useCallback(() => setSelectedIds(new Set(selectableIds)), [selectableIds]);
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const openPreview = useCallback((id: string) => {
@@ -727,7 +714,6 @@ export function useDocumentsV9Model({
 
   const closePreview = useCallback(() => setPreviewOpen(false), []);
 
-  const setActiveRunIdValue = useCallback((id: string) => setActiveRunId(id), []);
   const setActiveSheetIdValue = useCallback((id: string) => setActiveSheetId(id), []);
 
   const handleFiles = useCallback(
@@ -755,168 +741,6 @@ export function useDocumentsV9Model({
     },
     [handleFiles],
   );
-
-  const downloadOriginal = useCallback(
-    (doc: DocumentEntry) => {
-      if (!doc.record) return;
-      void downloadWorkspaceDocumentOriginal(workspaceId, doc.record.id, doc.name)
-        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
-        .catch((error) =>
-          notifyToast({
-            title: "Download failed",
-            description: error instanceof Error ? error.message : "Unable to download file.",
-            intent: "danger",
-          }),
-        );
-    },
-    [notifyToast, workspaceId],
-  );
-
-  const downloadOutputFromRow = useCallback(
-    (doc: DocumentEntry) => {
-      const runId = getDocumentOutputRun(doc.record)?.run_id ?? null;
-      if (!doc.record || !runId) {
-        notifyToast({ title: "Output not ready", description: "Open the document to see run history.", intent: "warning" });
-        return;
-      }
-      void downloadRunOutput(runId, doc.name)
-        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
-        .catch((error) =>
-          notifyToast({
-            title: "Download failed",
-            description: error instanceof Error ? error.message : "Unable to download output.",
-            intent: "danger",
-          }),
-        );
-    },
-    [notifyToast],
-  );
-
-  const downloadOutputFromPreview = useCallback(
-    (doc: DocumentEntry, run: RunResource | null) => {
-      if (!doc.record) return;
-      const runId = run?.status === "succeeded" ? run.id : getDocumentOutputRun(doc.record)?.run_id ?? null;
-      if (!runId) {
-        notifyToast({ title: "Output not ready", description: "Select a successful run to download output.", intent: "warning" });
-        return;
-      }
-      void downloadRunOutput(runId, doc.name)
-        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
-        .catch((error) =>
-          notifyToast({
-            title: "Download failed",
-            description: error instanceof Error ? error.message : "Unable to download output.",
-            intent: "danger",
-          }),
-        );
-    },
-    [notifyToast],
-  );
-
-  const reprocessDocument = useCallback(
-    (doc: DocumentEntry) => {
-      if (!doc.record) return;
-
-      void createRunForDocument(workspaceId, doc.record.id)
-        .then((run) => {
-          notifyToast({
-            title: "Reprocess started",
-            description: `Run ${run.id.slice(0, 8)}… queued`,
-            intent: "success",
-          });
-          queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
-          queryClient.invalidateQueries({ queryKey: documentsV9Keys.runsForDocument(workspaceId, doc.record!.id) });
-        })
-        .catch((error) => {
-          if (isActiveConfigurationMissing(error)) {
-            notifyToast({
-              title: "No active configuration",
-              description: "Activate a configuration for this workspace before reprocessing.",
-              intent: "warning",
-            });
-            return;
-          }
-          notifyToast({
-            title: "Reprocess failed",
-            description: resolveApiErrorMessage(error, "Unable to start a new run."),
-            intent: "danger",
-          });
-        });
-    },
-    [notifyToast, queryClient, workspaceId],
-  );
-
-  const toggleTagOnDocument = useCallback(
-    (doc: DocumentEntry, tag: string) => {
-      if (!doc.record) return;
-      const hasTag = doc.tags.includes(tag);
-      const patch = hasTag ? { remove: [tag] } : { add: [tag] };
-
-      void patchWorkspaceDocumentTags(workspaceId, doc.record.id, patch)
-        .then((updated) => {
-          // Patch query cache in-place for immediate UI updates (no full refetch).
-          queryClient.setQueryData(listKey, (existing: any) => {
-            if (!existing?.pages) return existing;
-            return {
-              ...existing,
-              pages: existing.pages.map((p: any) => ({
-                ...p,
-                items: (p.items ?? []).map((item: any) => (item.id === updated.id ? updated : item)),
-              })),
-            };
-          });
-        })
-        .catch((error) => {
-          notifyToast({
-            title: "Tag update failed",
-            description: error instanceof Error ? error.message : "Unable to update tags.",
-            intent: "danger",
-          });
-        });
-    },
-    [listKey, notifyToast, queryClient, workspaceId],
-  );
-
-  const bulkAddTagPrompt = useCallback(() => {
-    const tag = window.prompt("Add tag to selected documents:");
-    const value = (tag ?? "").trim();
-    if (!value) return;
-
-    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
-    if (docs.length === 0) return;
-
-    void patchWorkspaceDocumentTagsBatch(
-      workspaceId,
-      docs.map((doc) => doc.record!.id),
-      { add: [value] },
-    )
-      .then(() => {
-        notifyToast({ title: "Tags applied", description: `${value} added`, intent: "success" });
-        queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
-      })
-      .catch((error) => {
-        notifyToast({
-          title: "Bulk tag failed",
-          description: error instanceof Error ? error.message : "Unable to apply tags.",
-          intent: "danger",
-        });
-      });
-  }, [notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId]);
-
-  const bulkDownloadOriginals = useCallback(() => {
-    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
-    if (docs.length === 0) return;
-    docs.forEach((d) => {
-      void downloadWorkspaceDocumentOriginal(workspaceId, d.record!.id, d.name).catch(() => undefined);
-    });
-    notifyToast({ title: "Downloads started", description: `${docs.length} originals`, intent: "success" });
-  }, [notifyToast, selectedIds, visibleDocuments, workspaceId]);
-
-  const bulkReprocess = useCallback(() => {
-    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
-    if (docs.length === 0) return;
-    docs.forEach((d) => reprocessDocument(d));
-  }, [reprocessDocument, selectedIds, visibleDocuments]);
 
   const refreshDocuments = useCallback(() => void documentsQuery.refetch(), [documentsQuery]);
   const loadMore = useCallback(() => {
@@ -949,21 +773,389 @@ export function useDocumentsV9Model({
     [activeId, visibleDocuments],
   );
 
+  const setFiltersValue = useCallback(
+    (next: DocumentsFilters) => {
+      setFilters(next);
+      const hasSearch = search.trim().length >= 2;
+      const isDefault =
+        next.statuses.length === 0 &&
+        next.fileTypes.length === 0 &&
+        next.tags.length === 0 &&
+        next.assignees.length === 0;
+      setActiveViewId(!hasSearch && isDefault ? "all" : "custom");
+    },
+    [search],
+  );
+
+  const setBuiltInView = useCallback(
+    (id: string) => {
+      setActiveViewId(id);
+      setFilters((prev) => {
+        const cleared: DocumentsFilters = {
+          ...prev,
+          statuses: [],
+          fileTypes: [],
+          tags: [],
+          tagMode: "any",
+          assignees: [],
+        };
+
+        switch (id) {
+          case "mine":
+            return { ...cleared, assignees: [currentUserKey] };
+          case "unassigned":
+            return { ...cleared, assignees: [UNASSIGNED_KEY] };
+          case "ready":
+            return { ...cleared, statuses: ["ready"] };
+          case "processing":
+            return { ...cleared, statuses: ["queued", "processing"] };
+          case "failed":
+            return { ...cleared, statuses: ["failed"] };
+          case "all":
+          default:
+            return cleared;
+        }
+      });
+    },
+    [currentUserKey],
+  );
+
+  const selectSavedView = useCallback(
+    (viewId: string) => {
+      const view = savedViews.find((v) => v.id === viewId);
+      if (!view) return;
+      setFilters(view.filters);
+      setActiveViewId(viewId);
+    },
+    [savedViews],
+  );
+
+  const openSaveView = useCallback(() => setSaveViewOpen(true), []);
+  const closeSaveView = useCallback(() => setSaveViewOpen(false), []);
+
+  const saveView = useCallback(
+    (name: string) => {
+      const timestamp = Date.now();
+      const view: SavedView = {
+        id: `view_${timestamp}`,
+        name,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        filters,
+      };
+      const next = [view, ...savedViews];
+      setSavedViews(next);
+      storeSavedViews(workspaceId, next);
+      setActiveViewId(view.id);
+      notifyToast({ title: "View saved", description: name, intent: "success" });
+    },
+    [filters, notifyToast, savedViews, workspaceId],
+  );
+
+  const deleteView = useCallback(
+    (viewId: string) => {
+      const next = savedViews.filter((v) => v.id !== viewId);
+      setSavedViews(next);
+      storeSavedViews(workspaceId, next);
+      if (activeViewId === viewId) {
+        setActiveViewId("all");
+      }
+      notifyToast({ title: "View deleted", description: viewId, intent: "success" });
+    },
+    [activeViewId, notifyToast, savedViews, workspaceId],
+  );
+
+  const updateTagsOptimistic = useCallback(
+    (documentId: string, nextTags: string[]) => {
+      const entry = documentsByEntryId.get(documentId);
+      if (!entry?.record) return;
+
+      const prevTags = entry.tags;
+      const add = nextTags.filter((tag) => !prevTags.includes(tag));
+      const remove = prevTags.filter((tag) => !nextTags.includes(tag));
+      if (add.length === 0 && remove.length === 0) return;
+
+      void patchWorkspaceDocumentTags(workspaceId, entry.record.id, { add, remove })
+        .then((updated) => {
+          queryClient.setQueryData(listKey, (existing: any) => {
+            if (!existing?.pages) return existing;
+            return {
+              ...existing,
+              pages: existing.pages.map((p: any) => ({
+                ...p,
+                items: (p.items ?? []).map((item: any) => (item.id === updated.id ? updated : item)),
+              })),
+            };
+          });
+          queryClient.invalidateQueries({ queryKey: documentsV9Keys.document(workspaceId, updated.id) });
+        })
+        .catch((error) => {
+          notifyToast({
+            title: "Tag update failed",
+            description: error instanceof Error ? error.message : "Unable to update tags.",
+            intent: "danger",
+          });
+        });
+    },
+    [documentsByEntryId, listKey, notifyToast, queryClient, workspaceId],
+  );
+
+  const assignDocument = useCallback(
+    (documentId: string, assigneeKey: string | null) => {
+      setAssignments((prev) => {
+        const next = { ...prev, [documentId]: assigneeKey };
+        storeAssignments(workspaceId, next);
+        return next;
+      });
+      notifyToast({
+        title: "Assignment updated",
+        description: assigneeKey ? (peopleByKey.get(assigneeKey)?.label ?? assigneeKey) : "Unassigned",
+        intent: "success",
+      });
+    },
+    [notifyToast, peopleByKey, workspaceId],
+  );
+
+  const pickUpDocument = useCallback(
+    (documentId: string) => assignDocument(documentId, currentUserKey),
+    [assignDocument, currentUserKey],
+  );
+
+  const addComment = useCallback(
+    (documentId: string, body: string, mentions: { key: string; label: string }[]) => {
+      const timestamp = Date.now();
+      const comment: DocumentComment = {
+        id: `c_${timestamp}_${Math.random().toString(16).slice(2)}`,
+        documentId,
+        authorKey: currentUserKey,
+        authorLabel: currentUserLabel,
+        body,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        mentions,
+      };
+
+      setCommentsByDocId((prev) => {
+        const nextList = [...(prev[documentId] ?? []), comment];
+        const next = { ...prev, [documentId]: nextList };
+        storeComments(workspaceId, next);
+        return next;
+      });
+
+      notifyToast({ title: "Note added", description: "Saved locally for now.", intent: "success" });
+    },
+    [currentUserKey, currentUserLabel, notifyToast, workspaceId],
+  );
+
+  const editComment = useCallback(
+    (documentId: string, commentId: string, body: string, mentions: { key: string; label: string }[]) => {
+      setCommentsByDocId((prev) => {
+        const list = prev[documentId] ?? [];
+        const nextList = list.map((c) =>
+          c.id === commentId ? { ...c, body, mentions, updatedAt: Date.now() } : c,
+        );
+        const next = { ...prev, [documentId]: nextList };
+        storeComments(workspaceId, next);
+        return next;
+      });
+      notifyToast({ title: "Note updated", description: "Saved locally for now.", intent: "success" });
+    },
+    [notifyToast, workspaceId],
+  );
+
+  const deleteComment = useCallback(
+    (documentId: string, commentId: string) => {
+      setCommentsByDocId((prev) => {
+        const list = prev[documentId] ?? [];
+        const nextList = list.filter((c) => c.id !== commentId);
+        const next = { ...prev, [documentId]: nextList };
+        storeComments(workspaceId, next);
+        return next;
+      });
+      notifyToast({ title: "Note deleted", description: "Removed locally for now.", intent: "success" });
+    },
+    [notifyToast, workspaceId],
+  );
+
+  const selectRun = useCallback((runId: string) => setSelectedRunId(runId), []);
+
+  const downloadOutput = useCallback(
+    (doc: DocumentEntry | null) => {
+      if (!doc?.record) return;
+      if (!outputUrl) {
+        notifyToast({
+          title: "No output link",
+          description: "We could not find the output download link yet.",
+          intent: "warning",
+        });
+        return;
+      }
+
+      void downloadRunOutput(outputUrl, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
+          notifyToast({
+            title: "Download failed",
+            description: error instanceof Error ? error.message : "Unable to download the processed XLSX.",
+            intent: "danger",
+          }),
+        );
+    },
+    [notifyToast, outputUrl],
+  );
+
+  const downloadOutputFromRow = useCallback(
+    (doc: DocumentEntry) => {
+      const runId = getDocumentOutputRun(doc.record)?.run_id ?? null;
+      if (!doc.record || !runId) {
+        notifyToast({
+          title: "Output not ready",
+          description: "Open the document to see run history and download output.",
+          intent: "warning",
+        });
+        return;
+      }
+      void downloadRunOutputById(runId, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
+          notifyToast({
+            title: "Download failed",
+            description: error instanceof Error ? error.message : "Unable to download the processed XLSX.",
+            intent: "danger",
+          }),
+        );
+    },
+    [notifyToast],
+  );
+
+  const downloadOriginal = useCallback(
+    (doc: DocumentEntry | null) => {
+      if (!doc?.record) return;
+      void downloadOriginalDocument(workspaceId, doc.record.id, doc.name)
+        .then((filename) => notifyToast({ title: "Download started", description: filename, intent: "success" }))
+        .catch((error) =>
+          notifyToast({
+            title: "Download failed",
+            description: error instanceof Error ? error.message : "Unable to download the original file.",
+            intent: "danger",
+          }),
+        );
+    },
+    [notifyToast, workspaceId],
+  );
+
+  const reprocess = useCallback(
+    (doc: DocumentEntry | null) => {
+      if (!doc?.record) return;
+      if (!activeRun?.configuration_id) {
+        notifyToast({
+          title: "Cannot reprocess yet",
+          description: "No configuration is available for this document's runs yet.",
+          intent: "warning",
+        });
+        return;
+      }
+
+      void createRunForDocument(activeRun.configuration_id, doc.record.id)
+        .then((created) => {
+          notifyToast({ title: "Reprocess queued", description: `Run ${shortId(created.id)}`, intent: "success" });
+          queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Reprocess failed",
+            description: error instanceof Error ? error.message : "Unable to reprocess.",
+            intent: "danger",
+          }),
+        );
+    },
+    [activeRun?.configuration_id, notifyToast, queryClient, workspaceId],
+  );
+
+  const copyLink = useCallback(
+    (doc: DocumentEntry | null) => {
+      if (!doc?.record) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set("doc", doc.record.id);
+
+      void copyToClipboard(url.toString())
+        .then(() => notifyToast({ title: "Link copied", description: "Share it with your team.", intent: "success" }))
+        .catch(() =>
+          notifyToast({ title: "Copy failed", description: "Unable to copy link to clipboard.", intent: "danger" }),
+        );
+    },
+    [notifyToast],
+  );
+
+  const bulkAddTagPrompt = useCallback(() => {
+    const tag = window.prompt("Add tag to selected documents:");
+    const value = (tag ?? "").trim();
+    if (!value) return;
+
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+
+    void patchWorkspaceDocumentTagsBatch(
+      workspaceId,
+      docs.map((doc) => doc.record!.id),
+      { add: [value] },
+    )
+      .then(() => {
+        notifyToast({ title: "Tags applied", description: `${value} added`, intent: "success" });
+        queryClient.invalidateQueries({ queryKey: documentsV9Keys.workspace(workspaceId) });
+      })
+      .catch((error) => {
+        notifyToast({
+          title: "Bulk tag failed",
+          description: error instanceof Error ? error.message : "Unable to apply tags.",
+          intent: "danger",
+        });
+      });
+  }, [notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId]);
+
+  const bulkDownloadOriginals = useCallback(() => {
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+    docs.forEach((d) => {
+      void downloadOriginalDocument(workspaceId, d.record!.id, d.name).catch(() => undefined);
+    });
+    notifyToast({ title: "Downloads started", description: `${docs.length} originals`, intent: "success" });
+  }, [notifyToast, selectedIds, visibleDocuments, workspaceId]);
+
+  const bulkDownloadOutputs = useCallback(() => {
+    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+    if (docs.length === 0) return;
+    let triggered = 0;
+    docs.forEach((d) => {
+      const runId = getDocumentOutputRun(d.record)?.run_id ?? null;
+      if (!runId) return;
+      triggered += 1;
+      void downloadRunOutputById(runId, d.name).catch(() => undefined);
+    });
+    if (triggered > 0) {
+      notifyToast({ title: "Downloads started", description: `${triggered} outputs`, intent: "success" });
+    } else {
+      notifyToast({
+        title: "No outputs ready",
+        description: "Select documents with successful runs to download outputs.",
+        intent: "warning",
+      });
+    }
+  }, [notifyToast, selectedIds, visibleDocuments]);
+
   return {
     state: {
       viewMode,
       groupBy,
-      hideEmptyColumns,
-      sort,
       search,
-      filters,
-      activeViewKey,
-      savedViews,
       selectedIds,
       activeId,
       previewOpen,
-      activeRunId,
       activeSheetId,
+      filters,
+      activeViewId,
+      saveViewOpen,
+      selectedRunId,
     },
     derived: {
       now,
@@ -971,14 +1163,17 @@ export function useDocumentsV9Model({
       visibleDocuments,
       activeDocument,
       boardColumns,
-      statusCounts,
       isLoading: documentsQuery.isLoading,
       isError: documentsQuery.isError,
       hasNextPage: Boolean(documentsQuery.hasNextPage),
       isFetchingNextPage: documentsQuery.isFetchingNextPage,
+      people,
+      currentUserKey,
       runs,
-      runsLoading: runsQuery.isFetching,
+      runsLoading: runsQuery.isLoading,
+      selectedRunId,
       activeRun,
+      runLoading: runsQuery.isFetching,
       outputUrl,
       workbook: workbookQuery.data ?? null,
       workbookLoading: workbookQuery.isLoading,
@@ -986,55 +1181,51 @@ export function useDocumentsV9Model({
       showNoDocuments,
       showNoResults,
       allVisibleSelected,
-      activeViewLabel,
-      showSaveView,
+      savedViews,
+      activeComments,
+      counts,
     },
-    refs: { searchRef, fileInputRef },
+    refs: {
+      searchRef,
+      fileInputRef,
+    },
     actions: {
       setSearch: setSearchValue,
       setViewMode: setViewModeValue,
       setGroupBy: setGroupByValue,
-      setHideEmptyColumns: setHideEmptyColumnsValue,
-      setSort: setSortValue,
-
-      toggleStatusFilter,
-      toggleFileTypeFilter,
-      setTagMode,
-      toggleTagFilter,
-      clearFilters,
-
-      selectBuiltInView,
-      selectSavedView,
-      saveCurrentView,
-      deleteSavedView,
-
       toggleSelect,
       selectAllVisible,
       clearSelection,
-
       openPreview,
       closePreview,
-
-      setActiveRunId: setActiveRunIdValue,
       setActiveSheetId: setActiveSheetIdValue,
-
       handleUploadClick,
       handleFileInputChange,
-
-      downloadOriginal,
-      downloadOutputFromRow,
-      downloadOutputFromPreview,
-
-      reprocessDocument,
-      toggleTagOnDocument,
-
-      bulkAddTagPrompt,
-      bulkDownloadOriginals,
-      bulkReprocess,
-
       refreshDocuments,
       loadMore,
       handleKeyNavigate,
+      setFilters: setFiltersValue,
+      setBuiltInView,
+      selectSavedView,
+      openSaveView,
+      closeSaveView,
+      saveView,
+      deleteView,
+      updateTagsOptimistic,
+      assignDocument,
+      pickUpDocument,
+      addComment,
+      editComment,
+      deleteComment,
+      selectRun,
+      downloadOutput,
+      downloadOutputFromRow,
+      downloadOriginal,
+      reprocess,
+      copyLink,
+      bulkAddTagPrompt,
+      bulkDownloadOriginals,
+      bulkDownloadOutputs,
     },
   };
 }

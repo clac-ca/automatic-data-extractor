@@ -9,6 +9,9 @@ export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
 export type ListDocumentsQuery =
   paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"];
 
+export type WorkspaceMemberOut = components["schemas"]["WorkspaceMemberOut"];
+export type WorkspaceMemberPage = components["schemas"]["WorkspaceMemberPage"];
+
 export type RunResource = components["schemas"]["RunResource"];
 export type RunPage = components["schemas"]["RunPage"];
 export type RunStatus = components["schemas"]["RunStatus"];
@@ -28,20 +31,20 @@ export type DocumentsFilters = {
   fileTypes: FileType[];
   tags: string[];
   tagMode: TagMode;
+
+  /**
+   * Keys from WorkspacePerson plus special "__unassigned__".
+   * If empty => no filtering.
+   */
+  assignees: string[];
 };
 
-export type DocumentsSavedView = {
+export type SavedView = {
   id: string;
   name: string;
   createdAt: number;
   updatedAt: number;
-  state: {
-    search: string;
-    sort: string | null;
-    viewMode: ViewMode;
-    groupBy: BoardGroup;
-    filters: DocumentsFilters;
-  };
+  filters: DocumentsFilters;
 };
 
 export type MappingHealth = {
@@ -56,20 +59,48 @@ export type DocumentError = {
   nextStep: string;
 };
 
+export type WorkspacePerson = {
+  /** Stable key for selection and storage. Example: `user:<uuid>` or `label:<email>` */
+  key: string;
+  label: string;
+  kind: "user" | "label";
+  userId?: string;
+};
+
+export type DocumentComment = {
+  id: string;
+  documentId: string;
+  authorKey: string;
+  authorLabel: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Mention labels inserted like `@{Jane Doe}`; keep structured for future notifications */
+  mentions: { key: string; label: string }[];
+};
+
 export type DocumentEntry = {
   id: string;
   name: string;
   status: DocumentStatus;
+  fileType: FileType;
   uploader: string | null;
+
+  /** Collaborative fields (local-first until backend supports them). */
+  assigneeKey: string | null;
+  assigneeLabel: string | null;
+  commentCount: number;
+
   tags: string[];
   createdAt: number;
   updatedAt: number;
   size: string;
-  fileType: FileType;
+
   stage?: string;
   progress?: number;
   error?: DocumentError;
   mapping: MappingHealth;
+
   record?: DocumentRecord;
   upload?: UploadQueueItem<DocumentUploadResponse>;
 };

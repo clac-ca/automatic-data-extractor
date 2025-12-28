@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import clsx from "clsx";
 
 import { useLocation, useNavigate } from "@app/nav/history";
@@ -33,6 +33,7 @@ function DocumentsV9Redirect() {
   const workspacesQuery = useWorkspacesQuery();
 
   const workspaces: WorkspaceProfile[] = workspacesQuery.data?.items ?? [];
+
   const preferredIds = [readPreferredWorkspaceId(), session.user.preferred_workspace_id].filter(
     (value): value is string => Boolean(value),
   );
@@ -75,13 +76,46 @@ function DocumentsV9Redirect() {
 export function DocumentsV9Workbench() {
   const session = useSession();
   const { workspace } = useWorkspaceContext();
-  const currentUserLabel = session.user.display_name || session.user.email || "You";
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const model = useDocumentsV9Model({ currentUserLabel, workspaceId: workspace.id });
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const currentUserLabel = session.user.display_name || session.user.email || "You";
+  const currentUserId = session.user.id;
+
+  const model = useDocumentsV9Model({ currentUserLabel, currentUserId, workspaceId: workspace.id });
   const handleClearFilters = () => {
     model.actions.setSearch("");
-    model.actions.clearFilters();
+    model.actions.setBuiltInView("all");
+  };
+
+  const urlDocId = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("doc");
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!urlDocId) return;
+    model.actions.openPreview(urlDocId);
+  }, [urlDocId]);
+
+  const setDocParam = (docId: string | null, replace = false) => {
+    const params = new URLSearchParams(location.search);
+    if (docId) params.set("doc", docId);
+    else params.delete("doc");
+    const nextSearch = params.toString();
+    const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
+    navigate(target, { replace });
+  };
+
+  const onActivate = (id: string) => {
+    const hadDoc = Boolean(urlDocId);
+    setDocParam(id, hadDoc);
+    model.actions.openPreview(id);
+  };
+
+  const onClosePreview = () => {
+    setDocParam(null, false);
+    model.actions.closePreview();
   };
 
   return (
@@ -92,42 +126,31 @@ export function DocumentsV9Workbench() {
         searchRef={model.refs.searchRef}
         viewMode={model.state.viewMode}
         onViewModeChange={model.actions.setViewMode}
-        sort={model.state.sort}
-        onSortChange={model.actions.setSort}
         onUploadClick={model.actions.handleUploadClick}
         fileInputRef={model.refs.fileInputRef}
         onFileInputChange={model.actions.handleFileInputChange}
-        activeViewLabel={model.derived.activeViewLabel}
-        showSaveView={model.derived.showSaveView}
-        onSaveViewClick={() => setSaveDialogOpen(true)}
       />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <DocumentsSidebar
-          activeViewKey={model.state.activeViewKey}
-          onSelectBuiltIn={model.actions.selectBuiltInView}
-          savedViews={model.state.savedViews}
-          onSelectSavedView={model.actions.selectSavedView}
-          onDeleteSavedView={model.actions.deleteSavedView}
-          statusCounts={model.derived.statusCounts}
-          now={model.derived.now}
+          activeViewId={model.state.activeViewId}
+          onSetBuiltInView={(id) => model.actions.setBuiltInView(id)}
+          savedViews={model.derived.savedViews}
+          onSelectSavedView={(id) => model.actions.selectSavedView(id)}
+          onDeleteSavedView={(id) => model.actions.deleteView(id)}
+          onOpenSaveDialog={model.actions.openSaveView}
+          counts={model.derived.counts}
         />
 
-        <div className={clsx("flex min-h-0 min-w-0 flex-1 flex-col", model.state.previewOpen && "lg:flex-row")}>
-          <section
-            className={clsx(
-              "flex min-h-0 min-w-0 flex-1 flex-col",
-              model.state.previewOpen && "lg:border-r lg:border-slate-200",
-            )}
+        <div className={clsx("flex min-h-0 flex-1 flex-col", model.state.previewOpen && "lg:flex-row")}
+        >
+          <section className={clsx("flex min-h-0 flex-1 flex-col", model.state.previewOpen && "lg:border-r lg:border-slate-200")}
           >
             <DocumentsFiltersBar
               workspaceId={workspace.id}
               filters={model.state.filters}
-              onToggleStatus={model.actions.toggleStatusFilter}
-              onToggleFileType={model.actions.toggleFileTypeFilter}
-              onSetTagMode={model.actions.setTagMode}
-              onToggleTag={model.actions.toggleTagFilter}
-              onClearAll={model.actions.clearFilters}
+              onChange={model.actions.setFilters}
+              people={model.derived.people}
               showingCount={model.derived.visibleDocuments.length}
               totalCount={model.derived.documents.length}
             />
@@ -135,7 +158,6 @@ export function DocumentsV9Workbench() {
             {model.state.viewMode === "grid" ? (
               <>
                 <DocumentsGrid
-                  workspaceId={workspace.id}
                   documents={model.derived.visibleDocuments}
                   activeId={model.state.activeId}
                   selectedIds={model.state.selectedIds}
@@ -143,7 +165,7 @@ export function DocumentsV9Workbench() {
                   onSelectAll={model.actions.selectAllVisible}
                   onClearSelection={model.actions.clearSelection}
                   allVisibleSelected={model.derived.allVisibleSelected}
-                  onActivate={model.actions.openPreview}
+                  onActivate={onActivate}
                   onUploadClick={model.actions.handleUploadClick}
                   onClearFilters={handleClearFilters}
                   showNoDocuments={model.derived.showNoDocuments}
@@ -156,10 +178,12 @@ export function DocumentsV9Workbench() {
                   onRefresh={model.actions.refreshDocuments}
                   now={model.derived.now}
                   onKeyNavigate={model.actions.handleKeyNavigate}
+                  people={model.derived.people}
+                  onAssign={model.actions.assignDocument}
+                  onPickUp={model.actions.pickUpDocument}
                   onDownloadOriginal={model.actions.downloadOriginal}
-                  onDownloadOutputFromRow={model.actions.downloadOutputFromRow}
-                  onReprocess={model.actions.reprocessDocument}
-                  onToggleTagOnDocument={model.actions.toggleTagOnDocument}
+                  onDownloadOutput={model.actions.downloadOutputFromRow}
+                  onCopyLink={model.actions.copyLink}
                 />
 
                 <BulkActionBar
@@ -167,66 +191,72 @@ export function DocumentsV9Workbench() {
                   onClear={model.actions.clearSelection}
                   onAddTag={model.actions.bulkAddTagPrompt}
                   onDownloadOriginals={model.actions.bulkDownloadOriginals}
-                  onReprocess={model.actions.bulkReprocess}
+                  onDownloadOutputs={model.actions.bulkDownloadOutputs}
                 />
               </>
             ) : (
-                <DocumentsBoard
-                  columns={model.derived.boardColumns}
-                  groupBy={model.state.groupBy}
-                  onGroupByChange={model.actions.setGroupBy}
-                  hideEmptyColumns={model.state.hideEmptyColumns}
-                  onHideEmptyColumnsChange={model.actions.setHideEmptyColumns}
-                  activeId={model.state.activeId}
-                  onActivate={model.actions.openPreview}
-                  now={model.derived.now}
-                  isLoading={model.derived.isLoading}
-                  isError={model.derived.isError}
-                  hasNextPage={model.derived.hasNextPage}
-                  isFetchingNextPage={model.derived.isFetchingNextPage}
-                  onLoadMore={model.actions.loadMore}
-                  onRefresh={model.actions.refreshDocuments}
-                  onUploadClick={model.actions.handleUploadClick}
-                  onClearFilters={handleClearFilters}
-                  showNoDocuments={model.derived.showNoDocuments}
-                  showNoResults={model.derived.showNoResults}
-                />
+              <DocumentsBoard
+                columns={model.derived.boardColumns}
+                groupBy={model.state.groupBy}
+                onGroupByChange={model.actions.setGroupBy}
+                activeId={model.state.activeId}
+                onActivate={onActivate}
+                now={model.derived.now}
+                isLoading={model.derived.isLoading}
+                isError={model.derived.isError}
+                hasNextPage={model.derived.hasNextPage}
+                isFetchingNextPage={model.derived.isFetchingNextPage}
+                onLoadMore={model.actions.loadMore}
+                onRefresh={model.actions.refreshDocuments}
+                onUploadClick={model.actions.handleUploadClick}
+                onClearFilters={handleClearFilters}
+                showNoDocuments={model.derived.showNoDocuments}
+                showNoResults={model.derived.showNoResults}
+                people={model.derived.people}
+                onAssign={model.actions.assignDocument}
+                onPickUp={model.actions.pickUpDocument}
+              />
             )}
           </section>
 
           {model.state.previewOpen ? (
             <DocumentsPreviewPane
+              workspaceId={workspace.id}
               document={model.derived.activeDocument}
               now={model.derived.now}
               activeSheetId={model.state.activeSheetId}
               onSheetChange={model.actions.setActiveSheetId}
-              onClose={model.actions.closePreview}
               runs={model.derived.runs}
               runsLoading={model.derived.runsLoading}
-              activeRunId={model.state.activeRunId}
-              onRunSelect={model.actions.setActiveRunId}
+              selectedRunId={model.derived.selectedRunId}
+              onSelectRun={model.actions.selectRun}
               activeRun={model.derived.activeRun}
+              runLoading={model.derived.runLoading}
               outputUrl={model.derived.outputUrl}
+              onDownloadOutput={model.actions.downloadOutput}
+              onDownloadOriginal={model.actions.downloadOriginal}
+              onReprocess={model.actions.reprocess}
+              people={model.derived.people}
+              currentUserKey={model.derived.currentUserKey}
+              currentUserLabel={currentUserLabel}
+              onAssign={model.actions.assignDocument}
+              onPickUp={model.actions.pickUpDocument}
+              onCopyLink={model.actions.copyLink}
+              comments={model.derived.activeComments}
+              onAddComment={model.actions.addComment}
+              onEditComment={model.actions.editComment}
+              onDeleteComment={model.actions.deleteComment}
+              onTagsChange={model.actions.updateTagsOptimistic}
               workbook={model.derived.workbook}
               workbookLoading={model.derived.workbookLoading}
               workbookError={model.derived.workbookError}
-              onDownloadOutput={model.actions.downloadOutputFromPreview}
-              onDownloadOriginal={model.actions.downloadOriginal}
-              onReprocess={model.actions.reprocessDocument}
+              onClose={onClosePreview}
             />
           ) : null}
         </div>
       </div>
 
-      <SaveViewDialog
-        open={saveDialogOpen}
-        initialName="My view"
-        onCancel={() => setSaveDialogOpen(false)}
-        onSave={(name) => {
-          model.actions.saveCurrentView(name);
-          setSaveDialogOpen(false);
-        }}
-      />
+      <SaveViewDialog open={model.state.saveViewOpen} onClose={model.actions.closeSaveView} onSave={model.actions.saveView} />
     </div>
   );
 }

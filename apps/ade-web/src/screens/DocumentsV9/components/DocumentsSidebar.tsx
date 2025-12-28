@@ -1,117 +1,158 @@
 import clsx from "clsx";
-import type { DocumentStatus, DocumentsSavedView } from "../types";
-import { formatRelativeTime } from "../utils";
 
-type BuiltInViewId = "all" | "ready" | "processing" | "failed";
+import type { DocumentsFilters, SavedView } from "../types";
+import { unassignedKey } from "./PeoplePicker";
+
+type BuiltInViewId = "all" | "mine" | "unassigned" | "ready" | "processing" | "failed" | "custom";
 
 export function DocumentsSidebar({
-  activeViewKey,
-  onSelectBuiltIn,
+  activeViewId,
+  onSetBuiltInView,
   savedViews,
   onSelectSavedView,
   onDeleteSavedView,
-  statusCounts,
-  now,
+  onOpenSaveDialog,
+  counts,
 }: {
-  activeViewKey: string;
-  onSelectBuiltIn: (id: BuiltInViewId) => void;
-  savedViews: DocumentsSavedView[];
+  activeViewId: BuiltInViewId | string;
+  onSetBuiltInView: (id: BuiltInViewId) => void;
+
+  savedViews: SavedView[];
   onSelectSavedView: (viewId: string) => void;
   onDeleteSavedView: (viewId: string) => void;
-  statusCounts: Record<DocumentStatus, number>;
-  now: number;
+  onOpenSaveDialog: () => void;
+
+  counts: {
+    total: number;
+    mine: number;
+    unassigned: number;
+    ready: number;
+    processing: number;
+    failed: number;
+  };
 }) {
   const builtins: { id: BuiltInViewId; label: string; count?: number }[] = [
-    { id: "all", label: "All documents", count: Object.values(statusCounts).reduce((a, b) => a + b, 0) },
-    { id: "ready", label: "Ready", count: statusCounts.ready },
-    { id: "processing", label: "Processing", count: statusCounts.processing + statusCounts.queued },
-    { id: "failed", label: "Failed", count: statusCounts.failed },
+    { id: "all", label: "All documents", count: counts.total },
+    { id: "mine", label: "Mine", count: counts.mine },
+    { id: "unassigned", label: "Unassigned", count: counts.unassigned },
+    { id: "ready", label: "Ready", count: counts.ready },
+    { id: "processing", label: "Processing", count: counts.processing },
+    { id: "failed", label: "Failed", count: counts.failed },
   ];
 
   return (
-    <aside className="hidden min-h-0 w-[18rem] flex-col border-r border-slate-200 bg-white lg:flex">
+    <aside className="flex w-full flex-col border-r border-slate-200 bg-white lg:w-72">
       <div className="border-b border-slate-200 px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Library</p>
-        <p className="mt-1 text-sm text-slate-600">Browse, tag, download, and reprocess.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Views</p>
+        <p className="mt-2 text-xs text-slate-500">
+          Use views to focus work. Assignment and notes make this a shared workspace.
+        </p>
+        <button
+          type="button"
+          onClick={onOpenSaveDialog}
+          className="mt-3 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-brand-300"
+        >
+          Save current view
+        </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        <div className="px-2 pb-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Views</p>
+      <div className="flex-1 overflow-auto px-2 py-3">
+        <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Built-in
         </div>
-
         <div className="flex flex-col gap-1">
-          {builtins.map((item) => {
-            const key = `builtin:${item.id}`;
-            const isActive = activeViewKey === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onSelectBuiltIn(item.id)}
-                className={clsx(
-                  "flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
-                  isActive ? "bg-brand-50 text-slate-900" : "text-slate-700 hover:bg-slate-50",
-                )}
-              >
-                <span className="font-semibold">{item.label}</span>
-                <span className={clsx("text-xs", isActive ? "text-slate-700" : "text-slate-400")}>
-                  {item.count ?? 0}
+          {builtins.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              onClick={() => onSetBuiltInView(view.id)}
+              className={clsx(
+                "flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
+                activeViewId === view.id ? "bg-brand-50 text-brand-800" : "hover:bg-slate-50 text-slate-700",
+              )}
+            >
+              <span className="font-semibold">{view.label}</span>
+              {typeof view.count === "number" ? (
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                  {view.count}
                 </span>
-              </button>
-            );
-          })}
+              ) : null}
+            </button>
+          ))}
         </div>
 
-        <div className="mt-6 px-2 pb-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Saved</p>
+        <div className="mt-6 px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Saved
         </div>
-
         {savedViews.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-slate-500">
-            No saved views yet.
-            <div className="mt-1 text-xs text-slate-400">Tip: apply filters, then click “Save view”.</div>
-          </div>
+          <div className="px-3 py-2 text-xs text-slate-500">No saved views yet. Save a view to reuse your filters.</div>
         ) : (
           <div className="flex flex-col gap-1">
             {savedViews
               .slice()
               .sort((a, b) => b.updatedAt - a.updatedAt)
-              .map((view) => {
-                const isActive = activeViewKey === `saved:${view.id}`;
-                return (
-                  <div
-                    key={view.id}
+              .map((view) => (
+                <div key={view.id} className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => onSelectSavedView(view.id)}
                     className={clsx(
-                      "group flex items-center justify-between rounded-xl px-3 py-2 transition",
-                      isActive ? "bg-brand-50" : "hover:bg-slate-50",
+                      "min-w-0 flex-1 truncate text-left text-sm font-semibold",
+                      activeViewId === view.id ? "text-brand-800" : "text-slate-700",
                     )}
+                    title={view.name}
                   >
-                    <button
-                      type="button"
-                      onClick={() => onSelectSavedView(view.id)}
-                      className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
-                    >
-                      <div className={clsx("truncate text-sm font-semibold", isActive ? "text-slate-900" : "text-slate-700")}>
-                        {view.name}
-                      </div>
-                      <div className="text-xs text-slate-400">Updated {formatRelativeTime(now, view.updatedAt)}</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onDeleteSavedView(view.id)}
-                      className="ml-2 hidden rounded-md px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-white hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 group-hover:block group-focus-within:block"
-                      title="Delete view"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                );
-              })}
+                    {view.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteSavedView(view.id)}
+                    className="ml-2 hidden text-xs font-semibold text-slate-400 hover:text-rose-600 group-hover:inline"
+                    aria-label={`Delete view ${view.name}`}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
           </div>
         )}
       </div>
+
+      <div className="border-t border-slate-200 px-4 py-3 text-[11px] text-slate-500">
+        Tip: Use <span className="font-semibold">Unassigned</span> to triage, then <span className="font-semibold">Pick up</span> to own.
+      </div>
     </aside>
   );
+}
+
+export function filtersForBuiltInView(
+  id: "all" | "mine" | "unassigned" | "ready" | "processing" | "failed",
+  base: DocumentsFilters,
+  currentUserKey: string,
+): DocumentsFilters {
+  const cleared: DocumentsFilters = {
+    ...base,
+    statuses: [],
+    fileTypes: [],
+    tags: [],
+    tagMode: "any",
+    assignees: [],
+  };
+
+  switch (id) {
+    case "all":
+      return cleared;
+    case "mine":
+      return { ...cleared, assignees: [currentUserKey] };
+    case "unassigned":
+      return { ...cleared, assignees: [unassignedKey()] };
+    case "ready":
+      return { ...cleared, statuses: ["ready"] };
+    case "processing":
+      return { ...cleared, statuses: ["queued", "processing"] };
+    case "failed":
+      return { ...cleared, statuses: ["failed"] };
+    default:
+      return cleared;
+  }
 }

@@ -13,28 +13,18 @@ export function DocumentsHeader({
   searchRef,
   viewMode,
   onViewModeChange,
-  sort,
-  onSortChange,
   onUploadClick,
   fileInputRef,
   onFileInputChange,
-  activeViewLabel,
-  showSaveView,
-  onSaveViewClick,
 }: {
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: MutableRefObject<HTMLInputElement | null>;
   viewMode: ViewMode;
   onViewModeChange: (value: ViewMode) => void;
-  sort: string | null;
-  onSortChange: (value: string | null) => void;
   onUploadClick: () => void;
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  activeViewLabel: string;
-  showSaveView: boolean;
-  onSaveViewClick: () => void;
 }) {
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -45,11 +35,11 @@ export function DocumentsHeader({
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-slate-900">Documents</h1>
-            <p className="text-xs text-slate-500">{activeViewLabel}</p>
+            <p className="text-xs text-slate-500">Shared team workspace for processing and collaboration</p>
           </div>
         </div>
 
-        <div className="flex min-w-[240px] flex-1 items-center">
+        <div className="flex min-w-[260px] flex-1 items-center">
           <label className="sr-only" htmlFor="documents-v9-search">
             Search documents
           </label>
@@ -62,41 +52,20 @@ export function DocumentsHeader({
               ref={searchRef}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search by filename, uploader, or tag"
+              placeholder="Search by name, uploader, assignee, or tag"
               className="pl-9"
             />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm md:flex">
-            <span className="text-slate-500">Sort</span>
-            <select
-              value={sort ?? ""}
-              onChange={(e) => onSortChange(e.target.value || null)}
-              aria-label="Sort documents"
-              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm font-semibold text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
-            >
-              <option value="-created_at">Newest</option>
-              <option value="created_at">Oldest</option>
-              <option value="name">Name (A–Z)</option>
-              <option value="-last_run_at">Recently processed</option>
-            </select>
-          </div>
-
-          {showSaveView ? (
-            <Button type="button" size="sm" variant="secondary" onClick={onSaveViewClick}>
-              Save view
-            </Button>
-          ) : null}
-
-          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 shadow-sm">
+          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs shadow-sm">
             <Button
               type="button"
               size="sm"
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("grid")}
-              className={clsx("rounded-md", viewMode === "grid" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "grid" ? "shadow-sm" : "text-slate-500")}
               aria-pressed={viewMode === "grid"}
               aria-label="Grid view"
             >
@@ -108,7 +77,7 @@ export function DocumentsHeader({
               size="sm"
               variant={viewMode === "board" ? "secondary" : "ghost"}
               onClick={() => onViewModeChange("board")}
-              className={clsx("rounded-md", viewMode === "board" ? "shadow-sm" : "text-slate-500")}
+              className={clsx("h-8 rounded-md px-3 text-xs", viewMode === "board" ? "shadow-sm" : "text-slate-500")}
               aria-pressed={viewMode === "board"}
               aria-label="Board view"
             >

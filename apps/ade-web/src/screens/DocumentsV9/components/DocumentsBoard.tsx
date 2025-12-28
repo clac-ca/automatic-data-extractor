@@ -1,10 +1,10 @@
 import clsx from "clsx";
 
-import type { BoardColumn, BoardGroup } from "../types";
+import type { BoardColumn, BoardGroup, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
-import { StatusPill } from "./StatusPill";
+import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 
 const STATUS_DOT: Record<string, string> = {
   queued: "bg-slate-400",
@@ -18,10 +18,6 @@ export function DocumentsBoard({
   columns,
   groupBy,
   onGroupByChange,
-
-  hideEmptyColumns,
-  onHideEmptyColumnsChange,
-
   activeId,
   onActivate,
   now,
@@ -36,14 +32,14 @@ export function DocumentsBoard({
   onClearFilters,
   showNoDocuments,
   showNoResults,
+
+  people,
+  onAssign,
+  onPickUp,
 }: {
   columns: BoardColumn[];
   groupBy: BoardGroup;
   onGroupByChange: (value: BoardGroup) => void;
-
-  hideEmptyColumns: boolean;
-  onHideEmptyColumnsChange: (value: boolean) => void;
-
   activeId: string | null;
   onActivate: (id: string) => void;
   now: number;
@@ -58,56 +54,38 @@ export function DocumentsBoard({
   onClearFilters: () => void;
   showNoDocuments: boolean;
   showNoResults: boolean;
+
+  people: WorkspacePerson[];
+  onAssign: (documentId: string, assigneeKey: string | null) => void;
+  onPickUp: (documentId: string) => void;
 }) {
   const totalItems = columns.reduce((sum, column) => sum + column.items.length, 0);
   const showLoading = isLoading && totalItems === 0;
   const showError = isError && totalItems === 0;
 
-  const hiddenCount = hideEmptyColumns ? columns.filter((column) => column.items.length === 0).length : 0;
-  const visibleColumns = hideEmptyColumns ? columns.filter((column) => column.items.length > 0) : columns;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-slate-50">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-3 text-xs">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 font-semibold text-slate-500">
-            <span>Group by</span>
-            <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 px-1 py-1">
-              {(["status", "tag", "uploader"] as const).map((group) => (
-                <button
-                  key={group}
-                  type="button"
-                  onClick={() => onGroupByChange(group)}
-                  className={clsx(
-                    "rounded-full px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
-                    groupBy === group ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
-                  )}
-                  aria-pressed={groupBy === group}
-                >
-                  {group === "status" ? "Status" : group === "tag" ? "Tag" : "Uploader"}
-                </button>
-              ))}
-            </div>
+        <div className="flex items-center gap-2 font-semibold text-slate-500">
+          <span>Group by</span>
+          <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 px-1 py-1">
+            {(["status", "tag", "uploader"] as const).map((group) => (
+              <button
+                key={group}
+                type="button"
+                onClick={() => onGroupByChange(group)}
+                className={clsx(
+                  "rounded-full px-3 py-1 text-xs font-semibold transition",
+                  groupBy === group ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800",
+                )}
+                aria-pressed={groupBy === group}
+              >
+                {group === "status" ? "Status" : group === "tag" ? "Tag" : "Uploader"}
+              </button>
+            ))}
           </div>
-
-          <button
-            type="button"
-            onClick={() => onHideEmptyColumnsChange(!hideEmptyColumns)}
-            className={clsx(
-              "rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
-              hideEmptyColumns
-                ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                : "border-slate-200 bg-white text-slate-500 hover:text-slate-800",
-            )}
-            aria-pressed={hideEmptyColumns}
-            title={hideEmptyColumns ? "Showing non-empty columns" : "Showing all columns"}
-          >
-            {hideEmptyColumns ? "Hiding empty" : "Showing empty"}
-            {hiddenCount > 0 ? <span className="ml-2 text-slate-400">({hiddenCount})</span> : null}
-          </button>
         </div>
-
-        <span className="text-slate-500">Select a card to preview output.</span>
+        <span className="text-slate-500">Select a card to open the preview.</span>
       </div>
 
       <div className="flex-1 overflow-x-auto px-6 py-4">
@@ -135,7 +113,7 @@ export function DocumentsBoard({
           />
         ) : (
           <div className="flex min-h-full gap-4">
-            {visibleColumns.map((column) => (
+            {columns.map((column) => (
               <div key={column.id} className="flex w-72 min-w-[18rem] flex-col">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -177,21 +155,44 @@ export function DocumentsBoard({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                          {/* When not grouped by status, show explicit status for clarity */}
-                          {groupBy !== "status" ? <StatusPill status={doc.status} /> : null}
-
-                          {groupBy !== "uploader" ? (
-                            <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
+                          <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
+                          {!doc.assigneeKey ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onPickUp(doc.id);
+                              }}
+                              className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700"
+                            >
+                              Pick up
+                            </button>
                           ) : null}
+                          <div
+                            onClick={(event) => event.stopPropagation()}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-1 py-0.5"
+                          >
+                            <PeoplePicker
+                              people={people}
+                              value={[doc.assigneeKey ?? unassignedKey()]}
+                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                              placeholder="Assign..."
+                              includeUnassigned
+                              buttonClassName="border-0 bg-transparent shadow-none px-2 py-0 text-[11px]"
+                            />
+                          </div>
+                        </div>
 
-                          {groupBy !== "tag" && doc.tags.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
+                          {doc.tags.length > 0 ? (
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
                               {doc.tags[0]}
                               {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
                             </span>
-                          ) : null}
-
-                          {/* MappingBadge hides pending by default; shows only if actionable */}
+                          ) : (
+                            <span className="text-slate-400">No tags</span>
+                          )}
                           <MappingBadge mapping={doc.mapping} />
                         </div>
                       </div>
@@ -206,12 +207,7 @@ export function DocumentsBoard({
 
       {hasNextPage ? (
         <div className="flex justify-center border-t border-slate-200 bg-white px-6 py-3">
-          <button
-            type="button"
-            onClick={onLoadMore}
-            className="rounded-md text-xs font-semibold text-brand-600 transition hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:text-slate-400"
-            disabled={isFetchingNextPage}
-          >
+          <button type="button" onClick={onLoadMore} className="text-xs font-semibold text-brand-600" disabled={isFetchingNextPage}>
             {isFetchingNextPage ? "Loading more..." : "Load more"}
           </button>
         </div>

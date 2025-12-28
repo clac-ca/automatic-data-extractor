@@ -1,14 +1,15 @@
 import clsx from "clsx";
 import type { KeyboardEvent } from "react";
 
-import type { DocumentEntry } from "../types";
+import type { DocumentEntry, WorkspacePerson } from "../types";
 import { getDocumentOutputRun } from "../data";
-import { formatRelativeTime } from "../utils";
+import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
-import { DocumentIcon, DownloadIcon, RefreshIcon } from "./icons";
+import { ChatIcon, DocumentIcon, UserIcon } from "./icons";
 import { MappingBadge } from "./MappingBadge";
+import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
+import { RowActionsMenu } from "./RowActionsMenu";
 import { StatusPill } from "./StatusPill";
-import { TagPicker } from "./TagPicker";
 
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
@@ -19,7 +20,6 @@ function isInteractiveTarget(target: EventTarget | null) {
 }
 
 export function DocumentsGrid({
-  workspaceId,
   documents,
   activeId,
   selectedIds,
@@ -40,12 +40,15 @@ export function DocumentsGrid({
   onRefresh,
   now,
   onKeyNavigate,
+
+  people,
+  onAssign,
+  onPickUp,
+
   onDownloadOriginal,
-  onDownloadOutputFromRow,
-  onReprocess,
-  onToggleTagOnDocument,
+  onDownloadOutput,
+  onCopyLink,
 }: {
-  workspaceId: string;
   documents: DocumentEntry[];
   activeId: string | null;
   selectedIds: Set<string>;
@@ -66,10 +69,14 @@ export function DocumentsGrid({
   onRefresh: () => void;
   now: number;
   onKeyNavigate: (event: KeyboardEvent<HTMLDivElement>) => void;
-  onDownloadOriginal: (doc: DocumentEntry) => void;
-  onDownloadOutputFromRow: (doc: DocumentEntry) => void;
-  onReprocess: (doc: DocumentEntry) => void;
-  onToggleTagOnDocument: (doc: DocumentEntry, tag: string) => void;
+
+  people: WorkspacePerson[];
+  onAssign: (documentId: string, assigneeKey: string | null) => void;
+  onPickUp: (documentId: string) => void;
+
+  onDownloadOriginal: (doc: DocumentEntry | null) => void;
+  onDownloadOutput: (doc: DocumentEntry) => void;
+  onCopyLink: (doc: DocumentEntry | null) => void;
 }) {
   const hasSelectable = documents.some((doc) => doc.record);
   const showLoading = isLoading && documents.length === 0;
@@ -78,7 +85,7 @@ export function DocumentsGrid({
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
       <div className="border-b border-slate-200 bg-white px-6 py-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-        <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)] items-center gap-3">
+        <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
           <div>
             <input
               type="checkbox"
@@ -90,10 +97,10 @@ export function DocumentsGrid({
           </div>
           <div>Document</div>
           <div>Status</div>
-          <div>Output</div>
+          <div>Assignee</div>
           <div>Tags</div>
-          <div>Uploader</div>
           <div className="text-right">Updated</div>
+          <div className="text-right">Actions</div>
         </div>
       </div>
 
@@ -137,6 +144,7 @@ export function DocumentsGrid({
               const isSelectable = Boolean(doc.record);
               const outputRun = getDocumentOutputRun(doc.record);
               const canDownloadOutput = Boolean(outputRun?.run_id);
+              const isUnassigned = !doc.assigneeKey;
 
               return (
                 <div
@@ -153,7 +161,7 @@ export function DocumentsGrid({
                     onActivate(doc.id);
                   }}
                   className={clsx(
-                    "grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
+                    "grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50",
                     activeId === doc.id ? "bg-brand-50" : "hover:bg-slate-50",
                   )}
                   tabIndex={0}
@@ -176,14 +184,19 @@ export function DocumentsGrid({
                       <DocumentIcon className="h-4 w-4 text-slate-500" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {doc.name}{" "}
-                        <span className="ml-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
-                          {doc.fileType.toUpperCase()}
+                      <p className="truncate text-sm font-semibold text-slate-900">{doc.name}</p>
+                      <p className="flex items-center gap-2 text-xs text-slate-500">
+                        <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                          {fileTypeLabel(doc.fileType)}
                         </span>
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Uploaded {formatRelativeTime(now, doc.createdAt)} · {doc.size}
+                        <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
+                        {doc.commentCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                            <ChatIcon className="h-3.5 w-3.5" />
+                            {doc.commentCount}
+                          </span>
+                        ) : null}
+                        {doc.uploader ? <span className="text-[11px] text-slate-400">{doc.uploader}</span> : null}
                       </p>
                     </div>
                   </div>
@@ -191,74 +204,66 @@ export function DocumentsGrid({
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <StatusPill status={doc.status} />
                     <MappingBadge mapping={doc.mapping} />
-                    {typeof doc.progress === "number" ? (
-                      <span className="text-[11px] font-semibold text-slate-500">{Math.round(doc.progress)}%</span>
-                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className={clsx(
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed",
-                        canDownloadOutput
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          : "border-slate-200 bg-slate-50 text-slate-400",
-                      )}
-                      disabled={!canDownloadOutput}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDownloadOutputFromRow(doc);
-                      }}
-                      title={canDownloadOutput ? "Download processed output" : "Output not ready (open preview to see runs)"}
-                    >
-                      <DownloadIcon className="h-4 w-4" />
-                      Download
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50">
+                      <UserIcon className="h-3.5 w-3.5 text-slate-500" />
+                    </span>
 
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDownloadOriginal(doc);
-                      }}
-                      disabled={!doc.record}
-                      title="Download original upload"
-                    >
-                      <DownloadIcon className="h-4 w-4" />
-                      Original
-                    </button>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700">
+                        {doc.assigneeLabel ?? "Unassigned"}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        {isUnassigned ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPickUp(doc.id);
+                            }}
+                            className="text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                          >
+                            Pick up
+                          </button>
+                        ) : null}
+                        <div data-ignore-row-click>
+                          <PeoplePicker
+                            people={people}
+                            value={[doc.assigneeKey ?? unassignedKey()]}
+                            onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                            placeholder="Assign..."
+                            includeUnassigned
+                            buttonClassName="px-2 py-1 text-[11px]"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <TagPicker
-                      workspaceId={workspaceId}
-                      selected={doc.tags}
-                      onToggle={(tag) => onToggleTagOnDocument(doc, tag)}
-                      placeholder={doc.tags.length ? "Edit tags" : "Add tags"}
-                      disabled={!doc.record}
+                  <div className="text-xs text-slate-500">
+                    {doc.tags.length > 0 ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+                        {doc.tags[0]}
+                        {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">No tags</span>
+                    )}
+                  </div>
+
+                  <div className="text-right text-xs text-slate-500">{formatRelativeTime(now, doc.updatedAt)}</div>
+
+                  <div className="flex justify-end" data-ignore-row-click>
+                    <RowActionsMenu
+                      onDownloadOutput={() => onDownloadOutput(doc)}
+                      onDownloadOriginal={() => onDownloadOriginal(doc)}
+                      onCopyLink={() => onCopyLink(doc)}
+                      outputDisabled={!canDownloadOutput}
+                      originalDisabled={!doc.record}
+                      copyDisabled={!doc.record}
                     />
-                  </div>
-
-                  <div className="text-xs font-semibold text-slate-500">{doc.uploader ?? "Unassigned"}</div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="text-right text-xs text-slate-500">{formatRelativeTime(now, doc.updatedAt)}</div>
-
-                    <button
-                      type="button"
-                      className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onReprocess(doc);
-                      }}
-                      disabled={!doc.record}
-                      title="Reprocess (create new run)"
-                      aria-label={`Reprocess ${doc.name}`}
-                    >
-                      <RefreshIcon className="h-4 w-4" />
-                    </button>
                   </div>
                 </div>
               );
