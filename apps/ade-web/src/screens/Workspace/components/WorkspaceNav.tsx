@@ -125,7 +125,7 @@ export function WorkspaceNav({
   return (
     <aside
       className={clsx(
-        "relative hidden h-full min-h-0 flex-shrink-0 bg-white lg:flex",
+        "relative hidden min-h-0 flex-shrink-0 bg-white lg:flex",
         "border-r border-slate-200",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
@@ -137,7 +137,7 @@ export function WorkspaceNav({
       {/* The panel is absolutely positioned so it can expand over the page without shifting layout when unpinned */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-40 flex flex-col bg-white",
+          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-white",
           "border-r border-slate-300/80",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
