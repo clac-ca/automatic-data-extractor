@@ -1,14 +1,13 @@
 import { Button } from "@ui/Button";
 
-import type { RunsCounts, RunsFilters } from "../types";
-import { DATE_RANGE_OPTIONS, RUN_STATUS_META } from "../constants";
+import type { RunsFilters } from "../types";
+import { DATE_RANGE_OPTIONS } from "../constants";
 
 export function RunsFiltersBar({
   filters,
   configOptions,
   ownerOptions,
   resultEnabled,
-  counts,
   showingCount,
   totalCount,
   onChange,
@@ -18,14 +17,11 @@ export function RunsFiltersBar({
   configOptions: string[];
   ownerOptions: string[];
   resultEnabled: boolean;
-  counts: RunsCounts;
   showingCount: number;
   totalCount: number;
   onChange: (next: Partial<RunsFilters>) => void;
   onReset: () => void;
 }) {
-  const activeChips = buildActiveFilterChips(filters);
-
   return (
     <div className="shrink-0 border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -101,124 +97,6 @@ export function RunsFiltersBar({
           </Button>
         </div>
       </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <StatusChip
-          label="All"
-          count={counts.total}
-          active={filters.status === "all"}
-          onClick={() => onChange({ status: "all" })}
-        />
-        <StatusChip
-          label={RUN_STATUS_META.queued.label}
-          count={counts.queued}
-          tone="muted"
-          active={filters.status === "queued"}
-          onClick={() => onChange({ status: "queued" })}
-        />
-        <StatusChip
-          label={RUN_STATUS_META.running.label}
-          count={counts.running}
-          tone="info"
-          active={filters.status === "running"}
-          onClick={() => onChange({ status: "running" })}
-        />
-        <StatusChip
-          label={RUN_STATUS_META.succeeded.label}
-          count={counts.success}
-          tone="success"
-          active={filters.status === "succeeded"}
-          onClick={() => onChange({ status: "succeeded" })}
-        />
-        <StatusChip
-          label={RUN_STATUS_META.failed.label}
-          count={counts.failed}
-          tone="danger"
-          active={filters.status === "failed"}
-          onClick={() => onChange({ status: "failed" })}
-        />
-        <StatusChip
-          label={RUN_STATUS_META.cancelled.label}
-          count={counts.cancelled}
-          tone="muted"
-          active={filters.status === "cancelled"}
-          onClick={() => onChange({ status: "cancelled" })}
-        />
-      </div>
-
-      {activeChips.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold uppercase tracking-wide text-muted-foreground">Active filters</span>
-          {activeChips.map((chip) => (
-            <span key={chip} className="rounded-full border border-border bg-background px-3 py-1 text-muted-foreground">
-              {chip}
-            </span>
-          ))}
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded-full border border-border bg-muted/40 px-3 py-1 font-semibold text-muted-foreground hover:text-foreground"
-          >
-            Clear all
-          </button>
-        </div>
-      ) : (
-        <div className="mt-3 text-xs text-muted-foreground">No filters applied</div>
-      )}
     </div>
   );
-}
-
-function StatusChip({
-  label,
-  count,
-  active,
-  tone = "default",
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  tone?: "default" | "success" | "danger" | "info" | "muted";
-  onClick: () => void;
-}) {
-  const toneClass =
-    tone === "success"
-      ? "text-success-700"
-      : tone === "danger"
-        ? "text-danger-700"
-        : tone === "info"
-          ? "text-info-700"
-          : "text-muted-foreground";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-        active ? "border-transparent bg-brand-600 text-on-brand" : "border-border bg-background"
-      }`}
-    >
-      <span className={active ? "text-on-brand" : toneClass}>{label}</span>
-      <span className={active ? "text-on-brand/80" : "text-muted-foreground"}>{count}</span>
-    </button>
-  );
-}
-
-function buildActiveFilterChips(filters: RunsFilters) {
-  const chips: string[] = [];
-  if (filters.search) chips.push(`Search: ${filters.search}`);
-  if (filters.status !== "all") chips.push(`Status: ${RUN_STATUS_META[filters.status].label}`);
-  if (filters.result !== "all") {
-    const resultLabel =
-      filters.result === "clean" ? "Clean" : filters.result === "warnings" ? "Warnings" : "Errors";
-    chips.push(`Result: ${resultLabel}`);
-  }
-  if (filters.config !== "any") chips.push(`Config: ${filters.config}`);
-  if (filters.owner !== "all") chips.push(`Owner: ${filters.owner}`);
-  if (filters.dateRange !== "14d") {
-    const rangeLabel = DATE_RANGE_OPTIONS.find((option) => option.value === filters.dateRange)?.label ?? "Custom range";
-    chips.push(rangeLabel);
-  }
-  return chips;
 }

@@ -103,9 +103,6 @@ export default function WorkspaceRunsRoute() {
         onExport={() => {
           // TODO: Wire to export endpoint
         }}
-        onStartRun={() => {
-          // TODO: Wire to run creation flow
-        }}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -117,7 +114,6 @@ export default function WorkspaceRunsRoute() {
             configOptions={model.derived.configOptions}
             ownerOptions={model.derived.ownerOptions}
             resultEnabled={model.derived.supportsResultFilters}
-            counts={model.derived.counts}
             showingCount={model.derived.visibleRuns.length}
             totalCount={model.derived.totalCount}
             onChange={handleFiltersChange}

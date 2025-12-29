@@ -1,6 +1,6 @@
 import { Button } from "@ui/Button";
 
-export function RunsHeader({ onExport, onStartRun }: { onExport: () => void; onStartRun: () => void }) {
+export function RunsHeader({ onExport }: { onExport: () => void }) {
   return (
     <header className="shrink-0 border-b border-border bg-card">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
@@ -18,7 +18,6 @@ export function RunsHeader({ onExport, onStartRun }: { onExport: () => void; onS
           <Button variant="secondary" onClick={onExport}>
             Export
           </Button>
-          <Button onClick={onStartRun}>Start run</Button>
         </div>
       </div>
     </header>
