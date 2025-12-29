@@ -120,8 +120,8 @@ Single `RunPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 
 | Field (current DTO) | File | Current wire name(s) | Canonical target | Deprecation note |
 | --- | --- | --- | --- | --- |
-| `DocumentRecord.document_id` | `apps/ade-api/src/ade_api/features/documents/schemas.py` | exposes both `id` & `document_id` | keep `document_id` only (ULIDStr) | Remove alias; accept legacy `id` for one release via deprecated alias. |
-| `DocumentRecord.name` vs `original_filename` | same | alias/serialize mismatch | Keep `original_filename` on wire; drop `name` alias. | Add computed property for compatibility if needed. |
+| `DocumentRecord.document_id` | `apps/ade-api/src/ade_api/features/documents/schemas.py` | exposes both `id` & `document_id` | keep `document_id` only (ULIDStr) | Remove alias; keep only `document_id`. |
+| `DocumentRecord.name` vs `original_filename` | same | alias/serialize mismatch | Keep `original_filename` on wire; drop `name` alias. | Drop `name` on the wire. |
 | `DocumentRecord.metadata` | same | alias ↔ `attributes` | Keep `metadata` or `attributes`, not both. | Document alias removal plan. |
 | `DocumentRecord.deleted_by` | same | alias ↔ `deleted_by_user_id` | Use `deleted_by_user_id`. |  |
 | `DocumentRecord.tags` | same | alias ↔ `tag_values` | Keep `tags`. |  |
@@ -131,7 +131,7 @@ Single `RunPlaceholder(BaseModel)` with `id: str`. Needs real DTO or removal.
 | `WorkspaceMember.workspace_membership_id` | same | alias ↔ `id` | Keep `workspace_membership_id`. |  |
 | `RoleRead.role_id` | `apps/ade-api/src/ade_api/features/roles/schemas.py` | alias ↔ `id` | Keep `role_id`. |  |
 | `RoleAssignmentRead.assignment_id` | same | alias ↔ `id` | Keep `assignment_id`. |  |
-| `FileRenameResponse.src/dest` | `apps/ade-api/src/ade_api/features/configs/schemas.py` | `src`/`dest` fields alias `from`/`to` | Rename actual fields to `from_path` / `to_path` or keep `from`/`to` as canonical wire keys. | Should mark `src`/`dest` deprecated. |
+| `FileRenameResponse.src/dest` | `apps/ade-api/src/ade_api/features/configs/schemas.py` | `src`/`dest` fields alias `from`/`to` | Rename actual fields to `from_path` / `to_path` or keep `from`/`to` as canonical wire keys. | Keep canonical wire keys only. |
 
 *(Add more rows as additional aliases are discovered during implementation.)*
 
@@ -164,7 +164,7 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 - **Configs module**: `_problem()` helper already emits RFC 7807-ish payloads with `type`, `title`, `status`, `detail`, `code`, `meta`.
 - **Missing pieces**: No shared `ProblemDetail` schema; no registry of stable `code` values; routers mix literal strings vs dicts in `HTTPException.detail`.
 
-**Action**: introduce `ProblemDetail(BaseSchema)` with RFC‑9457 fields (`type`, `title`, `status`, `detail`, `instance?`, plus `code`, `trace_id`, `meta`). Replace `ErrorMessage` references and standardize `_problem()` to instantiate `ProblemDetail`. Update OpenAPI components/responses accordingly.
+**Action**: introduce `ProblemDetail(BaseSchema)` with RFC‑9457 fields (`type`, `title`, `status`, `detail`, `instance?`, plus `code`, `meta`). Replace `ErrorMessage` references and standardize `_problem()` to instantiate `ProblemDetail`. Update OpenAPI components/responses accordingly.
 
 ---
 
@@ -239,14 +239,14 @@ This document should evolve alongside the implementation to track which gaps hav
    - Convert all list endpoints in the map to return `Page[...]`, adding sort/filter params where missing.
 5. **File tree tightening**
    - Update `FileEntry` to require `mtime`, `etag`, `content_type`, `has_children`; enforce `content_type="inode/directory"` for directories and `size=None` rule.
-   - Rename `FileRenameResponse` wire keys to `from`/`to` with deprecated `src`/`dest` bridge.
+   - Rename `FileRenameResponse` wire keys to `from`/`to`.
 6. **Build + workspace storage safeguards**
-   - Replace `BuildRecord.venv_path` with `environment_ref` (plus temporary alias if needed).
+   - Replace `BuildRecord.venv_path` with `environment_ref`.
    - Update ORM + service to populate the new field; scrub path exposure from routers/tests.
    - Change `Workspace.settings` to `MutableDict.as_mutable(JSON)` with Alembic migration + regression tests covering in-place mutation.
 7. **Problem Details**
    - Implement shared `ProblemDetail` schema + helper for raising errors; update routers to reference it in `responses` metadata.
    - Convert configs `_problem()` to return the shared schema; drop `ErrorMessage`.
 8. **Contract verification**
-   - Refresh OpenAPI schema + run `ade openapi-types`; add regression tests for DTO serialization (golden fixtures) and alias deprecation.
-   - Ensure CI covers new pagination/list tests, back-compat alias acceptance, and sanitized build responses.
+   - Refresh OpenAPI schema + run `ade openapi-types`; add regression tests for DTO serialization (golden fixtures).
+   - Ensure CI covers new pagination/list tests and sanitized build responses.

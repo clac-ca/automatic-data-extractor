@@ -26,6 +26,9 @@ __all__ = [
     "RunCreateRequest",
     "RunWorkspaceCreateRequest",
     "RunInput",
+    "RunMetricsResource",
+    "RunFieldResource",
+    "RunColumnResource",
     "RunLinks",
     "RunOutput",
     "RunPage",
@@ -176,6 +179,72 @@ class RunOutput(BaseSchema):
     has_output: bool = False
     output_path: str | None = None
     processed_file: str | None = None
+
+
+class RunMetricsResource(BaseSchema):
+    """Aggregate run metrics derived from engine.run.completed."""
+
+    evaluation_outcome: str | None = None
+    evaluation_findings_total: int | None = None
+    evaluation_findings_info: int | None = None
+    evaluation_findings_warning: int | None = None
+    evaluation_findings_error: int | None = None
+
+    validation_issues_total: int | None = None
+    validation_issues_info: int | None = None
+    validation_issues_warning: int | None = None
+    validation_issues_error: int | None = None
+    validation_max_severity: str | None = None
+
+    workbook_count: int | None = None
+    sheet_count: int | None = None
+    table_count: int | None = None
+
+    row_count_total: int | None = None
+    row_count_empty: int | None = None
+
+    column_count_total: int | None = None
+    column_count_empty: int | None = None
+    column_count_mapped: int | None = None
+    column_count_ambiguous: int | None = None
+    column_count_unmapped: int | None = None
+    column_count_passthrough: int | None = None
+
+    field_count_expected: int | None = None
+    field_count_mapped: int | None = None
+
+    cell_count_total: int | None = None
+    cell_count_non_empty: int | None = None
+
+
+class RunFieldResource(BaseSchema):
+    """Field-level mapping summary for a run."""
+
+    field: str
+    label: str | None = None
+    mapped: bool
+    best_mapping_score: float | None = None
+    occurrences_tables: int
+    occurrences_columns: int
+
+
+class RunColumnResource(BaseSchema):
+    """Detected column details for a run table."""
+
+    workbook_index: int
+    workbook_name: str
+    sheet_index: int
+    sheet_name: str
+    table_index: int
+    column_index: int
+    header_raw: str | None = None
+    header_normalized: str | None = None
+    non_empty_cells: int
+    mapping_status: str
+    mapped_field: str | None = None
+    mapping_score: float | None = None
+    mapping_method: str | None = None
+    unmapped_reason: str | None = None
 
 
 class RunResource(BaseSchema):

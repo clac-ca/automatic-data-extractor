@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { client } from "@shared/api/client";
-import { runEventsUrl, streamRun, streamRunEvents, streamRunEventsForRun } from "@shared/runs/api";
+import { createRun, runEventsUrl, streamRunEvents, streamRunEventsForRun } from "@shared/runs/api";
 import type { RunResource } from "@shared/runs/api";
 import type { RunStreamEvent } from "@shared/runs/types";
 
@@ -120,42 +120,19 @@ describe("streamRunEvents", () => {
   });
 });
 
-describe("streamRun", () => {
-  it("creates a run via the typed client and streams events", async () => {
-    const { sse, fetchMock } = mockSseFetch();
-    const runEvent: RunStreamEvent = {
-      event: "run.complete",
-      timestamp: "2025-01-01T00:05:00Z",
-      data: { jobId: "run-123" },
-    };
-    const events: RunStreamEvent[] = [];
+describe("createRun", () => {
+  it("posts defaults and returns the created run resource", async () => {
     const postResponse = {
       data: sampleRunResource,
       response: new Response(JSON.stringify(sampleRunResource), { status: 200 }),
     } as unknown as CreateRunPostResponse;
     const postSpy = vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    const stream = streamRun("workspace-123", {
+    const run = await createRun("workspace-123", {
       dry_run: true,
       input_document_id: "doc-123",
       configuration_id: "config-123",
     });
-    const consume = (async () => {
-      for await (const event of stream) {
-        events.push(event);
-      }
-    })();
-
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(fetchMock).toHaveBeenCalled();
-    const [url] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toContain("/api/v1/runs/run-123/events/stream");
-    expect(String(url)).toContain("after_sequence=0");
-
-    sse.emit(runEvent);
-
-    await consume;
 
     expect(postSpy).toHaveBeenCalledWith("/api/v1/workspaces/{workspace_id}/runs", {
       params: { path: { workspace_id: "workspace-123" } },
@@ -166,15 +143,12 @@ describe("streamRun", () => {
           dry_run: true,
           validate_only: false,
           force_rebuild: false,
-          debug: false,
           log_level: "INFO",
         },
       },
       signal: undefined,
     });
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject(runEvent);
-    sse.close();
+    expect(run).toEqual(sampleRunResource);
   });
 
   it("throws when run creation does not return data", async () => {
@@ -184,7 +158,7 @@ describe("streamRun", () => {
     } as unknown as CreateRunPostResponse;
     vi.spyOn(client, "POST").mockResolvedValue(postResponse);
 
-    await expect(streamRun("workspace-123", { input_document_id: "doc-123" }).next()).rejects.toThrow(
+    await expect(createRun("workspace-123", { input_document_id: "doc-123" })).rejects.toThrow(
       "Expected run creation response.",
     );
   });
@@ -192,14 +166,8 @@ describe("streamRun", () => {
 
 describe("runEventsUrl helpers", () => {
   it("builds streaming event URLs with sequence parameters", () => {
-    const legacyRun = {
-      ...sampleRunResource,
-      links: { ...sampleRunResource.links, events_stream: undefined },
-    } as unknown as RunResource;
-
-    const url = runEventsUrl(legacyRun, { afterSequence: 42, stream: true });
-    expect(url).toContain("/api/v1/runs/run-123/events");
-    expect(url).toContain("stream=true");
+    const url = runEventsUrl(sampleRunResource, { afterSequence: 42 });
+    expect(url).toContain("/api/v1/runs/run-123/events/stream");
     expect(url).toContain("after_sequence=42");
   });
 

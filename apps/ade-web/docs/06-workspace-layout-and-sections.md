@@ -316,7 +316,7 @@ Responsibilities:
 
 - List and filter documents in the workspace.
 - Provide upload capabilities.
-- Show each document’s status and **last run** summary.
+- Show each document’s status and **last run** status.
 - Offer actions such as “Run extraction”, “Download source file”, “Delete/archive”.
 
 Shell integration:
@@ -339,8 +339,8 @@ Responsibilities:
 - Allow filtering by status, configuration, initiator, date range, and possibly document.
 - Provide links to:
   - Run detail view.
-  - Logs and telemetry (via NDJSON streams).
-  - Output files and telemetry.
+  - Event logs (via NDJSON streams).
+  - Output files and event downloads.
 
 Shell integration:
 

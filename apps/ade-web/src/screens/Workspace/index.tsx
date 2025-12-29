@@ -163,7 +163,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const safeModeDetail = safeMode.data?.detail ?? DEFAULT_SAFE_MODE_MESSAGE;
   const shortcutHint = useShortcutHint();
   const [topBarHeight, setTopBarHeight] = useState(0);
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const topBarRef = useRef<HTMLDivElement | null>(null);
+  const handleScrollContainerRef = useCallback((node: HTMLElement | null) => {
+    setScrollContainer(node);
+  }, []);
   const workspaceNavItems = useMemo(
     () => getWorkspacePrimaryNavigation(workspace),
     [workspace],
@@ -442,17 +446,21 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <AboutVersionsModal open={isVersionsModalOpen} onClose={() => setIsVersionsModalOpen(false)} />
       <div
         className={clsx(
-          "flex min-w-0 flex-col bg-background text-foreground",
-          fullHeightLayout ? "h-screen overflow-hidden" : "min-h-screen",
+          "flex min-w-0 flex-col bg-background text-foreground h-screen overflow-hidden",
         )}
         style={{ "--workspace-topbar-height": `${topBarHeight}px` } as CSSProperties}
       >
         {!immersiveWorkbenchActive ? (
           <div ref={topBarRef}>
-            <GlobalTopBar brand={topBarBrand} trailing={topBarTrailing} search={topBarSearch} />
+            <GlobalTopBar
+              brand={topBarBrand}
+              trailing={topBarTrailing}
+              search={topBarSearch}
+              scrollContainer={scrollContainer}
+            />
           </div>
         ) : null}
-        <div className={clsx("relative flex min-w-0 flex-1", fullHeightLayout ? "min-h-0" : "")}>
+        <div className="relative flex min-h-0 min-w-0 flex-1">
           {!immersiveWorkbenchActive ? (
             <WorkspaceNav
               workspace={workspace}
@@ -461,7 +469,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
               onTogglePinned={() => setIsNavPinned((current) => !current)}
             />
           ) : null}
-          <div className="flex flex-1 min-w-0 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {!immersiveWorkbenchActive && isMobileNavOpen ? (
               <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
                 <button
@@ -491,14 +499,15 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                 </div>
               </div>
             ) : null}
-            <div className="relative flex flex-1 min-w-0 overflow-hidden" key={`section-${section.key}`}>
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden" key={`section-${section.key}`}>
               <main
                 id="main-content"
                 tabIndex={-1}
                 className={clsx(
-                  "relative flex-1 min-w-0",
-                  fullHeightLayout ? "flex min-h-0 flex-col overflow-hidden" : "overflow-y-auto",
+                  "relative flex-1 min-h-0 min-w-0",
+                  fullHeightLayout ? "flex flex-col overflow-hidden" : "overflow-y-auto",
                 )}
+                ref={handleScrollContainerRef}
               >
                 <div
                   className={clsx(
@@ -515,9 +524,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                     </div>
                   ) : null}
                   <div
-                    className={clsx(
-                      fullHeightLayout ? "flex min-h-0 min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col",
-                    )}
+                    className="flex min-h-0 min-w-0 flex-1 flex-col"
                   >
                     {section.element}
                   </div>

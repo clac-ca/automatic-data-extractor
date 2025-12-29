@@ -23,7 +23,7 @@ Key things to watch while streaming:
   `run_id` for follow-up queries; build events may follow before `run.start` while the build is prepared.
 - `console.line` events include the ADE engine stdout; store the NDJSON output
   alongside ticket timelines when escalating to engineering.
-- `engine.run.summary` carries the authoritative run summary (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
+- `engine.run.completed` carries the full run payload (with supporting `engine.table.summary`/`engine.sheet.summary`/`engine.file.summary` events); `run.complete` includes the exit code and error message if the engine
   failed. Capture those payloads in the incident record.
 
 ## 2. Polling run status without streaming
@@ -36,8 +36,7 @@ non-streaming endpoints:
 2. Poll `/api/v1/runs/{run_id}` until the `status` transitions from
    `queued`/`running` to a terminal state.
 3. Retrieve the raw run event log via `/api/v1/runs/{run_id}/events/download`
-   (legacy `/logs` remains as an alias) to review console output and
-   events captured during execution.
+   to review console output and events captured during execution.
 
 ## 3. Direct database inspection
 
@@ -46,7 +45,7 @@ directly. The table layout matches the SQLAlchemy models in
 `apps/ade-api/src/ade_api/models/run.py`.
 
 ```sql
-SELECT id, status, exit_code, started_at, finished_at
+SELECT id, status, exit_code, started_at, completed_at
 FROM runs
 WHERE configuration_id = :configuration_id
 ORDER BY created_at DESC

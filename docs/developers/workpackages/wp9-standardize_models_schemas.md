@@ -31,7 +31,7 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
    `BuildRecord` exposes `venv_path` as an absolute filesystem path. Replace with a non‑sensitive `environment_ref` or `venv_label` that’s meaningful to clients but does not tie UI to host layout. 
 
 9. **One error model: RFC‑9457 Problem Details.**
-   Introduce a single `ProblemDetail` schema with stable `code`, `trace_id`, and optional `meta` used by **all** endpoints. No more bespoke error shapes.
+   Introduce a single `ProblemDetail` schema with stable `code` and optional `meta` used by **all** endpoints. No more bespoke error shapes.
 
 10. **Make workspace JSON settings truly mutable.**
     The ORM model stores plain JSON (no change tracking) while documents use `MutableDict`. Convert workspace settings to mutable JSON to avoid lost updates.
@@ -50,17 +50,17 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 ### Naming & structure
 
 * **DTO families**: `*Create`, `*Update` (partial), `*Out` (single read), `*List` or `Page[*]` (paginated), `*Summary` (truly condensed). Retire mixed terms like `Record`/`Profile`/`Read` unless there’s a strong reason. Current candidates to rename: `UserProfile/UserSummary` → `UserOut`; `RoleRead` → `RoleOut`; `DocumentRecord` → `DocumentOut`; `BuildRecord` → `BuildOut`; `ConfigurationRecord` → `ConfigurationOut`.
-* **IDs**: all ULIDs use `ULIDStr` and *wire names are explicit* (`user_id`, `workspace_id`, `document_id`, `build_id`, …). Avoid `id` on the wire; if you must bridge legacy, keep the alias **temporary** with a documented removal date. 
+* **IDs**: all ULIDs use `ULIDStr` and *wire names are explicit* (`user_id`, `workspace_id`, `document_id`, `build_id`, …). Avoid `id` on the wire.
 * **Enums**: single Python Enum per concept consumed by both ORM (SQLAlchemy `Enum(..., native_enum=False)`) and schema (string enum). Unify `Configuration.status`, `Build.status`, `Document.status/source`, RBAC `scope_type/principal_type`.
 * **Base schema**: one `BaseSchema` with `extra="forbid"`, `from_attributes=True`, `populate_by_name=True`, default `model_dump(exclude_none=True)`. Migrate configs/builds off raw `BaseModel`.
 * **Pagination**: everything lists as `Page[T]` (you already do this in documents & users); extend it to roles/workspaces/auth listings.
-* **Errors**: `ProblemDetail` (RFC‑9457) with `type`, `title`, `status`, `detail`, and extensions: `code` (stable machine code), `trace_id`, `meta`.
+* **Errors**: `ProblemDetail` (RFC‑9457) with `type`, `title`, `status`, `detail`, and extensions: `code` (stable machine code), `meta`.
 
 ### File tree specifics
 
 * `FileEntry`: `mtime`, `etag`, `content_type`, `has_children` are **required**; `size: null` for dirs; `content_type="inode/directory"` for dirs; `depth: int`.
 * `FileListing.depth`: `"0" | "1" | "infinity"` (string union), aligning request/response.
-* `FileRenameResponse`: use **wire keys** `from` / `to` (deprecate `src` / `dest`). 
+* `FileRenameResponse`: use **wire keys** `from` / `to` (drop `src` / `dest`). 
 
 ### Security & privacy
 
@@ -107,7 +107,7 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 5. **Alias cleanup & wire names**
 
-   * Collapse dual names on the wire (prefer explicit `*_id`, `original_filename`, etc.). Keep aliases for at most one release behind a feature flag or doc note (e.g., `DocumentRecord`’s mapping today). 
+   * Collapse dual names on the wire (prefer explicit `*_id`, `original_filename`, etc.). Remove aliases.
 
 6. **Lists**
 
@@ -123,7 +123,7 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 9. **Problem Details**
 
-   * Add a shared `ProblemDetail` schema (RFC‑9457) with `code`, `trace_id`, `meta`, and update router responses to reference it across modules.
+   * Add a shared `ProblemDetail` schema (RFC‑9457) with `code`, `meta`, and update router responses to reference it across modules.
 
 10. **Workspace settings mutability**
 
@@ -139,19 +139,11 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 ---
 
-## Back‑compat & deprecation policy (subtle but important)
-
-* **Field renames**: keep dual aliasing for **one release** only; mark in OpenAPI with `deprecated: true` on the old wire name (where your tooling supports it).
-* **Enum tightening**: when upgrading from free strings to enums, keep a temporary server‑side parser that produces a `ProblemDetail` with `code="invalid_enum_value"` on bad input.
-* **Build internals**: ship `environment_ref` alongside `venv_path` for one release, then remove `venv_path`. 
-
----
-
 ## Deliverables
 
 1. **Schema audit report** (per DTO): base class, enum fields, ID types, aliasing, pagination, nullability notes, and a “new name” column.
 2. **Enum catalog**: definitive list and mapping from old strings/Literals to new enum values (ORM + schema).
-3. **Wire name map**: every field whose wire name changes (with deprecation notes).
+3. **Wire name map**: every field whose wire name changes.
 4. **List envelope map**: endpoints converted to `Page[T]`.
 5. **Error model**: shared `ProblemDetail` definition and router response table that uses it.
 6. **OpenAPI diff**: before/after spec and a quick `openapi-typescript` compile check to ensure clean TS unions for discriminated types (e.g., `ConfigSource`) and string enums. 
@@ -161,7 +153,7 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 ## Acceptance criteria
 
 * **Base**: all schemas inherit from one base; no stray `BaseModel` configs left in configs/builds.
-* **IDs**: all ULID fields use `ULIDStr`; wire names are explicit `*_id`; any old aliases are deprecated and scheduled to be removed. 
+* **IDs**: all ULID fields use `ULIDStr`; wire names are explicit `*_id`; aliases are removed. 
 * **Enums**: every status/kind/scope field in ORM & schemas uses the shared enums; OpenAPI emits string enums (not untyped strings).
 * **Updates**: all `*Update` schemas are partial (optional fields with validation). 
 * **Lists**: all list endpoints return `Page[T]` or `{Resource}List` matching that envelope. 
@@ -176,7 +168,6 @@ We’re turning our API and domain layer into a **contract‑first system**: eve
 
 * **Contract**: regenerate OpenAPI & run `openapi-typescript`—TypeScript compiles with no `any` from us, discriminated unions for `ConfigSource`, and string enums for statuses. 
 * **Serialization**: golden JSON fixtures for each `*Out` and `*List` DTO (no missing required fields; dirs show `content_type="inode/directory"`; enums serialize as strings).
-* **Back‑compat**: tests proving old aliases are accepted (during the deprecation window) and new names are canonical.
 * **Security**: ensure `venv_path` (or any sensitive path) is never present on the wire. 
 
 ---

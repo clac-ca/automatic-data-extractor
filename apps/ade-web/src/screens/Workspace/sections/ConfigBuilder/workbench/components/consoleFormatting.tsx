@@ -124,7 +124,7 @@ function highlightJson(text: string) {
 }
 
 function formatEventRecord(event: Record<string, unknown>) {
-  const name = typeof event.event === "string" ? event.event : typeof event.type === "string" ? event.type : "";
+  const name = typeof event.event === "string" ? event.event : "";
   if (!name) return null;
 
   const level = typeof event.level === "string" ? event.level.toLowerCase() : "";

@@ -461,11 +461,9 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 - `GET  /api/v1/runs/{run_id}` – canonical run detail.
-- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON (legacy `/logs` alias).
+- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON.
 - `GET  /api/v1/runs/{run_id}/input` – input metadata; `GET /runs/{run_id}/input/download` downloads the source file.
 - `GET  /api/v1/runs/{run_id}/output` – output metadata; `GET /runs/{run_id}/output/download` downloads once ready (returns 409 if not).
-- Legacy outputs endpoints (`/runs/{run_id}/outputs*`) remain for compatibility and map to the singular output.
-
 #### Configuration-scoped triggers
 
 * `POST /api/v1/configurations/{configuration_id}/runs` – start a run for a configuration.
@@ -478,11 +476,10 @@ Workspace ledger:
 
 Run-centric:
 
-- `readRun(runId)`
-- `listRunOutputs(runId)`
-- `downloadRunOutput(runId, outputPath)`
-- `downloadRunArtifact(runId)`
-- `downloadRunLogFile(runId)`
+- `fetchRun(runId)`
+- `runInputUrl(run)`
+- `runOutputUrl(run)`
+- `runLogsUrl(run)`
 
 Configuration triggers:
 
@@ -665,26 +662,14 @@ They are typically used in:
 
 ### 5.2 Domain models (UI-facing)
 
-Domain models in `src/schema/` define shapes the UI actually consumes, e.g.:
+Domain models in `src/schema/` define the curated shapes the UI actually consumes, e.g.:
 
-* `WorkspaceSummary`, `WorkspaceDetail`
-* `DocumentSummary`, `DocumentDetail`
-* `RunSummary`, `RunDetail`
-* `Configuration`
+* `WorkspaceOut`, `DocumentOut`
+* `RunResource`, `RunStatus`
+* `ConfigurationOut`
 * `SafeModeStatus`, ...
 
-API modules handle mapping:
-
-```ts
-function toRunSummary(apiRun: ApiRun): RunSummary {
-  // ...
-}
-```
-
-Standard helpers in `schema/` keep snake_case out of the rest of the app:
-
-* `fromApiRun(apiRun: ApiRun): Run` – translates `run_id` → `runId`, normalises status/timestamps.
-* `fromApiConfiguration(apiConfig: ApiConfiguration): Configuration` – translates `configuration_id` → `configurationId`, etc.
+When mapping is required, helpers live alongside the domain types to keep snake_case out of the rest of the app.
 
 Benefits:
 

@@ -243,12 +243,7 @@ The bottom panel can be toggled and resized. It has two logical tabs:
 
   * Shows streamed text logs for runs, including any environment build output.
   * Shows status of the last run (running, succeeded, failed).
-  * Renders a **run summary** after completion, including where available:
-
-    * Run ID.
-    * Document and sheet names used.
-    * Basic metrics (rows processed, warnings, errors).
-    * Links to telemetry and logs.
+  * Offers links to the event log download and normalized output when available.
 
 * **Validation**
 
@@ -580,7 +575,7 @@ Responsibilities:
 
 * Parse the search string / `URLSearchParams`.
 * Map invalid or unknown values back to defaults.
-* Ignore legacy/unknown parameters; only canonical keys are parsed.
+* Ignore unknown parameters; only canonical keys are parsed.
 * Record which keys were explicitly present under `present.*`.
 
 ### 5.3 Writing to the URL
@@ -919,7 +914,7 @@ Key parameters (documented via helpers):
 * `logger` — run‑scoped logger.
 * `**_` — catch‑all for unused keyword arguments.
 
-Return a float for the detector’s default label (module `DEFAULT_LABEL`/`DEFAULT_ROW_LABEL` or inferred from module name), or a dict mapping labels to deltas if you need to influence multiple labels. The legacy `"scores"` wrapper is not used.
+Return a float for the detector’s default label (module `DEFAULT_LABEL`/`DEFAULT_ROW_LABEL` or inferred from module name), or a dict mapping labels to deltas if you need to influence multiple labels. The `"scores"` wrapper is not used.
 
 Helpers:
 

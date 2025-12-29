@@ -55,7 +55,10 @@ from ade_api.models import (
     ConfigurationStatus,
     Document,
     Run,
+    RunField,
+    RunMetrics,
     RunStatus,
+    RunTableColumn,
 )
 from ade_api.settings import Settings
 
@@ -70,7 +73,7 @@ from .exceptions import (
 )
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
-from .filters import RunFilters
+from .filters import RunColumnFilters, RunFilters
 from .schemas import (
     RunBatchCreateOptions,
     RunCreateOptionsBase,
@@ -884,6 +887,29 @@ class RunsService:
                 ),
             )
         return run
+
+    async def get_run_metrics(self, *, run_id: UUID) -> RunMetrics | None:
+        """Return persisted run metrics for ``run_id`` when available."""
+
+        run = await self._require_run(run_id)
+        return await self._runs.get_metrics(run.id)
+
+    async def list_run_fields(self, *, run_id: UUID) -> list[RunField]:
+        """Return field summaries for ``run_id``."""
+
+        run = await self._require_run(run_id)
+        return await self._runs.list_fields(run.id)
+
+    async def list_run_columns(
+        self,
+        *,
+        run_id: UUID,
+        filters: RunColumnFilters,
+    ) -> list[RunTableColumn]:
+        """Return detected columns for ``run_id`` with optional filters."""
+
+        run = await self._require_run(run_id)
+        return await self._runs.list_columns(run_id=run.id, filters=filters)
 
     async def get_run_events(
         self,
@@ -1910,6 +1936,7 @@ class RunsService:
                     if parsed:
                         forwarded = await run_stream.append(parsed)
                         self._log_event_debug(forwarded, origin="engine")
+                        await self._maybe_persist_run_metrics(run=run, event=forwarded)
                         yield forwarded
                         continue
 
@@ -2189,6 +2216,8 @@ class RunsService:
         await self._session.commit()
         await self._session.refresh(run)
 
+        await self._ensure_terminal_metrics_stub(run=run)
+
         logger.info(
             "run.complete",
             extra=log_context(
@@ -2201,6 +2230,21 @@ class RunsService:
             ),
         )
         return run
+
+    async def _ensure_terminal_metrics_stub(self, *, run: Run) -> None:
+        if run.status not in {RunStatus.FAILED, RunStatus.CANCELLED}:
+            return
+        existing = await self._session.get(RunMetrics, run.id)
+        if existing is not None:
+            return
+        outcome = "failure" if run.status is RunStatus.FAILED else "unknown"
+        self._session.add(
+            RunMetrics(
+                run_id=run.id,
+                evaluation_outcome=outcome,
+            )
+        )
+        await self._session.commit()
 
     @staticmethod
     def _build_env(
@@ -2346,6 +2390,317 @@ class RunsService:
             build_id=build_id,
         )
         return self._event_streams.get_stream(path=path, context=context)
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers: run metrics
+    # ------------------------------------------------------------------ #
+
+    async def _maybe_persist_run_metrics(self, *, run: Run, event: EventRecord) -> None:
+        if event.get("event") != "engine.run.completed":
+            return
+        payload = event.get("data")
+        if not isinstance(payload, dict):
+            return
+        metrics = self._extract_run_metrics(payload)
+        existing = await self._session.get(RunMetrics, run.id)
+        if existing is None:
+            self._session.add(RunMetrics(run_id=run.id, **metrics))
+        else:
+            for key, value in metrics.items():
+                setattr(existing, key, value)
+        await self._session.commit()
+        await self._maybe_persist_run_fields(run=run, payload=payload)
+        await self._maybe_persist_run_table_columns(run=run, payload=payload)
+
+    @staticmethod
+    def _extract_run_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+        def _coerce_int(value: Any) -> int | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+            return None
+
+        def _coerce_str(value: Any) -> str | None:
+            if isinstance(value, str) and value.strip():
+                return value
+            return None
+
+        evaluation = payload.get("evaluation")
+        findings = evaluation.get("findings") if isinstance(evaluation, dict) else None
+        findings_total = len(findings) if isinstance(findings, list) else None
+        findings_by_severity = {"info": 0, "warning": 0, "error": 0}
+        if isinstance(findings, list):
+            for finding in findings:
+                if not isinstance(finding, dict):
+                    continue
+                severity = finding.get("severity")
+                if severity in findings_by_severity:
+                    findings_by_severity[severity] += 1
+
+        validation = payload.get("validation") if isinstance(payload.get("validation"), dict) else {}
+        issues_by_severity = validation.get("issues_by_severity")
+        issues_info = _coerce_int(issues_by_severity.get("info")) if isinstance(issues_by_severity, dict) else None
+        issues_warning = (
+            _coerce_int(issues_by_severity.get("warning")) if isinstance(issues_by_severity, dict) else None
+        )
+        issues_error = _coerce_int(issues_by_severity.get("error")) if isinstance(issues_by_severity, dict) else None
+
+        counts = payload.get("counts") if isinstance(payload.get("counts"), dict) else {}
+        rows = counts.get("rows") if isinstance(counts.get("rows"), dict) else {}
+        columns = counts.get("columns") if isinstance(counts.get("columns"), dict) else {}
+        fields = counts.get("fields") if isinstance(counts.get("fields"), dict) else {}
+        cells = counts.get("cells") if isinstance(counts.get("cells"), dict) else {}
+
+        return {
+            "evaluation_outcome": _coerce_str(evaluation.get("outcome")) if isinstance(evaluation, dict) else None,
+            "evaluation_findings_total": findings_total,
+            "evaluation_findings_info": findings_by_severity["info"] if findings_total is not None else None,
+            "evaluation_findings_warning": findings_by_severity["warning"] if findings_total is not None else None,
+            "evaluation_findings_error": findings_by_severity["error"] if findings_total is not None else None,
+            "validation_issues_total": _coerce_int(validation.get("issues_total")) if validation else None,
+            "validation_issues_info": issues_info,
+            "validation_issues_warning": issues_warning,
+            "validation_issues_error": issues_error,
+            "validation_max_severity": _coerce_str(validation.get("max_severity")) if validation else None,
+            "workbook_count": _coerce_int(counts.get("workbooks")),
+            "sheet_count": _coerce_int(counts.get("sheets")),
+            "table_count": _coerce_int(counts.get("tables")),
+            "row_count_total": _coerce_int(rows.get("total")),
+            "row_count_empty": _coerce_int(rows.get("empty")),
+            "column_count_total": _coerce_int(columns.get("total")),
+            "column_count_empty": _coerce_int(columns.get("empty")),
+            "column_count_mapped": _coerce_int(columns.get("mapped")),
+            "column_count_ambiguous": _coerce_int(columns.get("ambiguous")),
+            "column_count_unmapped": _coerce_int(columns.get("unmapped")),
+            "column_count_passthrough": _coerce_int(columns.get("passthrough")),
+            "field_count_expected": _coerce_int(fields.get("expected")),
+            "field_count_mapped": _coerce_int(fields.get("mapped")),
+            "cell_count_total": _coerce_int(cells.get("total")),
+            "cell_count_non_empty": _coerce_int(cells.get("non_empty")),
+        }
+
+    async def _maybe_persist_run_fields(self, *, run: Run, payload: dict[str, Any]) -> None:
+        fields_payload = payload.get("fields")
+        if not isinstance(fields_payload, list) or not fields_payload:
+            return
+
+        exists_stmt = (
+            select(RunField.run_id)
+            .where(RunField.run_id == run.id)
+            .limit(1)
+        )
+        result = await self._session.execute(exists_stmt)
+        if result.first():
+            return
+
+        rows = self._extract_run_fields(fields_payload)
+        if not rows:
+            return
+
+        self._session.add_all([RunField(run_id=run.id, **row) for row in rows])
+        await self._session.commit()
+
+    @staticmethod
+    def _extract_run_fields(fields_payload: list[Any]) -> list[dict[str, Any]]:
+        def _coerce_int(value: Any, *, default: int = 0) -> int:
+            if isinstance(value, bool):
+                return default
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+            return default
+
+        def _coerce_bool(value: Any) -> bool:
+            return value if isinstance(value, bool) else False
+
+        def _coerce_float(value: Any) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            return None
+
+        def _coerce_str(value: Any) -> str | None:
+            if isinstance(value, str) and value.strip():
+                return value
+            return None
+
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        for entry in fields_payload:
+            if not isinstance(entry, dict):
+                continue
+            field_name = _coerce_str(entry.get("field"))
+            if not field_name or field_name in seen:
+                continue
+            seen.add(field_name)
+
+            occurrences = entry.get("occurrences")
+            if not isinstance(occurrences, dict):
+                occurrences = {}
+
+            rows.append(
+                {
+                    "field": field_name,
+                    "label": _coerce_str(entry.get("label")),
+                    "mapped": _coerce_bool(entry.get("mapped")),
+                    "best_mapping_score": _coerce_float(entry.get("best_mapping_score")),
+                    "occurrences_tables": _coerce_int(occurrences.get("tables"), default=0),
+                    "occurrences_columns": _coerce_int(occurrences.get("columns"), default=0),
+                }
+            )
+
+        return rows
+
+    async def _maybe_persist_run_table_columns(self, *, run: Run, payload: dict[str, Any]) -> None:
+        workbooks = payload.get("workbooks")
+        if not isinstance(workbooks, list) or not workbooks:
+            return
+
+        exists_stmt = (
+            select(RunTableColumn.run_id)
+            .where(RunTableColumn.run_id == run.id)
+            .limit(1)
+        )
+        result = await self._session.execute(exists_stmt)
+        if result.first():
+            return
+
+        rows = self._extract_run_table_columns(workbooks)
+        if not rows:
+            return
+
+        self._session.add_all([RunTableColumn(run_id=run.id, **row) for row in rows])
+        await self._session.commit()
+
+    @staticmethod
+    def _extract_run_table_columns(workbooks: list[Any]) -> list[dict[str, Any]]:
+        def _coerce_int(value: Any) -> int | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+            return None
+
+        def _coerce_str(value: Any) -> str | None:
+            if isinstance(value, str) and value.strip():
+                return value
+            return None
+
+        def _coerce_float(value: Any) -> float | None:
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            return None
+
+        rows: list[dict[str, Any]] = []
+
+        for workbook in workbooks:
+            if not isinstance(workbook, dict):
+                continue
+            locator = workbook.get("locator")
+            if not isinstance(locator, dict):
+                continue
+            wb_locator = locator.get("workbook")
+            if not isinstance(wb_locator, dict):
+                continue
+            workbook_index = _coerce_int(wb_locator.get("index"))
+            workbook_name = _coerce_str(wb_locator.get("name"))
+            if workbook_index is None or workbook_name is None:
+                continue
+
+            sheets = workbook.get("sheets")
+            if not isinstance(sheets, list):
+                continue
+
+            for sheet in sheets:
+                if not isinstance(sheet, dict):
+                    continue
+                sheet_locator = sheet.get("locator")
+                if not isinstance(sheet_locator, dict):
+                    continue
+                sheet_ref = sheet_locator.get("sheet")
+                if not isinstance(sheet_ref, dict):
+                    continue
+                sheet_index = _coerce_int(sheet_ref.get("index"))
+                sheet_name = _coerce_str(sheet_ref.get("name"))
+                if sheet_index is None or sheet_name is None:
+                    continue
+
+                tables = sheet.get("tables")
+                if not isinstance(tables, list):
+                    continue
+
+                for table in tables:
+                    if not isinstance(table, dict):
+                        continue
+                    table_locator = table.get("locator")
+                    if not isinstance(table_locator, dict):
+                        continue
+                    table_ref = table_locator.get("table")
+                    if not isinstance(table_ref, dict):
+                        continue
+                    table_index = _coerce_int(table_ref.get("index"))
+                    if table_index is None:
+                        continue
+
+                    structure = table.get("structure")
+                    if not isinstance(structure, dict):
+                        continue
+                    columns = structure.get("columns")
+                    if not isinstance(columns, list):
+                        continue
+
+                    for column in columns:
+                        if not isinstance(column, dict):
+                            continue
+                        column_index = _coerce_int(column.get("index"))
+                        if column_index is None:
+                            continue
+                        header = column.get("header")
+                        header_raw = None
+                        header_normalized = None
+                        if isinstance(header, dict):
+                            header_raw = _coerce_str(header.get("raw"))
+                            header_normalized = _coerce_str(header.get("normalized"))
+                        non_empty_cells = _coerce_int(column.get("non_empty_cells"))
+                        if non_empty_cells is None:
+                            continue
+                        mapping = column.get("mapping")
+                        if not isinstance(mapping, dict):
+                            continue
+                        mapping_status = _coerce_str(mapping.get("status"))
+                        if mapping_status is None:
+                            continue
+
+                        rows.append(
+                            {
+                                "workbook_index": workbook_index,
+                                "workbook_name": workbook_name,
+                                "sheet_index": sheet_index,
+                                "sheet_name": sheet_name,
+                                "table_index": table_index,
+                                "column_index": column_index,
+                                "header_raw": header_raw,
+                                "header_normalized": header_normalized,
+                                "non_empty_cells": non_empty_cells,
+                                "mapping_status": mapping_status,
+                                "mapped_field": _coerce_str(mapping.get("field")),
+                                "mapping_score": _coerce_float(mapping.get("score")),
+                                "mapping_method": _coerce_str(mapping.get("method")),
+                                "unmapped_reason": _coerce_str(mapping.get("unmapped_reason")),
+                            }
+                        )
+
+        return rows
 
     # ------------------------------------------------------------------ #
     # Internal helpers: event logging

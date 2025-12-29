@@ -1,0 +1,150 @@
+import type { RunRecord, RunsCounts, RunsDateRange, RunsFilters, RunsResultFilter, RunsStatusFilter } from "./types";
+
+const numberFormatter = new Intl.NumberFormat("en-US");
+
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return numberFormatter.format(value);
+}
+
+export function formatQuality(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return `${value}%`;
+}
+
+export function formatDuration(seconds: number | null | undefined, status: RunRecord["status"]): string {
+  if (typeof seconds === "number" && Number.isFinite(seconds)) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = Math.round(seconds % 60);
+    if (minutes <= 0) return `${remaining}s`;
+    return `${minutes}m ${remaining}s`;
+  }
+
+  if (status === "queued") return "Queued";
+  if (status === "running") return "Running";
+  if (status === "cancelled") return "Cancelled";
+
+  return "—";
+}
+
+export function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+export function formatResultLabel(run: RunRecord): string {
+  if (typeof run.errors === "number" && run.errors > 0) return `${run.errors} errors`;
+  if (typeof run.warnings === "number") return `${run.warnings} warnings`;
+  return "—";
+}
+
+export function coerceStatus(value: string | null): RunsStatusFilter {
+  if (!value || value === "all") return "all";
+  if (["queued", "running", "succeeded", "failed", "cancelled"].includes(value)) {
+    return value as RunsStatusFilter;
+  }
+  return "all";
+}
+
+export function coerceResult(value: string | null): RunsResultFilter {
+  if (!value || value === "all") return "all";
+  if (["clean", "warnings", "errors"].includes(value)) return value as RunsResultFilter;
+  return "all";
+}
+
+export function coerceDateRange(value: string | null): RunsDateRange {
+  if (!value) return "14d";
+  if (["14d", "7d", "24h", "30d", "custom"].includes(value)) return value as RunsDateRange;
+  return "14d";
+}
+
+export function buildCounts(runs: RunRecord[]): RunsCounts {
+  let warningKnown = false;
+  const counts: RunsCounts = {
+    total: 0,
+    success: 0,
+    warning: null,
+    failed: 0,
+    running: 0,
+    queued: 0,
+    active: 0,
+  };
+
+  runs.forEach((run) => {
+    counts.total += 1;
+    if (run.status === "succeeded") counts.success += 1;
+    if (run.status === "failed" || run.status === "cancelled") counts.failed += 1;
+    if (run.status === "running") counts.running += 1;
+    if (run.status === "queued") counts.queued += 1;
+
+    if (typeof run.warnings === "number") {
+      warningKnown = true;
+      counts.warning = (counts.warning ?? 0) + run.warnings;
+    }
+  });
+
+  counts.active = counts.running + counts.queued;
+  if (!warningKnown) counts.warning = null;
+  return counts;
+}
+
+export function filterRuns(runs: RunRecord[], filters: RunsFilters): RunRecord[] {
+  const search = filters.search.trim().toLowerCase();
+
+  return runs.filter((run) => {
+    if (filters.status !== "all" && run.status !== filters.status) return false;
+
+    if (filters.result === "clean" && run.warnings !== null && run.errors !== null) {
+      if (run.warnings > 0 || run.errors > 0) return false;
+    }
+    if (filters.result === "warnings" && run.warnings !== null) {
+      if (run.warnings === 0) return false;
+    }
+    if (filters.result === "errors" && run.errors !== null) {
+      if (run.errors === 0) return false;
+    }
+
+    if (filters.config !== "any" && run.configLabel !== filters.config) return false;
+    if (filters.owner !== "all" && run.ownerLabel !== filters.owner) return false;
+
+    if (!search) return true;
+
+    const haystack = [
+      run.inputName,
+      run.outputName ?? "",
+      run.id,
+      run.configLabel,
+      run.ownerLabel,
+      run.triggerLabel,
+    ]
+      .filter((value) => Boolean(value))
+      .join(" ")
+      .toLowerCase();
+
+    return haystack.includes(search);
+  });
+}
+
+export function buildCreatedAtRange(range: RunsDateRange, now = new Date()) {
+  if (range === "custom") {
+    return {};
+  }
+  const end = new Date(now);
+  const start = new Date(now);
+  if (range === "24h") {
+    start.setHours(start.getHours() - 24);
+  } else if (range === "7d") {
+    start.setDate(start.getDate() - 7);
+  } else if (range === "30d") {
+    start.setDate(start.getDate() - 30);
+  } else {
+    start.setDate(start.getDate() - 14);
+  }
+
+  return {
+    created_after: start.toISOString(),
+    created_before: end.toISOString(),
+  };
+}

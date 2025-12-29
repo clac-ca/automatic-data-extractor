@@ -11,7 +11,7 @@ Use this doc when you’re:
 
 * Building or changing the **Documents** or **Runs** UI.
 * Wiring up or consuming `/documents` and `/runs` API endpoints.
-* Debugging how a document ends up with a particular status or last‑run summary.
+* Debugging how a document ends up with a particular status or last‑run state.
 
 For shared terminology (Workspace, Document, Run, Configuration, Safe mode, etc.) see `01-domain-model-and-naming.md`.
 
@@ -117,14 +117,14 @@ export interface DocumentSummary {
   createdAt: string;      // ISO 8601 string
   uploadedBy: UserSummary;
 
-  lastRun?: DocumentLastRunSummary | null;
+  lastRun?: DocumentLastRun | null;
 }
 
-export interface DocumentLastRunSummary {
+export interface DocumentLastRun {
   runId: string;
   status: RunStatus;
-  finishedAt?: string | null;
-  message?: string | null; // Optional human-readable note
+  runAt?: string | null;
+  message?: string | null; // Optional status or error message
 }
 ```
 
@@ -336,10 +336,10 @@ ADE Web exposes Runs from two angles:
 
 ### 5.1 Run data model
 
-Workspace‑level run summary:
+Workspace‑level run record:
 
 ```ts
-export interface RunSummary {
+export interface RunListItem {
   runId: string;
   workspaceId: string;
   status: RunStatus;   // queued | running | succeeded | failed | cancelled
@@ -373,16 +373,15 @@ export interface RunOptions {
 }
 ```
 
-A more detailed `RunDetail` type extends this with:
+A more detailed run detail view extends this with:
 
 * Full list of input documents.
-* Links to input/output downloads and telemetry (events).
-* Optional telemetry summary.
+* Links to input/output downloads and event logs.
 * Log / console linkage.
 
 ### 5.2 Run status
 
-Canonical `RunStatus` values (defined centrally in `@schema/run`):
+Canonical `RunStatus` values (defined centrally in `@schema`):
 
 * `queued` – accepted, waiting to start.
 * `running` – in progress.
@@ -416,7 +415,7 @@ The **Runs** section is the workspace‑wide ledger of engine activity.
 
 1. Show all runs in a workspace.
 2. Allow filtering/sorting by status, configuration, initiator, and time.
-3. Provide access to logs, telemetry, and the normalized output.
+3. Provide access to logs, event history, and the normalized output.
 
 ### 6.1 Data and filters
 
@@ -476,15 +475,9 @@ The Run detail view composes several sections:
     * The archived **NDJSON** log file for historical runs.
   * Rendered similarly to the Configuration Builder console (virtualized, bounded tail).
 
-* **Telemetry summary** (when available)
-
-  * Rows processed.
-  * Warning / error counts.
-  * Per‑table metrics, etc.
-
 * **Outputs**
 
-  * Link to telemetry download (NDJSON events).
+  * Event log download (NDJSON events).
   * Single normalized output file with download URL and readiness flag.
 
 Data hooks:
@@ -712,7 +705,7 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
   Global run detail.
 
 * `GET /api/v1/runs/{run_id}/events?stream=true`
-  Run event stream (NDJSON SSE); `GET /runs/{run_id}/events/download` downloads the NDJSON log (legacy `/logs` alias).
+  Run event stream (NDJSON SSE); `GET /runs/{run_id}/events/download` downloads the NDJSON log.
 
 * `GET /api/v1/runs/{run_id}/input`
   Input metadata (document, content type, byte size).
@@ -725,8 +718,6 @@ The Documents and Runs features rely on the following backend endpoints. Detaile
 
 * `GET /api/v1/runs/{run_id}/output/download`
   Download the normalized output (returns 409 until ready).
-
-* Legacy `/runs/{run_id}/outputs*` endpoints map to the single output file for compatibility.
 
 ### 9.4 Run creation (configuration-scoped)
 

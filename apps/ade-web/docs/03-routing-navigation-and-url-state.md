@@ -490,7 +490,7 @@ Within the provider:
 Use cases:
 
 * Embedded flows that reuse components expecting `useSearchParams`, but where URL changes would be misleading.
-* Transitional/legacy flows where you cannot yet change the real URL model.
+* Transitional flows where you cannot yet change the real URL model.
 
 Rules:
 

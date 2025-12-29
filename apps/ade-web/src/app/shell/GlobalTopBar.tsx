@@ -16,6 +16,7 @@ interface GlobalTopBarProps {
   readonly trailing?: ReactNode;
   readonly search?: GlobalSearchFieldProps;
   readonly secondaryContent?: ReactNode;
+  readonly scrollContainer?: HTMLElement | null;
 }
 
 /**
@@ -31,6 +32,7 @@ export function GlobalTopBar({
   trailing,
   search,
   secondaryContent,
+  scrollContainer,
 }: GlobalTopBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -38,10 +40,12 @@ export function GlobalTopBar({
     if (typeof window === "undefined") return;
 
     let ticking = false;
+    const target = scrollContainer ?? window;
+    const readScrollTop = () => (target === window ? window.scrollY : (target as HTMLElement).scrollTop);
 
     const update = () => {
       ticking = false;
-      const next = window.scrollY > 0;
+      const next = readScrollTop() > 0;
       setIsScrolled((prev) => (prev === next ? prev : next));
     };
 
@@ -52,9 +56,9 @@ export function GlobalTopBar({
     };
 
     update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [scrollContainer]);
 
   const showSearch = Boolean(search);
 

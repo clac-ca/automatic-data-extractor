@@ -8,7 +8,7 @@ and WP12 when planning the UI work.
 ## Workspace Documents screen
 
 The documents screen already references "runs" in copy and state but still
-relies on the legacy runs endpoints. Key touchpoints:
+relies on older runs endpoints. Key touchpoints:
 
 - `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
   - Uploads now use an XHR-backed queue (progress, cancel, retry) and support an optional "Run on upload" toggle that queues runs after each successful upload.
@@ -18,8 +18,8 @@ relies on the legacy runs endpoints. Key touchpoints:
     handlers to call `POST /api/v1/configurations/{configuration_id}/runs` and stream
     events into the console once the backend is wired up.
   - `useDocumentRunsQuery` (search for `runsQuery`) polls the runs router
-    to show historical runs. Replace it with the new runs log endpoint and
-    add pagination/`after_id` handling.
+    to show historical runs. Replace it with the workspace runs list endpoint
+    and add pagination/`after_id` handling.
   - The "Safe mode" tooltips gate run buttons. Surface the new run status
     states (queued, running, succeeded, failed, cancelled) and error
     messaging in the drawer summary.
@@ -28,13 +28,13 @@ relies on the legacy runs endpoints. Key touchpoints:
 
 - `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` now
   consumes run/build NDJSON streams: `Terminal` shows raw logs, `Problems`
-  shows validation issues, and `Run` hosts summary/output/telemetry cards.
+  shows validation issues, and `Run` hosts output and event log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
   origin/level filters, follow toggle, and clear. Keep feeding it build/run
   events via `describeRunEvent`/`describeBuildEvent`.
 - `Workbench.tsx` keeps `validationState.status/lastRunAt` and the latest run
-  summary. Ensure these hydrate from the streaming runs endpoints and the
-  follow-up fetches (`fetchRunOutputs`, `fetchRunSummary`, `fetchRunTelemetry`).
+  metadata. Ensure these hydrate from the streaming runs endpoints and the
+  follow-up fetches (`fetchRun`, `runOutputUrl`, `runLogsUrl`).
 - The chrome "Last run" pill opens the `Run` tab; the primary action is labeled
   **Test run**. Update any onboarding or inline help to reflect the new naming.
 

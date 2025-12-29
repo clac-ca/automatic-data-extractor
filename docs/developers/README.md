@@ -43,7 +43,7 @@ automatic-data-extractor/
 │     └─ src/ade_tools/
 ├─ examples/                                # sample inputs/outputs for docs/tests
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
-├─ scripts/                                 # helper scripts (legacy node helpers, etc.)
+├─ scripts/                                 # helper scripts
 │
 ├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
 │  ├─ docker/
@@ -75,7 +75,7 @@ If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
 │     │        ├─ manifest.toml     # read via importlib.resources
-│     ├─ .venv/                     # (legacy) not used for runtime venvs
+│     ├─ .venv/                     # not used for runtime venvs
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
@@ -301,5 +301,5 @@ If mapping results look unexpected, inspect `events.ndjson` (look for `run.table
 
 1. **[Config Packages](./01-config-packages.md)** — what a config is, Script API v1, detectors, transforms, validators, hooks.
 2. **[Run Orchestration](./02-run-orchestration.md)** — queue, workers, resource limits, atomic writes.
-3. **Run telemetry** — the per‑run event log (`events.ndjson`) and derived run summaries (`ade.run_summary/v1`).
+3. **Run telemetry** — the per‑run event log (`events.ndjson`).
 4. **[Glossary](./12-glossary.md)** — common terms and system vocabulary.

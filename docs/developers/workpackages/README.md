@@ -10,8 +10,8 @@ Follow the packages in order unless a prerequisite is already complete:
 
 | WP | Title | Summary |
 | -- | ----- | ------- |
-| [WP0](./wp0-preflight-embed-templates.md) | Preflight: Embed Templates | (Deprecated) Templates now ship inside the ade-engine CLI; backend no longer bundles them. |
-| [WP1](./wp1-config-create-from-template.md) | Config Metadata & Draft Creation | Legacy notes on creating drafts from bundled templates; current flow uses `ade-engine config init`. |
+| [WP0](./wp0-preflight-embed-templates.md) | Preflight: Embed Templates | Templates now ship inside the ade-engine CLI; backend no longer bundles them. |
+| [WP1](./wp1-config-create-from-template.md) | Config Metadata & Draft Creation | Notes on creating drafts from bundled templates; current flow uses `ade-engine config init`. |
 | [WP2](./wp2-draft-file-editing.md) | Draft File Editing API | CRUD endpoints for draft files with ETags, safe paths, and size limits. |
 | [WP3](./wp3-lifecycle-actions.md) | Lifecycle Actions | Activate/archive/clone configs with one active per workspace and digest/version tracking. |
 | [WP4](./wp4-import-from-upload.md) | Import from Upload | Pipeline to upload, scan, and promote archives into draft configs. |

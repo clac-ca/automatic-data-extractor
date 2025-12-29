@@ -14,6 +14,9 @@ from .document import (
 )
 from .rbac import Permission, Role, RolePermission, ScopeType, UserRoleAssignment
 from .run import Run, RunStatus
+from .run_field import RunField
+from .run_metrics import RunMetrics
+from .run_table_column import RunTableColumn
 from .system_setting import SystemSetting
 from .user import User
 from .workspace import Workspace, WorkspaceMembership
@@ -34,7 +37,10 @@ __all__ = [
     "Role",
     "RolePermission",
     "Run",
+    "RunField",
+    "RunMetrics",
     "RunStatus",
+    "RunTableColumn",
     "ScopeType",
     "SystemSetting",
     "User",

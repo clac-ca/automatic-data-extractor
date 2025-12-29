@@ -477,8 +477,7 @@ export function Workbench({
     const { runId: completedRunId, status, payload } = pendingCompletion;
     const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-    const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
-    const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
+    const errorMessage = failureMessage || "ADE run failed.";
     const isCancelled = status === "cancelled";
     const notice =
       status === "succeeded"

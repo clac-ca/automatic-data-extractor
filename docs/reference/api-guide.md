@@ -23,7 +23,7 @@ Future versions will follow the same resource model. When breaking changes are r
   session context. Browser callers also receive `httponly` cookies; API/CLI callers use the `Authorization: Bearer <token>`
   header.
 - **API keys**: Issue long-lived credentials via `/api/v1/me/api-keys` for self-service or `/api/v1/users/{user_id}/api-keys`
-  for admins. Submit them via `X-API-Key` (or the bearer header for compatibility).
+  for admins. Submit them via `X-API-Key` (or `Authorization: Bearer <token>`).
 - **Permissions**: Every route enforces RBAC. Global permissions (for example `users.read_all`) apply across the tenant; workspace
   permissions (for example `workspace.documents.manage`) apply to the workspace ID in the URL path.
 - **CSRF**: Not enforced yet. The dependency is wired for future use but currently no-ops.
@@ -70,12 +70,10 @@ Trigger and monitor extraction runs. Creation is configuration-scoped; reads are
 - `GET /workspaces/{workspace_id}/runs` – list recent runs for a workspace, filterable by status or source document.
 - `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
 - `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).
-- `GET /runs/{run_id}/summary` – retrieve the run summary payload when available.
 - `GET /runs/{run_id}/input` – fetch input metadata; `GET /runs/{run_id}/input/download` downloads the original file.
 - `GET /runs/{run_id}/output` – fetch output metadata (`ready`, size, content type, download URL).
 - `GET /runs/{run_id}/output/download` – download the normalized output; returns `409` when not ready.
-- `GET /runs/{run_id}/events/download` – download the NDJSON event log (legacy `/runs/{run_id}/logs` remains as an alias).
-- Legacy: `/runs/{run_id}/outputs*` endpoints are deprecated and alias the singular output file.
+- `GET /runs/{run_id}/events/download` – download the NDJSON event log.
 
 ### Configurations
 

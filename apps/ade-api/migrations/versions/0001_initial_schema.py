@@ -208,6 +208,9 @@ def upgrade() -> None:
 
     # Runtime
     _create_runs()
+    _create_run_metrics()
+    _create_run_fields()
+    _create_run_table_columns()
 
 
 def downgrade() -> None:  # pragma: no cover
@@ -775,6 +778,110 @@ def _create_runs() -> None:
         unique=False,
     )
     op.create_index("ix_runs_build", "runs", ["build_id"], unique=False)
+
+
+def _create_run_metrics() -> None:
+    op.create_table(
+        "run_metrics",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("evaluation_outcome", sa.String(length=20), nullable=True),
+        sa.Column("evaluation_findings_total", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_info", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_warning", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_error", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_total", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_info", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_warning", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_error", sa.Integer(), nullable=True),
+        sa.Column("validation_max_severity", sa.String(length=10), nullable=True),
+        sa.Column("workbook_count", sa.Integer(), nullable=True),
+        sa.Column("sheet_count", sa.Integer(), nullable=True),
+        sa.Column("table_count", sa.Integer(), nullable=True),
+        sa.Column("row_count_total", sa.Integer(), nullable=True),
+        sa.Column("row_count_empty", sa.Integer(), nullable=True),
+        sa.Column("column_count_total", sa.Integer(), nullable=True),
+        sa.Column("column_count_empty", sa.Integer(), nullable=True),
+        sa.Column("column_count_mapped", sa.Integer(), nullable=True),
+        sa.Column("column_count_ambiguous", sa.Integer(), nullable=True),
+        sa.Column("column_count_unmapped", sa.Integer(), nullable=True),
+        sa.Column("column_count_passthrough", sa.Integer(), nullable=True),
+        sa.Column("field_count_expected", sa.Integer(), nullable=True),
+        sa.Column("field_count_mapped", sa.Integer(), nullable=True),
+        sa.Column("cell_count_total", sa.Integer(), nullable=True),
+        sa.Column("cell_count_non_empty", sa.Integer(), nullable=True),
+    )
+
+
+def _create_run_fields() -> None:
+    op.create_table(
+        "run_fields",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("field", sa.String(length=128), primary_key=True, nullable=False),
+        sa.Column("label", sa.String(length=255), nullable=True),
+        sa.Column("mapped", sa.Boolean(), nullable=False),
+        sa.Column("best_mapping_score", sa.Float(), nullable=True),
+        sa.Column("occurrences_tables", sa.Integer(), nullable=False),
+        sa.Column("occurrences_columns", sa.Integer(), nullable=False),
+    )
+    op.create_index("ix_run_fields_run", "run_fields", ["run_id"], unique=False)
+    op.create_index("ix_run_fields_field", "run_fields", ["field"], unique=False)
+
+
+def _create_run_table_columns() -> None:
+    op.create_table(
+        "run_table_columns",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("workbook_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("workbook_name", sa.String(length=255), nullable=False),
+        sa.Column("sheet_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("sheet_name", sa.String(length=255), nullable=False),
+        sa.Column("table_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("column_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("header_raw", sa.Text(), nullable=True),
+        sa.Column("header_normalized", sa.Text(), nullable=True),
+        sa.Column("non_empty_cells", sa.Integer(), nullable=False),
+        sa.Column("mapping_status", sa.String(length=32), nullable=False),
+        sa.Column("mapped_field", sa.String(length=128), nullable=True),
+        sa.Column("mapping_score", sa.Float(), nullable=True),
+        sa.Column("mapping_method", sa.String(length=32), nullable=True),
+        sa.Column("unmapped_reason", sa.String(length=64), nullable=True),
+    )
+    op.create_index(
+        "ix_run_table_columns_run",
+        "run_table_columns",
+        ["run_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_run_table_columns_run_sheet",
+        "run_table_columns",
+        ["run_id", "sheet_name"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_run_table_columns_run_mapped_field",
+        "run_table_columns",
+        ["run_id", "mapped_field"],
+        unique=False,
+    )
 
 
 def _create_documents() -> None:

@@ -9,9 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.pagination import Page, paginate_sql
 from ade_api.common.types import OrderBy
-from ade_api.models import Build, BuildStatus, Run, RunStatus
+from ade_api.models import (
+    Build,
+    BuildStatus,
+    Run,
+    RunField,
+    RunMetrics,
+    RunStatus,
+    RunTableColumn,
+)
 
-from .filters import RunFilters, apply_run_filters
+from .filters import RunColumnFilters, RunFilters, apply_run_column_filters, apply_run_filters
 
 __all__ = ["RunsRepository"]
 
@@ -82,3 +90,32 @@ class RunsRepository:
             return None
         run, build_status = row
         return run, BuildStatus(build_status)
+
+    async def get_metrics(self, run_id: UUID) -> RunMetrics | None:
+        return await self._session.get(RunMetrics, run_id)
+
+    async def list_fields(self, run_id: UUID) -> list[RunField]:
+        stmt = (
+            select(RunField)
+            .where(RunField.run_id == run_id)
+            .order_by(RunField.field.asc())
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def list_columns(
+        self,
+        *,
+        run_id: UUID,
+        filters: RunColumnFilters,
+    ) -> list[RunTableColumn]:
+        stmt: Select = select(RunTableColumn).where(RunTableColumn.run_id == run_id)
+        stmt = apply_run_column_filters(stmt, filters)
+        stmt = stmt.order_by(
+            RunTableColumn.workbook_index.asc(),
+            RunTableColumn.sheet_index.asc(),
+            RunTableColumn.table_index.asc(),
+            RunTableColumn.column_index.asc(),
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())

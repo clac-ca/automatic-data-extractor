@@ -366,47 +366,19 @@ Example structure:
 
 ```text
 src/schema/
-  workspace.ts
-  document.ts
-  run.ts
-  configuration.ts
-  permissions.ts
+  index.ts
+  adeArtifact.ts
+  adeTelemetry.ts
 ```
 
 Typical content:
 
-* `WorkspaceSummary`, `WorkspaceDetail`.
-* `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
-* `RunSummary`, `RunDetail`, `RunStatus`.
-* `Configuration`.
+* `WorkspaceOut`, `DocumentOut`.
+* `RunResource`, `RunStatus`.
+* Configuration and safe-mode types.
 * Permission and role models.
 
-You can also provide mapping helpers:
-
-```ts
-// run.ts
-import type { ApiRun } from "@generated-types";
-
-export interface RunSummary {
-  id: string;
-  status: RunStatus;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  // ...
-}
-
-export function fromApiRun(apiRun: ApiRun): RunSummary {
-  // convert and normalise fields here
-}
-```
-
-Standard helpers to keep snake_case out of screens:
-
-* `fromApiRun(apiRun: ApiRun): Run` – maps `run_id` → `runId` and normalises timestamps/status.
-* `fromApiConfiguration(apiConfig: ApiConfiguration): Configuration` – maps `configuration_id` → `configurationId` plus any display helpers.
-
-All snake_case → camelCase translation happens here so screens and hooks work with predictable models.
+The curated types already use wire shapes, so mapping helpers are only needed when you introduce UI‑specific view models.
 
 Features import types from `@schema`, not from `@generated-types`, to keep the rest of the code insulated from backend schema churn.
 
@@ -453,11 +425,11 @@ Guidelines:
   // Good
   import { WorkspaceShellScreen } from "@screens/workspace-shell/WorkspaceShellScreen";
   import { GlobalTopBar } from "@ui/global/GlobalTopBar";
-  import { listWorkspaceRuns } from "@shared/api/runsApi";
-  import { RunSummary } from "@schema/run";
+  import { createRun } from "@shared/runs/api";
+  import type { RunResource } from "@schema";
 
   // Avoid
-  import { listWorkspaceRuns } from "../../../shared/api/runsApi";
+  import { createRun } from "../../../shared/runs/api";
   ```
 
 * Within a small screen folder, relative imports are fine and often clearer:
@@ -537,7 +509,7 @@ Feature hooks wrap these functions into React Query calls.
 
   * `WorkspaceSummary`, `WorkspaceDetail`.
   * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
-  * `RunSummary`, `RunDetail`, `RunStatus`.
+  * `RunResource`, `RunStatus`.
   * `Configuration`.
 
 * If you need to distinguish backend wire types, use a clear prefix/suffix (`ApiRun`, `ApiDocument`) and isolate them in `schema/` or `generated-types/`.

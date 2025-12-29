@@ -4,7 +4,6 @@ import type { components, paths } from "@schema";
 import type { RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
-export type RunStatus = RunResource["status"];
 export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
 type RunCreateRequest = components["schemas"]["RunWorkspaceCreateRequest"];
 type RunCreatePathParams =
@@ -18,7 +17,6 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
   force_rebuild: false,
-  debug: false,
   log_level: "INFO",
 };
 
@@ -50,22 +48,6 @@ export async function createRun(
   }
 
   return data as RunResource;
-}
-
-export async function* streamRun(
-  workspaceId: string,
-  options: RunStreamOptions,
-  signal?: AbortSignal,
-): AsyncGenerator<RunStreamEvent> {
-  const runResource = await createRun(workspaceId, options, signal);
-  const eventsUrl = runEventsUrl(runResource, { afterSequence: 0 });
-  if (!eventsUrl) {
-    throw new Error("Run creation response is missing required links.");
-  }
-
-  for await (const event of streamRunEvents(eventsUrl, signal)) {
-    yield event;
-  }
 }
 
 export async function* streamRunEvents(
@@ -161,21 +143,11 @@ async function* streamRunEventsViaFetch(
 
 function parseSseEvent(rawEvent: string): RunStreamEvent | null {
   const dataLines: string[] = [];
-  let sseId: string | null = null;
-  let sseEvent: string | null = null;
 
   for (const line of rawEvent.split(/\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
-      continue;
-    }
-    if (line.startsWith("id:")) {
-      sseId = line.slice(3).trim();
-      continue;
-    }
-    if (line.startsWith("event:")) {
-      sseEvent = line.slice(6).trim();
       continue;
     }
   }
@@ -191,22 +163,16 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
 
   try {
     const parsed = JSON.parse(payload) as RunStreamEvent;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    if (typeof parsed.event !== "string" || parsed.event.trim().length === 0) {
+      return null;
+    }
+    if (!("timestamp" in parsed)) {
+      return null;
+    }
     (parsed as Record<string, unknown>)._raw = payload;
-
-    // Fill in missing event/type from SSE event field if not present in payload.
-    if (sseEvent && !(parsed as Record<string, unknown>).event && !(parsed as Record<string, unknown>).type) {
-      (parsed as Record<string, unknown>).event = sseEvent;
-    }
-
-    // Attach sequence/id if absent and SSE id is numeric or non-empty.
-    if (sseId && (parsed as Record<string, unknown>).sequence === undefined) {
-      const numeric = Number(sseId);
-      if (Number.isFinite(numeric)) {
-        (parsed as Record<string, unknown>).sequence = numeric;
-      } else {
-        (parsed as Record<string, unknown>).sse_id = sseId;
-      }
-    }
 
     return parsed;
   } catch (error) {
@@ -217,22 +183,13 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
 
 export function runEventsUrl(
   run: RunResource,
-  options?: { afterSequence?: number; stream?: boolean },
+  options?: { afterSequence?: number },
 ): string | null {
-  const baseLink =
-    run.events_stream_url ??
-    run.links?.events_stream ??
-    run.events_url ??
-    run.links?.events;
+  const baseLink = run.events_stream_url ?? run.links?.events_stream;
   if (!baseLink) {
     return null;
   }
   const queryParts: string[] = [];
-  const wantsStream = options?.stream ?? true;
-  const alreadyStreaming = baseLink.endsWith("/stream") || baseLink.includes("stream=true");
-  if (wantsStream && !alreadyStreaming) {
-    queryParts.push("stream=true");
-  }
   if (typeof options?.afterSequence === "number" && Number.isFinite(options.afterSequence)) {
     const normalized = Math.max(0, Math.floor(options.afterSequence));
     queryParts.push(`after_sequence=${normalized}`);
@@ -255,77 +212,6 @@ export async function* streamRunEventsForRun(
   }
 }
 
-export async function fetchRunEvents(
-  run: RunResource | string,
-  options?: { afterSequence?: number; signal?: AbortSignal },
-): Promise<RunStreamEvent[]> {
-  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
-  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence, stream: false });
-  if (!eventsUrl) {
-    throw new Error("Run events link unavailable.");
-  }
-  const response = await fetch(eventsUrl, {
-    method: "GET",
-    credentials: "include",
-    signal: options?.signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Run events unavailable (${response.status}).`);
-  }
-  const text = await response.text();
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const events: RunStreamEvent[] = [];
-  for (const line of lines) {
-    try {
-      events.push(JSON.parse(line) as RunStreamEvent);
-    } catch (error) {
-      console.warn("Skipping malformed run event line", error, line);
-    }
-  }
-  return events;
-}
-
-export async function fetchRunTelemetry(
-  run: RunResource | string,
-  signal?: AbortSignal,
-): Promise<RunStreamEvent[]> {
-  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const downloadLink =
-    runResource.events_download_url ??
-    runResource.links?.events_download ??
-    runResource.links?.logs;
-  if (!downloadLink) {
-    throw new Error("Run logs link unavailable.");
-  }
-
-  const response = await fetch(resolveApiUrl(downloadLink), {
-    method: "GET",
-    credentials: "include",
-    headers: { Accept: "application/x-ndjson" },
-    signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Run telemetry unavailable (${response.status}).`);
-  }
-  const data = await response.text();
-
-  const text = data ?? "";
-  return text
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as RunStreamEvent;
-      } catch (error) {
-        console.warn("Skipping invalid telemetry line", { error, line });
-        return null;
-      }
-    })
-    .filter((value): value is RunStreamEvent => Boolean(value));
-}
 
 export async function fetchRun(
   runId: string,
@@ -351,7 +237,7 @@ export function runOutputUrl(run: RunResource): string | null {
 }
 
 export function runLogsUrl(run: RunResource): string | null {
-  const link = run.events_download_url ?? run.links?.events_download ?? run.links?.logs;
+  const link = run.events_download_url ?? run.links?.events_download;
   return link ? resolveApiUrl(link) : null;
 }
 
@@ -367,8 +253,3 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
     : link;
   return resolveApiUrl(appended);
 }
-
-export const runQueryKeys = {
-  detail: (runId: string) => ["run", runId] as const,
-  telemetry: (runId: string) => ["run-telemetry", runId] as const,
-};

@@ -1,5 +1,4 @@
-import type { RunSummary } from "@schema";
-import type { RunStreamEvent, RunStatus } from "@shared/runs/types";
+import type { RunStatus } from "@shared/runs/types";
 
 export type WorkbenchFileKind = "file" | "folder";
 
@@ -85,12 +84,6 @@ export interface WorkbenchRunSummary {
   readonly logsUrl?: string;
   readonly processedFile?: string | null;
   readonly outputLoaded: boolean;
-  readonly summary?: RunSummary | null;
-  readonly summaryLoaded: boolean;
-  readonly summaryError?: string | null;
-  readonly telemetry?: readonly RunStreamEvent[] | null;
-  readonly telemetryLoaded: boolean;
-  readonly telemetryError?: string | null;
   readonly documentName?: string;
   readonly sheetNames?: readonly string[];
   readonly error?: string | null;

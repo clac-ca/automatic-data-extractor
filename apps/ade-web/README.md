@@ -102,7 +102,7 @@ ADE Web’s domain language is shared across UI copy, types, and routes:
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md#32-workspace)
 
 - **Document**  
-  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and last run summary. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
+  Immutable input file (Excel, CSV, PDF, etc.) uploaded into a workspace. Tracks status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status. Multi-sheet spreadsheets expose worksheet metadata via a document-sheets endpoint.  
   See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#2-documents)
 
 - **Run**  
@@ -198,7 +198,7 @@ Responsibilities:
 
 - List and filter documents in the workspace.
 - Upload new documents (`⌘U` / `Ctrl+U`).
-- Show status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and last run summary.
+- Show status (`uploaded`, `processing`, `processed`, `failed`, `archived`) and the last run status.
 - Trigger runs for a selected configuration, optionally per-document run preferences (preferred configuration and sheet selection).
 
 See: [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md#3-documents-screen-architecture)
@@ -211,7 +211,7 @@ Responsibilities:
 
 - Workspace-wide ledger of runs (REST `/runs` on the backend).
 - Filter by status, configuration, timeframe, and initiator.
-- Link to run detail, logs (via NDJSON replay), telemetry summaries, and outputs (artifact and per-file downloads).
+- Link to run detail, logs (via NDJSON replay), event downloads, and outputs (artifact and per-file downloads).
 
 Run creation, options (`RunOptions`), and event streaming (`ade.event/v1`) are described in detail in:  
 

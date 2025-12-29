@@ -43,13 +43,16 @@ from .exceptions import (
     RunOutputNotReadyError,
     RunQueueFullError,
 )
-from .filters import RunFilters
+from .filters import RunColumnFilters, RunFilters
 from .schemas import (
     RunBatchCreateRequest,
     RunBatchCreateResponse,
+    RunColumnResource,
     RunCreateRequest,
     RunEventsPage,
+    RunFieldResource,
     RunInput,
+    RunMetricsResource,
     RunOutput,
     RunPage,
     RunResource,
@@ -85,6 +88,14 @@ _FILTER_KEYS = {
     "has_output",
 }
 
+_COLUMN_FILTER_KEYS = {
+    "sheet_name",
+    "sheet_index",
+    "table_index",
+    "mapped_field",
+    "mapping_status",
+}
+
 
 def get_run_filters(
     request: Request,
@@ -93,6 +104,26 @@ def get_run_filters(
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
     extras = sorted({key for key in request.query_params.keys() if key not in allowed_with_shared})
+    if extras:
+        detail = [
+            {
+                "type": "extra_forbidden",
+                "loc": ["query", key],
+                "msg": "Extra inputs are not permitted",
+                "input": request.query_params.get(key),
+            }
+            for key in extras
+        ]
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+    return filters
+
+
+def get_run_column_filters(
+    request: Request,
+    filters: Annotated[RunColumnFilters, Depends()],
+) -> RunColumnFilters:
+    allowed = _COLUMN_FILTER_KEYS
+    extras = sorted({key for key in request.query_params.keys() if key not in allowed})
     if extras:
         detail = [
             {
@@ -329,6 +360,57 @@ async def get_run_endpoint(
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
     return await service.to_resource(run)
+
+
+@router.get(
+    "/runs/{run_id}/metrics",
+    response_model=RunMetricsResource,
+    response_model_exclude_none=True,
+)
+async def get_run_metrics_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> RunMetricsResource:
+    try:
+        metrics = await service.get_run_metrics(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if metrics is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run metrics not available")
+    return RunMetricsResource.model_validate(metrics)
+
+
+@router.get(
+    "/runs/{run_id}/fields",
+    response_model=list[RunFieldResource],
+    response_model_exclude_none=True,
+)
+async def list_run_fields_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    service: RunsService = runs_service_dependency,
+) -> list[RunFieldResource]:
+    try:
+        fields = await service.list_run_fields(run_id=run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return [RunFieldResource.model_validate(item) for item in fields]
+
+
+@router.get(
+    "/runs/{run_id}/columns",
+    response_model=list[RunColumnResource],
+    response_model_exclude_none=True,
+)
+async def list_run_columns_endpoint(
+    run_id: Annotated[UUID, Path(description="Run identifier")],
+    filters: Annotated[RunColumnFilters, Depends(get_run_column_filters)],
+    service: RunsService = runs_service_dependency,
+) -> list[RunColumnResource]:
+    try:
+        columns = await service.list_run_columns(run_id=run_id, filters=filters)
+    except RunNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return [RunColumnResource.model_validate(item) for item in columns]
 
 
 @router.get(

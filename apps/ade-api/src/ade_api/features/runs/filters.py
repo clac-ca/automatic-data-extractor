@@ -11,7 +11,7 @@ from sqlalchemy.sql import Select
 from ade_api.common.filters import FilterBase
 from ade_api.common.ids import UUIDStr
 from ade_api.common.validators import normalize_utc, parse_csv_or_repeated
-from ade_api.models import Document, Run, RunStatus
+from ade_api.models import Document, Run, RunStatus, RunTableColumn
 from ade_api.settings import MAX_SEARCH_LEN, MAX_SET_SIZE, MIN_SEARCH_LEN
 
 
@@ -102,6 +102,50 @@ class RunFilters(FilterBase):
         return value
 
 
+class RunColumnFilters(FilterBase):
+    """Query parameters supported by run column listings."""
+
+    sheet_name: str | None = Field(
+        None,
+        description="Filter columns to a specific sheet name.",
+    )
+    sheet_index: int | None = Field(
+        None,
+        ge=0,
+        description="Filter columns to a specific sheet index (0-based).",
+    )
+    table_index: int | None = Field(
+        None,
+        ge=0,
+        description="Filter columns to a specific table index (0-based).",
+    )
+    mapped_field: str | None = Field(
+        None,
+        description="Filter columns mapped to a specific field.",
+    )
+    mapping_status: Literal["mapped", "ambiguous", "unmapped", "passthrough"] | None = Field(
+        None,
+        description="Filter columns by mapping status.",
+    )
+
+    @field_validator("sheet_name", "mapped_field", mode="before")
+    @classmethod
+    def _trim_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("mapping_status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value.strip().lower() or None
+        return value
+
+
 def apply_run_filters(stmt: Select, filters: RunFilters) -> Select:
     """Apply ``filters`` to a run query."""
 
@@ -156,4 +200,25 @@ def apply_run_filters(stmt: Select, filters: RunFilters) -> Select:
     return stmt
 
 
-__all__ = ["RunFilters", "apply_run_filters"]
+def apply_run_column_filters(stmt: Select, filters: RunColumnFilters) -> Select:
+    """Apply ``filters`` to a run column query."""
+
+    if filters.sheet_name:
+        stmt = stmt.where(RunTableColumn.sheet_name == filters.sheet_name)
+    if filters.sheet_index is not None:
+        stmt = stmt.where(RunTableColumn.sheet_index == filters.sheet_index)
+    if filters.table_index is not None:
+        stmt = stmt.where(RunTableColumn.table_index == filters.table_index)
+    if filters.mapped_field:
+        stmt = stmt.where(RunTableColumn.mapped_field == filters.mapped_field)
+    if filters.mapping_status:
+        stmt = stmt.where(RunTableColumn.mapping_status == filters.mapping_status)
+    return stmt
+
+
+__all__ = [
+    "RunFilters",
+    "apply_run_filters",
+    "RunColumnFilters",
+    "apply_run_column_filters",
+]
