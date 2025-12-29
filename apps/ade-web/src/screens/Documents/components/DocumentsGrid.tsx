@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import type { DocumentEntry, WorkspacePerson } from "../types";
@@ -98,16 +98,6 @@ export function DocumentsGrid({
   const showLoading = isLoading && documents.length === 0;
   const showError = isError && documents.length === 0;
   const listRef = useRef<HTMLDivElement | null>(null);
-  const rowRefs = useRef(new Map<string, HTMLDivElement>());
-
-  useEffect(() => {
-    if (!activeId) return;
-    const container = listRef.current;
-    const row = rowRefs.current.get(activeId);
-    if (!container || !row) return;
-    const nextTop = row.offsetTop - container.offsetTop;
-    container.scrollTo({ top: Math.max(0, nextTop) });
-  }, [activeId]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
@@ -183,10 +173,6 @@ export function DocumentsGrid({
               return (
                 <div
                   key={doc.id}
-                  ref={(node) => {
-                    if (node) rowRefs.current.set(doc.id, node);
-                    else rowRefs.current.delete(doc.id);
-                  }}
                   className="border-b border-border/70"
                 >
                   <div
