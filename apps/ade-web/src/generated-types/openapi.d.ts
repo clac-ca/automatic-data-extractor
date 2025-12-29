@@ -1083,6 +1083,57 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Metrics Endpoint */
+        get: operations["get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Fields Endpoint */
+        get: operations["list_run_fields_endpoint_api_v1_runs__run_id__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Columns Endpoint */
+        get: operations["list_run_columns_endpoint_api_v1_runs__run_id__columns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/input": {
         parameters: {
             query?: never;
@@ -2619,12 +2670,6 @@ export type components = {
              */
             force_rebuild: boolean;
             /**
-             * Debug
-             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
-             * @default false
-             */
-            debug: boolean;
-            /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
              */
@@ -2658,6 +2703,40 @@ export type components = {
             runs: components["schemas"]["RunResource"][];
         };
         /**
+         * RunColumnResource
+         * @description Detected column details for a run table.
+         */
+        RunColumnResource: {
+            /** Workbook Index */
+            workbook_index: number;
+            /** Workbook Name */
+            workbook_name: string;
+            /** Sheet Index */
+            sheet_index: number;
+            /** Sheet Name */
+            sheet_name: string;
+            /** Table Index */
+            table_index: number;
+            /** Column Index */
+            column_index: number;
+            /** Header Raw */
+            header_raw?: string | null;
+            /** Header Normalized */
+            header_normalized?: string | null;
+            /** Non Empty Cells */
+            non_empty_cells: number;
+            /** Mapping Status */
+            mapping_status: string;
+            /** Mapped Field */
+            mapped_field?: string | null;
+            /** Mapping Score */
+            mapping_score?: number | null;
+            /** Mapping Method */
+            mapping_method?: string | null;
+            /** Unmapped Reason */
+            unmapped_reason?: string | null;
+        };
+        /**
          * RunCreateOptions
          * @description Execution toggles for a single ADE run.
          */
@@ -2678,12 +2757,6 @@ export type components = {
              * @default false
              */
             force_rebuild: boolean;
-            /**
-             * Debug
-             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
-             * @default false
-             */
-            debug: boolean;
             /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
@@ -2730,12 +2803,6 @@ export type components = {
              */
             force_rebuild: boolean;
             /**
-             * Debug
-             * @description Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).
-             * @default false
-             */
-            debug: boolean;
-            /**
              * Log Level
              * @description Engine log level passed as --log-level to ade_engine.
              */
@@ -2771,6 +2838,24 @@ export type components = {
             }[];
             /** Next After Sequence */
             next_after_sequence?: number | null;
+        };
+        /**
+         * RunFieldResource
+         * @description Field-level mapping summary for a run.
+         */
+        RunFieldResource: {
+            /** Field */
+            field: string;
+            /** Label */
+            label?: string | null;
+            /** Mapped */
+            mapped: boolean;
+            /** Best Mapping Score */
+            best_mapping_score?: number | null;
+            /** Occurrences Tables */
+            occurrences_tables: number;
+            /** Occurrences Columns */
+            occurrences_columns: number;
         };
         /**
          * RunInput
@@ -2819,6 +2904,62 @@ export type components = {
             output_download: string;
             /** Output Metadata */
             output_metadata: string;
+        };
+        /**
+         * RunMetricsResource
+         * @description Aggregate run metrics derived from engine.run.completed.
+         */
+        RunMetricsResource: {
+            /** Evaluation Outcome */
+            evaluation_outcome?: string | null;
+            /** Evaluation Findings Total */
+            evaluation_findings_total?: number | null;
+            /** Evaluation Findings Info */
+            evaluation_findings_info?: number | null;
+            /** Evaluation Findings Warning */
+            evaluation_findings_warning?: number | null;
+            /** Evaluation Findings Error */
+            evaluation_findings_error?: number | null;
+            /** Validation Issues Total */
+            validation_issues_total?: number | null;
+            /** Validation Issues Info */
+            validation_issues_info?: number | null;
+            /** Validation Issues Warning */
+            validation_issues_warning?: number | null;
+            /** Validation Issues Error */
+            validation_issues_error?: number | null;
+            /** Validation Max Severity */
+            validation_max_severity?: string | null;
+            /** Workbook Count */
+            workbook_count?: number | null;
+            /** Sheet Count */
+            sheet_count?: number | null;
+            /** Table Count */
+            table_count?: number | null;
+            /** Row Count Total */
+            row_count_total?: number | null;
+            /** Row Count Empty */
+            row_count_empty?: number | null;
+            /** Column Count Total */
+            column_count_total?: number | null;
+            /** Column Count Empty */
+            column_count_empty?: number | null;
+            /** Column Count Mapped */
+            column_count_mapped?: number | null;
+            /** Column Count Ambiguous */
+            column_count_ambiguous?: number | null;
+            /** Column Count Unmapped */
+            column_count_unmapped?: number | null;
+            /** Column Count Passthrough */
+            column_count_passthrough?: number | null;
+            /** Field Count Expected */
+            field_count_expected?: number | null;
+            /** Field Count Mapped */
+            field_count_mapped?: number | null;
+            /** Cell Count Total */
+            cell_count_total?: number | null;
+            /** Cell Count Non Empty */
+            cell_count_non_empty?: number | null;
         };
         /**
          * RunOutput
@@ -7197,6 +7338,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMetricsResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_fields_endpoint_api_v1_runs__run_id__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunFieldResource"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_columns_endpoint_api_v1_runs__run_id__columns_get: {
+        parameters: {
+            query?: {
+                sheet_name?: string | null;
+                sheet_index?: number | null;
+                table_index?: number | null;
+                mapped_field?: string | null;
+                mapping_status?: ("mapped" | "ambiguous" | "unmapped" | "passthrough") | null;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunColumnResource"][];
                 };
             };
             /** @description Validation Error */

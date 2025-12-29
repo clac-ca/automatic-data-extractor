@@ -1,14 +1,15 @@
 import { Input } from "@ui/Input";
 import { Button } from "@ui/Button";
 
-import type { RunsFilters } from "../types";
-import { DATE_RANGE_OPTIONS } from "../constants";
+import type { RunsCounts, RunsFilters } from "../types";
+import { DATE_RANGE_OPTIONS, RUN_STATUS_META } from "../constants";
 
 export function RunsFiltersBar({
   filters,
   configOptions,
   ownerOptions,
   resultEnabled,
+  counts,
   onChange,
   onReset,
 }: {
@@ -16,6 +17,7 @@ export function RunsFiltersBar({
   configOptions: string[];
   ownerOptions: string[];
   resultEnabled: boolean;
+  counts: RunsCounts;
   onChange: (next: Partial<RunsFilters>) => void;
   onReset: () => void;
 }) {
@@ -90,6 +92,86 @@ export function RunsFiltersBar({
           Reset
         </Button>
       </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <StatusChip
+          label="All"
+          count={counts.total}
+          active={filters.status === "all"}
+          onClick={() => onChange({ status: "all" })}
+        />
+        <StatusChip
+          label={RUN_STATUS_META.queued.label}
+          count={counts.queued}
+          tone="muted"
+          active={filters.status === "queued"}
+          onClick={() => onChange({ status: "queued" })}
+        />
+        <StatusChip
+          label={RUN_STATUS_META.running.label}
+          count={counts.running}
+          tone="info"
+          active={filters.status === "running"}
+          onClick={() => onChange({ status: "running" })}
+        />
+        <StatusChip
+          label={RUN_STATUS_META.succeeded.label}
+          count={counts.success}
+          tone="success"
+          active={filters.status === "succeeded"}
+          onClick={() => onChange({ status: "succeeded" })}
+        />
+        <StatusChip
+          label={RUN_STATUS_META.failed.label}
+          count={counts.failed}
+          tone="danger"
+          active={filters.status === "failed"}
+          onClick={() => onChange({ status: "failed" })}
+        />
+        <StatusChip
+          label={RUN_STATUS_META.cancelled.label}
+          count={counts.cancelled}
+          tone="muted"
+          active={filters.status === "cancelled"}
+          onClick={() => onChange({ status: "cancelled" })}
+        />
+      </div>
     </div>
+  );
+}
+
+function StatusChip({
+  label,
+  count,
+  active,
+  tone = "default",
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  tone?: "default" | "success" | "danger" | "info" | "muted";
+  onClick: () => void;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "text-success-700"
+      : tone === "danger"
+        ? "text-danger-700"
+        : tone === "info"
+          ? "text-info-700"
+          : "text-muted-foreground";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+        active ? "border-transparent bg-brand-600 text-on-brand" : "border-border bg-background"
+      }`}
+    >
+      <span className={active ? "text-on-brand" : toneClass}>{label}</span>
+      <span className={active ? "text-on-brand/80" : "text-muted-foreground"}>{count}</span>
+    </button>
   );
 }

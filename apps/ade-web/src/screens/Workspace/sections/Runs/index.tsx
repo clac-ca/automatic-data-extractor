@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
@@ -6,6 +6,7 @@ import { PageState } from "@ui/PageState";
 
 import { RunsFiltersBar } from "./components/RunsFiltersBar";
 import { RunsHeader } from "./components/RunsHeader";
+import { RunsInspector } from "./components/RunsInspector";
 import { RunsMetrics } from "./components/RunsMetrics";
 import { RunsTable } from "./components/RunsTable";
 import { DEFAULT_RUNS_FILTERS } from "./constants";
@@ -45,18 +46,6 @@ export default function WorkspaceRunsRoute() {
     }
   }, [model.actions, model.state.activeId, model.state.previewOpen, urlRunId]);
 
-  const serialized = useMemo(
-    () => buildSearchParams(model.state.filters, model.state.previewOpen ? model.state.activeId : null),
-    [model.state.activeId, model.state.filters, model.state.previewOpen],
-  );
-
-  useEffect(() => {
-    const current = location.search.startsWith("?") ? location.search.slice(1) : location.search;
-    if (serialized === current) return;
-    const target = `${location.pathname}${serialized ? `?${serialized}` : ""}${location.hash ?? ""}`;
-    navigate(target, { replace: true });
-  }, [location.hash, location.pathname, location.search, navigate, serialized]);
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -65,12 +54,45 @@ export default function WorkspaceRunsRoute() {
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
       }
-      model.actions.closePreview();
+      handleClosePreview();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model.actions, model.state.previewOpen]);
+  }, [model.state.previewOpen]);
+
+  const syncUrl = (filters: RunsFilters, runId: string | null) => {
+    const params = buildSearchParams(filters, runId);
+    const next = `${location.pathname}${params ? `?${params}` : ""}${location.hash ?? ""}`;
+    const current = `${location.pathname}${location.search}${location.hash ?? ""}`;
+    if (next === current) return;
+    navigate(next, { replace: true });
+  };
+
+  const handleClosePreview = () => {
+    model.actions.closePreview();
+    syncUrl(model.state.filters, null);
+  };
+
+  const handleTogglePreview = (id: string) => {
+    if (model.state.previewOpen && model.state.activeId === id) {
+      handleClosePreview();
+      return;
+    }
+    model.actions.openPreview(id);
+    syncUrl(model.state.filters, id);
+  };
+
+  const handleFiltersChange = (next: Partial<RunsFilters>) => {
+    const merged = { ...model.state.filters, ...next };
+    model.actions.setFilters(merged);
+    syncUrl(merged, model.state.previewOpen ? model.state.activeId : null);
+  };
+
+  const handleFiltersReset = () => {
+    model.actions.resetFilters();
+    syncUrl(DEFAULT_RUNS_FILTERS, model.state.previewOpen ? model.state.activeId : null);
+  };
 
   return (
     <div className="runs flex flex-1 flex-col gap-5">
@@ -90,8 +112,9 @@ export default function WorkspaceRunsRoute() {
         configOptions={model.derived.configOptions}
         ownerOptions={model.derived.ownerOptions}
         resultEnabled={model.derived.supportsResultFilters}
-        onChange={model.actions.updateFilters}
-        onReset={model.actions.resetFilters}
+        counts={model.derived.counts}
+        onChange={handleFiltersChange}
+        onReset={handleFiltersReset}
       />
 
       {model.derived.isLoading ? (
@@ -118,10 +141,16 @@ export default function WorkspaceRunsRoute() {
         <RunsTable
           runs={model.derived.visibleRuns}
           totalCount={model.derived.totalCount}
-          expandedId={expandedId}
-          onActivate={model.actions.togglePreview}
+          activeId={expandedId}
+          onSelect={handleTogglePreview}
         />
       )}
+
+      <RunsInspector
+        run={model.derived.activeRun}
+        open={model.state.previewOpen}
+        onClose={handleClosePreview}
+      />
     </div>
   );
 }

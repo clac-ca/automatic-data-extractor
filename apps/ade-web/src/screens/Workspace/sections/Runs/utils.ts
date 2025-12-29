@@ -69,13 +69,15 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
     failed: 0,
     running: 0,
     queued: 0,
+    cancelled: 0,
     active: 0,
   };
 
   runs.forEach((run) => {
     counts.total += 1;
     if (run.status === "succeeded") counts.success += 1;
-    if (run.status === "failed" || run.status === "cancelled") counts.failed += 1;
+    if (run.status === "failed") counts.failed += 1;
+    if (run.status === "cancelled") counts.cancelled += 1;
     if (run.status === "running") counts.running += 1;
     if (run.status === "queued") counts.queued += 1;
 
@@ -96,13 +98,16 @@ export function filterRuns(runs: RunRecord[], filters: RunsFilters): RunRecord[]
   return runs.filter((run) => {
     if (filters.status !== "all" && run.status !== filters.status) return false;
 
-    if (filters.result === "clean" && run.warnings !== null && run.errors !== null) {
+    if (filters.result === "clean") {
+      if (run.warnings === null || run.errors === null) return false;
       if (run.warnings > 0 || run.errors > 0) return false;
     }
-    if (filters.result === "warnings" && run.warnings !== null) {
+    if (filters.result === "warnings") {
+      if (run.warnings === null) return false;
       if (run.warnings === 0) return false;
     }
-    if (filters.result === "errors" && run.errors !== null) {
+    if (filters.result === "errors") {
+      if (run.errors === null) return false;
       if (run.errors === 0) return false;
     }
 

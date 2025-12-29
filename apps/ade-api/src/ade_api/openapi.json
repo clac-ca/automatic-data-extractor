@@ -7652,6 +7652,270 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/metrics": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run Metrics Endpoint",
+        "operationId": "get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunMetricsResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/fields": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Fields Endpoint",
+        "operationId": "list_run_fields_endpoint_api_v1_runs__run_id__fields_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunFieldResource"
+                  },
+                  "title": "Response List Run Fields Endpoint Api V1 Runs  Run Id  Fields Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/columns": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Columns Endpoint",
+        "operationId": "list_run_columns_endpoint_api_v1_runs__run_id__columns_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "sheet_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet Name"
+            }
+          },
+          {
+            "name": "sheet_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet Index"
+            }
+          },
+          {
+            "name": "table_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Table Index"
+            }
+          },
+          {
+            "name": "mapped_field",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mapped Field"
+            }
+          },
+          {
+            "name": "mapping_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "mapped",
+                    "ambiguous",
+                    "unmapped",
+                    "passthrough"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mapping Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunColumnResource"
+                  },
+                  "title": "Response List Run Columns Endpoint Api V1 Runs  Run Id  Columns Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/input": {
       "get": {
         "tags": [
@@ -11249,12 +11513,6 @@
             "description": "If true, rebuild the configuration environment before running.",
             "default": false
           },
-          "debug": {
-            "type": "boolean",
-            "title": "Debug",
-            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
-            "default": false
-          },
           "log_level": {
             "anyOf": [
               {
@@ -11337,6 +11595,122 @@
         "title": "RunBatchCreateResponse",
         "description": "Response envelope for batch run creation."
       },
+      "RunColumnResource": {
+        "properties": {
+          "workbook_index": {
+            "type": "integer",
+            "title": "Workbook Index"
+          },
+          "workbook_name": {
+            "type": "string",
+            "title": "Workbook Name"
+          },
+          "sheet_index": {
+            "type": "integer",
+            "title": "Sheet Index"
+          },
+          "sheet_name": {
+            "type": "string",
+            "title": "Sheet Name"
+          },
+          "table_index": {
+            "type": "integer",
+            "title": "Table Index"
+          },
+          "column_index": {
+            "type": "integer",
+            "title": "Column Index"
+          },
+          "header_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Raw"
+          },
+          "header_normalized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Normalized"
+          },
+          "non_empty_cells": {
+            "type": "integer",
+            "title": "Non Empty Cells"
+          },
+          "mapping_status": {
+            "type": "string",
+            "title": "Mapping Status"
+          },
+          "mapped_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapped Field"
+          },
+          "mapping_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Score"
+          },
+          "mapping_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Method"
+          },
+          "unmapped_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workbook_index",
+          "workbook_name",
+          "sheet_index",
+          "sheet_name",
+          "table_index",
+          "column_index",
+          "non_empty_cells",
+          "mapping_status"
+        ],
+        "title": "RunColumnResource",
+        "description": "Detected column details for a run table."
+      },
       "RunCreateOptions": {
         "properties": {
           "dry_run": {
@@ -11353,12 +11727,6 @@
             "type": "boolean",
             "title": "Force Rebuild",
             "description": "If true, rebuild the configuration environment before running.",
-            "default": false
-          },
-          "debug": {
-            "type": "boolean",
-            "title": "Debug",
-            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
             "default": false
           },
           "log_level": {
@@ -11440,12 +11808,6 @@
             "type": "boolean",
             "title": "Force Rebuild",
             "description": "If true, rebuild the configuration environment before running.",
-            "default": false
-          },
-          "debug": {
-            "type": "boolean",
-            "title": "Debug",
-            "description": "Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
             "default": false
           },
           "log_level": {
@@ -11542,6 +11904,58 @@
         ],
         "title": "RunEventsPage",
         "description": "Paginated ADE events for a run."
+      },
+      "RunFieldResource": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "mapped": {
+            "type": "boolean",
+            "title": "Mapped"
+          },
+          "best_mapping_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Mapping Score"
+          },
+          "occurrences_tables": {
+            "type": "integer",
+            "title": "Occurrences Tables"
+          },
+          "occurrences_columns": {
+            "type": "integer",
+            "title": "Occurrences Columns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "mapped",
+          "occurrences_tables",
+          "occurrences_columns"
+        ],
+        "title": "RunFieldResource",
+        "description": "Field-level mapping summary for a run."
       },
       "RunInput": {
         "properties": {
@@ -11703,6 +12117,289 @@
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
+      },
+      "RunMetricsResource": {
+        "properties": {
+          "evaluation_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Outcome"
+          },
+          "evaluation_findings_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Total"
+          },
+          "evaluation_findings_info": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Info"
+          },
+          "evaluation_findings_warning": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Warning"
+          },
+          "evaluation_findings_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Error"
+          },
+          "validation_issues_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Total"
+          },
+          "validation_issues_info": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Info"
+          },
+          "validation_issues_warning": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Warning"
+          },
+          "validation_issues_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Error"
+          },
+          "validation_max_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Max Severity"
+          },
+          "workbook_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workbook Count"
+          },
+          "sheet_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Count"
+          },
+          "table_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Count"
+          },
+          "row_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count Total"
+          },
+          "row_count_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count Empty"
+          },
+          "column_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Total"
+          },
+          "column_count_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Empty"
+          },
+          "column_count_mapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Mapped"
+          },
+          "column_count_ambiguous": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Ambiguous"
+          },
+          "column_count_unmapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Unmapped"
+          },
+          "column_count_passthrough": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Passthrough"
+          },
+          "field_count_expected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Expected"
+          },
+          "field_count_mapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Mapped"
+          },
+          "cell_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Count Total"
+          },
+          "cell_count_non_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Count Non Empty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunMetricsResource",
+        "description": "Aggregate run metrics derived from engine.run.completed."
       },
       "RunOutput": {
         "properties": {

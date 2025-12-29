@@ -20,6 +20,7 @@ export interface RunsCounts {
   readonly failed: number;
   readonly running: number;
   readonly queued: number;
+  readonly cancelled: number;
   readonly active: number;
 }
 
