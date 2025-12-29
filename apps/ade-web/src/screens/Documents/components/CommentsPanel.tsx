@@ -223,7 +223,7 @@ export function CommentsPanel({
                           ) : (
                             <span
                               key={idx}
-                              className="rounded-md bg-brand-50 px-1.5 py-0.5 font-semibold text-brand-700"
+                              className="rounded-md bg-brand-50 px-1.5 py-0.5 font-semibold text-brand-700 dark:bg-brand-500/20 dark:text-brand-200"
                               title="Mention (notifications coming soon)"
                             >
                               @{p.mention}
@@ -294,7 +294,9 @@ export function CommentsPanel({
                     }}
                     className={clsx(
                       "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
-                      idx === activeIndex ? "bg-brand-50" : "hover:bg-background",
+                      idx === activeIndex
+                        ? "bg-brand-50 dark:bg-brand-500/20"
+                        : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="font-semibold text-foreground">{p.label}</span>

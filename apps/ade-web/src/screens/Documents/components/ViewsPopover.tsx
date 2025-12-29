@@ -120,7 +120,9 @@ export function ViewsPopover({
                   }}
                   className={clsx(
                     "flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
-                    activeViewId === view.id ? "bg-brand-50 text-brand-800" : "hover:bg-background text-foreground",
+                    activeViewId === view.id
+                      ? "bg-brand-50 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200"
+                      : "hover:bg-background dark:hover:bg-muted/40 text-foreground",
                   )}
                 >
                   <span className="font-semibold">{view.label}</span>
@@ -153,7 +155,7 @@ export function ViewsPopover({
                         }}
                         className={clsx(
                           "min-w-0 flex-1 truncate text-left text-sm font-semibold",
-                          activeViewId === view.id ? "text-brand-800" : "text-foreground",
+                          activeViewId === view.id ? "text-brand-800 dark:text-brand-200" : "text-foreground",
                         )}
                         title={view.name}
                       >

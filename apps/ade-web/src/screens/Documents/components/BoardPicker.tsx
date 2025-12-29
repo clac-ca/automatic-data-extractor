@@ -140,7 +140,7 @@ export function BoardPicker({
                     }}
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                      selected ? "bg-brand-50" : "hover:bg-background",
+                      selected ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{board.label}</span>

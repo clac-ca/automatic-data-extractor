@@ -470,16 +470,16 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                   onClick={closeMobileNav}
                   aria-label="Close navigation"
                 />
-                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-border/70 bg-gradient-to-b from-card via-background to-card/95 shadow-[0_45px_90px_-50px_rgb(var(--sys-color-shadow)/0.85)]">
-                  <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="absolute inset-y-0 left-0 flex h-full w-[min(20rem,85vw)] max-w-xs flex-col rounded-r-3xl border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[0_45px_90px_-50px_rgb(var(--sys-color-shadow)/0.85)]">
+                  <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
                     <div className="flex flex-col leading-tight">
-                      <span className="text-sm font-semibold text-foreground">{workspace.name}</span>
-                      <span className="text-xs text-muted-foreground">Workspace navigation</span>
+                      <span className="text-sm font-semibold text-sidebar-foreground">{workspace.name}</span>
+                      <span className="text-xs text-sidebar-foreground">Workspace navigation</span>
                     </div>
                     <button
                       type="button"
                       onClick={closeMobileNav}
-                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground"
+                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-item-hover text-sidebar-foreground/80 hover:bg-sidebar-item-active hover:text-sidebar-foreground"
                       aria-label="Close navigation"
                     >
                       <CloseIcon />

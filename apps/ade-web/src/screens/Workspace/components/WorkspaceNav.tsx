@@ -125,8 +125,8 @@ export function WorkspaceNav({
   return (
     <aside
       className={clsx(
-        "relative hidden min-h-0 flex-shrink-0 bg-card lg:flex",
-        "border-r border-border",
+        "relative hidden min-h-0 flex-shrink-0 bg-sidebar text-sidebar-foreground lg:flex",
+        "border-r border-sidebar-border",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
       style={{ width: layoutWidth, height: navHeight, willChange: "width" }}
@@ -137,8 +137,8 @@ export function WorkspaceNav({
       {/* The panel is absolutely positioned so it can expand over the page without shifting layout when unpinned */}
       <div
         className={clsx(
-          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-card",
-          "border-r border-border",
+          "absolute inset-y-0 left-0 z-40 flex min-h-0 flex-col bg-sidebar text-sidebar-foreground",
+          "border-r border-sidebar-border",
           "transition-[width,box-shadow] duration-200 ease-out motion-reduce:transition-none",
           // When unpinned and expanded, add depth to communicate “overlay”
           !isPinned && panelExpanded && "shadow-xl",
@@ -202,7 +202,7 @@ function WorkspaceNavPanel({
       </nav>
 
       {/* Footer */}
-      <div className={clsx("border-t border-border", expanded ? "px-3 py-3" : "px-2 py-2")}>
+      <div className={clsx("border-t border-sidebar-border", expanded ? "px-3 py-3" : "px-2 py-2")}>
         <div className={clsx("flex flex-col", expanded ? "gap-1.5" : "gap-2")}>
           {settingsItem ? <WorkspaceSettingsLink item={settingsItem} expanded={expanded} /> : null}
           <NavPinButton isPinned={isPinned} expanded={expanded} onToggle={onTogglePinned} />
@@ -232,7 +232,7 @@ export function WorkspaceNavList({
   return (
     <>
       {showHeading && expanded ? (
-        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-muted-foreground">
+        <p className="mb-3 px-2 text-[0.63rem] font-semibold uppercase tracking-[0.4em] text-sidebar-foreground">
           Workspace
         </p>
       ) : null}
@@ -258,9 +258,11 @@ export function WorkspaceNavList({
                 clsx(
                   "group relative flex w-full items-center rounded-lg",
                   "transition-colors duration-150 motion-reduce:transition-none",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
                   expanded ? "px-3 py-2" : "justify-center px-2 py-2",
-                  isActive ? "bg-brand-500/10 text-brand-600" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  isActive
+                    ? "bg-sidebar-item-active text-sidebar-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
                 )
               }
             >
@@ -270,13 +272,15 @@ export function WorkspaceNavList({
                     className={clsx(
                       "flex h-10 w-10 items-center justify-center rounded-xl",
                       "transition-colors duration-150 motion-reduce:transition-none",
-                      isActive ? "bg-brand-500/15 text-brand-600" : "bg-muted text-muted-foreground group-hover:bg-muted/80",
+                      isActive
+                        ? "bg-sidebar-item-active text-sidebar-foreground"
+                        : "bg-sidebar-item-hover/70 text-sidebar-foreground group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
                     )}
                   >
                     <item.icon
                       className={clsx(
                         "h-5 w-5 transition-colors duration-150",
-                        isActive ? "text-brand-600" : "text-muted-foreground",
+                        "text-sidebar-foreground",
                       )}
                       aria-hidden
                     />
@@ -287,7 +291,7 @@ export function WorkspaceNavList({
                       "min-w-0 overflow-hidden truncate",
                       "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
                       expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-                      "text-sm font-semibold",
+                      "text-sm font-semibold text-sidebar-foreground",
                     )}
                     aria-hidden={!expanded}
                   >
@@ -322,9 +326,11 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
         clsx(
           "group relative flex w-full items-center rounded-lg",
           "transition-colors duration-150 motion-reduce:transition-none",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
           expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-          isActive ? "bg-brand-500/10 text-brand-600" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          isActive
+            ? "bg-sidebar-item-active text-sidebar-foreground"
+            : "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
         )
       }
     >
@@ -334,7 +340,9 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
             className={clsx(
               "flex h-10 w-10 items-center justify-center rounded-xl",
               "transition-colors duration-150 motion-reduce:transition-none",
-              isActive ? "bg-brand-500/15 text-brand-600" : "bg-muted text-muted-foreground group-hover:bg-muted/80",
+              isActive
+                ? "bg-sidebar-item-active text-sidebar-foreground"
+                : "bg-sidebar-item-hover/70 text-sidebar-foreground group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
             )}
             aria-hidden
           >
@@ -346,7 +354,7 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
               "min-w-0 overflow-hidden truncate",
               "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
               expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-              "text-xs font-semibold",
+              "text-xs font-semibold text-sidebar-foreground",
             )}
             aria-hidden={!expanded}
           >
@@ -382,14 +390,14 @@ function NavPinButton({
       className={clsx(
         "group relative flex w-full items-center rounded-lg",
         "transition-colors duration-150 motion-reduce:transition-none",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
         expanded ? "px-2 py-2" : "justify-center px-2 py-2",
-        "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "text-sidebar-foreground hover:bg-sidebar-item-hover hover:text-sidebar-foreground",
       )}
     >
       <span
         className={clsx(
-          "flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors duration-150 group-hover:bg-muted/80",
+          "flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-item-hover/70 text-sidebar-foreground transition-colors duration-150 group-hover:bg-sidebar-item-hover group-hover:text-sidebar-foreground",
         )}
         aria-hidden
       >
@@ -401,12 +409,12 @@ function NavPinButton({
           "min-w-0 overflow-hidden truncate",
           "transition-[max-width,opacity,transform,margin-left] duration-200 motion-reduce:transition-none",
           expanded ? "ml-3 max-w-[14rem] opacity-100 translate-x-0" : "ml-0 max-w-0 opacity-0 translate-x-1",
-          "text-xs font-semibold",
+          "text-xs font-semibold text-sidebar-foreground",
         )}
         aria-hidden={!expanded}
       >
         {isPinned ? "Pinned" : "Pin sidebar"}
-        <span className="ml-2 text-[0.7rem] font-semibold text-muted-foreground">{shortcutHint}</span>
+        <span className="ml-2 text-[0.7rem] font-semibold text-sidebar-foreground">{shortcutHint}</span>
       </span>
 
       {!expanded ? <RailTooltip label={label} /> : null}
@@ -423,7 +431,7 @@ function RailTooltip({ label }: { readonly label: string }) {
     <span
       className={clsx(
         "pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap",
-        "rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-lg",
+        "rounded-md bg-sidebar-foreground px-2 py-1 text-xs font-medium text-sidebar shadow-lg",
         "opacity-0 transition-opacity duration-150 motion-reduce:transition-none",
         "group-hover:opacity-100 group-focus-visible:opacity-100",
       )}

@@ -209,8 +209,8 @@ function FilterPills<T extends string>({
             className={clsx(
               "rounded-full border px-2 py-0.5 text-[11px] font-semibold transition",
               active
-                ? "border-brand-200 bg-brand-50 text-brand-700"
-                : "border-transparent text-muted-foreground hover:bg-background hover:text-foreground",
+                ? "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
+                : "border-transparent text-muted-foreground hover:bg-background dark:hover:bg-muted/40 hover:text-foreground",
             )}
           >
             {text}

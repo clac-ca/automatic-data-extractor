@@ -68,7 +68,9 @@ export function DocumentsSidebar({
               onClick={() => onSetBuiltInView(view.id)}
               className={clsx(
                 "flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition",
-                activeViewId === view.id ? "bg-brand-50 text-brand-800" : "hover:bg-background text-foreground",
+                activeViewId === view.id
+                  ? "bg-brand-50 text-brand-800 dark:bg-brand-500/20 dark:text-brand-200"
+                  : "hover:bg-background dark:hover:bg-muted/40 text-foreground",
               )}
             >
               <span className="font-semibold">{view.label}</span>
@@ -95,13 +97,13 @@ export function DocumentsSidebar({
                 <div key={view.id} className="group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-background">
                   <button
                     type="button"
-                    onClick={() => onSelectSavedView(view.id)}
-                    className={clsx(
-                      "min-w-0 flex-1 truncate text-left text-sm font-semibold",
-                      activeViewId === view.id ? "text-brand-800" : "text-foreground",
-                    )}
-                    title={view.name}
-                  >
+                  onClick={() => onSelectSavedView(view.id)}
+                  className={clsx(
+                    "min-w-0 flex-1 truncate text-left text-sm font-semibold",
+                    activeViewId === view.id ? "text-brand-800 dark:text-brand-200" : "text-foreground",
+                  )}
+                  title={view.name}
+                >
                     {view.name}
                   </button>
                   <button

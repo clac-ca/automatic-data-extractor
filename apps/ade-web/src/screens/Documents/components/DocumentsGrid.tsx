@@ -177,7 +177,7 @@ export function DocumentsGrid({
                     }}
                     className={clsx(
                       "group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      isActive ? "bg-brand-50" : "hover:bg-background",
+                      isActive ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                     tabIndex={0}
                     aria-expanded={isExpanded}

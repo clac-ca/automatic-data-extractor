@@ -28,5 +28,7 @@ textarea {
 }
 
 .focus-ring {
-  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  --focus-ring-offset: rgb(var(--sys-color-bg) / 1);
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  --tw-ring-offset-color: var(--focus-ring-offset);
 }

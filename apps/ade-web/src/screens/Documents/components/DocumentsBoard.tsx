@@ -163,7 +163,7 @@ export function DocumentsBoard({
                                 event.stopPropagation();
                                 onPickUp(doc.id);
                               }}
-                              className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700"
+                              className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
                             >
                               Pick up
                             </button>

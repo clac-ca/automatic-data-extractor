@@ -97,7 +97,7 @@ export function TagPicker({
           "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
           disabled
             ? "border-border bg-background text-muted-foreground"
-            : "border-border bg-card text-foreground hover:bg-background",
+            : "border-border bg-card text-foreground hover:bg-background dark:hover:bg-muted/40",
         )}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -151,7 +151,7 @@ export function TagPicker({
               <button
                 type="button"
                 onClick={() => onToggle(createCandidate)}
-                className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-foreground hover:bg-background"
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-foreground hover:bg-background dark:hover:bg-muted/40"
               >
                 <span>Create “{createCandidate}”</span>
                 <span className="text-[11px] text-muted-foreground">new</span>
@@ -174,7 +174,9 @@ export function TagPicker({
                     onClick={() => onToggle(item.tag)}
                     className={clsx(
                       "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold transition",
-                      isSelected ? "bg-brand-50 text-foreground" : "text-foreground hover:bg-background",
+                      isSelected
+                        ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200"
+                        : "text-foreground hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="truncate">{item.tag}</span>

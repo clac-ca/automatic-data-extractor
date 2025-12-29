@@ -26,6 +26,34 @@ export default {
         overlay: "rgb(var(--sys-color-overlay) / <alpha-value>)",
         shadow: "rgb(var(--sys-color-shadow) / <alpha-value>)",
 
+        // Chrome: header
+        header: "rgb(var(--sys-color-header-bg) / <alpha-value>)",
+        "header-foreground": "rgb(var(--sys-color-header-fg) / <alpha-value>)",
+        "header-muted": "rgb(var(--sys-color-header-fg-muted) / <alpha-value>)",
+        "header-border": "rgb(var(--sys-color-header-border) / <alpha-value>)",
+        "header-ring": "rgb(var(--sys-color-header-ring) / <alpha-value>)",
+
+        // Chrome: sidebar
+        sidebar: "rgb(var(--sys-color-sidebar-bg) / <alpha-value>)",
+        "sidebar-foreground": "rgb(var(--sys-color-sidebar-fg) / <alpha-value>)",
+        "sidebar-muted": "rgb(var(--sys-color-sidebar-fg-muted) / <alpha-value>)",
+        "sidebar-border": "rgb(var(--sys-color-sidebar-border) / <alpha-value>)",
+        "sidebar-ring": "rgb(var(--sys-color-sidebar-ring) / <alpha-value>)",
+        "sidebar-item": "rgb(var(--sys-color-sidebar-item-bg) / <alpha-value>)",
+        "sidebar-item-hover": "rgb(var(--sys-color-sidebar-item-hover) / <alpha-value>)",
+        "sidebar-item-active": "rgb(var(--sys-color-sidebar-item-active) / <alpha-value>)",
+        "sidebar-item-indicator": "rgb(var(--sys-color-sidebar-item-indicator) / <alpha-value>)",
+
+        // Legacy shell (alias to header)
+        shell: "rgb(var(--sys-color-shell-bg) / <alpha-value>)",
+        "shell-foreground": "rgb(var(--sys-color-shell-fg) / <alpha-value>)",
+        "shell-muted": "rgb(var(--sys-color-shell-muted) / <alpha-value>)",
+        "shell-border": "rgb(var(--sys-color-shell-border) / <alpha-value>)",
+        "shell-hover": "rgb(var(--sys-color-shell-hover) / <alpha-value>)",
+        "shell-active": "rgb(var(--sys-color-shell-active) / <alpha-value>)",
+        "shell-active-indicator": "rgb(var(--sys-color-shell-active-indicator) / <alpha-value>)",
+        "shell-ring": "rgb(var(--sys-color-shell-ring) / <alpha-value>)",
+
         // Component surfaces
         terminal: "rgb(var(--comp-terminal-bg) / <alpha-value>)",
         "terminal-foreground": "rgb(var(--comp-terminal-fg) / <alpha-value>)",

@@ -132,12 +132,17 @@ export function PeoplePicker({
                     onClick={() => toggle(person.key)}
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                      selected ? "bg-brand-50" : "hover:bg-background",
+                      selected ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{person.label}</span>
                     {multiple ? (
-                      <span className={clsx("text-xs font-semibold", selected ? "text-brand-700" : "text-muted-foreground")}>
+                      <span
+                        className={clsx(
+                          "text-xs font-semibold",
+                          selected ? "text-brand-700 dark:text-brand-200" : "text-muted-foreground",
+                        )}
+                      >
                         {selected ? "Selected" : "Select"}
                       </span>
                     ) : null}
