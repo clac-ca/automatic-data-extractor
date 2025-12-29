@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import unicodedata
 from collections.abc import AsyncIterator, Mapping
@@ -685,15 +684,14 @@ class DocumentsService:
         if not doc_ids:
             return {}
 
-        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
                 Run.input_document_id.label("document_id"),
                 Run.id.label("run_id"),
                 Run.status.label("status"),
                 Run.error_message.label("error_message"),
-                Run.summary.label("summary"),
-                Run.finished_at.label("finished_at"),
+                Run.completed_at.label("completed_at"),
                 Run.started_at.label("started_at"),
                 Run.created_at.label("created_at"),
                 func.row_number()
@@ -720,12 +718,9 @@ class DocumentsService:
             if not isinstance(document_id, UUID):
                 document_id = UUID(str(document_id))
             run_at = self._ensure_utc(
-                row.get("finished_at") or row.get("started_at") or row.get("created_at")
+                row.get("completed_at") or row.get("started_at") or row.get("created_at")
             )
-            message = self._last_run_message(
-                error_message=row.get("error_message"),
-                summary=row.get("summary"),
-            )
+            message = self._last_run_message(error_message=row.get("error_message"))
             latest[document_id] = DocumentLastRun(
                 run_id=row["run_id"],
                 status=row["status"],
@@ -745,15 +740,14 @@ class DocumentsService:
         if not doc_ids:
             return {}
 
-        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
                 Run.input_document_id.label("document_id"),
                 Run.id.label("run_id"),
                 Run.status.label("status"),
                 Run.error_message.label("error_message"),
-                Run.summary.label("summary"),
-                Run.finished_at.label("finished_at"),
+                Run.completed_at.label("completed_at"),
                 Run.started_at.label("started_at"),
                 Run.created_at.label("created_at"),
                 func.row_number()
@@ -781,12 +775,9 @@ class DocumentsService:
             if not isinstance(document_id, UUID):
                 document_id = UUID(str(document_id))
             run_at = self._ensure_utc(
-                row.get("finished_at") or row.get("started_at") or row.get("created_at")
+                row.get("completed_at") or row.get("started_at") or row.get("created_at")
             )
-            message = self._last_run_message(
-                error_message=row.get("error_message"),
-                summary=row.get("summary"),
-            )
+            message = self._last_run_message(error_message=row.get("error_message"))
             latest[document_id] = DocumentLastRun(
                 run_id=row["run_id"],
                 status=row["status"],
@@ -797,21 +788,10 @@ class DocumentsService:
         return latest
 
     @staticmethod
-    def _last_run_message(*, error_message: str | None, summary: str | None) -> str | None:
+    def _last_run_message(*, error_message: str | None) -> str | None:
         if error_message:
             return error_message
-        if not summary:
-            return None
-        try:
-            data = json.loads(summary)
-        except (TypeError, json.JSONDecodeError):
-            return summary
-
-        if isinstance(data, Mapping):
-            message = data.get("message")
-            if message:
-                return str(message)
-        return summary
+        return None
 
     @staticmethod
     def _ensure_utc(dt: datetime | None) -> datetime | None:

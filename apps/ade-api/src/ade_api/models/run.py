@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,22 +59,17 @@ class Run(Base):
         server_default=RunStatus.QUEUED.value,
     )
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     submitted_by_user_id: Mapped[UUID | None] = mapped_column(
         UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=True
     )
-    artifact_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    output_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    logs_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -86,7 +81,7 @@ class Run(Base):
             "ix_runs_workspace_input_finished",
             "workspace_id",
             "input_document_id",
-            "finished_at",
+            "completed_at",
             "started_at",
         ),
         Index("ix_runs_workspace_created", "workspace_id", "created_at"),

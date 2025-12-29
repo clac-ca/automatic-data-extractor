@@ -326,7 +326,7 @@ def apply_document_filters(
             status.value if isinstance(status, RunStatus) else str(status)
             for status in filters.run_status
         )
-        timestamp = func.coalesce(Run.finished_at, Run.started_at, Run.created_at)
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         latest_runs = (
             select(
                 Run.input_document_id.label("document_id"),

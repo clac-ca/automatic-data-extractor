@@ -111,8 +111,6 @@ class RunExecutionResult:
     return_code: int | None
     paths_snapshot: RunPathsSnapshot
     error_message: str | None = None
-    summary_model: Any | None = None
-    summary_json: str | None = None
 
 
 RunStreamFrame = StdoutFrame | EventRecord | RunExecutionResult
@@ -260,7 +258,6 @@ class RunsService:
             workspace_id=configuration.workspace_id,
             configuration_id=configuration.id,
             status=RunStatus.QUEUED,
-            trace_id=str(run_id),
             input_document_id=input_document_id,
             input_sheet_names=selected_sheet_names or None,
             build_id=build_id,
@@ -376,7 +373,6 @@ class RunsService:
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
                 status=RunStatus.QUEUED,
-                trace_id=str(run_id),
                 input_document_id=document_id,
                 input_sheet_names=None,
                 build_id=build.id,
@@ -395,7 +391,6 @@ class RunsService:
                 dry_run=options.dry_run,
                 validate_only=options.validate_only,
                 force_rebuild=options.force_rebuild,
-                debug=options.debug,
                 log_level=options.log_level,
                 input_document_id=document_id,
                 input_sheet_names=None,
@@ -1026,9 +1021,9 @@ class RunsService:
 
         # Timing and failure info
         started_at = self._ensure_utc(run.started_at)
-        finished_at = self._ensure_utc(run.finished_at)
+        completed_at = self._ensure_utc(run.completed_at)
         duration_seconds = (
-            (finished_at - started_at).total_seconds() if started_at and finished_at else None
+            (completed_at - started_at).total_seconds() if started_at and completed_at else None
         )
 
         failure_code = None
@@ -1063,7 +1058,7 @@ class RunsService:
             env_reused=None,
             created_at=self._ensure_utc(run.created_at) or utc_now(),
             started_at=started_at,
-            completed_at=finished_at,
+            completed_at=completed_at,
             duration_seconds=duration_seconds,
             exit_code=run.exit_code,
             input=input_meta,
@@ -1544,7 +1539,7 @@ class RunsService:
             "execution": {
                 "exit_code": run.exit_code,
                 "started_at": _dt_iso(run.started_at),
-                "completed_at": _dt_iso(run.finished_at),
+                "completed_at": _dt_iso(run.completed_at),
                 "duration_ms": self._duration_ms(run),
             },
             "artifacts": {
@@ -1667,7 +1662,7 @@ class RunsService:
         command.extend(["--logs-dir", str(logs_dir)])
         command.extend(["--config-package", str(config_path)])
         command.extend(["--log-format", "ndjson"])
-        log_level = getattr(options, "log_level", None) or ("DEBUG" if options.debug else "INFO")
+        log_level = getattr(options, "log_level", None) or "INFO"
         command.extend(["--log-level", str(log_level)])
 
         for sheet_name in selected_sheet_names:
@@ -1759,18 +1754,10 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        summary_json = self._serialize_summary(
-            await self._build_placeholder_summary(
-                run=run,
-                status=RunStatus.SUCCEEDED,
-                message="Validation-only execution",
-            )
-        )
         completion = await self._complete_run(
             run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
-            summary=summary_json,
         )
         yield await self._emit_api_event(
             run=completion,
@@ -1816,18 +1803,10 @@ class RunsService:
             run_dir=run_dir,
             default_paths=RunPathsSnapshot(),
         )
-        summary_json = self._serialize_summary(
-            await self._build_placeholder_summary(
-                run=run,
-                status=RunStatus.SUCCEEDED,
-                message=message,
-            )
-        )
         completion = await self._complete_run(
             run,
             status=RunStatus.SUCCEEDED,
             exit_code=0,
-            summary=summary_json,
         )
 
         # Console notification
@@ -1903,16 +1882,11 @@ class RunsService:
                 if isinstance(frame, RunExecutionResult):
                     paths_snapshot = frame.paths_snapshot or RunPathsSnapshot()
 
-                    summary_json = frame.summary_json
-                    if summary_json is None and frame.summary_model is not None:
-                        summary_json = self._serialize_summary(frame.summary_model)
-
                     completion = await self._complete_run(
                         run,
                         status=frame.status,
                         exit_code=frame.return_code,
                         error_message=frame.error_message,
-                        summary=summary_json,
                     )
                     event = await self._emit_api_event(
                         run=completion,
@@ -2204,16 +2178,13 @@ class RunsService:
         *,
         status: RunStatus,
         exit_code: int | None,
-        summary: str | None = None,
         error_message: str | None = None,
     ) -> Run:
         run.status = status
         run.exit_code = exit_code
         if error_message is not None:
             run.error_message = error_message
-        if summary is not None:
-            run.summary = summary
-        run.finished_at = utc_now()
+        run.completed_at = utc_now()
         run.cancelled_at = utc_now() if status is RunStatus.CANCELLED else None
         await self._session.commit()
         await self._session.refresh(run)
@@ -2230,30 +2201,6 @@ class RunsService:
             ),
         )
         return run
-
-    async def _build_placeholder_summary(
-        self,
-        *,
-        run: Run,
-        status: RunStatus,
-        message: str,
-    ) -> dict[str, Any]:
-        """Construct a minimal run summary payload without engine output."""
-
-        return {
-            "run_id": str(run.id),
-            "status": status.value,
-            "message": message,
-        }
-
-    @staticmethod
-    def _serialize_summary(summary: Any) -> str:
-        if isinstance(summary, str):
-            return summary
-        try:
-            return json.dumps(summary, default=str)
-        except TypeError:
-            return json.dumps(str(summary))
 
     @staticmethod
     def _build_env(
@@ -2301,8 +2248,8 @@ class RunsService:
 
     @staticmethod
     def _duration_ms(run: Run) -> int | None:
-        if run.started_at and run.finished_at:
-            return int((run.finished_at - run.started_at).total_seconds() * 1000)
+        if run.started_at and run.completed_at:
+            return int((run.completed_at - run.started_at).total_seconds() * 1000)
         return None
 
     @staticmethod

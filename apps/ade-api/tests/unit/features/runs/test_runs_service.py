@@ -369,17 +369,9 @@ async def test_stream_run_respects_persisted_safe_mode_override(
         safe_mode_enabled: bool = False,
     ) -> AsyncIterator[RunExecutionResult]:
         observed_flags.append(safe_mode_enabled)
-        summary = await self._build_placeholder_summary(
-            run=run,
-            status=RunStatus.SUCCEEDED,
-            message="engine ran",
-        )
-        summary_json = self._serialize_summary(summary)
         yield RunExecutionResult(
             status=RunStatus.SUCCEEDED,
             return_code=0,
-            summary_model=summary,
-            summary_json=summary_json,
             paths_snapshot=RunPathsSnapshot(),
             error_message=None,
         )
@@ -399,7 +391,7 @@ async def test_stream_run_respects_persisted_safe_mode_override(
 
 
 @pytest.mark.asyncio()
-async def test_validate_only_short_circuits_and_persists_summary(
+async def test_validate_only_short_circuits_and_completes(
     session,
     tmp_path: Path,
 ) -> None:
@@ -418,11 +410,9 @@ async def test_validate_only_short_circuits_and_persists_summary(
     assert event_types[-1] == "run.complete"
     completed_payload = events[-1].get("data", {})
     assert completed_payload is not None
-    assert completed_payload.get("summary") is None
     failure = completed_payload.get("failure")
     assert failure and failure.get("message") == "Validation-only execution"
 
     refreshed = await service.get_run(run.id)
     assert refreshed is not None
     assert refreshed.status is RunStatus.SUCCEEDED
-    assert refreshed.summary is not None

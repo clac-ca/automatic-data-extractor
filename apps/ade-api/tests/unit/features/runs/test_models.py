@@ -81,13 +81,9 @@ async def test_run_defaults(session: AsyncSession) -> None:
     await session.refresh(run)
 
     assert run.status is RunStatus.QUEUED
-    assert run.trace_id is None
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None
-    assert run.finished_at is None
+    assert run.completed_at is None
     assert run.cancelled_at is None
-    assert run.artifact_uri is None
-    assert run.output_uri is None
-    assert run.logs_uri is None

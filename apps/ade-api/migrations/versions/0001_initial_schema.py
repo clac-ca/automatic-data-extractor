@@ -736,11 +736,7 @@ def _create_runs() -> None:
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
         sa.Column("status", RUN_STATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
-        sa.Column("trace_id", sa.String(length=64), nullable=True),
         sa.Column("submitted_by_user_id", UUIDType(), nullable=True),
-        sa.Column("artifact_uri", sa.String(length=512), nullable=True),
-        sa.Column("output_uri", sa.String(length=512), nullable=True),
-        sa.Column("logs_uri", sa.String(length=512), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -748,9 +744,8 @@ def _create_runs() -> None:
             server_default=sa.func.now(),
         ),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
             ["submitted_by_user_id"],
@@ -770,7 +765,7 @@ def _create_runs() -> None:
     op.create_index(
         "ix_runs_workspace_input_finished",
         "runs",
-        ["workspace_id", "input_document_id", "finished_at", "started_at"],
+        ["workspace_id", "input_document_id", "completed_at", "started_at"],
         unique=False,
     )
     op.create_index(

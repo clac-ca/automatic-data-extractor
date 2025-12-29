@@ -43,10 +43,6 @@ class RunCreateOptionsBase(BaseSchema):
         default=False,
         description="If true, rebuild the configuration environment before running.",
     )
-    debug: bool = Field(
-        default=False,
-        description="Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
-    )
     log_level: RunLogLevel | None = Field(
         default=None,
         description="Engine log level passed as --log-level to ade_engine.",
@@ -98,10 +94,6 @@ class RunBatchCreateOptions(BaseSchema):
     force_rebuild: bool = Field(
         default=False,
         description="If true, rebuild the configuration environment before running.",
-    )
-    debug: bool = Field(
-        default=False,
-        description="Deprecated. Prefer log_level (debug=true maps to log_level=DEBUG).",
     )
     log_level: RunLogLevel | None = Field(
         default=None,

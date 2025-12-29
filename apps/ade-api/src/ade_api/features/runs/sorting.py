@@ -11,8 +11,8 @@ SORT_FIELDS = {
         tuple(nulls_last(Run.started_at.desc())),
     ),
     "completed_at": (
-        tuple(nulls_last(Run.finished_at.asc())),
-        tuple(nulls_last(Run.finished_at.desc())),
+        tuple(nulls_last(Run.completed_at.asc())),
+        tuple(nulls_last(Run.completed_at.desc())),
     ),
     "status": (Run.status.asc(), Run.status.desc()),
 }

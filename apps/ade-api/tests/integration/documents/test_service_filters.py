@@ -291,7 +291,7 @@ async def test_sorting_last_run_places_nulls_last(session, settings) -> None:
     assert [item.id for item in result.items] == [processed.id, uploaded.id]
 
 
-async def test_list_documents_includes_last_run_summary(session, settings) -> None:
+async def test_list_documents_includes_last_run_message(session, settings) -> None:
     workspace, uploader, colleague, processed, uploaded = await _build_documents_fixture(session)
 
     now = datetime.now(tz=UTC)
@@ -314,13 +314,9 @@ async def test_list_documents_includes_last_run_summary(session, settings) -> No
         submitted_by_user_id=uploader.id,
         status=RunStatus.FAILED,
         input_document_id=processed.id,
-        trace_id=None,
-        artifact_uri=None,
-        output_uri=None,
-        logs_uri=None,
         created_at=now - timedelta(minutes=10),
         started_at=now - timedelta(minutes=5),
-        finished_at=now - timedelta(minutes=1),
+        completed_at=now - timedelta(minutes=1),
         cancelled_at=None,
         error_message="Request failed with status 404",
     )
@@ -349,7 +345,7 @@ async def test_list_documents_includes_last_run_summary(session, settings) -> No
     assert processed_record.last_run.run_id == run.id
     assert processed_record.last_run.status == RunStatus.FAILED
     assert processed_record.last_run.message == "Request failed with status 404"
-    assert processed_record.last_run.run_at == run.finished_at
+    assert processed_record.last_run.run_at == run.completed_at
 
     uploaded_record = next(item for item in result.items if item.id == uploaded.id)
     assert uploaded_record.last_run is None

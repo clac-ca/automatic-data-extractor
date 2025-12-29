@@ -190,7 +190,7 @@ async def test_run_output_endpoint_serves_file(
         input_document_id=document.id,
         status=RunStatus.SUCCEEDED,
         created_at=utc_now(),
-        finished_at=utc_now(),
+        completed_at=utc_now(),
     )
     session.add(run)
     await session.commit()
