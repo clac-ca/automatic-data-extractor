@@ -157,10 +157,10 @@ export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): P
 }
 
 export function buildDocumentEntry(document: DocumentRecord): DocumentEntry {
-  const status = mapApiStatus(document.status);
+  const status = deriveDocumentStatus(document);
   const uploader = deriveUploaderLabel(document);
   const createdAt = parseTimestamp(document.created_at);
-  const updatedAt = parseTimestamp(document.updated_at);
+  const updatedAt = resolveDocumentUpdatedAt(document);
   const stage = buildStageLabel(status, document.last_run);
   const mapping = deriveMappingHealth(document);
 
@@ -268,6 +268,22 @@ export async function patchWorkspaceDocumentTagsBatch(
   return data.documents;
 }
 
+export async function deleteWorkspaceDocument(workspaceId: string, documentId: string): Promise<void> {
+  await client.DELETE("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  });
+}
+
+export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documentIds: string[]): Promise<string[]> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/delete", {
+    params: { path: { workspace_id: workspaceId } },
+    body: { document_ids: documentIds },
+  });
+
+  if (!data) throw new Error("Expected delete response.");
+  return data.document_ids ?? [];
+}
+
 export function runOutputDownloadUrl(run: RunResource): string | null {
   if (run.output?.download_url) return run.output.download_url;
   if (run.links?.output_download) return run.links.output_download;
@@ -302,6 +318,35 @@ export function mapApiStatus(status: ApiDocumentStatus): DocumentStatus {
     default:
       return "queued";
   }
+}
+
+function deriveDocumentStatus(document: DocumentRecord): DocumentStatus {
+  if (document.status === "archived") return "archived";
+
+  const lastRunStatus = document.last_run?.status;
+  switch (lastRunStatus) {
+    case "queued":
+      return "queued";
+    case "running":
+      return "processing";
+    case "succeeded":
+      return "ready";
+    case "failed":
+    case "cancelled":
+      return "failed";
+    default:
+      break;
+  }
+
+  return mapApiStatus(document.status);
+}
+
+function resolveDocumentUpdatedAt(document: DocumentRecord): number {
+  const updatedAt = parseTimestamp(document.updated_at);
+  if (!document.last_run_at) return updatedAt;
+
+  const lastRunAt = parseTimestamp(document.last_run_at);
+  return Math.max(updatedAt, lastRunAt);
 }
 
 export function deriveUploaderLabel(document: DocumentRecord): string | null {
@@ -376,7 +421,7 @@ function buildDocumentError(document: DocumentRecord) {
 export function buildStatusDescription(status: DocumentStatus, run?: RunResource | null) {
   switch (status) {
     case "ready":
-      return "Processed XLSX ready to download.";
+      return "Processed output ready to download.";
     case "processing":
       if (run?.status === "queued") return "Queued for processing.";
       if (run?.status === "running") return "Processing in progress.";

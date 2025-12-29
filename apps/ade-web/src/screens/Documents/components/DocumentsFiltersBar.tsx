@@ -24,18 +24,30 @@ export function DocumentsFiltersBar({
   showingCount: number;
   totalCount: number;
   activeViewId: string;
-  onSetBuiltInView: (id: "all" | "mine" | "unassigned" | "ready" | "processing" | "failed") => void;
+  onSetBuiltInView: (
+    id:
+      | "all_documents"
+      | "assigned_to_me"
+      | "assigned_to_me_or_unassigned"
+      | "unassigned"
+      | "processed"
+      | "processing"
+      | "failed"
+      | "archived",
+  ) => void;
   savedViews: SavedView[];
   onSelectSavedView: (viewId: string) => void;
   onDeleteSavedView: (viewId: string) => void;
   onOpenSaveDialog: () => void;
   counts: {
     total: number;
-    mine: number;
+    assignedToMe: number;
+    assignedToMeOrUnassigned: number;
     unassigned: number;
-    ready: number;
+    processed: number;
     processing: number;
     failed: number;
+    archived: number;
   };
 }) {
   const activeCount =

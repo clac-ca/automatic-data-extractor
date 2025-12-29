@@ -7,6 +7,7 @@ export function BulkActionBar({
   onAddTag,
   onDownloadOriginals,
   onDownloadOutputs,
+  onDelete,
 }: {
   count: number;
   outputReadyCount: number;
@@ -14,6 +15,7 @@ export function BulkActionBar({
   onAddTag: () => void;
   onDownloadOriginals: () => void;
   onDownloadOutputs: () => void;
+  onDelete: () => void;
 }) {
   if (count <= 0) return null;
 
@@ -32,11 +34,14 @@ export function BulkActionBar({
               Download outputs
             </Button>
             <span className="text-[11px] font-semibold text-muted-foreground">
-              {outputReadyCount}/{count} ready
+              {outputReadyCount}/{count} processed
             </span>
           </div>
           <Button size="sm" type="button" variant="secondary" onClick={onDownloadOriginals}>
             Download originals
+          </Button>
+          <Button size="sm" type="button" variant="danger" onClick={onDelete}>
+            Delete
           </Button>
           <Button size="sm" type="button" variant="ghost" onClick={onClear}>
             Clear

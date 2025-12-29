@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { ContextMenu } from "@ui/ContextMenu";
 
-import { CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon } from "./icons";
+import { CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon, TrashIcon } from "./icons";
 
 export function RowActionsMenu({
   onOpenDetails,
@@ -12,8 +12,10 @@ export function RowActionsMenu({
   onClosePreview,
   onDownloadOriginal,
   onCopyLink,
+  onDelete,
   originalDisabled,
   copyDisabled,
+  deleteDisabled,
 }: {
   onOpenDetails: () => void;
   onReprocess?: () => void;
@@ -22,8 +24,10 @@ export function RowActionsMenu({
   onClosePreview?: () => void;
   onDownloadOriginal: () => void;
   onCopyLink: () => void;
+  onDelete?: () => void;
   originalDisabled?: boolean;
   copyDisabled?: boolean;
+  deleteDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -87,6 +91,19 @@ export function RowActionsMenu({
                   label: "Close preview",
                   onSelect: onClosePreview,
                   icon: <CloseIcon className="h-4 w-4" />,
+                  dividerAbove: !onDelete,
+                },
+              ]
+            : []),
+          ...(onDelete
+            ? [
+                {
+                  id: "delete",
+                  label: "Delete document",
+                  onSelect: onDelete,
+                  disabled: deleteDisabled,
+                  danger: true,
+                  icon: <TrashIcon className="h-4 w-4" />,
                   dividerAbove: true,
                 },
               ]

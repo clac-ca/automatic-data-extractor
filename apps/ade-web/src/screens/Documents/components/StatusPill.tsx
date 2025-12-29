@@ -11,7 +11,7 @@ const STATUS_STYLES: Record<
   }
 > = {
   ready: {
-    label: "Ready",
+    label: "Processed",
     pill: "border-success-200 bg-success-50 text-success-700",
     dot: "bg-success-500",
   },

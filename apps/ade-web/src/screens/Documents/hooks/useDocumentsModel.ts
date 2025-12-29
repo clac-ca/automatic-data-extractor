@@ -12,9 +12,10 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import type { InfiniteData } from "@tanstack/react-query";
 
 import { useNotifications } from "@shared/notifications";
+import { resolveApiUrl } from "@shared/api/client";
 import { uploadWorkspaceDocument, type DocumentUploadResponse } from "@shared/documents";
 import { useUploadQueue } from "@shared/uploads/queue";
-import { createRun } from "@shared/runs/api";
+import { createRun, streamRunEvents } from "@shared/runs/api";
 
 import type { RunResource } from "@schema";
 
@@ -22,6 +23,8 @@ import {
   DOCUMENTS_PAGE_SIZE,
   buildDocumentEntry,
   createRunForDocument,
+  deleteWorkspaceDocument,
+  deleteWorkspaceDocumentsBatch,
   documentsKeys,
   downloadOriginalDocument,
   downloadRunOutput,
@@ -116,11 +119,13 @@ type WorkbenchDerived = {
   // Counts for sidebar
   counts: {
     total: number;
-    mine: number;
+    assignedToMe: number;
+    assignedToMeOrUnassigned: number;
     unassigned: number;
-    ready: number;
+    processed: number;
     processing: number;
     failed: number;
+    archived: number;
   };
 };
 
@@ -180,8 +185,10 @@ type WorkbenchActions = {
   downloadOriginal: (doc: DocumentEntry | null) => void;
   reprocess: (doc: DocumentEntry | null) => void;
   copyLink: (doc: DocumentEntry | null) => void;
+  deleteDocument: (documentId: string) => void;
 
   // Bulk actions
+  bulkDeleteDocuments: (documentIds?: string[]) => void;
   bulkUpdateTags: (payload: { add: string[]; remove: string[] }) => void;
   bulkDownloadOriginals: () => void;
   bulkDownloadOutputs: () => void;
@@ -298,7 +305,7 @@ export function useDocumentsModel({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<DocumentsFilters>(DEFAULT_FILTERS);
-  const [activeViewId, setActiveViewId] = useState<string>("all");
+  const [activeViewId, setActiveViewId] = useState<string>("all_documents");
   const [saveViewOpen, setSaveViewOpen] = useState(false);
 
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews(workspaceId));
@@ -311,6 +318,8 @@ export function useDocumentsModel({
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
   const runOnUploadHandledRef = useRef(new Set<string>());
+  const runStreamControllersRef = useRef(new Map<string, AbortController>());
+  const runStreamWorkspaceRef = useRef(workspaceId);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30000);
@@ -363,7 +372,7 @@ export function useDocumentsModel({
     enabled: workspaceId.length > 0,
     placeholderData: (previous) => previous,
     staleTime: 15_000,
-    refetchInterval: 15_000,
+    refetchInterval: false,
   });
 
   const documentsRaw = useMemo(
@@ -372,6 +381,68 @@ export function useDocumentsModel({
   );
 
   const documentsById = useMemo(() => new Map(documentsRaw.map((doc) => [doc.id, doc])), [documentsRaw]);
+  const activeRunIds = useMemo(() => {
+    const ids = new Set<string>();
+    documentsRaw.forEach((doc) => {
+      const lastRun = doc.last_run;
+      if (!lastRun) return;
+      if (lastRun.status === "queued" || lastRun.status === "running") {
+        ids.add(lastRun.run_id);
+      }
+    });
+    return Array.from(ids);
+  }, [documentsRaw]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    const controllers = runStreamControllersRef.current;
+    if (runStreamWorkspaceRef.current !== workspaceId) {
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
+      runStreamWorkspaceRef.current = workspaceId;
+    }
+
+    const nextIds = new Set(activeRunIds);
+    controllers.forEach((controller, runId) => {
+      if (!nextIds.has(runId)) {
+        controller.abort();
+        controllers.delete(runId);
+      }
+    });
+
+    nextIds.forEach((runId) => {
+      if (controllers.has(runId)) return;
+      const controller = new AbortController();
+      controllers.set(runId, controller);
+
+      void (async () => {
+        try {
+          const eventsUrl = resolveApiUrl(`/api/v1/runs/${runId}/events/stream`);
+          for await (const event of streamRunEvents(eventsUrl, controller.signal)) {
+            if (event.event === "run.start" || event.event === "run.complete") {
+              queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+            }
+            if (event.event === "run.complete") break;
+          }
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            console.warn("Run event stream failed", error);
+          }
+        } finally {
+          controllers.delete(runId);
+        }
+      })();
+    });
+  }, [activeRunIds, queryClient, workspaceId]);
+
+  useEffect(
+    () => () => {
+      runStreamControllersRef.current.forEach((controller) => controller.abort());
+      runStreamControllersRef.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     uploadQueue.items.forEach((item) => {
@@ -651,12 +722,25 @@ export function useDocumentsModel({
   const showNoResults = documents.length > 0 && visibleDocuments.length === 0;
 
   const counts = useMemo(() => {
-    const mine = documents.filter((d) => d.assigneeKey === currentUserKey).length;
+    const assignedToMe = documents.filter((d) => d.assigneeKey === currentUserKey).length;
     const unassigned = documents.filter((d) => !d.assigneeKey).length;
-    const ready = documents.filter((d) => d.status === "ready").length;
+    const assignedToMeOrUnassigned = documents.filter(
+      (d) => d.assigneeKey === currentUserKey || !d.assigneeKey,
+    ).length;
+    const processed = documents.filter((d) => d.status === "ready").length;
     const processing = documents.filter((d) => d.status === "processing" || d.status === "queued").length;
     const failed = documents.filter((d) => d.status === "failed").length;
-    return { total: documents.length, mine, unassigned, ready, processing, failed };
+    const archived = documents.filter((d) => d.status === "archived").length;
+    return {
+      total: documents.length,
+      assignedToMe,
+      assignedToMeOrUnassigned,
+      unassigned,
+      processed,
+      processing,
+      failed,
+      archived,
+    };
   }, [currentUserKey, documents]);
 
   const activeComments = useMemo(() => {
@@ -828,7 +912,7 @@ export function useDocumentsModel({
         next.fileTypes.length === 0 &&
         next.tags.length === 0 &&
         next.assignees.length === 0;
-      setActiveViewId(!hasSearch && isDefault ? "all" : "custom");
+      setActiveViewId(!hasSearch && isDefault ? "all_documents" : "custom");
     },
     [search],
   );
@@ -847,17 +931,21 @@ export function useDocumentsModel({
         };
 
         switch (id) {
-          case "mine":
+          case "assigned_to_me":
             return { ...cleared, assignees: [currentUserKey] };
+          case "assigned_to_me_or_unassigned":
+            return { ...cleared, assignees: [currentUserKey, UNASSIGNED_KEY] };
           case "unassigned":
             return { ...cleared, assignees: [UNASSIGNED_KEY] };
-          case "ready":
+          case "processed":
             return { ...cleared, statuses: ["ready"] };
           case "processing":
             return { ...cleared, statuses: ["queued", "processing"] };
           case "failed":
             return { ...cleared, statuses: ["failed"] };
-          case "all":
+          case "archived":
+            return { ...cleared, statuses: ["archived"] };
+          case "all_documents":
           default:
             return cleared;
         }
@@ -904,7 +992,7 @@ export function useDocumentsModel({
       setSavedViews(next);
       storeSavedViews(workspaceId, next);
       if (activeViewId === viewId) {
-        setActiveViewId("all");
+        setActiveViewId("all_documents");
       }
       notifyToast({ title: "View deleted", description: viewId, intent: "success" });
     },
@@ -1133,6 +1221,71 @@ export function useDocumentsModel({
     [notifyToast],
   );
 
+  const deleteDocument = useCallback(
+    (documentId: string) => {
+      const entry = documentsByEntryId.get(documentId);
+      if (!entry?.record) return;
+      void deleteWorkspaceDocument(workspaceId, entry.record.id)
+        .then(() => {
+          notifyToast({ title: "Document deleted", description: entry.name, intent: "success" });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, entry.record.id) });
+          setSelectedIds((prev) => {
+            if (!prev.has(documentId)) return prev;
+            const next = new Set(prev);
+            next.delete(documentId);
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Delete failed",
+            description: error instanceof Error ? error.message : "Unable to delete document.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, workspaceId],
+  );
+
+  const bulkDeleteDocuments = useCallback(
+    (documentIds?: string[]) => {
+      const docs = (documentIds?.length
+        ? documentIds.map((id) => documentsByEntryId.get(id)).filter((doc): doc is DocumentEntry => Boolean(doc?.record))
+        : visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record)) as DocumentEntry[];
+
+      if (docs.length === 0) return;
+      void deleteWorkspaceDocumentsBatch(
+        workspaceId,
+        docs.map((doc) => doc.record!.id),
+      )
+        .then(() => {
+          notifyToast({
+            title: "Documents deleted",
+            description: `${docs.length} removed`,
+            intent: "success",
+          });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          docs.forEach((doc) => {
+            queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, doc.record!.id) });
+          });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            docs.forEach((doc) => next.delete(doc.id));
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Bulk delete failed",
+            description: error instanceof Error ? error.message : "Unable to delete documents.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId],
+  );
+
   const bulkUpdateTags = useCallback(
     (payload: { add: string[]; remove: string[] }) => {
       const add = payload.add.filter(Boolean);
@@ -1278,6 +1431,8 @@ export function useDocumentsModel({
       downloadOriginal,
       reprocess,
       copyLink,
+      deleteDocument,
+      bulkDeleteDocuments,
       bulkUpdateTags,
       bulkDownloadOriginals,
       bulkDownloadOutputs,
@@ -1288,7 +1443,7 @@ export function useDocumentsModel({
 function statusLabel(status: DocumentStatus) {
   switch (status) {
     case "ready":
-      return "Ready";
+      return "Processed";
     case "processing":
       return "Processing";
     case "failed":

@@ -11,6 +11,7 @@ import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { RowActionsMenu } from "./RowActionsMenu";
 import { StatusPill } from "./StatusPill";
+import { TagPicker } from "./TagPicker";
 
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
@@ -24,6 +25,7 @@ function isInteractiveTarget(target: EventTarget | null, container?: Element | n
 }
 
 export function DocumentsGrid({
+  workspaceId,
   documents,
   activeId,
   selectedIds,
@@ -48,17 +50,20 @@ export function DocumentsGrid({
   people,
   onAssign,
   onPickUp,
+  onTagsChange,
 
   onDownloadOriginal,
   onDownloadOutput,
   onCopyLink,
   onReprocess,
+  onDelete,
   onOpenDetails,
   onOpenNotes,
   onClosePreview,
   expandedId,
   expandedContent,
 }: {
+  workspaceId: string;
   documents: DocumentEntry[];
   activeId: string | null;
   selectedIds: Set<string>;
@@ -83,11 +88,13 @@ export function DocumentsGrid({
   people: WorkspacePerson[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
   onPickUp: (documentId: string) => void;
+  onTagsChange: (documentId: string, nextTags: string[]) => void;
 
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onDownloadOutput: (doc: DocumentEntry) => void;
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry) => void;
+  onDelete: (doc: DocumentEntry) => void;
   onOpenDetails: (docId: string) => void;
   onOpenNotes: (docId: string) => void;
   onClosePreview: () => void;
@@ -169,6 +176,7 @@ export function DocumentsGrid({
               const previewId = `documents-preview-${doc.id}`;
               const hasNotes = doc.commentCount > 0;
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
+              const canEditTags = Boolean(doc.record);
 
               return (
                 <div
@@ -243,15 +251,20 @@ export function DocumentsGrid({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background">
-                        <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background">
+                        <UserIcon className="h-4 w-4 text-muted-foreground" />
                       </span>
 
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-foreground">
-                          {doc.assigneeLabel ?? "Unassigned"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <PeoplePicker
+                            people={people}
+                            value={[doc.assigneeKey ?? unassignedKey()]}
+                            onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                            placeholder="Assignee..."
+                            includeUnassigned
+                            buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
+                          />
                           {isUnassigned ? (
                             <button
                               type="button"
@@ -261,35 +274,27 @@ export function DocumentsGrid({
                               }}
                               className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
                             >
-                              Pick up
+                              Assign to me
                             </button>
                           ) : null}
-                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">Assign</span>
-                            <div data-ignore-row-click className="min-w-0">
-                              <PeoplePicker
-                                people={people}
-                                value={[doc.assigneeKey ?? unassignedKey()]}
-                                onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                                placeholder="Assignee..."
-                                includeUnassigned
-                                buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
-                              />
-                            </div>
-                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-xs text-muted-foreground">
-                      {doc.tags.length > 0 ? (
-                        <span className="rounded-full border border-border bg-background px-2 py-0.5">
-                          {doc.tags[0]}
-                          {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
-                        </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <div className="flex min-w-0 items-center">
+                      <TagPicker
+                        workspaceId={workspaceId}
+                        selected={doc.tags}
+                        onToggle={(tag) => {
+                          const nextTags = doc.tags.includes(tag)
+                            ? doc.tags.filter((t) => t !== tag)
+                            : [...doc.tags, tag];
+                          onTagsChange(doc.id, nextTags);
+                        }}
+                        placeholder="Add tags"
+                        disabled={!canEditTags}
+                        buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
+                      />
                     </div>
 
                     <div className="text-right text-xs text-muted-foreground">{formatRelativeTime(now, doc.updatedAt)}</div>
@@ -323,8 +328,10 @@ export function DocumentsGrid({
                           onClosePreview={onClosePreview}
                           onDownloadOriginal={() => onDownloadOriginal(doc)}
                           onCopyLink={() => onCopyLink(doc)}
+                          onDelete={() => onDelete(doc)}
                           originalDisabled={!doc.record}
                           copyDisabled={!doc.record}
+                          deleteDisabled={!doc.record}
                         />
                       </div>
                     </div>

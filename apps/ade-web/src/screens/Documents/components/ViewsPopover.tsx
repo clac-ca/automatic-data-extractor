@@ -3,7 +3,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SavedView } from "../types";
 
-type BuiltInViewId = "all" | "mine" | "unassigned" | "ready" | "processing" | "failed";
+type BuiltInViewId =
+  | "all_documents"
+  | "assigned_to_me"
+  | "assigned_to_me_or_unassigned"
+  | "unassigned"
+  | "processed"
+  | "processing"
+  | "failed"
+  | "archived";
 type ActiveViewId = BuiltInViewId | "custom" | string;
 
 export function ViewsPopover({
@@ -23,11 +31,13 @@ export function ViewsPopover({
   onOpenSaveDialog: () => void;
   counts: {
     total: number;
-    mine: number;
+    assignedToMe: number;
+    assignedToMeOrUnassigned: number;
     unassigned: number;
-    ready: number;
+    processed: number;
     processing: number;
     failed: number;
+    archived: number;
   };
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -47,14 +57,29 @@ export function ViewsPopover({
 
   const builtins = useMemo(() => {
     return [
-      { id: "all", label: "All documents", count: counts.total },
-      { id: "mine", label: "Mine", count: counts.mine },
+      { id: "all_documents", label: "All documents", count: counts.total },
+      { id: "assigned_to_me", label: "Assigned to me", count: counts.assignedToMe },
+      {
+        id: "assigned_to_me_or_unassigned",
+        label: "Assigned to me or Unassigned",
+        count: counts.assignedToMeOrUnassigned,
+      },
       { id: "unassigned", label: "Unassigned", count: counts.unassigned },
-      { id: "ready", label: "Ready", count: counts.ready },
+      { id: "processed", label: "Processed", count: counts.processed },
       { id: "processing", label: "Processing", count: counts.processing },
       { id: "failed", label: "Failed", count: counts.failed },
+      { id: "archived", label: "Archived", count: counts.archived },
     ] as const;
-  }, [counts.failed, counts.mine, counts.processing, counts.ready, counts.total, counts.unassigned]);
+  }, [
+    counts.archived,
+    counts.failed,
+    counts.assignedToMe,
+    counts.assignedToMeOrUnassigned,
+    counts.processing,
+    counts.processed,
+    counts.total,
+    counts.unassigned,
+  ]);
 
   const activeLabel = useMemo(() => {
     if (activeViewId === "custom") return "Custom view";

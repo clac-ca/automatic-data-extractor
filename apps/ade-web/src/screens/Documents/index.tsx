@@ -5,6 +5,7 @@ import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
 import { readPreferredWorkspaceId, useWorkspacesQuery, type WorkspaceProfile } from "@shared/workspaces";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { PageState } from "@ui/PageState";
 
 import { DocumentsBoard } from "./components/DocumentsBoard";
@@ -17,6 +18,7 @@ import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
 import { useDocumentsModel } from "./hooks/useDocumentsModel";
 import { getDocumentOutputRun } from "./data";
+import type { DocumentEntry } from "./types";
 
 export default function DocumentsScreen() {
   return (
@@ -86,10 +88,16 @@ export function DocumentsWorkbench() {
   const { actions, state } = model;
   const [detailsRequest, setDetailsRequest] = useState<{ id: string; tab: "details" | "notes" } | null>(null);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    ids: string[];
+    title: string;
+    description: string;
+    confirmLabel: string;
+  } | null>(null);
   const handleClearFilters = () => {
     setSearchParam("");
     actions.setSearch("");
-    actions.setBuiltInView("all");
+    actions.setBuiltInView("all_documents");
   };
 
   const urlSearch = useMemo(() => {
@@ -184,6 +192,15 @@ export function DocumentsWorkbench() {
     [model.actions, setDocParam, urlDocId],
   );
 
+  const requestDeleteDocument = useCallback((doc: DocumentEntry) => {
+    setDeleteDialog({
+      ids: [doc.id],
+      title: `Delete ${doc.name}?`,
+      description: "This removes the document from the workspace.",
+      confirmLabel: "Delete document",
+    });
+  }, []);
+
   const selectedDocuments = useMemo(
     () => model.derived.visibleDocuments.filter((doc) => model.state.selectedIds.has(doc.id) && doc.record),
     [model.derived.visibleDocuments, model.state.selectedIds],
@@ -193,6 +210,35 @@ export function DocumentsWorkbench() {
     () => selectedDocuments.filter((doc) => Boolean(getDocumentOutputRun(doc.record))).length,
     [selectedDocuments],
   );
+
+  const requestBulkDelete = useCallback(() => {
+    if (selectedDocuments.length === 0) return;
+    const countLabel = selectedDocuments.length === 1 ? "document" : "documents";
+    setDeleteDialog({
+      ids: selectedDocuments.map((doc) => doc.id),
+      title: `Delete ${selectedDocuments.length} ${countLabel}?`,
+      description: `This removes the ${countLabel} from the workspace.`,
+      confirmLabel: `Delete ${selectedDocuments.length} ${countLabel}`,
+    });
+  }, [selectedDocuments]);
+
+  const confirmDelete = useCallback(() => {
+    if (!deleteDialog) return;
+    const ids = deleteDialog.ids;
+    if (ids.length === 0) {
+      setDeleteDialog(null);
+      return;
+    }
+    if (state.previewOpen && state.activeId && ids.includes(state.activeId)) {
+      onClosePreview();
+    }
+    if (ids.length === 1) {
+      actions.deleteDocument(ids[0]);
+    } else {
+      actions.bulkDeleteDocuments(ids);
+    }
+    setDeleteDialog(null);
+  }, [actions, deleteDialog, onClosePreview, state.activeId, state.previewOpen]);
 
   return (
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
@@ -225,6 +271,7 @@ export function DocumentsWorkbench() {
           {model.state.viewMode === "grid" ? (
             <>
               <DocumentsGrid
+                workspaceId={workspace.id}
                 documents={model.derived.visibleDocuments}
                 activeId={model.state.activeId}
                 selectedIds={model.state.selectedIds}
@@ -248,10 +295,12 @@ export function DocumentsWorkbench() {
                 people={model.derived.people}
                 onAssign={model.actions.assignDocument}
                 onPickUp={model.actions.pickUpDocument}
+                onTagsChange={model.actions.updateTagsOptimistic}
                 onDownloadOriginal={model.actions.downloadOriginal}
                 onDownloadOutput={model.actions.downloadOutputFromRow}
                 onCopyLink={model.actions.copyLink}
                 onReprocess={(doc) => model.actions.reprocess(doc)}
+                onDelete={requestDeleteDocument}
                 onOpenDetails={onOpenDetails}
                 onOpenNotes={onOpenNotes}
                 onClosePreview={onClosePreview}
@@ -305,6 +354,7 @@ export function DocumentsWorkbench() {
                 onAddTag={() => setBulkTagOpen(true)}
                 onDownloadOriginals={model.actions.bulkDownloadOriginals}
                 onDownloadOutputs={model.actions.bulkDownloadOutputs}
+                onDelete={requestBulkDelete}
               />
             </>
           ) : (
@@ -384,6 +434,15 @@ export function DocumentsWorkbench() {
         selectedCount={model.state.selectedIds.size}
         onClose={() => setBulkTagOpen(false)}
         onApply={(payload) => model.actions.bulkUpdateTags(payload)}
+      />
+      <ConfirmDialog
+        open={Boolean(deleteDialog)}
+        title={deleteDialog?.title ?? "Delete documents?"}
+        description={deleteDialog?.description}
+        confirmLabel={deleteDialog?.confirmLabel ?? "Delete"}
+        onCancel={() => setDeleteDialog(null)}
+        onConfirm={confirmDelete}
+        tone="danger"
       />
     </div>
   );

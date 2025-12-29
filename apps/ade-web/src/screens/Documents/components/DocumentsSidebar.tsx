@@ -3,7 +3,16 @@ import clsx from "clsx";
 import type { DocumentsFilters, SavedView } from "../types";
 import { unassignedKey } from "./PeoplePicker";
 
-type BuiltInViewId = "all" | "mine" | "unassigned" | "ready" | "processing" | "failed" | "custom";
+type BuiltInViewId =
+  | "all_documents"
+  | "assigned_to_me"
+  | "assigned_to_me_or_unassigned"
+  | "unassigned"
+  | "processed"
+  | "processing"
+  | "failed"
+  | "archived"
+  | "custom";
 
 export function DocumentsSidebar({
   activeViewId,
@@ -24,20 +33,28 @@ export function DocumentsSidebar({
 
   counts: {
     total: number;
-    mine: number;
+    assignedToMe: number;
+    assignedToMeOrUnassigned: number;
     unassigned: number;
-    ready: number;
+    processed: number;
     processing: number;
     failed: number;
+    archived: number;
   };
 }) {
   const builtins: { id: BuiltInViewId; label: string; count?: number }[] = [
-    { id: "all", label: "All documents", count: counts.total },
-    { id: "mine", label: "Mine", count: counts.mine },
+    { id: "all_documents", label: "All documents", count: counts.total },
+    { id: "assigned_to_me", label: "Assigned to me", count: counts.assignedToMe },
+    {
+      id: "assigned_to_me_or_unassigned",
+      label: "Assigned to me or Unassigned",
+      count: counts.assignedToMeOrUnassigned,
+    },
     { id: "unassigned", label: "Unassigned", count: counts.unassigned },
-    { id: "ready", label: "Ready", count: counts.ready },
+    { id: "processed", label: "Processed", count: counts.processed },
     { id: "processing", label: "Processing", count: counts.processing },
     { id: "failed", label: "Failed", count: counts.failed },
+    { id: "archived", label: "Archived", count: counts.archived },
   ];
 
   return (
@@ -128,7 +145,15 @@ export function DocumentsSidebar({
 }
 
 export function filtersForBuiltInView(
-  id: "all" | "mine" | "unassigned" | "ready" | "processing" | "failed",
+  id:
+    | "all_documents"
+    | "assigned_to_me"
+    | "assigned_to_me_or_unassigned"
+    | "unassigned"
+    | "processed"
+    | "processing"
+    | "failed"
+    | "archived",
   base: DocumentsFilters,
   currentUserKey: string,
 ): DocumentsFilters {
@@ -142,18 +167,22 @@ export function filtersForBuiltInView(
   };
 
   switch (id) {
-    case "all":
+    case "all_documents":
       return cleared;
-    case "mine":
+    case "assigned_to_me":
       return { ...cleared, assignees: [currentUserKey] };
+    case "assigned_to_me_or_unassigned":
+      return { ...cleared, assignees: [currentUserKey, unassignedKey()] };
     case "unassigned":
       return { ...cleared, assignees: [unassignedKey()] };
-    case "ready":
+    case "processed":
       return { ...cleared, statuses: ["ready"] };
     case "processing":
       return { ...cleared, statuses: ["queued", "processing"] };
     case "failed":
       return { ...cleared, statuses: ["failed"] };
+    case "archived":
+      return { ...cleared, statuses: ["archived"] };
     default:
       return cleared;
   }

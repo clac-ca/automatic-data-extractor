@@ -9,7 +9,7 @@ import { TagPicker } from "./TagPicker";
 const STATUS_OPTIONS: { value: DocumentStatus; label: string }[] = [
   { value: "queued", label: "Queued" },
   { value: "processing", label: "Processing" },
-  { value: "ready", label: "Ready" },
+  { value: "ready", label: "Processed" },
   { value: "failed", label: "Failed" },
   { value: "archived", label: "Archived" },
 ];
