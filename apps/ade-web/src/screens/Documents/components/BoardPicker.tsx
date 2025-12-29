@@ -105,7 +105,6 @@ export function BoardPicker({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or create board..."
               className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-brand-300"
-              autoFocus
             />
           </div>
           <div className="max-h-72 overflow-auto p-2">

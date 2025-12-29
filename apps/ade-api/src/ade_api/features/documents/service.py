@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import unicodedata
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any

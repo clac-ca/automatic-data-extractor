@@ -36,7 +36,7 @@ export function ThemePicker({ className }: { readonly className?: string }) {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("scroll", handleResize, true);
     };
-  }, [open, updatePosition]);
+  }, [open, setPreviewTheme, updatePosition]);
 
   const items = useMemo(
     () =>

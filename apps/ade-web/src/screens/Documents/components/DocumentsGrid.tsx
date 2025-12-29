@@ -133,7 +133,8 @@ export function DocumentsGrid({
         className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
-        role="list"
+        role="listbox"
+        aria-label="Documents"
       >
         {showLoading ? (
           <div className="py-8">
@@ -186,7 +187,7 @@ export function DocumentsGrid({
                   className="border-b border-border/70"
                 >
                   <div
-                    role="listitem"
+                    role="button"
                     onClick={(event) => {
                       if (isInteractiveTarget(event.target)) return;
                       onActivate(doc.id);

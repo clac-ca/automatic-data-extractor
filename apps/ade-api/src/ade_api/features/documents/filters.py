@@ -61,7 +61,9 @@ class DocumentFilters(FilterBase):
     )
     tags_not: set[str] | None = Field(
         None,
-        description="Exclude documents tagged with any of the provided values (CSV or repeated params).",
+        description=(
+            "Exclude documents tagged with any of the provided values (CSV or repeated params)."
+        ),
     )
     tags_empty: bool | None = Field(
         None,
@@ -299,7 +301,7 @@ class DocumentFilters(FilterBase):
         return normalized or None
 
     @model_validator(mode="after")
-    def _validate_tag_filters(self) -> "DocumentFilters":
+    def _validate_tag_filters(self) -> DocumentFilters:
         if self.tags_empty and (self.tags or self.tags_not):
             raise HTTPException(422, "tags_empty cannot be combined with tags or tags_not.")
         return self

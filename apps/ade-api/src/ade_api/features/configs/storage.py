@@ -197,7 +197,12 @@ class ConfigStorage:
                 "--log-format",
                 "text",
             ]
-            result = subprocess.run(command, capture_output=True, text=True, env=self._engine_subprocess_env())
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                env=self._engine_subprocess_env(),
+            )
             issues: list[ConfigValidationIssue] = []
             if result.returncode != 0:
                 message_src = result.stderr.strip() or result.stdout.strip()
@@ -324,7 +329,12 @@ class ConfigStorage:
             "--layout",
             "src",
         ]
-        result = subprocess.run(command, capture_output=True, text=True, env=self._engine_subprocess_env())
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=self._engine_subprocess_env(),
+        )
         if result.returncode != 0:
             message_src = result.stderr.strip() or result.stdout.strip()
             message = message_src.splitlines()[0] if message_src else "Config init failed"

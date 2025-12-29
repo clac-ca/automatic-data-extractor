@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import unicodedata
-
+from collections.abc import Iterable
 
 MAX_TAG_LENGTH = 100
 MAX_TAGS_PER_DOCUMENT = 50

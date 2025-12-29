@@ -9,6 +9,7 @@ import {
   type MutableRefObject,
 } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 
 import { useNotifications } from "@shared/notifications";
 import { uploadWorkspaceDocument, type DocumentUploadResponse } from "@shared/documents";
@@ -25,6 +26,7 @@ import {
   downloadOriginalDocument,
   downloadRunOutput,
   downloadRunOutputById,
+  fetchRunMetrics,
   fetchWorkbookPreview,
   fetchWorkspaceDocumentById,
   fetchWorkspaceDocuments,
@@ -44,6 +46,7 @@ import type {
   DocumentsFilters,
   DocumentPage,
   DocumentStatus,
+  RunMetricsResource,
   SavedView,
   ViewMode,
   WorkbookPreview,
@@ -89,6 +92,9 @@ type WorkbenchDerived = {
   selectedRunId: string | null;
   activeRun: RunResource | null;
   runLoading: boolean;
+  runMetrics: RunMetricsResource | null;
+  runMetricsLoading: boolean;
+  runMetricsError: boolean;
 
   // Output preview
   outputUrl: string | null;
@@ -678,23 +684,37 @@ export function useDocumentsModel({
     return items.slice().sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
   }, [runsQuery.data]);
 
+  const preferredRunId = activeDocument?.record?.last_run?.run_id ?? null;
+
   useEffect(() => {
     if (!previewOpen) return;
     setSelectedRunId((prev) => {
       const existing = prev && runs.some((r) => r.id === prev) ? prev : null;
       if (existing) return existing;
 
-      const preferred = activeDocument?.record?.last_run?.run_id ?? null;
-      if (preferred && runs.some((r) => r.id === preferred)) return preferred;
+      if (preferredRunId && runs.some((r) => r.id === preferredRunId)) return preferredRunId;
 
       return runs[0]?.id ?? null;
     });
-  }, [activeDocument?.id, previewOpen, runs]);
+  }, [activeDocument?.id, preferredRunId, previewOpen, runs]);
 
   const activeRun = useMemo(() => {
     if (!selectedRunId) return null;
     return runs.find((r) => r.id === selectedRunId) ?? null;
   }, [runs, selectedRunId]);
+
+  const shouldPollRunMetrics =
+    previewOpen && activeRun ? activeRun.status === "running" || activeRun.status === "queued" : false;
+
+  const runMetricsQuery = useQuery({
+    queryKey: selectedRunId
+      ? documentsKeys.runMetrics(selectedRunId)
+      : [...documentsKeys.root(), "runMetrics", "none"],
+    queryFn: ({ signal }) => (selectedRunId ? fetchRunMetrics(selectedRunId, signal) : Promise.resolve(null)),
+    enabled: Boolean(selectedRunId) && previewOpen,
+    staleTime: 30_000,
+    refetchInterval: shouldPollRunMetrics ? 10_000 : false,
+  });
 
   const outputUrl = useMemo(() => {
     if (!activeRun) return null;
@@ -903,13 +923,13 @@ export function useDocumentsModel({
 
       void patchWorkspaceDocumentTags(workspaceId, entry.record.id, { add, remove })
         .then((updated) => {
-          queryClient.setQueryData(listKey, (existing: any) => {
+          queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPage> | undefined) => {
             if (!existing?.pages) return existing;
             return {
               ...existing,
-              pages: existing.pages.map((p: any) => ({
-                ...p,
-                items: (p.items ?? []).map((item: any) => (item.id === updated.id ? updated : item)),
+              pages: existing.pages.map((page) => ({
+                ...page,
+                items: (page.items ?? []).map((item) => (item.id === updated.id ? updated : item)),
               })),
             };
           });
@@ -1207,6 +1227,9 @@ export function useDocumentsModel({
       selectedRunId,
       activeRun,
       runLoading: runsQuery.isFetching,
+      runMetrics: runMetricsQuery.data ?? null,
+      runMetricsLoading: runMetricsQuery.isLoading,
+      runMetricsError: runMetricsQuery.isError,
       outputUrl,
       workbook: workbookQuery.data ?? null,
       workbookLoading: workbookQuery.isLoading,

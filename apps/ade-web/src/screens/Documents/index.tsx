@@ -83,12 +83,13 @@ export function DocumentsWorkbench() {
   const currentUserId = session.user.id;
 
   const model = useDocumentsModel({ currentUserLabel, currentUserId, workspaceId: workspace.id });
+  const { actions, state } = model;
   const [detailsRequest, setDetailsRequest] = useState<{ id: string; tab: "details" | "notes" } | null>(null);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const handleClearFilters = () => {
     setSearchParam("");
-    model.actions.setSearch("");
-    model.actions.setBuiltInView("all");
+    actions.setSearch("");
+    actions.setBuiltInView("all");
   };
 
   const urlSearch = useMemo(() => {
@@ -102,22 +103,34 @@ export function DocumentsWorkbench() {
   }, [location.search]);
 
   useEffect(() => {
-    if (urlSearch !== model.state.search) {
-      model.actions.setSearch(urlSearch);
+    if (urlSearch !== state.search) {
+      actions.setSearch(urlSearch);
     }
-  }, [model.actions.setSearch, model.state.search, urlSearch]);
+  }, [actions, state.search, urlSearch]);
 
   useEffect(() => {
     if (!urlDocId) return;
-    model.actions.openPreview(urlDocId);
-  }, [urlDocId]);
+    actions.openPreview(urlDocId);
+  }, [actions, urlDocId]);
+
+  const setDocParam = useCallback(
+    (docId: string | null, replace = false) => {
+      const params = new URLSearchParams(location.search);
+      if (docId) params.set("doc", docId);
+      else params.delete("doc");
+      const nextSearch = params.toString();
+      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
+      navigate(target, { replace });
+    },
+    [location.hash, location.pathname, location.search, navigate],
+  );
 
   useEffect(() => {
-    if (!model.state.previewOpen) return;
-    if (!model.state.activeId) return;
-    if (urlDocId === model.state.activeId) return;
-    setDocParam(model.state.activeId, true);
-  }, [model.state.activeId, model.state.previewOpen, urlDocId]);
+    if (!state.previewOpen) return;
+    if (!state.activeId) return;
+    if (urlDocId === state.activeId) return;
+    setDocParam(state.activeId, true);
+  }, [setDocParam, state.activeId, state.previewOpen, urlDocId]);
 
   const setSearchParam = useCallback(
     (value: string, replace = true) => {
@@ -134,14 +147,6 @@ export function DocumentsWorkbench() {
     [location.hash, location.pathname, location.search, navigate],
   );
 
-  const setDocParam = (docId: string | null, replace = false) => {
-    const params = new URLSearchParams(location.search);
-    if (docId) params.set("doc", docId);
-    else params.delete("doc");
-    const nextSearch = params.toString();
-    const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
-    navigate(target, { replace });
-  };
 
   const onActivate = (id: string) => {
     if (model.state.activeId === id && model.state.previewOpen) {
@@ -265,6 +270,7 @@ export function DocumentsWorkbench() {
                       onSelectRun={model.actions.selectRun}
                       activeRun={model.derived.activeRun}
                       runLoading={model.derived.runLoading}
+                      runMetrics={model.derived.runMetrics}
                       outputUrl={model.derived.outputUrl}
                       onDownloadOutput={model.actions.downloadOutput}
                       onDownloadOriginal={model.actions.downloadOriginal}
@@ -339,6 +345,7 @@ export function DocumentsWorkbench() {
                       onSelectRun={model.actions.selectRun}
                       activeRun={model.derived.activeRun}
                       runLoading={model.derived.runLoading}
+                      runMetrics={model.derived.runMetrics}
                       outputUrl={model.derived.outputUrl}
                       onDownloadOutput={model.actions.downloadOutput}
                       onDownloadOriginal={model.actions.downloadOriginal}

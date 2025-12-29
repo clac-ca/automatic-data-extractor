@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";
 
@@ -12,6 +12,7 @@ export function SaveViewDialog({
   onSave: (name: string) => void;
 }) {
   const [name, setName] = useState("");
+  const inputId = useId();
 
   useEffect(() => {
     if (open) setName("");
@@ -26,13 +27,15 @@ export function SaveViewDialog({
         <p className="mt-1 text-xs text-muted-foreground">Save your current filters as a reusable view.</p>
 
         <div className="mt-4">
-          <label className="text-xs font-semibold text-muted-foreground">View name</label>
+          <label htmlFor={inputId} className="text-xs font-semibold text-muted-foreground">
+            View name
+          </label>
           <Input
+            id={inputId}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. My triage queue"
             className="mt-2"
-            autoFocus
           />
         </div>
 

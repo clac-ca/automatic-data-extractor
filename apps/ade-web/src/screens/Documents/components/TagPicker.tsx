@@ -52,7 +52,7 @@ export function TagPicker({
     staleTime: 30_000,
   });
 
-  const items = tagsQuery.data?.items ?? [];
+  const items = useMemo(() => tagsQuery.data?.items ?? [], [tagsQuery.data?.items]);
 
   const createCandidate = useMemo(() => {
     const t = effectiveQuery;
@@ -123,7 +123,6 @@ export function TagPicker({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or create tag…"
               className="h-9"
-              autoFocus
             />
             <div className="mt-1 text-[11px] text-muted-foreground">
               Type 2+ characters to search existing tags.

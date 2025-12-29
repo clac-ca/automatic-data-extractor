@@ -1,3 +1,4 @@
+import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
 import type { RunResource } from "@schema";
 
@@ -11,6 +12,7 @@ import type {
   FileType,
   ListDocumentsQuery,
   MappingHealth,
+  RunMetricsResource,
   WorkspaceMemberPage,
   WorkbookPreview,
   WorkbookSheet,
@@ -40,6 +42,7 @@ export const documentsKeys = {
   runsForDocument: (workspaceId: string, documentId: string) =>
     [...documentsKeys.workspace(workspaceId), "runs", { input_document_id: documentId }] as const,
   run: (runId: string) => [...documentsKeys.root(), "run", runId] as const,
+  runMetrics: (runId: string) => [...documentsKeys.run(runId), "metrics"] as const,
   workbook: (url: string) => [...documentsKeys.root(), "workbook", url] as const,
 };
 
@@ -101,6 +104,21 @@ export async function fetchWorkspaceRunsForDocument(
 
   if (!data) throw new Error("Expected run page payload.");
   return data.items ?? [];
+}
+
+export async function fetchRunMetrics(runId: string, signal?: AbortSignal): Promise<RunMetricsResource | null> {
+  try {
+    const { data } = await client.GET("/api/v1/runs/{run_id}/metrics", {
+      params: { path: { run_id: runId } },
+      signal,
+    });
+    return data ?? null;
+  } catch (error: unknown) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): Promise<WorkbookPreview> {

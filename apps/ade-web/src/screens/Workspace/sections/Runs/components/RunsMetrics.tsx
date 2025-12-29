@@ -3,15 +3,20 @@ import clsx from "clsx";
 import type { RunsCounts } from "../types";
 import { formatNumber } from "../utils";
 
-export function RunsMetrics({ counts }: { counts: RunsCounts }) {
+export function RunsMetrics({ counts, rangeLabel }: { counts: RunsCounts; rangeLabel: string }) {
   const completed = counts.success + counts.failed + counts.cancelled;
   const failedTotal = counts.failed + counts.cancelled;
   const successRate = completed > 0 ? Math.round((counts.success / completed) * 100) : 0;
   const warningsLabel = counts.warning === null ? "—" : formatNumber(counts.warning);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr_1fr_1fr]">
+    <div className="shrink-0 border-b border-border bg-card px-6 py-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.1fr_1fr_1fr_1fr_1fr]">
+        <SummaryBlock
+          label="Total runs"
+          value={formatNumber(counts.total)}
+          meta={rangeLabel}
+        />
         <SummaryBlock
           label="Active queue"
           value={formatNumber(counts.active)}

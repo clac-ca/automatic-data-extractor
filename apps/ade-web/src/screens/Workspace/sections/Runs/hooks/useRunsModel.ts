@@ -1,7 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchWorkspaceRuns, buildRunRecord, runsKeys, RUNS_PAGE_SIZE } from "../data";
+import {
+  fetchRunColumns,
+  fetchRunFields,
+  fetchRunMetrics,
+  fetchWorkspaceRuns,
+  buildRunRecord,
+  runsKeys,
+  RUNS_PAGE_SIZE,
+} from "../data";
 import { buildCounts, buildCreatedAtRange, filterRuns } from "../utils";
 import type { RunsFilters } from "../types";
 import { DEFAULT_RUNS_FILTERS } from "../constants";
@@ -60,6 +68,34 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
     [activeId, runs],
   );
 
+  const shouldFetchDetails = Boolean(activeId && previewOpen);
+  const shouldPollDetails =
+    previewOpen && activeRun ? activeRun.status === "running" || activeRun.status === "queued" : false;
+
+  const metricsQuery = useQuery({
+    queryKey: activeId ? runsKeys.metrics(activeId) : [...runsKeys.root(), "metrics", "none"],
+    queryFn: ({ signal }) => (activeId ? fetchRunMetrics(activeId, signal) : Promise.resolve(null)),
+    enabled: shouldFetchDetails,
+    staleTime: 30_000,
+    refetchInterval: shouldPollDetails ? 10_000 : false,
+  });
+
+  const fieldsQuery = useQuery({
+    queryKey: activeId ? runsKeys.fields(activeId) : [...runsKeys.root(), "fields", "none"],
+    queryFn: ({ signal }) => (activeId ? fetchRunFields(activeId, signal) : Promise.resolve(null)),
+    enabled: shouldFetchDetails,
+    staleTime: 30_000,
+    refetchInterval: shouldPollDetails ? 10_000 : false,
+  });
+
+  const columnsQuery = useQuery({
+    queryKey: activeId ? runsKeys.columns(activeId, null) : [...runsKeys.root(), "columns", "none"],
+    queryFn: ({ signal }) => (activeId ? fetchRunColumns(activeId, null, signal) : Promise.resolve(null)),
+    enabled: shouldFetchDetails,
+    staleTime: 30_000,
+    refetchInterval: shouldPollDetails ? 10_000 : false,
+  });
+
   const updateFilters = useCallback((next: Partial<RunsFilters>) => {
     setFilters((current) => ({ ...current, ...next }));
   }, []);
@@ -110,6 +146,15 @@ export function useRunsModel({ workspaceId, initialFilters }: { workspaceId: str
       isLoading: runsQuery.isLoading,
       isError: runsQuery.isError,
       totalCount: runsQuery.data?.total ?? runsQuery.data?.items?.length ?? 0,
+      metrics: metricsQuery.data ?? null,
+      metricsLoading: metricsQuery.isLoading,
+      metricsError: metricsQuery.isError,
+      fields: fieldsQuery.data ?? null,
+      fieldsLoading: fieldsQuery.isLoading,
+      fieldsError: fieldsQuery.isError,
+      columns: columnsQuery.data ?? null,
+      columnsLoading: columnsQuery.isLoading,
+      columnsError: columnsQuery.isError,
     },
     actions: {
       updateFilters,

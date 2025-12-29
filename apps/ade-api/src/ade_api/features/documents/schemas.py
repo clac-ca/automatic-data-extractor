@@ -121,7 +121,7 @@ class DocumentTagsPatch(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _ensure_changes(self) -> "DocumentTagsPatch":
+    def _ensure_changes(self) -> DocumentTagsPatch:
         if not (self.add or self.remove):
             raise ValueError("add or remove is required")
         return self
@@ -145,7 +145,7 @@ class DocumentBatchTagsRequest(BaseSchema):
     )
 
     @model_validator(mode="after")
-    def _ensure_changes(self) -> "DocumentBatchTagsRequest":
+    def _ensure_changes(self) -> DocumentBatchTagsRequest:
         if not (self.add or self.remove):
             raise ValueError("add or remove is required")
         return self
@@ -154,7 +154,7 @@ class DocumentBatchTagsRequest(BaseSchema):
 class DocumentBatchTagsResponse(BaseSchema):
     """Response envelope for batch tag updates."""
 
-    documents: list["DocumentOut"] = Field(default_factory=list)
+    documents: list[DocumentOut] = Field(default_factory=list)
 
 
 class DocumentBatchDeleteRequest(BaseSchema):

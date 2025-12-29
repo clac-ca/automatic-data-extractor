@@ -2353,7 +2353,7 @@ interface SidePanelPlaceholderProps {
   readonly appearance: "light" | "dark";
 }
 
-function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderProps) {
+function SidePanelPlaceholder({ width, view, appearance: _appearance }: SidePanelPlaceholderProps) {
   const label = ACTIVITY_LABELS[view] || "Coming soon";
   const surfaceClass = "border-border bg-muted text-muted-foreground";
   return (
@@ -2851,7 +2851,7 @@ function ChromeIconButton({
   ariaLabel,
   onClick,
   icon,
-  appearance,
+  appearance: _appearance,
   active = false,
   disabled = false,
 }: {

@@ -6,10 +6,10 @@ import { PageState } from "@ui/PageState";
 
 import { RunsFiltersBar } from "./components/RunsFiltersBar";
 import { RunsHeader } from "./components/RunsHeader";
-import { RunsInspector } from "./components/RunsInspector";
 import { RunsMetrics } from "./components/RunsMetrics";
+import { RunPreviewPanel } from "./components/RunPreviewPanel";
 import { RunsTable } from "./components/RunsTable";
-import { DEFAULT_RUNS_FILTERS } from "./constants";
+import { DEFAULT_RUNS_FILTERS, DATE_RANGE_OPTIONS } from "./constants";
 import { useRunsModel } from "./hooks/useRunsModel";
 import { coerceDateRange, coerceResult, coerceStatus } from "./utils";
 import type { RunsFilters } from "./types";
@@ -46,6 +46,22 @@ export default function WorkspaceRunsRoute() {
     }
   }, [model.actions, model.state.activeId, model.state.previewOpen, urlRunId]);
 
+  const syncUrl = useCallback(
+    (filters: RunsFilters, runId: string | null) => {
+      const params = buildSearchParams(filters, runId);
+      const next = `${location.pathname}${params ? `?${params}` : ""}${location.hash ?? ""}`;
+      const current = `${location.pathname}${location.search}${location.hash ?? ""}`;
+      if (next === current) return;
+      navigate(next, { replace: true });
+    },
+    [location.hash, location.pathname, location.search, navigate],
+  );
+
+  const handleClosePreview = useCallback(() => {
+    model.actions.closePreview();
+    syncUrl(model.state.filters, null);
+  }, [model.actions, model.state.filters, syncUrl]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -59,20 +75,7 @@ export default function WorkspaceRunsRoute() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [model.state.previewOpen]);
-
-  const syncUrl = (filters: RunsFilters, runId: string | null) => {
-    const params = buildSearchParams(filters, runId);
-    const next = `${location.pathname}${params ? `?${params}` : ""}${location.hash ?? ""}`;
-    const current = `${location.pathname}${location.search}${location.hash ?? ""}`;
-    if (next === current) return;
-    navigate(next, { replace: true });
-  };
-
-  const handleClosePreview = () => {
-    model.actions.closePreview();
-    syncUrl(model.state.filters, null);
-  };
+  }, [handleClosePreview, model.state.previewOpen]);
 
   const handleTogglePreview = (id: string) => {
     if (model.state.previewOpen && model.state.activeId === id) {
@@ -95,7 +98,7 @@ export default function WorkspaceRunsRoute() {
   };
 
   return (
-    <div className="runs flex flex-1 flex-col gap-5">
+    <div className="runs flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <RunsHeader
         onExport={() => {
           // TODO: Wire to export endpoint
@@ -105,52 +108,69 @@ export default function WorkspaceRunsRoute() {
         }}
       />
 
-      <RunsMetrics counts={model.derived.counts} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <RunsMetrics counts={model.derived.counts} rangeLabel={resolveRangeLabel(model.state.filters.dateRange)} />
 
-      <RunsFiltersBar
-        filters={model.state.filters}
-        configOptions={model.derived.configOptions}
-        ownerOptions={model.derived.ownerOptions}
-        resultEnabled={model.derived.supportsResultFilters}
-        counts={model.derived.counts}
-        onChange={handleFiltersChange}
-        onReset={handleFiltersReset}
-      />
-
-      {model.derived.isLoading ? (
-        <div className="rounded-2xl border border-border bg-card px-6 py-10">
-          <PageState title="Loading runs" variant="loading" />
-        </div>
-      ) : model.derived.isError ? (
-        <div className="rounded-2xl border border-border bg-card px-6 py-10">
-          <PageState
-            title="Unable to load runs"
-            description="Refresh the page or try again later."
-            variant="error"
+          <RunsFiltersBar
+            filters={model.state.filters}
+            configOptions={model.derived.configOptions}
+            ownerOptions={model.derived.ownerOptions}
+            resultEnabled={model.derived.supportsResultFilters}
+            counts={model.derived.counts}
+            showingCount={model.derived.visibleRuns.length}
+            totalCount={model.derived.totalCount}
+            onChange={handleFiltersChange}
+            onReset={handleFiltersReset}
           />
-        </div>
-      ) : model.derived.visibleRuns.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card px-6 py-10">
-          <PageState
-            title="No runs found"
-            description="Try adjusting filters or clearing the search."
-            variant="empty"
-          />
-        </div>
-      ) : (
-        <RunsTable
-          runs={model.derived.visibleRuns}
-          totalCount={model.derived.totalCount}
-          activeId={expandedId}
-          onSelect={handleTogglePreview}
-        />
-      )}
 
-      <RunsInspector
-        run={model.derived.activeRun}
-        open={model.state.previewOpen}
-        onClose={handleClosePreview}
-      />
+          {model.derived.isLoading ? (
+            <div className="flex-1 bg-card px-6 py-10">
+              <PageState title="Loading runs" variant="loading" />
+            </div>
+          ) : model.derived.isError ? (
+            <div className="flex-1 bg-card px-6 py-10">
+              <PageState
+                title="Unable to load runs"
+                description="Refresh the page or try again later."
+                variant="error"
+              />
+            </div>
+          ) : model.derived.visibleRuns.length === 0 ? (
+            <div className="flex-1 bg-card px-6 py-10">
+              <PageState
+                title="No runs found"
+                description="Try adjusting filters or clearing the search."
+                variant="empty"
+              />
+            </div>
+          ) : (
+            <RunsTable
+              runs={model.derived.visibleRuns}
+              activeId={expandedId}
+              onSelect={handleTogglePreview}
+              expandedId={expandedId}
+              expandedContent={
+                model.state.previewOpen && model.derived.activeRun ? (
+                  <RunPreviewPanel
+                    run={model.derived.activeRun}
+                    metrics={model.derived.metrics}
+                    metricsLoading={model.derived.metricsLoading}
+                    metricsError={model.derived.metricsError}
+                    fields={model.derived.fields}
+                    fieldsLoading={model.derived.fieldsLoading}
+                    fieldsError={model.derived.fieldsError}
+                    columns={model.derived.columns}
+                    columnsLoading={model.derived.columnsLoading}
+                    columnsError={model.derived.columnsError}
+                    onClose={handleClosePreview}
+                  />
+                ) : null
+              }
+            />
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -195,4 +215,8 @@ function filtersEqual(a: RunsFilters, b: RunsFilters) {
     a.config === b.config &&
     a.owner === b.owner
   );
+}
+
+function resolveRangeLabel(value: RunsFilters["dateRange"]) {
+  return DATE_RANGE_OPTIONS.find((option) => option.value === value)?.label ?? "Selected range";
 }

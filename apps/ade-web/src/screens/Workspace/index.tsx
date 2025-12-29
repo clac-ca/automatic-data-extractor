@@ -386,7 +386,9 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
   const segments = extractSectionSegments(location.pathname, workspace.id);
   const section = resolveWorkspaceSection(workspace.id, segments, location.search, location.hash);
   const isDocumentsSection = section?.kind === "content" && section.key === "documents";
+  const isRunsSection = section?.kind === "content" && section.key === "runs";
   const documentSearchValue = isDocumentsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
+  const runSearchValue = isRunsSection ? new URLSearchParams(location.search).get("q") ?? "" : "";
   const handleDocumentSearchChange = useCallback(
     (nextValue: string) => {
       if (!isDocumentsSection) {
@@ -427,7 +429,47 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         enableShortcut: true,
       }
     : undefined;
-  const topBarSearch = documentsSearch ?? workspaceSearch;
+  const handleRunSearchChange = useCallback(
+    (nextValue: string) => {
+      if (!isRunsSection) {
+        return;
+      }
+      const params = new URLSearchParams(location.search);
+      if (nextValue) {
+        params.set("q", nextValue);
+      } else {
+        params.delete("q");
+      }
+      const searchParams = params.toString();
+      navigate(
+        `${location.pathname}${searchParams ? `?${searchParams}` : ""}${location.hash}`,
+        { replace: true },
+      );
+    },
+    [isRunsSection, location.hash, location.pathname, location.search, navigate],
+  );
+  const handleRunSearchSubmit = useCallback(
+    (value: string) => {
+      handleRunSearchChange(value);
+    },
+    [handleRunSearchChange],
+  );
+  const handleRunSearchClear = useCallback(() => {
+    handleRunSearchChange("");
+  }, [handleRunSearchChange]);
+  const runsSearch = isRunsSection
+    ? {
+        value: runSearchValue,
+        onChange: handleRunSearchChange,
+        onSubmit: handleRunSearchSubmit,
+        onClear: handleRunSearchClear,
+        placeholder: "Search runs",
+        shortcutHint,
+        scopeLabel: "Runs",
+        enableShortcut: true,
+      }
+    : undefined;
+  const topBarSearch = documentsSearch ?? runsSearch ?? workspaceSearch;
 
   useEffect(() => {
     if (section?.kind === "redirect") {
@@ -641,7 +683,7 @@ export function resolveWorkspaceSection(
       return { kind: "content", key: "documents", element: <WorkspaceDocumentsRoute />, fullHeight: true };
     }
     case "runs":
-      return { kind: "content", key: "runs", element: <WorkspaceRunsRoute /> };
+      return { kind: "content", key: "runs", element: <WorkspaceRunsRoute />, fullHeight: true };
     case "config-builder": {
       if (!second) {
         return { kind: "content", key: "config-builder", element: <WorkspaceConfigsIndexRoute /> };

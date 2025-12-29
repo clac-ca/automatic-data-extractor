@@ -205,6 +205,7 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
               ref={menuRef}
               id={menuId}
               role="menu"
+              tabIndex={-1}
               className={clsx(
                 "fixed w-72 origin-top-right rounded-xl border border-border bg-popover p-2 text-sm shadow-2xl ring-1 ring-border/50",
                 "isolate",

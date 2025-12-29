@@ -169,7 +169,7 @@ export function DocumentsBoard({
                             </button>
                           ) : null}
                           <div
-                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             className="min-w-0 rounded-full border border-border bg-background px-1 py-0.5"
                           >
                             <PeoplePicker

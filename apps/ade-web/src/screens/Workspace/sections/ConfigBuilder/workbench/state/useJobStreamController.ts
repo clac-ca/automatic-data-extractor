@@ -138,7 +138,7 @@ export function useJobStreamController({
         }
       }
     },
-    [onJobIdChange],
+    [],
   );
 
   const startJob = useCallback(

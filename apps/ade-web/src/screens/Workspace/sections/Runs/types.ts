@@ -1,4 +1,8 @@
-import type { RunResource, RunStatus } from "@schema";
+import type { components, RunResource, RunStatus } from "@schema";
+
+export type RunMetrics = components["schemas"]["RunMetricsResource"];
+export type RunField = components["schemas"]["RunFieldResource"];
+export type RunColumn = components["schemas"]["RunColumnResource"];
 
 export type RunsStatusFilter = "all" | RunStatus;
 export type RunsResultFilter = "all" | "clean" | "warnings" | "errors";

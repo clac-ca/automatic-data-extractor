@@ -25,8 +25,8 @@ from ade_api.common.events import (
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import Page
-from ade_api.common.types import OrderBy
 from ade_api.common.time import utc_now
+from ade_api.common.types import OrderBy
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.configs.storage import ConfigStorage
@@ -71,13 +71,13 @@ from .exceptions import (
     RunOutputNotReadyError,
     RunQueueFullError,
 )
+from .filters import RunColumnFilters, RunFilters
 from .repository import RunsRepository
 from .runner import EngineSubprocessRunner, StdoutFrame
-from .filters import RunColumnFilters, RunFilters
 from .schemas import (
     RunBatchCreateOptions,
-    RunCreateOptionsBase,
     RunCreateOptions,
+    RunCreateOptionsBase,
     RunInput,
     RunLinks,
     RunOutput,
@@ -370,7 +370,7 @@ class RunsService:
         await self._enforce_queue_capacity(requested=len(document_ids))
 
         runs: list[Run] = []
-        for run_id, document_id in zip(run_ids, document_ids):
+        for run_id, document_id in zip(run_ids, document_ids, strict=True):
             run = Run(
                 id=run_id,
                 workspace_id=configuration.workspace_id,
@@ -388,7 +388,7 @@ class RunsService:
         await self._session.flush()
         await self._session.commit()
 
-        for run, document_id in zip(runs, document_ids):
+        for run, document_id in zip(runs, document_ids, strict=True):
             await self._session.refresh(run)
             run_options = RunCreateOptions(
                 dry_run=options.dry_run,
@@ -2522,9 +2522,15 @@ class RunsService:
         return {
             "evaluation_outcome": RunsService._coerce_str(evaluation.get("outcome")),
             "evaluation_findings_total": findings_total,
-            "evaluation_findings_info": findings_by_severity["info"] if findings_total is not None else None,
-            "evaluation_findings_warning": findings_by_severity["warning"] if findings_total is not None else None,
-            "evaluation_findings_error": findings_by_severity["error"] if findings_total is not None else None,
+            "evaluation_findings_info": (
+                findings_by_severity["info"] if findings_total is not None else None
+            ),
+            "evaluation_findings_warning": (
+                findings_by_severity["warning"] if findings_total is not None else None
+            ),
+            "evaluation_findings_error": (
+                findings_by_severity["error"] if findings_total is not None else None
+            ),
             "validation_issues_total": RunsService._coerce_int(validation.get("issues_total")),
             "validation_issues_info": issues_info,
             "validation_issues_warning": issues_warning,
@@ -2569,7 +2575,9 @@ class RunsService:
                     "field": field_name,
                     "label": RunsService._coerce_str(entry.get("label")),
                     "mapped": True if entry.get("mapped") is True else False,
-                    "best_mapping_score": RunsService._coerce_float(entry.get("best_mapping_score")),
+                    "best_mapping_score": RunsService._coerce_float(
+                        entry.get("best_mapping_score")
+                    ),
                     "occurrences_tables": RunsService._coerce_int(occurrences.get("tables")) or 0,
                     "occurrences_columns": RunsService._coerce_int(occurrences.get("columns")) or 0,
                 }
@@ -2674,7 +2682,9 @@ class RunsService:
                                 "mapped_field": RunsService._coerce_str(mapping.get("field")),
                                 "mapping_score": RunsService._coerce_float(mapping.get("score")),
                                 "mapping_method": RunsService._coerce_str(mapping.get("method")),
-                                "unmapped_reason": RunsService._coerce_str(mapping.get("unmapped_reason")),
+                                "unmapped_reason": RunsService._coerce_str(
+                                    mapping.get("unmapped_reason")
+                                ),
                             }
                         )
 

@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@app/nav/history";
 
 import { Button } from "@ui/Button";
 import { ContextMenu } from "@ui/ContextMenu";
@@ -8,9 +9,16 @@ import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 import type { RunResource } from "@schema";
 
 import { MAX_PREVIEW_ROWS } from "../data";
-import type { DocumentComment, DocumentEntry, WorkspacePerson, WorkbookPreview, WorkbookSheet } from "../types";
+import type {
+  DocumentComment,
+  DocumentEntry,
+  RunMetricsResource,
+  WorkspacePerson,
+  WorkbookPreview,
+  WorkbookSheet,
+} from "../types";
 import { columnLabel, formatRelativeTime, shortId } from "../utils";
-import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon, UserIcon } from "./icons";
+import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, OpenInNewIcon, RefreshIcon, UserIcon } from "./icons";
 import { CommentsPanel } from "./CommentsPanel";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { TagPicker } from "./TagPicker";
@@ -30,6 +38,7 @@ export function DocumentsPreviewPane({
   onSelectRun,
   activeRun,
   runLoading,
+  runMetrics,
 
   outputUrl,
   onDownloadOutput,
@@ -70,6 +79,7 @@ export function DocumentsPreviewPane({
   onSelectRun: (runId: string) => void;
   activeRun: RunResource | null;
   runLoading: boolean;
+  runMetrics: RunMetricsResource | null;
 
   outputUrl: string | null;
   onDownloadOutput: (doc: DocumentEntry | null) => void;
@@ -101,12 +111,28 @@ export function DocumentsPreviewPane({
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsTab, setDetailsTab] = useState<DetailsPanelTab>("details");
+  const navigate = useNavigate();
 
   // Close details when switching documents (keeps the preview feeling stable/intentional)
   useEffect(() => {
     setDetailsOpen(false);
     setDetailsTab("details");
   }, [document?.id]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      event.stopPropagation();
+      onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const sheets = workbook?.sheets ?? [];
   const selectedSheetId = activeSheetId ?? sheets[0]?.name ?? "";
@@ -119,6 +145,8 @@ export function DocumentsPreviewPane({
   const effectiveRun = activeRun ?? (selectedRunId ? runOptions.find((r) => r.id === selectedRunId) ?? null : null) ?? runOptions[0] ?? null;
 
   const hasOutput = effectiveRun?.status === "succeeded" && Boolean(outputUrl);
+  const runLink = effectiveRun ? `/workspaces/${workspaceId}/runs?run=${effectiveRun.id}` : null;
+  const runtimeSummary = buildRuntimeSummary(effectiveRun);
 
   const canDownloadOutput = Boolean(document?.record && outputUrl);
   const canDownloadOriginal = Boolean(document?.record);
@@ -180,6 +208,9 @@ export function DocumentsPreviewPane({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {runMetrics || runtimeSummary ? (
+                    <PreviewMetricsInline metrics={runMetrics} runtime={runtimeSummary} />
+                  ) : null}
                   {runOptions.length > 1 ? (
                     <Select
                       value={selectedRunId ?? runOptions[0]?.id ?? ""}
@@ -194,6 +225,19 @@ export function DocumentsPreviewPane({
                       ))}
                     </Select>
                   ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      if (runLink) navigate(runLink);
+                    }}
+                    disabled={!runLink}
+                    aria-label="Open run details"
+                    title="Open run details"
+                  >
+                    Run details
+                    <OpenInNewIcon className="h-3 w-3" />
+                  </button>
                   <PreviewActionsMenu
                     document={document}
                     canDownloadOutput={canDownloadOutput}
@@ -313,6 +357,82 @@ function PreviewMessage({ title, children }: { title: string; children: string }
       <p className="font-semibold text-foreground">{title}</p>
       <p>{children}</p>
     </div>
+  );
+}
+
+const METRICS_NUMBER_FORMATTER = new Intl.NumberFormat();
+
+function formatMetricNumber(value: number | null | undefined) {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return METRICS_NUMBER_FORMATTER.format(value);
+}
+
+function pluralize(label: string, value: number) {
+  return value === 1 ? label : `${label}s`;
+}
+
+function buildValidationSummary(metrics: RunMetricsResource) {
+  const total = metrics.validation_issues_total;
+  if (typeof total !== "number") return null;
+  const totalLabel = formatMetricNumber(total);
+  if (!totalLabel) return null;
+  const severity = metrics.validation_max_severity;
+  const label = severity === "error" || severity === "warning" || severity === "info" ? severity : "issue";
+  if (total === 0) return totalLabel;
+  return `${totalLabel} ${pluralize(label, total)}`;
+}
+
+function buildColumnsSummary(metrics: RunMetricsResource) {
+  const mapped = metrics.column_count_mapped;
+  const unmapped = metrics.column_count_unmapped;
+
+  if (typeof mapped === "number" || typeof unmapped === "number") {
+    const mappedLabel = typeof mapped === "number" ? formatMetricNumber(mapped) : null;
+    const unmappedLabel = typeof unmapped === "number" ? formatMetricNumber(unmapped) : null;
+    const parts: string[] = [];
+    if (mappedLabel) parts.push(`${mappedLabel} mapped`);
+    if (unmappedLabel) parts.push(`${unmappedLabel} unmapped`);
+    if (parts.length > 0) return `Columns ${parts.join(" / ")}`;
+  }
+
+  const total = metrics.column_count_total;
+  if (typeof total !== "number") return null;
+  const totalLabel = formatMetricNumber(total);
+  if (!totalLabel) return null;
+  return `Columns ${totalLabel}`;
+}
+
+function formatDurationSeconds(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remaining = Math.round(seconds % 60);
+  if (minutes <= 0) return `${remaining}s`;
+  return `${minutes}m ${remaining}s`;
+}
+
+function buildRuntimeSummary(run: RunResource | null) {
+  if (!run) return null;
+  const seconds = run.duration_seconds;
+  if (typeof seconds !== "number" || Number.isNaN(seconds)) return null;
+  return `Runtime ${formatDurationSeconds(seconds)}`;
+}
+
+function PreviewMetricsInline({
+  metrics,
+  runtime,
+}: {
+  metrics: RunMetricsResource | null;
+  runtime?: string | null;
+}) {
+  const validation = metrics ? buildValidationSummary(metrics) : null;
+  const columns = metrics ? buildColumnsSummary(metrics) : null;
+  const parts = [validation ? `Validation ${validation}` : null, columns, runtime].filter(Boolean) as string[];
+
+  if (parts.length === 0) return null;
+
+  return (
+    <span className="hidden lg:inline-flex items-center text-[11px] text-muted-foreground">
+      {parts.join(" | ")}
+    </span>
   );
 }
 
@@ -565,16 +685,7 @@ function DetailsDrawer({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="absolute inset-0 z-20"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          // Close the drawer first; prevent the global “close preview” Esc handler from firing.
-          e.stopPropagation();
-          onClose();
-        }
-      }}
-    >
+    <div className="absolute inset-0 z-20" role="dialog" aria-modal="true">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-overlay/10"

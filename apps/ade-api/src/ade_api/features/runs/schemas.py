@@ -137,7 +137,7 @@ class RunWorkspaceBatchCreateRequest(BaseSchema):
 class RunBatchCreateResponse(BaseSchema):
     """Response envelope for batch run creation."""
 
-    runs: list["RunResource"]
+    runs: list[RunResource]
 
 
 class RunLinks(BaseSchema):

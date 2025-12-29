@@ -15,6 +15,7 @@ export type WorkspaceMemberPage = components["schemas"]["WorkspaceMemberPage"];
 export type RunResource = components["schemas"]["RunResource"];
 export type RunPage = components["schemas"]["RunPage"];
 export type RunStatus = components["schemas"]["RunStatus"];
+export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
 
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];

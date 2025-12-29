@@ -28,8 +28,8 @@ from ade_api.common.encoding import json_bytes
 from ade_api.common.events import EventRecord, strip_sequence
 from ade_api.common.pagination import PageParams
 from ade_api.common.sorting import make_sort_dependency
-from ade_api.common.types import OrderBy
 from ade_api.common.sse import sse_json
+from ade_api.common.types import OrderBy
 from ade_api.core.http import require_authenticated, require_csrf
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
 from ade_api.models import RunStatus

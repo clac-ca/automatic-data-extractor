@@ -36,7 +36,7 @@ export function extractFilename(contentDisposition: string | null): string | nul
   if (!contentDisposition) return null;
   const utfMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
-  const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+  const match = contentDisposition.match(/filename="?([^";]+)"?/i);
   return match?.[1] ?? null;
 }
 
