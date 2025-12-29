@@ -199,7 +199,7 @@ async def test_list_document_sheets_ignores_cached_metadata_when_missing(
     )
 
     assert listing.status_code == 404
-    assert "exceeds the allowed maximum" in response.text
+    assert "was not found" in listing.text
 
 
 async def test_delete_document_marks_deleted(
@@ -315,7 +315,7 @@ async def test_list_documents_invalid_filter_returns_422(
     response = await async_client.get(
         f"{workspace_base}/documents",
         headers=headers,
-        params={"status_in": "bogus"},
+        params={"status": "bogus"},
     )
 
     assert response.status_code == 422

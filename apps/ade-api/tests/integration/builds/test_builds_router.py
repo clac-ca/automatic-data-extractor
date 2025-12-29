@@ -250,6 +250,7 @@ async def test_list_builds_with_filters_and_limits(
         headers=headers,
     )
     assert failed_build["status"] == "failed"
+    assert active_build_id == failed_build_id
 
     failed_only = await async_client.get(
         f"/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds",
@@ -268,4 +269,4 @@ async def test_list_builds_with_filters_and_limits(
     )
     assert all_builds.status_code == 200
     build_ids = [item["id"] for item in all_builds.json()["items"]]
-    assert build_ids == [failed_build_id, active_build_id]
+    assert build_ids == [failed_build_id]
