@@ -15,9 +15,12 @@ import { StatusPill } from "./StatusPill";
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
 
-function isInteractiveTarget(target: EventTarget | null) {
+function isInteractiveTarget(target: EventTarget | null, container?: Element | null) {
   if (!(target instanceof Element)) return false;
-  return Boolean(target.closest(INTERACTIVE_SELECTOR));
+  const interactive = target.closest(INTERACTIVE_SELECTOR);
+  if (!interactive) return false;
+  if (container && interactive === container) return false;
+  return true;
 }
 
 export function DocumentsGrid({
@@ -189,7 +192,7 @@ export function DocumentsGrid({
                   <div
                     role="button"
                     onClick={(event) => {
-                      if (isInteractiveTarget(event.target)) return;
+                      if (isInteractiveTarget(event.target, event.currentTarget)) return;
                       onActivate(doc.id);
                     }}
                     onKeyDown={(event) => {

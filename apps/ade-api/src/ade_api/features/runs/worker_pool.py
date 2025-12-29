@@ -32,7 +32,7 @@ class RunWorkerPool:
         self._event_streams = event_streams
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
-        self._poll_interval = 0.5
+        self._poll_interval = settings.run_worker_poll_interval.total_seconds()
         self._cleanup_interval = 30.0
 
     async def start(self) -> None:

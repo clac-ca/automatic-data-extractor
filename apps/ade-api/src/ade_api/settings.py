@@ -339,6 +339,7 @@ class Settings(BaseSettings):
     # Runs & workers
     max_concurrency: int = Field(default=2, ge=1)
     queue_size: int | None = Field(default=None, ge=1)
+    run_worker_poll_interval: timedelta = Field(default=timedelta(seconds=2))
     run_timeout_seconds: int | None = Field(default=None, ge=1)
     worker_cpu_seconds: int | None = Field(default=None, ge=1)  # plain seconds
     worker_mem_mb: int | None = Field(default=None, ge=1)
@@ -430,6 +431,7 @@ class Settings(BaseSettings):
         "session_last_seen_interval",
         "failed_login_lock_duration",
         "storage_document_retention_period",
+        "run_worker_poll_interval",
         mode="before",
     )
     @classmethod

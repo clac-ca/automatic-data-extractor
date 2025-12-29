@@ -197,7 +197,7 @@ function WorkspaceNavPanel({
   return (
     <>
       {/* Nav */}
-      <nav className={clsx("flex-1 overflow-y-auto", "overflow-x-visible", expanded ? "px-3 py-4" : "px-2 py-3")} aria-label="Workspace sections">
+      <nav className={clsx("flex-1 overflow-y-auto", "overflow-x-hidden", expanded ? "px-3 py-4" : "px-2 py-3")} aria-label="Workspace sections">
         <WorkspaceNavList items={items} variant={variant} />
       </nav>
 
@@ -298,7 +298,6 @@ export function WorkspaceNavList({
                     {item.label}
                   </span>
 
-                  {!expanded ? <RailTooltip label={item.label} /> : null}
                 </>
               )}
             </NavLink>
@@ -361,7 +360,6 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
             Settings
           </span>
 
-          {!expanded ? <RailTooltip label={tooltipLabel} /> : null}
         </>
       )}
     </NavLink>
@@ -417,28 +415,7 @@ function NavPinButton({
         <span className="ml-2 text-[0.7rem] font-semibold text-sidebar-foreground">{shortcutHint}</span>
       </span>
 
-      {!expanded ? <RailTooltip label={label} /> : null}
     </button>
-  );
-}
-
-/**
- * Tooltip used in rail mode (icon-only).
- * Keep pointer-events disabled so it never interferes with hover/leave logic.
- */
-function RailTooltip({ label }: { readonly label: string }) {
-  return (
-    <span
-      className={clsx(
-        "pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap",
-        "rounded-md bg-sidebar-foreground px-2 py-1 text-xs font-medium text-sidebar shadow-lg",
-        "opacity-0 transition-opacity duration-150 motion-reduce:transition-none",
-        "group-hover:opacity-100 group-focus-visible:opacity-100",
-      )}
-      aria-hidden
-    >
-      {label}
-    </span>
   );
 }
 
