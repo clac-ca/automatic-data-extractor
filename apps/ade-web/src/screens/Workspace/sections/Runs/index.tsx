@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
@@ -149,6 +149,7 @@ export default function WorkspaceRunsRoute() {
               runs={model.derived.visibleRuns}
               activeId={expandedId}
               onSelect={handleTogglePreview}
+              onNavigate={model.actions.setActiveId}
               expandedId={expandedId}
               expandedContent={
                 model.state.previewOpen && model.derived.activeRun ? (
