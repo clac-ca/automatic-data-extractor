@@ -14,4 +14,4 @@ ade bundle apps/ade-engine/README.md \
   --dir apps/ade-engine/src \
   --ext py \
   --out "${generated_dir}/ade-engine-src-bundle.md" \
-  --no-clip --no-show
+  --no-show

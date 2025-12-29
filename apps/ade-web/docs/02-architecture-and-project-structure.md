@@ -36,7 +36,7 @@ All relevant code lives under `apps/ade-web/src`:
 apps/ade-web/
   src/
     app/              # App shell: providers, global layout, top-level routing
-    screens/          # Screen/feature slices (aliased as "@features")
+    screens/          # Screen/feature slices (aliased as "@screens")
     ui/               # Reusable presentational components
     shared/           # Cross-cutting hooks, utilities, and API modules (no UI)
     schema/           # Hand-written domain models / schemas
@@ -44,7 +44,7 @@ apps/ade-web/
     test/             # Vitest setup and shared testing helpers
 ````
 
-> Screen folders live in `src/screens` and are imported via `@features/*` (historical alias). There is no `src/features` directory.
+> Screen folders live in `src/screens` and are imported via `@screens/*`. There is no `src/features` directory.
 
 At a high level:
 
@@ -64,7 +64,7 @@ We treat the codebase as layered, with imports flowing “down” only:
 ```text
         app
         ↑
-     screens (@features)
+     screens (@screens)
      ↑          ↑
     ui        shared
       ↑         ↑
@@ -136,7 +136,7 @@ What does **not** belong here:
 
 ## 5. `screens/` – screen/feature slices
 
-**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@features/*` alias.
+**Responsibility:** Implement user‑facing features and screens: auth, workspace directory, workspace shell, and each shell section (Documents, Runs, Configuration Builder, Settings, Overview). The physical folder is `src/screens/`, imported via the `@screens/*` alias.
 
 Example structure:
 
@@ -366,47 +366,19 @@ Example structure:
 
 ```text
 src/schema/
-  workspace.ts
-  document.ts
-  run.ts
-  configuration.ts
-  permissions.ts
+  index.ts
+  adeArtifact.ts
+  adeTelemetry.ts
 ```
 
 Typical content:
 
-* `WorkspaceSummary`, `WorkspaceDetail`.
-* `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
-* `RunSummary`, `RunDetail`, `RunStatus`.
-* `Configuration`.
+* `WorkspaceOut`, `DocumentOut`.
+* `RunResource`, `RunStatus`.
+* Configuration and safe-mode types.
 * Permission and role models.
 
-You can also provide mapping helpers:
-
-```ts
-// run.ts
-import type { ApiRun } from "@generated-types";
-
-export interface RunSummary {
-  id: string;
-  status: RunStatus;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  // ...
-}
-
-export function fromApiRun(apiRun: ApiRun): RunSummary {
-  // convert and normalise fields here
-}
-```
-
-Standard helpers to keep snake_case out of screens:
-
-* `fromApiRun(apiRun: ApiRun): Run` – maps `run_id` → `runId` and normalises timestamps/status.
-* `fromApiConfiguration(apiConfig: ApiConfiguration): Configuration` – maps `configuration_id` → `configurationId` plus any display helpers.
-
-All snake_case → camelCase translation happens here so screens and hooks work with predictable models.
+The curated types already use wire shapes, so mapping helpers are only needed when you introduce UI‑specific view models.
 
 Features import types from `@schema`, not from `@generated-types`, to keep the rest of the code insulated from backend schema churn.
 
@@ -438,7 +410,7 @@ Tests for a specific component or hook live alongside that code (e.g. `RunsScree
 We use a small set of TS/Vite aliases to keep imports readable:
 
 * `@app` → `src/app`
-* `@features` → `src/screens`
+* `@screens` → `src/screens`
 * `@ui` → `src/ui`
 * `@shared` → `src/shared`
 * `@schema` → `src/schema`
@@ -451,13 +423,13 @@ Guidelines:
 
   ```ts
   // Good
-  import { WorkspaceShellScreen } from "@features/workspace-shell/WorkspaceShellScreen";
+  import { WorkspaceShellScreen } from "@screens/workspace-shell/WorkspaceShellScreen";
   import { GlobalTopBar } from "@ui/global/GlobalTopBar";
-  import { listWorkspaceRuns } from "@shared/api/runsApi";
-  import { RunSummary } from "@schema/run";
+  import { createRun } from "@shared/runs/api";
+  import type { RunResource } from "@schema";
 
   // Avoid
-  import { listWorkspaceRuns } from "../../../shared/api/runsApi";
+  import { createRun } from "../../../shared/runs/api";
   ```
 
 * Within a small screen folder, relative imports are fine and often clearer:
@@ -504,7 +476,7 @@ This section summarises naming conventions used in this document. See **01‑dom
 
 * **Mutations** use `use<Verb><Domain>Mutation`:
 
-  * `useUploadDocumentMutation`, `useStartRunMutation`, `useActivateConfigurationMutation`, `useDeactivateConfigurationMutation`.
+  * `useUploadDocumentMutation`, `useStartRunMutation`, `useMakeActiveConfigurationMutation`, `useArchiveConfigurationMutation`.
 
 * **State / infra hooks** use descriptive names:
 
@@ -526,7 +498,7 @@ This section summarises naming conventions used in this document. See **01‑dom
   listWorkspaceRuns(workspaceId, params);
   startRun(workspaceId, payload);
   listConfigurations(workspaceId, params);
-  activateConfiguration(workspaceId, configurationId);
+  makeActiveConfiguration(workspaceId, configurationId);
   ```
 
 Feature hooks wrap these functions into React Query calls.
@@ -537,7 +509,7 @@ Feature hooks wrap these functions into React Query calls.
 
   * `WorkspaceSummary`, `WorkspaceDetail`.
   * `DocumentSummary`, `DocumentDetail`, `DocumentStatus`.
-  * `RunSummary`, `RunDetail`, `RunStatus`.
+  * `RunResource`, `RunStatus`.
   * `Configuration`.
 
 * If you need to distinguish backend wire types, use a clear prefix/suffix (`ApiRun`, `ApiDocument`) and isolate them in `schema/` or `generated-types/`.

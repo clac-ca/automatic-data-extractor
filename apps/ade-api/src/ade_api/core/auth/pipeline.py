@@ -19,6 +19,7 @@ from .principal import AuthenticatedPrincipal, AuthVia, PrincipalType
 logger = logging.getLogger(__name__)
 _ADMIN_ROLE_SLUG = "global-admin"
 
+
 @runtime_checkable
 class ApiKeyAuthenticator(Protocol):
     """Interface for authenticating API key strings."""
@@ -60,6 +61,12 @@ _dev_user_lock = asyncio.Lock()
 _dev_user_ready: set[uuid.UUID] = set()
 
 
+def reset_auth_state() -> None:
+    """Clear process-local auth caches (useful for tests)."""
+
+    _dev_user_ready.clear()
+
+
 async def _ensure_dev_user(
     principal: AuthenticatedPrincipal,
     settings: Settings,
@@ -68,7 +75,7 @@ async def _ensure_dev_user(
     """Ensure a backing User exists for auth-disabled mode (once per process)."""
 
     # Deferred import avoids circular dependency during app startup.
-    from ade_api.core.models import User
+    from ade_api.models import User
 
     if principal.user_id in _dev_user_ready:
         return
@@ -122,7 +129,7 @@ async def _ensure_active_principal(
 ) -> None:
     """Ensure the backing user exists and is active."""
 
-    from ade_api.core.models import User
+    from ade_api.models import User
 
     user = await session.get(User, principal.user_id)
     if user is None:

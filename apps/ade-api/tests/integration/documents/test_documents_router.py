@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import io
+from uuid import UUID
 
+import openpyxl
 import pytest
 from fastapi import UploadFile
 from httpx import AsyncClient
 
-from ade_api.core.models import Document, User
+from ade_api.common.encoding import json_dumps
+from ade_api.common.ids import generate_uuid7
+from ade_api.common.time import utc_now
 from ade_api.features.documents.exceptions import DocumentFileMissingError
 from ade_api.features.documents.service import DocumentsService
-from ade_api.common.encoding import json_dumps
-from ade_api.settings import get_settings
-from ade_api.infra.db.session import get_sessionmaker
 from ade_api.infra.storage import workspace_documents_root
+from ade_api.models import Document, DocumentSource, DocumentStatus, User
+from ade_api.settings import Settings
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -22,17 +25,17 @@ pytestmark = pytest.mark.asyncio
 
 async def test_upload_list_download_document(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
 ) -> None:
     """Full upload flow should persist metadata and serve downloads."""
 
-    member = seed_identity["member"]
+    member = seed_identity.member
     token, _ = await login(
         async_client,
-        email=member["email"],  # type: ignore[index]
-        password=member["password"],  # type: ignore[index]
+        email=member.email,
+        password=member.password,
     )
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -60,9 +63,7 @@ async def test_upload_list_download_document(
     assert any(item["id"] == document_id for item in payload["items"])
     assert all(isinstance(item.get("tags"), list) for item in payload["items"])
 
-    detail = await async_client.get(
-        f"{workspace_base}/documents/{document_id}", headers=headers
-    )
+    detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["id"] == document_id
 
@@ -72,18 +73,18 @@ async def test_upload_list_download_document(
     assert download.status_code == 200
     assert download.content == b"hello world"
     assert download.headers["content-type"].startswith("text/plain")
-    assert 'attachment; filename="example.txt"' in download.headers['content-disposition']
+    assert 'attachment; filename="example.txt"' in download.headers["content-disposition"]
 
 
 async def test_upload_document_ignores_blank_metadata(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
 ) -> None:
     """Whitespace-only metadata payloads should be treated as empty objects."""
 
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {"Authorization": f"Bearer {token}"}
 
     upload = await async_client.post(
@@ -98,16 +99,53 @@ async def test_upload_document_ignores_blank_metadata(
     assert payload["metadata"] == {}
 
 
+async def test_upload_document_does_not_cache_worksheets(
+    async_client: AsyncClient,
+    seed_identity,
+    session,
+) -> None:
+    """Uploads should not persist worksheet metadata on document records."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    workbook = openpyxl.Workbook()
+    workbook.active.title = "Sheet A"
+    payload = io.BytesIO()
+    workbook.save(payload)
+    workbook.close()
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={
+            "file": (
+                "example.xlsx",
+                payload.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert upload.status_code == 201, upload.text
+    document_id = UUID(upload.json()["id"])
+    record = await session.get(Document, document_id)
+    assert record is not None
+    assert "worksheets" not in (record.attributes or {})
+
+
 async def test_upload_document_exceeds_limit_returns_413(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
     override_app_settings,
 ) -> None:
     """Uploading a file larger than the configured limit should fail."""
 
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -121,18 +159,60 @@ async def test_upload_document_exceeds_limit_returns_413(
     )
 
     assert response.status_code == 413
+
+
+async def test_list_document_sheets_ignores_cached_metadata_when_missing(
+    async_client: AsyncClient,
+    seed_identity,
+    session,
+) -> None:
+    """Missing files should not fall back to cached worksheet metadata."""
+
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    document = Document(
+        id=generate_uuid7(),
+        workspace_id=seed_identity.workspace_id,
+        original_filename="cached.xlsx",
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/cached.xlsx",
+        attributes={
+            "worksheets": [
+                {"name": "Cached", "index": 0, "kind": "worksheet", "is_active": True},
+            ]
+        },
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add(document)
+    await session.commit()
+
+    listing = await async_client.get(
+        f"{workspace_base}/documents/{document.id}/sheets",
+        headers=headers,
+    )
+
+    assert listing.status_code == 404
     assert "exceeds the allowed maximum" in response.text
 
 
 async def test_delete_document_marks_deleted(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
+    session,
+    settings: Settings,
 ) -> None:
     """Soft deletion should flag the record and remove the stored file."""
 
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -151,32 +231,29 @@ async def test_delete_document_marks_deleted(
     )
     assert delete_response.status_code == 204, delete_response.text
 
-    detail = await async_client.get(
-        f"{workspace_base}/documents/{document_id}", headers=headers
-    )
+    detail = await async_client.get(f"{workspace_base}/documents/{document_id}", headers=headers)
     assert detail.status_code == 404
 
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        row = await session.get(Document, document_id)
-        assert row is not None
-        assert row.deleted_at is not None
-        stored_uri = row.stored_uri
+    row = await session.get(Document, UUID(document_id))
+    assert row is not None
+    assert row.deleted_at is not None
+    stored_uri = row.stored_uri
 
-    settings = get_settings()
-    stored_path = workspace_documents_root(settings, seed_identity["workspace_id"]) / stored_uri
+    stored_path = workspace_documents_root(settings, seed_identity.workspace_id) / stored_uri
     assert not stored_path.exists()
 
 
 async def test_download_missing_file_returns_404(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
+    session,
+    settings: Settings,
 ) -> None:
     """Downloading a document with a missing backing file should 404."""
 
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -189,14 +266,11 @@ async def test_download_missing_file_returns_404(
     payload = upload.json()
     document_id = payload["id"]
 
-    session_factory = get_sessionmaker()
-    async with session_factory() as session:
-        row = await session.get(Document, document_id)
-        assert row is not None
-        stored_uri = row.stored_uri
+    row = await session.get(Document, UUID(document_id))
+    assert row is not None
+    stored_uri = row.stored_uri
 
-    settings = get_settings()
-    stored_path = workspace_documents_root(settings, seed_identity["workspace_id"]) / stored_uri
+    stored_path = workspace_documents_root(settings, seed_identity.workspace_id) / stored_uri
     assert stored_path.exists()
     stored_path.unlink()
 
@@ -210,11 +284,11 @@ async def test_download_missing_file_returns_404(
 
 async def test_list_documents_unknown_param_returns_422(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
 ) -> None:
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {"Authorization": f"Bearer {token}"}
 
     response = await async_client.get(
@@ -231,11 +305,11 @@ async def test_list_documents_unknown_param_returns_422(
 
 async def test_list_documents_invalid_filter_returns_422(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
 ) -> None:
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {"Authorization": f"Bearer {token}"}
 
     response = await async_client.get(
@@ -251,13 +325,13 @@ async def test_list_documents_invalid_filter_returns_422(
 
 async def test_list_documents_uploader_me_filters(
     async_client: AsyncClient,
-    seed_identity: dict[str, object],
+    seed_identity,
 ) -> None:
-    member = seed_identity["member"]
-    owner = seed_identity["workspace_owner"]
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    member = seed_identity.member
+    owner = seed_identity.workspace_owner
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
 
-    member_token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
     member_headers = {"Authorization": f"Bearer {member_token}"}
 
     upload_one = await async_client.post(
@@ -269,8 +343,8 @@ async def test_list_documents_uploader_me_filters(
 
     owner_token, _ = await login(
         async_client,
-        email=owner["email"],  # type: ignore[index]
-        password=owner["password"],  # type: ignore[index]
+        email=owner.email,
+        password=owner.password,
     )
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
 
@@ -282,7 +356,7 @@ async def test_list_documents_uploader_me_filters(
     assert upload_two.status_code == 201, upload_two.text
 
     # Re-authenticate as the member for filtering assertions.
-    member_token, _ = await login(async_client, email=member["email"], password=member["password"])  # type: ignore[index]
+    member_token, _ = await login(async_client, email=member.email, password=member.password)
     member_headers = {"Authorization": f"Bearer {member_token}"}
 
     listing = await async_client.get(
@@ -298,59 +372,57 @@ async def test_list_documents_uploader_me_filters(
 
 
 async def test_stream_document_handles_missing_file_mid_stream(
-    seed_identity: dict[str, object]
+    seed_identity,
+    session,
+    settings: Settings,
 ) -> None:
     """Document streaming should surface a domain error when the file disappears."""
 
-    settings = get_settings()
-    session_factory = get_sessionmaker()
+    service = DocumentsService(session=session, settings=settings)
+    workspace_id = seed_identity.workspace_id
 
-    async with session_factory() as session:
-        service = DocumentsService(session=session, settings=settings)
-        workspace_id = str(seed_identity["workspace_id"])
-        member_info = seed_identity["member"]
-        member = await session.get(User, member_info["id"])  # type: ignore[index]
-        assert member is not None
+    member = await session.get(User, seed_identity.member.id)
+    assert member is not None
 
-        upload = UploadFile(
-            filename="race.txt",
-            file=io.BytesIO(b"race"),
-        )
-        record = await service.create_document(
-            workspace_id=workspace_id,
-            upload=upload,
-            metadata=None,
-            expires_at=None,
-            actor=member,
-        )
+    upload = UploadFile(
+        filename="race.txt",
+        file=io.BytesIO(b"race"),
+    )
+    record = await service.create_document(
+        workspace_id=workspace_id,
+        upload=upload,
+        metadata=None,
+        expires_at=None,
+        actor=member,
+    )
 
-        _, stream = await service.stream_document(
-            workspace_id=workspace_id,
-            document_id=record.id,
-        )
+    _, stream = await service.stream_document(
+        workspace_id=workspace_id,
+        document_id=record.id,
+    )
 
-        stored_row = await session.get(Document, record.id)
-        assert stored_row is not None
-        stored_path = workspace_documents_root(settings, workspace_id) / stored_row.stored_uri
-        stored_path.unlink()
+    stored_row = await session.get(Document, record.id)
+    assert stored_row is not None
+    stored_path = workspace_documents_root(settings, workspace_id) / stored_row.stored_uri
+    stored_path.unlink()
 
-        with pytest.raises(DocumentFileMissingError):
-            async for _ in stream:
-                pass
+    with pytest.raises(DocumentFileMissingError):
+        async for _ in stream:
+            pass
 
 
 async def test_list_document_sheets_reports_parse_failures(
-    async_client: AsyncClient, seed_identity: dict[str, object]
+    async_client: AsyncClient, seed_identity
 ) -> None:
     """Worksheet listing should distinguish parse errors from missing files."""
 
-    member = seed_identity["member"]
+    member = seed_identity.member
     token, _ = await login(
         async_client,
-        email=member["email"],  # type: ignore[index]
-        password=member["password"],  # type: ignore[index]
+        email=member.email,
+        password=member.password,
     )
-    workspace_base = f"/api/v1/workspaces/{seed_identity['workspace_id']}"
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
     headers = {
         "Authorization": f"Bearer {token}",
     }
@@ -376,3 +448,135 @@ async def test_list_document_sheets_reports_parse_failures(
 
     assert listing.status_code == 422
     assert "Worksheet inspection failed" in listing.text
+
+
+async def test_document_tags_replace_and_patch(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("tags.txt", b"tag payload", "text/plain")},
+    )
+    assert upload.status_code == 201, upload.text
+    document_id = upload.json()["id"]
+
+    replace = await async_client.put(
+        f"{workspace_base}/documents/{document_id}/tags",
+        headers=headers,
+        json={"tags": [" Finance ", "Q1   Report", "finance"]},
+    )
+    assert replace.status_code == 200, replace.text
+    assert replace.json()["tags"] == ["finance", "q1 report"]
+
+    patch = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}/tags",
+        headers=headers,
+        json={"add": ["Priority"], "remove": ["q1 report"]},
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["tags"] == ["finance", "priority"]
+
+    patch_again = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}/tags",
+        headers=headers,
+        json={"add": ["Priority"], "remove": ["q1 report"]},
+    )
+    assert patch_again.status_code == 200, patch_again.text
+    assert patch_again.json()["tags"] == ["finance", "priority"]
+
+    empty_patch = await async_client.patch(
+        f"{workspace_base}/documents/{document_id}/tags",
+        headers=headers,
+        json={},
+    )
+    assert empty_patch.status_code == 422
+
+
+async def test_tag_catalog_counts_and_excludes_deleted(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    upload_one = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("catalog-one.txt", b"one", "text/plain")},
+    )
+    assert upload_one.status_code == 201, upload_one.text
+    document_one = upload_one.json()["id"]
+
+    upload_two = await async_client.post(
+        f"{workspace_base}/documents",
+        headers=headers,
+        files={"file": ("catalog-two.txt", b"two", "text/plain")},
+    )
+    assert upload_two.status_code == 201, upload_two.text
+    document_two = upload_two.json()["id"]
+
+    replace_one = await async_client.put(
+        f"{workspace_base}/documents/{document_one}/tags",
+        headers=headers,
+        json={"tags": ["finance", "priority"]},
+    )
+    assert replace_one.status_code == 200, replace_one.text
+
+    replace_two = await async_client.put(
+        f"{workspace_base}/documents/{document_two}/tags",
+        headers=headers,
+        json={"tags": ["finance"]},
+    )
+    assert replace_two.status_code == 200, replace_two.text
+
+    catalog = await async_client.get(
+        f"{workspace_base}/tags",
+        headers=headers,
+        params={"sort": "-count"},
+    )
+    assert catalog.status_code == 200, catalog.text
+    items = catalog.json()["items"]
+    assert items[0]["tag"] == "finance"
+    assert items[0]["document_count"] == 2
+    assert items[1]["tag"] == "priority"
+    assert items[1]["document_count"] == 1
+
+    deleted = await async_client.delete(
+        f"{workspace_base}/documents/{document_one}",
+        headers=headers,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    catalog_after = await async_client.get(
+        f"{workspace_base}/tags",
+        headers=headers,
+    )
+    assert catalog_after.status_code == 200, catalog_after.text
+    items_after = catalog_after.json()["items"]
+    assert items_after == [{"tag": "finance", "document_count": 1}]
+
+
+async def test_tag_catalog_rejects_short_query(
+    async_client: AsyncClient,
+    seed_identity,
+) -> None:
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
+    workspace_base = f"/api/v1/workspaces/{seed_identity.workspace_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await async_client.get(
+        f"{workspace_base}/tags",
+        headers=headers,
+        params={"q": "a"},
+    )
+    assert response.status_code == 422

@@ -67,4 +67,3 @@ async def test_delete_removes_file(tmp_path: Path) -> None:
 
     await storage.delete(stored_uri)
     assert not path.exists()
-

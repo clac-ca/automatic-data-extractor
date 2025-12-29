@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import unicodedata
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
+from uuid import UUID
 
 import openpyxl
 from fastapi import UploadFile
@@ -19,10 +19,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.pagination import paginate_sql
-from ade_api.common.sql import nulls_last
 from ade_api.common.types import OrderBy
-from ade_api.core.models import Document, DocumentSource, DocumentStatus, Run, RunStatus, User
 from ade_api.infra.storage import workspace_documents_root
+from ade_api.models import (
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    DocumentTag,
+    Run,
+    RunStatus,
+    User,
+)
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -30,11 +37,25 @@ from .exceptions import (
     DocumentNotFoundError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
+    InvalidDocumentTagsError,
 )
 from .filters import DocumentFilters, apply_document_filters
 from .repository import DocumentsRepository
-from .schemas import DocumentLastRun, DocumentOut, DocumentPage, DocumentSheet
+from .schemas import (
+    DocumentLastRun,
+    DocumentOut,
+    DocumentPage,
+    DocumentSheet,
+    TagCatalogItem,
+    TagCatalogPage,
+)
 from .storage import DocumentStorage
+from .tags import (
+    MAX_TAGS_PER_DOCUMENT,
+    TagValidationError,
+    normalize_tag_list,
+    normalize_tag_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +79,7 @@ class DocumentsService:
     async def create_document(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         upload: UploadFile,
         metadata: Mapping[str, Any] | None = None,
         expires_at: str | None = None,
@@ -66,7 +87,7 @@ class DocumentsService:
     ) -> DocumentOut:
         """Persist ``upload`` to storage and return the resulting metadata record."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.create.start",
             extra=log_context(
@@ -110,7 +131,6 @@ class DocumentsService:
             expires_at=expiration,
             last_run_at=None,
         )
-        await self._capture_worksheet_metadata(document, storage.path_for(stored_uri))
         self._session.add(document)
         await self._session.flush()
 
@@ -122,7 +142,7 @@ class DocumentsService:
             "document.create.success",
             extra=log_context(
                 workspace_id=workspace_id,
-                document_id=str(document_id),
+                document_id=document_id,
                 user_id=actor_id,
                 content_type=document.content_type,
                 byte_size=document.byte_size,
@@ -135,7 +155,7 @@ class DocumentsService:
     async def list_documents(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         page: int,
         page_size: int,
         include_total: bool,
@@ -145,7 +165,7 @@ class DocumentsService:
     ) -> DocumentPage:
         """Return paginated documents with the shared envelope."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.list.start",
             extra=log_context(
@@ -158,10 +178,7 @@ class DocumentsService:
             ),
         )
 
-        stmt = (
-            self._repository.base_query(workspace_id)
-            .where(Document.deleted_at.is_(None))
-        )
+        stmt = self._repository.base_query(workspace_id).where(Document.deleted_at.is_(None))
         stmt = apply_document_filters(stmt, filters, actor=actor)
 
         page_result = await paginate_sql(
@@ -198,7 +215,7 @@ class DocumentsService:
             total=page_result.total,
         )
 
-    async def get_document(self, *, workspace_id: str, document_id: str) -> DocumentOut:
+    async def get_document(self, *, workspace_id: UUID, document_id: UUID) -> DocumentOut:
         """Return document metadata for ``document_id``."""
 
         logger.debug(
@@ -223,8 +240,8 @@ class DocumentsService:
     async def list_document_sheets(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
     ) -> list[DocumentSheet]:
         """Return worksheet descriptors for ``document_id``."""
 
@@ -234,24 +251,11 @@ class DocumentsService:
         )
 
         document = await self._get_document(workspace_id, document_id)
-        cached_sheets = self._cached_worksheets(document)
         storage = self._storage_for(workspace_id)
         path = storage.path_for(document.stored_uri)
 
         exists = await run_in_threadpool(path.exists)
         if not exists:
-            if cached_sheets:
-                logger.warning(
-                    "document.sheets.cached_missing_file",
-                    extra=log_context(
-                        workspace_id=workspace_id,
-                        document_id=document_id,
-                        stored_uri=document.stored_uri,
-                        cache_source="worksheets",
-                    ),
-                )
-                return cached_sheets
-
             raise DocumentFileMissingError(
                 document_id=document_id,
                 stored_uri=document.stored_uri,
@@ -272,35 +276,11 @@ class DocumentsService:
                 )
                 return sheets
             except Exception as exc:  # pragma: no cover - defensive fallback
-                if cached_sheets:
-                    logger.warning(
-                        "document.sheets.cached_after_inspection_error",
-                        extra=log_context(
-                            workspace_id=workspace_id,
-                            document_id=document_id,
-                            stored_uri=document.stored_uri,
-                            reason=type(exc).__name__,
-                        ),
-                    )
-                    return cached_sheets
-
                 raise DocumentWorksheetParseError(
                     document_id=document_id,
                     stored_uri=document.stored_uri,
                     reason=type(exc).__name__,
                 ) from exc
-
-        if cached_sheets:
-            logger.info(
-                "document.sheets.list.success",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    document_id=document_id,
-                    sheet_count=len(cached_sheets),
-                    kind="cached",
-                ),
-            )
-            return cached_sheets
 
         name = self._default_sheet_name(document.original_filename)
         sheets = [DocumentSheet(name=name, index=0, kind="file", is_active=True)]
@@ -318,8 +298,8 @@ class DocumentsService:
     async def stream_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
     ) -> tuple[DocumentOut, AsyncIterator[bytes]]:
         """Return a document record and async iterator for its bytes."""
 
@@ -383,13 +363,13 @@ class DocumentsService:
     async def delete_document(
         self,
         *,
-        workspace_id: str,
-        document_id: str,
+        workspace_id: UUID,
+        document_id: UUID,
         actor: User | None = None,
     ) -> None:
         """Soft delete ``document_id`` and remove the stored file."""
 
-        actor_id = cast(str | None, getattr(actor, "id", None))
+        actor_id: UUID | None = actor.id if actor is not None else None
         logger.debug(
             "document.delete.start",
             extra=log_context(
@@ -419,7 +399,211 @@ class DocumentsService:
             ),
         )
 
-    async def _get_document(self, workspace_id: str, document_id: str) -> Document:
+    async def delete_documents_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        actor: User | None = None,
+    ) -> list[UUID]:
+        """Soft delete multiple documents and remove stored files."""
+
+        ordered_ids = list(dict.fromkeys(document_ids))
+        if not ordered_ids:
+            return []
+
+        actor_id: UUID | None = actor.id if actor is not None else None
+        documents = await self._require_documents(
+            workspace_id=workspace_id,
+            document_ids=ordered_ids,
+        )
+
+        now = datetime.now(tz=UTC)
+        for document in documents:
+            document.deleted_at = now
+            if actor is not None:
+                document.deleted_by_user_id = actor_id
+
+        await self._session.flush()
+
+        storage = self._storage_for(workspace_id)
+        for document in documents:
+            await storage.delete(document.stored_uri)
+
+        return ordered_ids
+
+    async def replace_document_tags(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        tags: list[str],
+    ) -> DocumentOut:
+        """Replace tags on a document in a single transaction."""
+
+        try:
+            normalized = normalize_tag_list(tags, max_tags=MAX_TAGS_PER_DOCUMENT)
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        document = await self._get_document(workspace_id, document_id)
+        document.tags = [DocumentTag(document_id=document.id, tag=tag) for tag in normalized]
+        await self._session.flush()
+
+        return DocumentOut.model_validate(document)
+
+    async def patch_document_tags(
+        self,
+        *,
+        workspace_id: UUID,
+        document_id: UUID,
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> DocumentOut:
+        """Add or remove tags on a document."""
+
+        if not add and not remove:
+            raise InvalidDocumentTagsError("add or remove is required")
+
+        try:
+            normalized_add = normalize_tag_list(add or [])
+            normalized_remove = normalize_tag_list(remove or [])
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        document = await self._get_document(workspace_id, document_id)
+        existing = {tag.tag for tag in document.tags}
+        next_tags = (existing | set(normalized_add)) - set(normalized_remove)
+        if len(next_tags) > MAX_TAGS_PER_DOCUMENT:
+            raise InvalidDocumentTagsError(f"Too many tags; max {MAX_TAGS_PER_DOCUMENT}.")
+
+        to_remove = existing - next_tags
+        if to_remove:
+            document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
+        to_add = next_tags - existing
+        for tag in to_add:
+            document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+
+        await self._session.flush()
+
+        return DocumentOut.model_validate(document)
+
+    async def patch_document_tags_batch(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+        add: list[str] | None = None,
+        remove: list[str] | None = None,
+    ) -> list[DocumentOut]:
+        """Add or remove tags on multiple documents."""
+
+        if not add and not remove:
+            raise InvalidDocumentTagsError("add or remove is required")
+
+        try:
+            normalized_add = normalize_tag_list(add or [])
+            normalized_remove = normalize_tag_list(remove or [])
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        ordered_ids = list(dict.fromkeys(document_ids))
+        documents = await self._require_documents(
+            workspace_id=workspace_id,
+            document_ids=ordered_ids,
+        )
+        document_by_id = {doc.id: doc for doc in documents}
+
+        for document in documents:
+            existing = {tag.tag for tag in document.tags}
+            next_tags = (existing | set(normalized_add)) - set(normalized_remove)
+            if len(next_tags) > MAX_TAGS_PER_DOCUMENT:
+                raise InvalidDocumentTagsError(f"Too many tags; max {MAX_TAGS_PER_DOCUMENT}.")
+
+            to_remove = existing - next_tags
+            if to_remove:
+                document.tags = [tag for tag in document.tags if tag.tag not in to_remove]
+            to_add = next_tags - existing
+            for tag in to_add:
+                document.tags.append(DocumentTag(document_id=document.id, tag=tag))
+
+        await self._session.flush()
+
+        return [DocumentOut.model_validate(document_by_id[doc_id]) for doc_id in ordered_ids]
+
+    async def list_tag_catalog(
+        self,
+        *,
+        workspace_id: UUID,
+        page: int,
+        page_size: int,
+        include_total: bool,
+        q: str | None = None,
+        sort: str = "name",
+    ) -> TagCatalogPage:
+        """Return tag catalog entries with counts."""
+
+        try:
+            normalized_q = normalize_tag_query(q)
+        except TagValidationError as exc:
+            raise InvalidDocumentTagsError(str(exc)) from exc
+
+        count_expr = func.count(DocumentTag.document_id).label("document_count")
+        stmt = (
+            select(
+                DocumentTag.tag.label("tag"),
+                count_expr,
+            )
+            .join(Document, DocumentTag.document_id == Document.id)
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.deleted_at.is_(None),
+            )
+            .group_by(DocumentTag.tag)
+        )
+
+        if normalized_q:
+            pattern = f"%{normalized_q}%"
+            stmt = stmt.where(DocumentTag.tag.like(pattern))
+
+        if sort == "-count":
+            order_by = [count_expr.desc(), DocumentTag.tag.asc()]
+        else:
+            order_by = [DocumentTag.tag.asc()]
+
+        offset = (page - 1) * page_size
+        ordered_stmt = stmt.order_by(*order_by)
+
+        if include_total:
+            count_stmt = select(func.count()).select_from(ordered_stmt.order_by(None).subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
+            result = await self._session.execute(ordered_stmt.limit(page_size).offset(offset))
+            rows = result.mappings().all()
+            has_next = (page * page_size) < total
+        else:
+            result = await self._session.execute(
+                ordered_stmt.limit(page_size + 1).offset(offset)
+            )
+            rows = result.mappings().all()
+            has_next = len(rows) > page_size
+            rows = rows[:page_size]
+            total = None
+
+        items = [
+            TagCatalogItem(tag=row["tag"], document_count=int(row["document_count"] or 0))
+            for row in rows
+        ]
+
+        return TagCatalogPage(
+            items=items,
+            page=page,
+            page_size=page_size,
+            has_next=has_next,
+            has_previous=page > 1,
+            total=total,
+        )
+
+    async def _get_document(self, workspace_id: UUID, document_id: UUID) -> Document:
         document = await self._repository.get_document(
             workspace_id=workspace_id,
             document_id=document_id,
@@ -435,9 +619,40 @@ class DocumentsService:
             raise DocumentNotFoundError(document_id)
         return document
 
+    async def _require_documents(
+        self,
+        *,
+        workspace_id: UUID,
+        document_ids: Sequence[UUID],
+    ) -> list[Document]:
+        if not document_ids:
+            return []
+
+        stmt = (
+            self._repository.base_query(workspace_id)
+            .where(Document.deleted_at.is_(None))
+            .where(Document.id.in_(document_ids))
+        )
+        result = await self._session.execute(stmt)
+        documents = list(result.scalars())
+        found = {doc.id for doc in documents}
+        missing = [document_id for document_id in document_ids if document_id not in found]
+        if missing:
+            logger.warning(
+                "document.require_documents.not_found",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    document_id=str(missing[0]),
+                    missing_count=len(missing),
+                ),
+            )
+            raise DocumentNotFoundError(missing[0])
+
+        return documents
+
     async def _attach_last_runs(
         self,
-        workspace_id: str,
+        workspace_id: UUID,
         documents: Sequence[DocumentOut],
     ) -> None:
         """Populate ``last_run`` on each document using recent run data."""
@@ -445,138 +660,146 @@ class DocumentsService:
         if not documents:
             return
 
-        logger.debug(
-            "document.last_run.attach.start",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(documents),
-            ),
+        last_runs = await self._latest_stream_runs(
+            workspace_id=workspace_id,
+            documents=documents,
         )
-
-        run_summaries = await self._latest_stream_runs(
+        last_successful_runs = await self._latest_successful_runs(
             workspace_id=workspace_id,
             documents=documents,
         )
         for document in documents:
-            summary = run_summaries.get(document.id)
-            if summary is None:
-                document.last_run = None
-                continue
-            document.last_run = summary
-
-        logger.debug(
-            "document.last_run.attach.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                matched_documents=len(run_summaries),
-            ),
-        )
+            document.last_run = last_runs.get(document.id)
+            document.last_successful_run = last_successful_runs.get(document.id)
+            if document.last_run and document.last_run.run_at:
+                document.last_run_at = document.last_run.run_at
 
     async def _latest_stream_runs(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         documents: Sequence[DocumentOut],
-    ) -> dict[str, DocumentLastRun]:
-        ids = [document.id for document in documents if document.id]
-        if not ids:
+    ) -> dict[UUID, DocumentLastRun]:
+        doc_ids = [doc.id for doc in documents]
+        if not doc_ids:
             return {}
 
-        logger.debug(
-            "document.last_run.query.start",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(ids),
-            ),
-        )
-
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
         ranked_runs = (
             select(
-                Run.id,
-                Run.input_document_id,
-                Run.status,
-                Run.finished_at,
-                Run.started_at,
-                Run.created_at,
-                Run.summary,
-                Run.error_message,
+                Run.input_document_id.label("document_id"),
+                Run.id.label("run_id"),
+                Run.status.label("status"),
+                Run.error_message.label("error_message"),
+                Run.completed_at.label("completed_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
                 func.row_number()
                 .over(
                     partition_by=Run.input_document_id,
-                    order_by=(
-                        *nulls_last(Run.finished_at.desc()),
-                        *nulls_last(Run.started_at.desc()),
-                        *nulls_last(Run.created_at.desc()),
-                    ),
+                    order_by=timestamp.desc(),
                 )
-                .label("run_rank"),
+                .label("rank"),
             )
             .where(
                 Run.workspace_id == workspace_id,
-                Run.input_document_id.in_(ids),
+                Run.input_document_id.is_not(None),
+                Run.input_document_id.in_(doc_ids),
             )
-        ).subquery()
-
-        stmt = (
-            select(
-                ranked_runs.c.id,
-                ranked_runs.c.input_document_id,
-                ranked_runs.c.status,
-                ranked_runs.c.finished_at,
-                ranked_runs.c.started_at,
-                ranked_runs.c.created_at,
-                ranked_runs.c.summary,
-                ranked_runs.c.error_message,
-            )
-            .where(ranked_runs.c.run_rank == 1)
+            .subquery()
         )
-        result = await self._session.execute(stmt)
-        rows = result.all()
 
-        latest: dict[str, DocumentLastRun] = {}
-        for row in rows:
-            doc_id = row.input_document_id
-            if doc_id is None:
-                continue
-            timestamp = row.finished_at or row.started_at or row.created_at
-            status_value = (
-                RunStatus.CANCELLED if row.status == RunStatus.CANCELLED else row.status
+        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
+        result = await self._session.execute(stmt)
+
+        latest: dict[UUID, DocumentLastRun] = {}
+        for row in result.mappings():
+            document_id = row["document_id"]
+            if not isinstance(document_id, UUID):
+                document_id = UUID(str(document_id))
+            run_at = self._ensure_utc(
+                row.get("completed_at") or row.get("started_at") or row.get("created_at")
             )
-            summary_payload = None
-            if row.summary:
-                try:
-                    parsed = json.loads(row.summary)
-                    summary_payload = parsed if isinstance(parsed, dict) else None
-                except json.JSONDecodeError:
-                    summary_payload = None
-            message = row.error_message
-            if summary_payload:
-                run_block = summary_payload.get("run", {})
-                message = (
-                    run_block.get("failure_message")
-                    or message
-                    or run_block.get("status")
-                )
-            latest[doc_id] = DocumentLastRun(
-                run_id=row.id,
-                status=status_value,
-                run_at=(
-                    timestamp
-                    if timestamp is None or timestamp.tzinfo
-                    else timestamp.replace(tzinfo=UTC)
-                ),
+            message = self._last_run_message(error_message=row.get("error_message"))
+            latest[document_id] = DocumentLastRun(
+                run_id=row["run_id"],
+                status=row["status"],
+                run_at=run_at,
                 message=message,
             )
 
-        logger.debug(
-            "document.last_run.query.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                document_count=len(ids),
-                matched_runs=len(latest),
-            ),
-        )
         return latest
+
+    async def _latest_successful_runs(
+        self,
+        *,
+        workspace_id: UUID,
+        documents: Sequence[DocumentOut],
+    ) -> dict[UUID, DocumentLastRun]:
+        doc_ids = [doc.id for doc in documents]
+        if not doc_ids:
+            return {}
+
+        timestamp = func.coalesce(Run.completed_at, Run.started_at, Run.created_at)
+        ranked_runs = (
+            select(
+                Run.input_document_id.label("document_id"),
+                Run.id.label("run_id"),
+                Run.status.label("status"),
+                Run.error_message.label("error_message"),
+                Run.completed_at.label("completed_at"),
+                Run.started_at.label("started_at"),
+                Run.created_at.label("created_at"),
+                func.row_number()
+                .over(
+                    partition_by=Run.input_document_id,
+                    order_by=timestamp.desc(),
+                )
+                .label("rank"),
+            )
+            .where(
+                Run.workspace_id == workspace_id,
+                Run.input_document_id.is_not(None),
+                Run.input_document_id.in_(doc_ids),
+                Run.status == RunStatus.SUCCEEDED,
+            )
+            .subquery()
+        )
+
+        stmt = select(ranked_runs).where(ranked_runs.c.rank == 1)
+        result = await self._session.execute(stmt)
+
+        latest: dict[UUID, DocumentLastRun] = {}
+        for row in result.mappings():
+            document_id = row["document_id"]
+            if not isinstance(document_id, UUID):
+                document_id = UUID(str(document_id))
+            run_at = self._ensure_utc(
+                row.get("completed_at") or row.get("started_at") or row.get("created_at")
+            )
+            message = self._last_run_message(error_message=row.get("error_message"))
+            latest[document_id] = DocumentLastRun(
+                run_id=row["run_id"],
+                status=row["status"],
+                run_at=run_at,
+                message=message,
+            )
+
+        return latest
+
+    @staticmethod
+    def _last_run_message(*, error_message: str | None) -> str | None:
+        if error_message:
+            return error_message
+        return None
+
+    @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt
 
     def _resolve_expiration(self, override: str | None, now: datetime) -> datetime:
         if override is None:
@@ -619,9 +842,7 @@ class DocumentsService:
 
         # Strip control characters (including newlines) to avoid header injection and
         # other control sequence issues when the filename is rendered in responses.
-        filtered = "".join(
-            ch for ch in candidate if unicodedata.category(ch)[0] != "C"
-        ).strip()
+        filtered = "".join(ch for ch in candidate if unicodedata.category(ch)[0] != "C").strip()
 
         if not filtered:
             return _FALLBACK_FILENAME
@@ -637,48 +858,7 @@ class DocumentsService:
         candidate = content_type.strip()
         return candidate or None
 
-    def _cached_worksheets(self, document: Document) -> list[DocumentSheet] | None:
-        """Return cached worksheet metadata stored on the document, if any."""
-
-        attrs = document.attributes if isinstance(document.attributes, Mapping) else {}
-        cached = attrs.get("worksheets") if isinstance(attrs, Mapping) else None
-        if not isinstance(cached, Sequence) or isinstance(cached, (str, bytes, bytearray)):
-            return None
-
-        valid: list[DocumentSheet] = []
-        for entry in cached:
-            try:
-                valid.append(DocumentSheet.model_validate(entry))
-            except Exception:  # pragma: no cover - defensive
-                continue
-
-        return valid or None
-
-    async def _capture_worksheet_metadata(self, document: Document, path: Path) -> None:
-        """Persist worksheet descriptors on the document for later reuse."""
-
-        suffix = Path(document.original_filename).suffix.lower()
-        try:
-            if suffix == ".xlsx":
-                sheets = await run_in_threadpool(self._inspect_workbook, path)
-            else:
-                sheet_name = self._default_sheet_name(document.original_filename)
-                sheets = [DocumentSheet(name=sheet_name, index=0, kind="file", is_active=True)]
-        except Exception as exc:  # pragma: no cover - defensive fallback
-            logger.warning(
-                "document.sheets.cache_failed",
-                extra=log_context(
-                    workspace_id=document.workspace_id,
-                    document_id=document.id,
-                    stored_uri=document.stored_uri,
-                    reason=type(exc).__name__,
-                ),
-            )
-            return
-
-        document.attributes["worksheets"] = [sheet.model_dump() for sheet in sheets]
-
-    def _storage_for(self, workspace_id: str) -> DocumentStorage:
+    def _storage_for(self, workspace_id: UUID) -> DocumentStorage:
         base = workspace_documents_root(self._settings, workspace_id)
         return DocumentStorage(base)
 

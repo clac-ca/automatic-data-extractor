@@ -1,8 +1,9 @@
 import clsx from "clsx";
 
-import type { ConfigBuilderPane } from "@app/nav/urlState";
-import type { RunStreamStatus } from "../state/runStream";
-import type { WorkbenchConsoleLine, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
+import type { WorkbenchPane } from "../state/workbenchSearchParams";
+import type { JobStreamStatus } from "../state/useJobStreamController";
+import type { WorkbenchConsoleStore } from "../state/consoleStore";
+import type { WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 
@@ -11,20 +12,20 @@ import { ProblemsTab } from "./ProblemsTab";
 
 interface BottomPanelProps {
   readonly height: number;
-  readonly consoleLines: readonly WorkbenchConsoleLine[];
+  readonly console: WorkbenchConsoleStore;
   readonly validation: WorkbenchValidationState;
-  readonly activePane: ConfigBuilderPane;
-  readonly onPaneChange: (pane: ConfigBuilderPane) => void;
+  readonly activePane: WorkbenchPane;
+  readonly onPaneChange: (pane: WorkbenchPane) => void;
   readonly latestRun?: WorkbenchRunSummary | null;
   readonly onClearConsole?: () => void;
-  readonly runStatus?: RunStreamStatus;
+  readonly runStatus?: JobStreamStatus;
   readonly onToggleCollapse?: () => void;
   readonly appearance?: "light" | "dark";
 }
 
 export function BottomPanel({
   height,
-  consoleLines,
+  console,
   validation,
   activePane,
   onPaneChange,
@@ -38,15 +39,14 @@ export function BottomPanel({
   const theme =
     appearance === "dark"
       ? {
-          surface: "border-[#1f2431] bg-[#0f111a] text-slate-100",
-          header: "border-[#1f2431] bg-[#0f111a]",
-          hideButton:
-            "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
+          surface: "border-border bg-card text-foreground",
+          header: "border-border bg-card",
+          hideButton: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
         }
       : {
-          surface: "border-slate-200 bg-slate-50 text-slate-800",
-          header: "border-slate-200 bg-slate-50",
-          hideButton: "border-slate-300 bg-white text-slate-700 hover:border-slate-400",
+          surface: "border-border bg-muted text-foreground",
+          header: "border-border bg-muted",
+          hideButton: "border-border-strong bg-card text-foreground hover:border-border-strong hover:bg-muted",
         };
 
   return (
@@ -56,7 +56,7 @@ export function BottomPanel({
     >
       <TabsRoot
         value={activePane}
-        onValueChange={(value) => onPaneChange(value as ConfigBuilderPane)}
+        onValueChange={(value) => onPaneChange(value as WorkbenchPane)}
       >
         <div
           className={clsx("flex flex-none items-center justify-between border-b px-3 py-1.5", theme.header)}
@@ -76,7 +76,7 @@ export function BottomPanel({
             >
               Problems
               {hasProblems ? (
-                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
+                <span className="inline-flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-danger-600 px-1 text-[10px] font-semibold text-on-danger">
                   {validation.messages.length}
                 </span>
               ) : null}
@@ -99,7 +99,7 @@ export function BottomPanel({
 
         <TabsContent value="terminal" className="flex min-h-0 flex-1 flex-col">
           <ConsoleTab
-            consoleLines={consoleLines}
+            console={console}
             latestRun={latestRun}
             onClearConsole={onClearConsole}
             runStatus={runStatus}

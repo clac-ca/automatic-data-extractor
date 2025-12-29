@@ -93,28 +93,29 @@ Otherwise, ADE reuses the existing build. Requests are **idempotent**—you get 
 
 **Simple, DB‑based dedupe (no per‑config file locks):**
 
-* **Single‑builder rule:** a partial unique index ensures at most one `queued/building` row per configuration; requests against an inflight build either wait briefly or return a conflict, depending on options.
-* **No half builds:** build rows are marked `active` only after the venv is successfully provisioned and imports are verified; the configuration pointer flips to that build on success.
+* **Fingerprint dedupe:** a unique constraint on `(configuration_id, fingerprint)` ensures concurrent requests converge on a single build row for that fingerprint.
+* **Single runner:** build execution is claimed via `UPDATE ... WHERE status='queued'`, so only one worker runs the build at a time.
+* **No half builds:** build rows are marked `ready` only after the venv is successfully provisioned and imports are verified; the configuration pointer flips to that build on success.
 
 This keeps behavior correct and predictable without introducing filesystem locks.
 
 ---
 
-## Timeouts & Wait Behavior
+## Timeouts & Queue Behavior
 
 **Build timeout:**
 
-* A single build is capped by `ADE_BUILD_TIMEOUT_SECONDS`.
+* A single build is capped by `ADE_BUILD_TIMEOUT` (seconds).
 * If exceeded (including crash/kill), the build is marked `failed` and any partial folder is deleted.
 
-**Ensure wait (server‑side runs):**
+**Runs waiting on builds:**
 
-* When a run calls `ensure_build()` and finds an inflight build row, the server **waits up to `ADE_BUILD_ENSURE_WAIT_SECONDS`** for it to finish.
-* If it completes within that window, the run proceeds. Otherwise, the run submission returns a retriable error (e.g., `409 build_in_progress`) and can retry shortly.
+* Runs remain `queued` while the build is pending; there is no `waiting_for_build` status.
+* If the build fails or is cancelled, the run is failed with a build‑failure message.
 
 **UI behavior (Build button):**
 
-* `PUT /build` returns immediately with `"status":"building"` when another build is already running; the UI polls `GET /build` until `active` or `failed`.
+* `PUT /build` returns immediately with the current build status (for example `"building"`); the UI polls `GET /build` until `ready` or `failed`.
 
 ---
 
@@ -123,10 +124,10 @@ This keeps behavior correct and predictable without introducing filesystem locks
 If the app crashes mid‑build, you won’t get stuck:
 
 * Every `building` row stores a `started_at` timestamp.
-* On **startup** and on every `ensure_build()` call, ADE checks for **stale** building rows:
+* During normal worker operation and build reads, ADE checks for **stale** building rows:
 
-  * If `now - started_at > ADE_BUILD_TIMEOUT_SECONDS`, ADE marks the row `failed` and deletes the partial folder (if present).
-  * The next ensure will start a fresh build normally.
+  * If `now - started_at > ADE_BUILD_TIMEOUT`, ADE marks the row `failed` and deletes the partial folder (if present).
+  * The next build request will start a fresh build normally.
 
 This self‑healing logic guarantees that a crash during build does not permanently block new builds.
 
@@ -144,7 +145,7 @@ This self‑healing logic guarantees that a crash during build does not permanen
 
 ## Runs and Build Reuse
 
-Before each run, the backend calls `ensure_active_build(workspace_id, configuration_id)`, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
+Before each run, the backend resolves the build for the configuration fingerprint, records the `build_id` on the run, and hydrates the local env if missing. Runs launch using the build-scoped venv:
 
 ```bash
 ${ADE_VENVS_DIR}/<workspace_id>/<configuration_id>/<build_id>/.venv/bin/python -I -B -m ade_engine.run <run_id>
@@ -177,7 +178,7 @@ Body:
 ```
 
 * `stream: false` — enqueue a background build and return a `Build` snapshot immediately. Progress is emitted as run events (see below).
-* `stream: true` — execute inline and stream `AdeEvent` envelopes (`build.*` + `console.line` with `scope:"build"`) over SSE.
+* `stream: true` — execute inline and stream `EventRecord` dictionaries (`build.*` + `console.line` with `scope:"build"`) over SSE.
 
 ### List build history
 
@@ -200,10 +201,10 @@ Returns the persisted `Build` resource including timestamps, status, and exit me
 Build activity is part of the run stream. After creating a run, attach to:
 
 ```
-GET /api/v1/runs/{run_id}/events?stream=true&after_sequence=<cursor>
+GET /api/v1/runs/{run_id}/events/stream?after_sequence=<cursor>
 ```
 
-This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build lifecycle + `console.line` + subsequent run events). Use `after_sequence` to resume.
+This returns an SSE stream of `EventRecord` objects; the API emits a monotonic `id:` counter per event (build lifecycle + `console.line scope=build` + subsequent run events). Use `after_sequence` or `Last-Event-ID` to resume; the cursor maps to the SSE `id` field.
 
 > **Runs API (submit):** clients provide `configuration_id` to `/configurations/{configuration_id}/runs`. The server resolves the workspace, ensures the build, and records `build_id` at submit time.
 
@@ -222,9 +223,9 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 | `ADE_BUILD_TTL_DAYS`            | —                      | Optional expiry for builds                      |
 | `ADE_ENGINE_SPEC`               | `apps/ade-engine/` | How to install the engine (path or pinned dist) |
 | `ADE_PYTHON_BIN`                | system default         | Python executable to use for `venv` (optional)  |
-| `ADE_BUILD_TIMEOUT_SECONDS`     | `600`                  | Max duration for a single build before failing  |
-| `ADE_BUILD_ENSURE_WAIT_SECONDS` | `30`                   | How long server waits for an in‑progress build  |
-| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent builds/runs                  |
+| `ADE_BUILD_TIMEOUT`             | `600`                  | Max duration (seconds) for a single build before failing |
+| `ADE_MAX_CONCURRENCY`           | `2`                    | Maximum concurrent runs per API process         |
+| `ADE_QUEUE_SIZE`                | —                      | Maximum queued runs allowed (server-level)      |
 | `ADE_RUN_TIMEOUT_SECONDS`       | `300`                  | Hard timeout for runs                           |
 | `ADE_WORKER_CPU_SECONDS`        | `60`                   | CPU limit per run                               |
 | `ADE_WORKER_MEM_MB`             | `512`                  | Memory limit per run                            |
@@ -235,18 +236,18 @@ This returns an SSE stream of `AdeEvent` objects ordered by `sequence` (build li
 ## Backend Architecture (Essentials)
 
 * **Router** — `POST /workspaces/{workspace_id}/configurations/{configuration_id}/builds` plus status/log polling endpoints under `/builds/{build_id}`.
-* **Service (`ensure_build`)** — checks the DB, computes the fingerprint, applies force rules, **uses the `builds` table (one queued/building row per config) to deduplicate concurrent requests**, and triggers the builder if needed.
+* **Service (`ensure_build_for_run`)** — computes the fingerprint, applies force rules, **get‑or‑creates by `(configuration_id, fingerprint)`**, and claims a build via status transitions before running the builder.
 * **Builder** — creates `<ADE_VENVS_DIR>/<ws>/<configuration>/<build_id>/.venv`, installs engine + config, verifies imports + smoke checks, **updates the configuration’s active_build pointer on success**, deletes the temp folder on failure.
-* **Runs** — call `ensure_active_build()` then run the worker using the returned `venv_path`. Each run row stores the `build_id`.
+* **Runs** — resolve the build via fingerprint, then run the worker using the build‑scoped `venv_path`. Each run row stores the `build_id`.
 * **Database** — `configurations` holds the active build pointer/fingerprint; `builds` tracks job history + status. Build logs are streamed as `console.line` in the run event stream.
 
 ---
 
 ## Summary
 
-* Keep it simple: **DB‑based dedupe** (queued/building rows) guarantees **one** build at a time per configuration—no filesystem locks.
-* **Coalesce** concurrent requests: UI returns `"building"` quickly; runs wait briefly for the status to flip via build rows.
-* **Self‑heal** stale in-progress states after crashes using `started_at + ADE_BUILD_TIMEOUT_SECONDS`.
+* Keep it simple: **DB‑based dedupe** (unique `(configuration_id, fingerprint)` rows) guarantees **one** build row per fingerprint—no filesystem locks.
+* **Coalesce** concurrent requests: UI returns `"building"` quickly; runs remain queued until the build is ready.
+* **Self‑heal** stale in-progress states after crashes using `started_at + ADE_BUILD_TIMEOUT`.
 * Allow **rebuilds while runs run**; new builds land in new folders and runs continue using their pinned build_id.
 * Runs **don’t pass** `build_id`—the server chooses and **records** the job ID for reproducibility.
 * No renames, no symlinks—just clean metadata updates, timeouts, and simple cleanup.

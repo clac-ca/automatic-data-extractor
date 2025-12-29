@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
 from ade_api.common.pagination import Page, paginate_sql
-from ade_api.core.models import Build, BuildStatus
+from ade_api.models import Build, BuildStatus
 
 __all__ = [
     "BuildsRepository",
@@ -72,6 +72,23 @@ class BuildsRepository:
                 Build.fingerprint == fingerprint,
             )
             .order_by(Build.created_at.desc())
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().first()
+
+    async def get_by_fingerprint(
+        self,
+        *,
+        configuration_id: UUID,
+        fingerprint: str,
+    ) -> Build | None:
+        stmt = (
+            select(Build)
+            .where(
+                Build.configuration_id == configuration_id,
+                Build.fingerprint == fingerprint,
+            )
             .limit(1)
         )
         result = await self._session.execute(stmt)

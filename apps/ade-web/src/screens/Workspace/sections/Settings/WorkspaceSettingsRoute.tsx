@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { PageState } from "@ui/PageState";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { SettingsLayout } from "./components/SettingsLayout";
 import { SettingsSectionProvider } from "./sectionContext";
 import {

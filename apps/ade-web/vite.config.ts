@@ -6,7 +6,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
-import monacoEditorPlugin from "vite-plugin-monaco-editor";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const resolveSrc = (relativePath: string) => path.resolve(projectRoot, "src", relativePath);
@@ -14,18 +13,23 @@ const packageJsonPath = fileURLToPath(new URL("./package.json", import.meta.url)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { version?: string };
 const appVersion = packageJson.version ?? "unknown";
 
-const frontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
-const backendPort = process.env.DEV_BACKEND_PORT ?? "8000";
+const parsedFrontendPort = Number.parseInt(process.env.DEV_FRONTEND_PORT ?? "8000", 10);
+const frontendPort = Number.isNaN(parsedFrontendPort) ? 8000 : parsedFrontendPort;
+const parsedBackendPort = Number.parseInt(process.env.DEV_BACKEND_PORT ?? "8001", 10);
+const backendPort = Number.isNaN(parsedBackendPort) ? 8001 : parsedBackendPort;
 
-// The plugin ships as CJS, so the default import resolves to an object in ESM.
-const monacoPlugin = (monacoEditorPlugin as { default?: typeof monacoEditorPlugin }).default ?? monacoEditorPlugin;
+if (backendPort === frontendPort) {
+  throw new Error(
+    `DEV_BACKEND_PORT (${backendPort}) must not match DEV_FRONTEND_PORT (${frontendPort}); otherwise the /api proxy will loop.`,
+  );
+}
 
 export default defineConfig({
-  plugins: [tailwindcss(), react(), tsconfigPaths(), monacoPlugin({})],
+  plugins: [tailwindcss(), react(), tsconfigPaths()],
   resolve: {
     alias: {
       "@app": resolveSrc("app"),
-      "@features": resolveSrc("screens"),
+      "@screens": resolveSrc("screens"),
       "@ui": resolveSrc("ui"),
       "@shared": resolveSrc("shared"),
       "@schema": resolveSrc("schema"),
@@ -37,7 +41,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   server: {
-    port: Number.isNaN(frontendPort) ? 8000 : frontendPort,
+    port: frontendPort,
+    strictPort: true,
     host: process.env.DEV_FRONTEND_HOST ?? "0.0.0.0",
     proxy: {
       "/api": {

@@ -6,7 +6,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
+.venv*/
+venv*/
 .mypy_cache/
 .pytest_cache/
 
@@ -25,6 +26,7 @@ apps/ade-web/dist/
 data/
 artifacts/
 .workpackage/
+.workpackages/
 .old-codebase/
 
 # Env files (avoid baking secrets into images)

@@ -25,6 +25,7 @@ interface EditorAreaProps {
   readonly editorTheme: string;
   readonly menuAppearance: "light" | "dark";
   readonly canSaveFiles?: boolean;
+  readonly readOnly?: boolean;
   readonly minHeight?: number;
   readonly onRetryTabLoad?: (tabId: string) => void;
 }
@@ -47,6 +48,7 @@ export function EditorArea({
   editorTheme,
   menuAppearance,
   canSaveFiles = false,
+  readOnly = false,
   minHeight,
   onRetryTabLoad,
 }: EditorAreaProps) {
@@ -58,7 +60,7 @@ export function EditorArea({
 
   if (!hasTabs || !activeTab) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a file from the explorer to begin editing.
       </div>
     );
@@ -104,6 +106,7 @@ export function EditorArea({
           onContentChange={onContentChange}
           onSaveTab={onSaveTab}
           canSaveFiles={canSaveFiles}
+          readOnly={readOnly}
           onRetryTabLoad={onRetryTabLoad}
           onSelectTab={onSelectTab}
           isTabDragging={isTabDragging}

@@ -82,14 +82,9 @@ export function EditorTabStrip({
       activationConstraint: { distance: 5 },
     }),
   );
-  const barTone =
-    menuAppearance === "dark"
-      ? "border-[#1f2937] bg-[#0f172a]"
-      : "border-slate-200 bg-slate-900/5";
+  const barTone = "border-border bg-card";
   const overflowButtonTone =
-    menuAppearance === "dark"
-      ? "text-slate-300 hover:bg-white/10 hover:text-white focus-visible:ring-white/30 focus-visible:ring-offset-0"
-      : "text-slate-500 hover:bg-white hover:text-slate-900 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900/5";
+    "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
 
   const setTabNode = useCallback((tabId: string, node: HTMLDivElement | null) => {
     const map = tabRefs.current;
@@ -383,15 +378,13 @@ interface ScrollButtonProps {
 
 function ScrollButton({ appearance, direction, disabled, onClick }: ScrollButtonProps) {
   const activeTone =
-    appearance === "dark"
-      ? "hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/30"
-      : "hover:bg-white hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900/5";
+    "hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card";
   return (
     <button
       type="button"
       className={clsx(
         "flex h-8 w-8 items-center justify-center rounded-md transition focus-visible:outline-none",
-        appearance === "dark" ? "text-slate-300" : "text-slate-500",
+        appearance === "dark" ? "text-muted-foreground" : "text-muted-foreground",
         disabled ? "cursor-default opacity-30" : activeTone,
       )}
       onClick={onClick}
@@ -408,15 +401,11 @@ interface ScrollGradientProps {
   readonly appearance: "light" | "dark";
 }
 
-function ScrollGradient({ position, appearance }: ScrollGradientProps) {
+function ScrollGradient({ position, appearance: _appearance }: ScrollGradientProps) {
   const gradientClass =
-    appearance === "dark"
-      ? position === "left"
-        ? "left-0 bg-gradient-to-r from-[#0f172a] via-[#0f172a]/80 to-transparent"
-        : "right-0 bg-gradient-to-l from-[#0f172a] via-[#0f172a]/80 to-transparent"
-      : position === "left"
-        ? "left-0 bg-gradient-to-r from-slate-100 via-slate-100/70 to-transparent"
-        : "right-0 bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent";
+    position === "left"
+      ? "left-0 bg-gradient-to-r from-card via-card/80 to-transparent"
+      : "right-0 bg-gradient-to-l from-card via-card/80 to-transparent";
   return (
     <div className={clsx("pointer-events-none absolute top-0 bottom-0 w-8", gradientClass)} />
   );

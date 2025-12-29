@@ -6,6 +6,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
+
 async def login(
     client: AsyncClient,
     *,

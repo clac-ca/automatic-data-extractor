@@ -1,2 +1,1 @@
-"""Alembic migrations for ADE live under ``ade_api.infra.db.migrations``."""
-
+"""Alembic migrations for ADE (config: `apps/ade-api/alembic.ini`)."""

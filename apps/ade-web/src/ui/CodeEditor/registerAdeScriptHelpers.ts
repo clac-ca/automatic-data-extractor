@@ -3,7 +3,7 @@
 import type * as Monaco from "monaco-editor";
 
 import type { AdeFunctionSpec } from "./adeScriptApi";
-import { getHoverSpec, getSnippetSpecs, isAdeConfigFile } from "./adeScriptApi";
+import { getHoverSpec, getSnippetSpecs } from "./adeScriptApi";
 
 type Registration = {
   disposables: Monaco.IDisposable[];
@@ -51,13 +51,10 @@ function registerHoverProvider(
 ): Monaco.IDisposable {
   return monaco.languages.registerHoverProvider(languageId, {
     provideHover(model, position) {
-      const filePath = getModelPath(model);
-      if (!isAdeConfigFile(filePath)) return null;
-
       const word = model.getWordAtPosition(position);
       if (!word) return null;
 
-      const spec = getHoverSpec(word.word, filePath);
+      const spec = getHoverSpec(word.word);
       if (!spec) return null;
 
       const range = new monaco.Range(
@@ -91,24 +88,27 @@ function registerCompletionProvider(
     triggerCharacters: [" ", "d", "t", "_"],
 
     provideCompletionItems(model, position) {
-      const filePath = getModelPath(model);
-      if (!isAdeConfigFile(filePath)) {
-        return EMPTY_COMPLETIONS;
-      }
-
-      const specs = getSnippetSpecs(filePath);
+      const specs = getSnippetSpecs();
       if (!specs || specs.length === 0) {
         return EMPTY_COMPLETIONS;
       }
 
       const lineNumber = position.lineNumber;
-      const word = model.getWordUntilPosition(position);
-
-      // If there's a current word, replace just that; otherwise replace from the caret.
-      const range =
-        word && word.word
-          ? new monaco.Range(lineNumber, word.startColumn, lineNumber, word.endColumn)
-          : new monaco.Range(lineNumber, position.column, lineNumber, position.column);
+      const prefix = model.getValueInRange(
+        new monaco.Range(lineNumber, 1, lineNumber, position.column),
+      );
+      const trimmed = prefix.replace(/\s+$/, "");
+      const trailing = prefix.length - trimmed.length; // whitespace after the last token
+      const identMatch = /[A-Za-z_][\w]*$/.exec(trimmed);
+      const replaceStartCol = identMatch
+        ? position.column - trailing - identMatch[0].length
+        : position.column - trailing;
+      const range = new monaco.Range(
+        lineNumber,
+        Math.max(1, replaceStartCol),
+        lineNumber,
+        position.column,
+      );
 
       const suggestions = specs.map((spec, index) =>
         createSnippetSuggestion(monaco, spec, range, index),
@@ -116,7 +116,6 @@ function registerCompletionProvider(
 
       if (import.meta.env?.DEV) {
         console.debug("[ade-completions] ADE specs for file", {
-          filePath,
           specs: specs.map((s) => s.name),
         });
         console.debug(
@@ -140,11 +139,6 @@ function registerSignatureProvider(
     signatureHelpTriggerCharacters: ["(", ","],
     signatureHelpRetriggerCharacters: [","],
     provideSignatureHelp(model, position) {
-      const filePath = getModelPath(model);
-      if (!isAdeConfigFile(filePath)) {
-        return null;
-      }
-
       const lineContent = model.getLineContent(position.lineNumber);
       const prefix = lineContent.slice(0, position.column);
       const match = /([A-Za-z_][\w]*)\s*\($/.exec(prefix);
@@ -152,7 +146,7 @@ function registerSignatureProvider(
         return null;
       }
 
-      const spec = getHoverSpec(match[1], filePath);
+      const spec = getHoverSpec(match[1]);
       if (!spec) {
         return null;
       }
@@ -181,25 +175,6 @@ function registerSignatureProvider(
       };
     },
   });
-}
-
-/* ---------- Shared helpers ---------- */
-
-function getModelPath(model: Monaco.editor.ITextModel | undefined): string | undefined {
-  if (!model) return undefined;
-  const uri = model.uri;
-  if (!uri) return undefined;
-
-  const rawPath = uri.path || uri.toString();
-  if (!rawPath) return undefined;
-
-  const normalized = rawPath.startsWith("/") ? rawPath.slice(1) : rawPath;
-
-  if (import.meta.env?.DEV) {
-    console.debug("[ade] getModelPath", { rawPath, normalized });
-  }
-
-  return normalized;
 }
 
 function computeActiveParameter(prefix: string): number {

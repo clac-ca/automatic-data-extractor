@@ -1,5 +1,7 @@
 # WP‑1 — Create Config (copy → draft) + Validate (digest + checks)
 
+> Status note: templates now come from the ade-engine CLI (`ade-engine config init`); the API no longer ships embedded template folders. This document describes the older flow where templates lived under `apps/ade-api/src/ade_api/templates/config_packages/`.
+
 ## What we’re doing (in one paragraph)
 
 A config package is a folder the engine imports (`ade_config`). To create one, we **copy** an existing folder—either a backend‑embedded **template** or a **clone** of another config by its **ULID**—into the workspace, validate its minimal shape, and publish it as a **draft** by an **atomic rename**. Drafts are editable via file endpoints (later work). **Validate** recomputes a deterministic **content digest** and returns issues; for WP‑1 every **build** simply re-runs validate first instead of relying on stored metadata. **Activate** locks the config and enforces “one active per workspace” (later WP).
@@ -54,7 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_cfg_ws_status ON configurations(workspace_id, sta
 
 ## Minimal shape of a valid config folder
 
-* **Required files**: `manifest.json`, `pyproject.toml`.  We will enforce richer structure in later work packages.
+* **Required files**: `manifest.toml`, `pyproject.toml`.  We will enforce richer structure in later work packages.
 * **Digest include set**: during validate we only hash files under the config folder whose extension is `.py`, `.toml`, or `.json`. Everything else is ignored for WP‑1 to keep hashing fast and deterministic.
 
 ---
@@ -128,7 +130,7 @@ POST /api/v1/workspaces/{workspace_id}/configurations/{config_id}/validate
 }
 ```
 
-If issues are found (e.g., malformed `manifest.json`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
+If issues are found (e.g., malformed `manifest.toml`), return them in `issues` and omit `content_digest` from the payload. Build callers are expected to stop when issues are present and try again after fixes. A future WP can persist results or add status fields when the workflow needs historical data.
 
 Error: `409 configuration_not_editable` if state ≠ `draft`.
 

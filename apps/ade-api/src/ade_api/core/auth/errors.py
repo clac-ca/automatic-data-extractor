@@ -22,4 +22,3 @@ class PermissionDeniedError(Exception):
         if scope_type:
             msg = f"{msg} for scope '{scope_type}'"
         super().__init__(msg)
-

@@ -6,13 +6,13 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
+from .api.v1.router import api_router
 from .app.lifecycles import create_application_lifespan
 from .common.exceptions import http_exception_handler, unhandled_exception_handler
 from .common.logging import log_context, setup_logging
 from .common.middleware import register_middleware
 from .common.openapi import configure_openapi
 from .core.http.errors import register_auth_exception_handlers
-from .routers import api_router
 from .settings import Settings, get_settings
 from .web.spa import mount_spa
 
@@ -86,7 +86,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     # Middleware, routers, SPA, and OpenAPI configuration.
-    register_middleware(app)
+    register_middleware(app, settings=settings)
     app.include_router(api_router, prefix=API_PREFIX)
     mount_spa(app, api_prefix=API_PREFIX, static_dir=settings.web_dir / "static")
     configure_openapi(app, settings)

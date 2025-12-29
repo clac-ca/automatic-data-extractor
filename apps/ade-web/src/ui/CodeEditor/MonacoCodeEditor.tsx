@@ -11,26 +11,37 @@ import {
 } from "react";
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import clsx from "clsx";
 
 import type { CodeEditorHandle, CodeEditorProps } from "./CodeEditor.types";
 import { disposeAdeScriptHelpers, registerAdeScriptHelpers } from "./registerAdeScriptHelpers";
 
 const ADE_DARK_THEME_ID = "ade-dark";
-const ADE_DARK_THEME: MonacoEditor.IStandaloneThemeData = {
-  base: "vs-dark",
-  inherit: true,
-  rules: [],
-  colors: {
-    "editor.background": "#1f2430",
-    "editor.foreground": "#f3f6ff",
-    "editorCursor.foreground": "#fbd38d",
-    "editor.lineHighlightBackground": "#2a3142",
-    "editorLineNumber.foreground": "#8c92a3",
-    "editor.selectionBackground": "#3a4256",
-    "editor.inactiveSelectionBackground": "#2d3446",
-    "editorGutter.background": "#1c212b",
-  },
+const ADE_DARK_THEME_FALLBACKS: Record<string, string> = {
+  "editor.background": "#1f2430",
+  "editor.foreground": "#f3f6ff",
+  "editorCursor.foreground": "#fbd38d",
+  "editor.lineHighlightBackground": "#2a3142",
+  "editorLineNumber.foreground": "#8c92a3",
+  "editor.selectionBackground": "#3a4256",
+  "editor.inactiveSelectionBackground": "#2d3446",
+  "editorGutter.background": "#1c212b",
+};
+
+const ADE_DARK_THEME_CSS_VARS: Record<string, string> = {
+  "editor.background": "--comp-editor-bg",
+  "editor.foreground": "--comp-editor-fg",
+  "editorCursor.foreground": "--comp-editor-cursor",
+  "editor.lineHighlightBackground": "--comp-editor-line-highlight",
+  "editorLineNumber.foreground": "--comp-editor-line-number",
+  "editor.selectionBackground": "--comp-editor-selection",
+  "editor.inactiveSelectionBackground": "--comp-editor-selection-inactive",
+  "editorGutter.background": "--comp-editor-gutter",
 };
 
 const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function MonacoCodeEditor(
@@ -51,6 +62,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
   const adeLanguageRef = useRef<string | null>(null);
   const editorPath = useMemo(() => toEditorPath(path), [path]);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const monacoRef = useRef<Parameters<BeforeMount>[0] | null>(null);
   const [editorReady, setEditorReady] = useState(false);
 
   useEffect(() => {
@@ -150,8 +162,21 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
   }, []);
 
   const handleBeforeMount = useCallback<BeforeMount>((monacoInstance) => {
-    monacoInstance.editor.defineTheme(ADE_DARK_THEME_ID, ADE_DARK_THEME);
+    ensureMonacoWorkers();
+    monacoRef.current = monacoInstance;
+    monacoInstance.editor.defineTheme(ADE_DARK_THEME_ID, buildAdeDarkTheme());
   }, []);
+
+  useEffect(() => {
+    if (theme !== ADE_DARK_THEME_ID) {
+      return;
+    }
+    const monacoInstance = monacoRef.current;
+    if (!monacoInstance) {
+      return;
+    }
+    monacoInstance.editor.defineTheme(ADE_DARK_THEME_ID, buildAdeDarkTheme());
+  }, [theme]);
 
   return (
     <div ref={containerRef} className={clsx("relative h-full w-full min-w-0 overflow-hidden", className)}>
@@ -180,7 +205,7 @@ const MonacoCodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function 
           snippetSuggestions: "inline",
         }}
         loading={
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Loading editor…
           </div>
         }
@@ -201,3 +226,74 @@ function toEditorPath(rawPath: string | undefined): string | undefined {
 
 export type MonacoModel = ReturnType<Parameters<OnMount>[0]["getModel"]>;
 export type MonacoPosition = ReturnType<Parameters<OnMount>[0]["getPosition"]>;
+
+type MonacoEnvironment = {
+  getWorker: (_moduleId: string, label: string) => Worker;
+};
+
+function ensureMonacoWorkers(): void {
+  const globalScope = globalThis as unknown as { MonacoEnvironment?: MonacoEnvironment };
+
+  if (globalScope.MonacoEnvironment?.getWorker) return;
+
+  globalScope.MonacoEnvironment = {
+    getWorker: (_moduleId: string, label: string) => {
+      switch (label) {
+        case "json":
+          return new JsonWorker();
+        case "css":
+        case "less":
+        case "scss":
+          return new CssWorker();
+        case "html":
+        case "handlebars":
+        case "razor":
+          return new HtmlWorker();
+        case "typescript":
+        case "javascript":
+          return new TsWorker();
+        default:
+          return new EditorWorker();
+      }
+    },
+  };
+}
+
+function buildAdeDarkTheme(): MonacoEditor.IStandaloneThemeData {
+  const colors: Record<string, string> = {};
+  Object.entries(ADE_DARK_THEME_CSS_VARS).forEach(([token, cssVar]) => {
+    colors[token] = resolveCssColor(cssVar, ADE_DARK_THEME_FALLBACKS[token]);
+  });
+  return {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors,
+  };
+}
+
+function resolveCssColor(variable: string, fallback: string): string {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return fallback;
+  }
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+  if (!raw) {
+    return fallback;
+  }
+  const parts = raw
+    .split(/[\s,]+/)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  if (parts.length < 3) {
+    return fallback;
+  }
+  return rgbToHex(parts[0], parts[1], parts[2]);
+}
+
+function rgbToHex(red: number, green: number, blue: number): string {
+  const toHex = (value: number) => {
+    const clamped = Math.max(0, Math.min(255, Math.round(value)));
+    return clamped.toString(16).padStart(2, "0");
+  };
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`;
+}

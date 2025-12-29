@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import HTTPException
 
+from ade_api.common.sorting import parse_sort, resolve_sort
 from ade_api.features.documents.filters import (
     DOCUMENT_SOURCE_VALUES,
     DOCUMENT_STATUS_VALUES,
@@ -12,7 +13,6 @@ from ade_api.features.documents.filters import (
     DocumentStatus,
 )
 from ade_api.features.documents.sorting import DEFAULT_SORT, ID_FIELD, SORT_FIELDS
-from ade_api.common.sorting import parse_sort, resolve_sort
 
 
 def test_document_filters_normalise_sets_and_strings() -> None:
@@ -24,7 +24,7 @@ def test_document_filters_normalise_sets_and_strings() -> None:
             DocumentSource.MANUAL_UPLOAD.value,
             DocumentSource.MANUAL_UPLOAD.value,
         ],
-        tags_in=[" alpha ", "beta", "alpha", ""],
+        tags=[" Alpha ", "beta", "ALPHA", "beta   two"],
         uploader_id_in=[
             uploader_one,
             uploader_one,
@@ -38,7 +38,7 @@ def test_document_filters_normalise_sets_and_strings() -> None:
         DocumentStatus.PROCESSED,
     }
     assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
-    assert filters.tags_in == {"alpha", "beta"}
+    assert filters.tags == {"alpha", "beta", "beta two"}
     assert filters.uploader_id_in == {
         UUID(uploader_one),
         UUID(uploader_two),
@@ -71,6 +71,11 @@ def test_document_filters_reject_invalid_ranges() -> None:
 
     with pytest.raises(HTTPException):
         DocumentFilters(byte_size_from=100, byte_size_to=50)
+
+
+def test_document_filters_reject_invalid_tag_combinations() -> None:
+    with pytest.raises(HTTPException):
+        DocumentFilters(tags_empty=True, tags={"finance"})
 
 
 def test_document_filter_enums_export_expected_values() -> None:

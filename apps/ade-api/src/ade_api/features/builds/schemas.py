@@ -7,11 +7,11 @@ from typing import Annotated, Literal
 
 from pydantic import AliasChoices, ConfigDict, Field, conint
 
+from ade_api.common.events import EventRecord
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page, PageParams
 from ade_api.common.schema import BaseSchema
-from ade_api.core.models import BuildStatus
-from ade_api.schemas.events import AdeEvent
+from ade_api.models import BuildStatus
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
 BuildObjectType = Literal["ade.build"]
@@ -112,7 +112,7 @@ class BuildPage(Page[BuildResource]):
 class BuildEventsPage(BaseSchema):
     """Paginated ADE events for a build."""
 
-    items: list[AdeEvent]
+    items: list[EventRecord]
     next_after_sequence: int | None = None
 
 

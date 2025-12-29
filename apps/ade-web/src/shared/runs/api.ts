@@ -1,32 +1,43 @@
 import { client, resolveApiUrl } from "@shared/api/client";
 
-import type { RunSummary, components, paths } from "@schema";
-import type { AdeEvent as RunStreamEvent } from "./types";
+import type { components, paths } from "@schema";
+import type { RunStreamEvent } from "./types";
 
 export type RunResource = components["schemas"]["RunResource"];
-export type RunStatus = RunResource["status"];
-export type RunCreateOptions = components["schemas"]["RunCreateOptions"];
-type RunCreateRequest = components["schemas"]["RunCreateRequest"];
+export type RunCreateOptions = components["schemas"]["RunCreateOptionsBase"];
+type RunCreateRequest = components["schemas"]["RunWorkspaceCreateRequest"];
 type RunCreatePathParams =
-  paths["/api/v1/configurations/{configuration_id}/runs"]["post"]["parameters"]["path"];
+  paths["/api/v1/workspaces/{workspace_id}/runs"]["post"]["parameters"]["path"];
 
-export type RunStreamOptions = Partial<RunCreateOptions>;
+export type RunStreamOptions = Partial<RunCreateOptions> & {
+  input_document_id: RunCreateRequest["input_document_id"];
+  configuration_id?: RunCreateRequest["configuration_id"];
+};
 const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   dry_run: false,
   validate_only: false,
   force_rebuild: false,
+  log_level: "INFO",
 };
 
 export async function createRun(
-  configId: string,
-  options: RunStreamOptions = {},
+  workspaceId: string,
+  options: RunStreamOptions,
   signal?: AbortSignal,
 ): Promise<RunResource> {
-  const pathParams: RunCreatePathParams = { configuration_id: configId };
-  const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...options };
-  const body: RunCreateRequest = { options: mergedOptions };
+  const pathParams: RunCreatePathParams = { workspace_id: workspaceId };
+  const { input_document_id, configuration_id, ...optionOverrides } = options;
+  const mergedOptions: RunCreateOptions = { ...DEFAULT_RUN_OPTIONS, ...optionOverrides };
+  if (!input_document_id) {
+    throw new Error("input_document_id is required to start a run.");
+  }
+  const body: RunCreateRequest = {
+    input_document_id,
+    configuration_id: configuration_id ?? undefined,
+    options: mergedOptions,
+  };
 
-  const { data } = await client.POST("/api/v1/configurations/{configuration_id}/runs", {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/runs", {
     params: { path: pathParams },
     body,
     signal,
@@ -39,23 +50,14 @@ export async function createRun(
   return data as RunResource;
 }
 
-export async function* streamRun(
-  configId: string,
-  options: RunStreamOptions = {},
+export async function* streamRunEvents(
+  url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
-  const runResource = await createRun(configId, options, signal);
-  const eventsUrl = runEventsUrl(runResource, { afterSequence: 0 });
-  if (!eventsUrl) {
-    throw new Error("Run creation response is missing required links.");
-  }
-
-  for await (const event of streamRunEvents(eventsUrl, signal)) {
-    yield event;
-  }
+  yield* streamRunEventsViaFetch(url, signal);
 }
 
-export async function* streamRunEvents(
+async function* streamRunEventsViaFetch(
   url: string,
   signal?: AbortSignal,
 ): AsyncGenerator<RunStreamEvent> {
@@ -103,7 +105,7 @@ export async function* streamRunEvents(
           continue;
         }
         yield event;
-        if (event.type === "run.complete") {
+        if (event.event === "run.complete") {
           shouldClose = true;
           break;
         }
@@ -141,21 +143,38 @@ export async function* streamRunEvents(
 
 function parseSseEvent(rawEvent: string): RunStreamEvent | null {
   const dataLines: string[] = [];
+
   for (const line of rawEvent.split(/\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);
+      continue;
     }
   }
+
   if (!dataLines.length) {
     return null;
   }
+
   const payload = dataLines.join("\n");
   if (!payload.trim()) {
     return null;
   }
+
   try {
-    return JSON.parse(payload) as RunStreamEvent;
+    const parsed = JSON.parse(payload) as RunStreamEvent;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    if (typeof parsed.event !== "string" || parsed.event.trim().length === 0) {
+      return null;
+    }
+    if (!("timestamp" in parsed)) {
+      return null;
+    }
+    (parsed as Record<string, unknown>)._raw = payload;
+
+    return parsed;
   } catch (error) {
     console.warn("Skipping malformed run event", error, payload);
     return null;
@@ -164,22 +183,13 @@ function parseSseEvent(rawEvent: string): RunStreamEvent | null {
 
 export function runEventsUrl(
   run: RunResource,
-  options?: { afterSequence?: number; stream?: boolean },
+  options?: { afterSequence?: number },
 ): string | null {
-  const baseLink =
-    run.events_stream_url ??
-    run.links?.events_stream ??
-    run.events_url ??
-    run.links?.events;
+  const baseLink = run.events_stream_url ?? run.links?.events_stream;
   if (!baseLink) {
     return null;
   }
   const queryParts: string[] = [];
-  const wantsStream = options?.stream ?? true;
-  const alreadyStreaming = baseLink.endsWith("/stream") || baseLink.includes("stream=true");
-  if (wantsStream && !alreadyStreaming) {
-    queryParts.push("stream=true");
-  }
   if (typeof options?.afterSequence === "number" && Number.isFinite(options.afterSequence)) {
     const normalized = Math.max(0, Math.floor(options.afterSequence));
     queryParts.push(`after_sequence=${normalized}`);
@@ -202,77 +212,6 @@ export async function* streamRunEventsForRun(
   }
 }
 
-export async function fetchRunEvents(
-  run: RunResource | string,
-  options?: { afterSequence?: number; signal?: AbortSignal },
-): Promise<RunStreamEvent[]> {
-  const runResource = typeof run === "string" ? await fetchRun(run, options?.signal) : run;
-  const eventsUrl = runEventsUrl(runResource, { afterSequence: options?.afterSequence, stream: false });
-  if (!eventsUrl) {
-    throw new Error("Run events link unavailable.");
-  }
-  const response = await fetch(eventsUrl, {
-    method: "GET",
-    credentials: "include",
-    signal: options?.signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Run events unavailable (${response.status}).`);
-  }
-  const text = await response.text();
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const events: RunStreamEvent[] = [];
-  for (const line of lines) {
-    try {
-      events.push(JSON.parse(line) as RunStreamEvent);
-    } catch (error) {
-      console.warn("Skipping malformed run event line", error, line);
-    }
-  }
-  return events;
-}
-
-export async function fetchRunTelemetry(
-  run: RunResource | string,
-  signal?: AbortSignal,
-): Promise<RunStreamEvent[]> {
-  const runResource = typeof run === "string" ? await fetchRun(run, signal) : run;
-  const downloadLink =
-    runResource.events_download_url ??
-    runResource.links?.events_download ??
-    runResource.links?.logs;
-  if (!downloadLink) {
-    throw new Error("Run logs link unavailable.");
-  }
-
-  const response = await fetch(resolveApiUrl(downloadLink), {
-    method: "GET",
-    credentials: "include",
-    headers: { Accept: "application/x-ndjson" },
-    signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Run telemetry unavailable (${response.status}).`);
-  }
-  const data = await response.text();
-
-  const text = data ?? "";
-  return text
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      try {
-        return JSON.parse(line) as RunStreamEvent;
-      } catch (error) {
-        console.warn("Skipping invalid telemetry line", { error, line });
-        return null;
-      }
-    })
-    .filter((value): value is RunStreamEvent => Boolean(value));
-}
 
 export async function fetchRun(
   runId: string,
@@ -287,33 +226,6 @@ export async function fetchRun(
   return data as RunResource;
 }
 
-export async function fetchRunSummary(runId: string, signal?: AbortSignal): Promise<RunSummary | null> {
-  // Prefer the dedicated summary endpoint; fall back to embedded summaries when present.
-  try {
-    const { data } = await client.GET("/api/v1/runs/{run_id}/summary", {
-      params: { path: { run_id: runId } },
-      signal,
-    });
-    if (data) return data as RunSummary;
-  } catch (error) {
-    // If the backend is older or the endpoint is unavailable, continue to fallback parsing.
-    console.warn("Falling back to embedded run summary", error);
-  }
-
-  const run = await fetchRun(runId, signal);
-  const summary = (run as { summary?: RunSummary | string | null })?.summary;
-  if (!summary) return null;
-  if (typeof summary === "string") {
-    try {
-      return JSON.parse(summary) as RunSummary;
-    } catch (error) {
-      console.warn("Unable to parse run summary", { error });
-      return null;
-    }
-  }
-  return summary as RunSummary;
-}
-
 export function runOutputUrl(run: RunResource): string | null {
   const output = run.output;
   const ready = output?.ready;
@@ -325,7 +237,12 @@ export function runOutputUrl(run: RunResource): string | null {
 }
 
 export function runLogsUrl(run: RunResource): string | null {
-  const link = run.events_download_url ?? run.links?.events_download ?? run.links?.logs;
+  const link = run.events_download_url ?? run.links?.events_download;
+  return link ? resolveApiUrl(link) : null;
+}
+
+export function runInputUrl(run: RunResource): string | null {
+  const link = run.links?.input_download ?? run.links?.input;
   return link ? resolveApiUrl(link) : null;
 }
 
@@ -336,9 +253,3 @@ function resolveRunLink(link: string, options?: { appendQuery?: string }) {
     : link;
   return resolveApiUrl(appended);
 }
-
-export const runQueryKeys = {
-  detail: (runId: string) => ["run", runId] as const,
-  telemetry: (runId: string) => ["run-telemetry", runId] as const,
-  summary: (runId: string) => ["run-summary", runId] as const,
-};

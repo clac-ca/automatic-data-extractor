@@ -1,7 +1,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
 import { readCsrfToken } from "./csrf";
-import { ApiError } from "../api";
+import { ApiError } from "./errors";
 import type { paths } from "@schema";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
@@ -17,9 +17,8 @@ export function resolveApiUrl(path: string) {
   return baseUrl.length > 0 ? `${baseUrl}${path}` : path;
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}) {
-  const target = resolveApiUrl(path);
-  const headers = new Headers(init.headers ?? {});
+export function buildApiHeaders(method: string, init?: HeadersInit) {
+  const headers = new Headers(init ?? {});
   headers.set("X-Requested-With", "fetch");
   if (!headers.has("Authorization")) {
     const token = readStoredAccessToken();
@@ -27,13 +26,20 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
       headers.set("Authorization", `${token.token_type} ${token.access_token}`);
     }
   }
-  const method = init.method?.toUpperCase() ?? "GET";
-  if (!SAFE_METHODS.has(method)) {
+  const normalizedMethod = method.toUpperCase();
+  if (!SAFE_METHODS.has(normalizedMethod)) {
     const token = readCsrfToken();
     if (token && !headers.has("X-CSRF-Token")) {
       headers.set("X-CSRF-Token", token);
     }
   }
+  return headers;
+}
+
+export async function apiFetch(path: string, init: RequestInit = {}) {
+  const target = resolveApiUrl(path);
+  const method = init.method ?? "GET";
+  const headers = buildApiHeaders(method, init.headers);
   const response = await fetch(target, {
     credentials: "include",
     ...init,

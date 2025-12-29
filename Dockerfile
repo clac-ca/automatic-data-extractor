@@ -9,24 +9,19 @@ ARG NODE_VERSION=20
 # =============================================================================
 FROM node:${NODE_VERSION}-alpine AS frontend-build
 
-# We'll build the SPA from here:
 WORKDIR /app/apps/ade-web
 
-# Install frontend dependencies using only manifest files (better caching)
 COPY apps/ade-web/package*.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
 
-# Copy SPA sources and telemetry schemas required at build time
 COPY apps/ade-web/ ./
-COPY apps/ade-engine/src/ade_engine/schemas ../ade-engine/src/ade_engine/schemas
-
-# Build production bundle
 RUN npm run build
 
 # =============================================================================
 # Stage 2: Backend build (install Python packages)
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim AS backend-build
+FROM python:${PYTHON_VERSION}-slim-bookworm AS backend-build
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -34,14 +29,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps for building Python packages (kept out of final image)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends build-essential git unixodbc unixodbc-dev msodbcsql18 \
-    && rm -rf /var/lib/apt/lists/*
+# Build deps (kept out of final image). pyodbc builds need unixodbc-dev.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        cargo \
+        git \
+        rustc \
+        unixodbc-dev \
+        pkg-config \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy minimal metadata first to maximize layer cache reuse
 COPY README.md ./
@@ -49,41 +48,53 @@ COPY apps/ade-cli/pyproject.toml    apps/ade-cli/
 COPY apps/ade-engine/pyproject.toml apps/ade-engine/
 COPY apps/ade-api/pyproject.toml    apps/ade-api/
 
-RUN python -m pip install -U pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install -U pip
 
 # Now copy full sources
 COPY apps ./apps
 
 # Install CLI, engine, and API into an isolated prefix (/install)
-RUN python -m pip install --no-cache-dir --prefix=/install \
-    ./apps/ade-cli \
-    ./apps/ade-engine \
-    ./apps/ade-api
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --prefix=/install \
+        ./apps/ade-cli \
+        ./apps/ade-engine \
+        ./apps/ade-api
 
 # =============================================================================
 # Stage 3: Runtime image (what actually runs in prod)
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     API_ROOT=/app/apps/ade-api \
     ALEMBIC_INI_PATH=/app/apps/ade-api/alembic.ini \
-    ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations
+    ALEMBIC_MIGRATIONS_DIR=/app/apps/ade-api/migrations \
+    ACCEPT_EULA=Y
 
 WORKDIR /app
 
-# System deps for pyodbc / Azure SQL connectivity (runtime only)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && curl -sSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
-    && curl -sSL https://packages.microsoft.com/config/debian/12/prod.list -o /etc/apt/sources.list.d/microsoft-prod.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc msodbcsql18 \
-    && rm -rf /var/lib/apt/lists/*
+# -----------------------------------------------------------------------------
+# SQL Server / Azure SQL ODBC driver (msodbcsql18) + unixODBC manager
+# Use Microsoft's repo bootstrap package (stable on Debian slim)
+# -----------------------------------------------------------------------------
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl; \
+    curl -sSL -O https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb; \
+    dpkg -i packages-microsoft-prod.deb; \
+    rm -f packages-microsoft-prod.deb; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        unixodbc \
+        msodbcsql18 \
+        libgssapi-krb5-2 \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
-# OCI labels: nice to have in registries
+# OCI labels
 LABEL org.opencontainers.image.title="automatic-data-extractor" \
       org.opencontainers.image.description="ADE — Automatic Data Extractor" \
       org.opencontainers.image.source="https://github.com/clac-ca/automatic-data-extractor"
@@ -98,10 +109,12 @@ COPY apps ./apps
 COPY --from=frontend-build /app/apps/ade-web/dist \
     ./apps/ade-api/src/ade_api/web/static
 
-# Create non-root user and data directory, then fix ownership
-RUN groupadd -r ade && useradd -r -g ade ade \
-    && mkdir -p /app/data/db /app/data/documents \
-    && chown -R ade:ade /app
+# Non-root user + persistent data dir
+RUN set -eux; \
+    groupadd -r ade; \
+    useradd -r -g ade ade; \
+    mkdir -p /app/data/db /app/data/documents; \
+    chown -R ade:ade /app
 
 VOLUME ["/app/data"]
 EXPOSE 8000

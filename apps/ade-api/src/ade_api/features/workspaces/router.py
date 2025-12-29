@@ -4,11 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, Response, Security, status
 
-from ade_api.app.dependencies import get_workspace_profile, get_workspaces_service
+from ade_api.api.deps import get_workspaces_service
 from ade_api.common.pagination import PageParams
 from ade_api.core.http import require_authenticated, require_csrf, require_global, require_workspace
-from ade_api.core.models import User
+from ade_api.models import User
 
+from .deps import get_workspace_profile
 from .schemas import (
     WorkspaceCreate,
     WorkspaceOut,

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import Any
+
 import pytest
 from httpx import AsyncClient
 
-from ade_api.core.models import User
+from ade_api.models import User
 from tests.utils import login
 
 pytestmark = pytest.mark.asyncio
@@ -18,10 +19,10 @@ def _items(payload: Any) -> list[dict[str, Any]]:
 
 async def test_permission_catalog_requires_global_permission(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
 
     response = await async_client.get(
         "/api/v1/rbac/permissions",
@@ -34,10 +35,10 @@ async def test_permission_catalog_requires_global_permission(
 
 async def test_permission_catalog_global_admin(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    admin = seed_identity["admin"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     response = await async_client.get(
         "/api/v1/rbac/permissions",
@@ -55,10 +56,10 @@ async def test_permission_catalog_global_admin(
 
 async def test_roles_crud_and_delete(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    admin = seed_identity["admin"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     create_response = await async_client.post(
         "/api/v1/rbac/roles",
@@ -104,13 +105,13 @@ async def test_roles_crud_and_delete(
 
 async def test_workspace_member_listing_requires_permission(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=member["email"], password=member["password"])
+    member = seed_identity.member
+    token, _ = await login(async_client, email=member.email, password=member.password)
 
     response = await async_client.get(
-        f"/api/v1/workspaces/{seed_identity['workspace_id']}/members",
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -118,37 +119,35 @@ async def test_workspace_member_listing_requires_permission(
 
 async def test_workspace_member_listing_admin(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    admin = seed_identity["admin"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     response = await async_client.get(
-        f"/api/v1/workspaces/{seed_identity['workspace_id']}/members",
+        f"/api/v1/workspaces/{seed_identity.workspace_id}/members",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     payload = response.json()
     members = _items(payload)
-    assert any(
-        str(m["user_id"]) == str(seed_identity["workspace_owner"]["id"]) for m in members
-    )
+    assert any(str(m["user_id"]) == str(seed_identity.workspace_owner.id) for m in members)
 
 
 async def test_workspace_member_listing_excludes_inactive_by_default(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
     session,
 ) -> None:
-    admin = seed_identity["admin"]
-    member = seed_identity["member"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
-    user = await session.get(User, member["id"])
+    admin = seed_identity.admin
+    member = seed_identity.member
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+    user = await session.get(User, member.id)
     assert user is not None
     user.is_active = False
     await session.flush()
 
-    base_url = f"/api/v1/workspaces/{seed_identity['workspace_id']}/members"
+    base_url = f"/api/v1/workspaces/{seed_identity.workspace_id}/members"
 
     default_response = await async_client.get(
         base_url,
@@ -156,7 +155,7 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
     )
     assert default_response.status_code == 200
     default_members = {str(item["user_id"]) for item in _items(default_response.json())}
-    assert str(member["id"]) not in default_members
+    assert str(member.id) not in default_members
 
     inclusive = await async_client.get(
         base_url,
@@ -165,20 +164,20 @@ async def test_workspace_member_listing_excludes_inactive_by_default(
     )
     assert inclusive.status_code == 200, inclusive.text
     inclusive_members = {str(item["user_id"]) for item in _items(inclusive.json())}
-    assert str(member["id"]) in inclusive_members
+    assert str(member.id) in inclusive_members
 
 
 async def test_assign_workspace_member_roles(
     async_client: AsyncClient,
-    seed_identity: dict[str, Any],
+    seed_identity,
 ) -> None:
-    admin = seed_identity["admin"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
-    workspace_id = seed_identity["workspace_id"]
-    user_id = seed_identity["invitee"]["id"]
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
+    workspace_id = seed_identity.workspace_id
+    user_id = seed_identity.orphan.id
     user_id_str = str(user_id)
 
-    # Assign workspace-member to invitee
+    # Assign workspace-member to a user without existing membership
     create_response = await async_client.post(
         f"/api/v1/workspaces/{workspace_id}/members",
         json={

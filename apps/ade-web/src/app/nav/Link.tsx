@@ -7,15 +7,17 @@ type LinkProps = React.PropsWithChildren<{
   className?: string;
   title?: string;
   onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  ariaCurrent?: React.AriaAttributes["aria-current"];
 }>;
 
-export function Link({ to, replace, className, title, children, onClick }: LinkProps) {
+export function Link({ to, replace, className, title, children, onClick, ariaCurrent }: LinkProps) {
   const navigate = useNavigate();
   return (
     <a
       href={to}
       className={className}
       title={title}
+      aria-current={ariaCurrent}
       onClick={(event) => {
         onClick?.(event);
         if (
@@ -57,9 +59,16 @@ export function NavLink({ to, end, className, children, title, onClick }: NavLin
     typeof className === "function" ? className({ isActive }) : className;
   const renderedChildren =
     typeof children === "function" ? children({ isActive }) : children;
+  const ariaCurrent = isActive ? "page" : undefined;
 
   return (
-    <Link to={to} className={computedClassName} title={title} onClick={onClick}>
+    <Link
+      to={to}
+      className={computedClassName}
+      title={title}
+      onClick={onClick}
+      ariaCurrent={ariaCurrent}
+    >
       {renderedChildren}
     </Link>
   );

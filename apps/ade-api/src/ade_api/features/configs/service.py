@@ -17,14 +17,16 @@ from collections import defaultdict
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.ids import generate_uuid7
 from ade_api.common.logging import log_context
 from ade_api.common.time import utc_now
-from ade_api.core.models import Configuration, ConfigurationStatus
+from ade_api.models import Configuration, ConfigurationStatus
 
 from .etag import canonicalize_etag
 from .exceptions import (
@@ -74,7 +76,7 @@ class ConfigurationsService:
         self._repo = ConfigurationsRepository(session)
         self._storage = storage
 
-    async def list_configurations(self, *, workspace_id: str) -> list[Configuration]:
+    async def list_configurations(self, *, workspace_id: UUID) -> list[Configuration]:
         logger.debug(
             "config.list.start",
             extra=log_context(workspace_id=workspace_id),
@@ -89,8 +91,8 @@ class ConfigurationsService:
     async def get_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
             "config.get.start",
@@ -113,7 +115,7 @@ class ConfigurationsService:
     async def create_configuration(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         display_name: str,
         source: ConfigSource,
     ) -> Configuration:
@@ -185,8 +187,8 @@ class ConfigurationsService:
     async def clone_configuration(
         self,
         *,
-        workspace_id: str,
-        source_configuration_id: str,
+        workspace_id: UUID,
+        source_configuration_id: UUID,
         display_name: str,
     ) -> Configuration:
         logger.debug(
@@ -217,7 +219,7 @@ class ConfigurationsService:
     async def import_configuration_from_archive(
         self,
         *,
-        workspace_id: str,
+        workspace_id: UUID,
         display_name: str,
         archive: bytes,
     ) -> Configuration:
@@ -269,8 +271,8 @@ class ConfigurationsService:
     async def validate_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> ValidationResult:
         logger.debug(
             "config.validate.start",
@@ -294,74 +296,14 @@ class ConfigurationsService:
         )
         return ValidationResult(configuration=configuration, issues=issues, content_digest=digest)
 
-    async def activate_configuration(
+    async def make_active_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
-            "config.activate.start",
-            extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
-        )
-        configuration = await self._require_configuration(
-            workspace_id=workspace_id,
-            configuration_id=configuration_id,
-        )
-        config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
-        issues, digest = await self._storage.validate_path(config_path)
-        if issues:
-            logger.warning(
-                "config.activate.validation_failed",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    issue_count=len(issues),
-                ),
-            )
-            raise ConfigValidationFailedError(issues)
-
-        if configuration.status not in {
-            ConfigurationStatus.DRAFT,
-            ConfigurationStatus.PUBLISHED,
-            ConfigurationStatus.INACTIVE,
-        }:
-            logger.warning(
-                "config.activate.state_invalid",
-                extra=log_context(
-                    workspace_id=workspace_id,
-                    configuration_id=configuration_id,
-                    current_status=configuration.status.value,
-                ),
-            )
-            raise ConfigStateError("Configuration is not activatable")
-
-        await self._demote_active(workspace_id=workspace_id, exclude=configuration_id)
-
-        configuration.status = ConfigurationStatus.ACTIVE
-        configuration.content_digest = digest
-        configuration.activated_at = utc_now()
-        await self._session.flush()
-        await self._session.refresh(configuration)
-
-        logger.info(
-            "config.activate.success",
-            extra=log_context(
-                workspace_id=workspace_id,
-                configuration_id=configuration_id,
-                status=configuration.status.value,
-            ),
-        )
-        return configuration
-
-    async def publish_configuration(
-        self,
-        *,
-        workspace_id: str,
-        configuration_id: str,
-    ) -> Configuration:
-        logger.debug(
-            "config.publish.start",
+            "config.make_active.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
         configuration = await self._require_configuration(
@@ -371,20 +313,20 @@ class ConfigurationsService:
 
         if configuration.status is not ConfigurationStatus.DRAFT:
             logger.warning(
-                "config.publish.state_invalid",
+                "config.make_active.state_invalid",
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
                     current_status=configuration.status.value,
                 ),
             )
-            raise ConfigStateError("Configuration must be a draft before publishing")
+            raise ConfigStateError("Configuration must be a draft before making it active")
 
         config_path = await self._storage.ensure_config_path(workspace_id, configuration_id)
         issues, digest = await self._storage.validate_path(config_path)
         if issues:
             logger.warning(
-                "config.publish.validation_failed",
+                "config.make_active.validation_failed",
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
@@ -393,13 +335,26 @@ class ConfigurationsService:
             )
             raise ConfigValidationFailedError(issues)
 
-        configuration.status = ConfigurationStatus.PUBLISHED
+        await self._archive_active(workspace_id=workspace_id, exclude=configuration_id)
+
+        configuration.status = ConfigurationStatus.ACTIVE
         configuration.content_digest = digest
-        await self._session.flush()
+        configuration.activated_at = utc_now()
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            logger.warning(
+                "config.make_active.conflict",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                ),
+            )
+            raise ConfigStateError("active_configuration_conflict") from exc
         await self._session.refresh(configuration)
 
         logger.info(
-            "config.publish.success",
+            "config.make_active.success",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
@@ -408,23 +363,24 @@ class ConfigurationsService:
         )
         return configuration
 
-    async def deactivate_configuration(
+    async def archive_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         logger.debug(
-            "config.deactivate.start",
+            "config.archive.start",
             extra=log_context(workspace_id=workspace_id, configuration_id=configuration_id),
         )
         configuration = await self._require_configuration(
             workspace_id=workspace_id,
             configuration_id=configuration_id,
         )
-        if configuration.status == ConfigurationStatus.INACTIVE:
+
+        if configuration.status is ConfigurationStatus.ARCHIVED:
             logger.info(
-                "config.deactivate.noop",
+                "config.archive.noop",
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
@@ -433,12 +389,23 @@ class ConfigurationsService:
             )
             return configuration
 
-        configuration.status = ConfigurationStatus.INACTIVE
+        if configuration.status is not ConfigurationStatus.ACTIVE:
+            logger.warning(
+                "config.archive.state_invalid",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration_id,
+                    current_status=configuration.status.value,
+                ),
+            )
+            raise ConfigStateError("Only the active configuration can be archived")
+
+        configuration.status = ConfigurationStatus.ARCHIVED
         await self._session.flush()
         await self._session.refresh(configuration)
 
         logger.info(
-            "config.deactivate.success",
+            "config.archive.success",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
@@ -450,8 +417,8 @@ class ConfigurationsService:
     async def replace_configuration_from_archive(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         archive: bytes,
         if_match: str | None,
     ) -> Configuration:
@@ -497,8 +464,8 @@ class ConfigurationsService:
     async def list_files(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         prefix: str,
         depth: str,
         include: list[str] | None,
@@ -599,8 +566,8 @@ class ConfigurationsService:
     async def read_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         include_content: bool = True,
     ) -> dict:
@@ -641,8 +608,8 @@ class ConfigurationsService:
     async def write_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         content: bytes,
         parents: bool,
@@ -712,8 +679,8 @@ class ConfigurationsService:
     async def delete_file(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         if_match: str | None,
     ) -> None:
@@ -752,8 +719,8 @@ class ConfigurationsService:
     async def create_directory(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
     ) -> tuple[Path, bool]:
         configuration = await self._require_configuration(
@@ -787,7 +754,7 @@ class ConfigurationsService:
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
                 path=relative_path,
-                created=created,
+                directory_created=created,
             ),
         )
         return dir_path, created
@@ -795,8 +762,8 @@ class ConfigurationsService:
     async def delete_directory(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         relative_path: str,
         recursive: bool,
     ) -> None:
@@ -852,8 +819,8 @@ class ConfigurationsService:
     async def rename_entry(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         source_path: str,
         dest_path: str,
         overwrite: bool,
@@ -993,8 +960,8 @@ class ConfigurationsService:
     async def export_zip(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> bytes:
         logger.debug(
             "config.export_zip.start",
@@ -1016,8 +983,8 @@ class ConfigurationsService:
     async def _materialize_source(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
         source: ConfigSource,
     ) -> None:
         if isinstance(source, ConfigSourceTemplate):
@@ -1026,13 +993,11 @@ class ConfigurationsService:
                 extra=log_context(
                     workspace_id=workspace_id,
                     configuration_id=configuration_id,
-                    template_id=source.template_id,
                 ),
             )
             await self._storage.materialize_from_template(
                 workspace_id=workspace_id,
                 configuration_id=configuration_id,
-                template_id=source.template_id,
             )
             return
 
@@ -1062,19 +1027,19 @@ class ConfigurationsService:
         )
         raise ConfigSourceNotFoundError("Unsupported source reference")
 
-    async def _demote_active(self, workspace_id: str, exclude: str) -> None:
+    async def _archive_active(self, workspace_id: UUID, exclude: UUID) -> None:
         existing = await self._repo.get_active(workspace_id)
         if existing is None or existing.id == exclude:
             return
         logger.debug(
-            "config.demote_active",
+            "config.archive_active",
             extra=log_context(
                 workspace_id=workspace_id,
                 configuration_id=existing.id,
-                new_status=ConfigurationStatus.INACTIVE.value,
+                new_status=ConfigurationStatus.ARCHIVED.value,
             ),
         )
-        existing.status = ConfigurationStatus.INACTIVE
+        existing.status = ConfigurationStatus.ARCHIVED
         await self._session.flush()
 
     async def _current_fileset_hash(self, config_path: Path) -> str:
@@ -1084,8 +1049,8 @@ class ConfigurationsService:
     async def _require_configuration(
         self,
         *,
-        workspace_id: str,
-        configuration_id: str,
+        workspace_id: UUID,
+        configuration_id: UUID,
     ) -> Configuration:
         configuration = await self._repo.get(
             workspace_id=workspace_id,

@@ -23,7 +23,7 @@ Future versions will follow the same resource model. When breaking changes are r
   session context. Browser callers also receive `httponly` cookies; API/CLI callers use the `Authorization: Bearer <token>`
   header.
 - **API keys**: Issue long-lived credentials via `/api/v1/me/api-keys` for self-service or `/api/v1/users/{user_id}/api-keys`
-  for admins. Submit them via `X-API-Key` (or the bearer header for compatibility).
+  for admins. Submit them via `X-API-Key` (or `Authorization: Bearer <token>`).
 - **Permissions**: Every route enforces RBAC. Global permissions (for example `users.read_all`) apply across the tenant; workspace
   permissions (for example `workspace.documents.manage`) apply to the workspace ID in the URL path.
 - **CSRF**: Not enforced yet. The dependency is wired for future use but currently no-ops.
@@ -55,26 +55,25 @@ will receive `403 Forbidden`.
 Upload source files for extraction. All document routes are nested under the workspace path segment.
 
 - `GET /workspaces/{workspace_id}/documents` – list documents with pagination, sorting, and filters.
-- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration).
+- `POST /workspaces/{workspace_id}/documents` – multipart upload endpoint (accepts optional metadata JSON and expiration); uploads store bytes + metadata only (worksheet inspection is on-demand).
 - `GET /workspaces/{workspace_id}/documents/{document_id}` – fetch metadata, including upload timestamps and submitter.
 - `GET /workspaces/{workspace_id}/documents/{document_id}/download` – download the stored file with a safe `Content-Disposition` header.
-- `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads (falls back to a single-sheet descriptor for other file types).
+- `GET /workspaces/{workspace_id}/documents/{document_id}/sheets` – enumerate worksheets for spreadsheet uploads by inspecting the stored file (falls back to a single-sheet descriptor for other file types; returns `422` when parsing fails).
 - `DELETE /workspaces/{workspace_id}/documents/{document_id}` – remove a document, if permitted.
 
 ### Runs
 
 Trigger and monitor extraction runs. Creation is configuration-scoped; reads are global by run ID.
 
-- `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; supports inline streaming or background execution depending on `stream`.
+- `POST /configurations/{configuration_id}/runs` – submit a run for the given configuration; requires `input_document_id` and supports inline streaming or background execution depending on `stream` (returns `429` with `run_queue_full` when the queue is full).
+- `POST /configurations/{configuration_id}/runs/batch` – enqueue runs for multiple documents in one request (all-or-nothing; no sheet selection; returns `429` with `run_queue_full` when the full batch does not fit).
 - `GET /workspaces/{workspace_id}/runs` – list recent runs for a workspace, filterable by status or source document.
 - `GET /runs/{run_id}` – retrieve run metadata (status, timing, config/build references, input/output hints).
 - `GET /runs/{run_id}/events` – fetch or stream structured events (use `?stream=true` for SSE/NDJSON).
-- `GET /runs/{run_id}/summary` – retrieve the run summary payload when available.
 - `GET /runs/{run_id}/input` – fetch input metadata; `GET /runs/{run_id}/input/download` downloads the original file.
 - `GET /runs/{run_id}/output` – fetch output metadata (`ready`, size, content type, download URL).
 - `GET /runs/{run_id}/output/download` – download the normalized output; returns `409` when not ready.
-- `GET /runs/{run_id}/events/download` – download the NDJSON event log (legacy `/runs/{run_id}/logs` remains as an alias).
-- Legacy: `/runs/{run_id}/outputs*` endpoints are deprecated and alias the singular output file.
+- `GET /runs/{run_id}/events/download` – download the NDJSON event log.
 
 ### Configurations
 
@@ -84,9 +83,8 @@ Author and manage ADE configuration packages. All routes are workspace-scoped.
 - `POST /workspaces/{workspace_id}/configurations` – create from a bundled template or clone an existing config.
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}` – fetch configuration metadata.
 - `POST /workspaces/{workspace_id}/configurations/{configuration_id}/validate` – validate the working tree and return issues/content digest.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/activate` – mark as the active configuration for the workspace.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/publish` – freeze the draft into a published version.
-- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/deactivate` – mark the configuration inactive.
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/publish` – make the draft active (archives any previous active configuration).
+- `POST /workspaces/{workspace_id}/configurations/{configuration_id}/archive` – archive the active configuration.
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}/export` – download a ZIP of the editable tree.
 
 **File editor surface**
@@ -107,7 +105,7 @@ Provision isolated virtual environments for configurations. Builds are configura
 - `GET /workspaces/{workspace_id}/configurations/{configuration_id}/builds` – list build history for a configuration (filters: `status`, pagination, optional totals).
 - `GET /builds/{build_id}` – fetch a build snapshot (status, timestamps, exit code, engine/python metadata).
 
-> Build console output is emitted as `AdeEvent` envelopes; attach to `/runs/{run_id}/events?stream=true` after submitting a run or use streaming build creation (`stream: true`) to receive events inline.
+> Build console output is emitted as `EventRecord` entries (`console.line` with `data.scope="build"`) in the same stream used for run events. Attach to `/runs/{run_id}/events/stream` after submitting a run or use streaming build creation (`stream: true`) to receive the same EventRecords inline.
 
 ## Error handling
 
@@ -124,7 +122,7 @@ If you need near real-time updates, register a webhook endpoint with the ADE tea
 
 ## SDKs and client libraries
 
-Official client libraries are on the roadmap. Until they ship, use your preferred HTTP client. The API uses predictable JSON schemas, making it easy to generate typed clients with tools such as OpenAPI Generator once the schema is published.
+Official client libraries are on the roadmap. Until they ship, use your preferred HTTP client. The API uses predictable JSON schemas, making it easy to generate typed clients with tools such as OpenAPI Generator once the schema is formally versioned.
 
 ## Sandbox environment
 

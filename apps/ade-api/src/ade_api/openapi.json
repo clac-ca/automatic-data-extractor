@@ -578,6 +578,24 @@
         ],
         "summary": "Create an API key for the current user",
         "operationId": "create_my_api_key_api_v1_me_api_keys_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -645,6 +663,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Api Key Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -804,6 +838,24 @@
         ],
         "summary": "Create an API key for a user (admin)",
         "operationId": "create_api_key_api_v1_api_keys_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -935,6 +987,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Api Key Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -1095,6 +1163,22 @@
               "format": "uuid",
               "title": "User Id"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -1177,6 +1261,22 @@
               "type": "string",
               "format": "uuid",
               "title": "Api Key Id"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -1444,6 +1544,22 @@
               "title": "User Id"
             },
             "description": "User identifier."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -1513,6 +1629,22 @@
               "title": "User Id"
             },
             "description": "User identifier."
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -1740,6 +1872,24 @@
         ],
         "summary": "Create a role",
         "operationId": "create_role_api_v1_rbac_roles_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1858,6 +2008,22 @@
               "title": "Role Id"
             },
             "description": "Role identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -1922,6 +2088,22 @@
               "title": "Role Id"
             },
             "description": "Role identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -2196,6 +2378,22 @@
               "title": "Role Id"
             },
             "description": "Role identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -2262,6 +2460,22 @@
               "title": "Role Id"
             },
             "description": "Role identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -2519,6 +2733,24 @@
         ],
         "summary": "Create a new workspace",
         "operationId": "create_workspace_api_v1_workspaces_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -2664,7 +2896,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -2727,11 +2959,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -2796,11 +3044,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -2854,11 +3118,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -2909,7 +3189,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -2922,7 +3202,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "uuid"
                 },
                 {
                   "type": "null"
@@ -3026,11 +3307,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -3092,7 +3389,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3104,11 +3401,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "User identifier",
               "title": "User Id"
             },
             "description": "User identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -3168,7 +3481,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3180,11 +3493,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "User identifier",
               "title": "User Id"
             },
             "description": "User identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -3229,11 +3558,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -3305,7 +3650,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3345,6 +3690,244 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "tag_mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "any",
+                    "all"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag Mode"
+            }
+          },
+          {
+            "name": "tags_empty",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tags Empty"
+            }
+          },
+          {
+            "name": "uploader",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Uploader"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder Id"
+            }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "updated_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated After"
+            }
+          },
+          {
+            "name": "updated_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated Before"
+            }
+          },
+          {
+            "name": "last_run_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Run From"
+            }
+          },
+          {
+            "name": "last_run_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Run To"
+            }
+          },
+          {
+            "name": "byte_size_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Byte Size From"
+            }
+          },
+          {
+            "name": "byte_size_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Byte Size To"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -3363,6 +3946,15 @@
             "description": "CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3407,6 +3999,280 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags": {
+      "put": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Replace document tags",
+        "operationId": "replace_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentTagsReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update document tags",
+        "operationId": "patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentTagsPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update tags on multiple documents",
+        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
       "get": {
         "tags": [
@@ -3421,7 +4287,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3433,7 +4299,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Document identifier",
               "title": "Document Id"
             },
@@ -3496,7 +4362,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3508,11 +4374,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Document identifier",
               "title": "Document Id"
             },
             "description": "Document identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -3566,7 +4448,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3578,7 +4460,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Document identifier",
               "title": "Document Id"
             },
@@ -3641,7 +4523,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3653,7 +4535,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Document identifier",
               "title": "Document Id"
             },
@@ -3695,6 +4577,217 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/delete": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Soft delete multiple documents",
+        "operationId": "delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to delete documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document deletion."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tags": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List document tags",
+        "operationId": "list_document_tags_api_v1_workspaces__workspace_id__tags_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Search tags (min length 2).",
+              "title": "Q"
+            },
+            "description": "Search tags (min length 2)."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "name",
+                "-count"
+              ],
+              "type": "string",
+              "default": "name",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "include_total",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Total"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagCatalogPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to list tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow tag access."
+          },
+          "422": {
+            "description": "Tag search parameters are invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/configurations": {
       "get": {
         "tags": [
@@ -3709,7 +4802,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3796,11 +4889,27 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
             "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -3863,7 +4972,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3875,13 +4984,529 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
             "description": "Configuration identifier"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/import": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Create a configuration from an uploaded archive",
+        "operationId": "import_configuration_api_v1_workspaces__workspace_id__configurations_import_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Validate the configuration on disk",
+        "operationId": "validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationValidateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Make a draft configuration active",
+        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "null",
+                "description": "Make the configuration active (archives any existing active configuration).",
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive": {
+      "post": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Archive the active configuration",
+        "operationId": "archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export": {
+      "get": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Export Config",
+        "operationId": "export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "zip",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/zip": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import": {
+      "put": {
+        "tags": [
+          "configurations"
+        ],
+        "summary": "Replace a draft configuration from an uploaded archive",
+        "operationId": "replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3931,7 +5556,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -3943,7 +5568,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4106,140 +5731,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/import": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Create a configuration from an uploaded archive",
-        "operationId": "import_configuration_api_v1_workspaces__workspace_id__configurations_import_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Validate the configuration on disk",
-        "operationId": "validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationValidateResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
       "get": {
         "tags": [
@@ -4254,7 +5745,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4266,7 +5757,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4353,7 +5844,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4365,7 +5856,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4426,7 +5917,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4438,7 +5929,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4461,6 +5952,22 @@
               "type": "boolean",
               "default": false,
               "title": "Parents"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -4521,7 +6028,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4533,7 +6040,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4546,6 +6053,22 @@
             "schema": {
               "type": "string",
               "title": "File Path"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -4589,7 +6112,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -4601,7 +6124,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -4614,6 +6137,22 @@
             "schema": {
               "type": "string",
               "title": "File Path"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -4662,389 +6201,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Activate a configuration",
-        "operationId": "activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfigurationActivateRequest",
-                "description": "Activation options.",
-                "default": {
-                  "ensure_build": false
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Publish a configuration draft",
-        "operationId": "publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "null",
-                "description": "Publish the current draft into a frozen version without activating it.",
-                "title": "Payload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
-      "post": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Deactivate a configuration (was 'archive')",
-        "operationId": "deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export": {
-      "get": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Export Config",
-        "operationId": "export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          },
-          {
-            "name": "format",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "zip",
-              "title": "Format"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              },
-              "application/zip": {}
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/import": {
-      "put": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "Replace a draft configuration from an uploaded archive",
-        "operationId": "replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "configuration_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Configuration identifier",
-              "title": "Configuration Id"
-            },
-            "description": "Configuration identifier"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationRecord"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
       "put": {
         "tags": [
@@ -5059,7 +6215,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -5071,7 +6227,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5084,6 +6240,22 @@
             "schema": {
               "type": "string",
               "title": "Directory Path"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
             }
           }
         ],
@@ -5144,7 +6316,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Workspace identifier",
               "title": "Workspace Id"
             },
@@ -5156,7 +6328,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 1,
+              "format": "uuid",
               "description": "Configuration identifier",
               "title": "Configuration Id"
             },
@@ -5180,6 +6352,22 @@
               "default": false,
               "title": "Recursive"
             }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "responses": {
@@ -5192,42 +6380,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/config-templates": {
-      "get": {
-        "tags": [
-          "configurations"
-        ],
-        "summary": "List configuration templates",
-        "operationId": "list_config_templates_api_v1_config_templates_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ConfigTemplate"
-                  },
-                  "type": "array",
-                  "title": "Response List Config Templates Api V1 Config Templates Get"
                 }
               }
             }
@@ -5423,6 +6575,22 @@
               "title": "Configuration Id"
             },
             "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -5716,6 +6884,22 @@
               "title": "Configuration Id"
             },
             "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
           }
         ],
         "requestBody": {
@@ -5815,22 +6999,21 @@
             }
           },
           {
-            "name": "status",
+            "name": "q",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunStatus"
-                  }
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Q"
             }
           },
           {
@@ -5850,8 +7033,85 @@
               ],
               "title": "Input Document Id"
             }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name",
+              "title": "Sort"
+            },
+            "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5887,7 +7147,171 @@
         ]
       }
     },
+    "/api/v1/configurations/{configuration_id}/runs/batch": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Runs Batch Endpoint",
+        "description": "Create multiple runs for ``configuration_id`` and enqueue execution.",
+        "operationId": "create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post",
+        "parameters": [
+          {
+            "name": "configuration_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Configuration identifier",
+              "title": "Configuration Id"
+            },
+            "description": "Configuration identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunBatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunBatchCreateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/runs": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Workspace Run Endpoint",
+        "description": "Create a run for ``workspace_id`` and enqueue execution.",
+        "operationId": "create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunWorkspaceCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
       "get": {
         "tags": [
           "runs"
@@ -5941,22 +7365,21 @@
             }
           },
           {
-            "name": "status",
+            "name": "q",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunStatus"
-                  }
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 128
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Status"
+              "title": "Q"
             }
           },
           {
@@ -5976,8 +7399,85 @@
               ],
               "title": "Input Document Id"
             }
+          },
+          {
+            "name": "created_after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created After"
+            }
+          },
+          {
+            "name": "created_before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created Before"
+            }
+          },
+          {
+            "name": "has_output",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Output"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name",
+              "title": "Sort"
+            },
+            "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5985,6 +7485,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/runs/batch": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Create Workspace Runs Batch Endpoint",
+        "description": "Create multiple runs for ``workspace_id`` and enqueue execution.",
+        "operationId": "create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunWorkspaceBatchCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunBatchCreateResponse"
                 }
               }
             }
@@ -6041,6 +7624,270 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RunResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/metrics": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run Metrics Endpoint",
+        "operationId": "get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunMetricsResource"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/fields": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Fields Endpoint",
+        "operationId": "list_run_fields_endpoint_api_v1_runs__run_id__fields_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunFieldResource"
+                  },
+                  "title": "Response List Run Fields Endpoint Api V1 Runs  Run Id  Fields Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/columns": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Run Columns Endpoint",
+        "operationId": "list_run_columns_endpoint_api_v1_runs__run_id__columns_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Run identifier",
+              "title": "Run Id"
+            },
+            "description": "Run identifier"
+          },
+          {
+            "name": "sheet_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet Name"
+            }
+          },
+          {
+            "name": "sheet_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sheet Index"
+            }
+          },
+          {
+            "name": "table_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Table Index"
+            }
+          },
+          {
+            "name": "mapped_field",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mapped Field"
+            }
+          },
+          {
+            "name": "mapping_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "mapped",
+                    "ambiguous",
+                    "unmapped",
+                    "passthrough"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mapping Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunColumnResource"
+                  },
+                  "title": "Response List Run Columns Endpoint Api V1 Runs  Run Id  Columns Get"
                 }
               }
             }
@@ -6154,65 +8001,6 @@
                 "schema": {}
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/runs/{run_id}/summary": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Run Summary Endpoint",
-        "operationId": "get_run_summary_endpoint_api_v1_runs__run_id__summary_get",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunSummary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Run summary not found"
           },
           "422": {
             "description": "Validation Error",
@@ -6460,59 +8248,6 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/logs": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Download Run Logs File Endpoint",
-        "operationId": "download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "404": {
-            "description": "Logs unavailable"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/runs/{run_id}/output": {
       "get": {
         "tags": [
@@ -6627,128 +8362,6 @@
         ]
       }
     },
-    "/api/v1/runs/{run_id}/outputs": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "List Run Outputs Legacy",
-        "operationId": "list_run_outputs_legacy_api_v1_runs__run_id__outputs_get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunOutputFile"
-                  },
-                  "title": "Response List Run Outputs Legacy Api V1 Runs  Run Id  Outputs Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Download Run Output Legacy Endpoint",
-        "operationId": "download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Run identifier",
-              "title": "Run Id"
-            },
-            "description": "Run identifier"
-          },
-          {
-            "name": "output_path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Legacy output path",
-              "title": "Output Path"
-            },
-            "description": "Legacy output path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/system/safe-mode": {
       "get": {
         "tags": [
@@ -6788,15 +8401,33 @@
         "summary": "Toggle ADE safe mode",
         "description": "Persist and broadcast an updated ADE safe mode state.",
         "operationId": "update_safe_mode_api_v1_system_safe_mode_put",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SafeModeUpdateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
@@ -6829,108 +8460,6 @@
   },
   "components": {
     "schemas": {
-      "AdeEventV1": {
-        "properties": {
-          "schema_id": {
-            "type": "string",
-            "const": "ade.events.v1",
-            "title": "Schema Id",
-            "default": "ade.events.v1"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type"
-          },
-          "event_id": {
-            "type": "string",
-            "title": "Event Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "api",
-              "engine"
-            ],
-            "title": "Source"
-          },
-          "workspace_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Workspace Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "configuration_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Configuration Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
-          },
-          "run_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Id"
-          },
-          "build_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
-          },
-          "origin_event_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin Event Id"
-          },
-          "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "type",
-          "event_id",
-          "sequence",
-          "created_at",
-          "source",
-          "workspace_id",
-          "configuration_id"
-        ],
-        "title": "AdeEventV1",
-        "description": "API-owned canonical ADE event envelope."
-      },
       "ApiKeyCreateRequest": {
         "properties": {
           "label": {
@@ -7528,6 +9057,224 @@
         ],
         "title": "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
       },
+      "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
+      },
+      "Body_list_documents_api_v1_workspaces__workspace_id__documents_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Status"
+          },
+          "source_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/DocumentSource"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source In"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "tags_not": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags Not"
+          },
+          "uploader_id": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Id"
+          },
+          "uploader_email": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Email"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
+      },
+      "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "file_type": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "xlsx",
+                    "xls",
+                    "csv",
+                    "pdf"
+                  ]
+                },
+                "type": "array",
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Type"
+          }
+        },
+        "type": "object",
+        "title": "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
+      },
       "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put": {
         "properties": {
           "file": {
@@ -7613,7 +9360,8 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEventV1"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "array",
             "title": "Items"
@@ -7832,90 +9580,6 @@
         "title": "BuildStatus",
         "description": "Lifecycle states for API-facing build resources."
       },
-      "ColumnCounts": {
-        "properties": {
-          "physical_total": {
-            "type": "integer",
-            "title": "Physical Total",
-            "default": 0
-          },
-          "physical_empty": {
-            "type": "integer",
-            "title": "Physical Empty",
-            "default": 0
-          },
-          "physical_non_empty": {
-            "type": "integer",
-            "title": "Physical Non Empty",
-            "default": 0
-          },
-          "distinct_headers": {
-            "type": "integer",
-            "title": "Distinct Headers",
-            "default": 0
-          },
-          "distinct_headers_mapped": {
-            "type": "integer",
-            "title": "Distinct Headers Mapped",
-            "default": 0
-          },
-          "distinct_headers_unmapped": {
-            "type": "integer",
-            "title": "Distinct Headers Unmapped",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ColumnCounts",
-        "description": "Column-level counts."
-      },
-      "ColumnSummaryDistinct": {
-        "properties": {
-          "header": {
-            "type": "string",
-            "title": "Header"
-          },
-          "header_normalized": {
-            "type": "string",
-            "title": "Header Normalized"
-          },
-          "occurrences": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Occurrences"
-          },
-          "mapped": {
-            "type": "boolean",
-            "title": "Mapped",
-            "default": false
-          },
-          "mapped_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Mapped Fields"
-          },
-          "mapped_fields_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Mapped Fields Counts"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "header",
-          "header_normalized"
-        ],
-        "title": "ColumnSummaryDistinct",
-        "description": "Distinct header summary for aggregate scopes."
-      },
       "ConfigSourceClone": {
         "properties": {
           "type": {
@@ -7945,64 +9609,15 @@
             "type": "string",
             "const": "template",
             "title": "Type"
-          },
-          "template_id": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Template Id"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "type",
-          "template_id"
+          "type"
         ],
         "title": "ConfigSourceTemplate",
-        "description": "Reference to a bundled template."
-      },
-      "ConfigTemplate": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "ConfigTemplate",
-        "description": "Metadata for an available configuration template."
+        "description": "Request to scaffold a config from the engine's built-in template."
       },
       "ConfigValidationIssue": {
         "properties": {
@@ -8023,19 +9638,6 @@
         ],
         "title": "ConfigValidationIssue",
         "description": "Description of a validation issue found on disk."
-      },
-      "ConfigurationActivateRequest": {
-        "properties": {
-          "ensure_build": {
-            "type": "boolean",
-            "title": "Ensure Build",
-            "default": false
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ConfigurationActivateRequest",
-        "description": "Activation control flags."
       },
       "ConfigurationCreate": {
         "properties": {
@@ -8194,9 +9796,8 @@
         "type": "string",
         "enum": [
           "draft",
-          "published",
           "active",
-          "inactive"
+          "archived"
         ],
         "title": "ConfigurationStatus",
         "description": "Lifecycle states for workspace configuration packages."
@@ -8248,65 +9849,6 @@
         "title": "ConfigurationValidateResponse",
         "description": "Result of running validation."
       },
-      "Counts": {
-        "properties": {
-          "files": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Files"
-          },
-          "sheets": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sheets"
-          },
-          "tables": {
-            "anyOf": [
-              {
-                "additionalProperties": {
-                  "type": "integer"
-                },
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tables"
-          },
-          "rows": {
-            "$ref": "#/components/schemas/RowCounts"
-          },
-          "columns": {
-            "$ref": "#/components/schemas/ColumnCounts"
-          },
-          "fields": {
-            "$ref": "#/components/schemas/FieldCounts"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "Counts",
-        "description": "Aggregate counts for a summary scope."
-      },
       "DirectoryWriteResponse": {
         "properties": {
           "path": {
@@ -8326,21 +9868,119 @@
         ],
         "title": "DirectoryWriteResponse"
       },
-      "DocumentLastRun": {
+      "DocumentBatchDeleteRequest": {
         "properties": {
-          "run_id": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to delete (soft delete, all-or-nothing)."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "DocumentBatchDeleteRequest",
+        "description": "Payload for soft-deleting multiple documents."
+      },
+      "DocumentBatchDeleteResponse": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "title": "Document Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchDeleteResponse",
+        "description": "Response envelope for batch deletions."
+      },
+      "DocumentBatchTagsRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to update tags for (all-or-nothing)."
+          },
+          "add": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Add",
+            "description": "Tags to add to each document."
+          },
+          "remove": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove",
+            "description": "Tags to remove from each document."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "DocumentBatchTagsRequest",
+        "description": "Payload for updating tags on multiple documents."
+      },
+      "DocumentBatchTagsResponse": {
+        "properties": {
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentBatchTagsResponse",
+        "description": "Response envelope for batch tag updates."
+      },
+      "DocumentLastRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
             "title": "Run Id",
-            "description": "Latest run identifier when the execution was streamed directly."
+            "description": "Latest run identifier for the execution."
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -8374,6 +10014,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "run_id",
           "status"
         ],
         "title": "DocumentLastRun",
@@ -8505,6 +10146,17 @@
               }
             ],
             "description": "Latest run execution associated with the document when available."
+          },
+          "last_successful_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest successful run execution associated with the document when available."
           }
         },
         "additionalProperties": false,
@@ -8627,6 +10279,63 @@
         "title": "DocumentStatus",
         "description": "Canonical document processing states."
       },
+      "DocumentTagsPatch": {
+        "properties": {
+          "add": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Add",
+            "description": "Tags to add to the document."
+          },
+          "remove": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove",
+            "description": "Tags to remove from the document."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentTagsPatch",
+        "description": "Payload for adding/removing tags on a document."
+      },
+      "DocumentTagsReplace": {
+        "properties": {
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Complete set of tags for the document."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "title": "DocumentTagsReplace",
+        "description": "Payload for replacing tags on a document."
+      },
       "EffectivePermissions": {
         "properties": {
           "global": {
@@ -8657,124 +10366,6 @@
         "type": "object",
         "title": "EffectivePermissions",
         "description": "Effective permission sets for the current principal."
-      },
-      "FieldCounts": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
-          },
-          "required": {
-            "type": "integer",
-            "title": "Required",
-            "default": 0
-          },
-          "mapped": {
-            "type": "integer",
-            "title": "Mapped",
-            "default": 0
-          },
-          "unmapped": {
-            "type": "integer",
-            "title": "Unmapped",
-            "default": 0
-          },
-          "required_mapped": {
-            "type": "integer",
-            "title": "Required Mapped",
-            "default": 0
-          },
-          "required_unmapped": {
-            "type": "integer",
-            "title": "Required Unmapped",
-            "default": 0
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "FieldCounts",
-        "description": "Canonical field counts."
-      },
-      "FieldSummaryAggregate": {
-        "properties": {
-          "field": {
-            "type": "string",
-            "title": "Field"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "required": {
-            "type": "boolean",
-            "title": "Required",
-            "default": false
-          },
-          "mapped": {
-            "type": "boolean",
-            "title": "Mapped",
-            "default": false
-          },
-          "max_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Score"
-          },
-          "tables_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tables Mapped"
-          },
-          "sheets_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sheets Mapped"
-          },
-          "files_mapped": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Files Mapped"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "field"
-        ],
-        "title": "FieldSummaryAggregate",
-        "description": "Field status at aggregate scopes (sheet/file/run)."
       },
       "FileCapabilities": {
         "properties": {
@@ -9904,28 +11495,221 @@
         "title": "RoleUpdate",
         "description": "Payload for updating an existing role."
       },
-      "RowCounts": {
+      "RunBatchCreateOptions": {
         "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
           },
-          "empty": {
-            "type": "integer",
-            "title": "Empty",
-            "default": 0
+          "validate_only": {
+            "type": "boolean",
+            "title": "Validate Only",
+            "default": false
           },
-          "non_empty": {
-            "type": "integer",
-            "title": "Non Empty",
-            "default": 0
+          "force_rebuild": {
+            "type": "boolean",
+            "title": "Force Rebuild",
+            "description": "If true, rebuild the configuration environment before running.",
+            "default": false
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Opaque metadata to propagate with run telemetry."
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "RowCounts",
-        "description": "Row-level counts."
+        "title": "RunBatchCreateOptions",
+        "description": "Execution toggles for batch ADE runs (per-document input)."
+      },
+      "RunBatchCreateRequest": {
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to enqueue as individual runs (all-or-nothing)."
+          },
+          "options": {
+            "$ref": "#/components/schemas/RunBatchCreateOptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_ids"
+        ],
+        "title": "RunBatchCreateRequest",
+        "description": "Payload accepted by the batch run creation endpoint."
+      },
+      "RunBatchCreateResponse": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunResource"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "RunBatchCreateResponse",
+        "description": "Response envelope for batch run creation."
+      },
+      "RunColumnResource": {
+        "properties": {
+          "workbook_index": {
+            "type": "integer",
+            "title": "Workbook Index"
+          },
+          "workbook_name": {
+            "type": "string",
+            "title": "Workbook Name"
+          },
+          "sheet_index": {
+            "type": "integer",
+            "title": "Sheet Index"
+          },
+          "sheet_name": {
+            "type": "string",
+            "title": "Sheet Name"
+          },
+          "table_index": {
+            "type": "integer",
+            "title": "Table Index"
+          },
+          "column_index": {
+            "type": "integer",
+            "title": "Column Index"
+          },
+          "header_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Raw"
+          },
+          "header_normalized": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Normalized"
+          },
+          "non_empty_cells": {
+            "type": "integer",
+            "title": "Non Empty Cells"
+          },
+          "mapping_status": {
+            "type": "string",
+            "title": "Mapping Status"
+          },
+          "mapped_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapped Field"
+          },
+          "mapping_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Score"
+          },
+          "mapping_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Method"
+          },
+          "unmapped_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "workbook_index",
+          "workbook_name",
+          "sheet_index",
+          "sheet_name",
+          "table_index",
+          "column_index",
+          "non_empty_cells",
+          "mapping_status"
+        ],
+        "title": "RunColumnResource",
+        "description": "Detected column details for a run table."
       },
       "RunCreateOptions": {
         "properties": {
@@ -9945,19 +11729,104 @@
             "description": "If true, rebuild the configuration environment before running.",
             "default": false
           },
-          "input_document_id": {
+          "log_level": {
             "anyOf": [
               {
                 "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
               },
               {
                 "type": "null"
               }
             ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine."
+          },
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Optional worksheet names to ingest when processing XLSX files."
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Opaque metadata to propagate with run telemetry."
+          },
+          "input_document_id": {
+            "type": "string",
+            "format": "uuid",
             "title": "Input Document Id",
             "description": "Document identifier to ingest."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_document_id"
+        ],
+        "title": "RunCreateOptions",
+        "description": "Execution toggles for a single ADE run."
+      },
+      "RunCreateOptionsBase": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "validate_only": {
+            "type": "boolean",
+            "title": "Validate Only",
+            "default": false
+          },
+          "force_rebuild": {
+            "type": "boolean",
+            "title": "Force Rebuild",
+            "description": "If true, rebuild the configuration environment before running.",
+            "default": false
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DEBUG",
+                  "INFO",
+                  "WARNING",
+                  "ERROR"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Level",
+            "description": "Engine log level passed as --log-level to ade_engine."
           },
           "input_sheet_names": {
             "anyOf": [
@@ -9992,7 +11861,7 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "title": "RunCreateOptions",
+        "title": "RunCreateOptionsBase",
         "description": "Optional execution toggles for ADE runs."
       },
       "RunCreateRequest": {
@@ -10010,7 +11879,8 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/AdeEventV1"
+              "additionalProperties": true,
+              "type": "object"
             },
             "type": "array",
             "title": "Items"
@@ -10034,6 +11904,58 @@
         ],
         "title": "RunEventsPage",
         "description": "Paginated ADE events for a run."
+      },
+      "RunFieldResource": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "mapped": {
+            "type": "boolean",
+            "title": "Mapped"
+          },
+          "best_mapping_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Mapping Score"
+          },
+          "occurrences_tables": {
+            "type": "integer",
+            "title": "Occurrences Tables"
+          },
+          "occurrences_columns": {
+            "type": "integer",
+            "title": "Occurrences Columns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "field",
+          "mapped",
+          "occurrences_tables",
+          "occurrences_columns"
+        ],
+        "title": "RunFieldResource",
+        "description": "Field-level mapping summary for a run."
       },
       "RunInput": {
         "properties": {
@@ -10142,10 +12064,6 @@
             "type": "string",
             "title": "Self"
           },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
           "events": {
             "type": "string",
             "title": "Events"
@@ -10187,7 +12105,6 @@
         "type": "object",
         "required": [
           "self",
-          "summary",
           "events",
           "events_stream",
           "events_download",
@@ -10200,6 +12117,289 @@
         ],
         "title": "RunLinks",
         "description": "Hypermedia links for run-related resources."
+      },
+      "RunMetricsResource": {
+        "properties": {
+          "evaluation_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Outcome"
+          },
+          "evaluation_findings_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Total"
+          },
+          "evaluation_findings_info": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Info"
+          },
+          "evaluation_findings_warning": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Warning"
+          },
+          "evaluation_findings_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Findings Error"
+          },
+          "validation_issues_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Total"
+          },
+          "validation_issues_info": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Info"
+          },
+          "validation_issues_warning": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Warning"
+          },
+          "validation_issues_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Issues Error"
+          },
+          "validation_max_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Max Severity"
+          },
+          "workbook_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workbook Count"
+          },
+          "sheet_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet Count"
+          },
+          "table_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Count"
+          },
+          "row_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count Total"
+          },
+          "row_count_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count Empty"
+          },
+          "column_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Total"
+          },
+          "column_count_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Empty"
+          },
+          "column_count_mapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Mapped"
+          },
+          "column_count_ambiguous": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Ambiguous"
+          },
+          "column_count_unmapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Unmapped"
+          },
+          "column_count_passthrough": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Count Passthrough"
+          },
+          "field_count_expected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Expected"
+          },
+          "field_count_mapped": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Mapped"
+          },
+          "cell_count_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Count Total"
+          },
+          "cell_count_non_empty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cell Count Non Empty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RunMetricsResource",
+        "description": "Aggregate run metrics derived from engine.run.completed."
       },
       "RunOutput": {
         "properties": {
@@ -10285,69 +12485,6 @@
         "title": "RunOutput",
         "description": "Output metadata captured for a run."
       },
-      "RunOutputFile": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Path"
-          },
-          "byte_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Byte Size"
-          },
-          "content_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Content Type"
-          },
-          "download_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Download Url"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "RunOutputFile",
-        "description": "Deprecated collection wrapper for legacy output listings."
-      },
       "RunPage": {
         "properties": {
           "items": {
@@ -10424,17 +12561,10 @@
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "build_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
+            "type": "string",
+            "format": "uuid",
+            "title": "Build Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -10616,6 +12746,7 @@
           "id",
           "workspace_id",
           "configuration_id",
+          "build_id",
           "status",
           "created_at",
           "links"
@@ -10627,7 +12758,6 @@
         "type": "string",
         "enum": [
           "queued",
-          "waiting_for_build",
           "running",
           "succeeded",
           "failed",
@@ -10636,74 +12766,78 @@
         "title": "RunStatus",
         "description": "Lifecycle states for ADE runs."
       },
-      "RunSummary": {
+      "RunWorkspaceBatchCreateRequest": {
         "properties": {
-          "schema_id": {
-            "type": "string",
-            "title": "Schema Id",
-            "default": "ade.summary"
-          },
-          "schema_version": {
-            "type": "string",
-            "title": "Schema Version",
-            "default": "1.0.0"
-          },
-          "scope": {
-            "type": "string",
-            "const": "run",
-            "title": "Scope",
-            "default": "run"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "parent_ids": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object",
-            "title": "Parent Ids"
-          },
-          "source": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Source"
-          },
-          "counts": {
-            "$ref": "#/components/schemas/Counts"
-          },
-          "fields": {
+          "document_ids": {
             "items": {
-              "$ref": "#/components/schemas/FieldSummaryAggregate"
+              "type": "string",
+              "format": "uuid",
+              "description": "UUIDv7 (RFC 9562) generated in the application layer."
             },
             "type": "array",
-            "title": "Fields"
+            "minItems": 1,
+            "title": "Document Ids",
+            "description": "Documents to enqueue as individual runs (all-or-nothing)."
           },
-          "columns": {
-            "items": {
-              "$ref": "#/components/schemas/ColumnSummaryDistinct"
-            },
-            "type": "array",
-            "title": "Columns"
+          "configuration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Id",
+            "description": "Optional configuration identifier (defaults to the active configuration)."
           },
-          "validation": {
-            "$ref": "#/components/schemas/ValidationSummary"
-          },
-          "details": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Details"
+          "options": {
+            "$ref": "#/components/schemas/RunBatchCreateOptions"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "id",
-          "counts"
+          "document_ids"
         ],
-        "title": "RunSummary",
-        "description": "Run-level summary aggregated across files within a run."
+        "title": "RunWorkspaceBatchCreateRequest",
+        "description": "Payload accepted by the workspace batch run creation endpoint."
+      },
+      "RunWorkspaceCreateRequest": {
+        "properties": {
+          "input_document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Input Document Id",
+            "description": "Document identifier to ingest."
+          },
+          "configuration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration Id",
+            "description": "Optional configuration identifier (defaults to the active configuration)."
+          },
+          "options": {
+            "$ref": "#/components/schemas/RunCreateOptionsBase"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_document_id"
+        ],
+        "title": "RunWorkspaceCreateRequest",
+        "description": "Payload accepted by the workspace run creation endpoint."
       },
       "SafeModeStatus": {
         "properties": {
@@ -10924,6 +13058,76 @@
         ],
         "title": "SessionTokens",
         "description": "Session token pair issued to a client."
+      },
+      "TagCatalogItem": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "document_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Document Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tag",
+          "document_count"
+        ],
+        "title": "TagCatalogItem",
+        "description": "Tag entry with document counts."
+      },
+      "TagCatalogPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagCatalogItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous"
+        ],
+        "title": "TagCatalogPage",
+        "description": "Paginated tag catalog."
       },
       "UploaderOut": {
         "properties": {
@@ -11207,56 +13411,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "ValidationSummary": {
-        "properties": {
-          "rows_evaluated": {
-            "type": "integer",
-            "title": "Rows Evaluated",
-            "default": 0
-          },
-          "issues_total": {
-            "type": "integer",
-            "title": "Issues Total",
-            "default": 0
-          },
-          "issues_by_severity": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Severity"
-          },
-          "issues_by_code": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Code"
-          },
-          "issues_by_field": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Issues By Field"
-          },
-          "max_severity": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Severity"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ValidationSummary",
-        "description": "Validation counts for a summary scope."
       },
       "VersionsResponse": {
         "properties": {

@@ -461,11 +461,9 @@ The backend uses `/runs` for all execution units. On the frontend, a Run is glob
 #### Canonical run detail & assets (global)
 
 - `GET  /api/v1/runs/{run_id}` – canonical run detail.
-- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON (legacy `/logs` alias).
+- `GET  /api/v1/runs/{run_id}/events` – poll/stream events; `GET /runs/{run_id}/events/download` downloads NDJSON.
 - `GET  /api/v1/runs/{run_id}/input` – input metadata; `GET /runs/{run_id}/input/download` downloads the source file.
 - `GET  /api/v1/runs/{run_id}/output` – output metadata; `GET /runs/{run_id}/output/download` downloads once ready (returns 409 if not).
-- Legacy outputs endpoints (`/runs/{run_id}/outputs*`) remain for compatibility and map to the singular output.
-
 #### Configuration-scoped triggers
 
 * `POST /api/v1/configurations/{configuration_id}/runs` – start a run for a configuration.
@@ -478,11 +476,10 @@ Workspace ledger:
 
 Run-centric:
 
-- `readRun(runId)`
-- `listRunOutputs(runId)`
-- `downloadRunOutput(runId, outputPath)`
-- `downloadRunArtifact(runId)`
-- `downloadRunLogFile(runId)`
+- `fetchRun(runId)`
+- `runInputUrl(run)`
+- `runOutputUrl(run)`
+- `runLogsUrl(run)`
 
 Configuration triggers:
 
@@ -515,10 +512,8 @@ Streaming:
 * `GET  /api/v1/workspaces/{workspace_id}/configurations`
 * `POST /api/v1/workspaces/{workspace_id}/configurations`
 * `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}`
-* `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/versions`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate`
-* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish`
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish` (make active)
+* `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive`
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/validate`
 * `GET  /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/export`
 
@@ -538,7 +533,7 @@ Directory creation is idempotent: `PUT` returns `201` when the folder is first c
 
 * `POST /api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/builds`
 * `GET  /api/v1/builds/{build_id}`
-* Build logs are observed via the run event stream (`/runs/{run_id}/events?stream=true`, `console.line` with `scope:"build"`).
+* Build logs are observed via the run event stream (`/runs/{run_id}/events/stream`, `console.line` with `data.scope:"build"`).
 
 The backend may rebuild environments automatically when:
 
@@ -554,10 +549,8 @@ Configurations:
 * `listConfigurations(workspaceId)`
 * `createConfiguration(workspaceId, payload)`
 * `readConfiguration(workspaceId, configurationId)`
-* `listConfigurationVersions(workspaceId, configurationId)`
-* `activateConfiguration(workspaceId, configurationId)`
-* `deactivateConfiguration(workspaceId, configurationId)`
-* `publishConfiguration(workspaceId, configurationId)`
+* `makeActiveConfiguration(workspaceId, configurationId)` // wraps `/publish`
+* `archiveConfiguration(workspaceId, configurationId)`    // wraps `/archive`
 * `validateConfiguration(workspaceId, configurationId, payload)`
 * `exportConfiguration(workspaceId, configurationId)`
 
@@ -581,7 +574,8 @@ Hooks:
 
 * `useConfigurationsQuery(workspaceId)`
 * `useConfigurationQuery(workspaceId, configurationId)`
-* `useConfigurationVersionsQuery(workspaceId, configurationId)`
+* `useMakeActiveConfigurationMutation(workspaceId)`
+* `useArchiveConfigurationMutation(workspaceId)`
 * `useConfigurationFilesQuery(workspaceId, configurationId)`
 * `useCreateBuildMutation(workspaceId, configurationId)` (triggers build; observe via run event stream)
 
@@ -668,26 +662,14 @@ They are typically used in:
 
 ### 5.2 Domain models (UI-facing)
 
-Domain models in `src/schema/` define shapes the UI actually consumes, e.g.:
+Domain models in `src/schema/` define the curated shapes the UI actually consumes, e.g.:
 
-* `WorkspaceSummary`, `WorkspaceDetail`
-* `DocumentSummary`, `DocumentDetail`
-* `RunSummary`, `RunDetail`
-* `Configuration`
+* `WorkspaceOut`, `DocumentOut`
+* `RunResource`, `RunStatus`
+* `ConfigurationOut`
 * `SafeModeStatus`, ...
 
-API modules handle mapping:
-
-```ts
-function toRunSummary(apiRun: ApiRun): RunSummary {
-  // ...
-}
-```
-
-Standard helpers in `schema/` keep snake_case out of the rest of the app:
-
-* `fromApiRun(apiRun: ApiRun): Run` – translates `run_id` → `runId`, normalises status/timestamps.
-* `fromApiConfiguration(apiConfig: ApiConfiguration): Configuration` – translates `configuration_id` → `configurationId`, etc.
+When mapping is required, helpers live alongside the domain types to keep snake_case out of the rest of the app.
 
 Benefits:
 
@@ -698,126 +680,59 @@ Benefits:
 
 ## 6. Streaming events (SSE + NDJSON archive)
 
-Run streams emit `AdeEvent` envelopes (live over SSE; persisted as NDJSON).
+The app supports **one-shot job streaming** for the workbench console, plus an NDJSON archive for post-run analysis.
 
-Treat these as **ordered event streams**, not snapshot queries.
+### 6.1 Workbench job stream (preferred)
 
-### 6.1 Event envelope
+The Configuration Builder uses a single SSE stream that covers the full job lifecycle (environment build + run):
 
-All events share a common envelope; only the tail `payload` varies per `type`:
+* `GET /api/v1/configurations/{configuration_id}/jobs/stream`
 
-```jsonc
-{
-  "type": "console.line",                // e.g. run.start, build.complete, console.line
-  "event_id": "evt_01JK3J0YRKJ...",
-  "created_at": "2025-11-26T12:00:00Z",
-  "sequence": 42,                        // monotonic within one run/build stream
+This stream is intentionally **live-only**:
 
-  "workspace_id": "ws_1",
-  "configuration_id": "cfg_1",
-  "build_id": "b_1",
-  "run_id": "run_1",
+* No replay.
+* No resume (`Last-Event-ID` is ignored / unsupported).
+* The UI keeps a bounded in-memory tail (e.g. last 2k lines) and relies on archived logs for full history.
 
-  "source": "api",
+### 6.2 SSE event types
 
-  "payload": {                           // type-specific payload
-    "scope": "run",
-    "stream": "stdout",
-    "message": "Installing engine…"
+The server uses **standard SSE `event:` dispatch** where each SSE message carries a single JSON
+`EventRecord` payload (the same envelope used by the engine’s NDJSON logs).
+
+* `event: job.meta` (JSON `EventRecord`) – emitted once at connect time
+
+  `data` contains stream-level context. These identifiers are **not repeated** on every event.
+
+  ```jsonc
+  {
+    "event": "job.meta",
+    "timestamp": "2025-12-15T19:45:05.637Z",
+    "level": "info",
+    "message": "connected",
+    "data": {
+      "jobId": "019b238b-8836-767d-a452-094a81a917eb",
+      "workspaceId": "019b2334-e5e8-75c5-b342-734630c9531a",
+      "configurationId": "019b2380-78bf-76ee-8b22-60ba3d86062c",
+      "buildId": "019b238b-884a-712e-982a-2765b9c147b2"
+    }
   }
-}
-```
+  ```
 
-Additive changes (new event types, optional fields) are allowed. Breaking changes require a new schema or major version.
+* `event: <event_name>` (JSON `EventRecord`) – all subsequent build/run/engine events
 
-### 6.2 Event taxonomy & frontend usage
+  Examples: `build.phase.start`, `console.line`, `engine.detector.column_result`, `run.complete`.
 
-Key families:
+  Each SSE message uses:
 
-* **Run lifecycle (`run.*`)**
+  * `id:` = the run stream `sequence` number (monotonic within the job)
+  * `event:` = the EventRecord `event` name
+  * `data:` = compact JSON `EventRecord`
 
-  * `run.queued`, `run.start`, `run.complete`
-  * Engine telemetry is forwarded: `engine.start`, `engine.phase.start` / `engine.phase.complete`, `engine.table.summary`, `engine.sheet.summary`, `engine.file.summary`, `engine.run.summary`, `engine.complete`
+  Completion is indicated by `event: run.complete` (final event).
 
-* **Table & validation**
+### 6.3 NDJSON archive
 
-  * `engine.table.summary` – per-table metrics
-  * `engine.validation.issue` – fine-grained issues (optional)
-  * `engine.validation.summary` – aggregated counts
-
-* **Console**
-
-  * `console.line` – ordered stdout/stderr lines; `payload.scope` distinguishes build vs run
-
-* **Build lifecycle (`build.*`)**
-
-  * `build.queued`, `build.start`, `build.complete`
-  * `build.phase.start` / `build.phase.complete`
-  * Environment reuse events also surface as `build.complete`
-
-* **Errors**
-
-  * Stream-level `error` events for transport-level failures.
-
-UI rules:
-
-* Use `sequence` for ordering when transport may deliver events slightly out of order.
-* Prefer the run event stream (`/runs/{id}/events?stream=true`) for live consoles; use archived NDJSON (`/runs/{id}/events/download`, legacy `/runs/{id}/logs`) for offline replay.
-* Derive progress and summaries incrementally from lifecycle + validation events instead of waiting solely on `run.complete`/`engine.run.summary`.
-
-### 6.3 Streaming helper
-
-The browser-native `EventSource` API is used for live run streams:
-
-```ts
-const es = new EventSource(`/api/v1/runs/${runId}/events?stream=true`);
-es.onmessage = (msg) => {
-  const event = JSON.parse(msg.data); // AdeEvent envelope with payload
-  // ...apply to reducer / UI
-};
-es.onerror = () => es.close();
-```
-
-Characteristics:
-
-* Close the stream on unmount or when the user hides the console.
-* Treat `run.complete` as terminal; callers can close the stream after it arrives (after receiving `engine.run.summary` if present).
-* For post-run analysis, `events.ndjson` is available via `/runs/{run_id}/events/download` (alias: `/runs/{run_id}/logs`).
-
-### 6.4 Run & build streams in practice
-
-Used by:
-
-* **Configuration Builder**
-
-  * `POST /api/v1/configurations/{configuration_id}/runs` then `GET /api/v1/runs/{run_id}/events?stream=true`
-    (emits `build.*`, `console.line` with `scope`, `run.*`, `run.table.*`, `run.validation.*`)
-
-* **Run consoles / details**
-
-  * `GET /api/v1/runs/{run_id}/events?stream=true`
-    (replay then live-stream `AdeEvent` envelopes; use `after_sequence` to resume)
-
-Because environments are usually rebuilt automatically when runs start (or when `force_rebuild` is set), the build stream is primarily for explicit `/builds` workflows and debugging. Normal workbench/test flows rely on the run stream.
-
-UI components (e.g. workbench console, run detail):
-
-* Append console lines from `console.line` events.
-* Update status/progress from lifecycle + validation events.
-
-### 6.5 Cancellation & error UX
-
-When using streaming helpers:
-
-* Always create an `AbortController` in the component.
-* Cancel the stream on unmount or when the user closes the console.
-
-On errors:
-
-* Show a console-local banner (“Stream disconnected”) rather than crashing the whole screen.
-* Optionally provide a “Retry stream” button.
-
-React Query is **not** used for NDJSON streams; they’re long-lived event flows, not snapshot fetches.
+For full-fidelity logs and offline inspection, the backend still persists NDJSON event logs and exposes them via the run download endpoints (e.g. `GET /api/v1/runs/{run_id}/events/download`).
 
 ---
 

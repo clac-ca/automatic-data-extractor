@@ -4,25 +4,20 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
 from ade_api.common.ids import UUIDStr
 from ade_api.common.pagination import Page
 from ade_api.common.schema import BaseSchema
-from ade_api.core.models import ConfigurationStatus
+from ade_api.models import ConfigurationStatus
 
 
 class ConfigSourceTemplate(BaseSchema):
-    """Reference to a bundled template."""
+    """Request to scaffold a config from the engine's built-in template."""
 
     type: Literal["template"]
-    template_id: str = Field(min_length=1, max_length=100)
-
-    @field_validator("template_id", mode="before")
-    @classmethod
-    def _clean_template_id(cls, value: str) -> str:
-        return value.strip()
 
 
 class ConfigSourceClone(BaseSchema):
@@ -33,8 +28,12 @@ class ConfigSourceClone(BaseSchema):
 
     @field_validator("configuration_id", mode="before")
     @classmethod
-    def _clean_configuration_id(cls, value: str) -> str:
-        return value.strip()
+    def _clean_configuration_id(cls, value: object) -> object:
+        if value is None:
+            return value
+        if isinstance(value, UUID):
+            return value
+        return str(value).strip()
 
 
 ConfigSource = Annotated[
@@ -87,12 +86,6 @@ class ConfigurationValidateResponse(BaseSchema):
     status: ConfigurationStatus
     content_digest: str | None = None
     issues: list[ConfigValidationIssue]
-
-
-class ConfigurationActivateRequest(BaseSchema):
-    """Activation control flags."""
-
-    ensure_build: bool = False
 
 
 class FileCapabilities(BaseSchema):
@@ -199,7 +192,6 @@ __all__ = [
     "ConfigValidationIssue",
     "ConfigurationPage",
     "ConfigurationCreate",
-    "ConfigurationActivateRequest",
     "ConfigurationRecord",
     "ConfigurationValidateResponse",
     "FileCapabilities",

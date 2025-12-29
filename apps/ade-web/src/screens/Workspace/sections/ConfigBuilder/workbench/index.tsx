@@ -2,8 +2,8 @@ import { useEffect } from "react";
 
 import { PageState } from "@ui/PageState";
 
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
-import { useWorkbenchWindow } from "@features/Workspace/context/WorkbenchWindowContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
+import { useWorkbenchWindow } from "@screens/Workspace/context/WorkbenchWindowContext";
 import { useConfigurationQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
 
 import { Workbench } from "./Workbench";
@@ -46,6 +46,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
       workspaceId: workspace.id,
       configId,
       configName: `${workspace.name} · ${resolvedName}`,
+      configDisplayName: resolvedName,
     });
   }, [configId, configQuery.data?.display_name, configQuery.isError, workspace.id, workspace.name, openSession]);
 
@@ -110,6 +111,7 @@ export default function ConfigEditorWorkbenchRoute({ params }: ConfigEditorWorkb
           workspaceId={workspace.id}
           configId={activeSession.configId}
           configName={activeSession.configName}
+          configDisplayName={configQuery.data.display_name ?? activeSession.configId}
           windowState="restored"
           onMinimizeWindow={minimizeWindow}
           onMaximizeWindow={maximizeWindow}

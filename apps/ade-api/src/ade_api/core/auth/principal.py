@@ -30,4 +30,3 @@ class AuthenticatedPrincipal:
     principal_type: PrincipalType
     auth_via: AuthVia
     api_key_id: UUID | None = None
-

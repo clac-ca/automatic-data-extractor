@@ -14,6 +14,7 @@ interface EditorPaneProps {
   readonly onContentChange: (tabId: string, value: string) => void;
   readonly onSaveTab?: (tabId: string) => void;
   readonly canSaveFiles?: boolean;
+  readonly readOnly?: boolean;
   readonly onRetryTabLoad?: (tabId: string) => void;
   readonly onSelectTab: (tabId: string) => void;
   readonly isTabDragging?: boolean;
@@ -26,6 +27,7 @@ export function EditorPane({
   onContentChange,
   onSaveTab,
   canSaveFiles = false,
+  readOnly = false,
   onRetryTabLoad,
   onSelectTab,
   isTabDragging = false,
@@ -34,7 +36,7 @@ export function EditorPane({
 
   if (!activeTab) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a file from the explorer to begin editing.
       </div>
     );
@@ -45,15 +47,15 @@ export function EditorPane({
       {tabs.map((tab) => (
         <TabsContent key={tab.id} value={tab.id} className="flex min-h-0 min-w-0 flex-1">
           {tab.status === "loading" ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               Loading {tab.name}…
             </div>
           ) : tab.status === "error" ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
               <p>{tab.error ?? "Unable to load the file."}</p>
               <button
                 type="button"
-                className="rounded bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-500"
+                className="rounded bg-brand-600 px-3 py-1 text-xs font-medium text-on-brand hover:bg-brand-500"
                 onClick={() => (onRetryTabLoad ? onRetryTabLoad(tab.id) : onSelectTab(tab.id))}
               >
                 Retry loading
@@ -71,6 +73,7 @@ export function EditorPane({
                 language={tab.language ?? "plaintext"}
                 path={tab.id}
                 theme={editorTheme}
+                readOnly={readOnly}
                 onChange={(value) => onContentChange(tab.id, value ?? "")}
                 onSaveShortcut={() => {
                   if (!canSaveFiles) {

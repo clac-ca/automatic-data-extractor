@@ -57,9 +57,7 @@ def _detect_api_root() -> Path:
 
 DEFAULT_API_ROOT = _detect_api_root()
 DEFAULT_WEB_DIR = MODULE_DIR / "web"
-DEFAULT_STORAGE_ROOT = Path("./data")        # resolve later
-DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR = MODULE_DIR / "templates" / "config_packages"
-DEFAULT_CONFIG_TEMPLATES_DIR = DEFAULT_STORAGE_ROOT / "templates" / "config_packages"
+DEFAULT_STORAGE_ROOT = Path("./data")  # resolve later
 DEFAULT_PUBLIC_URL = "http://localhost:8000"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 DEFAULT_WORKSPACES_DIR = DEFAULT_STORAGE_ROOT / "workspaces"
@@ -73,15 +71,14 @@ DEFAULT_RUNS_DIR = DEFAULT_WORKSPACES_DIR
 DEFAULT_PIP_CACHE_DIR = DEFAULT_STORAGE_ROOT / "cache" / "pip"
 DEFAULT_SQLITE_PATH = DEFAULT_STORAGE_ROOT / "db" / DEFAULT_DB_FILENAME
 DEFAULT_ENGINE_SPEC = "apps/ade-engine"
-DEFAULT_BUILD_TIMEOUT = timedelta(seconds=600)
-DEFAULT_BUILD_ENSURE_WAIT = timedelta(seconds=30)
+DEFAULT_BUILD_TIMEOUT = 600
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 MAX_SORT_FIELDS = 3
 MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
-MAX_SET_SIZE = 50                  # cap for *_in lists
+MAX_SET_SIZE = 50  # cap for *_in lists
 COUNT_STATEMENT_TIMEOUT_MS: int | None = None  # optional (Postgres), e.g., 500
 
 _LENIENT_LIST_FIELDS = {"server_cors_origins", "oidc_scopes"}
@@ -90,6 +87,7 @@ _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
 
 # ---- Helpers ----------------------------------------------------------------
+
 
 def _parse_duration(value: Any, *, field_name: str) -> timedelta:
     """Accept seconds (int/float/str) or '60s'/'5m'/'1h'/'14d'."""
@@ -107,15 +105,11 @@ def _parse_duration(value: Any, *, field_name: str) -> timedelta:
             unit = s[-1].lower()
             num = s[:-1].strip()
             if unit not in _UNIT_SECONDS or not num:
-                raise ValueError(
-                    f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'"
-                ) from None
+                raise ValueError(f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'") from None
             try:
                 seconds = float(num) * _UNIT_SECONDS[unit]
             except ValueError as exc:
-                raise ValueError(
-                    f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'"
-                ) from exc
+                raise ValueError(f"{field_name} must be secs or 'Xs','Xm','Xh','Xd'") from exc
     else:
         raise TypeError(f"{field_name} must be number, duration string, or timedelta")
     if seconds <= 0:
@@ -167,6 +161,7 @@ def _resolve_path(value: Path | str | None, *, default: Path) -> Path:
 
 
 # ---- Settings ---------------------------------------------------------------
+
 
 class _LenientEnvSettingsSource(EnvSettingsSource):
     """Environment source that preserves raw strings for list-like fields."""
@@ -284,8 +279,6 @@ class Settings(BaseSettings):
     # Paths
     api_root: Path = Field(default=DEFAULT_API_ROOT)
     web_dir: Path = Field(default=DEFAULT_WEB_DIR)
-    config_templates_source_dir: Path = Field(default=DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR)
-    config_templates_dir: Path = Field(default=DEFAULT_CONFIG_TEMPLATES_DIR)
     alembic_ini_path: Path = Field(default=DEFAULT_ALEMBIC_INI)
     alembic_migrations_dir: Path = Field(default=DEFAULT_ALEMBIC_MIGRATIONS)
 
@@ -302,19 +295,16 @@ class Settings(BaseSettings):
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
     python_bin: str | None = Field(default=None)
-    build_timeout: timedelta = Field(default=DEFAULT_BUILD_TIMEOUT)
-    build_ensure_wait: timedelta = Field(default=DEFAULT_BUILD_ENSURE_WAIT)
+    build_timeout: int = Field(default=DEFAULT_BUILD_TIMEOUT, ge=1)
     build_ttl: timedelta | None = Field(default=None)
 
     # Database
     database_dsn: str | None = None
     database_echo: bool = False
-    database_pool_size: int = Field(5, ge=1)       # ignored by sqlite; relevant for Postgres
+    database_pool_size: int = Field(5, ge=1)  # ignored by sqlite; relevant for Postgres
     database_max_overflow: int = Field(10, ge=0)
     database_pool_timeout: int = Field(30, gt=0)
-    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(
-        default="sql_password"
-    )
+    database_auth_mode: Literal["sql_password", "managed_identity"] = Field(default="sql_password")
     database_mi_client_id: str | None = None
 
     # JWT
@@ -347,10 +337,10 @@ class Settings(BaseSettings):
     auth_disabled_user_name: str | None = "Development User"
 
     # Runs & workers
-    max_concurrency: int | None = Field(default=None, ge=1)
+    max_concurrency: int = Field(default=2, ge=1)
     queue_size: int | None = Field(default=None, ge=1)
-    run_timeout_seconds: int | None = Field(default=None, ge=1)  # accepts '5m', '300'
-    worker_cpu_seconds: int | None = Field(default=None, ge=1)   # plain seconds
+    run_timeout_seconds: int | None = Field(default=None, ge=1)
+    worker_cpu_seconds: int | None = Field(default=None, ge=1)  # plain seconds
     worker_mem_mb: int | None = Field(default=None, ge=1)
     worker_fsize_mb: int | None = Field(default=None, ge=1)
 
@@ -409,9 +399,7 @@ class Settings(BaseSettings):
             return "sql_password"
         mode = str(v).strip().lower()
         if mode not in {"sql_password", "managed_identity"}:
-            raise ValueError(
-                "ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'"
-            )
+            raise ValueError("ADE_DATABASE_AUTH_MODE must be 'sql_password' or 'managed_identity'")
         return mode
 
     @field_validator("database_mi_client_id", mode="before")
@@ -448,10 +436,18 @@ class Settings(BaseSettings):
     def _v_durations(cls, v: Any, info: ValidationInfo) -> timedelta:
         return _parse_duration(v, field_name=info.field_name)
 
-    @field_validator("build_timeout", "build_ensure_wait", mode="before")
+    @field_validator("build_timeout", mode="before")
     @classmethod
-    def _v_build_required(cls, v: Any, info: ValidationInfo) -> timedelta:
-        return _parse_duration(v, field_name=info.field_name)
+    def _v_build_required(cls, v: Any, info: ValidationInfo) -> int:
+        if v in (None, ""):
+            raise ValueError(f"{info.field_name} must not be blank")
+        try:
+            seconds = int(v)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{info.field_name} must be integer seconds") from exc
+        if seconds <= 0:
+            raise ValueError(f"{info.field_name} must be > 0 seconds")
+        return seconds
 
     @field_validator("build_ttl", mode="before")
     @classmethod
@@ -465,7 +461,13 @@ class Settings(BaseSettings):
     def _v_run_timeout(cls, v: Any) -> int | None:
         if v in (None, ""):
             return None
-        return int(_parse_duration(v, field_name="run_timeout_seconds").total_seconds())
+        try:
+            seconds = int(v)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("run_timeout_seconds must be integer seconds") from exc
+        if seconds <= 0:
+            raise ValueError("run_timeout_seconds must be > 0 seconds")
+        return seconds
 
     @field_validator("oidc_issuer", mode="before")
     @classmethod
@@ -497,37 +499,23 @@ class Settings(BaseSettings):
     def _finalize(self) -> Settings:
         self.api_root = _resolve_path(self.api_root, default=DEFAULT_API_ROOT)
         self.web_dir = _resolve_path(self.web_dir, default=DEFAULT_WEB_DIR)
-        self.config_templates_source_dir = _resolve_path(
-            self.config_templates_source_dir, default=DEFAULT_CONFIG_TEMPLATES_SOURCE_DIR
-        )
-        self.config_templates_dir = _resolve_path(
-            self.config_templates_dir, default=DEFAULT_CONFIG_TEMPLATES_DIR
-        )
-        self.alembic_ini_path = _resolve_path(
-            self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI
-        )
+        self.alembic_ini_path = _resolve_path(self.alembic_ini_path, default=DEFAULT_ALEMBIC_INI)
         self.alembic_migrations_dir = _resolve_path(
             self.alembic_migrations_dir, default=DEFAULT_ALEMBIC_MIGRATIONS
         )
 
-        self.workspaces_dir = _resolve_path(
-            self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR
-        )
+        self.workspaces_dir = _resolve_path(self.workspaces_dir, default=DEFAULT_WORKSPACES_DIR)
         if "documents_dir" not in self.model_fields_set:
             self.documents_dir = self.workspaces_dir
         if "configs_dir" not in self.model_fields_set:
             self.configs_dir = self.workspaces_dir
         if "runs_dir" not in self.model_fields_set:
             self.runs_dir = self.workspaces_dir
-        self.documents_dir = _resolve_path(
-            self.documents_dir, default=self.workspaces_dir
-        )
+        self.documents_dir = _resolve_path(self.documents_dir, default=self.workspaces_dir)
         self.configs_dir = _resolve_path(self.configs_dir, default=self.workspaces_dir)
         self.venvs_dir = _resolve_path(self.venvs_dir, default=DEFAULT_VENVS_DIR)
         self.runs_dir = _resolve_path(self.runs_dir, default=self.workspaces_dir)
-        self.pip_cache_dir = _resolve_path(
-            self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR
-        )
+        self.pip_cache_dir = _resolve_path(self.pip_cache_dir, default=DEFAULT_PIP_CACHE_DIR)
 
         if not self.frontend_url:
             self.frontend_url = self.server_public_url

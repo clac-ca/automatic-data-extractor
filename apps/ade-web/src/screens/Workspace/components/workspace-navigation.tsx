@@ -1,6 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 
-import type { WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import type { WorkspaceProfile } from "@shared/workspaces";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   readonly title?: string;
@@ -43,11 +43,11 @@ const SettingsIcon = createIcon(
   "M5 7h14M5 17h14M9 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm10 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm-7-5h7m-9 0H5",
 );
 
-export const DirectoryIcon = createIcon(
-  "M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-8.5Z",
-);
-
-type WorkspaceSectionId = "documents" | "runs" | "config-builder" | "settings";
+type WorkspaceSectionId =
+  | "documents"
+  | "runs"
+  | "config-builder"
+  | "settings";
 
 interface WorkspaceSectionDescriptor {
   readonly id: WorkspaceSectionId;

@@ -4,27 +4,48 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ade-engine"
-version = "1.6.1"
-description = "ADE engine runtime package (scaffold)."
-requires-python = ">=3.14"
-readme = { text = "Placeholder runtime package; implementation forthcoming.", content-type = "text/plain" }
+version = "1.7.7"
+description = "Deterministic workbook normalization engine (detect → extract → map → normalize → render)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "CLAC IT Team" }]
 license = { text = "Proprietary" }
 dependencies = [
-    "openpyxl>=3.1",
-    "jsonschema>=4.21",
-    "pydantic>=2.6",
-    "typer>=0.12",
+  "openpyxl==3.1.5",
+  "polars==1.36.1",
+  "pydantic==2.12.5",
+  "pydantic-settings==2.12.0",
+  "typer==0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "import-linter>=2.0",
+  "pytest>=8.0",
 ]
 
 [project.scripts]
 ade-engine = "ade_engine.cli.app:app"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.package-data]
-"ade_engine.schemas" = ["*.json"]
+ade_engine = [
+  "py.typed",
+  "extensions/templates/config_packages/default/**/*",
+  "extensions/templates/config_packages/default/**",
+  "extensions/templates/config_packages/default/*",
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ade_engine*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+pythonpath = ["src"]

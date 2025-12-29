@@ -1,3 +1,3 @@
-"""Infrastructure primitives (database, storage, etc.)."""
+"""Infrastructure adapters (filesystem storage, venv utilities, versioning)."""
 
-__all__ = ["db", "storage"]
+__all__ = ["storage", "venv", "versions"]

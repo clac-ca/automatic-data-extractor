@@ -6,7 +6,7 @@ export function PinGlyph({ filled }: { readonly filled: boolean }) {
       <path
         d="M6.5 2.5h3l.5 4h2v1.5h-4V13l-1-.5V8H4V6.5h2z"
         fill="currentColor"
-        className="text-slate-500"
+        className="text-muted-foreground"
       />
     </svg>
   ) : (
@@ -16,7 +16,7 @@ export function PinGlyph({ filled }: { readonly filled: boolean }) {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.2"
-        className="text-slate-400"
+        className="text-muted-foreground"
       />
     </svg>
   );

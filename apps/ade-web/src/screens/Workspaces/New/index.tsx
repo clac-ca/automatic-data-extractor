@@ -9,10 +9,9 @@ import { ApiError } from "@shared/api";
 import type { UserSummary } from "@shared/users/api";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
-import { useCreateWorkspaceMutation } from "./hooks/useCreateWorkspaceMutation";
-import { useWorkspacesQuery, type WorkspaceProfile } from "@features/Workspace/api/workspaces-api";
+import { getDefaultWorkspacePath, useCreateWorkspaceMutation } from "@shared/workspaces";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
-import { WorkspaceDirectoryLayout } from "@features/Workspaces/components/WorkspaceDirectoryLayout";
+import { WorkspaceDirectoryLayout } from "@screens/Workspaces/components/WorkspaceDirectoryLayout";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
 import { FormField } from "@ui/FormField";
@@ -32,7 +31,7 @@ const workspaceSchema = z.object({
 
 type WorkspaceFormValues = z.infer<typeof workspaceSchema>;
 
-export default function WorkspaceCreateRoute() {
+export default function WorkspaceCreateScreen() {
   return (
     <RequireSession>
       <WorkspaceCreateContent />
@@ -43,7 +42,6 @@ export default function WorkspaceCreateRoute() {
 function WorkspaceCreateContent() {
   const navigate = useNavigate();
   const session = useSession();
-  const workspacesQuery = useWorkspacesQuery();
   const createWorkspace = useCreateWorkspaceMutation();
 
   const normalizedPermissions = useMemo(
@@ -119,9 +117,8 @@ function WorkspaceCreateContent() {
         owner_user_id: canSelectOwner ? values.ownerUserId || undefined : undefined,
       },
       {
-        onSuccess(workspace: WorkspaceProfile) {
-          workspacesQuery.refetch();
-          navigate(`/workspaces/${workspace.id}`);
+        onSuccess(workspace) {
+          navigate(getDefaultWorkspacePath(workspace.id));
         },
         onError(error: unknown) {
           if (error instanceof ApiError) {
@@ -152,14 +149,14 @@ function WorkspaceCreateContent() {
     <WorkspaceDirectoryLayout>
       <div className="space-y-6">
         <header className="space-y-2">
-          <h1 className="text-2xl font-semibold text-slate-900">Create a workspace</h1>
-          <p className="text-sm text-slate-600">
+          <h1 className="text-2xl font-semibold text-foreground">Create a workspace</h1>
+          <p className="text-sm text-muted-foreground">
             Name the workspace and choose who should own it. You can adjust settings and permissions after the workspace
             is created.
           </p>
         </header>
 
-        <form className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft" onSubmit={onSubmit}>
+        <form className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-soft" onSubmit={onSubmit}>
           <div className="grid gap-5 md:grid-cols-2">
             <FormField label="Workspace name" required error={errors.name?.message}>
               <Input
@@ -201,7 +198,7 @@ function WorkspaceCreateContent() {
                   clearErrors("ownerUserId");
                 }}
                 disabled={ownerSelectDisabled}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                className="rounded-lg border border-border-strong bg-card px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 <option value={session.user.id ?? ""}>{currentUserLabel}</option>
                 {filteredOwnerOptions.map((user) => (

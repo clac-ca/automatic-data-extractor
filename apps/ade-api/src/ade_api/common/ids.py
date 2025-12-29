@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import secrets
+import threading
+import time
 import uuid
-from collections.abc import Callable
 from typing import Annotated
 
 from pydantic import Field
@@ -21,19 +23,55 @@ UUIDStr = Annotated[
 ]
 
 
-def _resolve_uuid7() -> Callable[[], uuid.UUID]:
-    """Return a callable that produces a UUIDv7, falling back to uuid4 when absent."""
+_UUID7_LOCK = threading.Lock()
+_UUID7_LAST_TS_MS: int = -1
+_UUID7_LAST_RAND: int = 0
 
-    maybe_uuid7 = getattr(uuid, "uuid7", None)
-    if callable(maybe_uuid7):
-        return maybe_uuid7
-    return uuid.uuid4
+_UUID7_RAND_BITS = 74
+_UUID7_RAND_MASK = (1 << _UUID7_RAND_BITS) - 1
+_UUID7_RAND_B_MASK = (1 << 62) - 1
 
 
-_uuid7_factory = _resolve_uuid7()
+def _uuid7_randbits(bits: int) -> int:
+    nbytes = (bits + 7) // 8
+    value = int.from_bytes(secrets.token_bytes(nbytes), "big")
+    return value & ((1 << bits) - 1)
 
 
 def generate_uuid7() -> uuid.UUID:
-    """Return a sortable UUID for ADE identifiers (prefers RFC 9562 uuid7)."""
+    """Return a sortable UUIDv7 for ADE identifiers (RFC 9562).
 
-    return _uuid7_factory()
+    We implement UUIDv7 directly to avoid pinning ADE to Python 3.14+
+    (where :func:`uuid.uuid7` is available).
+    """
+
+    global _UUID7_LAST_TS_MS, _UUID7_LAST_RAND
+
+    ts_ms = time.time_ns() // 1_000_000
+    with _UUID7_LOCK:
+        if ts_ms > _UUID7_LAST_TS_MS:
+            _UUID7_LAST_TS_MS = ts_ms
+            _UUID7_LAST_RAND = _uuid7_randbits(_UUID7_RAND_BITS)
+        else:
+            ts_ms = _UUID7_LAST_TS_MS
+            _UUID7_LAST_RAND = (_UUID7_LAST_RAND + 1) & _UUID7_RAND_MASK
+
+            if _UUID7_LAST_RAND == 0:
+                while True:
+                    candidate_ts = time.time_ns() // 1_000_000
+                    if candidate_ts > _UUID7_LAST_TS_MS:
+                        ts_ms = candidate_ts
+                        _UUID7_LAST_TS_MS = candidate_ts
+                        _UUID7_LAST_RAND = _uuid7_randbits(_UUID7_RAND_BITS)
+                        break
+
+        rand_a = _UUID7_LAST_RAND >> 62
+        rand_b = _UUID7_LAST_RAND & _UUID7_RAND_B_MASK
+
+        value = (ts_ms & 0xFFFFFFFFFFFF) << 80
+        value |= 0x7 << 76  # version 7
+        value |= (rand_a & 0xFFF) << 64
+        value |= 0b10 << 62  # variant (RFC 4122)
+        value |= rand_b
+
+    return uuid.UUID(int=value)

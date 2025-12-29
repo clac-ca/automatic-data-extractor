@@ -601,6 +601,41 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace document tags */
+        put: operations["replace_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update document tags */
+        patch: operations["patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update tags on multiple documents */
+        post: operations["patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -653,6 +688,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Soft delete multiple documents */
+        post: operations["delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document tags */
+        get: operations["list_document_tags_api_v1_workspaces__workspace_id__tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations": {
         parameters: {
             query?: never;
@@ -680,23 +749,6 @@ export type paths = {
         };
         /** Retrieve configuration metadata */
         get: operations["read_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List editable files and directories */
-        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -739,44 +791,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Config File */
-        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get"];
-        /** Upsert Config File */
-        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put"];
-        post?: never;
-        /** Delete Config File */
-        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete"];
-        options?: never;
-        /** Head Config File */
-        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head"];
-        /** Rename or move a file */
-        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch"];
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate a configuration */
-        post: operations["activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/publish": {
         parameters: {
             query?: never;
@@ -786,7 +800,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Publish a configuration draft */
+        /** Make a draft configuration active */
         post: operations["publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post"];
         delete?: never;
         options?: never;
@@ -794,7 +808,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/deactivate": {
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/archive": {
         parameters: {
             query?: never;
             header?: never;
@@ -803,8 +817,8 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Deactivate a configuration (was 'archive') */
-        post: operations["deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post"];
+        /** Archive the active configuration */
+        post: operations["archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -845,6 +859,44 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List editable files and directories */
+        get: operations["list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/files/{file_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Config File */
+        get: operations["read_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__get"];
+        /** Upsert Config File */
+        put: operations["upsert_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__put"];
+        post?: never;
+        /** Delete Config File */
+        delete: operations["delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete"];
+        options?: never;
+        /** Head Config File */
+        head: operations["head_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__head"];
+        /** Rename or move a file */
+        patch: operations["rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch"];
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/configurations/{configuration_id}/directories/{directory_path}": {
         parameters: {
             query?: never;
@@ -858,23 +910,6 @@ export type paths = {
         post?: never;
         /** Delete Config Directory */
         delete: operations["delete_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/config-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List configuration templates */
-        get: operations["list_config_templates_api_v1_config_templates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -970,6 +1005,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/configurations/{configuration_id}/runs/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Runs Batch Endpoint
+         * @description Create multiple runs for ``configuration_id`` and enqueue execution.
+         */
+        post: operations["create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/runs": {
         parameters: {
             query?: never;
@@ -980,7 +1035,31 @@ export type paths = {
         /** List Workspace Runs Endpoint */
         get: operations["list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Workspace Run Endpoint
+         * @description Create a run for ``workspace_id`` and enqueue execution.
+         */
+        post: operations["create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/runs/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Workspace Runs Batch Endpoint
+         * @description Create multiple runs for ``workspace_id`` and enqueue execution.
+         */
+        post: operations["create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -996,6 +1075,57 @@ export type paths = {
         };
         /** Get Run Endpoint */
         get: operations["get_run_endpoint_api_v1_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Metrics Endpoint */
+        get: operations["get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Fields Endpoint */
+        get: operations["list_run_fields_endpoint_api_v1_runs__run_id__fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Run Columns Endpoint */
+        get: operations["list_run_columns_endpoint_api_v1_runs__run_id__columns_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1030,23 +1160,6 @@ export type paths = {
         };
         /** Download run input file */
         get: operations["download_run_input_endpoint_api_v1_runs__run_id__input_download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Run Summary Endpoint */
-        get: operations["get_run_summary_endpoint_api_v1_runs__run_id__summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1106,26 +1219,6 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{run_id}/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Run Logs File Endpoint
-         * @deprecated
-         */
-        get: operations["download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{run_id}/output": {
         parameters: {
             query?: never;
@@ -1152,46 +1245,6 @@ export type paths = {
         };
         /** Download run output file */
         get: operations["download_run_output_endpoint_api_v1_runs__run_id__output_download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/outputs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Run Outputs Legacy
-         * @deprecated
-         */
-        get: operations["list_run_outputs_legacy_api_v1_runs__run_id__outputs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/runs/{run_id}/outputs/{output_path}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Run Output Legacy Endpoint
-         * @deprecated
-         */
-        get: operations["download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1228,56 +1281,6 @@ export type paths = {
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
-        /**
-         * AdeEventV1
-         * @description API-owned canonical ADE event envelope.
-         */
-        AdeEventV1: {
-            /**
-             * Schema Id
-             * @default ade.events.v1
-             * @constant
-             */
-            schema_id: "ade.events.v1";
-            /** Type */
-            type: string;
-            /** Event Id */
-            event_id: string;
-            /** Sequence */
-            sequence: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "api" | "engine";
-            /**
-             * Workspace Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            workspace_id: string;
-            /**
-             * Configuration Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            configuration_id: string;
-            /** Run Id */
-            run_id?: string | null;
-            /** Build Id */
-            build_id?: string | null;
-            /** Origin Event Id */
-            origin_event_id?: string | null;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            };
-        };
         /**
          * ApiKeyCreateRequest
          * @description Request payload to create a new API key.
@@ -1568,6 +1571,39 @@ export type components = {
              */
             file: string;
         };
+        /** Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get */
+        Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get: {
+            /** Status */
+            status?: components["schemas"]["RunStatus"][] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
+        /** Body_list_documents_api_v1_workspaces__workspace_id__documents_get */
+        Body_list_documents_api_v1_workspaces__workspace_id__documents_get: {
+            /** Status */
+            status?: components["schemas"]["DocumentStatus"][] | null;
+            /** Run Status */
+            run_status?: components["schemas"]["RunStatus"][] | null;
+            /** Source In */
+            source_in?: components["schemas"]["DocumentSource"][] | null;
+            /** Tags */
+            tags?: string[] | null;
+            /** Tags Not */
+            tags_not?: string[] | null;
+            /** Uploader Id */
+            uploader_id?: string[] | null;
+            /** Uploader Email */
+            uploader_email?: string[] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
+        /** Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get */
+        Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
+            /** Status */
+            status?: components["schemas"]["RunStatus"][] | null;
+            /** File Type */
+            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+        };
         /** Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put */
         Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
             /**
@@ -1619,7 +1655,9 @@ export type components = {
          */
         BuildEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEventV1"][];
+            items: {
+                [key: string]: unknown;
+            }[];
             /** Next After Sequence */
             next_after_sequence?: number | null;
         };
@@ -1713,67 +1751,6 @@ export type components = {
          */
         BuildStatus: "queued" | "building" | "ready" | "failed" | "cancelled";
         /**
-         * ColumnCounts
-         * @description Column-level counts.
-         */
-        ColumnCounts: {
-            /**
-             * Physical Total
-             * @default 0
-             */
-            physical_total: number;
-            /**
-             * Physical Empty
-             * @default 0
-             */
-            physical_empty: number;
-            /**
-             * Physical Non Empty
-             * @default 0
-             */
-            physical_non_empty: number;
-            /**
-             * Distinct Headers
-             * @default 0
-             */
-            distinct_headers: number;
-            /**
-             * Distinct Headers Mapped
-             * @default 0
-             */
-            distinct_headers_mapped: number;
-            /**
-             * Distinct Headers Unmapped
-             * @default 0
-             */
-            distinct_headers_unmapped: number;
-        };
-        /**
-         * ColumnSummaryDistinct
-         * @description Distinct header summary for aggregate scopes.
-         */
-        ColumnSummaryDistinct: {
-            /** Header */
-            header: string;
-            /** Header Normalized */
-            header_normalized: string;
-            /** Occurrences */
-            occurrences?: {
-                [key: string]: number;
-            };
-            /**
-             * Mapped
-             * @default false
-             */
-            mapped: boolean;
-            /** Mapped Fields */
-            mapped_fields?: string[];
-            /** Mapped Fields Counts */
-            mapped_fields_counts?: {
-                [key: string]: number;
-            };
-        };
-        /**
          * ConfigSourceClone
          * @description Reference to an existing workspace config.
          */
@@ -1792,7 +1769,7 @@ export type components = {
         };
         /**
          * ConfigSourceTemplate
-         * @description Reference to a bundled template.
+         * @description Request to scaffold a config from the engine's built-in template.
          */
         ConfigSourceTemplate: {
             /**
@@ -1800,22 +1777,6 @@ export type components = {
              * @enum {string}
              */
             type: "template";
-            /** Template Id */
-            template_id: string;
-        };
-        /**
-         * ConfigTemplate
-         * @description Metadata for an available configuration template.
-         */
-        ConfigTemplate: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description?: string | null;
-            /** Version */
-            version?: string | null;
         };
         /**
          * ConfigValidationIssue
@@ -1826,17 +1787,6 @@ export type components = {
             path: string;
             /** Message */
             message: string;
-        };
-        /**
-         * ConfigurationActivateRequest
-         * @description Activation control flags.
-         */
-        ConfigurationActivateRequest: {
-            /**
-             * Ensure Build
-             * @default false
-             */
-            ensure_build: boolean;
         };
         /**
          * ConfigurationCreate
@@ -1906,7 +1856,7 @@ export type components = {
          * @description Lifecycle states for workspace configuration packages.
          * @enum {string}
          */
-        ConfigurationStatus: "draft" | "published" | "active" | "inactive";
+        ConfigurationStatus: "draft" | "active" | "archived";
         /**
          * ConfigurationValidateResponse
          * @description Result of running validation.
@@ -1930,27 +1880,6 @@ export type components = {
             /** Issues */
             issues: components["schemas"]["ConfigValidationIssue"][];
         };
-        /**
-         * Counts
-         * @description Aggregate counts for a summary scope.
-         */
-        Counts: {
-            /** Files */
-            files?: {
-                [key: string]: number;
-            } | null;
-            /** Sheets */
-            sheets?: {
-                [key: string]: number;
-            } | null;
-            /** Tables */
-            tables?: {
-                [key: string]: number;
-            } | null;
-            rows?: components["schemas"]["RowCounts"];
-            columns?: components["schemas"]["ColumnCounts"];
-            fields?: components["schemas"]["FieldCounts"];
-        };
         /** DirectoryWriteResponse */
         DirectoryWriteResponse: {
             /** Path */
@@ -1959,15 +1888,64 @@ export type components = {
             created: boolean;
         };
         /**
+         * DocumentBatchDeleteRequest
+         * @description Payload for soft-deleting multiple documents.
+         */
+        DocumentBatchDeleteRequest: {
+            /**
+             * Document Ids
+             * @description Documents to delete (soft delete, all-or-nothing).
+             */
+            document_ids: string[];
+        };
+        /**
+         * DocumentBatchDeleteResponse
+         * @description Response envelope for batch deletions.
+         */
+        DocumentBatchDeleteResponse: {
+            /** Document Ids */
+            document_ids?: string[];
+        };
+        /**
+         * DocumentBatchTagsRequest
+         * @description Payload for updating tags on multiple documents.
+         */
+        DocumentBatchTagsRequest: {
+            /**
+             * Document Ids
+             * @description Documents to update tags for (all-or-nothing).
+             */
+            document_ids: string[];
+            /**
+             * Add
+             * @description Tags to add to each document.
+             */
+            add?: string[] | null;
+            /**
+             * Remove
+             * @description Tags to remove from each document.
+             */
+            remove?: string[] | null;
+        };
+        /**
+         * DocumentBatchTagsResponse
+         * @description Response envelope for batch tag updates.
+         */
+        DocumentBatchTagsResponse: {
+            /** Documents */
+            documents?: components["schemas"]["DocumentOut"][];
+        };
+        /**
          * DocumentLastRun
          * @description Minimal representation of the last engine execution for a document.
          */
         DocumentLastRun: {
             /**
              * Run Id
-             * @description Latest run identifier when the execution was streamed directly.
+             * Format: uuid
+             * @description Latest run identifier for the execution.
              */
-            run_id?: string | null;
+            run_id: string;
             status: components["schemas"]["RunStatus"];
             /**
              * Run At
@@ -2042,6 +2020,8 @@ export type components = {
             uploader?: components["schemas"]["UploaderOut"] | null;
             /** @description Latest run execution associated with the document when available. */
             last_run?: components["schemas"]["DocumentLastRun"] | null;
+            /** @description Latest successful run execution associated with the document when available. */
+            last_successful_run?: components["schemas"]["DocumentLastRun"] | null;
         };
         /**
          * DocumentPage
@@ -2095,6 +2075,33 @@ export type components = {
          */
         DocumentStatus: "uploaded" | "processing" | "processed" | "failed" | "archived";
         /**
+         * DocumentTagsPatch
+         * @description Payload for adding/removing tags on a document.
+         */
+        DocumentTagsPatch: {
+            /**
+             * Add
+             * @description Tags to add to the document.
+             */
+            add?: string[] | null;
+            /**
+             * Remove
+             * @description Tags to remove from the document.
+             */
+            remove?: string[] | null;
+        };
+        /**
+         * DocumentTagsReplace
+         * @description Payload for replacing tags on a document.
+         */
+        DocumentTagsReplace: {
+            /**
+             * Tags
+             * @description Complete set of tags for the document.
+             */
+            tags: string[];
+        };
+        /**
          * EffectivePermissions
          * @description Effective permission sets for the current principal.
          */
@@ -2111,70 +2118,6 @@ export type components = {
             workspaces?: {
                 [key: string]: string[];
             };
-        };
-        /**
-         * FieldCounts
-         * @description Canonical field counts.
-         */
-        FieldCounts: {
-            /**
-             * Total
-             * @default 0
-             */
-            total: number;
-            /**
-             * Required
-             * @default 0
-             */
-            required: number;
-            /**
-             * Mapped
-             * @default 0
-             */
-            mapped: number;
-            /**
-             * Unmapped
-             * @default 0
-             */
-            unmapped: number;
-            /**
-             * Required Mapped
-             * @default 0
-             */
-            required_mapped: number;
-            /**
-             * Required Unmapped
-             * @default 0
-             */
-            required_unmapped: number;
-        };
-        /**
-         * FieldSummaryAggregate
-         * @description Field status at aggregate scopes (sheet/file/run).
-         */
-        FieldSummaryAggregate: {
-            /** Field */
-            field: string;
-            /** Label */
-            label?: string | null;
-            /**
-             * Required
-             * @default false
-             */
-            required: boolean;
-            /**
-             * Mapped
-             * @default false
-             */
-            mapped: boolean;
-            /** Max Score */
-            max_score?: number | null;
-            /** Tables Mapped */
-            tables_mapped?: number | null;
-            /** Sheets Mapped */
-            sheets_mapped?: number | null;
-            /** Files Mapped */
-            files_mapped?: number | null;
         };
         /** FileCapabilities */
         FileCapabilities: {
@@ -2706,29 +2649,96 @@ export type components = {
             permissions?: string[] | null;
         };
         /**
-         * RowCounts
-         * @description Row-level counts.
+         * RunBatchCreateOptions
+         * @description Execution toggles for batch ADE runs (per-document input).
          */
-        RowCounts: {
+        RunBatchCreateOptions: {
             /**
-             * Total
-             * @default 0
+             * Dry Run
+             * @default false
              */
-            total: number;
+            dry_run: boolean;
             /**
-             * Empty
-             * @default 0
+             * Validate Only
+             * @default false
              */
-            empty: number;
+            validate_only: boolean;
             /**
-             * Non Empty
-             * @default 0
+             * Force Rebuild
+             * @description If true, rebuild the configuration environment before running.
+             * @default false
              */
-            non_empty: number;
+            force_rebuild: boolean;
+            /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
+            /**
+             * Metadata
+             * @description Opaque metadata to propagate with run telemetry.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+        };
+        /**
+         * RunBatchCreateRequest
+         * @description Payload accepted by the batch run creation endpoint.
+         */
+        RunBatchCreateRequest: {
+            /**
+             * Document Ids
+             * @description Documents to enqueue as individual runs (all-or-nothing).
+             */
+            document_ids: string[];
+            options?: components["schemas"]["RunBatchCreateOptions"];
+        };
+        /**
+         * RunBatchCreateResponse
+         * @description Response envelope for batch run creation.
+         */
+        RunBatchCreateResponse: {
+            /** Runs */
+            runs: components["schemas"]["RunResource"][];
+        };
+        /**
+         * RunColumnResource
+         * @description Detected column details for a run table.
+         */
+        RunColumnResource: {
+            /** Workbook Index */
+            workbook_index: number;
+            /** Workbook Name */
+            workbook_name: string;
+            /** Sheet Index */
+            sheet_index: number;
+            /** Sheet Name */
+            sheet_name: string;
+            /** Table Index */
+            table_index: number;
+            /** Column Index */
+            column_index: number;
+            /** Header Raw */
+            header_raw?: string | null;
+            /** Header Normalized */
+            header_normalized?: string | null;
+            /** Non Empty Cells */
+            non_empty_cells: number;
+            /** Mapping Status */
+            mapping_status: string;
+            /** Mapped Field */
+            mapped_field?: string | null;
+            /** Mapping Score */
+            mapping_score?: number | null;
+            /** Mapping Method */
+            mapping_method?: string | null;
+            /** Unmapped Reason */
+            unmapped_reason?: string | null;
         };
         /**
          * RunCreateOptions
-         * @description Optional execution toggles for ADE runs.
+         * @description Execution toggles for a single ADE run.
          */
         RunCreateOptions: {
             /**
@@ -2748,10 +2758,55 @@ export type components = {
              */
             force_rebuild: boolean;
             /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
+            /**
+             * Input Sheet Names
+             * @description Optional worksheet names to ingest when processing XLSX files.
+             */
+            input_sheet_names?: string[] | null;
+            /**
+             * Metadata
+             * @description Opaque metadata to propagate with run telemetry.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+            /**
              * Input Document Id
+             * Format: uuid
              * @description Document identifier to ingest.
              */
-            input_document_id?: string | null;
+            input_document_id: string;
+        };
+        /**
+         * RunCreateOptionsBase
+         * @description Optional execution toggles for ADE runs.
+         */
+        RunCreateOptionsBase: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Validate Only
+             * @default false
+             */
+            validate_only: boolean;
+            /**
+             * Force Rebuild
+             * @description If true, rebuild the configuration environment before running.
+             * @default false
+             */
+            force_rebuild: boolean;
+            /**
+             * Log Level
+             * @description Engine log level passed as --log-level to ade_engine.
+             */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
              * Input Sheet Names
              * @description Optional worksheet names to ingest when processing XLSX files.
@@ -2778,9 +2833,29 @@ export type components = {
          */
         RunEventsPage: {
             /** Items */
-            items: components["schemas"]["AdeEventV1"][];
+            items: {
+                [key: string]: unknown;
+            }[];
             /** Next After Sequence */
             next_after_sequence?: number | null;
+        };
+        /**
+         * RunFieldResource
+         * @description Field-level mapping summary for a run.
+         */
+        RunFieldResource: {
+            /** Field */
+            field: string;
+            /** Label */
+            label?: string | null;
+            /** Mapped */
+            mapped: boolean;
+            /** Best Mapping Score */
+            best_mapping_score?: number | null;
+            /** Occurrences Tables */
+            occurrences_tables: number;
+            /** Occurrences Columns */
+            occurrences_columns: number;
         };
         /**
          * RunInput
@@ -2811,8 +2886,6 @@ export type components = {
         RunLinks: {
             /** Self */
             self: string;
-            /** Summary */
-            summary: string;
             /** Events */
             events: string;
             /** Events Stream */
@@ -2831,6 +2904,62 @@ export type components = {
             output_download: string;
             /** Output Metadata */
             output_metadata: string;
+        };
+        /**
+         * RunMetricsResource
+         * @description Aggregate run metrics derived from engine.run.completed.
+         */
+        RunMetricsResource: {
+            /** Evaluation Outcome */
+            evaluation_outcome?: string | null;
+            /** Evaluation Findings Total */
+            evaluation_findings_total?: number | null;
+            /** Evaluation Findings Info */
+            evaluation_findings_info?: number | null;
+            /** Evaluation Findings Warning */
+            evaluation_findings_warning?: number | null;
+            /** Evaluation Findings Error */
+            evaluation_findings_error?: number | null;
+            /** Validation Issues Total */
+            validation_issues_total?: number | null;
+            /** Validation Issues Info */
+            validation_issues_info?: number | null;
+            /** Validation Issues Warning */
+            validation_issues_warning?: number | null;
+            /** Validation Issues Error */
+            validation_issues_error?: number | null;
+            /** Validation Max Severity */
+            validation_max_severity?: string | null;
+            /** Workbook Count */
+            workbook_count?: number | null;
+            /** Sheet Count */
+            sheet_count?: number | null;
+            /** Table Count */
+            table_count?: number | null;
+            /** Row Count Total */
+            row_count_total?: number | null;
+            /** Row Count Empty */
+            row_count_empty?: number | null;
+            /** Column Count Total */
+            column_count_total?: number | null;
+            /** Column Count Empty */
+            column_count_empty?: number | null;
+            /** Column Count Mapped */
+            column_count_mapped?: number | null;
+            /** Column Count Ambiguous */
+            column_count_ambiguous?: number | null;
+            /** Column Count Unmapped */
+            column_count_unmapped?: number | null;
+            /** Column Count Passthrough */
+            column_count_passthrough?: number | null;
+            /** Field Count Expected */
+            field_count_expected?: number | null;
+            /** Field Count Mapped */
+            field_count_mapped?: number | null;
+            /** Cell Count Total */
+            cell_count_total?: number | null;
+            /** Cell Count Non Empty */
+            cell_count_non_empty?: number | null;
         };
         /**
          * RunOutput
@@ -2859,22 +2988,6 @@ export type components = {
             output_path?: string | null;
             /** Processed File */
             processed_file?: string | null;
-        };
-        /**
-         * RunOutputFile
-         * @description Deprecated collection wrapper for legacy output listings.
-         */
-        RunOutputFile: {
-            /** Name */
-            name?: string | null;
-            /** Path */
-            path?: string | null;
-            /** Byte Size */
-            byte_size?: number | null;
-            /** Content Type */
-            content_type?: string | null;
-            /** Download Url */
-            download_url?: string | null;
         };
         /**
          * RunPage
@@ -2923,8 +3036,12 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
-            /** Build Id */
-            build_id?: string | null;
+            /**
+             * Build Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            build_id: string;
             status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
@@ -2968,48 +3085,41 @@ export type components = {
          * @description Lifecycle states for ADE runs.
          * @enum {string}
          */
-        RunStatus: "queued" | "waiting_for_build" | "running" | "succeeded" | "failed" | "cancelled";
+        RunStatus: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
-         * RunSummary
-         * @description Run-level summary aggregated across files within a run.
+         * RunWorkspaceBatchCreateRequest
+         * @description Payload accepted by the workspace batch run creation endpoint.
          */
-        RunSummary: {
+        RunWorkspaceBatchCreateRequest: {
             /**
-             * Schema Id
-             * @default ade.summary
+             * Document Ids
+             * @description Documents to enqueue as individual runs (all-or-nothing).
              */
-            schema_id: string;
+            document_ids: string[];
             /**
-             * Schema Version
-             * @default 1.0.0
+             * Configuration Id
+             * @description Optional configuration identifier (defaults to the active configuration).
              */
-            schema_version: string;
+            configuration_id?: string | null;
+            options?: components["schemas"]["RunBatchCreateOptions"];
+        };
+        /**
+         * RunWorkspaceCreateRequest
+         * @description Payload accepted by the workspace run creation endpoint.
+         */
+        RunWorkspaceCreateRequest: {
             /**
-             * Scope
-             * @default run
-             * @constant
+             * Input Document Id
+             * Format: uuid
+             * @description Document identifier to ingest.
              */
-            scope: "run";
-            /** Id */
-            id: string;
-            /** Parent Ids */
-            parent_ids?: {
-                [key: string]: string;
-            };
-            /** Source */
-            source?: {
-                [key: string]: unknown;
-            };
-            counts: components["schemas"]["Counts"];
-            /** Fields */
-            fields?: components["schemas"]["FieldSummaryAggregate"][];
-            /** Columns */
-            columns?: components["schemas"]["ColumnSummaryDistinct"][];
-            validation?: components["schemas"]["ValidationSummary"];
-            /** Details */
-            details?: {
-                [key: string]: unknown;
-            };
+            input_document_id: string;
+            /**
+             * Configuration Id
+             * @description Optional configuration identifier (defaults to the active configuration).
+             */
+            configuration_id?: string | null;
+            options?: components["schemas"]["RunCreateOptionsBase"];
         };
         /**
          * SafeModeStatus
@@ -3143,6 +3253,34 @@ export type components = {
             refresh_expires_in?: number | null;
         };
         /**
+         * TagCatalogItem
+         * @description Tag entry with document counts.
+         */
+        TagCatalogItem: {
+            /** Tag */
+            tag: string;
+            /** Document Count */
+            document_count: number;
+        };
+        /**
+         * TagCatalogPage
+         * @description Paginated tag catalog.
+         */
+        TagCatalogPage: {
+            /** Items */
+            items: components["schemas"]["TagCatalogItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+        };
+        /**
          * UploaderOut
          * @description Minimal representation of the user who uploaded the document.
          */
@@ -3273,36 +3411,6 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /**
-         * ValidationSummary
-         * @description Validation counts for a summary scope.
-         */
-        ValidationSummary: {
-            /**
-             * Rows Evaluated
-             * @default 0
-             */
-            rows_evaluated: number;
-            /**
-             * Issues Total
-             * @default 0
-             */
-            issues_total: number;
-            /** Issues By Severity */
-            issues_by_severity?: {
-                [key: string]: number;
-            };
-            /** Issues By Code */
-            issues_by_code?: {
-                [key: string]: number;
-            };
-            /** Issues By Field */
-            issues_by_field?: {
-                [key: string]: number;
-            };
-            /** Max Severity */
-            max_severity?: string | null;
         };
         /**
          * VersionsResponse
@@ -3810,7 +3918,9 @@ export interface operations {
     create_my_api_key_api_v1_me_api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3857,7 +3967,9 @@ export interface operations {
     revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 api_key_id: string;
             };
@@ -3958,7 +4070,9 @@ export interface operations {
     create_api_key_api_v1_api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4064,7 +4178,9 @@ export interface operations {
     revoke_api_key_api_v1_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 api_key_id: string;
             };
@@ -4165,7 +4281,9 @@ export interface operations {
     create_user_api_key_api_v1_users__user_id__api_keys_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 user_id: string;
             };
@@ -4221,7 +4339,9 @@ export interface operations {
     revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 user_id: string;
                 api_key_id: string;
@@ -4363,7 +4483,9 @@ export interface operations {
     update_user_api_v1_users__user_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier. */
                 user_id: string;
@@ -4418,7 +4540,9 @@ export interface operations {
     deactivate_user_api_v1_users__user_id__deactivate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier. */
                 user_id: string;
@@ -4541,7 +4665,9 @@ export interface operations {
     create_role_api_v1_rbac_roles_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4606,7 +4732,9 @@ export interface operations {
     delete_role_api_v1_rbac_roles__role_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Role identifier */
                 role_id: string;
@@ -4636,7 +4764,9 @@ export interface operations {
     update_role_api_v1_rbac_roles__role_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Role identifier */
                 role_id: string;
@@ -4747,7 +4877,9 @@ export interface operations {
     assign_user_role_api_v1_users__user_id__roles__role_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier */
                 user_id: string;
@@ -4781,7 +4913,9 @@ export interface operations {
     remove_user_role_api_v1_users__user_id__roles__role_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description User identifier */
                 user_id: string;
@@ -5023,7 +5157,9 @@ export interface operations {
     create_workspace_api_v1_workspaces_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5135,7 +5271,9 @@ export interface operations {
     delete_workspace_api_v1_workspaces__workspace_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5186,7 +5324,9 @@ export interface operations {
     update_workspace_api_v1_workspaces__workspace_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5248,7 +5388,9 @@ export interface operations {
     set_default_workspace_api_v1_workspaces__workspace_id__default_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5332,7 +5474,9 @@ export interface operations {
     add_workspace_member_api_v1_workspaces__workspace_id__members_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5368,7 +5512,9 @@ export interface operations {
     update_workspace_member_api_v1_workspaces__workspace_id__members__user_id__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5406,7 +5552,9 @@ export interface operations {
     remove_workspace_member_api_v1_workspaces__workspace_id__members__user_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5441,6 +5589,20 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
+                q?: string | null;
+                tag_mode?: ("any" | "all") | null;
+                tags_empty?: boolean | null;
+                uploader?: string | null;
+                folder_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                updated_after?: string | null;
+                updated_before?: string | null;
+                last_run_from?: string | null;
+                last_run_to?: string | null;
+                byte_size_from?: number | null;
+                byte_size_to?: number | null;
+                has_output?: boolean | null;
                 /** @description CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name */
                 sort?: string | null;
             };
@@ -5451,7 +5613,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_documents_api_v1_workspaces__workspace_id__documents_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5497,7 +5663,9 @@ export interface operations {
     upload_document_api_v1_workspaces__workspace_id__documents_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5555,6 +5723,181 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    replace_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTagsReplace"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTagsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchTagsResponse"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5616,7 +5959,9 @@ export interface operations {
     delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5760,6 +6105,116 @@ export interface operations {
             };
         };
     };
+    delete_documents_batch_api_v1_workspaces__workspace_id__documents_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchDeleteResponse"];
+                };
+            };
+            /** @description Authentication required to delete documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document deletion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_document_tags_api_v1_workspaces__workspace_id__tags_get: {
+        parameters: {
+            query?: {
+                /** @description Search tags (min length 2). */
+                q?: string | null;
+                sort?: "name" | "-count";
+                page?: number;
+                page_size?: number;
+                include_total?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCatalogPage"];
+                };
+            };
+            /** @description Authentication required to list tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow tag access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag search parameters are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_configurations_api_v1_workspaces__workspace_id__configurations_get: {
         parameters: {
             query?: {
@@ -5799,7 +6254,9 @@ export interface operations {
     create_configuration_api_v1_workspaces__workspace_id__configurations_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5866,53 +6323,12 @@ export interface operations {
             };
         };
     };
-    list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
-        parameters: {
-            query?: {
-                prefix?: string;
-                depth?: "0" | "1" | "infinity";
-                include?: string[] | null;
-                exclude?: string[] | null;
-                limit?: number;
-                page_token?: string | null;
-                sort?: "path" | "name" | "mtime" | "size";
-                order?: "asc" | "desc";
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileListing"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5948,7 +6364,9 @@ export interface operations {
     validate_configuration_api_v1_workspaces__workspace_id__configurations__configuration_id__validate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -5966,6 +6384,202 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationValidateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigurationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_config_files_api_v1_workspaces__workspace_id__configurations__configuration_id__files_get: {
+        parameters: {
+            query?: {
+                prefix?: string;
+                depth?: "0" | "1" | "infinity";
+                include?: string[] | null;
+                exclude?: string[] | null;
+                limit?: number;
+                page_token?: string | null;
+                sort?: "path" | "name" | "mtime" | "size";
+                order?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileListing"];
                 };
             };
             /** @description Validation Error */
@@ -6038,7 +6652,9 @@ export interface operations {
             query?: {
                 parents?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6082,7 +6698,9 @@ export interface operations {
     delete_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6150,7 +6768,9 @@ export interface operations {
     rename_config_file_api_v1_workspaces__workspace_id__configurations__configuration_id__files__file_path__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6186,195 +6806,12 @@ export interface operations {
             };
         };
     };
-    activate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ConfigurationActivateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    deactivate_configuration_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__deactivate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_config_api_v1_workspaces__workspace_id__configurations__configuration_id__export_get: {
-        parameters: {
-            query?: {
-                format?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                    "application/zip": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-                /** @description Configuration identifier */
-                configuration_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigurationRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_config_directory_api_v1_workspaces__workspace_id__configurations__configuration_id__directories__directory_path__put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6420,7 +6857,9 @@ export interface operations {
             query?: {
                 recursive?: boolean;
             };
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6446,26 +6885,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_config_templates_api_v1_config_templates_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConfigTemplate"][];
                 };
             };
         };
@@ -6515,7 +6934,9 @@ export interface operations {
     create_build_endpoint_api_v1_workspaces__workspace_id__configurations__configuration_id__builds_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
@@ -6658,8 +7079,13 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                status?: components["schemas"]["RunStatus"][] | null;
+                q?: string | null;
                 input_document_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                has_output?: boolean | null;
+                /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
+                sort?: string | null;
             };
             header?: never;
             path: {
@@ -6668,7 +7094,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6693,7 +7123,9 @@ export interface operations {
     create_run_endpoint_api_v1_configurations__configuration_id__runs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Configuration identifier */
                 configuration_id: string;
@@ -6726,14 +7158,57 @@ export interface operations {
             };
         };
     };
+    create_runs_batch_endpoint_api_v1_configurations__configuration_id__runs_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Configuration identifier */
+                configuration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunBatchCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunBatchCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                status?: components["schemas"]["RunStatus"][] | null;
+                q?: string | null;
                 input_document_id?: string | null;
+                created_after?: string | null;
+                created_before?: string | null;
+                has_output?: boolean | null;
+                /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
+                sort?: string | null;
             };
             header?: never;
             path: {
@@ -6742,7 +7217,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6751,6 +7230,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_run_endpoint_api_v1_workspaces__workspace_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkspaceCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workspace_runs_batch_endpoint_api_v1_workspaces__workspace_id__runs_batch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunWorkspaceBatchCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunBatchCreateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6783,6 +7338,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_metrics_endpoint_api_v1_runs__run_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMetricsResource"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_fields_endpoint_api_v1_runs__run_id__fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunFieldResource"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_run_columns_endpoint_api_v1_runs__run_id__columns_get: {
+        parameters: {
+            query?: {
+                sheet_name?: string | null;
+                sheet_index?: number | null;
+                table_index?: number | null;
+                mapped_field?: string | null;
+                mapping_status?: ("mapped" | "ambiguous" | "unmapped" | "passthrough") | null;
+            };
+            header?: never;
+            path: {
+                /** @description Run identifier */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunColumnResource"][];
                 };
             };
             /** @description Validation Error */
@@ -6848,45 +7505,6 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_run_summary_endpoint_api_v1_runs__run_id__summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunSummary"];
-                };
-            };
-            /** @description Run summary not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -7006,43 +7624,6 @@ export interface operations {
             };
         };
     };
-    download_run_logs_file_endpoint_api_v1_runs__run_id__logs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Logs unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_run_output_metadata_endpoint_api_v1_runs__run_id__output_get: {
         parameters: {
             query?: never;
@@ -7126,70 +7707,6 @@ export interface operations {
             };
         };
     };
-    list_run_outputs_legacy_api_v1_runs__run_id__outputs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RunOutputFile"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_run_output_legacy_endpoint_api_v1_runs__run_id__outputs__output_path__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Run identifier */
-                run_id: string;
-                /** @description Legacy output path */
-                output_path: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     read_safe_mode_api_v1_system_safe_mode_get: {
         parameters: {
             query?: never;
@@ -7213,7 +7730,9 @@ export interface operations {
     update_safe_mode_api_v1_system_safe_mode_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

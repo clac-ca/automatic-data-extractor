@@ -17,7 +17,7 @@ anywhere without provisioning external infrastructure.
 
 
 ## 2. Prerequisites
-- **Python 3.14** with `pip` available on your `PATH`. Windows installers live at
+- **Python 3.11+** with `pip` available on your `PATH`. Windows installers live at
   <https://www.python.org/downloads/>.
 - **Node.js 20 LTS** (includes `npm`). Download from
   <https://nodejs.org/en/download/>.
@@ -60,7 +60,7 @@ export environment variables in your shell.
    cd automatic-data-extractor
    cp .env.example .env
 
-   python3.14 -m venv .venv
+   python3 -m venv .venv
    source .venv/bin/activate  # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
    python -m pip install --upgrade pip
@@ -122,8 +122,6 @@ git clone https://github.com/your-org/automatic-data-extractor.git
 cd automatic-data-extractor
 cp .env.example .env
 docker build -t ade:local .
-# or use the helper script
-# ade docker:build
 ```
 
 ### 5.2 Run the container
@@ -133,8 +131,6 @@ docker run -d --name ade-backend \
   -p 8000:8000 \
   -v "$(pwd)/data:/app/data" \
   ade:local
-# or run interactively with
-# ade docker:up --detach
 ```
 
 The bind mount keeps the SQLite database and documents on the host so they

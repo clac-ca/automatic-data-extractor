@@ -19,19 +19,17 @@ from fastapi import (
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 
-from ade_api.app.dependencies import get_builds_service
+from ade_api.api.deps import get_builds_service
 from ade_api.common.encoding import json_bytes
-from ade_api.common.logging import log_context
+from ade_api.common.events import strip_sequence
+from ade_api.common.sse import sse_json
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
-from ade_api.core.models import BuildStatus
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
-from ade_api.infra.db.session import get_sessionmaker
-from ade_api.schemas.events import AdeEvent
+from ade_api.models import BuildStatus
 from ade_api.settings import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 
-from .exceptions import BuildAlreadyInProgressError, BuildNotFoundError
+from .exceptions import BuildNotFoundError
 from .schemas import (
-    BuildCreateOptions,
     BuildCreateRequest,
     BuildEventsPage,
     BuildFilters,
@@ -39,7 +37,8 @@ from .schemas import (
     BuildPage,
     BuildResource,
 )
-from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildExecutionContext, BuildsService
+from .service import DEFAULT_EVENTS_PAGE_LIMIT, BuildsService
+from .tasks import execute_build_background
 
 router = APIRouter(tags=["builds"], dependencies=[Security(require_authenticated)])
 builds_service_dependency = Depends(get_builds_service)
@@ -62,63 +61,7 @@ async def resolve_build_filters(
 
 
 def _event_bytes(event: Any) -> bytes:
-    if isinstance(event, AdeEvent):
-        return event.model_dump_json().encode("utf-8") + b"\n"
-    if hasattr(event, "json_bytes"):
-        return event.json_bytes() + b"\n"
     return json_bytes(event) + b"\n"
-
-
-def _sse_event_bytes(event: AdeEvent) -> bytes:
-    """Format an AdeEvent for SSE with resumable sequence IDs."""
-
-    payload = event.model_dump_json()
-    lines = payload.splitlines() or [""]
-    parts: list[str] = []
-    if event.sequence is not None:
-        parts.append(f"id: {event.sequence}")
-    parts.append(f"event: {event.type}")
-    parts.extend(f"data: {line}" for line in lines)
-    return "\n".join(parts).encode("utf-8") + b"\n\n"
-
-
-async def _execute_build_background(
-    context_data: dict[str, Any],
-    options_data: dict[str, Any],
-    settings_payload: dict[str, Any],
-) -> None:
-    from ade_api.app.dependencies import get_build_event_dispatcher
-    from ade_api.features.configs.storage import ConfigStorage
-    from ade_api.settings import Settings
-
-    settings = Settings(**settings_payload)
-    session_factory = get_sessionmaker(settings=settings)
-    storage = ConfigStorage(settings=settings)
-    dispatcher = get_build_event_dispatcher(settings=settings)
-    context = BuildExecutionContext.from_dict(context_data)
-    options = BuildCreateOptions(**options_data)
-    async with session_factory() as session:
-        service = BuildsService(
-            session=session,
-            settings=settings,
-            storage=storage,
-            event_dispatcher=dispatcher,
-            event_storage=dispatcher.storage,
-        )
-        try:
-            await service.run_to_completion(context=context, options=options)
-        except Exception:  # pragma: no cover - defensive logging
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.exception(
-                "build.background.failed",
-                extra=log_context(
-                    workspace_id=context.workspace_id,
-                    configuration_id=context.configuration_id,
-                    build_id=context.build_id,
-                ),
-            )
 
 
 @router.get(
@@ -196,12 +139,10 @@ async def create_build_endpoint(
         )
     except ConfigurationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except BuildAlreadyInProgressError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     resource = service.to_resource(build)
     background_tasks.add_task(
-        _execute_build_background,
+        execute_build_background,
         context.as_dict(),
         payload.options.model_dump(),
         service.settings.model_dump(mode="python"),
@@ -242,6 +183,7 @@ async def list_build_events_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     if format == "ndjson":
+
         async def event_stream() -> AsyncIterator[bytes]:
             for event in events:
                 yield _event_bytes(event)
@@ -262,9 +204,11 @@ async def stream_build_events_endpoint(
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
 
-    last_event_id_header = (
-        request.headers.get("last-event-id")
-        or request.headers.get("Last-Event-ID")
+    # Kick off execution if this build is still pending; stream will then tail events.
+    await service.launch_build_if_needed(build=build, reason="sse_stream", run_id=None)
+
+    last_event_id_header = request.headers.get("last-event-id") or request.headers.get(
+        "Last-Event-ID"
     )
     start_sequence = after_sequence
     if start_sequence is None and last_event_id_header:
@@ -275,33 +219,54 @@ async def stream_build_events_endpoint(
     start_sequence = start_sequence or 0
 
     async def event_stream() -> AsyncIterator[bytes]:
-        reader = service.event_log_reader(
-            workspace_id=build.workspace_id,
-            configuration_id=build.configuration_id,
-            build_id=build.id,
-        )
         last_sequence = start_sequence
-        stream_complete = False
 
-        for event in reader.iter(after_sequence=start_sequence):
-            yield _sse_event_bytes(event)
-            if event.sequence:
-                last_sequence = event.sequence
-            if event.type in {"build.complete", "build.failed"}:
-                stream_complete = True
-                break
+        async with service.subscribe_to_events(build) as subscription:
+            for event in service.iter_events(build=build, after_sequence=start_sequence):
+                seq = event.get("sequence")
+                if isinstance(seq, int):
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                payload = strip_sequence(event)
+                yield sse_json(
+                    str(event.get("event") or "message"),
+                    payload,
+                    event_id=last_sequence,
+                )
+                if event.get("event") in {"build.complete", "build.failed"}:
+                    return
 
-        if stream_complete:
-            return
+            build_already_finished = build.status in {
+                BuildStatus.READY,
+                BuildStatus.FAILED,
+                BuildStatus.CANCELLED,
+            }
+            if build_already_finished:
+                return
 
-        async with service.subscribe_to_events(build.id) as subscription:
             async for live_event in subscription:
-                if live_event.sequence and live_event.sequence <= last_sequence:
-                    continue
-                yield _sse_event_bytes(live_event)
-                if live_event.sequence:
-                    last_sequence = live_event.sequence
-                if live_event.type in {"build.complete", "build.failed"}:
+                seq = live_event.get("sequence")
+                if isinstance(seq, int):
+                    if seq <= last_sequence:
+                        continue
+                    last_sequence = seq
+                else:
+                    last_sequence += 1
+                payload = strip_sequence(live_event)
+                yield sse_json(
+                    str(live_event.get("event") or "message"),
+                    payload,
+                    event_id=last_sequence,
+                )
+                if live_event.get("event") in {"build.complete", "build.failed"}:
                     break
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -1,60 +1,153 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  // "dark" is a MODE, not a THEME
+  darkMode: ["class", '[data-mode="dark"]'],
   theme: {
     extend: {
       colors: {
+        // System semantics (what UI should use)
+        background: "rgb(var(--sys-color-bg) / <alpha-value>)",
+        foreground: "rgb(var(--sys-color-fg) / <alpha-value>)",
+
+        card: "rgb(var(--sys-color-surface) / <alpha-value>)",
+        "card-foreground": "rgb(var(--sys-color-fg) / <alpha-value>)",
+
+        popover: "rgb(var(--sys-color-surface-elevated) / <alpha-value>)",
+        "popover-foreground": "rgb(var(--sys-color-fg) / <alpha-value>)",
+
+        muted: "rgb(var(--sys-color-surface-muted) / <alpha-value>)",
+        "muted-foreground": "rgb(var(--sys-color-fg-muted) / <alpha-value>)",
+
+        border: "rgb(var(--sys-color-border) / <alpha-value>)",
+        "border-strong": "rgb(var(--sys-color-border-strong) / <alpha-value>)",
+
+        ring: "rgb(var(--sys-color-ring) / <alpha-value>)",
+        overlay: "rgb(var(--sys-color-overlay) / <alpha-value>)",
+        shadow: "rgb(var(--sys-color-shadow) / <alpha-value>)",
+
+        // Chrome: header
+        header: "rgb(var(--sys-color-header-bg) / <alpha-value>)",
+        "header-foreground": "rgb(var(--sys-color-header-fg) / <alpha-value>)",
+        "header-muted": "rgb(var(--sys-color-header-fg-muted) / <alpha-value>)",
+        "header-border": "rgb(var(--sys-color-header-border) / <alpha-value>)",
+        "header-ring": "rgb(var(--sys-color-header-ring) / <alpha-value>)",
+
+        // Chrome: sidebar
+        sidebar: "rgb(var(--sys-color-sidebar-bg) / <alpha-value>)",
+        "sidebar-foreground": "rgb(var(--sys-color-sidebar-fg) / <alpha-value>)",
+        "sidebar-muted": "rgb(var(--sys-color-sidebar-fg-muted) / <alpha-value>)",
+        "sidebar-border": "rgb(var(--sys-color-sidebar-border) / <alpha-value>)",
+        "sidebar-ring": "rgb(var(--sys-color-sidebar-ring) / <alpha-value>)",
+        "sidebar-item": "rgb(var(--sys-color-sidebar-item-bg) / <alpha-value>)",
+        "sidebar-item-hover": "rgb(var(--sys-color-sidebar-item-hover) / <alpha-value>)",
+        "sidebar-item-active": "rgb(var(--sys-color-sidebar-item-active) / <alpha-value>)",
+        "sidebar-item-indicator": "rgb(var(--sys-color-sidebar-item-indicator) / <alpha-value>)",
+
+        // Legacy shell (alias to header)
+        shell: "rgb(var(--sys-color-shell-bg) / <alpha-value>)",
+        "shell-foreground": "rgb(var(--sys-color-shell-fg) / <alpha-value>)",
+        "shell-muted": "rgb(var(--sys-color-shell-muted) / <alpha-value>)",
+        "shell-border": "rgb(var(--sys-color-shell-border) / <alpha-value>)",
+        "shell-hover": "rgb(var(--sys-color-shell-hover) / <alpha-value>)",
+        "shell-active": "rgb(var(--sys-color-shell-active) / <alpha-value>)",
+        "shell-active-indicator": "rgb(var(--sys-color-shell-active-indicator) / <alpha-value>)",
+        "shell-ring": "rgb(var(--sys-color-shell-ring) / <alpha-value>)",
+
+        // Component surfaces
+        terminal: "rgb(var(--comp-terminal-bg) / <alpha-value>)",
+        "terminal-foreground": "rgb(var(--comp-terminal-fg) / <alpha-value>)",
+        "terminal-muted": "rgb(var(--comp-terminal-muted) / <alpha-value>)",
+        "terminal-border": "rgb(var(--comp-terminal-border) / <alpha-value>)",
+
+        // Reference ramps (exposed for charts, data viz, etc)
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
-          300: "#a5b4fc",
-          400: "#818cf8",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#3730a3",
-          900: "#312e81",
+          50: "rgb(var(--ref-accent-50) / <alpha-value>)",
+          100: "rgb(var(--ref-accent-100) / <alpha-value>)",
+          200: "rgb(var(--ref-accent-200) / <alpha-value>)",
+          300: "rgb(var(--ref-accent-300) / <alpha-value>)",
+          400: "rgb(var(--ref-accent-400) / <alpha-value>)",
+          500: "rgb(var(--ref-accent-500) / <alpha-value>)",
+          600: "rgb(var(--ref-accent-600) / <alpha-value>)",
+          700: "rgb(var(--ref-accent-700) / <alpha-value>)",
+          800: "rgb(var(--ref-accent-800) / <alpha-value>)",
+          900: "rgb(var(--ref-accent-900) / <alpha-value>)",
         },
+
         success: {
-          50: "#ecfdf3",
-          100: "#d1fadf",
-          200: "#a6f4c5",
-          300: "#6ce9a6",
-          400: "#32d583",
-          500: "#12b76a",
-          600: "#039855",
-          700: "#027a48",
-          800: "#05603a",
-          900: "#054f31",
+          50: "rgb(var(--ref-success-50) / <alpha-value>)",
+          100: "rgb(var(--ref-success-100) / <alpha-value>)",
+          200: "rgb(var(--ref-success-200) / <alpha-value>)",
+          300: "rgb(var(--ref-success-300) / <alpha-value>)",
+          400: "rgb(var(--ref-success-400) / <alpha-value>)",
+          500: "rgb(var(--ref-success-500) / <alpha-value>)",
+          600: "rgb(var(--ref-success-600) / <alpha-value>)",
+          700: "rgb(var(--ref-success-700) / <alpha-value>)",
+          800: "rgb(var(--ref-success-800) / <alpha-value>)",
+          900: "rgb(var(--ref-success-900) / <alpha-value>)",
         },
+
         warning: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#78350f",
+          50: "rgb(var(--ref-warning-50) / <alpha-value>)",
+          100: "rgb(var(--ref-warning-100) / <alpha-value>)",
+          200: "rgb(var(--ref-warning-200) / <alpha-value>)",
+          300: "rgb(var(--ref-warning-300) / <alpha-value>)",
+          400: "rgb(var(--ref-warning-400) / <alpha-value>)",
+          500: "rgb(var(--ref-warning-500) / <alpha-value>)",
+          600: "rgb(var(--ref-warning-600) / <alpha-value>)",
+          700: "rgb(var(--ref-warning-700) / <alpha-value>)",
+          800: "rgb(var(--ref-warning-800) / <alpha-value>)",
+          900: "rgb(var(--ref-warning-900) / <alpha-value>)",
         },
+
         danger: {
-          50: "#fef2f2",
-          100: "#fee2e2",
-          200: "#fecaca",
-          300: "#fca5a5",
-          400: "#f87171",
-          500: "#ef4444",
-          600: "#dc2626",
-          700: "#b91c1c",
-          800: "#991b1b",
-          900: "#7f1d1d",
+          50: "rgb(var(--ref-danger-50) / <alpha-value>)",
+          100: "rgb(var(--ref-danger-100) / <alpha-value>)",
+          200: "rgb(var(--ref-danger-200) / <alpha-value>)",
+          300: "rgb(var(--ref-danger-300) / <alpha-value>)",
+          400: "rgb(var(--ref-danger-400) / <alpha-value>)",
+          500: "rgb(var(--ref-danger-500) / <alpha-value>)",
+          600: "rgb(var(--ref-danger-600) / <alpha-value>)",
+          700: "rgb(var(--ref-danger-700) / <alpha-value>)",
+          800: "rgb(var(--ref-danger-800) / <alpha-value>)",
+          900: "rgb(var(--ref-danger-900) / <alpha-value>)",
+        },
+
+        info: {
+          50: "rgb(var(--ref-info-50) / <alpha-value>)",
+          100: "rgb(var(--ref-info-100) / <alpha-value>)",
+          200: "rgb(var(--ref-info-200) / <alpha-value>)",
+          300: "rgb(var(--ref-info-300) / <alpha-value>)",
+          400: "rgb(var(--ref-info-400) / <alpha-value>)",
+          500: "rgb(var(--ref-info-500) / <alpha-value>)",
+          600: "rgb(var(--ref-info-600) / <alpha-value>)",
+          700: "rgb(var(--ref-info-700) / <alpha-value>)",
+          800: "rgb(var(--ref-info-800) / <alpha-value>)",
+          900: "rgb(var(--ref-info-900) / <alpha-value>)",
+        },
+
+        // Semantic "on-*" tokens (useful for badges/buttons)
+        "on-brand": "rgb(var(--sys-color-on-accent) / <alpha-value>)",
+        "on-success": "rgb(var(--sys-color-on-success) / <alpha-value>)",
+        "on-warning": "rgb(var(--sys-color-on-warning) / <alpha-value>)",
+        "on-danger": "rgb(var(--sys-color-on-danger) / <alpha-value>)",
+        "on-info": "rgb(var(--sys-color-on-info) / <alpha-value>)",
+
+        filetype: {
+          json: "rgb(var(--comp-file-json) / <alpha-value>)",
+          py: "rgb(var(--comp-file-py) / <alpha-value>)",
+          ts: "rgb(var(--comp-file-ts) / <alpha-value>)",
+          tsx: "rgb(var(--comp-file-tsx) / <alpha-value>)",
+          js: "rgb(var(--comp-file-js) / <alpha-value>)",
+          jsx: "rgb(var(--comp-file-jsx) / <alpha-value>)",
+          md: "rgb(var(--comp-file-md) / <alpha-value>)",
+          env: "rgb(var(--comp-file-env) / <alpha-value>)",
+          txt: "rgb(var(--comp-file-txt) / <alpha-value>)",
+          lock: "rgb(var(--comp-file-lock) / <alpha-value>)",
         },
       },
       boxShadow: {
-        soft: "0 20px 45px -25px rgba(15, 23, 42, 0.45)",
+        soft: "0 20px 45px -25px rgb(var(--sys-color-shadow) / 0.45)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
@@ -62,4 +155,4 @@ export default {
     },
   },
   plugins: [],
-}
+};

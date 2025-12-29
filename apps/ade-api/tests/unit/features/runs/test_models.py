@@ -5,8 +5,20 @@ from datetime import datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ade_api.core.models import Configuration, ConfigurationStatus, Run, RunStatus, Workspace
-from ade_api.infra.db.mixins import generate_uuid7
+from ade_api.db.mixins import generate_uuid7
+from ade_api.common.time import utc_now
+from ade_api.models import (
+    Build,
+    BuildStatus,
+    Configuration,
+    ConfigurationStatus,
+    Document,
+    DocumentSource,
+    DocumentStatus,
+    Run,
+    RunStatus,
+    Workspace,
+)
 
 
 async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Configuration]:
@@ -31,21 +43,47 @@ async def _create_configuration(session: AsyncSession) -> tuple[Workspace, Confi
 async def test_run_defaults(session: AsyncSession) -> None:
     workspace, configuration = await _create_configuration(session)
 
-    run = Run(workspace_id=workspace.id, configuration_id=configuration.id)
+    build = Build(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        fingerprint="fingerprint",
+        status=BuildStatus.READY,
+        created_at=utc_now(),
+    )
+    session.add(build)
+    await session.flush()
+
+    document = Document(
+        id=generate_uuid7(),
+        workspace_id=workspace.id,
+        original_filename="input.csv",
+        content_type="text/csv",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/input.csv",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add(document)
+    await session.flush()
+
+    run = Run(
+        workspace_id=workspace.id,
+        configuration_id=configuration.id,
+        build_id=build.id,
+        input_document_id=document.id,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
 
     assert run.status is RunStatus.QUEUED
-    assert run.attempt == 1
-    assert run.retry_of_run_id is None
-    assert run.trace_id is None
-    assert run.input_document_id is None
+    assert run.input_document_id == document.id
     assert run.input_sheet_names is None
     assert isinstance(run.created_at, datetime)
     assert run.started_at is None
-    assert run.finished_at is None
+    assert run.completed_at is None
     assert run.cancelled_at is None
-    assert run.artifact_uri is None
-    assert run.output_uri is None
-    assert run.logs_uri is None

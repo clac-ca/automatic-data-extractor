@@ -34,8 +34,7 @@
 - **JSON field style:** `snake_case`.
 - **Content negotiation:**  
   - Default read → `application/octet-stream` (bytes).  
-  - `Accept: application/json` → JSON helper with inline text, metadata.  
-  - (Optional compat) `?format=json` may map to JSON helper but **header is canonical**.
+  - `Accept: application/json` → JSON helper with inline text, metadata.
 - **Caching & concurrency:**  
   - **Listings:** Weak `ETag: W/"<fileset-hash>"`, honor `If-None-Match` → `304`.  
   - **Items:** Strong `ETag: "<opaque>"`, honor `If-Match` for update/delete/rename; `If-None-Match: *` for create.
@@ -272,7 +271,6 @@ DELETE /workspaces/{workspace_id}/configurations/{config_id}/files/{path}
   "status": 412,
   "detail": "ETag mismatch",
   "code": "precondition_failed",
-  "trace_id": "7c6e8b9f3b5c",
   "meta": { "current_etag": "\"7f6d…\"" }
 }
 ```
@@ -297,16 +295,7 @@ DELETE /workspaces/{workspace_id}/configurations/{config_id}/files/{path}
 
 ---
 
-## 7) Backward Compatibility & Migration
-
-* **Reads:** continue to support `?format=json`, but recommend `Accept: application/json`.
-* **Writes:** 201 previously without body → now returns **FileWriteResponse**; legacy clients may ignore body safely.
-* **Rename:** new `PATCH` endpoint. If a legacy client sees `404/405`, it may fall back to PUT+DELETE (not recommended).
-* **Errors:** all file endpoints now return `application/problem+json`.
-
----
-
-## 8) Acceptance Criteria
+## 7) Acceptance Criteria
 
 * Listing honors `If-None-Match` and returns `304` when unchanged; `fileset_hash` stable across pagination windows.
 * UI can render a large tree without additional fetches using `parent`, `depth`, `has_children`.
@@ -317,7 +306,7 @@ DELETE /workspaces/{workspace_id}/configurations/{config_id}/files/{path}
 
 ---
 
-## 9) Test Plan (representative)
+## 8) Test Plan (representative)
 
 **Unit**
 

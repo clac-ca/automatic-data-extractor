@@ -17,25 +17,15 @@ const ITEMS: Array<{ id: ActivityBarView; label: string; icon: React.ReactNode }
   { id: "extensions", label: "Extensions", icon: <ExtensionsIcon /> },
 ];
 
-export function ActivityBar({ activeView, onSelectView, onOpenSettings, appearance }: ActivityBarProps) {
-  const theme =
-    appearance === "dark"
-      ? {
-          bg: "bg-[#1b1b1f]",
-          border: "border-[#111111]",
-          iconIdle: "text-slate-400",
-          iconActive: "text-[#4fc1ff]",
-          hover: "hover:text-white hover:bg-white/5 focus-visible:text-white",
-          indicator: "bg-[#4fc1ff]",
-        }
-      : {
-          bg: "bg-[#f3f3f3]",
-          border: "border-[#d0d0d0]",
-          iconIdle: "text-slate-500",
-          iconActive: "text-[#005fb8]",
-          hover: "hover:text-[#0f172a] hover:bg-black/5 focus-visible:text-[#0f172a]",
-          indicator: "bg-[#005fb8]",
-        };
+export function ActivityBar({ activeView, onSelectView, onOpenSettings, appearance: _appearance }: ActivityBarProps) {
+  const theme = {
+    bg: "bg-card",
+    border: "border-border",
+    iconIdle: "text-muted-foreground",
+    iconActive: "text-brand-400",
+    hover: "hover:text-foreground hover:bg-muted focus-visible:text-foreground",
+    indicator: "bg-brand-500",
+  };
 
   return (
     <aside

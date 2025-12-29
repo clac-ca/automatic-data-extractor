@@ -1,4 +1,6 @@
-export type BuildStatus = "queued" | "building" | "ready" | "failed" | "cancelled";
+import type { components } from "@schema";
 
-// Build streaming now uses the unified AdeEvent envelope. Helpers live in
-// @shared/runs/types (AdeEvent + type guards). This file keeps the status union.
+export type BuildStatus = components["schemas"]["BuildStatus"];
+
+// Build streaming reuses the unified EventRecord envelope. Helpers live in
+// @shared/runs/types; this file keeps the API-sourced status union.

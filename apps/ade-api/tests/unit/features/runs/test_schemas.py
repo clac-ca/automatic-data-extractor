@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 
-from ade_api.core.models import RunStatus
 from ade_api.features.runs.schemas import (
     RunCreateOptions,
     RunCreateRequest,
@@ -13,6 +12,7 @@ from ade_api.features.runs.schemas import (
     RunLinks,
     RunResource,
 )
+from ade_api.models import RunStatus
 
 
 @pytest.fixture
@@ -21,12 +21,13 @@ def run_identifiers() -> dict[str, UUID]:
         "run_id": uuid4(),
         "workspace_id": uuid4(),
         "configuration_id": uuid4(),
+        "build_id": uuid4(),
     }
 
 
 @pytest.fixture
 def timestamp() -> datetime:
-    return datetime(2024, 1, 1, tzinfo=timezone.utc)
+    return datetime(2024, 1, 1, tzinfo=UTC)
 
 
 def _links_for(run_id: UUID) -> RunLinks:
@@ -34,11 +35,10 @@ def _links_for(run_id: UUID) -> RunLinks:
     base = f"/api/v1/runs/{run_str}"
     return RunLinks(
         self=base,
-        summary=f"{base}/summary",
         events=f"{base}/events",
         events_stream=f"{base}/events/stream",
         events_download=f"{base}/events/download",
-        logs=f"{base}/logs",
+        logs=f"{base}/events/download",
         input=f"{base}/input",
         input_download=f"{base}/input/download",
         output=f"{base}/output/download",
@@ -54,6 +54,7 @@ def test_run_resource_dump_uses_aliases_and_defaults(
         id=run_identifiers["run_id"],
         workspace_id=run_identifiers["workspace_id"],
         configuration_id=run_identifiers["configuration_id"],
+        build_id=run_identifiers["build_id"],
         status=RunStatus.QUEUED,
         created_at=timestamp,
         links=_links_for(run_identifiers["run_id"]),
@@ -79,10 +80,19 @@ def test_run_create_options_captures_input_document() -> None:
 
 
 def test_run_create_request_serializes_minimal_options() -> None:
-    request = RunCreateRequest()
+    request = RunCreateRequest(
+        options=RunCreateOptions(input_document_id=uuid4()),
+    )
     payload = request.model_dump()
 
-    assert payload == {"options": {"dry_run": False, "validate_only": False, "force_rebuild": False}}
+    assert payload == {
+        "options": {
+            "dry_run": False,
+            "validate_only": False,
+            "force_rebuild": False,
+            "input_document_id": request.options.input_document_id,
+        }
+    }
 
 
 @pytest.mark.parametrize("cursor", [9, None])

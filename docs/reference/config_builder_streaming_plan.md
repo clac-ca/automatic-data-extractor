@@ -20,7 +20,7 @@ preferences.
 
 ## Non-goals
 
-- Replacing the legacy validation API (keep using it for structured
+- Replacing the current validation API (keep using it for structured
 issues until runs expose equivalent payloads).
 - Implementing document-level run triggers (covered by the documents
 screen work).
@@ -48,14 +48,14 @@ screen work).
 4. **User actions**
    - "Run validation" triggers a streaming run (`validate_only: true`) and
      still invokes the validation mutation for structured issues in Problems.
-   - "Test run" triggers a streaming extraction; when complete, the chrome pill
-     and the `Run` tab surface outputs/summary/telemetry.
+- "Test run" triggers a streaming extraction; when complete, the chrome pill
+  and the `Run` tab surface outputs and event logs.
    - Both actions open the panel and focus the `Terminal` tab by default.
 
 5. **Error handling & UX polish**
    - Catch `ApiError` and aborted fetches; append error messages to the
      console and surface a transient toast/notice in the workbench chrome.
-   - When operations finish, append a succinct summary line (status/duration)
+- When operations finish, append a succinct status line (status/duration)
      and update the chrome "Last run" pill so users notice outcomes even if the
      panel is collapsed.
 

@@ -28,7 +28,6 @@
       "properties": {
         "run_id": { "type": "string", "minLength": 1 },
         "config_version_id": { "type": ["string", "null"] },
-        "trace_id": { "type": ["string", "null"] },
         "status": { "type": "string", "enum": ["succeeded", "failed"] },
         "started_at": { "type": "string", "format": "date-time" },
         "completed_at": { "type": "string", "format": "date-time" },

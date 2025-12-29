@@ -2,13 +2,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useNavigate } from "@app/nav/history";
-import { deleteWorkspace, workspacesKeys } from "@features/Workspace/api/workspaces-api";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { deleteWorkspace, workspacesKeys } from "@shared/workspaces";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { Alert } from "@ui/Alert";
 import { Button } from "@ui/Button";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 
 export function DangerSettingsPage() {
@@ -43,11 +43,11 @@ export function DangerSettingsPage() {
         description="Delete this workspace when it is no longer needed."
       />
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-slate-900">Delete workspace</h3>
-            <p className="text-sm text-slate-600">
+            <h3 className="text-lg font-semibold text-foreground">Delete workspace</h3>
+            <p className="text-sm text-muted-foreground">
               Permanently remove this workspace and all associated data. This action cannot be undone.
             </p>
           </div>
@@ -72,12 +72,12 @@ export function DangerSettingsPage() {
             {feedback}
           </Alert>
         ) : null}
-        <p className="mt-3 text-sm text-amber-700">
+        <p className="mt-3 text-sm text-warning-700">
           All workspace configurations, documents, runs, and history will be removed.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="rounded-2xl border border-warning-100 bg-warning-50 p-4 text-sm text-warning-800">
         <p className="font-semibold">Looking for ADE safe mode?</p>
         <p className="mt-1">
           Safe mode is a system-wide control. Manage it from the system settings area instead of workspace settings.
@@ -113,7 +113,7 @@ export function DangerSettingsPage() {
             disabled={deleteWorkspaceMutation.isPending}
           />
         </FormField>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
             Enter <strong>{workspace.slug}</strong> to confirm deletion.
           </p>
       </ConfirmDialog>

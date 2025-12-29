@@ -33,8 +33,7 @@ class ApiKeyCreateRequest(BaseSchema):
     scope_id: UUIDStr | None = Field(
         default=None,
         description=(
-            "Workspace identifier when scope_type=workspace. "
-            "Must be null for global keys."
+            "Workspace identifier when scope_type=workspace. Must be null for global keys."
         ),
     )
 

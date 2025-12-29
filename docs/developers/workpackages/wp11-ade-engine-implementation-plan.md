@@ -26,7 +26,7 @@ breaks the implementation into incremental, testable milestones.
 - **Frozen execution environment:** Runs must execute inside the build-specific virtual environment referenced by the backend so results remain reproducible and isolated from other tenants.【F:docs/developers/02-build-venv.md†L7-L38】【F:docs/developers/workpackages/wp6-runs-integration.md†L7-L24】
 - **Run directory contract:** All reads and writes are confined to the run's `input/`, `output/`, and `logs/` folders, with artifact and event writers persisting into `artifact.json` and `events.ndjson` respectively.【F:docs/developers/README.md†L100-L116】
 - **Five-pass pipeline fidelity:** The runtime must follow the documented detection → mapping → transform → validate → output sequence so tooling and documentation stay aligned.【F:docs/developers/README.md†L126-L165】
-- **CLI compatibility:** Maintain the manifest inspection mode for `python -m ade_engine` while adding a worker entry point consumable by the runs service; flag-breaking changes in advance.【F:docs/ade_runs_api_spec.md†L298-L355】
+- **CLI behavior:** Maintain the manifest inspection mode for `python -m ade_engine` while adding a worker entry point consumable by the runs service; flag-breaking changes in advance.【F:docs/ade_runs_api_spec.md†L298-L355】
 
 ## Source Material Reviewed
 - Developer overview of build/run lifecycle and config layout.【F:docs/developers/README.md†L1-L196】
@@ -56,10 +56,10 @@ breaks the implementation into incremental, testable milestones.
 
 ### 1. Runtime Foundations
 - Define configuration/data directories helper (resolve `ADE_*` env vars, default paths). Reuse logic from backend if available.
-- Model core dataclasses: `RunContext`, `TableContext`, `ArtifactWriter`, `EventLogger`.
+- Model core dataclasses: `RunContext`, `TableContext`, `ArtifactWriter`, `EventEmitter`.
 - Implement artifact + event appenders that enforce atomic writes inside `runs/<run_id>/`.
 - Establish manifest loading + validation utilities (extend `load_config_manifest` with schema guardrails if schemas exist).
-- Expand CLI arguments to accept `--run-id` and `--runs-dir` once worker path is ready; keep backward-compatible manifest mode.
+- Expand CLI arguments to accept `--run-id` and `--runs-dir` once worker path is ready; keep manifest inspection mode.
 
 ### 2. Config Import & Hook Wiring
 - Implement loader that imports `ade_config` modules (detectors, hooks) from the installed package.
@@ -157,7 +157,7 @@ breaks the implementation into incremental, testable milestones.
 Completed this iteration by introducing the `RunService` facade, isolating table processing into pure helpers, and implementing a configurable telemetry layer that unifies correlation metadata and severity thresholds across artifact and event sinks.
 
 ## Remaining Frontend & Backend Integration Work
-- [x] Update the runs service to execute the new worker entry point by supplying `--run-id`/`--runs-dir` arguments (or calling `run_run` directly) so platform runs drive actual runs instead of invoking the legacy manifest-printing CLI. Align the subprocess environment with the run directory layout and safe-mode semantics exposed by the runtime.【F:apps/ade-api/src/ade_api/features/runs/service.py†L332-L427】【F:apps/ade-engine/src/ade_engine/__main__.py†L12-L88】
+- [x] Update the runs service to execute the new worker entry point by supplying `--run-id`/`--runs-dir` arguments (or calling `run_run` directly) so platform runs drive actual runs instead of invoking the manifest-printing CLI. Align the subprocess environment with the run directory layout and safe-mode semantics exposed by the runtime.【F:apps/ade-api/src/ade_api/features/runs/service.py†L332-L427】【F:apps/ade-engine/src/ade_engine/__main__.py†L12-L88】
 - [x] Replace the placeholder runs router/service with an implementation that persists submissions, provisions run folders, and associates runs with run metadata/artifacts that the frontend can display.【F:apps/ade-api/src/ade_api/features/runs/router.py†L1-L120】【F:apps/ade-api/src/ade_api/features/runs/service.py†L1-L272】
 - [x] Ensure the workspace UI flows continue end-to-end once the backend endpoints exist: the documents drawer currently posts to `/runs` and expects a `RunRecord`, and validation mode streams run events over NDJSON, so both APIs must emit the shapes the SPA consumes.【F:apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx†L626-L704】【F:apps/ade-web/src/shared/runs/api.ts†L1-L24】
 
@@ -173,7 +173,7 @@ Completed this iteration by introducing the `RunService` facade, isolating table
 
 ## Architecture Hindsight (Round 4)
 - The new async runner still leaves the API service responsible for low-level process management. Standing up a dedicated runs orchestrator (e.g., a worker queue or supervisor service) would decouple HTTP lifecycle concerns from long-running ADE executions and simplify retries or cancellation.
-- Schema alignment between the backend and SPA improved once schemas were centralized, but the engine still owns bespoke Pydantic models. Consolidating all schema generation into a single package (with codegen for Python and TypeScript) would ensure versioned compatibility across every layer.
+- Schema alignment between the backend and SPA improved once schemas were centralized, but the engine still owns bespoke Pydantic models. Consolidating all schema generation into a single package (with codegen for Python and TypeScript) would ensure versioned consistency across every layer.
 - Telemetry envelopes are now versioned, yet our persistence strategy remains file-system–centric. Introducing a telemetry bus abstraction (writing to disk, SSE, or external collectors) could support richer analytics without rewriting the pipeline.
 
 ### Follow-Up Tasks Under Consideration
@@ -191,4 +191,4 @@ Implemented a request-scoped run supervisor that streams ADE subprocess output t
 ### Follow-Up Tasks For Future Consideration
 - [ ] Prototype a standalone run orchestration service (or queue-backed worker) that the API enqueues into while the supervisor subscribes to progress events instead of spawning subprocesses inline.
 - [ ] Extend the bundled schema source to emit TypeScript declarations (or JSON Schema) that the SPA can import directly, replacing bespoke telemetry/mapping view models.
-- [ ] Experiment with a telemetry event bus that fans out envelopes to durable stores (database, object storage) and live consumers simultaneously, keeping filesystem sinks as a compatibility layer.
+- [ ] Experiment with a telemetry event bus that fans out envelopes to durable stores (database, object storage) and live consumers simultaneously, keeping filesystem sinks as the default layer.

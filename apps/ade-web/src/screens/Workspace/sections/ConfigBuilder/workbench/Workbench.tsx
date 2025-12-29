@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type MouseEventHandler,
   type ReactNode,
@@ -13,6 +14,8 @@ import clsx from "clsx";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 
+import { useNavigate } from "@app/nav/history";
+
 import { ActivityBar, type ActivityBarView } from "./components/ActivityBar";
 import { BottomPanel } from "./components/BottomPanel";
 import { EditorArea } from "./components/EditorArea";
@@ -21,15 +24,17 @@ import { PanelResizeHandle } from "./components/PanelResizeHandle";
 import { useWorkbenchFiles } from "./state/useWorkbenchFiles";
 import { useWorkbenchUrlState } from "./state/useWorkbenchUrlState";
 import { useUnsavedChangesGuard } from "./state/useUnsavedChangesGuard";
-import { useEditorThemePreference } from "./state/useEditorThemePreference";
-import type { EditorThemePreference } from "./state/useEditorThemePreference";
 import type {
   WorkbenchDataSeed,
+  WorkbenchUploadFile,
 } from "./types";
 import { clamp, trackPointerDrag } from "./utils/drag";
 import { createWorkbenchTreeFromListing, findFileNode, findFirstFile } from "./utils/tree";
+import { hasFileDrag } from "./utils/fileDrop";
+import { isAssetsWorkbenchPath, isSafeWorkbenchPath, joinWorkbenchPath, normalizeWorkbenchPath } from "./utils/paths";
 
 import { ContextMenu, type ContextMenuItem } from "@ui/ContextMenu";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { SplitButton } from "@ui/SplitButton";
 import { PageState } from "@ui/PageState";
 
@@ -40,12 +45,15 @@ import {
   useCreateConfigurationDirectoryMutation,
   useDeleteConfigurationDirectoryMutation,
 } from "@shared/configurations/hooks/useConfigurationFiles";
+import { useConfigurationsQuery } from "@shared/configurations/hooks/useConfigurationsQuery";
+import { useDuplicateConfigurationMutation, useMakeActiveConfigurationMutation } from "@shared/configurations/hooks/useConfigurationLifecycle";
 import { useReplaceConfigurationMutation } from "@shared/configurations/hooks/useConfigurationImport";
 import { configurationKeys } from "@shared/configurations/keys";
-import { exportConfiguration, readConfigurationFileJson } from "@shared/configurations/api";
+import { exportConfiguration, readConfigurationFileJson, validateConfiguration } from "@shared/configurations/api";
 import type { FileReadJson } from "@shared/configurations/types";
 import { createScopedStorage } from "@shared/storage";
-import type { ConfigBuilderConsole } from "@app/nav/urlState";
+import { isDarkMode, useTheme } from "@shared/theme";
+import type { WorkbenchConsoleState } from "./state/workbenchSearchParams";
 import { ApiError } from "@shared/api";
 import type { components } from "@schema";
 import { fetchDocumentSheets, type DocumentSheet } from "@shared/documents";
@@ -54,8 +62,11 @@ import { useNotifications, type NotificationIntent } from "@shared/notifications
 import { Select } from "@ui/Select";
 import { Button } from "@ui/Button";
 import { Alert } from "@ui/Alert";
+import { FormField } from "@ui/FormField";
+import { Input } from "@ui/Input";
 import { useRunSessionModel, type RunCompletionInfo } from "./state/useRunSessionModel";
 import { createLastSelectionStorage, persistLastSelection } from "../storage";
+import { normalizeConfigStatus, suggestDuplicateName } from "../utils/configs";
 
 const EXPLORER_LIMITS = { min: 200, max: 420 } as const;
 const MIN_EDITOR_HEIGHT = 320;
@@ -63,7 +74,7 @@ const MIN_EDITOR_HEIGHT_WITH_CONSOLE = 120;
 const MIN_CONSOLE_HEIGHT = 140;
 const DEFAULT_CONSOLE_HEIGHT = 220;
 const COLLAPSED_CONSOLE_BAR_HEIGHT = 40;
-const MAX_CONSOLE_LINES = 400;
+const MAX_CONSOLE_LINES = 2_000;
 const OUTPUT_HANDLE_THICKNESS = 10; // matches thicker PanelResizeHandle hit target
 const ACTIVITY_BAR_WIDTH = 56; // w-14
 const CONSOLE_COLLAPSE_MESSAGE =
@@ -72,18 +83,11 @@ const buildTabStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.tabs`;
 const buildConsoleStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.console`;
-const buildEditorThemeStorageKey = (workspaceId: string, configId: string) =>
-  `ade.ui.workspace.${workspaceId}.configuration.${configId}.editor-theme`;
 const buildExplorerExpandedStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.explorer.expanded`;
 const buildLayoutStorageKey = (workspaceId: string, configId: string) =>
   `ade.ui.workspace.${workspaceId}.configuration.${configId}.layout`;
 
-const THEME_MENU_OPTIONS: Array<{ value: EditorThemePreference; label: string }> = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
 
 const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
   explorer: "",
@@ -95,7 +99,7 @@ const ACTIVITY_LABELS: Record<ActivityBarView, string> = {
 interface ConsolePanelPreferences {
   readonly version: 2;
   readonly fraction: number;
-  readonly state: ConfigBuilderConsole;
+  readonly state: WorkbenchConsoleState;
 }
 
 type SideBounds = {
@@ -107,12 +111,35 @@ type SideBounds = {
 
 type WorkbenchWindowState = "restored" | "maximized";
 
+type WorkbenchUploadItem = {
+  readonly file: File;
+  readonly relativePath: string;
+  readonly targetPath: string;
+  readonly exists: boolean;
+  readonly etag: string | null;
+};
+
+type WorkbenchUploadPlan = {
+  readonly folderPath: string;
+  readonly items: readonly WorkbenchUploadItem[];
+  readonly conflicts: readonly WorkbenchUploadItem[];
+  readonly skipped: readonly { readonly relativePath: string; readonly reason: string }[];
+};
+
 type DocumentRecord = components["schemas"]["DocumentOut"];
+type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
+const RUN_LOG_LEVEL_OPTIONS: Array<{ value: RunLogLevel; label: string }> = [
+  { value: "DEBUG", label: "Debug" },
+  { value: "INFO", label: "Info" },
+  { value: "WARNING", label: "Warning" },
+  { value: "ERROR", label: "Error" },
+];
 
 interface WorkbenchProps {
   readonly workspaceId: string;
   readonly configId: string;
   readonly configName: string;
+  readonly configDisplayName: string;
   readonly seed?: WorkbenchDataSeed;
   readonly windowState: WorkbenchWindowState;
   readonly onMinimizeWindow: () => void;
@@ -126,6 +153,7 @@ export function Workbench({
   workspaceId,
   configId,
   configName,
+  configDisplayName,
   seed,
   windowState,
   onMinimizeWindow,
@@ -135,6 +163,7 @@ export function Workbench({
   shouldBypassUnsavedGuard,
 }: WorkbenchProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {
     fileId,
     pane,
@@ -157,7 +186,39 @@ export function Workbench({
   });
   const currentFilesetEtag = filesQuery.data?.fileset_hash ?? null;
   const isDraftConfig = filesQuery.data?.status === "draft";
+  const fileCapabilities = filesQuery.data?.capabilities;
+  const canEditConfig = usingSeed || Boolean(fileCapabilities?.editable);
+  const isReadOnlyConfig = !canEditConfig;
   const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspaceId), [workspaceId]);
+  const configurationsQuery = useConfigurationsQuery({ workspaceId, enabled: !usingSeed });
+  const existingConfigNames = useMemo(() => {
+    const items = configurationsQuery.data?.items ?? [];
+    return new Set(items.map((c) => c.display_name.trim().toLowerCase()));
+  }, [configurationsQuery.data?.items]);
+  const activeConfiguration = useMemo(() => {
+    const items = configurationsQuery.data?.items ?? [];
+    for (const config of items) {
+      if (normalizeConfigStatus(config.status) === "active") {
+        return config;
+      }
+    }
+    return null;
+  }, [configurationsQuery.data?.items]);
+  const duplicateToEdit = useDuplicateConfigurationMutation(workspaceId);
+  const makeActiveConfig = useMakeActiveConfigurationMutation(workspaceId);
+
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  const [makeActiveDialogOpen, setMakeActiveDialogOpen] = useState(false);
+  const [makeActiveDialogState, setMakeActiveDialogState] = useState<
+    | { stage: "checking" }
+    | { stage: "confirm" }
+    | { stage: "issues"; issues: readonly { path: string; message: string }[] }
+    | { stage: "error"; message: string }
+    | null
+  >(null);
 
   const tree = useMemo(() => {
     if (seed) {
@@ -178,6 +239,38 @@ export function Workbench({
     }
   }, [configId, usingSeed, filesQuery.isSuccess, lastSelectionStorage]);
 
+  const openDuplicateDialog = useCallback(() => {
+    duplicateToEdit.reset();
+    setDuplicateError(null);
+    setDuplicateName(suggestDuplicateName(configDisplayName, existingConfigNames));
+    setDuplicateDialogOpen(true);
+  }, [configDisplayName, duplicateToEdit, existingConfigNames]);
+
+  useEffect(() => {
+    if (!makeActiveDialogOpen || !isDraftConfig || usingSeed) {
+      return;
+    }
+    let cancelled = false;
+    setMakeActiveDialogState({ stage: "checking" });
+    void validateConfiguration(workspaceId, configId)
+      .then((result) => {
+        if (cancelled) return;
+        if (Array.isArray(result.issues) && result.issues.length > 0) {
+          setMakeActiveDialogState({ stage: "issues", issues: result.issues });
+          return;
+        }
+        setMakeActiveDialogState({ stage: "confirm" });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Unable to validate configuration.";
+        setMakeActiveDialogState({ stage: "error", message });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [configId, isDraftConfig, makeActiveDialogOpen, usingSeed, workspaceId]);
+
   const [pendingCompletion, setPendingCompletion] = useState<RunCompletionInfo | null>(null);
   const handleRunComplete = useCallback((info: RunCompletionInfo) => {
     setPendingCompletion(info);
@@ -193,11 +286,12 @@ export function Workbench({
     runMode: derivedRunMode,
     runInProgress,
     validation: validationState,
-    consoleLines,
+    console,
     latestRun,
     clearConsole,
     startRun,
   } = useRunSessionModel({
+    workspaceId,
     configId,
     runId,
     seed,
@@ -206,6 +300,7 @@ export function Workbench({
     onRunComplete: handleRunComplete,
   });
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [forceRun, setForceRun] = useState(false);
 
   const tabPersistence = useMemo(
     () => (seed ? null : createScopedStorage(buildTabStorageKey(workspaceId, configId))),
@@ -220,8 +315,9 @@ export function Workbench({
     [workspaceId, configId],
   );
   const initialConsolePrefsRef = useRef<ConsolePanelPreferences | Record<string, unknown> | null>(null);
-  const editorTheme = useEditorThemePreference(buildEditorThemeStorageKey(workspaceId, configId));
-  const menuAppearance = editorTheme.resolvedTheme === "vs-light" ? "light" : "dark";
+  const theme = useTheme();
+  const menuAppearance = isDarkMode(theme.resolvedMode) ? "dark" : "light";
+  const editorThemeId = theme.resolvedMode === "light" ? "vs-light" : "ade-dark";
   const validationLabel = validationState.lastRunAt ? `Last run ${formatRelative(validationState.lastRunAt)}` : undefined;
 
   const [explorer, setExplorer] = useState(() => {
@@ -249,18 +345,20 @@ export function Workbench({
   const [activityView, setActivityView] = useState<ActivityBarView>("explorer");
   const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const [testMenu, setTestMenu] = useState<{ x: number; y: number } | null>(null);
-  const [forceRun, setForceRun] = useState(false);
   const [isResizingConsole, setIsResizingConsole] = useState(false);
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [uploadPlan, setUploadPlan] = useState<WorkbenchUploadPlan | null>(null);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [pendingOpenFileId, setPendingOpenFileId] = useState<string | null>(null);
   const [deletingFilePath, setDeletingFilePath] = useState<string | null>(null);
   const [deletingFolderPath, setDeletingFolderPath] = useState<string | null>(null);
-  const { notifyBanner, dismissScope } = useNotifications();
+  const { notifyBanner, dismissScope, notifyToast } = useNotifications();
   const consoleBannerScope = useMemo(
     () => `workbench-console:${workspaceId}:${configId}`,
     [workspaceId, configId],
   );
+  const uploadToastKey = useMemo(() => `workbench-upload:${workspaceId}:${configId}`, [workspaceId, configId]);
   const deleteConfigFile = useDeleteConfigurationFileMutation(workspaceId, configId);
   const createConfigDirectory = useCreateConfigurationDirectoryMutation(workspaceId, configId);
   const deleteConfigDirectory = useDeleteConfigurationDirectoryMutation(workspaceId, configId);
@@ -309,6 +407,69 @@ export function Workbench({
     }
   }, [workspaceId, configId, showConsoleBanner, pushConsoleError]);
 
+  const closeDuplicateDialog = useCallback(() => {
+    setDuplicateDialogOpen(false);
+    setDuplicateError(null);
+  }, []);
+
+  const handleConfirmDuplicate = useCallback(() => {
+    const trimmed = duplicateName.trim();
+    if (!trimmed) {
+      setDuplicateError("Enter a name for the new draft configuration.");
+      return;
+    }
+    setDuplicateError(null);
+    duplicateToEdit.mutate(
+      { sourceConfigurationId: configId, displayName: trimmed },
+      {
+        onSuccess(record) {
+          notifyToast({ title: "Draft created.", intent: "success", duration: 3500 });
+          closeDuplicateDialog();
+          navigate(`/workspaces/${workspaceId}/config-builder/${encodeURIComponent(record.id)}/editor`);
+        },
+        onError(error) {
+          setDuplicateError(error instanceof Error ? error.message : "Unable to duplicate configuration.");
+        },
+      },
+    );
+  }, [closeDuplicateDialog, configId, duplicateName, duplicateToEdit, navigate, notifyToast, workspaceId]);
+
+  const openMakeActiveDialog = useCallback(() => {
+    makeActiveConfig.reset();
+    setMakeActiveDialogState({ stage: "checking" });
+    setMakeActiveDialogOpen(true);
+  }, [makeActiveConfig]);
+
+  const closeMakeActiveDialog = useCallback(() => {
+    setMakeActiveDialogOpen(false);
+    setMakeActiveDialogState(null);
+  }, []);
+
+  const handleConfirmMakeActive = useCallback(() => {
+    makeActiveConfig.mutate(
+      { configurationId: configId },
+      {
+        async onSuccess() {
+          notifyToast({
+            title: "Configuration is now active and locked.",
+            description: "Duplicate it to make further edits.",
+            intent: "success",
+            duration: 5000,
+          });
+          closeMakeActiveDialog();
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: configurationKeys.files(workspaceId, configId) }),
+            queryClient.invalidateQueries({ queryKey: configurationKeys.root(workspaceId) }),
+          ]);
+        },
+        onError(error) {
+          const message = error instanceof Error ? error.message : "Unable to make configuration active.";
+          setMakeActiveDialogState({ stage: "error", message });
+        },
+      },
+    );
+  }, [closeMakeActiveDialog, configId, makeActiveConfig, notifyToast, queryClient, workspaceId]);
+
   useEffect(() => {
     if (!pendingCompletion) {
       return;
@@ -316,8 +477,7 @@ export function Workbench({
     const { runId: completedRunId, status, payload } = pendingCompletion;
     const failure = (payload?.failure ?? undefined) as Record<string, unknown> | undefined;
     const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-    const summaryMessage = typeof payload?.summary === "string" ? payload.summary.trim() : null;
-    const errorMessage = failureMessage || summaryMessage || "ADE run failed.";
+    const errorMessage = failureMessage || "ADE run failed.";
     const isCancelled = status === "cancelled";
     const notice =
       status === "succeeded"
@@ -414,7 +574,7 @@ export function Workbench({
     [files.tabs],
   );
   const isSavingTabs = files.tabs.some((tab) => tab.saving);
-  const canSaveFiles = !usingSeed && dirtyTabs.length > 0;
+  const canSaveFiles = !usingSeed && canEditConfig && dirtyTabs.length > 0;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -770,9 +930,30 @@ export function Workbench({
     if (!ready) {
       return;
     }
+    let document: DocumentRecord | null = null;
+    try {
+      const documents = await fetchRecentDocuments(workspaceId);
+      document = documents[0] ?? null;
+    } catch (error) {
+      notifyToast({
+        title: "Unable to load documents for validation.",
+        message: describeError(error),
+        intent: "warning",
+        duration: 5000,
+      });
+      return;
+    }
+    if (!document) {
+      notifyToast({
+        title: "Upload a document to run validation.",
+        intent: "warning",
+        duration: 5000,
+      });
+      return;
+    }
     await startRun(
-      { validate_only: true },
-      { mode: "validation" },
+      { validate_only: true, input_document_id: document.id },
+      { mode: "validation", documentId: document.id, documentName: document.name },
       { prepare: prepareRun },
     );
   }, [
@@ -783,10 +964,17 @@ export function Workbench({
     saveDirtyTabsBeforeRun,
     startRun,
     prepareRun,
+    workspaceId,
+    notifyToast,
   ]);
 
   const handleRunExtraction = useCallback(
-    async (selection: { documentId: string; documentName: string; sheetNames?: readonly string[] }) => {
+    async (selection: {
+      documentId: string;
+      documentName: string;
+      sheetNames?: readonly string[];
+      logLevel: RunLogLevel;
+    }) => {
       setRunDialogOpen(false);
       setForceRun(false);
       if (usingSeed || !tree || filesQuery.isLoading || filesQuery.isError) {
@@ -801,6 +989,7 @@ export function Workbench({
         {
           input_document_id: selection.documentId,
           input_sheet_names: worksheetList.length ? worksheetList : undefined,
+          log_level: selection.logLevel,
         },
         {
           mode: "extraction",
@@ -868,12 +1057,15 @@ export function Workbench({
   const isRunningExtraction = runBusy && activeRunMode !== "validation";
   const canRunExtraction =
     !usingSeed && Boolean(tree) && !filesQuery.isLoading && !filesQuery.isError && !runBusy;
-  const canCreateFiles = !usingSeed && !filesQuery.isLoading && !filesQuery.isError;
-  const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending;
+  const canCreateFiles =
+    !usingSeed && !filesQuery.isLoading && !filesQuery.isError && Boolean(fileCapabilities?.can_create);
+  const canDeleteFiles = canCreateFiles && !deleteConfigFile.isPending && Boolean(fileCapabilities?.can_delete);
   const canCreateFolders = canCreateFiles && !createConfigDirectory.isPending;
-  const canDeleteFolders = canCreateFiles && !deleteConfigDirectory.isPending;
+  const canDeleteFolders =
+    canCreateFiles && !deleteConfigDirectory.isPending && Boolean(fileCapabilities?.can_delete);
   const canReplaceFromArchive =
     isDraftConfig && !usingSeed && !replaceConfig.isPending && Boolean(currentFilesetEtag);
+  const canMakeActive = isDraftConfig && !usingSeed && !files.isDirty && !makeActiveConfig.isPending;
 
   const handleSelectActivityView = useCallback((view: ActivityBarView) => {
     setActivityView(view);
@@ -944,6 +1136,318 @@ export function Workbench({
     setExplorer((prev) => ({ ...prev, collapsed: true }));
   }, []);
 
+  const handleWorkbenchDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+  }, []);
+
+  const handleWorkbenchDrop = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      if (event.defaultPrevented || !hasFileDrag(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
+      notifyToast({
+        title: "Drop files into the Explorer to upload.",
+        description: "Open the Explorer pane, then drop into a folder in the file tree.",
+        intent: "info",
+        duration: 7000,
+        persistKey: uploadToastKey,
+        actions: [
+          {
+            label: "Show Explorer",
+            variant: "secondary",
+            onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: false })),
+          },
+        ],
+      });
+    },
+    [notifyToast, uploadToastKey, setExplorer],
+  );
+
+  const runUploadPlan = useCallback(
+    async (plan: WorkbenchUploadPlan, options: { overwriteExisting: boolean }) => {
+      if (usingSeed) {
+        notifyToast({
+          title: "Uploads aren’t available in demo mode.",
+          intent: "warning",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (isReadOnlyConfig) {
+        notifyToast({
+          title: "This configuration is read-only.",
+          description: "Duplicate it to upload files.",
+          intent: "warning",
+          duration: 7000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (!canCreateFiles) {
+        notifyToast({
+          title: "Files are still loading.",
+          description: "Wait for the explorer to finish syncing and try again.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (isUploadingFiles) {
+        notifyToast({
+          title: "Upload already in progress.",
+          description: "Wait for the current upload to finish before starting another.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+
+      const total = plan.items.length;
+      if (total === 0) {
+        notifyToast({ title: "No files to upload.", intent: "warning", duration: 5000, persistKey: uploadToastKey });
+        return;
+      }
+
+      setIsUploadingFiles(true);
+      notifyToast({
+        title: `Uploading ${total} file${total === 1 ? "" : "s"}…`,
+        description: plan.folderPath ? `Destination: ${plan.folderPath}` : "Destination: root",
+        intent: "info",
+        duration: null,
+        dismissible: false,
+        persistKey: uploadToastKey,
+      });
+
+      const uploaded: string[] = [];
+      const failures: Array<{ path: string; message: string }> = [];
+      try {
+        for (const item of plan.items) {
+          if (item.exists && !options.overwriteExisting) {
+            continue;
+          }
+          try {
+            await saveConfigFile.mutateAsync({
+              path: item.targetPath,
+              content: item.file,
+              parents: true,
+              create: !item.exists,
+              etag: item.exists ? item.etag ?? undefined : undefined,
+              contentType: item.file.type || undefined,
+            });
+            uploaded.push(item.targetPath);
+          } catch (error) {
+            const message =
+              error instanceof ApiError && error.status === 412
+                ? "Upload blocked because the file changed on the server. Refresh and try again."
+                : error instanceof ApiError && error.status === 428
+                  ? "Upload blocked: refresh the file list and try again."
+                  : error instanceof ApiError && error.status === 413
+                    ? error.problem?.detail || "File is larger than the allowed limit."
+                    : describeError(error);
+            failures.push({ path: item.targetPath, message });
+          }
+        }
+
+        try {
+          await filesQuery.refetch();
+        } catch {
+          // ignore
+        }
+
+        for (const path of uploaded) {
+          const tab = files.tabs.find((entry) => entry.id === path);
+          if (!tab || tab.status !== "ready") {
+            continue;
+          }
+          const isDirty = tab.content !== tab.initialContent;
+          if (isDirty) {
+            continue;
+          }
+          try {
+            await reloadFileFromServer(path);
+          } catch {
+            // ignore tab reload failures; next manual reload/save will reconcile
+          }
+        }
+      } finally {
+        setIsUploadingFiles(false);
+      }
+
+      const skippedCount = plan.skipped.length;
+      const uploadedCount = uploaded.length;
+      const failedCount = failures.length;
+      const intent: NotificationIntent =
+        failedCount > 0 ? (uploadedCount > 0 ? "warning" : "danger") : skippedCount > 0 ? "warning" : "success";
+      const descriptionParts: string[] = [];
+      if (uploadedCount > 0) descriptionParts.push(`${uploadedCount} uploaded`);
+      if (skippedCount > 0) descriptionParts.push(`${skippedCount} skipped`);
+      if (failedCount > 0) descriptionParts.push(`${failedCount} failed`);
+
+      notifyToast({
+        title:
+          failedCount > 0
+            ? "Upload finished with issues."
+            : skippedCount > 0
+              ? "Upload finished."
+              : "Upload complete.",
+        description: descriptionParts.join(" · "),
+        intent,
+        duration: 8000,
+        dismissible: true,
+        persistKey: uploadToastKey,
+        actions:
+          failures.length > 0
+            ? [
+                {
+                  label: "Show errors",
+                  variant: "secondary",
+                  onSelect: () => {
+                    const sample = failures
+                      .slice(0, 6)
+                      .map((failure) => `${failure.path}: ${failure.message}`)
+                      .join(" · ");
+                    notifyBanner({
+                      title: "Upload errors",
+                      description: sample || "Upload errors occurred.",
+                      intent: "danger",
+                      duration: null,
+                      dismissible: true,
+                      scope: uploadToastKey,
+                      persistKey: `${uploadToastKey}:errors`,
+                    });
+                  },
+                },
+              ]
+            : undefined,
+      });
+    },
+    [
+      canCreateFiles,
+      filesQuery,
+      isReadOnlyConfig,
+      isUploadingFiles,
+      notifyBanner,
+      notifyToast,
+      reloadFileFromServer,
+      saveConfigFile,
+      uploadToastKey,
+      usingSeed,
+      files.tabs,
+    ],
+  );
+
+  const handleUploadFiles = useCallback(
+    async (folderPath: string, droppedFiles: readonly WorkbenchUploadFile[]) => {
+      if (isUploadingFiles) {
+        notifyToast({
+          title: "Upload already in progress.",
+          description: "Wait for the current upload to finish before dropping more files.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (uploadPlan) {
+        notifyToast({
+          title: "Resolve the overwrite prompt first.",
+          description: "Choose whether to overwrite existing files, then try again.",
+          intent: "info",
+          duration: 6000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+      if (!tree) {
+        return;
+      }
+      const normalizedFolder = normalizeWorkbenchPath(folderPath);
+      const limits = filesQuery.data?.limits ?? null;
+
+      const items: WorkbenchUploadItem[] = [];
+      const skipped: Array<{ relativePath: string; reason: string }> = [];
+      const seenPaths = new Set<string>();
+
+      for (const entry of droppedFiles) {
+        const relativePath = normalizeWorkbenchPath(entry.relativePath);
+        if (!relativePath) {
+          skipped.push({ relativePath: entry.relativePath, reason: "Missing file name." });
+          continue;
+        }
+        const targetPath = joinWorkbenchPath(normalizedFolder, relativePath);
+        if (!targetPath || !isSafeWorkbenchPath(targetPath)) {
+          skipped.push({ relativePath, reason: "Invalid path." });
+          continue;
+        }
+        if (seenPaths.has(targetPath)) {
+          skipped.push({ relativePath, reason: "Duplicate path in drop payload." });
+          continue;
+        }
+        seenPaths.add(targetPath);
+
+        const existing = findFileNode(tree, targetPath);
+        if (existing && existing.kind === "folder") {
+          skipped.push({ relativePath, reason: "A folder with this name already exists." });
+          continue;
+        }
+
+        const exists = Boolean(existing && existing.kind === "file");
+        const etag = exists ? existing?.metadata?.etag ?? null : null;
+        if (exists && !etag) {
+          skipped.push({ relativePath, reason: "Missing file version. Refresh and try again." });
+          continue;
+        }
+
+        const maxBytes =
+          limits && typeof limits.code_max_bytes === "number" && typeof limits.asset_max_bytes === "number"
+            ? isAssetsWorkbenchPath(targetPath)
+              ? limits.asset_max_bytes
+              : limits.code_max_bytes
+            : null;
+        if (typeof maxBytes === "number" && entry.file.size > maxBytes) {
+          skipped.push({ relativePath, reason: `File exceeds ${maxBytes} bytes.` });
+          continue;
+        }
+
+        items.push({ file: entry.file, relativePath, targetPath, exists, etag });
+      }
+
+      if (items.length === 0) {
+        notifyToast({
+          title: "No uploadable files.",
+          description: skipped.length ? `${skipped.length} item${skipped.length === 1 ? "" : "s"} skipped.` : undefined,
+          intent: "warning",
+          duration: 7000,
+          persistKey: uploadToastKey,
+        });
+        return;
+      }
+
+      const conflicts = items.filter((item) => item.exists);
+      const plan: WorkbenchUploadPlan = {
+        folderPath: normalizedFolder,
+        items,
+        conflicts,
+        skipped,
+      };
+
+      if (conflicts.length > 0) {
+        setUploadPlan(plan);
+        return;
+      }
+
+      await runUploadPlan(plan, { overwriteExisting: false });
+    },
+    [filesQuery.data?.limits, isUploadingFiles, notifyToast, runUploadPlan, tree, uploadPlan, uploadToastKey],
+  );
+
   const handleCreateFile = useCallback(
     async (folderPath: string, fileName: string) => {
       const trimmed = fileName.trim();
@@ -952,6 +1456,9 @@ export function Workbench({
       }
       if (trimmed.includes("..")) {
         throw new Error("File name cannot include '..'.");
+      }
+      if (isReadOnlyConfig) {
+        throw new Error("This configuration is read-only. Duplicate it to edit.");
       }
       if (!canCreateFiles) {
         throw new Error("Files are still loading.");
@@ -984,7 +1491,7 @@ export function Workbench({
         setIsCreatingFile(false);
       }
     },
-    [canCreateFiles, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
+    [canCreateFiles, isReadOnlyConfig, tree, saveConfigFile, filesQuery, showConsoleBanner, pushConsoleError],
   );
 
   const handleCreateFolder = useCallback(
@@ -995,6 +1502,9 @@ export function Workbench({
       }
       if (trimmed.includes("..")) {
         throw new Error("Folder name cannot include '..'.");
+      }
+      if (isReadOnlyConfig) {
+        throw new Error("This configuration is read-only. Duplicate it to edit.");
       }
       if (!canCreateFolders) {
         throw new Error("Files are still loading.");
@@ -1021,11 +1531,14 @@ export function Workbench({
         setIsCreatingFolder(false);
       }
     },
-    [canCreateFolders, tree, createConfigDirectory, filesQuery, showConsoleBanner, pushConsoleError],
+    [canCreateFolders, isReadOnlyConfig, tree, createConfigDirectory, filesQuery, showConsoleBanner, pushConsoleError],
   );
 
   const handleDeleteFile = useCallback(
     async (filePath: string) => {
+      if (isReadOnlyConfig) {
+        throw new Error("This configuration is read-only. Duplicate it to edit.");
+      }
       if (!canDeleteFiles) {
         throw new Error("Files are still loading.");
       }
@@ -1062,11 +1575,24 @@ export function Workbench({
         setDeletingFilePath((prev) => (prev === filePath ? null : prev));
       }
     },
-    [canDeleteFiles, tree, deleteConfigFile, files, filesQuery, showConsoleBanner, pushConsoleError, setDeletingFilePath],
+    [
+      canDeleteFiles,
+      isReadOnlyConfig,
+      tree,
+      deleteConfigFile,
+      files,
+      filesQuery,
+      showConsoleBanner,
+      pushConsoleError,
+      setDeletingFilePath,
+    ],
   );
 
   const handleDeleteFolder = useCallback(
     async (folderPath: string) => {
+      if (isReadOnlyConfig) {
+        throw new Error("This configuration is read-only. Duplicate it to edit.");
+      }
       if (!canDeleteFolders) {
         throw new Error("Files are still loading.");
       }
@@ -1099,6 +1625,7 @@ export function Workbench({
     },
     [
       canDeleteFolders,
+      isReadOnlyConfig,
       tree,
       deleteConfigDirectory,
       files,
@@ -1165,17 +1692,10 @@ export function Workbench({
 
   const settingsMenuItems = useMemo<ContextMenuItem[]>(() => {
     const blankIcon = <span className="inline-block h-4 w-4 opacity-0" />;
-    const items: ContextMenuItem[] = THEME_MENU_OPTIONS.map((option) => ({
-      id: `theme-${option.value}`,
-      label: `${option.label} theme`,
-      icon: editorTheme.preference === option.value ? <MenuIconCheck /> : blankIcon,
-      onSelect: () => editorTheme.setPreference(option.value),
-    }));
-    items.push(
+    return [
       {
         id: "toggle-explorer",
         label: explorer.collapsed ? "Show Explorer" : "Hide Explorer",
-        dividerAbove: true,
         icon: explorer.collapsed ? blankIcon : <MenuIconCheck />,
         onSelect: () => setExplorer((prev) => ({ ...prev, collapsed: !prev.collapsed })),
       },
@@ -1185,20 +1705,42 @@ export function Workbench({
         icon: outputCollapsed ? blankIcon : <MenuIconCheck />,
         onSelect: handleToggleOutput,
       },
-    );
-    return items;
+    ];
   }, [
-    editorTheme,
     explorer.collapsed,
     outputCollapsed,
     handleToggleOutput,
   ]);
   const actionsMenuItems = useMemo<ContextMenuItem[]>(() => {
-    return [
+    const items: ContextMenuItem[] = [];
+
+    if (isDraftConfig) {
+      items.push({
+        id: "make-active",
+        label: "Make active",
+        disabled: !canMakeActive,
+        onSelect: () => {
+          setActionsMenu(null);
+          openMakeActiveDialog();
+        },
+      });
+    }
+
+    items.push({
+      id: "duplicate",
+      label: "Duplicate to edit",
+      onSelect: () => {
+        setActionsMenu(null);
+        openDuplicateDialog();
+      },
+    });
+
+    items.push(
       {
         id: "export",
         label: isExporting ? "Exporting…" : "Export (.zip)",
         disabled: isExporting,
+        dividerAbove: true,
         onSelect: () => {
           setActionsMenu(null);
           void handleExportConfig();
@@ -1210,8 +1752,19 @@ export function Workbench({
         disabled: !canReplaceFromArchive,
         onSelect: handleReplaceArchiveRequest,
       },
-    ];
-  }, [canReplaceFromArchive, handleExportConfig, handleReplaceArchiveRequest, isExporting]);
+    );
+
+    return items;
+  }, [
+    canMakeActive,
+    canReplaceFromArchive,
+    handleExportConfig,
+    handleReplaceArchiveRequest,
+    isDraftConfig,
+    isExporting,
+    openDuplicateDialog,
+    openMakeActiveDialog,
+  ]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !isMaximized) {
@@ -1230,16 +1783,6 @@ export function Workbench({
   const testMenuItems = useMemo<ContextMenuItem[]>(() => {
     const disabled = !canRunExtraction;
     return [
-      {
-        id: "test-default",
-        label: "Test",
-        disabled,
-        onSelect: () => {
-          setForceRun(false);
-          setRunDialogOpen(true);
-          setTestMenu(null);
-        },
-      },
       {
         id: "test-force",
         label: "Force build and test",
@@ -1282,40 +1825,23 @@ export function Workbench({
       />
     );
   }
-  const rootSurfaceClass = isMaximized
-    ? menuAppearance === "dark"
-      ? "bg-[#0f111a] text-white"
-      : "bg-slate-50 text-slate-900"
-    : menuAppearance === "dark"
-      ? "bg-transparent text-white"
-      : "bg-transparent text-slate-900";
-  const editorSurface = menuAppearance === "dark" ? "#1b1f27" : "#ffffff";
-  const editorText = menuAppearance === "dark" ? "#f5f6fb" : "#0f172a";
+  const rootSurfaceClass = isMaximized ? "bg-background text-foreground" : "bg-transparent text-foreground";
   const windowFrameClass = isMaximized
-    ? clsx(
-        "fixed inset-0 z-[90] flex flex-col",
-        menuAppearance === "dark" ? "bg-[#0f111a] text-white" : "bg-white text-slate-900",
-      )
-    : clsx(
-        "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-        menuAppearance === "dark" ? "bg-[#101322] text-white" : "bg-white text-slate-900",
-      );
-  const collapsedConsoleTheme =
-    menuAppearance === "dark"
-      ? {
-          bar: "border-[#1f2431] bg-[#0f111a] text-slate-200",
-          hint: "text-slate-400",
-          button: "border-[#2b3040] bg-[#161926] text-slate-100 hover:border-[#3b4153] hover:bg-[#1e2333]",
-        }
-      : {
-          bar: "border-slate-300 bg-white text-slate-700",
-          hint: "text-slate-500",
-          button: "border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-400",
-        };
+    ? "fixed inset-0 z-[90] flex flex-col bg-background text-foreground"
+    : "flex w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-card text-foreground";
+  const collapsedConsoleTheme = {
+    bar: "border-border bg-card text-foreground",
+    hint: "text-muted-foreground",
+    button: "border-border-strong bg-popover text-foreground hover:border-border-strong hover:bg-muted",
+  };
 
   return (
-    <div className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}>
-      {isMaximized ? <div className="fixed inset-0 z-40 bg-slate-900/60" /> : null}
+    <div
+      className={clsx("flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden", rootSurfaceClass)}
+      onDragOver={handleWorkbenchDragOver}
+      onDrop={handleWorkbenchDrop}
+    >
+      {isMaximized ? <div className="fixed inset-0 z-40 bg-overlay/60" /> : null}
       <div className={windowFrameClass}>
         <WorkbenchChrome
           configName={configName}
@@ -1348,6 +1874,51 @@ export function Workbench({
           onCloseWindow={handleCloseWorkbench}
           actionsBusy={isExporting || replaceConfig.isPending}
         />
+        {!usingSeed ? (
+          <div
+            className="border-b border-border bg-card px-4 py-3 text-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            {isReadOnlyConfig ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold">Read-only configuration</p>
+                  <p className="text-xs text-muted-foreground">
+                    {filesQuery.data?.status === "active"
+                      ? "Active configurations can’t be edited. Duplicate this configuration to create a draft you can change."
+                      : "Archived configurations can’t be edited. Duplicate this configuration to create a draft you can change."}
+                  </p>
+                </div>
+                <Button size="sm" onClick={openDuplicateDialog}>
+                  Duplicate to edit
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold">Draft configuration</p>
+                  <p className="text-xs text-muted-foreground">
+                    Make this draft active to use it for extraction runs.
+                    {activeConfiguration ? ` The current active configuration “${activeConfiguration.display_name}” will be archived.` : ""}
+                  </p>
+                  {!canMakeActive && files.isDirty ? (
+                    <p className="text-xs font-medium text-warning-500">Save changes before making active.</p>
+                  ) : null}
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={openMakeActiveDialog}
+                  disabled={!canMakeActive}
+                  title={!canMakeActive && files.isDirty ? "Save changes before making active." : undefined}
+                >
+                  Make active
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
         <div ref={setPaneAreaEl} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <ActivityBar
             activeView={activityView}
@@ -1369,6 +1940,9 @@ export function Workbench({
                       setFileId(fileId);
                     }}
                     theme={menuAppearance}
+                    canUploadFiles={canCreateFiles}
+                    onUploadFiles={handleUploadFiles}
+                    isUploadingFiles={isUploadingFiles}
                     canCreateFile={canCreateFiles}
                     canCreateFolder={canCreateFolders}
                     isCreatingEntry={isCreatingFile || isCreatingFolder}
@@ -1413,7 +1987,7 @@ export function Workbench({
             </>
           ) : null}
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ backgroundColor: editorSurface, color: editorText }}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card text-card-foreground">
           <div
             className="grid min-h-0 min-w-0 flex-1"
             style={{
@@ -1443,9 +2017,10 @@ export function Workbench({
               onPinTab={files.pinTab}
               onUnpinTab={files.unpinTab}
               onSelectRecentTab={files.selectRecentTab}
-              editorTheme={editorTheme.resolvedTheme}
+              editorTheme={editorThemeId}
               menuAppearance={menuAppearance}
               canSaveFiles={canSaveFiles}
+              readOnly={isReadOnlyConfig}
               minHeight={editorMinHeight}
             />
             <PanelResizeHandle
@@ -1514,7 +2089,7 @@ export function Workbench({
             ) : (
               <BottomPanel
                 height={Math.max(0, liveConsoleHeight)}
-                consoleLines={consoleLines}
+                console={console}
                 validation={validationState}
                 activePane={pane}
                 onPaneChange={setPane}
@@ -1522,6 +2097,7 @@ export function Workbench({
                 onClearConsole={handleClearConsole}
                 runStatus={derivedRunStatus}
                 onToggleCollapse={handleToggleOutput}
+                appearance={menuAppearance}
               />
             )}
           </div>
@@ -1547,18 +2123,18 @@ export function Workbench({
         className="hidden"
       />
       {replaceConfirmOpen ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="replace-config-title"
           >
             <div className="space-y-2">
-              <h2 id="replace-config-title" className="text-lg font-semibold text-slate-900">
+              <h2 id="replace-config-title" className="text-lg font-semibold text-foreground">
                 Import from zip
               </h2>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Importing will replace this configuration’s current code with the uploaded archive. Unsaved editor changes
                 will be discarded.
               </p>
@@ -1566,7 +2142,7 @@ export function Workbench({
                 <p className="text-sm font-medium text-danger-600">Only draft configurations can be replaced.</p>
               ) : null}
               {files.isDirty ? (
-                <p className="text-sm font-medium text-amber-700">You have unsaved changes that will be lost.</p>
+                <p className="text-sm font-medium text-warning-700">You have unsaved changes that will be lost.</p>
               ) : null}
             </div>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -1591,6 +2167,161 @@ export function Workbench({
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={duplicateDialogOpen}
+        title="Duplicate configuration"
+        description={`Create a new draft based on “${configDisplayName}”.`}
+        confirmLabel="Create draft"
+        cancelLabel="Cancel"
+        onCancel={closeDuplicateDialog}
+        onConfirm={handleConfirmDuplicate}
+        isConfirming={duplicateToEdit.isPending}
+        confirmDisabled={duplicateToEdit.isPending || duplicateName.trim().length === 0}
+      >
+        <FormField label="New configuration name" required>
+          <Input
+            value={duplicateName}
+            onChange={(event) => setDuplicateName(event.target.value)}
+            placeholder="Copy of My Config"
+            disabled={duplicateToEdit.isPending}
+          />
+        </FormField>
+        {duplicateError ? <p className="text-sm font-medium text-danger-600">{duplicateError}</p> : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={makeActiveDialogOpen}
+        title={
+          makeActiveDialogState?.stage === "checking"
+            ? "Checking configuration…"
+            : makeActiveDialogState?.stage === "issues"
+              ? "Fix validation issues first"
+              : "Make configuration active?"
+        }
+        description={
+          makeActiveDialogState?.stage === "checking"
+            ? "Running validation before activation."
+            : makeActiveDialogState?.stage === "issues"
+              ? "This configuration has validation issues and can’t be activated yet."
+              : activeConfiguration
+                ? `This becomes the workspace’s live configuration for extraction runs. The current active configuration “${activeConfiguration.display_name}” will be archived.`
+                : "This becomes the workspace’s live configuration for extraction runs."
+        }
+        confirmLabel={
+          makeActiveDialogState?.stage === "issues"
+            ? "Continue editing"
+            : makeActiveDialogState?.stage === "error"
+              ? "Close"
+              : "Make active"
+        }
+        cancelLabel="Cancel"
+        onCancel={closeMakeActiveDialog}
+        onConfirm={() => {
+          if (makeActiveDialogState?.stage === "issues") {
+            closeMakeActiveDialog();
+            return;
+          }
+          if (makeActiveDialogState?.stage === "error") {
+            closeMakeActiveDialog();
+            return;
+          }
+          handleConfirmMakeActive();
+        }}
+        isConfirming={makeActiveConfig.isPending}
+        confirmDisabled={makeActiveDialogState?.stage === "checking" || makeActiveConfig.isPending}
+      >
+        {makeActiveDialogState?.stage === "checking" ? (
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand-600" aria-hidden="true" />
+            <span>Validating…</span>
+          </div>
+        ) : makeActiveDialogState?.stage === "issues" ? (
+          <div className="space-y-2">
+            <p className="text-sm text-foreground">Issues:</p>
+            <ul className="max-h-56 space-y-2 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+              {makeActiveDialogState.issues.map((issue) => (
+                <li key={`${issue.path}:${issue.message}`} className="space-y-1">
+                  <p className="font-semibold">{issue.path}</p>
+                  <p className="text-muted-foreground">{issue.message}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : makeActiveDialogState?.stage === "error" ? (
+          <p className="text-sm font-medium text-danger-600">{makeActiveDialogState.message}</p>
+        ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(uploadPlan)}
+        title={uploadPlan && uploadPlan.conflicts.length === 1 ? "Overwrite existing file?" : "Overwrite existing files?"}
+        description={
+          uploadPlan
+            ? `${uploadPlan.conflicts.length} file${uploadPlan.conflicts.length === 1 ? "" : "s"} already exist${
+                uploadPlan.folderPath ? ` in “${uploadPlan.folderPath}”.` : " in the configuration root."
+              } Overwrite to replace them.`
+            : undefined
+        }
+        confirmLabel={
+          uploadPlan
+            ? `Overwrite ${uploadPlan.conflicts.length} file${uploadPlan.conflicts.length === 1 ? "" : "s"}`
+            : "Overwrite"
+        }
+        cancelLabel="Cancel"
+        onCancel={() => setUploadPlan(null)}
+        onConfirm={() => {
+          const plan = uploadPlan;
+          setUploadPlan(null);
+          if (!plan) return;
+          void runUploadPlan(plan, { overwriteExisting: true });
+        }}
+        isConfirming={isUploadingFiles}
+        confirmDisabled={!uploadPlan || uploadPlan.conflicts.length === 0 || isUploadingFiles}
+        tone="danger"
+      >
+        {uploadPlan ? (
+          <div className="space-y-3">
+            <div className="max-h-56 overflow-auto rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+              <p className="font-semibold text-foreground">Will overwrite:</p>
+              <ul className="mt-2 space-y-1">
+                {uploadPlan.conflicts.slice(0, 20).map((item) => (
+                  <li key={item.targetPath} className="break-all">
+                    {item.targetPath}
+                  </li>
+                ))}
+              </ul>
+              {uploadPlan.conflicts.length > 20 ? (
+                <p className="mt-2 text-[11px] text-muted-foreground">And {uploadPlan.conflicts.length - 20} more…</p>
+              ) : null}
+            </div>
+            {uploadPlan.skipped.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {uploadPlan.skipped.length} item{uploadPlan.skipped.length === 1 ? "" : "s"} will be skipped due to invalid
+                paths or size limits.
+              </p>
+            ) : null}
+            {uploadPlan.items.length > uploadPlan.conflicts.length ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground">
+                <p className="font-medium">Prefer not to overwrite?</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isUploadingFiles}
+                  onClick={() => {
+                    const plan = uploadPlan;
+                    setUploadPlan(null);
+                    void runUploadPlan(plan, { overwriteExisting: false });
+                  }}
+                >
+                  Upload new only ({uploadPlan.items.length - uploadPlan.conflicts.length})
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmDialog>
+
       <ContextMenu
         open={Boolean(actionsMenu)}
         position={actionsMenu}
@@ -1622,12 +2353,9 @@ interface SidePanelPlaceholderProps {
   readonly appearance: "light" | "dark";
 }
 
-function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderProps) {
+function SidePanelPlaceholder({ width, view, appearance: _appearance }: SidePanelPlaceholderProps) {
   const label = ACTIVITY_LABELS[view] || "Coming soon";
-  const surfaceClass =
-    appearance === "dark"
-      ? "border-[#111111] bg-[#1e1e1e] text-slate-300"
-      : "border-slate-200 bg-slate-50 text-slate-600";
+  const surfaceClass = "border-border bg-muted text-muted-foreground";
   return (
     <div
       className={clsx(
@@ -1644,7 +2372,7 @@ function SidePanelPlaceholder({ width, view, appearance }: SidePanelPlaceholderP
 
 function MenuIconCheck() {
   return (
-    <svg className="h-4 w-4 text-[#4fc1ff]" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg className="h-4 w-4 text-brand-400" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path d="M4 8l3 3 5-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -1703,17 +2431,12 @@ function WorkbenchChrome({
   readonly onCloseWindow: () => void;
   readonly actionsBusy?: boolean;
 }) {
-  const dark = appearance === "dark";
-  const surfaceClass = dark
-    ? "border-white/10 bg-[#151821] text-white"
-    : "border-slate-200 bg-white text-slate-900";
-  const metaTextClass = dark ? "text-white/60" : "text-slate-500";
-  const saveButtonClass = dark
-    ? "bg-emerald-400/20 text-emerald-50 hover:bg-emerald-400/30 disabled:bg-white/10 disabled:text-white/30"
-    : "bg-emerald-500 text-white hover:bg-emerald-400 disabled:bg-slate-200 disabled:text-slate-500";
-  const runButtonClass = dark
-    ? "bg-brand-500 text-white hover:bg-brand-400 disabled:bg-white/20 disabled:text-white/40"
-    : "bg-brand-600 text-white hover:bg-brand-500 disabled:bg-slate-200 disabled:text-slate-500";
+  const surfaceClass = "border-border bg-card text-foreground";
+  const metaTextClass = "text-muted-foreground";
+  const saveButtonClass =
+    "bg-success-600 text-on-success hover:bg-success-500 disabled:bg-muted disabled:text-muted-foreground";
+  const runButtonClass =
+    "bg-brand-600 text-on-brand hover:bg-brand-500 disabled:bg-muted disabled:text-muted-foreground";
   const isMaximized = windowState === "maximized";
 
   return (
@@ -1772,7 +2495,7 @@ function WorkbenchChrome({
           menuClassName={clsx(
             runButtonClass,
             "rounded-l-none px-2",
-            dark ? "border-white/20" : "border-slate-300",
+            "border-border-strong",
           )}
           menuAriaLabel="Open test options"
           onPrimaryClick={() => onRunExtraction(false)}
@@ -1811,7 +2534,7 @@ function WorkbenchChrome({
         <div
           className={clsx(
             "flex items-center gap-2 border-l pl-3",
-            appearance === "dark" ? "border-white/20" : "border-slate-200/70",
+            "border-border/70",
           )}
         >
           <ChromeIconButton
@@ -1847,10 +2570,16 @@ interface RunExtractionDialogProps {
     documentId: string;
     documentName: string;
     sheetNames?: readonly string[];
+    logLevel: RunLogLevel;
   }) => void;
 }
 
-function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractionDialogProps) {
+function RunExtractionDialog({
+  open,
+  workspaceId,
+  onClose,
+  onRun,
+}: RunExtractionDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const documentsQuery = useQuery<DocumentRecord[]>({
     queryKey: ["builder-documents", workspaceId],
@@ -1891,6 +2620,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
     [sheetQuery.data],
   );
   const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+  const [logLevel, setLogLevel] = useState<RunLogLevel>("INFO");
   useEffect(() => {
     if (!open) {
       return;
@@ -1926,17 +2656,17 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
   const sheetsAvailable = sheetOptions.length > 0;
 
   const content = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 px-4">
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-overlay/60 px-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
       >
         <header className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Select a document</h2>
-            <p className="text-sm text-slate-500">
+            <h2 className="text-lg font-semibold text-foreground">Select a document</h2>
+            <p className="text-sm text-muted-foreground">
               Choose a workspace document and optional worksheet before running a test.
             </p>
           </div>
@@ -1948,20 +2678,20 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
         {documentsQuery.isError ? (
           <Alert tone="danger">Unable to load documents. Try again later.</Alert>
         ) : documentsQuery.isLoading ? (
-          <p className="text-sm text-slate-500">Loading documents…</p>
+          <p className="text-sm text-muted-foreground">Loading documents…</p>
         ) : documents.length === 0 ? (
-          <p className="text-sm text-slate-500">Upload a document in the workspace to run the extractor.</p>
+          <p className="text-sm text-muted-foreground">Upload a document in the workspace to run the extractor.</p>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700" htmlFor="builder-run-document-select">
+              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-document-select">
                 Document
               </label>
               <Select
                 id="builder-run-document-select"
                 value={selectedDocumentId}
                 onChange={(event) => setSelectedDocumentId(event.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="w-full"
               >
                 {documents.map((document) => (
                   <option key={document.id} value={document.id}>
@@ -1970,7 +2700,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                 ))}
               </Select>
               {selectedDocument ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Uploaded {formatDocumentTimestamp(selectedDocument.created_at)} ·{" "}
                   {(selectedDocument.byte_size ?? 0).toLocaleString()} bytes
                 </p>
@@ -1978,13 +2708,32 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700">Worksheet</p>
+              <label className="text-sm font-medium text-foreground" htmlFor="builder-run-log-level-select">
+                Log level
+              </label>
+              <Select
+                id="builder-run-log-level-select"
+                value={logLevel}
+                onChange={(event) => setLogLevel(event.target.value as RunLogLevel)}
+                className="w-full"
+              >
+                {RUN_LOG_LEVEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">Controls the engine runtime verbosity for this run.</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Worksheet</p>
               {sheetQuery.isLoading ? (
-                <p className="text-sm text-slate-500">Loading worksheets…</p>
+                <p className="text-sm text-muted-foreground">Loading worksheets…</p>
               ) : sheetQuery.isError ? (
                 <Alert tone="warning">
                   <div className="space-y-2">
-                    <p className="text-sm text-slate-700">
+                    <p className="text-sm text-foreground">
                       Worksheet metadata is temporarily unavailable. The run will process the entire file unless you retry and
                       pick specific sheets.
                     </p>
@@ -2004,11 +2753,11 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                   </div>
                 </Alert>
               ) : sheetsAvailable ? (
-                <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+                <div className="space-y-3 rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-slate-700">Worksheets</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-medium text-foreground">Worksheets</p>
+                      <p className="text-xs text-muted-foreground">
                         {normalizedSheetSelection.length === 0
                           ? "All worksheets will be processed by default. Select specific sheets to narrow the run."
                           : `${normalizedSheetSelection.length.toLocaleString()} worksheet${
@@ -2021,17 +2770,17 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                     </Button>
                   </div>
 
-                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-slate-200 p-2">
+                  <div className="max-h-48 space-y-2 overflow-auto rounded-md border border-border p-2">
                     {sheetOptions.map((sheet) => {
                       const checked = normalizedSheetSelection.includes(sheet.name);
                       return (
                         <label
                           key={`${sheet.index}-${sheet.name}`}
-                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-foreground hover:bg-muted"
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                            className="h-4 w-4 rounded border-border text-success-600 focus:ring-success-500"
                             checked={checked}
                             onChange={() => toggleWorksheet(sheet.name)}
                           />
@@ -2045,7 +2794,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">This file will be ingested directly.</p>
+                <p className="text-sm text-muted-foreground">This file will be ingested directly.</p>
               )}
             </div>
           </div>
@@ -2064,6 +2813,7 @@ function RunExtractionDialog({ open, workspaceId, onClose, onRun }: RunExtractio
                 documentId: selectedDocument.id,
                 documentName: selectedDocument.name,
                 sheetNames: normalizedSheetSelection.length > 0 ? normalizedSheetSelection : undefined,
+                logLevel,
               });
             }}
             disabled={runDisabled}
@@ -2101,7 +2851,7 @@ function ChromeIconButton({
   ariaLabel,
   onClick,
   icon,
-  appearance,
+  appearance: _appearance,
   active = false,
   disabled = false,
 }: {
@@ -2112,11 +2862,9 @@ function ChromeIconButton({
   readonly active?: boolean;
   readonly disabled?: boolean;
 }) {
-  const dark = appearance === "dark";
-  const baseClass = dark
-    ? "text-white/70 hover:text-white hover:bg-white/5 hover:border-white/20 focus-visible:ring-white/40"
-    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100 hover:border-slate-300 focus-visible:ring-slate-400/40";
-  const activeClass = dark ? "text-white border-white/30 bg-white/10" : "text-slate-900 border-slate-300 bg-slate-200/70";
+  const baseClass =
+    "text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border-strong focus-visible:ring-ring/40";
+  const activeClass = "text-foreground border-border-strong bg-muted";
   return (
     <button
       type="button"
@@ -2138,7 +2886,7 @@ function ChromeIconButton({
 
 function WorkbenchBadgeIcon() {
   return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#4fc1ff] via-[#2d7dff] to-[#7c4dff] text-white shadow-lg shadow-[#10121f]">
+    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 via-brand-500 to-brand-600 text-on-brand shadow-[0_12px_24px_rgb(var(--sys-color-shadow)/0.35)]">
       <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
         <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />
         <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.2" />

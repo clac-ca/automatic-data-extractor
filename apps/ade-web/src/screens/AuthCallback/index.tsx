@@ -9,7 +9,7 @@ import { ApiError } from "@shared/api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
 
-export default function AuthCallbackRoute() {
+export default function AuthCallbackScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -61,7 +61,7 @@ export default function AuthCallbackRoute() {
 
   if (errorMessage) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <PageState
           title="Unable to finish sign-in"
           description={errorMessage}
@@ -77,7 +77,7 @@ export default function AuthCallbackRoute() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+    <div className="flex min-h-screen items-center justify-center bg-background px-6">
       <PageState title="Finishing sign-in" variant="loading" />
     </div>
   );

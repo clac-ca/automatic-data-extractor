@@ -15,6 +15,7 @@ from uuid import UUID
 from fastapi.concurrency import run_in_threadpool
 
 from ade_api.common.encoding import json_dumps
+from ade_api.infra.venv import pip_install_env, venv_python_path
 
 from .exceptions import BuildExecutionError
 
@@ -71,8 +72,45 @@ BuilderEvent = BuilderStepEvent | BuilderLogEvent | BuilderArtifactsEvent
 class VirtualEnvironmentBuilder:
     """Create virtual environments containing ADE engine + config package."""
 
-    def __init__(self) -> None:
-        self._platform_bin = "Scripts" if os.name == "nt" else "bin"
+    async def build(
+        self,
+        *,
+        build_id: UUID,
+        workspace_id: UUID,
+        configuration_id: UUID,
+        venv_root: Path,
+        config_path: Path,
+        engine_spec: str,
+        pip_cache_dir: Path | None,
+        python_bin: str | None,
+        timeout: float,
+        fingerprint: str | None = None,
+    ) -> BuildArtifacts:
+        """Build the virtual environment and return captured metadata.
+
+        This is a convenience wrapper around :meth:`build_stream` for callers
+        that don't need step/log streaming.
+        """
+
+        artifacts: BuildArtifacts | None = None
+        async for event in self.build_stream(
+            build_id=build_id,
+            workspace_id=workspace_id,
+            configuration_id=configuration_id,
+            venv_root=venv_root,
+            config_path=config_path,
+            engine_spec=engine_spec,
+            pip_cache_dir=pip_cache_dir,
+            python_bin=python_bin,
+            timeout=timeout,
+            fingerprint=fingerprint,
+        ):
+            if isinstance(event, BuilderArtifactsEvent):
+                artifacts = event.artifacts
+
+        if artifacts is None:
+            raise BuildExecutionError("Build finished without artifacts", build_id=build_id)
+        return artifacts
 
     async def build_stream(
         self,
@@ -94,7 +132,7 @@ class VirtualEnvironmentBuilder:
         venv_path = venv_root / ".venv"
         temp_path = venv_root / ".venv.tmp"
         await self._prepare_target(venv_root, temp_path)
-        env = self._build_env(pip_cache_dir)
+        env = pip_install_env(pip_cache_dir)
 
         try:
             yield BuilderStepEvent(BuildStep.CREATE_VENV, "Creating virtual environment")
@@ -106,7 +144,7 @@ class VirtualEnvironmentBuilder:
             ):
                 yield event
 
-            venv_python = self._venv_python(temp_path)
+            venv_python = venv_python_path(temp_path)
             yield BuilderStepEvent(BuildStep.UPGRADE_PIP, "Upgrading pip/setuptools/wheel")
             async for event in self._stream_command(
                 [
@@ -149,6 +187,7 @@ class VirtualEnvironmentBuilder:
                     "pip",
                     "install",
                     "--no-input",
+                    "-e",
                     str(config_path),
                 ],
                 timeout=timeout,
@@ -243,10 +282,6 @@ class VirtualEnvironmentBuilder:
 
         await run_in_threadpool(_finalize)
 
-    def _venv_python(self, target: Path) -> Path:
-        executable = "python.exe" if os.name == "nt" else "python"
-        return target / self._platform_bin / executable
-
     async def _stream_command(
         self,
         command: list[str],
@@ -324,27 +359,17 @@ class VirtualEnvironmentBuilder:
             )
         return output.decode("utf-8", errors="replace")
 
-    async def _write_metadata(self, target: Path, payload: dict[str, str | None]) -> None:
+    async def _write_metadata(self, target: Path, payload: Mapping[str, object | None]) -> None:
         runtime_dir = target / "ade-runtime"
         metadata_path = runtime_dir / "build.json"
-        packages_path = runtime_dir / "packages.txt"
         marker_path = target / "ade_build.json"
 
         def _write() -> None:
             runtime_dir.mkdir(parents=True, exist_ok=True)
             metadata_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
-            packages_path.write_text("ade-engine\nade-config", encoding="utf-8")
             marker_path.write_text(json_dumps(payload, indent=2), encoding="utf-8")
 
         await run_in_threadpool(_write)
-
-    def _build_env(self, pip_cache_dir: Path | None) -> dict[str, str]:
-        if pip_cache_dir is None:
-            return {}
-        return {
-            "PIP_NO_INPUT": "1",
-            "PIP_CACHE_DIR": str(pip_cache_dir),
-        }
 
     def _merge_env(self, env: Mapping[str, str] | None) -> Mapping[str, str] | None:
         if env is None:

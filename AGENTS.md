@@ -1,82 +1,119 @@
 # AGENTS.md
-ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
 
-## Monorepo cheat sheet
+This file is **for AI coding agents** working on the `ade` codebase. ADE is a lightweight, configurable engine for normalizing Excel/CSV files at scale.
+
+If you are operating inside a subdirectory with its own `AGENTS.md`, follow the nearest instructions in the directory tree (they override this file).
+
+## Repo map
 
 ```
 automatic-data-extractor/
 ├─ apps/
 │  ├─ ade-api/      # FastAPI backend (serves /api + built SPA)
-│  │  ├─ src/ade_api/             # core app code
-│  │  ├─ migrations/              # Alembic migrations
-│  │  └─ templates/config_packages# starter config packages
 │  ├─ ade-web/      # React/Vite SPA
-│  │  ├─ src/                    # app/, screens/, ui/, schema/, generated-types/
-│  │  └─ docs/                   # frontend architecture guides
-│  ├─ ade-engine/   # Engine runtime (Python package)
-│  │  ├─ src/ade_engine/         # engine code
-│  │  └─ docs/                   # engine runtime/CLI docs
+│  ├─ ade-engine/   # Engine runtime (Python package + Typer CLI)
 │  └─ ade-cli/      # Orchestration CLI (console script: ade)
-│     └─ src/ade_tools/          # CLI commands
-├─ data/            # Workspaces, runs, docs
+├─ data/            # Workspaces, runs, docs, sample inputs/outputs
 ├─ docs/            # Guides, HOWTOs, runbooks
 └─ scripts/         # Repo-level helper scripts
 ```
 
-Config templates live under `apps/ade-api/src/ade_api/templates/config_packages`.
-Workspaces: `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs)
+Docs to know:
+- Top-level `docs/` (guides, admin, templates, events)
+- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI)
+- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing)
 
-Docs:
-- Top-level `docs/` (guides, admin, templates, events).
-- Engine: `apps/ade-engine/docs/` (runtime, manifest, IO, mapping, normalization, telemetry, CLI).
-- Frontend: `apps/ade-web/docs/` (architecture, routing, data layer, auth, UI/testing).
+## ade CLI essentials
 
-## ⚡ CLI (ade) quickstart
+Use `ade --help` and `ade <command> --help` for full flags; the engine CLI lives at `python -m ade_engine --help`.
 
-Run `ade --help` for the full list; `ade <command> --help` for flags. Key commands:
+- `ade setup` — one-time bootstrap (venv, hooks).
+- `ade dev [--backend-only|--frontend-only] [--backend-port 9000]` — run dev servers.
+- `ade start` — serve API + built SPA. `ade build` — build frontend assets.
+- `ade tests`, `ade lint`, `ade ci` — validation pipelines. `ade types` — regen frontend API types.
+- `ade migrate`, `ade routes`, `ade users`, `ade docker`, `ade clean` / `ade reset`, `ade bundle --ext md --out <file> [--include/--exclude ...]`.
+- Config packages now start from the engine's built-in template via `ade-engine config init <dir>`; workspaces live under `data/workspaces/<workspace_id>/...` (configs, venvs, runs, logs, docs).
 
-- `ade setup` — initial repo setup (env, hooks).
-- `ade dev` — backend/frontend dev servers (`--backend-only/--frontend-only`).
-- `ade start` — serve API + built SPA.
-- `ade build` — build frontend assets into `apps/ade-api/src/ade_api/web/static`.
-- `ade tests` — run Python/JS test suites.
-- `ade lint` — lint/format helpers.
-- `ade bundle` — bundle files/dirs into Markdown for LLM/code review (filters, include/exclude, `--out`, `--no-clip`).
-- `ade types` — generate frontend types from OpenAPI.
-- `ade migrate` — run DB migrations.
-- `ade routes` — list FastAPI routes.
-- `ade users` — manage users/roles (see subcommands).
-- `ade docker` — local Docker helpers.
-- `ade lint` — lint/format helpers (`--fix` to auto-fix issues; start here before manual fixes).
-- `ade clean` / `ade reset` — remove build artifacts/venvs/cache.
-- `ade ci` — full pipeline (lint, test, build).
-- `ade engine ...` — full `ade_engine` CLI (mirrors `python -m ade_engine`).
-
-### Engine CLI (via `ade engine`)
-
-Use `ade engine run --help` to see all flags. Highlights:
+### Help snapshots (truncated)
 
 ```bash
-ade engine run \
-  --input data/samples/example.xlsx \
-  --config-package "data/templates/config_packages/DaRT Remittance" \
-  --output-dir /tmp/out \            # or --output-file /tmp/out/normalized.xlsx
-  --events-dir /tmp/out/logs         # or --events-file /tmp/out/logs/engine_events.ndjson
+$ ade --help
+Usage: ade [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  setup     Bootstrap repo env and hooks
+  dev       Run backend/frontend dev servers
+  start     Serve API + built SPA
+  build     Build frontend assets
+  tests     Run Python/JS tests
+  lint      Lint/format helpers
+  bundle    Bundle files into Markdown
+  types     Generate frontend API types
+  migrate   Run DB migrations
+  routes    List FastAPI routes
+  users     Manage users/roles
+  docker    Local Docker helpers
+  clean     Remove build artifacts/caches
+  reset     Clean + venv reset
+  ci        Full lint/test/build pipeline
 ```
 
-- Multiple inputs: repeat `--input` to run each file separately.
-- If `--events-*` is omitted, events stream to stdout only (no file sink).
-- Defaults: output → `<output-dir>/normalized.xlsx` (or `<input_dir>/output/normalized.xlsx` if no dir given).
+```bash
+$ python -m ade_engine --help
+Usage: python -m ade_engine [OPTIONS] COMMAND [ARGS]...
 
-### Bundle examples
+Commands:
+  process  Process inputs with the ADE engine (file/batch)
+  config   Create and validate config packages
+  version  Show engine version
+```
+
+## Engine CLI quick runs (current)
+
+- Entrypoint: `python -m ade_engine process ...` or `ade-engine process ...`
+- Output defaults (file mode): if no flags, writes `<input_parent>/<input_stem>_normalized.xlsx` and logs beside it. `--output` must be a `.xlsx` file. `--output-dir` changes only the directory. Batch mode always requires `--output-dir`; logs default beside outputs.
+
+```bash
+# 1) Scaffold a config package from the bundled template
+ade-engine config init my-config --package-name ade_config
+
+# 2) Validate the config package can be imported/registered
+ade-engine config validate --config-package my-config
+
+# 3) Process a single file (defaults output next to input)
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --config-package my-config
+
+# 3b) Single file with explicit output dir
+ade-engine process file \
+  --input data/samples/CaressantWRH_251130__ORIGINAL.xlsx \
+  --output-dir ./output \
+  --config-package my-config
+
+# 4) Process a batch directory (output dir required)
+ade-engine process batch \
+  --input-dir data/samples \
+  --output-dir ./output/batch \
+  --include "*.xlsx" \
+  --config-package my-config
+```
+
+## Bundle examples
 
 ```bash
 # Bundle docs as Markdown
 ade bundle --ext md --out /tmp/bundle.md docs/
 
-# Bundle with filters, no clipboard
+# Bundle with filters (skips __pycache__ automatically)
 ade bundle --include "src/**" --include "apps/ade-api/src/ade_api/**/*.py" \
-           --exclude "**/__pycache__/**" --out /tmp/bundle.md --no-clip
+           --out /tmp/bundle.md
+
+# Copy a bundle to the clipboard (opt-in)
+ade bundle README.md apps/ade-api/AGENTS.md --clip
 
 # Bundle specific files quickly
 ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md

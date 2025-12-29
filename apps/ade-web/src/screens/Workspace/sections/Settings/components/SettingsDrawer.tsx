@@ -66,29 +66,30 @@ export function SettingsDrawer({
   }
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-40 flex items-start justify-end bg-slate-900/50"
-      onClick={onClose}
-      role="presentation"
-    >
+    <div className="fixed inset-0 z-40">
+      <button
+        type="button"
+        className="absolute inset-0 bg-overlay/50"
+        onClick={onClose}
+        aria-label="Close drawer"
+      />
       <div
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={clsx("flex h-full flex-col bg-white shadow-2xl transition", widthClassName)}
-        onClick={(event) => event.stopPropagation()}
+        className={clsx("absolute inset-y-0 right-0 flex h-full flex-col bg-card shadow-2xl transition", widthClassName)}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">Details</p>
-            <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-            {description ? <p className="text-sm text-slate-600">{description}</p> : null}
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">Details</p>
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+            {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className="rounded-full border border-border bg-card p-2 text-muted-foreground transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             aria-label="Close drawer"
           >
             <CloseIcon />
@@ -97,7 +98,7 @@ export function SettingsDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-        {footer ? <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">{footer}</div> : null}
+        {footer ? <div className="border-t border-border bg-background px-5 py-4">{footer}</div> : null}
       </div>
     </div>,
     document.body,

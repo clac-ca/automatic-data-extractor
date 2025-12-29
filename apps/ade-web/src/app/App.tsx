@@ -1,15 +1,16 @@
 import { NavProvider, useLocation } from "@app/nav/history";
 
 import { AppProviders } from "./AppProviders";
-import HomeScreen from "@features/Home";
-import LoginScreen from "@features/Login";
-import AuthCallbackScreen from "@features/AuthCallback";
-import SetupScreen from "@features/Setup";
-import WorkspacesScreen from "@features/Workspaces";
-import WorkspaceCreateScreen from "@features/Workspaces/New";
-import WorkspaceScreen from "@features/Workspace";
-import LogoutScreen from "@features/Logout";
-import NotFoundScreen from "@features/NotFound";
+import HomeScreen from "@screens/Home";
+import LoginScreen from "@screens/Login";
+import AuthCallbackScreen from "@screens/AuthCallback";
+import SetupScreen from "@screens/Setup";
+import WorkspacesScreen from "@screens/Workspaces";
+import WorkspaceCreateScreen from "@screens/Workspaces/New";
+import WorkspaceScreen from "@screens/Workspace";
+import DocumentsScreen from "@screens/Documents";
+import LogoutScreen from "@screens/Logout";
+import NotFoundScreen from "@screens/NotFound";
 
 export function App() {
   return (
@@ -52,6 +53,8 @@ export function ScreenSwitch() {
         return <WorkspaceCreateScreen />;
       }
       return <WorkspaceScreen />;
+    case "documents":
+      return <DocumentsScreen />;
     default:
       break;
   }

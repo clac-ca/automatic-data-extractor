@@ -1,5 +1,4 @@
-import type { RunSummary } from "@schema";
-import type { AdeEvent, RunStatus } from "@shared/runs/types";
+import type { RunStatus } from "@shared/runs/types";
 
 export type WorkbenchFileKind = "file" | "folder";
 
@@ -37,7 +36,12 @@ export interface WorkbenchFileTab {
   lastSavedAt?: string | null;
 }
 
-export type WorkbenchConsoleLevel = "info" | "success" | "warning" | "error";
+export interface WorkbenchUploadFile {
+  readonly file: File;
+  readonly relativePath: string;
+}
+
+export type WorkbenchConsoleLevel = "debug" | "info" | "success" | "warning" | "error";
 
 export interface WorkbenchConsoleLine {
   readonly id?: string;
@@ -73,18 +77,13 @@ export interface WorkbenchRunSummary {
   readonly runId: string;
   readonly status: RunStatus;
   readonly outputUrl?: string;
+  readonly inputUrl?: string;
   readonly outputReady?: boolean;
   readonly outputFilename?: string | null;
   readonly outputPath?: string | null;
   readonly logsUrl?: string;
   readonly processedFile?: string | null;
   readonly outputLoaded: boolean;
-  readonly summary?: RunSummary | null;
-  readonly summaryLoaded: boolean;
-  readonly summaryError?: string | null;
-  readonly telemetry?: readonly AdeEvent[] | null;
-  readonly telemetryLoaded: boolean;
-  readonly telemetryError?: string | null;
   readonly documentName?: string;
   readonly sheetNames?: readonly string[];
   readonly error?: string | null;

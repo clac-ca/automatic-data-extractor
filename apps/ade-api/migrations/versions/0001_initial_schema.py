@@ -1,7 +1,7 @@
 """Initial ADE schema with UUID primary keys and simplified RBAC.
 
 Designed for UUIDv7 identifiers generated in the application layer using
-Python 3.14's :func:`uuid.uuid7`.
+:func:`ade_api.common.ids.generate_uuid7` (RFC 9562).
 """
 
 from __future__ import annotations
@@ -106,7 +106,6 @@ def _timestamps() -> tuple[sa.Column, sa.Column]:
 
 RUN_STATUS = sa.Enum(
     "queued",
-    "waiting_for_build",
     "running",
     "succeeded",
     "failed",
@@ -131,9 +130,8 @@ BUILD_STATUS = sa.Enum(
 
 CONFIG_STATUS = sa.Enum(
     "draft",
-    "published",
     "active",
-    "inactive",
+    "archived",
     name="configuration_status",
     native_enum=False,
     create_constraint=True,
@@ -210,6 +208,9 @@ def upgrade() -> None:
 
     # Runtime
     _create_runs()
+    _create_run_metrics()
+    _create_run_fields()
+    _create_run_table_columns()
 
 
 def downgrade() -> None:  # pragma: no cover
@@ -225,9 +226,7 @@ def _uuid_pk(name: str = "id") -> sa.Column:
     """UUID primary key column.
 
     There is intentionally *no* server-side default here. IDs are expected
-    to be generated in the application layer using uuid.uuid7() (Python 3.14+),
-    which implements UUIDv7 from RFC 9562 with a millisecond timestamp and
-    monotonic counter for portability. 
+    to be generated in the application layer as UUIDv7 identifiers (RFC 9562).
     """
     return sa.Column(
         name,
@@ -573,6 +572,8 @@ def _create_system_settings() -> None:
 
 
 def _create_configurations() -> None:
+    dialect = _dialect_name()
+
     op.create_table(
         "configurations",
         _uuid_pk(),
@@ -604,6 +605,42 @@ def _create_configurations() -> None:
         unique=False,
     )
 
+    # Exactly one active configuration per workspace where the dialect supports
+    # partial/filtered indexes.
+    active_where = sa.text("status = 'active'")
+
+    if dialect in {"postgresql", "postgres"}:
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            postgresql_where=active_where,
+        )
+    elif dialect == "sqlite":
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            sqlite_where=active_where,
+        )
+    elif dialect == "mssql":
+        op.create_index(
+            "ux_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=True,
+            mssql_where=active_where,
+        )
+    else:
+        op.create_index(
+            "ix_configurations_active_per_workspace",
+            "configurations",
+            ["workspace_id"],
+            unique=False,
+        )
+
 
 def _create_builds() -> None:
     dialect = _dialect_name()
@@ -623,7 +660,7 @@ def _create_builds() -> None:
             sa.ForeignKey("configurations.id", ondelete="NO ACTION"),
             nullable=False,
         ),
-        sa.Column("fingerprint", sa.String(length=128), nullable=True),
+        sa.Column("fingerprint", sa.String(length=128), nullable=False),
         sa.Column("engine_spec", sa.String(length=255), nullable=True),
         sa.Column("engine_version", sa.String(length=50), nullable=True),
         sa.Column("python_version", sa.String(length=50), nullable=True),
@@ -641,6 +678,11 @@ def _create_builds() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
+        sa.UniqueConstraint(
+            "configuration_id",
+            "fingerprint",
+            name="ux_builds_config_fingerprint",
+        ),
     )
     op.create_index("ix_builds_workspace", "builds", ["workspace_id"], unique=False)
     op.create_index(
@@ -651,42 +693,6 @@ def _create_builds() -> None:
     )
     op.create_index("ix_builds_status", "builds", ["status"], unique=False)
     op.create_index("ix_builds_fingerprint", "builds", ["fingerprint"], unique=False)
-
-    # At most one queued/building build per configuration where the dialect supports
-    # partial/filtered indexes. On others, keep a non-unique index instead.
-    inflight_where = sa.text("status in ('queued','building')")
-
-    if dialect in {"postgresql", "postgres"}:
-        op.create_index(
-            "ux_builds_inflight_per_config",
-            "builds",
-            ["configuration_id"],
-            unique=True,
-            postgresql_where=inflight_where,
-        )
-    elif dialect == "sqlite":
-        op.create_index(
-            "ux_builds_inflight_per_config",
-            "builds",
-            ["configuration_id"],
-            unique=True,
-            sqlite_where=inflight_where,
-        )
-    elif dialect == "mssql":
-        op.create_index(
-            "ux_builds_inflight_per_config",
-            "builds",
-            ["configuration_id"],
-            unique=True,
-            mssql_where=inflight_where,
-        )
-    else:
-        op.create_index(
-            "ix_builds_inflight_per_config",
-            "builds",
-            ["configuration_id"],
-            unique=False,
-        )
 
     # Foreign key from configurations.active_build_id → builds.id
     # Skipped on SQLite due to ALTER TABLE limitations and on MSSQL to avoid
@@ -722,34 +728,18 @@ def _create_runs() -> None:
             "build_id",
             UUIDType(),
             sa.ForeignKey("builds.id", ondelete="NO ACTION"),
-            nullable=True,
+            nullable=False,
         ),
         sa.Column(
             "input_document_id",
             UUIDType(),
             sa.ForeignKey("documents.id", ondelete="NO ACTION"),
-            nullable=True,
+            nullable=False,
         ),
         sa.Column("input_sheet_names", sa.JSON(), nullable=True),
         sa.Column("status", RUN_STATUS, nullable=False, server_default="queued"),
         sa.Column("exit_code", sa.Integer(), nullable=True),
-        sa.Column(
-            "attempt",
-            sa.Integer(),
-            nullable=False,
-            server_default=sa.text("1"),
-        ),
-        sa.Column(
-            "retry_of_run_id",
-            UUIDType(),
-            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
-            nullable=True,
-        ),
-        sa.Column("trace_id", sa.String(length=64), nullable=True),
         sa.Column("submitted_by_user_id", UUIDType(), nullable=True),
-        sa.Column("artifact_uri", sa.String(length=512), nullable=True),
-        sa.Column("output_uri", sa.String(length=512), nullable=True),
-        sa.Column("logs_uri", sa.String(length=512), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -757,9 +747,8 @@ def _create_runs() -> None:
             server_default=sa.func.now(),
         ),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(
             ["submitted_by_user_id"],
@@ -779,7 +768,7 @@ def _create_runs() -> None:
     op.create_index(
         "ix_runs_workspace_input_finished",
         "runs",
-        ["workspace_id", "input_document_id", "finished_at", "started_at"],
+        ["workspace_id", "input_document_id", "completed_at", "started_at"],
         unique=False,
     )
     op.create_index(
@@ -788,8 +777,111 @@ def _create_runs() -> None:
         ["workspace_id", "created_at"],
         unique=False,
     )
-    op.create_index("ix_runs_retry_of", "runs", ["retry_of_run_id"], unique=False)
     op.create_index("ix_runs_build", "runs", ["build_id"], unique=False)
+
+
+def _create_run_metrics() -> None:
+    op.create_table(
+        "run_metrics",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("evaluation_outcome", sa.String(length=20), nullable=True),
+        sa.Column("evaluation_findings_total", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_info", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_warning", sa.Integer(), nullable=True),
+        sa.Column("evaluation_findings_error", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_total", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_info", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_warning", sa.Integer(), nullable=True),
+        sa.Column("validation_issues_error", sa.Integer(), nullable=True),
+        sa.Column("validation_max_severity", sa.String(length=10), nullable=True),
+        sa.Column("workbook_count", sa.Integer(), nullable=True),
+        sa.Column("sheet_count", sa.Integer(), nullable=True),
+        sa.Column("table_count", sa.Integer(), nullable=True),
+        sa.Column("row_count_total", sa.Integer(), nullable=True),
+        sa.Column("row_count_empty", sa.Integer(), nullable=True),
+        sa.Column("column_count_total", sa.Integer(), nullable=True),
+        sa.Column("column_count_empty", sa.Integer(), nullable=True),
+        sa.Column("column_count_mapped", sa.Integer(), nullable=True),
+        sa.Column("column_count_ambiguous", sa.Integer(), nullable=True),
+        sa.Column("column_count_unmapped", sa.Integer(), nullable=True),
+        sa.Column("column_count_passthrough", sa.Integer(), nullable=True),
+        sa.Column("field_count_expected", sa.Integer(), nullable=True),
+        sa.Column("field_count_mapped", sa.Integer(), nullable=True),
+        sa.Column("cell_count_total", sa.Integer(), nullable=True),
+        sa.Column("cell_count_non_empty", sa.Integer(), nullable=True),
+    )
+
+
+def _create_run_fields() -> None:
+    op.create_table(
+        "run_fields",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("field", sa.String(length=128), primary_key=True, nullable=False),
+        sa.Column("label", sa.String(length=255), nullable=True),
+        sa.Column("mapped", sa.Boolean(), nullable=False),
+        sa.Column("best_mapping_score", sa.Float(), nullable=True),
+        sa.Column("occurrences_tables", sa.Integer(), nullable=False),
+        sa.Column("occurrences_columns", sa.Integer(), nullable=False),
+    )
+    op.create_index("ix_run_fields_run", "run_fields", ["run_id"], unique=False)
+    op.create_index("ix_run_fields_field", "run_fields", ["field"], unique=False)
+
+
+def _create_run_table_columns() -> None:
+    op.create_table(
+        "run_table_columns",
+        sa.Column(
+            "run_id",
+            UUIDType(),
+            sa.ForeignKey("runs.id", ondelete="NO ACTION"),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column("workbook_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("workbook_name", sa.String(length=255), nullable=False),
+        sa.Column("sheet_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("sheet_name", sa.String(length=255), nullable=False),
+        sa.Column("table_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("column_index", sa.Integer(), primary_key=True, nullable=False),
+        sa.Column("header_raw", sa.Text(), nullable=True),
+        sa.Column("header_normalized", sa.Text(), nullable=True),
+        sa.Column("non_empty_cells", sa.Integer(), nullable=False),
+        sa.Column("mapping_status", sa.String(length=32), nullable=False),
+        sa.Column("mapped_field", sa.String(length=128), nullable=True),
+        sa.Column("mapping_score", sa.Float(), nullable=True),
+        sa.Column("mapping_method", sa.String(length=32), nullable=True),
+        sa.Column("unmapped_reason", sa.String(length=64), nullable=True),
+    )
+    op.create_index(
+        "ix_run_table_columns_run",
+        "run_table_columns",
+        ["run_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_run_table_columns_run_sheet",
+        "run_table_columns",
+        ["run_id", "sheet_name"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_run_table_columns_run_mapped_field",
+        "run_table_columns",
+        ["run_id", "mapped_field"],
+        unique=False,
+    )
 
 
 def _create_documents() -> None:
@@ -909,13 +1001,19 @@ def _create_documents() -> None:
 def _create_document_tags() -> None:
     op.create_table(
         "document_tags",
+        _uuid_pk(),
         sa.Column(
             "document_id",
             UUIDType(),
             sa.ForeignKey("documents.id", ondelete="NO ACTION"),
-            primary_key=True,
+            nullable=False,
         ),
-        sa.Column("tag", sa.String(length=100), primary_key=True, nullable=False),
+        sa.Column("tag", sa.String(length=100), nullable=False),
+        sa.UniqueConstraint(
+            "document_id",
+            "tag",
+            name="document_tags_document_id_tag_key",
+        ),
     )
     op.create_index(
         "ix_document_tags_document_id",
@@ -924,3 +1022,9 @@ def _create_document_tags() -> None:
         unique=False,
     )
     op.create_index("ix_document_tags_tag", "document_tags", ["tag"], unique=False)
+    op.create_index(
+        "document_tags_tag_document_id_idx",
+        "document_tags",
+        ["tag", "document_id"],
+        unique=False,
+    )

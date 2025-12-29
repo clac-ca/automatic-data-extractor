@@ -61,7 +61,7 @@ export function SplitButton({
       role="group"
       className={clsx(
         "inline-flex items-stretch rounded-md shadow-sm",
-        highlight && "ring-2 ring-amber-300/70 ring-offset-2 ring-offset-transparent",
+        highlight && "ring-2 ring-brand-300/70 ring-offset-2 ring-offset-transparent",
         className,
       )}
       onContextMenu={onContextMenu}

@@ -1,17 +1,19 @@
 import type { ReactElement } from "react";
 
 import { DangerSettingsPage } from "./pages/DangerSettingsPage";
+import { AppearanceSettingsPage } from "./pages/AppearanceSettingsPage";
 import { GeneralSettingsPage } from "./pages/GeneralSettingsPage";
 import { MembersSettingsPage } from "./pages/MembersSettingsPage";
 import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 
 export type WorkspaceSettingsRouteId =
   | "workspace.general"
+  | "preferences.appearance"
   | "access.members"
   | "access.roles"
   | "lifecycle.danger";
 
-export type SettingsGroupId = "workspace" | "access" | "lifecycle";
+export type SettingsGroupId = "workspace" | "preferences" | "access" | "lifecycle";
 
 export type SettingsSection = {
   readonly id: WorkspaceSettingsRouteId;
@@ -41,6 +43,7 @@ export interface WorkspaceSettingsNavGroup {
 
 const GROUP_LABELS: Record<SettingsGroupId, string> = {
   workspace: "Workspace",
+  preferences: "Preferences",
   access: "Access",
   lifecycle: "Lifecycle",
 };
@@ -55,10 +58,18 @@ export const workspaceSettingsSections: SettingsSection[] = [
     element: <GeneralSettingsPage />,
   },
   {
+    id: "preferences.appearance",
+    group: "preferences",
+    label: "Appearance",
+    description: "Theme and color mode preferences.",
+    path: "preferences/appearance",
+    element: <AppearanceSettingsPage />,
+  },
+  {
     id: "access.members",
     group: "access",
     label: "Members",
-    description: "Invite teammates and manage access.",
+    description: "Manage members and access.",
     path: "access/members",
     required: { view: ["workspace.members.view"], edit: ["workspace.members.manage"] },
     element: <MembersSettingsPage />,
@@ -121,13 +132,11 @@ export function buildSettingsNav(
       if (!section) {
         return groups;
       }
-      const group = groups[section.group] ?? {
-        id: section.group,
-        label: GROUP_LABELS[section.group],
-        items: [],
-      };
-      group.items = [...group.items, item];
-      groups[section.group] = group;
+      const existing = groups[section.group];
+      const next: WorkspaceSettingsNavGroup = existing
+        ? { ...existing, items: [...existing.items, item] }
+        : { id: section.group, label: GROUP_LABELS[section.group], items: [item] };
+      groups[section.group] = next;
       return groups;
     }, {} as Record<SettingsGroupId, WorkspaceSettingsNavGroup>),
   );

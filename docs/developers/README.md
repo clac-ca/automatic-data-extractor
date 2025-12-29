@@ -43,7 +43,7 @@ automatic-data-extractor/
 │     └─ src/ade_tools/
 ├─ examples/                                # sample inputs/outputs for docs/tests
 ├─ docs/                                    # Developer Guide, HOWTOs, operations runbooks
-├─ scripts/                                 # helper scripts (legacy node helpers, etc.)
+├─ scripts/                                 # helper scripts
 │
 ├─ infra/                                   # deployment infra (container, compose, k8s, IaC)
 │  ├─ docker/
@@ -57,7 +57,7 @@ automatic-data-extractor/
 └─ .github/workflows/                       # CI: lint, test, build, publish
 ```
 
-Bundled ADE config templates ship under `apps/ade-api/src/ade_api/templates/config_packages/`; on startup the API copies them into `ADE_CONFIG_TEMPLATES_DIR` (default `./data/templates/config_packages`), replacing bundled template folders while leaving any user-added templates in place.
+Config packages are scaffolded via the ade-engine CLI (`ade-engine config init <dir>`), which carries the built-in starter template. The API no longer ships or syncs its own template copies.
 
 Everything ADE produces (config_packages, runs, logs, cache, etc.) is persisted under `./data/workspaces/<workspace_id>/...` by default. Virtual environments now live on **local, non-shared storage** at `ADE_VENVS_DIR` (default `/tmp/ade-venvs/<workspace_id>/<configuration_id>/<build_id>/.venv`). Set `ADE_WORKSPACES_DIR` to move the workspace root for configs/runs/documents, or override `ADE_VENVS_DIR` to pick a local path for venvs—ADE always nests the workspace ID beneath the override. In production, mount workspace storage to persist configs/runs, and keep venvs on local disks.
 
@@ -74,8 +74,8 @@ If a container restarts or ADE_VENVS_DIR is empty, the service **lazily hydrates
 │     │        ├─ column_detectors/ # detect → transform (opt) → validate (opt)
 │     │        ├─ row_detectors/    # header/data row heuristics
 │     │        ├─ hooks/            # on_run_start/after_mapping/before_save/on_run_end
-│     │        ├─ manifest.json     # read via importlib.resources
-│     ├─ .venv/                     # (legacy) not used for runtime venvs
+│     │        ├─ manifest.toml     # read via importlib.resources
+│     ├─ .venv/                     # not used for runtime venvs
 │     ├─ runs/
 │     │  └─ <run_id>/
 │     │     ├─ input/               # Uploaded files
@@ -173,7 +173,7 @@ and can emit telemetry/notes using `context.logger.note(...)`.
 ./data/                                                  # Default root for ADE state
 ├─ config_packages/                                       # Editable config packages you author in the UI (source of truth)
 │  └─ <config_id>/                                        # One folder per published config (immutable once published)
-│     ├─ manifest.json                                    # Config manifest: metadata, defaults, entrypoints
+│     ├─ manifest.toml                                    # Config manifest: metadata, defaults, entrypoints
 │     ├─ pyproject.toml?                                  # Optional dependency list (supersedes requirements.txt)
 │     ├─ column_detectors/                                # Field logic: detect → transform (optional) → validate (optional)
 │     │  └─ <field>.py                                    # One Python file per target field (e.g., member_id.py)
@@ -301,5 +301,5 @@ If mapping results look unexpected, inspect `events.ndjson` (look for `run.table
 
 1. **[Config Packages](./01-config-packages.md)** — what a config is, Script API v1, detectors, transforms, validators, hooks.
 2. **[Run Orchestration](./02-run-orchestration.md)** — queue, workers, resource limits, atomic writes.
-3. **Run telemetry** — the per‑run event log (`events.ndjson`) and derived run summaries (`ade.run_summary/v1`).
+3. **Run telemetry** — the per‑run event log (`events.ndjson`).
 4. **[Glossary](./12-glossary.md)** — common terms and system vocabulary.

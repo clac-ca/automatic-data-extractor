@@ -1,5 +1,3 @@
-"""CLI entrypoint for ade_engine."""
+"""CLI command modules for :mod:`ade_engine`."""
 
-from ade_engine.cli.app import app
-
-__all__ = ["app"]
+__all__ = ["process", "config", "common"]

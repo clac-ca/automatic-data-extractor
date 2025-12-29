@@ -12,12 +12,12 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_safe_mode_toggle_persists_state(
-    async_client: AsyncClient, seed_identity: dict[str, dict[str, str]]
+    async_client: AsyncClient, seed_identity
 ) -> None:
     """Safe mode state can be toggled and reflected in health checks."""
 
-    admin = seed_identity["admin"]
-    token, _ = await login(async_client, email=admin["email"], password=admin["password"])
+    admin = seed_identity.admin
+    token, _ = await login(async_client, email=admin.email, password=admin.password)
     headers = {"Authorization": f"Bearer {token}"}
 
     initial = await async_client.get("/api/v1/system/safe-mode", headers=headers)

@@ -12,7 +12,7 @@ from pathlib import Path
 from sqlalchemy import MetaData, inspect
 from sqlalchemy.engine import URL
 
-from ade_api.infra.db import build_database_url, get_engine, reset_database_state
+from ade_api.db import build_database_url, get_engine, reset_database_state
 
 from ..settings import Settings
 
@@ -141,6 +141,7 @@ async def _drop_all_tables(settings: Settings) -> int:
     engine = get_engine(settings=settings)
 
     async with engine.begin() as connection:
+
         def _reflect_and_drop(sync_connection) -> int:
             inspector = inspect(sync_connection)
             dropped = 0
@@ -194,9 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 "⚠️  confirmation required; re-run with --yes or `npm run reset:force`.",
             )
             return 2
-        answer = input(
-            "Proceed with database reset and storage deletion? [y/N] "
-        ).strip().lower()
+        answer = input("Proceed with database reset and storage deletion? [y/N] ").strip().lower()
         if answer not in {"y", "yes"}:
             print("🛑 storage reset cancelled")
             return 2

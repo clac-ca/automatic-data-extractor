@@ -26,7 +26,7 @@ def test_canonicalize_etag(raw: str | None, expected: str | None) -> None:
     [
         ("sha256:abc", '"sha256:abc"'),
         ('"sha256:def"', '"sha256:def"'),
-        (" W/\"sha256:ghi\" ", '"sha256:ghi"'),
+        (' W/"sha256:ghi" ', '"sha256:ghi"'),
         (None, None),
         ("", None),
     ],

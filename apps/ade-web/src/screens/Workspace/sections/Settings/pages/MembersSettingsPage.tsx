@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
-import { useWorkspaceContext } from "@features/Workspace/context/WorkspaceContext";
+import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@shared/users/hooks/useUsersQuery";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { SettingsDrawer } from "../components/SettingsDrawer";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { useSettingsSection } from "../sectionContext";
@@ -14,11 +13,12 @@ import {
   useWorkspaceMembersQuery,
 } from "../hooks/useWorkspaceMembers";
 import { useWorkspaceRolesQuery } from "../hooks/useWorkspaceRoles";
-import type { RoleDefinition, WorkspaceMember } from "@features/Workspace/api/workspaces-api";
+import type { RoleDefinition, WorkspaceMember } from "@shared/workspaces";
 import type { UserSummary } from "@shared/users/api";
 import { Alert } from "@ui/Alert";
 import { Avatar } from "@ui/Avatar";
 import { Button } from "@ui/Button";
+import { ConfirmDialog } from "@ui/ConfirmDialog";
 import { FormField } from "@ui/FormField";
 import { Input } from "@ui/Input";
 import { Select } from "@ui/Select";
@@ -81,18 +81,18 @@ export function MembersSettingsPage() {
   }, [rolesQuery.data]);
 
   const selectedParam = params[0];
-  const isInviteOpen = selectedParam === "new";
+  const isAddMemberOpen = selectedParam === "new";
   const selectedMemberId = selectedParam && selectedParam !== "new" ? decodeURIComponent(selectedParam) : null;
   const selectedMember = members.find((member) => member.user_id === selectedMemberId);
 
   const basePath = `/workspaces/${workspace.id}/settings/access/members`;
   const suffix = `${location.search}${location.hash}`;
   const closeDrawer = () => navigate(`${basePath}${suffix}`, { replace: true });
-  const openInviteDrawer = () => navigate(`${basePath}/new${suffix}`);
+  const openAddMemberDrawer = () => navigate(`${basePath}/new${suffix}`);
   const openMemberDrawer = (userId: string) =>
     navigate(`${basePath}/${encodeURIComponent(userId)}${suffix}`);
 
-  const handleInvite = async ({ user, roleIds }: { user: UserSummary; roleIds: string[] }) => {
+  const handleAddMember = async ({ user, roleIds }: { user: UserSummary; roleIds: string[] }) => {
     setFeedbackMessage(null);
     await addMember.mutateAsync({ user, roleIds });
     setFeedbackMessage({
@@ -120,9 +120,9 @@ export function MembersSettingsPage() {
     <div className="space-y-6">
       <SettingsSectionHeader
         title="Members"
-        description="Invite teammates, adjust their workspace roles, or remove their access."
+        description="Add members, adjust workspace roles, or remove access."
         actions={
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">
             {memberCount} member{memberCount === 1 ? "" : "s"}
           </span>
         }
@@ -140,11 +140,11 @@ export function MembersSettingsPage() {
         </Alert>
       ) : null}
 
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
+      <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-soft">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Workspace members</h2>
-            <p className="text-sm text-slate-500">
+            <h2 className="text-lg font-semibold text-foreground">Workspace members</h2>
+            <p className="text-sm text-muted-foreground">
               {isMembersLoading ? "Loading members…" : `${memberCount} member${memberCount === 1 ? "" : "s"} total`}
             </p>
           </div>
@@ -158,7 +158,7 @@ export function MembersSettingsPage() {
               />
             </FormField>
             {canManageMembers ? (
-              <Button type="button" onClick={openInviteDrawer}>
+              <Button type="button" onClick={openAddMemberDrawer}>
                 Add member
               </Button>
             ) : null}
@@ -166,47 +166,47 @@ export function MembersSettingsPage() {
         </header>
 
         {isMembersLoading ? (
-          <p className="text-sm text-slate-600">Loading members…</p>
+          <p className="text-sm text-muted-foreground">Loading members…</p>
         ) : filteredMembers.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
             {memberSearch ? `No members match "${memberSearch}".` : "No members yet. Add teammates to collaborate."}
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-slate-200">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <div className="overflow-hidden rounded-xl border border-border">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-background">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3">Member</th>
                   <th className="px-4 py-3">Roles</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
+              <tbody className="divide-y divide-border bg-card">
                 {filteredMembers.map((member) => {
                   const roleChips = member.role_ids
                     .map((roleId) => availableRoles.find((role) => role.id === roleId)?.name ?? roleId)
                     .sort((a, b) => a.localeCompare(b));
                   const label = member.user?.display_name ?? member.user?.email ?? member.user_id;
                   return (
-                    <tr key={member.user_id} className="text-sm text-slate-700">
+                    <tr key={member.user_id} className="text-sm text-foreground">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar name={member.user?.display_name} email={member.user?.email} size="sm" />
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-slate-900">{label}</p>
-                            <p className="truncate text-xs text-slate-500">{member.user?.email ?? member.user_id}</p>
+                            <p className="truncate font-semibold text-foreground">{label}</p>
+                            <p className="truncate text-xs text-muted-foreground">{member.user?.email ?? member.user_id}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {roleChips.length === 0 ? (
-                            <span className="text-xs text-slate-500">No roles assigned.</span>
+                            <span className="text-xs text-muted-foreground">No roles assigned.</span>
                           ) : (
                             roleChips.map((name) => (
                               <span
                                 key={`${member.user_id}-${name}`}
-                                className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                                className="inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground"
                               >
                                 {name}
                               </span>
@@ -251,13 +251,13 @@ export function MembersSettingsPage() {
         ) : null}
       </section>
 
-      <InviteMemberDrawer
-        open={isInviteOpen && canManageMembers}
+      <AddMemberDrawer
+        open={isAddMemberOpen && canManageMembers}
         onClose={closeDrawer}
         availableRoles={availableRoles}
         memberIds={memberIds}
         isSubmitting={addMember.isPending}
-        onInvite={handleInvite}
+        onAdd={handleAddMember}
       />
 
       <MemberDrawer
@@ -274,39 +274,39 @@ export function MembersSettingsPage() {
   );
 }
 
-interface InviteMemberDrawerProps {
+interface AddMemberDrawerProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly availableRoles: readonly RoleDefinition[];
   readonly memberIds: ReadonlySet<string>;
   readonly isSubmitting: boolean;
-  readonly onInvite: (input: { user: UserSummary; roleIds: string[] }) => Promise<void>;
+  readonly onAdd: (input: { user: UserSummary; roleIds: string[] }) => Promise<void>;
 }
 
-function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmitting, onInvite }: InviteMemberDrawerProps) {
-  const [inviteUserId, setInviteUserId] = useState("");
-  const [inviteRoleIds, setInviteRoleIds] = useState<string[]>([]);
-  const [inviteSearch, setInviteSearch] = useState("");
-  const [debouncedInviteSearch, setDebouncedInviteSearch] = useState("");
+function AddMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmitting, onAdd }: AddMemberDrawerProps) {
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedInviteSearch(inviteSearch.trim()), 250);
+    const handle = window.setTimeout(() => setDebouncedUserSearch(userSearch.trim()), 250);
     return () => window.clearTimeout(handle);
-  }, [inviteSearch]);
+  }, [userSearch]);
 
   useEffect(() => {
     if (!open) {
-      setInviteUserId("");
-      setInviteRoleIds([]);
-      setInviteSearch("");
+      setSelectedUserId("");
+      setSelectedRoleIds([]);
+      setUserSearch("");
       setFeedback(null);
     }
   }, [open]);
 
   const usersQuery = useUsersQuery({
     enabled: open,
-    search: debouncedInviteSearch,
+    search: debouncedUserSearch,
     pageSize: 50,
   });
 
@@ -321,32 +321,32 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
       });
   }, [memberIds, usersQuery.users]);
 
-  const selectedInviteUser = useMemo(
-    () => availableUsers.find((user) => user.id === inviteUserId),
-    [availableUsers, inviteUserId],
+  const selectedUser = useMemo(
+    () => availableUsers.find((user) => user.id === selectedUserId),
+    [availableUsers, selectedUserId],
   );
 
-  const canSubmitInvite = Boolean(inviteUserId) && inviteRoleIds.length > 0 && !isSubmitting;
-  const inviteSearchTooShort = inviteSearch.trim().length > 0 && inviteSearch.trim().length < 2;
+  const canSubmitAdd = Boolean(selectedUserId) && selectedRoleIds.length > 0 && !isSubmitting;
+  const searchTooShort = userSearch.trim().length > 0 && userSearch.trim().length < 2;
   const usersLoading = usersQuery.isPending && usersQuery.users.length === 0;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFeedback(null);
-    const user = availableUsers.find((candidate) => candidate.id === inviteUserId);
+    const user = availableUsers.find((candidate) => candidate.id === selectedUserId);
     if (!user) {
       setFeedback("Select a user to add.");
       return;
     }
-    if (inviteRoleIds.length === 0) {
+    if (selectedRoleIds.length === 0) {
       setFeedback("Select at least one role for this member.");
       return;
     }
     try {
-      await onInvite({ user, roleIds: inviteRoleIds });
-      setInviteUserId("");
-      setInviteSearch("");
-      setInviteRoleIds([]);
+      await onAdd({ user, roleIds: selectedRoleIds });
+      setSelectedUserId("");
+      setUserSearch("");
+      setSelectedRoleIds([]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to add member.";
       setFeedback(message);
@@ -354,12 +354,12 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
   };
 
   return (
-    <SettingsDrawer
-      open={open}
-      onClose={onClose}
-      title="Add member"
-      description="Invite an existing teammate and choose their workspace roles."
-    >
+	    <SettingsDrawer
+	      open={open}
+	      onClose={onClose}
+	      title="Add member"
+	      description="Add an existing user and choose their workspace roles."
+	    >
       <form className="space-y-4" onSubmit={handleSubmit}>
         {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
         {usersQuery.isError ? (
@@ -368,82 +368,82 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
           </Alert>
         ) : null}
 
-        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
-          <Input
-            value={inviteSearch}
-            onChange={(event) => setInviteSearch(event.target.value)}
-            placeholder="Search users"
-            disabled={isSubmitting || usersLoading}
-          />
-          {inviteSearchTooShort ? (
-            <p className="text-xs text-slate-500">Enter at least two characters to search the full directory.</p>
-          ) : null}
-        </FormField>
+	        <FormField label="Search directory" hint="Enter at least two characters to search by name or email.">
+	          <Input
+	            value={userSearch}
+	            onChange={(event) => setUserSearch(event.target.value)}
+	            placeholder="Search users"
+	            disabled={isSubmitting || usersLoading}
+	          />
+	          {searchTooShort ? (
+	            <p className="text-xs text-muted-foreground">Enter at least two characters to search the full directory.</p>
+	          ) : null}
+	        </FormField>
 
-        <FormField label="User" required>
-          <Select
-            value={inviteUserId}
-            onChange={(event) => {
-              setInviteUserId(event.target.value);
-              if (event.target.value) {
-                setInviteSearch("");
-              }
-            }}
-            disabled={isSubmitting || usersLoading}
-            required
-          >
-            <option value="">Select a user</option>
-            {selectedInviteUser &&
-            !availableUsers.some((user) => user.id === selectedInviteUser.id) ? (
-              <option value={selectedInviteUser.id}>
-                {selectedInviteUser.display_name
-                  ? `${selectedInviteUser.display_name} (${selectedInviteUser.email})`
-                  : selectedInviteUser.email}
-              </option>
-            ) : null}
+	        <FormField label="User" required>
+	          <Select
+	            value={selectedUserId}
+	            onChange={(event) => {
+	              setSelectedUserId(event.target.value);
+	              if (event.target.value) {
+	                setUserSearch("");
+	              }
+	            }}
+	            disabled={isSubmitting || usersLoading}
+	            required
+	          >
+	            <option value="">Select a user</option>
+	            {selectedUser &&
+	            !availableUsers.some((user) => user.id === selectedUser.id) ? (
+	              <option value={selectedUser.id}>
+	                {selectedUser.display_name
+	                  ? `${selectedUser.display_name} (${selectedUser.email})`
+	                  : selectedUser.email}
+	              </option>
+	            ) : null}
             {availableUsers.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.display_name ? `${user.display_name} (${user.email})` : user.email}
               </option>
-            ))}
-          </Select>
-          {availableUsers.length === 0 && inviteSearch ? (
-            <p className="text-xs text-slate-500">No users matched "{inviteSearch}".</p>
-          ) : null}
-        </FormField>
+	            ))}
+	          </Select>
+	          {availableUsers.length === 0 && userSearch ? (
+	            <p className="text-xs text-muted-foreground">No users matched "{userSearch}".</p>
+	          ) : null}
+	        </FormField>
 
         <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold text-slate-700">Roles</legend>
-          <p className="text-xs text-slate-500">Assign at least one role to grant access.</p>
+          <legend className="text-sm font-semibold text-foreground">Roles</legend>
+          <p className="text-xs text-muted-foreground">Assign at least one role to grant access.</p>
           <div className="flex flex-wrap gap-2">
             {availableRoles.length === 0 ? (
-              <p className="text-xs text-slate-500">No workspace roles available yet.</p>
+              <p className="text-xs text-muted-foreground">No workspace roles available yet.</p>
             ) : (
               availableRoles.map((role) => (
                 <label
                   key={role.id}
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                  className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                 >
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300"
-                    checked={inviteRoleIds.includes(role.id)}
-                    onChange={(event) =>
-                      setInviteRoleIds((current) =>
-                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
-                      )
-                    }
-                    disabled={isSubmitting}
-                  />
+	                  <input
+	                    type="checkbox"
+	                    className="h-4 w-4 rounded border-border-strong"
+	                    checked={selectedRoleIds.includes(role.id)}
+	                    onChange={(event) =>
+	                      setSelectedRoleIds((current) =>
+	                        event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id),
+	                      )
+	                    }
+	                    disabled={isSubmitting}
+	                  />
                   <span>{role.name}</span>
                 </label>
               ))
-            )}
-          </div>
-          {inviteRoleIds.length > 0 ? (
-            <p className="text-xs text-slate-500">{inviteRoleIds.length} role(s) selected.</p>
-          ) : null}
-        </fieldset>
+	            )}
+	          </div>
+	          {selectedRoleIds.length > 0 ? (
+	            <p className="text-xs text-muted-foreground">{selectedRoleIds.length} role(s) selected.</p>
+	          ) : null}
+	        </fieldset>
 
         {usersQuery.hasNextPage ? (
           <div className="pt-2">
@@ -462,7 +462,7 @@ function InviteMemberDrawer({ open, onClose, availableRoles, memberIds, isSubmit
           <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" isLoading={isSubmitting} disabled={!canSubmitInvite}>
+          <Button type="submit" isLoading={isSubmitting} disabled={!canSubmitAdd}>
             Add member
           </Button>
         </div>
@@ -549,32 +549,32 @@ function MemberDrawer({
         ) : (
           <div className="space-y-4">
             {feedback ? <Alert tone="danger">{feedback}</Alert> : null}
-            <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
               <Avatar name={member.user?.display_name} email={member.user?.email} size="md" />
               <div className="space-y-1">
-                <p className="text-base font-semibold text-slate-900">
+                <p className="text-base font-semibold text-foreground">
                   {member.user?.display_name ?? member.user?.email ?? member.user_id}
                 </p>
-                <p className="text-sm text-slate-500">{member.user?.email ?? "No email available"}</p>
-                <p className="text-xs text-slate-500">User ID: {member.user_id}</p>
+                <p className="text-sm text-muted-foreground">{member.user?.email ?? "No email available"}</p>
+                <p className="text-xs text-muted-foreground">User ID: {member.user_id}</p>
               </div>
             </div>
 
             <fieldset className="space-y-3">
-              <legend className="text-sm font-semibold text-slate-700">Roles</legend>
-              <p className="text-xs text-slate-500">Select the roles this member should have inside the workspace.</p>
+              <legend className="text-sm font-semibold text-foreground">Roles</legend>
+              <p className="text-xs text-muted-foreground">Select the roles this member should have inside the workspace.</p>
               <div className="flex flex-wrap gap-2">
                 {availableRoles.length === 0 ? (
-                  <p className="text-xs text-slate-500">No workspace roles available.</p>
+                  <p className="text-xs text-muted-foreground">No workspace roles available.</p>
                 ) : (
                   availableRoles.map((role) => (
                     <label
                       key={role.id}
-                      className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                      className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-slate-300"
+                        className="h-4 w-4 rounded border-border-strong"
                         checked={roleDraft.includes(role.id)}
                         onChange={(event) =>
                           setRoleDraft((current) =>
@@ -591,7 +591,7 @@ function MemberDrawer({
                 )}
               </div>
               {roleDraft.length > 0 ? (
-                <p className="text-xs text-slate-500">{roleDraft.length} role(s) selected.</p>
+                <p className="text-xs text-muted-foreground">{roleDraft.length} role(s) selected.</p>
               ) : null}
             </fieldset>
           </div>

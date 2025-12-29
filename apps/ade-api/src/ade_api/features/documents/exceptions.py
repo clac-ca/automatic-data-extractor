@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 
 class DocumentNotFoundError(Exception):
     """Raised when a document lookup does not yield a result."""
 
-    def __init__(self, document_id: str) -> None:
-        super().__init__(f"Document {document_id!r} not found")
-        self.document_id = document_id
+    def __init__(self, document_id: UUID | str) -> None:
+        doc_id = str(document_id)
+        super().__init__(f"Document {doc_id!r} not found")
+        self.document_id = doc_id
 
 
 class DocumentFileMissingError(Exception):
     """Raised when a stored document file cannot be located on disk."""
 
-    def __init__(self, *, document_id: str, stored_uri: str) -> None:
-        message = (
-            f"Stored file for document {document_id!r} was not found at {stored_uri!r}."
-        )
+    def __init__(self, *, document_id: UUID | str, stored_uri: str) -> None:
+        doc_id = str(document_id)
+        message = f"Stored file for document {doc_id!r} was not found at {stored_uri!r}."
         super().__init__(message)
-        self.document_id = document_id
+        self.document_id = doc_id
         self.stored_uri = stored_uri
 
 
@@ -46,20 +48,29 @@ class InvalidDocumentExpirationError(Exception):
 class DocumentWorksheetParseError(Exception):
     """Raised when worksheet metadata cannot be read from a workbook."""
 
-    def __init__(self, *, document_id: str, stored_uri: str, reason: str | None = None) -> None:
+    def __init__(
+        self, *, document_id: UUID | str, stored_uri: str, reason: str | None = None
+    ) -> None:
+        doc_id = str(document_id)
         details = " Unable to read worksheet metadata."
         if reason:
             details = f" Parse failed ({reason})."
 
         message = (
-            f"Worksheet inspection failed for document {document_id!r} at {stored_uri!r}."
-            f"{details}"
+            f"Worksheet inspection failed for document {doc_id!r} at {stored_uri!r}.{details}"
         )
 
         super().__init__(message)
-        self.document_id = document_id
+        self.document_id = doc_id
         self.stored_uri = stored_uri
         self.reason = reason
+
+
+class InvalidDocumentTagsError(Exception):
+    """Raised when document tag inputs fail validation."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 __all__ = [
@@ -68,4 +79,5 @@ __all__ = [
     "DocumentTooLargeError",
     "InvalidDocumentExpirationError",
     "DocumentWorksheetParseError",
+    "InvalidDocumentTagsError",
 ]

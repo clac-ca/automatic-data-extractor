@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { isRunStatusTerminal, normalizeRunStatusValue } from "./runStream";
-import { useRunStreamController, type RunStreamMetadata } from "./useRunStreamController";
-import type { WorkbenchDataSeed, WorkbenchRunSummary } from "../types";
+import { useJobStreamController, type JobStreamMetadata, type JobStreamStatus } from "./useJobStreamController";
+import type { WorkbenchDataSeed, WorkbenchRunSummary, WorkbenchValidationState } from "../types";
 
 import {
   fetchRun,
+  runInputUrl,
   runLogsUrl,
   runOutputUrl,
-  type RunResource,
   type RunStreamOptions,
 } from "@shared/runs/api";
 import type { RunStatus } from "@shared/runs/types";
@@ -24,6 +23,7 @@ export type RunCompletionInfo = {
 };
 
 interface UseRunSessionModelOptions {
+  readonly workspaceId: string;
   readonly configId: string;
   readonly runId: string | null;
   readonly seed?: WorkbenchDataSeed;
@@ -32,7 +32,21 @@ interface UseRunSessionModelOptions {
   readonly onRunComplete?: (info: RunCompletionInfo) => void;
 }
 
+function isTerminal(status: JobStreamStatus) {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
+function normalizeRunStatus(value?: string | null): RunStatus {
+  const normalized = (value ?? "").toLowerCase();
+  if (normalized === "succeeded" || normalized === "failed" || normalized === "cancelled") {
+    return normalized;
+  }
+  if (normalized === "success") return "succeeded";
+  return "failed";
+}
+
 export function useRunSessionModel({
+  workspaceId,
   configId,
   runId,
   seed,
@@ -40,282 +54,156 @@ export function useRunSessionModel({
   onRunIdChange,
   onRunComplete,
 }: UseRunSessionModelOptions) {
+  const lastRunMetadataRef = useRef<JobStreamMetadata | null>(null);
   const {
-    stream,
-    runResource,
-    runMetadata,
-    runStartedAt,
-    runStatus,
-    runMode,
-    runInProgress,
-    validation,
-    appendConsoleLine,
+    console,
+    jobId,
+    jobMode,
+    jobStatus,
+    jobInProgress,
+    completedDetails,
     clearConsole,
-    startRun,
-  } = useRunStreamController({
+    startJob,
+  } = useJobStreamController({
+    workspaceId,
     configId,
-    runId,
-    onRunIdChange,
-    seed,
+    onJobIdChange: onRunIdChange,
+    seed: seed ? { console: seed.console } : undefined,
     maxConsoleLines,
   });
 
-  const consoleLines = stream.consoleLines;
+  const resolvedRunId = jobId ?? runId;
+  const runMode = jobMode ?? null;
+
   const [latestRun, setLatestRun] = useState<WorkbenchRunSummary | null>(null);
   const lastCompletedRunRef = useRef<string | null>(null);
 
-  // Fetch output/telemetry/summary exactly once when a run finishes.
+  const validation: WorkbenchValidationState = useMemo(
+    () => ({
+      status: jobInProgress && runMode === "validation" ? "running" : "idle",
+      messages: [],
+      lastRunAt: undefined,
+      error: null,
+      digest: null,
+    }),
+    [jobInProgress, runMode],
+  );
+
+  // When the job finishes, capture completion info and hydrate output/log links.
   useEffect(() => {
-    if (!runId || !isRunStatusTerminal(runStatus)) {
+    if (!resolvedRunId || !isTerminal(jobStatus)) {
       return;
     }
-    if (lastCompletedRunRef.current === runId) {
+    if (lastCompletedRunRef.current === resolvedRunId) {
       return;
     }
-    lastCompletedRunRef.current = runId;
+    lastCompletedRunRef.current = resolvedRunId;
 
-    const completedPayload = stream.completedPayload ?? {};
-    const failure = completedPayload.failure as Record<string, unknown> | undefined;
-    const failureMessage = typeof failure?.message === "string" ? failure.message.trim() : null;
-    const summaryMessage = typeof completedPayload.summary === "string" ? completedPayload.summary.trim() : null;
-    const payloadStartedAt = typeof completedPayload.started_at === "string" ? completedPayload.started_at : undefined;
-    const payloadSource = completedPayload.source as Record<string, unknown> | undefined;
-    const payloadSourceStartedAt = typeof payloadSource?.started_at === "string" ? payloadSource.started_at : undefined;
-    const payloadCompletedAt = typeof completedPayload.completed_at === "string" ? completedPayload.completed_at : undefined;
-    const payloadSourceCompletedAt =
-      typeof payloadSource?.completed_at === "string" ? payloadSource.completed_at : undefined;
-    const payloadStatus =
-      (completedPayload.status as RunStatus | undefined) ??
-      (payloadSource?.status as RunStatus | undefined) ??
-      runStatus;
-    const completedDetails =
-      completedPayload.details && typeof completedPayload.details === "object"
-        ? (completedPayload.details as Record<string, unknown>)
-        : null;
-    const artifacts =
-      completedPayload.artifacts && typeof completedPayload.artifacts === "object"
-        ? (completedPayload.artifacts as Record<string, unknown>)
-        : null;
-    const artifactOutputPath = extractOutputPath(artifacts) ?? extractOutputPath(completedDetails);
-    const artifactProcessedFile = extractProcessedFile(artifacts) ?? extractProcessedFile(completedDetails);
+    const status = normalizeRunStatus(typeof completedDetails?.status === "string" ? completedDetails.status : null);
+    const mode: "validation" | "extraction" = runMode ?? "extraction";
 
-    const normalizedStatus = normalizeRunStatusValue(payloadStatus);
-    const completionStatus: RunStatus = normalizedStatus;
-    const resolvedMode: "validation" | "extraction" = runMode ?? runMetadata?.mode ?? "extraction";
-    const startedAtIso =
-      payloadStartedAt ?? payloadSourceStartedAt ?? runResource?.started_at ?? runStartedAt ?? undefined;
-    const completedIso =
-      payloadCompletedAt ??
-      payloadSourceCompletedAt ??
-      runResource?.completed_at ??
-      new Date().toISOString();
-    const durationMs = calculateDurationMs(startedAtIso ?? null, completedIso ?? null);
+    const execution = (completedDetails?.execution as Record<string, unknown> | undefined) ?? {};
+    const startedAt = typeof execution.started_at === "string" ? execution.started_at : null;
+    const completedAt = typeof execution.completed_at === "string" ? execution.completed_at : new Date().toISOString();
+    const durationMs = typeof execution.duration_ms === "number" ? execution.duration_ms : null;
 
     onRunComplete?.({
-      runId,
-      status: completionStatus,
-      mode: resolvedMode,
-      startedAt: startedAtIso ?? null,
-      completedAt: completedIso ?? new Date().toISOString(),
+      runId: resolvedRunId,
+      status,
+      mode,
+      startedAt,
+      completedAt,
       durationMs,
-      payload: stream.completedPayload,
+      payload: completedDetails,
     });
 
-    if (resolvedMode === "validation") {
+    if (mode === "validation") {
       return;
     }
 
-    setLatestRun((previous) => {
-      const outputMeta = deriveOutputMetadata({
-        runResource,
-        fallbackPath: artifactOutputPath ?? previous?.outputPath ?? null,
-        fallbackProcessedFile: artifactProcessedFile ?? previous?.processedFile ?? null,
-      });
-      const logsUrl = runResource ? runLogsUrl(runResource) ?? undefined : previous?.logsUrl;
-      return {
-        runId,
-        status: completionStatus,
-        outputUrl: outputMeta.outputUrl ?? previous?.outputUrl,
-        outputPath: outputMeta.outputPath,
-        outputFilename: outputMeta.outputFilename ?? previous?.outputFilename,
-        outputReady: outputMeta.outputReady ?? previous?.outputReady ?? (outputMeta.outputPath ? true : undefined),
-        processedFile: outputMeta.processedFile ?? previous?.processedFile ?? null,
-        outputLoaded: true,
-        logsUrl,
-        documentName: runMetadata?.documentName ?? previous?.documentName,
-        sheetNames: runMetadata?.sheetNames ?? previous?.sheetNames ?? [],
-        summary: null,
-        summaryLoaded: true,
-        summaryError: null,
-        telemetry: null,
-        telemetryLoaded: true,
-        telemetryError: null,
-        error: failureMessage ?? summaryMessage ?? previous?.error ?? null,
-        startedAt: startedAtIso ?? previous?.startedAt ?? null,
-        completedAt: completedIso ?? previous?.completedAt ?? null,
-        durationMs,
-      };
+    const runMetadata = lastRunMetadataRef.current;
+    const artifacts = (completedDetails?.artifacts as Record<string, unknown> | undefined) ?? {};
+    const outputPath = typeof artifacts.output_path === "string" ? artifacts.output_path : null;
+    const processedFile = typeof artifacts.processed_file === "string" ? artifacts.processed_file : null;
+
+    setLatestRun({
+      runId: resolvedRunId,
+      status,
+      outputUrl: undefined,
+      inputUrl: undefined,
+      outputReady: outputPath ? true : undefined,
+      outputFilename: outputPath ? basename(outputPath) : null,
+      outputPath,
+      logsUrl: undefined,
+      processedFile,
+      outputLoaded: false,
+      documentName: runMetadata?.documentName,
+      sheetNames: runMetadata?.sheetNames ?? [],
+      error: null,
+      startedAt,
+      completedAt,
+      durationMs,
     });
 
     void (async () => {
-      let currentResource = runResource;
-      if (!currentResource) {
-        try {
-          currentResource = await fetchRun(runId);
-        } catch (error) {
-          setLatestRun((previous) =>
-            previous && previous.runId === runId
-              ? { ...previous, outputLoaded: true, summaryLoaded: true, telemetryLoaded: true, error: describeError(error) }
-              : previous,
-          );
-        }
-      }
-
-      if (currentResource) {
-        const outputMeta = deriveOutputMetadata({
-          runResource: currentResource,
-          fallbackPath: artifactOutputPath ?? null,
-          fallbackProcessedFile: artifactProcessedFile ?? null,
-        });
-        const logsUrl = runLogsUrl(currentResource) ?? undefined;
-        setLatestRun((previous) =>
-          previous && previous.runId === runId
+      try {
+        const resource = await fetchRun(resolvedRunId);
+        const outputUrl = runOutputUrl(resource) ?? undefined;
+        const logsUrl = runLogsUrl(resource) ?? undefined;
+        const inputUrl = runInputUrl(resource) ?? undefined;
+        setLatestRun((prev) =>
+          prev && prev.runId === resolvedRunId
             ? {
-                ...previous,
-                outputUrl: outputMeta.outputUrl ?? previous.outputUrl,
-                outputPath: outputMeta.outputPath ?? previous.outputPath ?? null,
-                outputFilename: outputMeta.outputFilename ?? previous.outputFilename,
-                outputReady: outputMeta.outputReady ?? previous.outputReady,
-                processedFile: outputMeta.processedFile ?? previous.processedFile,
+                ...prev,
+                outputUrl: outputUrl ?? prev.outputUrl,
+                outputReady: outputUrl ? true : prev.outputReady,
+                logsUrl: logsUrl ?? prev.logsUrl,
+                inputUrl: inputUrl ?? prev.inputUrl,
                 outputLoaded: true,
-                logsUrl,
               }
-            : previous,
+            : prev,
+        );
+      } catch {
+        setLatestRun((prev) =>
+          prev && prev.runId === resolvedRunId ? { ...prev, outputLoaded: true } : prev,
         );
       }
     })();
-  }, [runId, runStatus, runMode, runMetadata, runResource, runStartedAt, stream.completedPayload, onRunComplete]);
+  }, [resolvedRunId, jobStatus, completedDetails, onRunComplete, runMode]);
 
-  const startManagedRun = useCallback(
+  const startRun = useCallback(
     async (
       options: RunStreamOptions,
-      metadata: RunStreamMetadata,
-      extras?: { forceRebuild?: boolean; prepare?: () => boolean },
+      metadata: JobStreamMetadata,
+      extras?: { prepare?: () => boolean; forceRebuild?: boolean },
     ) => {
-      const result = await startRun(options, metadata, extras);
+      lastRunMetadataRef.current = metadata;
+      const effectiveOptions =
+        extras?.forceRebuild ? { ...options, force_rebuild: true } : options;
+      const result = await startJob(effectiveOptions, metadata, { prepare: extras?.prepare });
       if (result && metadata.mode === "extraction") {
         setLatestRun(null);
       }
-      return result;
+      return result ? { runId: result.jobId, startedAt: result.startedAt } : null;
     },
-    [startRun],
+    [startJob],
   );
+
+  const runStatus: JobStreamStatus = jobStatus;
 
   return useMemo(
     () => ({
-      stream,
       runStatus,
-      runMode,
-      runInProgress,
+      runMode: runMode ?? undefined,
+      runInProgress: jobInProgress,
       validation,
-      consoleLines,
+      console,
       latestRun,
-      appendConsoleLine,
       clearConsole,
-      startRun: startManagedRun,
+      startRun,
     }),
-    [
-      stream,
-      runStatus,
-      runMode,
-      runInProgress,
-      validation,
-      consoleLines,
-      latestRun,
-      appendConsoleLine,
-      clearConsole,
-      startManagedRun,
-    ],
+    [runStatus, runMode, jobInProgress, validation, console, latestRun, clearConsole, startRun],
   );
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return typeof error === "string" ? error : "Unexpected error";
-}
-
-function calculateDurationMs(startedAt?: string | null, completedAt?: string | null): number | undefined {
-  if (!startedAt || !completedAt) {
-    return undefined;
-  }
-  const startDate = new Date(startedAt);
-  const completedDate = new Date(completedAt);
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(completedDate.getTime())) {
-    return undefined;
-  }
-  return Math.max(0, completedDate.getTime() - startDate.getTime());
-}
-
-function deriveOutputMetadata({
-  runResource,
-  fallbackPath,
-  fallbackProcessedFile,
-}: {
-  readonly runResource?: RunResource | null;
-  readonly fallbackPath?: string | null;
-  readonly fallbackProcessedFile?: string | null;
-}): {
-  readonly outputUrl?: string;
-  readonly outputPath: string | null;
-  readonly outputFilename: string | null;
-  readonly outputReady: boolean | undefined;
-  readonly processedFile: string | null;
-} {
-  const output = runResource?.output;
-  const outputPath = (output?.output_path as string | null | undefined) ?? fallbackPath ?? null;
-  const processedFile =
-    (output?.processed_file as string | null | undefined) ??
-    fallbackProcessedFile ??
-    null;
-  const outputUrl = runResource ? runOutputUrl(runResource) ?? undefined : undefined;
-  const outputReady = output?.ready ?? (outputUrl ? true : undefined) ?? (fallbackPath ? true : undefined);
-  const outputFilename =
-    (output?.filename as string | null | undefined) ??
-    (outputPath ? basename(outputPath) : null);
-
-  return {
-    outputUrl,
-    outputPath,
-    outputFilename,
-    outputReady,
-    processedFile,
-  };
-}
-
-function extractOutputPath(artifacts: Record<string, unknown> | null): string | null {
-  if (!artifacts) return null;
-  if (typeof artifacts.output_path === "string") {
-    return artifacts.output_path;
-  }
-  if (Array.isArray(artifacts.output_paths) && artifacts.output_paths.length) {
-    const first = artifacts.output_paths[0];
-    if (typeof first === "string") return first;
-  }
-  return null;
-}
-
-function extractProcessedFile(artifacts: Record<string, unknown> | null): string | null {
-  if (!artifacts) return null;
-  if (typeof artifacts.processed_file === "string") {
-    return artifacts.processed_file;
-  }
-  if (Array.isArray(artifacts.processed_files) && artifacts.processed_files.length) {
-    const first = artifacts.processed_files[0];
-    if (typeof first === "string") return first;
-  }
-  return null;
 }
 
 function basename(path: string): string {
