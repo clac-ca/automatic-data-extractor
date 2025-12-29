@@ -899,13 +899,19 @@ def _create_documents() -> None:
 def _create_document_tags() -> None:
     op.create_table(
         "document_tags",
+        _uuid_pk(),
         sa.Column(
             "document_id",
             UUIDType(),
             sa.ForeignKey("documents.id", ondelete="NO ACTION"),
-            primary_key=True,
+            nullable=False,
         ),
-        sa.Column("tag", sa.String(length=100), primary_key=True, nullable=False),
+        sa.Column("tag", sa.String(length=100), nullable=False),
+        sa.UniqueConstraint(
+            "document_id",
+            "tag",
+            name="document_tags_document_id_tag_key",
+        ),
     )
     op.create_index(
         "ix_document_tags_document_id",
@@ -914,3 +920,9 @@ def _create_document_tags() -> None:
         unique=False,
     )
     op.create_index("ix_document_tags_tag", "document_tags", ["tag"], unique=False)
+    op.create_index(
+        "document_tags_tag_document_id_idx",
+        "document_tags",
+        ["tag", "document_id"],
+        unique=False,
+    )

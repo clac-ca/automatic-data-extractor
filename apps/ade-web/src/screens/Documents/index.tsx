@@ -9,12 +9,14 @@ import { PageState } from "@ui/PageState";
 
 import { DocumentsBoard } from "./components/DocumentsBoard";
 import { BulkActionBar } from "./components/BulkActionBar";
+import { BulkTagDialog } from "./components/BulkTagDialog";
 import { DocumentsFiltersBar } from "./components/DocumentsFiltersBar";
 import { DocumentsGrid } from "./components/DocumentsGrid";
 import { DocumentsHeader } from "./components/DocumentsHeader";
 import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
 import { useDocumentsModel } from "./hooks/useDocumentsModel";
+import { getDocumentOutputRun } from "./data";
 
 export default function DocumentsScreen() {
   return (
@@ -81,7 +83,8 @@ export function DocumentsWorkbench() {
   const currentUserId = session.user.id;
 
   const model = useDocumentsModel({ currentUserLabel, currentUserId, workspaceId: workspace.id });
-  const [detailsRequestId, setDetailsRequestId] = useState<string | null>(null);
+  const [detailsRequest, setDetailsRequest] = useState<{ id: string; tab: "details" | "notes" } | null>(null);
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const handleClearFilters = () => {
     setSearchParam("");
     model.actions.setSearch("");
@@ -108,6 +111,13 @@ export function DocumentsWorkbench() {
     if (!urlDocId) return;
     model.actions.openPreview(urlDocId);
   }, [urlDocId]);
+
+  useEffect(() => {
+    if (!model.state.previewOpen) return;
+    if (!model.state.activeId) return;
+    if (urlDocId === model.state.activeId) return;
+    setDocParam(model.state.activeId, true);
+  }, [model.state.activeId, model.state.previewOpen, urlDocId]);
 
   const setSearchParam = useCallback(
     (value: string, replace = true) => {
@@ -146,7 +156,7 @@ export function DocumentsWorkbench() {
   const onClosePreview = () => {
     setDocParam(null, false);
     model.actions.closePreview();
-    setDetailsRequestId(null);
+    setDetailsRequest(null);
   };
 
   const onOpenDetails = useCallback(
@@ -154,9 +164,29 @@ export function DocumentsWorkbench() {
       const hadDoc = Boolean(urlDocId);
       setDocParam(id, hadDoc);
       model.actions.openPreview(id);
-      setDetailsRequestId(id);
+      setDetailsRequest({ id, tab: "details" });
     },
     [model.actions, setDocParam, urlDocId],
+  );
+
+  const onOpenNotes = useCallback(
+    (id: string) => {
+      const hadDoc = Boolean(urlDocId);
+      setDocParam(id, hadDoc);
+      model.actions.openPreview(id);
+      setDetailsRequest({ id, tab: "notes" });
+    },
+    [model.actions, setDocParam, urlDocId],
+  );
+
+  const selectedDocuments = useMemo(
+    () => model.derived.visibleDocuments.filter((doc) => model.state.selectedIds.has(doc.id) && doc.record),
+    [model.derived.visibleDocuments, model.state.selectedIds],
+  );
+
+  const selectedOutputReadyCount = useMemo(
+    () => selectedDocuments.filter((doc) => Boolean(getDocumentOutputRun(doc.record))).length,
+    [selectedDocuments],
   );
 
   return (
@@ -218,6 +248,7 @@ export function DocumentsWorkbench() {
                 onCopyLink={model.actions.copyLink}
                 onReprocess={(doc) => model.actions.reprocess(doc)}
                 onOpenDetails={onOpenDetails}
+                onOpenNotes={onOpenNotes}
                 onClosePreview={onClosePreview}
                 expandedId={model.state.previewOpen ? model.state.activeId : null}
                 expandedContent={
@@ -253,8 +284,9 @@ export function DocumentsWorkbench() {
                       workbookLoading={model.derived.workbookLoading}
                       workbookError={model.derived.workbookError}
                       onClose={onClosePreview}
-                      detailsRequestId={detailsRequestId}
-                      onDetailsRequestHandled={() => setDetailsRequestId(null)}
+                      detailsRequestId={detailsRequest?.id ?? null}
+                      detailsRequestTab={detailsRequest?.tab ?? null}
+                      onDetailsRequestHandled={() => setDetailsRequest(null)}
                     />
                   ) : null
                 }
@@ -262,8 +294,9 @@ export function DocumentsWorkbench() {
 
               <BulkActionBar
                 count={model.state.selectedIds.size}
+                outputReadyCount={selectedOutputReadyCount}
                 onClear={model.actions.clearSelection}
-                onAddTag={model.actions.bulkAddTagPrompt}
+                onAddTag={() => setBulkTagOpen(true)}
                 onDownloadOriginals={model.actions.bulkDownloadOriginals}
                 onDownloadOutputs={model.actions.bulkDownloadOutputs}
               />
@@ -325,8 +358,9 @@ export function DocumentsWorkbench() {
                       workbookLoading={model.derived.workbookLoading}
                       workbookError={model.derived.workbookError}
                       onClose={onClosePreview}
-                      detailsRequestId={detailsRequestId}
-                      onDetailsRequestHandled={() => setDetailsRequestId(null)}
+                      detailsRequestId={detailsRequest?.id ?? null}
+                      detailsRequestTab={detailsRequest?.tab ?? null}
+                      onDetailsRequestHandled={() => setDetailsRequest(null)}
                     />
                   </div>
                 </div>
@@ -337,6 +371,13 @@ export function DocumentsWorkbench() {
       </div>
 
       <SaveViewDialog open={model.state.saveViewOpen} onClose={model.actions.closeSaveView} onSave={model.actions.saveView} />
+      <BulkTagDialog
+        open={bulkTagOpen}
+        workspaceId={workspace.id}
+        selectedCount={model.state.selectedIds.size}
+        onClose={() => setBulkTagOpen(false)}
+        onApply={(payload) => model.actions.bulkUpdateTags(payload)}
+      />
     </div>
   );
 }

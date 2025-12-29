@@ -29,7 +29,6 @@ import {
 
 export const DOCUMENTS_PAGE_SIZE = 50;
 export const MAX_PREVIEW_ROWS = 200;
-export const MAX_PREVIEW_COLUMNS = 24;
 
 export const documentsKeys = {
   root: () => ["documents"] as const,
@@ -118,11 +117,8 @@ export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): P
     const totalRows = rows.length;
     const totalColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
     const truncatedRows = totalRows > MAX_PREVIEW_ROWS;
-    const truncatedColumns = totalColumns > MAX_PREVIEW_COLUMNS;
 
-    const visibleRows = rows
-      .slice(0, MAX_PREVIEW_ROWS)
-      .map((row) => row.slice(0, MAX_PREVIEW_COLUMNS).map((cell) => normalizeCell(cell)));
+    const visibleRows = rows.slice(0, MAX_PREVIEW_ROWS).map((row) => row.map((cell) => normalizeCell(cell)));
 
     const columnCount = Math.max(visibleRows[0]?.length ?? 0, totalColumns, 1);
     const headers = buildHeaders(visibleRows[0] ?? [], columnCount);
@@ -135,7 +131,7 @@ export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): P
       totalRows,
       totalColumns,
       truncatedRows,
-      truncatedColumns,
+      truncatedColumns: false,
     } satisfies WorkbookSheet;
   });
 

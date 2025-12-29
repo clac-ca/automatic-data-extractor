@@ -7,7 +7,7 @@ import { Select } from "@ui/Select";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@ui/Tabs";
 import type { RunResource } from "@schema";
 
-import { MAX_PREVIEW_COLUMNS, MAX_PREVIEW_ROWS } from "../data";
+import { MAX_PREVIEW_ROWS } from "../data";
 import type { DocumentComment, DocumentEntry, WorkspacePerson, WorkbookPreview, WorkbookSheet } from "../types";
 import { columnLabel, formatRelativeTime, shortId } from "../utils";
 import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon, UserIcon } from "./icons";
@@ -55,6 +55,7 @@ export function DocumentsPreviewPane({
 
   onClose,
   detailsRequestId,
+  detailsRequestTab,
   onDetailsRequestHandled,
 }: {
   workspaceId: string;
@@ -95,6 +96,7 @@ export function DocumentsPreviewPane({
 
   onClose: () => void;
   detailsRequestId?: string | null;
+  detailsRequestTab?: DetailsPanelTab | null;
   onDetailsRequestHandled?: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -129,10 +131,10 @@ export function DocumentsPreviewPane({
 
   useEffect(() => {
     if (!detailsRequestId || detailsRequestId !== document?.id) return;
-    setDetailsTab("details");
+    setDetailsTab(detailsRequestTab ?? "details");
     setDetailsOpen(true);
     onDetailsRequestHandled?.();
-  }, [detailsRequestId, document?.id, onDetailsRequestHandled]);
+  }, [detailsRequestId, detailsRequestTab, document?.id, onDetailsRequestHandled]);
 
   return (
     <div className="relative flex min-h-0 w-full flex-col">
@@ -146,9 +148,39 @@ export function DocumentsPreviewPane({
         ) : (
           <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="relative bg-background/40">
-              <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-2">
-                {runOptions.length > 1 ? (
-                  <div className="pointer-events-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/90 px-4 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onDownloadOutput(document)}
+                    disabled={!canDownloadOutput}
+                    title={canDownloadOutput ? "Download output" : "Output not ready"}
+                  >
+                    Download output
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onDownloadOriginal(document)}
+                    disabled={!canDownloadOriginal}
+                    title={canDownloadOriginal ? "Download original" : "Original unavailable"}
+                  >
+                    Download original
+                  </Button>
+                  <IconButton
+                    ariaLabel="Copy link"
+                    title="Copy link"
+                    onClick={() => onCopyLink(document)}
+                    disabled={!document.record}
+                  >
+                    <LinkIcon className="h-4 w-4" />
+                  </IconButton>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {runOptions.length > 1 ? (
                     <Select
                       value={selectedRunId ?? runOptions[0]?.id ?? ""}
                       onChange={(event) => onSelectRun(event.target.value)}
@@ -161,9 +193,7 @@ export function DocumentsPreviewPane({
                         </option>
                       ))}
                     </Select>
-                  </div>
-                ) : null}
-                <div className="pointer-events-auto">
+                  ) : null}
                   <PreviewActionsMenu
                     document={document}
                     canDownloadOutput={canDownloadOutput}
@@ -224,8 +254,8 @@ export function DocumentsPreviewPane({
 
                     {(activeSheet.truncatedRows || activeSheet.truncatedColumns) ? (
                       <div className="border-t border-border bg-card px-4 py-2 text-[11px] text-muted-foreground">
-                        Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows and{" "}
-                        {Math.min(activeSheet.totalColumns, MAX_PREVIEW_COLUMNS)} columns.
+                        Showing first {Math.min(activeSheet.totalRows, MAX_PREVIEW_ROWS)} rows
+                        {activeSheet.truncatedColumns ? ` and ${activeSheet.headers.length} columns` : ""}.
                       </div>
                     ) : null}
                   </div>
@@ -319,7 +349,7 @@ function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
   const columnCount = sheet.headers.length;
 
   return (
-    <table className="min-w-full text-left text-xs">
+    <table className="min-w-full w-max text-left text-xs">
       <thead className="sticky top-0 z-10 border-b border-border bg-background/95 text-muted-foreground backdrop-blur">
         <tr>
           {Array.from({ length: columnCount }).map((_, index) => {
@@ -328,7 +358,7 @@ function PreviewTable({ sheet }: { sheet: WorkbookSheet }) {
             return (
               <th
                 key={`${sheet.name}-h-${index}`}
-                className="px-3 py-2 text-[11px] font-semibold"
+                className="max-w-[22rem] truncate px-3 py-2 text-[11px] font-semibold"
                 title={label}
               >
                 {label}

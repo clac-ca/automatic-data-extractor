@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { useEffect, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
 import type { DocumentEntry, WorkspacePerson } from "../types";
@@ -50,6 +51,7 @@ export function DocumentsGrid({
   onCopyLink,
   onReprocess,
   onOpenDetails,
+  onOpenNotes,
   onClosePreview,
   expandedId,
   expandedContent,
@@ -84,6 +86,7 @@ export function DocumentsGrid({
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry) => void;
   onOpenDetails: (docId: string) => void;
+  onOpenNotes: (docId: string) => void;
   onClosePreview: () => void;
   expandedId?: string | null;
   expandedContent?: ReactNode;
@@ -91,6 +94,17 @@ export function DocumentsGrid({
   const hasSelectable = documents.some((doc) => doc.record);
   const showLoading = isLoading && documents.length === 0;
   const showError = isError && documents.length === 0;
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+
+  useEffect(() => {
+    if (!activeId) return;
+    const container = listRef.current;
+    const row = rowRefs.current.get(activeId);
+    if (!container || !row) return;
+    const nextTop = row.offsetTop - container.offsetTop;
+    container.scrollTo({ top: Math.max(0, nextTop) });
+  }, [activeId]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
@@ -115,6 +129,7 @@ export function DocumentsGrid({
       </div>
 
       <div
+        ref={listRef}
         className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
@@ -162,7 +177,14 @@ export function DocumentsGrid({
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
 
               return (
-                <div key={doc.id} className="border-b border-border/70">
+                <div
+                  key={doc.id}
+                  ref={(node) => {
+                    if (node) rowRefs.current.set(doc.id, node);
+                    else rowRefs.current.delete(doc.id);
+                  }}
+                  className="border-b border-border/70"
+                >
                   <div
                     role="listitem"
                     onClick={(event) => {
@@ -209,13 +231,18 @@ export function DocumentsGrid({
                           <span aria-hidden className="text-muted-foreground">·</span>
                           <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
                           <span aria-hidden className="text-muted-foreground">·</span>
-                          <span
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground"
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenNotes(doc.id);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
                             title={hasNotes ? `${doc.commentCount} notes` : "No notes yet"}
                           >
                             <ChatIcon className="h-3 w-3" />
                             <span className="tabular-nums">{doc.commentCount}</span>
-                          </span>
+                          </button>
                         </p>
                       </div>
                     </div>
@@ -234,7 +261,7 @@ export function DocumentsGrid({
                         <p className="truncate text-xs font-semibold text-foreground">
                           {doc.assigneeLabel ?? "Unassigned"}
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
                           {isUnassigned ? (
                             <button
                               type="button"
@@ -247,15 +274,18 @@ export function DocumentsGrid({
                               Pick up
                             </button>
                           ) : null}
-                          <div data-ignore-row-click className="min-w-0">
-                            <PeoplePicker
-                              people={people}
-                              value={[doc.assigneeKey ?? unassignedKey()]}
-                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                              placeholder="Assign..."
-                              includeUnassigned
-                              buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
-                            />
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <span className="font-semibold">Assign</span>
+                            <div data-ignore-row-click className="min-w-0">
+                              <PeoplePicker
+                                people={people}
+                                value={[doc.assigneeKey ?? unassignedKey()]}
+                                onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                                placeholder="Assignee..."
+                                includeUnassigned
+                                buttonClassName="min-w-0 max-w-[11rem] px-2 py-1 text-[11px]"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -287,7 +317,6 @@ export function DocumentsGrid({
                           title={downloadLabel}
                           className={clsx(
                             "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
-                            "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100",
                             "hover:bg-background hover:text-muted-foreground",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                             "disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card disabled:hover:text-muted-foreground",

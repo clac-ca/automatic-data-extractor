@@ -2,12 +2,14 @@ import { Button } from "@ui/Button";
 
 export function BulkActionBar({
   count,
+  outputReadyCount,
   onClear,
   onAddTag,
   onDownloadOriginals,
   onDownloadOutputs,
 }: {
   count: number;
+  outputReadyCount: number;
   onClear: () => void;
   onAddTag: () => void;
   onDownloadOriginals: () => void;
@@ -25,9 +27,14 @@ export function BulkActionBar({
           <Button size="sm" type="button" variant="secondary" onClick={onAddTag}>
             Add tags
           </Button>
-          <Button size="sm" type="button" variant="secondary" onClick={onDownloadOutputs}>
-            Download outputs
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" type="button" variant="secondary" onClick={onDownloadOutputs}>
+              Download outputs
+            </Button>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {outputReadyCount}/{count} ready
+            </span>
+          </div>
           <Button size="sm" type="button" variant="secondary" onClick={onDownloadOriginals}>
             Download originals
           </Button>

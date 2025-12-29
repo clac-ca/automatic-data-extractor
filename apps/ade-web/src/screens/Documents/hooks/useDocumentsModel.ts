@@ -176,7 +176,7 @@ type WorkbenchActions = {
   copyLink: (doc: DocumentEntry | null) => void;
 
   // Bulk actions
-  bulkAddTagPrompt: () => void;
+  bulkUpdateTags: (payload: { add: string[]; remove: string[] }) => void;
   bulkDownloadOriginals: () => void;
   bulkDownloadOutputs: () => void;
 };
@@ -1113,31 +1113,38 @@ export function useDocumentsModel({
     [notifyToast],
   );
 
-  const bulkAddTagPrompt = useCallback(() => {
-    const tag = window.prompt("Add tag to selected documents:");
-    const value = (tag ?? "").trim();
-    if (!value) return;
+  const bulkUpdateTags = useCallback(
+    (payload: { add: string[]; remove: string[] }) => {
+      const add = payload.add.filter(Boolean);
+      const remove = payload.remove.filter(Boolean);
+      if (add.length === 0 && remove.length === 0) return;
 
-    const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
-    if (docs.length === 0) return;
+      const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
+      if (docs.length === 0) return;
 
-    void patchWorkspaceDocumentTagsBatch(
-      workspaceId,
-      docs.map((doc) => doc.record!.id),
-      { add: [value] },
-    )
-      .then(() => {
-        notifyToast({ title: "Tags applied", description: `${value} added`, intent: "success" });
-        queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
-      })
-      .catch((error) => {
-        notifyToast({
-          title: "Bulk tag failed",
-          description: error instanceof Error ? error.message : "Unable to apply tags.",
-          intent: "danger",
+      void patchWorkspaceDocumentTagsBatch(
+        workspaceId,
+        docs.map((doc) => doc.record!.id),
+        { add, remove },
+      )
+        .then(() => {
+          notifyToast({
+            title: "Tags applied",
+            description: `${add.length} added · ${remove.length} removed`,
+            intent: "success",
+          });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+        })
+        .catch((error) => {
+          notifyToast({
+            title: "Bulk tag failed",
+            description: error instanceof Error ? error.message : "Unable to apply tags.",
+            intent: "danger",
+          });
         });
-      });
-  }, [notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId]);
+    },
+    [notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId],
+  );
 
   const bulkDownloadOriginals = useCallback(() => {
     const docs = visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record);
@@ -1248,7 +1255,7 @@ export function useDocumentsModel({
       downloadOriginal,
       reprocess,
       copyLink,
-      bulkAddTagPrompt,
+      bulkUpdateTags,
       bulkDownloadOriginals,
       bulkDownloadOutputs,
     },
