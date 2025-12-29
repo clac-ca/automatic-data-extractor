@@ -55,6 +55,7 @@ jobs:
           build-args: |
             PYTHON_VERSION=${{ env.PYTHON_VERSION }}
             NODE_VERSION=${{ env.NODE_VERSION }}
+            FRONTEND_BUILD_SHA=${{ github.run_id }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

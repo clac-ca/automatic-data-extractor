@@ -11,12 +11,16 @@ FROM node:${NODE_VERSION}-alpine AS frontend-build
 
 WORKDIR /app/apps/ade-web
 
+ARG FRONTEND_BUILD_SHA=dev
+
 COPY apps/ade-web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
 COPY apps/ade-web/ ./
-RUN npm run build
+RUN --mount=type=cache,target=/root/.npm \
+    echo "frontend build ${FRONTEND_BUILD_SHA}" >/dev/null && \
+    npm run build
 
 # =============================================================================
 # Stage 2: Backend build (install Python packages)

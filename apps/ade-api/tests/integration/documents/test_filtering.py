@@ -19,13 +19,13 @@ def test_document_filters_normalise_sets_and_strings() -> None:
     uploader_one = str(uuid4())
     uploader_two = str(uuid4())
     filters = DocumentFilters(
-        status_in=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED.value],
+        status=[DocumentStatus.UPLOADED.value, DocumentStatus.PROCESSED.value],
         source_in=[
             DocumentSource.MANUAL_UPLOAD.value,
             DocumentSource.MANUAL_UPLOAD.value,
         ],
         tags=[" Alpha ", "beta", "ALPHA", "beta   two"],
-        uploader_id_in=[
+        uploader_id=[
             uploader_one,
             uploader_one,
             uploader_two,
@@ -33,13 +33,13 @@ def test_document_filters_normalise_sets_and_strings() -> None:
         q="  quarterly ",
     )
 
-    assert filters.status_in == {
+    assert filters.status == {
         DocumentStatus.UPLOADED,
         DocumentStatus.PROCESSED,
     }
     assert filters.source_in == {DocumentSource.MANUAL_UPLOAD}
     assert filters.tags == {"alpha", "beta", "beta two"}
-    assert filters.uploader_id_in == {
+    assert filters.uploader_id == {
         UUID(uploader_one),
         UUID(uploader_two),
     }
@@ -48,19 +48,19 @@ def test_document_filters_normalise_sets_and_strings() -> None:
 
 def test_document_filters_normalise_datetimes_to_utc() -> None:
     filters = DocumentFilters(
-        created_at_from=datetime(2024, 5, 1, 8, 30),
+        created_after=datetime(2024, 5, 1, 8, 30),
         last_run_to=datetime(2024, 5, 3, 12, 0, tzinfo=UTC),
     )
 
-    assert filters.created_at_from.tzinfo is UTC
+    assert filters.created_after.tzinfo is UTC
     assert filters.last_run_to.tzinfo is UTC
 
 
 def test_document_filters_reject_invalid_ranges() -> None:
     with pytest.raises(HTTPException):
         DocumentFilters(
-            created_at_from=datetime(2024, 5, 2),
-            created_at_to=datetime(2024, 5, 2),
+            created_after=datetime(2024, 5, 2),
+            created_before=datetime(2024, 5, 2),
         )
 
     with pytest.raises(HTTPException):
