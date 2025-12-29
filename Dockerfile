@@ -14,13 +14,14 @@ WORKDIR /app/apps/ade-web
 ARG FRONTEND_BUILD_SHA=dev
 
 COPY apps/ade-web/package*.json ./
+RUN if [ ! -x /usr/bin/npm ]; then ln -s "$(command -v npm)" /usr/bin/npm; fi
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --no-audit --no-fund
+    /usr/bin/npm ci --no-audit --no-fund
 
 COPY apps/ade-web/ ./
 RUN --mount=type=cache,target=/root/.npm \
     echo "frontend build ${FRONTEND_BUILD_SHA}" >/dev/null && \
-    npm run build
+    /usr/bin/npm run build
 
 # =============================================================================
 # Stage 2: Backend build (install Python packages)
@@ -57,6 +58,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Now copy full sources
 COPY apps ./apps
+COPY --from=frontend-build /app/apps/ade-web/dist \
+    ./apps/ade-api/src/ade_api/web/static
 
 # Install CLI, engine, and API into an isolated prefix (/install)
 RUN --mount=type=cache,target=/root/.cache/pip \
