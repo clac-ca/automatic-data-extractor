@@ -1,6 +1,6 @@
 import clsx from "clsx";
 
-import type { BoardColumn, BoardGroup, WorkspacePerson } from "../types";
+import type { BoardColumn, BoardGroup, ListDensity, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
@@ -20,6 +20,7 @@ export function DocumentsBoard({
   onGroupByChange,
   activeId,
   onActivate,
+  density,
   now,
   isLoading,
   isError,
@@ -42,6 +43,7 @@ export function DocumentsBoard({
   onGroupByChange: (value: BoardGroup) => void;
   activeId: string | null;
   onActivate: (id: string) => void;
+  density: ListDensity;
   now: number;
   isLoading: boolean;
   isError: boolean;
@@ -62,6 +64,11 @@ export function DocumentsBoard({
   const totalItems = columns.reduce((sum, column) => sum + column.items.length, 0);
   const showLoading = isLoading && totalItems === 0;
   const showError = isError && totalItems === 0;
+  const isCompact = density === "compact";
+  const columnGap = isCompact ? "gap-2" : "gap-3";
+  const columnPadding = isCompact ? "px-2.5 py-2.5" : "px-3 py-3";
+  const cardGap = isCompact ? "gap-2" : "gap-3";
+  const cardPadding = isCompact ? "px-2.5 py-2.5" : "px-3 py-3";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
@@ -122,7 +129,13 @@ export function DocumentsBoard({
                   </div>
                 </div>
 
-                <div className="flex min-h-[12rem] flex-1 flex-col gap-3 rounded-2xl border border-dashed border-border bg-card px-3 py-3">
+                <div
+                  className={clsx(
+                    "flex min-h-[12rem] flex-1 flex-col rounded-2xl border border-dashed border-border bg-card",
+                    columnGap,
+                    columnPadding,
+                  )}
+                >
                   {column.items.length === 0 ? (
                     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                       <p>No items yet</p>
@@ -139,7 +152,9 @@ export function DocumentsBoard({
                           }
                         }}
                         className={clsx(
-                          "flex cursor-pointer flex-col gap-3 rounded-2xl border bg-card px-3 py-3 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                          cardGap,
+                          cardPadding,
                           activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
                         )}
                         role="button"

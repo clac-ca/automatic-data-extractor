@@ -2,12 +2,11 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "@app/nav/history";
 
 import { useSession } from "@shared/auth/context/SessionContext";
+import { AppearanceMenu } from "@app/shell/AppearanceMenu";
 import { GlobalTopBar, type GlobalTopBarSearchProps } from "@app/shell/GlobalTopBar";
 import { ProfileDropdown } from "@app/shell/ProfileDropdown";
 import { AboutVersionsModal } from "@app/shell/AboutVersionsModal";
 import { DirectoryIcon } from "@ui/Icons";
-import { ModeToggle } from "@ui/ModeToggle";
-import { ThemePicker } from "@ui/ThemePicker";
 
 interface WorkspaceDirectoryLayoutProps {
   readonly children: ReactNode;
@@ -44,11 +43,10 @@ export function WorkspaceDirectoryLayout({ children, sidePanel, actions, search 
             </button>
           }
           search={search}
-          actions={actions ? <div className="flex items-center gap-2">{actions}</div> : undefined}
+          actions={actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : undefined}
           trailing={
-            <div className="flex items-center gap-2">
-              <ModeToggle />
-              <ThemePicker />
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <AppearanceMenu />
               <ProfileDropdown
                 displayName={displayName}
                 email={email}

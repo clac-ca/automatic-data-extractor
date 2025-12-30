@@ -41,6 +41,7 @@ import {
   runHasDownloadableOutput,
   runOutputDownloadUrl,
 } from "../data";
+import { DEFAULT_LIST_SETTINGS, normalizeListSettings, resolveRefreshIntervalMs } from "../listSettings";
 import type {
   BoardColumn,
   BoardGroup,
@@ -49,6 +50,7 @@ import type {
   DocumentsFilters,
   DocumentPage,
   DocumentStatus,
+  ListSettings,
   RunMetricsResource,
   SavedView,
   ViewMode,
@@ -70,6 +72,8 @@ type WorkbenchState = {
   activeViewId: string;
   saveViewOpen: boolean;
   selectedRunId: string | null;
+
+  listSettings: ListSettings;
 };
 
 type WorkbenchDerived = {
@@ -109,6 +113,7 @@ type WorkbenchDerived = {
   showNoDocuments: boolean;
   showNoResults: boolean;
   allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
 
   // Saved views
   savedViews: SavedView[];
@@ -127,6 +132,9 @@ type WorkbenchDerived = {
     failed: number;
     archived: number;
   };
+
+  lastUpdatedAt: number | null;
+  isRefreshing: boolean;
 };
 
 type WorkbenchRefs = {
@@ -138,7 +146,7 @@ type WorkbenchActions = {
   setViewMode: (value: ViewMode) => void;
   setGroupBy: (value: BoardGroup) => void;
 
-  toggleSelect: (id: string) => void;
+  updateSelection: (id: string, options?: { mode?: "toggle" | "range"; checked?: boolean }) => void;
   selectAllVisible: () => void;
   clearSelection: () => void;
 
@@ -157,6 +165,7 @@ type WorkbenchActions = {
 
   // Filters & views
   setFilters: (next: DocumentsFilters) => void;
+  setListSettings: (next: ListSettings) => void;
   setBuiltInView: (id: string) => void;
   selectSavedView: (viewId: string) => void;
   openSaveView: () => void;
@@ -219,6 +228,7 @@ const DOCUMENTS_STORAGE_KEYS = {
   assignmentsLegacy: (workspaceId: string) => `ade.documents.v10.assignments.${workspaceId}`,
   comments: (workspaceId: string) => `ade.documents.comments.${workspaceId}`,
   commentsLegacy: (workspaceId: string) => `ade.documents.v10.comments.${workspaceId}`,
+  listSettings: (workspaceId: string) => `ade.documents.list_settings.${workspaceId}`,
 };
 
 function safeJsonParse<T>(value: string | null): T | null {
@@ -281,6 +291,18 @@ function storeComments(workspaceId: string, map: Record<string, DocumentComment[
   window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.comments(workspaceId), JSON.stringify(map));
 }
 
+function loadListSettings(workspaceId: string): ListSettings {
+  if (typeof window === "undefined") return DEFAULT_LIST_SETTINGS;
+  const raw = window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.listSettings(workspaceId));
+  const parsed = safeJsonParse<Partial<ListSettings>>(raw);
+  return normalizeListSettings(parsed);
+}
+
+function storeListSettings(workspaceId: string, settings: ListSettings) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.listSettings(workspaceId), JSON.stringify(settings));
+}
+
 export function useDocumentsModel({
   workspaceId,
   currentUserLabel,
@@ -307,6 +329,7 @@ export function useDocumentsModel({
   const [filters, setFilters] = useState<DocumentsFilters>(DEFAULT_FILTERS);
   const [activeViewId, setActiveViewId] = useState<string>("all_documents");
   const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [listSettings, setListSettings] = useState<ListSettings>(() => loadListSettings(workspaceId));
 
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews(workspaceId));
   const [assignments, setAssignments] = useState<Record<string, string | null>>(() => loadAssignments(workspaceId));
@@ -315,6 +338,7 @@ export function useDocumentsModel({
   const [now, setNow] = useState(() => Date.now());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectionAnchorRef = useRef<string | null>(null);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
   const runOnUploadHandledRef = useRef(new Set<string>());
@@ -338,6 +362,7 @@ export function useDocumentsModel({
     setSavedViews(loadSavedViews(workspaceId));
     setAssignments(loadAssignments(workspaceId));
     setCommentsByDocId(loadComments(workspaceId));
+    setListSettings(loadListSettings(workspaceId));
   }, [workspaceId]);
 
   const startUpload = useCallback(
@@ -353,7 +378,14 @@ export function useDocumentsModel({
   });
 
   const sort = "-created_at";
-  const listKey = useMemo(() => documentsKeys.list(workspaceId, sort), [sort, workspaceId]);
+  const listKey = useMemo(
+    () => documentsKeys.list(workspaceId, sort, listSettings.pageSize),
+    [listSettings.pageSize, sort, workspaceId],
+  );
+  const refreshInterval = useMemo(
+    () => resolveRefreshIntervalMs(listSettings.refreshInterval),
+    [listSettings.refreshInterval],
+  );
 
   const documentsQuery = useInfiniteQuery<DocumentPage>({
     queryKey: listKey,
@@ -364,7 +396,7 @@ export function useDocumentsModel({
         {
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
-          pageSize: DOCUMENTS_PAGE_SIZE,
+          pageSize: listSettings.pageSize ?? DOCUMENTS_PAGE_SIZE,
         },
         signal,
       ),
@@ -372,7 +404,7 @@ export function useDocumentsModel({
     enabled: workspaceId.length > 0,
     placeholderData: (previous) => previous,
     staleTime: 15_000,
-    refetchInterval: false,
+    refetchInterval: refreshInterval,
   });
 
   const documentsRaw = useMemo(
@@ -607,16 +639,6 @@ export function useDocumentsModel({
   const documentsByEntryId = useMemo(() => new Map(documents.map((d) => [d.id, d])), [documents]);
 
   useEffect(() => {
-    setSelectedIds((previous) => {
-      const next = new Set<string>();
-      previous.forEach((id) => {
-        if (documentsByEntryId.has(id)) next.add(id);
-      });
-      return next;
-    });
-  }, [documentsByEntryId]);
-
-  useEffect(() => {
     if (documents.length === 0) {
       setActiveId(null);
       return;
@@ -716,10 +738,31 @@ export function useDocumentsModel({
   }, [groupBy, visibleDocuments]);
 
   const selectableIds = useMemo(() => visibleDocuments.filter((doc) => doc.record).map((doc) => doc.id), [visibleDocuments]);
-  const allVisibleSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const visibleSelectedCount = useMemo(
+    () => selectableIds.filter((id) => selectedIds.has(id)).length,
+    [selectableIds, selectedIds],
+  );
+  const allVisibleSelected = selectableIds.length > 0 && visibleSelectedCount === selectableIds.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    setSelectedIds((previous) => {
+      const next = new Set<string>();
+      selectableIds.forEach((id) => {
+        if (previous.has(id)) next.add(id);
+      });
+      if (next.size === previous.size) return previous;
+      return next;
+    });
+    if (selectionAnchorRef.current && !selectableIds.includes(selectionAnchorRef.current)) {
+      selectionAnchorRef.current = null;
+    }
+  }, [selectableIds]);
 
   const showNoDocuments = documents.length === 0;
   const showNoResults = documents.length > 0 && visibleDocuments.length === 0;
+  const lastUpdatedAt = documentsQuery.dataUpdatedAt > 0 ? documentsQuery.dataUpdatedAt : null;
+  const isRefreshing = documentsQuery.isFetching && Boolean(documentsQuery.data);
 
   const counts = useMemo(() => {
     const assignedToMe = documents.filter((d) => d.assigneeKey === currentUserKey).length;
@@ -825,19 +868,43 @@ export function useDocumentsModel({
   const setViewModeValue = useCallback((value: ViewMode) => setViewMode(value), []);
   const setGroupByValue = useCallback((value: BoardGroup) => setGroupBy(value), []);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const updateSelection = useCallback(
+    (id: string, options?: { mode?: "toggle" | "range"; checked?: boolean }) => {
+      const isRange = options?.mode === "range";
+      setSelectedIds((previous) => {
+        const next = new Set(previous);
+        const shouldSelect = isRange ? options?.checked ?? true : options?.checked ?? !previous.has(id);
+        const anchorId = selectionAnchorRef.current;
+        if (isRange && anchorId) {
+          const startIndex = selectableIds.indexOf(anchorId);
+          const endIndex = selectableIds.indexOf(id);
+          if (startIndex !== -1 && endIndex !== -1) {
+            const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+            for (let i = from; i <= to; i += 1) {
+              const targetId = selectableIds[i];
+              if (shouldSelect) next.add(targetId);
+              else next.delete(targetId);
+            }
+            return next;
+          }
+        }
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      selectionAnchorRef.current = id;
+    },
+    [selectableIds],
+  );
 
   const selectAllVisible = useCallback(() => setSelectedIds(new Set(selectableIds)), [selectableIds]);
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    selectionAnchorRef.current = null;
+  }, []);
 
   const openPreview = useCallback((id: string) => {
+    selectionAnchorRef.current = id;
     setActiveId(id);
     setPreviewOpen(true);
   }, []);
@@ -915,6 +982,15 @@ export function useDocumentsModel({
       setActiveViewId(!hasSearch && isDefault ? "all_documents" : "custom");
     },
     [search],
+  );
+
+  const setListSettingsValue = useCallback(
+    (next: ListSettings) => {
+      const normalized = normalizeListSettings(next);
+      setListSettings(normalized);
+      storeListSettings(workspaceId, normalized);
+    },
+    [workspaceId],
   );
 
   const setBuiltInView = useCallback(
@@ -1362,6 +1438,7 @@ export function useDocumentsModel({
       activeViewId,
       saveViewOpen,
       selectedRunId,
+      listSettings,
     },
     derived: {
       now,
@@ -1390,9 +1467,12 @@ export function useDocumentsModel({
       showNoDocuments,
       showNoResults,
       allVisibleSelected,
+      someVisibleSelected,
       savedViews,
       activeComments,
       counts,
+      lastUpdatedAt,
+      isRefreshing,
     },
     refs: {
       fileInputRef,
@@ -1401,7 +1481,7 @@ export function useDocumentsModel({
       setSearch: setSearchValue,
       setViewMode: setViewModeValue,
       setGroupBy: setGroupByValue,
-      toggleSelect,
+      updateSelection,
       selectAllVisible,
       clearSelection,
       openPreview,
@@ -1413,6 +1493,7 @@ export function useDocumentsModel({
       loadMore,
       handleKeyNavigate,
       setFilters: setFiltersValue,
+      setListSettings: setListSettingsValue,
       setBuiltInView,
       selectSavedView,
       openSaveView,

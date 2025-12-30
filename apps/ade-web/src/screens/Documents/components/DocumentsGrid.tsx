@@ -1,8 +1,8 @@
 import clsx from "clsx";
-import { useRef } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useEffect, useRef } from "react";
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
-import type { DocumentEntry, WorkspacePerson } from "../types";
+import type { DocumentEntry, ListDensity, WorkspacePerson } from "../types";
 import { getDocumentOutputRun } from "../data";
 import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
@@ -16,6 +16,19 @@ import { TagPicker } from "./TagPicker";
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
 
+type SelectionOptions = {
+  mode?: "toggle" | "range";
+  checked?: boolean;
+};
+
+type DensityStyles = {
+  rowGap: string;
+  rowPadding: string;
+  iconSize: string;
+  avatarSize: string;
+  pickerButtonClass: string;
+};
+
 function isInteractiveTarget(target: EventTarget | null, container?: Element | null) {
   if (!(target instanceof Element)) return false;
   const interactive = target.closest(INTERACTIVE_SELECTOR);
@@ -24,15 +37,38 @@ function isInteractiveTarget(target: EventTarget | null, container?: Element | n
   return true;
 }
 
+function isSelectionModifier(event: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean }) {
+  return Boolean(event.shiftKey || event.metaKey || event.ctrlKey);
+}
+
+function isRangeSelection(event: { shiftKey?: boolean }) {
+  return Boolean(event.shiftKey);
+}
+
+function getDensityStyles(density: ListDensity): DensityStyles {
+  const isCompact = density === "compact";
+  return {
+    rowGap: isCompact ? "gap-2" : "gap-3",
+    rowPadding: isCompact ? "py-2" : "py-3",
+    iconSize: isCompact ? "h-8 w-8" : "h-9 w-9",
+    avatarSize: isCompact ? "h-6 w-6" : "h-7 w-7",
+    pickerButtonClass: isCompact
+      ? "min-w-0 max-w-[12rem] bg-background px-2 py-0.5 text-[11px] shadow-none"
+      : "min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none",
+  };
+}
+
 export function DocumentsGrid({
   workspaceId,
   documents,
+  density,
   activeId,
   selectedIds,
   onSelect,
   onSelectAll,
   onClearSelection,
   allVisibleSelected,
+  someVisibleSelected,
   onActivate,
   onUploadClick,
   onClearFilters,
@@ -65,12 +101,14 @@ export function DocumentsGrid({
 }: {
   workspaceId: string;
   documents: DocumentEntry[];
+  density: ListDensity;
   activeId: string | null;
   selectedIds: Set<string>;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, options?: SelectionOptions) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
   onActivate: (id: string) => void;
   onUploadClick: () => void;
   onClearFilters: () => void;
@@ -101,22 +139,35 @@ export function DocumentsGrid({
   expandedId?: string | null;
   expandedContent?: ReactNode;
 }) {
-  const hasSelectable = documents.some((doc) => doc.record);
+  const hasSelectableRows = documents.some((doc) => doc.record);
   const showLoading = isLoading && documents.length === 0;
   const showError = isError && documents.length === 0;
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const densityStyles = getDensityStyles(density);
+
+  useEffect(() => {
+    if (!headerCheckboxRef.current) return;
+    headerCheckboxRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
       <div className="shrink-0 border-b border-border bg-background/40 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        <div className="grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3">
+        <div
+          className={clsx(
+            "grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center",
+            densityStyles.rowGap,
+          )}
+        >
           <div>
             <input
               type="checkbox"
+              ref={headerCheckboxRef}
               checked={allVisibleSelected}
               onChange={(event) => (event.target.checked ? onSelectAll() : onClearSelection())}
               aria-label="Select all visible documents"
-              disabled={!hasSelectable}
+              disabled={!hasSelectableRows}
+              className="h-4 w-4 rounded border-border-strong"
             />
           </div>
           <div>Document</div>
@@ -129,7 +180,6 @@ export function DocumentsGrid({
       </div>
 
       <div
-        ref={listRef}
         className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
@@ -167,16 +217,50 @@ export function DocumentsGrid({
         ) : (
           <div className="flex flex-col">
             {documents.map((doc) => {
-              const isSelectable = Boolean(doc.record);
+              const canSelectRow = Boolean(doc.record);
               const outputRun = getDocumentOutputRun(doc.record);
               const canDownloadOutput = Boolean(outputRun?.run_id);
               const isUnassigned = !doc.assigneeKey;
               const isExpanded = Boolean(expandedContent && expandedId === doc.id);
               const isActive = Boolean(isExpanded && activeId === doc.id);
+              const isSelected = selectedIds.has(doc.id);
               const previewId = `documents-preview-${doc.id}`;
               const hasNotes = doc.commentCount > 0;
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
-              const canEditTags = Boolean(doc.record);
+              const canEditTags = canSelectRow;
+
+              const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+                if (isInteractiveTarget(event.target, event.currentTarget)) return;
+                if (isSelectionModifier(event)) {
+                  if (canSelectRow) {
+                    const isRange = isRangeSelection(event);
+                    onSelect(doc.id, {
+                      mode: isRange ? "range" : "toggle",
+                      checked: isRange ? true : !isSelected,
+                    });
+                  }
+                  return;
+                }
+                onActivate(doc.id);
+              };
+
+              const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                if (event.currentTarget !== event.target) return;
+                event.preventDefault();
+                onActivate(doc.id);
+              };
+
+              const handleSelectClick = (event: ReactMouseEvent<HTMLInputElement>) => {
+                event.stopPropagation();
+                if (!canSelectRow) return;
+                const isRange = isRangeSelection(event);
+                const nextChecked = !isSelected;
+                onSelect(doc.id, {
+                  mode: isRange ? "range" : "toggle",
+                  checked: nextChecked,
+                });
+              };
 
               return (
                 <div
@@ -185,19 +269,17 @@ export function DocumentsGrid({
                 >
                   <div
                     role="button"
-                    onClick={(event) => {
-                      if (isInteractiveTarget(event.target, event.currentTarget)) return;
-                      onActivate(doc.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      if (event.currentTarget !== event.target) return;
-                      event.preventDefault();
-                      onActivate(doc.id);
-                    }}
+                    onClick={handleRowClick}
+                    onKeyDown={handleRowKeyDown}
                     className={clsx(
-                      "group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center gap-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      isActive ? "bg-brand-50 dark:bg-brand-500/20" : "hover:bg-background dark:hover:bg-muted/40",
+                      "group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                      densityStyles.rowGap,
+                      densityStyles.rowPadding,
+                      isActive
+                        ? "bg-brand-50 dark:bg-brand-500/20"
+                        : isSelected
+                          ? "bg-muted/40 dark:bg-muted/30"
+                          : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                     tabIndex={0}
                     aria-expanded={isExpanded}
@@ -206,18 +288,22 @@ export function DocumentsGrid({
                     <div>
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(doc.id)}
-                        onChange={() => {
-                          if (isSelectable) onSelect(doc.id);
-                        }}
-                        onClick={(event) => event.stopPropagation()}
+                        checked={isSelected}
+                        onChange={() => undefined}
+                        onClick={handleSelectClick}
                         aria-label={`Select ${doc.name}`}
-                        disabled={!isSelectable}
+                        disabled={!canSelectRow}
+                        className="h-4 w-4 rounded border-border-strong"
                       />
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
+                      <div
+                        className={clsx(
+                          "flex items-center justify-center rounded-xl border border-border bg-background",
+                          densityStyles.iconSize,
+                        )}
+                      >
                         <DocumentIcon className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
@@ -251,7 +337,12 @@ export function DocumentsGrid({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background">
+                      <span
+                        className={clsx(
+                          "inline-flex items-center justify-center rounded-full border border-border bg-background",
+                          densityStyles.avatarSize,
+                        )}
+                      >
                         <UserIcon className="h-4 w-4 text-muted-foreground" />
                       </span>
 
@@ -263,7 +354,7 @@ export function DocumentsGrid({
                             onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                             placeholder="Assignee..."
                             includeUnassigned
-                            buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
+                            buttonClassName={densityStyles.pickerButtonClass}
                           />
                           {isUnassigned ? (
                             <button

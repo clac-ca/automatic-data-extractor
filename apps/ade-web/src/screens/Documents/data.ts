@@ -35,7 +35,8 @@ export const MAX_PREVIEW_ROWS = 200;
 export const documentsKeys = {
   root: () => ["documents"] as const,
   workspace: (workspaceId: string) => [...documentsKeys.root(), workspaceId] as const,
-  list: (workspaceId: string, sort: string | null) => [...documentsKeys.workspace(workspaceId), "list", { sort }] as const,
+  list: (workspaceId: string, sort: string | null, pageSize: number) =>
+    [...documentsKeys.workspace(workspaceId), "list", { sort, pageSize }] as const,
   members: (workspaceId: string) => [...documentsKeys.workspace(workspaceId), "members"] as const,
   document: (workspaceId: string, documentId: string) =>
     [...documentsKeys.workspace(workspaceId), "document", documentId] as const,

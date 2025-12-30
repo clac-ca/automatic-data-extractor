@@ -245,6 +245,12 @@ export function DocumentsWorkbench() {
       <DocumentsHeader
         viewMode={model.state.viewMode}
         onViewModeChange={model.actions.setViewMode}
+        listSettings={model.state.listSettings}
+        onListSettingsChange={model.actions.setListSettings}
+        onRefresh={model.actions.refreshDocuments}
+        isRefreshing={model.derived.isRefreshing}
+        lastUpdatedAt={model.derived.lastUpdatedAt}
+        now={model.derived.now}
         onUploadClick={model.actions.handleUploadClick}
         fileInputRef={model.refs.fileInputRef}
         onFileInputChange={model.actions.handleFileInputChange}
@@ -273,12 +279,14 @@ export function DocumentsWorkbench() {
               <DocumentsGrid
                 workspaceId={workspace.id}
                 documents={model.derived.visibleDocuments}
+                density={model.state.listSettings.density}
                 activeId={model.state.activeId}
                 selectedIds={model.state.selectedIds}
-                onSelect={model.actions.toggleSelect}
+                onSelect={model.actions.updateSelection}
                 onSelectAll={model.actions.selectAllVisible}
                 onClearSelection={model.actions.clearSelection}
                 allVisibleSelected={model.derived.allVisibleSelected}
+                someVisibleSelected={model.derived.someVisibleSelected}
                 onActivate={onActivate}
                 onUploadClick={model.actions.handleUploadClick}
                 onClearFilters={handleClearFilters}
@@ -348,7 +356,7 @@ export function DocumentsWorkbench() {
               />
 
               <BulkActionBar
-                count={model.state.selectedIds.size}
+                count={selectedDocuments.length}
                 outputReadyCount={selectedOutputReadyCount}
                 onClear={model.actions.clearSelection}
                 onAddTag={() => setBulkTagOpen(true)}
@@ -365,6 +373,7 @@ export function DocumentsWorkbench() {
                 onGroupByChange={model.actions.setGroupBy}
                 activeId={model.state.previewOpen ? model.state.activeId : null}
                 onActivate={onActivate}
+                density={model.state.listSettings.density}
                 now={model.derived.now}
                 isLoading={model.derived.isLoading}
                 isError={model.derived.isError}
@@ -431,7 +440,7 @@ export function DocumentsWorkbench() {
       <BulkTagDialog
         open={bulkTagOpen}
         workspaceId={workspace.id}
-        selectedCount={model.state.selectedIds.size}
+        selectedCount={selectedDocuments.length}
         onClose={() => setBulkTagOpen(false)}
         onApply={(payload) => model.actions.bulkUpdateTags(payload)}
       />

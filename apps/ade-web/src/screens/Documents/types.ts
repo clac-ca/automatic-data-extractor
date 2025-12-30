@@ -24,6 +24,15 @@ export type DocumentStatus = "queued" | "processing" | "ready" | "failed" | "arc
 export type ViewMode = "grid" | "board";
 export type BoardGroup = "status" | "tag" | "uploader";
 
+export type ListDensity = "comfortable" | "compact";
+export type ListRefreshInterval = "off" | "30s" | "1m" | "5m";
+export type ListPageSize = 50 | 100 | 200;
+export type ListSettings = {
+  pageSize: ListPageSize;
+  refreshInterval: ListRefreshInterval;
+  density: ListDensity;
+};
+
 export type FileType = "xlsx" | "xls" | "csv" | "pdf" | "unknown";
 export type TagMode = "any" | "all";
 

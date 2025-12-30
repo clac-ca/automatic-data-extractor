@@ -3,22 +3,38 @@ import clsx from "clsx";
 
 import { Button } from "@ui/Button";
 
-import type { ViewMode } from "../types";
-import { BoardIcon, DocumentIcon, GridIcon, UploadIcon } from "./icons";
+import { formatRelativeTime } from "../utils";
+import type { ListSettings, ViewMode } from "../types";
+import { ListSettingsPopover } from "./ListSettingsPopover";
+import { BoardIcon, DocumentIcon, GridIcon, RefreshIcon, UploadIcon } from "./icons";
 
 export function DocumentsHeader({
   viewMode,
   onViewModeChange,
+  listSettings,
+  onListSettingsChange,
+  onRefresh,
+  isRefreshing,
+  lastUpdatedAt,
+  now,
   onUploadClick,
   fileInputRef,
   onFileInputChange,
 }: {
   viewMode: ViewMode;
   onViewModeChange: (value: ViewMode) => void;
+  listSettings: ListSettings;
+  onListSettingsChange: (next: ListSettings) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
+  lastUpdatedAt: number | null;
+  now: number;
   onUploadClick: () => void;
   fileInputRef: MutableRefObject<HTMLInputElement | null>;
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
+  const updatedLabel = lastUpdatedAt ? formatRelativeTime(now, lastUpdatedAt) : "—";
+
   return (
     <header className="shrink-0 border-b border-border bg-card">
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
@@ -57,6 +73,23 @@ export function DocumentsHeader({
             >
               <BoardIcon className="h-4 w-4" />
               Board
+            </Button>
+          </div>
+
+          <ListSettingsPopover settings={listSettings} onChange={onListSettingsChange} />
+
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="hidden sm:inline">Updated {updatedLabel}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onRefresh}
+              className="h-8 rounded-md px-2 text-xs"
+              aria-label="Refresh documents"
+            >
+              <RefreshIcon className={clsx("h-4 w-4", isRefreshing && "animate-spin")} />
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
 
