@@ -4,7 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type KeyboardEvent,
   type MutableRefObject,
 } from "react";
@@ -19,6 +18,7 @@ import { documentChangesStreamUrl, streamDocumentChanges, type DocumentUploadRes
 import {
   useUploadManager,
   type UploadManagerItem,
+  type UploadManagerQueueItem,
   type UploadManagerStatus,
   type UploadManagerSummary,
 } from "@shared/documents/uploadManager";
@@ -189,8 +189,8 @@ type WorkbenchActions = {
 
   setActiveSheetId: (id: string) => void;
 
+  queueUploads: (items: UploadManagerQueueItem[]) => void;
   handleUploadClick: () => void;
-  handleFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
   pauseUpload: (uploadId: string) => void;
   resumeUpload: (uploadId: string) => void;
   retryUpload: (uploadId: string) => void;
@@ -427,7 +427,7 @@ export function useDocumentsModel({
   }, [configurationsQuery.data?.items]);
   const configMissing = configurationsQuery.isSuccess && !activeConfiguration;
 
-  const sort = "-activity_at";
+  const sort = "-created_at";
   const listKey = useMemo(
     () =>
       documentsKeys.list(workspaceId, {
@@ -1175,10 +1175,10 @@ export function useDocumentsModel({
 
   const setActiveSheetIdValue = useCallback((id: string) => setActiveSheetId(id), []);
 
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-      const nextItems = uploadManager.enqueue(Array.from(files));
+  const queueUploads = useCallback(
+    (items: UploadManagerQueueItem[]) => {
+      if (!items.length) return;
+      const nextItems = uploadManager.enqueue(items);
       const nowTimestamp = Date.now();
       nextItems.forEach((item, index) => {
         uploadCreatedAtRef.current.set(item.id, nowTimestamp + index * 1000);
@@ -1200,13 +1200,6 @@ export function useDocumentsModel({
   );
 
   const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
-  const handleFileInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      handleFiles(event.target.files);
-      event.target.value = "";
-    },
-    [handleFiles],
-  );
 
   const pauseUpload = useCallback((uploadId: string) => uploadManager.pause(uploadId), [uploadManager]);
   const resumeUpload = useCallback((uploadId: string) => uploadManager.resume(uploadId), [uploadManager]);
@@ -1898,8 +1891,8 @@ export function useDocumentsModel({
       openPreview,
       closePreview,
       setActiveSheetId: setActiveSheetIdValue,
+      queueUploads,
       handleUploadClick,
-      handleFileInputChange,
       pauseUpload,
       resumeUpload,
       retryUpload,

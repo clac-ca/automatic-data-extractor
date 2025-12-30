@@ -145,6 +145,7 @@ class DocumentOut(BaseSchema):
         else:
             data = {}
         data.pop("worksheets", None)
+        data.pop("__ade_run_options", None)
         return data
 
     @model_validator(mode="after")
@@ -328,6 +329,15 @@ class DocumentChangesPage(BaseSchema):
     next_cursor: str
 
 
+class DocumentUploadRunOptions(BaseSchema):
+    """Run-specific options captured at upload time."""
+
+    input_sheet_names: list[str] | None = Field(
+        default=None,
+        description="Optional worksheet names to ingest when processing XLSX files.",
+    )
+
+
 class DocumentUploadSessionCreateRequest(BaseSchema):
     """Create a resumable upload session for a document."""
 
@@ -337,6 +347,7 @@ class DocumentUploadSessionCreateRequest(BaseSchema):
     conflict_behavior: DocumentUploadConflictBehavior = DocumentUploadConflictBehavior.RENAME
     folder_id: str | None = None
     metadata: dict[str, Any] | None = None
+    run_options: DocumentUploadRunOptions | None = None
 
 
 class DocumentUploadSessionCreateResponse(BaseSchema):
@@ -396,6 +407,7 @@ __all__ = [
     "DocumentTagsPatch",
     "DocumentTagsReplace",
     "DocumentUpdateRequest",
+    "DocumentUploadRunOptions",
     "DocumentUploadSessionCreateRequest",
     "DocumentUploadSessionCreateResponse",
     "DocumentUploadSessionStatusResponse",

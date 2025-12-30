@@ -3,8 +3,6 @@ import type {
   RunRecord,
   RunsCounts,
   RunsDateRange,
-  RunsFilters,
-  RunsResultFilter,
   RunsStatusFilter,
 } from "./types";
 
@@ -70,12 +68,6 @@ export function coerceStatus(value: string | null): RunsStatusFilter {
   return "all";
 }
 
-export function coerceResult(value: string | null): RunsResultFilter {
-  if (!value || value === "all") return "all";
-  if (["clean", "warnings", "errors"].includes(value)) return value as RunsResultFilter;
-  return "all";
-}
-
 export function coerceDateRange(value: string | null): RunsDateRange {
   if (!value) return "14d";
   if (["14d", "7d", "24h", "30d", "custom"].includes(value)) return value as RunsDateRange;
@@ -112,46 +104,6 @@ export function buildCounts(runs: RunRecord[]): RunsCounts {
   counts.active = counts.running + counts.queued;
   if (!warningKnown) counts.warning = null;
   return counts;
-}
-
-export function filterRuns(runs: RunRecord[], filters: RunsFilters): RunRecord[] {
-  const search = filters.search.trim().toLowerCase();
-
-  return runs.filter((run) => {
-    if (filters.status !== "all" && run.status !== filters.status) return false;
-
-    if (filters.result === "clean") {
-      if (run.warnings === null || run.errors === null) return false;
-      if (run.warnings > 0 || run.errors > 0) return false;
-    }
-    if (filters.result === "warnings") {
-      if (run.warnings === null) return false;
-      if (run.warnings === 0) return false;
-    }
-    if (filters.result === "errors") {
-      if (run.errors === null) return false;
-      if (run.errors === 0) return false;
-    }
-
-    if (filters.config !== "any" && run.configLabel !== filters.config) return false;
-    if (filters.owner !== "all" && run.ownerLabel !== filters.owner) return false;
-
-    if (!search) return true;
-
-    const haystack = [
-      run.inputName,
-      run.outputName ?? "",
-      run.id,
-      run.configLabel,
-      run.ownerLabel,
-      run.triggerLabel,
-    ]
-      .filter((value) => Boolean(value))
-      .join(" ")
-      .toLowerCase();
-
-    return haystack.includes(search);
-  });
 }
 
 export function buildCreatedAtRange(range: RunsDateRange, now = new Date()) {

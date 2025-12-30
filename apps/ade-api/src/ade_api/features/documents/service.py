@@ -17,6 +17,7 @@ from uuid import UUID
 import openpyxl
 from fastapi import UploadFile
 from fastapi.concurrency import run_in_threadpool
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,6 +57,7 @@ from .exceptions import (
     InvalidDocumentTagsError,
 )
 from .filters import DocumentFilters, apply_document_filters
+from .schemas import DocumentUploadRunOptions
 from ade_api.features.configs.repository import ConfigurationsRepository
 from ade_api.features.runs.repository import RunsRepository
 from ade_api.features.workspaces.repository import WorkspacesRepository
@@ -90,6 +92,8 @@ from .tags import (
 
 logger = logging.getLogger(__name__)
 
+UPLOAD_RUN_OPTIONS_KEY = "__ade_run_options"
+
 _FALLBACK_FILENAME = "upload"
 _MAX_FILENAME_LENGTH = 255
 _UPLOAD_SESSION_PREFIX = "upload_sessions"
@@ -119,6 +123,30 @@ class DocumentsService:
         self._configs = ConfigurationsRepository(session)
         self._runs = RunsRepository(session)
         self._workspaces = WorkspacesRepository(session)
+
+    @staticmethod
+    def build_upload_metadata(
+        metadata: Mapping[str, Any] | None,
+        run_options: DocumentUploadRunOptions | None,
+    ) -> dict[str, Any]:
+        payload = dict(metadata or {})
+        if run_options is not None:
+            payload[UPLOAD_RUN_OPTIONS_KEY] = run_options.model_dump(exclude_none=True)
+        return payload
+
+    @staticmethod
+    def read_upload_run_options(
+        metadata: Mapping[str, Any] | None,
+    ) -> DocumentUploadRunOptions | None:
+        if not metadata:
+            return None
+        raw = metadata.get(UPLOAD_RUN_OPTIONS_KEY)
+        if raw is None:
+            return None
+        try:
+            return DocumentUploadRunOptions.model_validate(raw)
+        except ValidationError:
+            return None
 
     async def create_document(
         self,
@@ -325,7 +353,7 @@ class DocumentsService:
             filename=payload.filename,
             content_type=payload.content_type,
             byte_size=payload.byte_size,
-            upload_metadata=dict(payload.metadata or {}),
+            upload_metadata=self.build_upload_metadata(payload.metadata, payload.run_options),
             conflict_behavior=payload.conflict_behavior,
             folder_id=payload.folder_id,
             temp_stored_uri=stored_uri,
@@ -439,7 +467,7 @@ class DocumentsService:
         workspace_id: UUID,
         upload_session_id: UUID,
         actor: User | None,
-    ) -> DocumentOut:
+    ) -> tuple[DocumentOut, DocumentUploadRunOptions | None]:
         session = await self._require_upload_session(
             workspace_id=workspace_id,
             upload_session_id=upload_session_id,
@@ -461,6 +489,8 @@ class DocumentsService:
         await run_in_threadpool(final_path.parent.mkdir, parents=True, exist_ok=True)
         await run_in_threadpool(temp_path.replace, final_path)
 
+        run_options = self.read_upload_run_options(session.upload_metadata)
+        metadata_payload = dict(session.upload_metadata or {})
         document = Document(
             id=document_id,
             workspace_id=workspace_id,
@@ -469,7 +499,7 @@ class DocumentsService:
             byte_size=size,
             sha256=sha,
             stored_uri=stored_uri,
-            attributes=dict(session.upload_metadata or {}),
+            attributes=metadata_payload,
             uploaded_by_user_id=actor.id if actor else session.created_by_user_id,
             status=DocumentStatus.UPLOADED,
             source=DocumentSource.MANUAL_UPLOAD,
@@ -493,7 +523,7 @@ class DocumentsService:
             document_id=document_id,
             payload=payload.model_dump(),
         )
-        return payload
+        return payload, run_options
 
     async def cancel_upload_session(
         self,

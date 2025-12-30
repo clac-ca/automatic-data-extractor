@@ -2,10 +2,9 @@ import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
 import type { components, paths, RunResource } from "@schema";
 
-import type { RunRecord } from "./types";
+import type { RunRecord, RunsQuery } from "./types";
 import { formatDuration, formatTimestamp } from "./utils";
 
-type RunsQuery = paths["/api/v1/workspaces/{workspace_id}/runs"]["get"]["parameters"]["query"];
 type RunColumnsQuery = paths["/api/v1/runs/{run_id}/columns"]["get"]["parameters"]["query"];
 type RunPage = components["schemas"]["RunPage"];
 type RunMetricsResource = components["schemas"]["RunMetricsResource"];
@@ -104,6 +103,7 @@ export function buildRunRecord(run: RunResource): RunRecord {
 
   return {
     id: run.id,
+    configurationId: run.configuration_id,
     status: run.status,
     inputName,
     outputName,

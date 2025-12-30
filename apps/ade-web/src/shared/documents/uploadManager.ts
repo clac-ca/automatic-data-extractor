@@ -10,6 +10,7 @@ import {
   uploadDocumentUploadSessionRange,
   uploadWorkspaceDocument,
   type DocumentUploadResponse,
+  type DocumentUploadRunOptions,
 } from "./uploads";
 
 export type UploadManagerStatus =
@@ -31,6 +32,7 @@ export interface UploadManagerItem<TResponse> {
   readonly file: File;
   readonly status: UploadManagerStatus;
   readonly progress: UploadManagerProgress;
+  readonly runOptions?: DocumentUploadRunOptions;
   readonly response?: TResponse;
   readonly error?: string;
   readonly mode?: "simple" | "session";
@@ -38,6 +40,11 @@ export interface UploadManagerItem<TResponse> {
   readonly chunkSizeBytes?: number;
   readonly nextExpectedRanges?: string[];
 }
+
+export type UploadManagerQueueItem = {
+  readonly file: File;
+  readonly runOptions?: DocumentUploadRunOptions;
+};
 
 export type UploadManagerSummary = {
   readonly totalCount: number;
@@ -74,16 +81,17 @@ export function useUploadManager({
   const abortHandlesRef = useRef(new Map<string, () => void>());
   const abortReasonsRef = useRef(new Map<string, "pause" | "cancel">());
 
-  const enqueue = useCallback((files: readonly File[]) => {
+  const enqueue = useCallback((files: readonly UploadManagerQueueItem[]) => {
     if (!files.length) return [];
     const now = Date.now();
-    const newItems = files.map((file, index) => ({
+    const newItems = files.map((entry, index) => ({
       id: createUploadId(now, index),
-      file,
+      file: entry.file,
       status: "queued" as const,
+      runOptions: entry.runOptions,
       progress: {
         loaded: 0,
-        total: Math.max(file.size, 0),
+        total: Math.max(entry.file.size, 0),
         percent: 0,
       },
     }));
@@ -392,6 +400,7 @@ async function runSimpleUpload(
 ) {
   const handle = uploadWorkspaceDocument(options.workspaceId, item.file, {
     onProgress: options.onProgress,
+    runOptions: item.runOptions,
   });
   options.controller.signal.addEventListener("abort", () => handle.abort(), { once: true });
   const result = await handle.promise;
@@ -453,6 +462,7 @@ async function runSessionUpload(
         filename: item.file.name,
         byte_size: total,
         content_type: item.file.type || undefined,
+        run_options: item.runOptions,
       },
       options.controller.signal,
     );

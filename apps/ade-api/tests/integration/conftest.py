@@ -99,6 +99,51 @@ def _reset_auth_caches() -> None:
     reset_auth_state()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _override_sessionmaker(
+    db_connection: AsyncConnection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> AsyncIterator[None]:
+    """Bind background sessions to the test transaction connection."""
+
+    session_factory = async_sessionmaker(
+        bind=db_connection,
+        expire_on_commit=False,
+        autoflush=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+    def _get_sessionmaker_override(*_args: object, **_kwargs: object) -> async_sessionmaker[AsyncSession]:
+        return session_factory
+
+    from ade_api.app import lifecycles as app_lifecycles
+    from ade_api.db import session as db_session
+    from ade_api.features.builds import tasks as builds_tasks
+    from ade_api.features.runs import tasks as runs_tasks
+
+    monkeypatch.setattr(db_session, "get_sessionmaker", _get_sessionmaker_override)
+    monkeypatch.setattr(builds_tasks, "get_sessionmaker", _get_sessionmaker_override)
+    monkeypatch.setattr(runs_tasks, "get_sessionmaker", _get_sessionmaker_override)
+    monkeypatch.setattr(app_lifecycles, "get_sessionmaker", _get_sessionmaker_override)
+
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _disable_run_workers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid long-running worker tasks during integration tests."""
+
+    async def _noop(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    from ade_api.features.builds.service import BuildsService
+    from ade_api.features.runs.worker_pool import RunWorkerPool
+
+    monkeypatch.setattr(BuildsService, "launch_build_if_needed", _noop)
+    monkeypatch.setattr(RunWorkerPool, "start", _noop)
+    monkeypatch.setattr(RunWorkerPool, "stop", _noop)
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def migrated_db(base_settings: Settings) -> AsyncEngine:
     reset_database_state()

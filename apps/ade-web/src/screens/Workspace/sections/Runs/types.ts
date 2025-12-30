@@ -5,17 +5,34 @@ export type RunField = components["schemas"]["RunFieldResource"];
 export type RunColumn = components["schemas"]["RunColumnResource"];
 
 export type RunsStatusFilter = "all" | RunStatus;
-export type RunsResultFilter = "all" | "clean" | "warnings" | "errors";
 export type RunsDateRange = "14d" | "7d" | "24h" | "30d" | "custom";
 
 export interface RunsFilters {
   readonly search: string;
   readonly status: RunsStatusFilter;
-  readonly result: RunsResultFilter;
   readonly dateRange: RunsDateRange;
-  readonly config: string;
-  readonly owner: string;
+  readonly configurationId: string | null;
 }
+
+export type RunConfigOption = {
+  id: string;
+  label: string;
+};
+
+export type RunsQuery = {
+  page?: number;
+  page_size?: number;
+  include_total?: boolean;
+  q?: string | null;
+  status?: RunStatus | RunStatus[] | null;
+  configuration_id?: string | null;
+  created_after?: string | null;
+  created_before?: string | null;
+  sort?: string | null;
+  input_document_id?: string | null;
+  has_output?: boolean | null;
+  file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
+};
 
 export interface RunsCounts {
   readonly total: number;
@@ -30,6 +47,7 @@ export interface RunsCounts {
 
 export interface RunRecord {
   readonly id: string;
+  readonly configurationId: string;
   readonly status: RunStatus;
   readonly inputName: string;
   readonly outputName: string | null;

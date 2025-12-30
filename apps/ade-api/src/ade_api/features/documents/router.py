@@ -24,6 +24,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from ade_api.api.deps import get_documents_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
 from ade_api.common.logging import log_context
@@ -33,6 +34,7 @@ from ade_api.common.sorting import make_sort_dependency
 from ade_api.common.types import OrderBy
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
 from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.features.runs.schemas import RunCreateOptionsBase
 from ade_api.features.runs.exceptions import RunQueueFullError
 from ade_api.features.runs.service import RunsService
 from ade_api.models import User
@@ -65,6 +67,7 @@ from .schemas import (
     DocumentTagsPatch,
     DocumentTagsReplace,
     DocumentUpdateRequest,
+    DocumentUploadRunOptions,
     DocumentUploadSessionCreateRequest,
     DocumentUploadSessionCreateResponse,
     DocumentUploadSessionStatusResponse,
@@ -166,7 +169,6 @@ _FILTER_KEYS = {
 
 def get_document_filters(
     request: Request,
-    filters: Annotated[DocumentFilters, Depends()],
 ) -> DocumentFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
@@ -183,7 +185,20 @@ def get_document_filters(
         ]
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
-    return filters
+    data: dict[str, object] = {}
+    for key in allowed:
+        values = request.query_params.getlist(key)
+        if not values:
+            continue
+        data[key] = values if len(values) > 1 else values[0]
+
+    try:
+        return DocumentFilters.model_validate(data)
+    except ValidationError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.errors(),
+        ) from exc
 
 
 def _parse_metadata(metadata: str | None) -> dict[str, Any]:
@@ -207,20 +222,51 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     return decoded
 
 
+def _parse_run_options(run_options: str | None) -> DocumentUploadRunOptions | None:
+    if run_options is None:
+        return None
+    candidate = run_options.strip()
+    if not candidate:
+        return None
+    try:
+        decoded = json.loads(candidate)
+    except json.JSONDecodeError as exc:  # pragma: no cover - validation guard
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="run_options must be valid JSON",
+        ) from exc
+    if not isinstance(decoded, dict):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="run_options must be a JSON object",
+        )
+    try:
+        return DocumentUploadRunOptions.model_validate(decoded)
+    except ValidationError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=exc.errors(),
+        ) from exc
+
+
 async def _try_enqueue_run(
     *,
     runs_service: RunsService,
     workspace_id: UUID,
     document_id: UUID,
+    run_options: DocumentUploadRunOptions | None = None,
 ) -> None:
     try:
         if await runs_service.is_processing_paused(workspace_id=workspace_id):
             return
+        options = None
+        if run_options and run_options.input_sheet_names is not None:
+            options = RunCreateOptionsBase(input_sheet_names=run_options.input_sheet_names)
         await runs_service.prepare_run_for_workspace(
             workspace_id=workspace_id,
             input_document_id=document_id,
             configuration_id=None,
-            options=None,
+            options=options,
         )
     except ConfigurationNotFoundError:
         return
@@ -267,13 +313,16 @@ async def upload_document(
     file: Annotated[UploadFile, File(...)],
     metadata: Annotated[str | None, Form()] = None,
     expires_at: Annotated[str | None, Form()] = None,
+    run_options: Annotated[str | None, Form()] = None,
 ) -> DocumentOut:
     payload = _parse_metadata(metadata)
+    upload_run_options = _parse_run_options(run_options)
+    metadata_payload = service.build_upload_metadata(payload, upload_run_options)
     try:
         document = await service.create_document(
             workspace_id=workspace_id,
             upload=file,
-            metadata=payload,
+            metadata=metadata_payload,
             expires_at=expires_at,
             actor=_actor,
         )
@@ -286,6 +335,7 @@ async def upload_document(
         runs_service=runs_service,
         workspace_id=workspace_id,
         document_id=document.id,
+        run_options=upload_run_options,
     )
 
     return document
@@ -561,7 +611,7 @@ async def commit_upload_session(
     actor: DocumentManager,
 ) -> DocumentOut:
     try:
-        document = await service.commit_upload_session(
+        document, upload_run_options = await service.commit_upload_session(
             workspace_id=workspace_id,
             upload_session_id=upload_session_id,
             actor=actor,
@@ -577,6 +627,7 @@ async def commit_upload_session(
         runs_service=runs_service,
         workspace_id=workspace_id,
         document_id=document.id,
+        run_options=upload_run_options,
     )
 
     return document

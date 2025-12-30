@@ -518,7 +518,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -775,7 +775,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1090,7 +1090,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1342,7 +1342,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1727,7 +1727,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -1815,7 +1815,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -2239,7 +2239,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -2824,7 +2824,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3243,7 +3243,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3673,7 +3673,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -3687,294 +3687,6 @@
               "type": "boolean",
               "default": false,
               "title": "Include Total"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "tag_mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "any",
-                    "all"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tag Mode"
-            }
-          },
-          {
-            "name": "tags_empty",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Tags Empty"
-            }
-          },
-          {
-            "name": "uploader",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Uploader"
-            }
-          },
-          {
-            "name": "assignee_unassigned",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Assignee Unassigned"
-            }
-          },
-          {
-            "name": "folder_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Folder Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "updated_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Updated After"
-            }
-          },
-          {
-            "name": "updated_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Updated Before"
-            }
-          },
-          {
-            "name": "activity_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Activity After"
-            }
-          },
-          {
-            "name": "activity_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Activity Before"
-            }
-          },
-          {
-            "name": "last_run_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last Run From"
-            }
-          },
-          {
-            "name": "last_run_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last Run To"
-            }
-          },
-          {
-            "name": "byte_size_from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Byte Size From"
-            }
-          },
-          {
-            "name": "byte_size_to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Byte Size To"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
             }
           },
           {
@@ -3996,15 +3708,6 @@
             "description": "CSV; prefix '-' for DESC. Allowed: activity_at, byte_size, created_at, display_status, id, last_run_at, name, source, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4888,6 +4591,272 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Update tags on multiple documents",
+        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update tags."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Archive multiple documents",
+        "operationId": "archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Restore multiple documents from the archive",
+        "operationId": "restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to update documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document updates."
+          },
+          "404": {
+            "description": "One or more documents were not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive": {
       "post": {
         "tags": [
@@ -5264,272 +5233,6 @@
         ]
       }
     },
-    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Update tags on multiple documents",
-        "operationId": "patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchTagsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchTagsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update tags."
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates."
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace."
-          },
-          "422": {
-            "description": "Tag payload is invalid."
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Archive multiple documents",
-        "operationId": "archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents."
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates."
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
-      "post": {
-        "tags": [
-          "documents"
-        ],
-        "summary": "Restore multiple documents from the archive",
-        "operationId": "restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Workspace identifier",
-              "title": "Workspace Id"
-            },
-            "description": "Workspace identifier"
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DocumentBatchArchiveRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentBatchArchiveResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required to update documents."
-          },
-          "403": {
-            "description": "Workspace permissions do not allow document updates."
-          },
-          "404": {
-            "description": "One or more documents were not found within the workspace."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/download": {
       "get": {
         "tags": [
@@ -5833,7 +5536,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -5921,7 +5624,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -7547,7 +7250,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "maximum": 200,
+                  "maximum": 2000,
                   "minimum": 1
                 },
                 {
@@ -7565,7 +7268,7 @@
               "anyOf": [
                 {
                   "type": "integer",
-                  "maximum": 200,
+                  "maximum": 2000,
                   "minimum": 1
                 },
                 {
@@ -8078,7 +7781,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -8092,92 +7795,6 @@
               "type": "boolean",
               "default": false,
               "title": "Include Total"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "input_document_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Input Document Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
             }
           },
           {
@@ -8199,15 +7816,6 @@
             "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -8444,7 +8052,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 2000,
               "minimum": 1,
               "default": 25,
               "title": "Page Size"
@@ -8458,92 +8066,6 @@
               "type": "boolean",
               "default": false,
               "title": "Include Total"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 2,
-                  "maxLength": 128
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Q"
-            }
-          },
-          {
-            "name": "input_document_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Input Document Id"
-            }
-          },
-          {
-            "name": "created_after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created After"
-            }
-          },
-          {
-            "name": "created_before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Created Before"
-            }
-          },
-          {
-            "name": "has_output",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Has Output"
             }
           },
           {
@@ -8565,15 +8087,6 @@
             "description": "CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -10153,241 +9666,6 @@
         ],
         "title": "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post"
       },
-      "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get": {
-        "properties": {
-          "status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"
-      },
-      "Body_list_documents_api_v1_workspaces__workspace_id__documents_get": {
-        "properties": {
-          "display_status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/DocumentDisplayStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Status"
-          },
-          "run_status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Run Status"
-          },
-          "source_in": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/DocumentSource"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source In"
-          },
-          "tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags"
-          },
-          "tags_not": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tags Not"
-          },
-          "uploader_id": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uploader Id"
-          },
-          "uploader_email": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Uploader Email"
-          },
-          "assignee_user_id": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "UUIDv7 (RFC 9562) generated in the application layer."
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignee User Id"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_documents_api_v1_workspaces__workspace_id__documents_get"
-      },
-      "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get": {
-        "properties": {
-          "status": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/RunStatus"
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          },
-          "file_type": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string",
-                  "enum": [
-                    "xlsx",
-                    "xls",
-                    "csv",
-                    "pdf"
-                  ]
-                },
-                "type": "array",
-                "uniqueItems": true
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Type"
-          }
-        },
-        "type": "object",
-        "title": "Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"
-      },
       "Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put": {
         "properties": {
           "file": {
@@ -10430,6 +9708,17 @@
               }
             ],
             "title": "Expires At"
+          },
+          "run_options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Options"
           }
         },
         "type": "object",
@@ -11692,6 +10981,29 @@
         "title": "DocumentUploadConflictBehavior",
         "description": "Conflict handling modes for upload sessions."
       },
+      "DocumentUploadRunOptions": {
+        "properties": {
+          "input_sheet_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sheet Names",
+            "description": "Optional worksheet names to ingest when processing XLSX files."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentUploadRunOptions",
+        "description": "Run-specific options captured at upload time."
+      },
       "DocumentUploadSessionCreateRequest": {
         "properties": {
           "filename": {
@@ -11740,6 +11052,16 @@
               }
             ],
             "title": "Metadata"
+          },
+          "run_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentUploadRunOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

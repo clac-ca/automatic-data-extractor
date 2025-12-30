@@ -28,6 +28,10 @@ class RunFilters(FilterBase):
         default=None,
         description="Optional run statuses to include (filters out others).",
     )
+    configuration_id: set[UUIDStr] | None = Field(
+        default=None,
+        description="Limit runs to one or more configuration identifiers.",
+    )
     input_document_id: UUIDStr | None = Field(
         default=None,
         description="Limit runs to those started for the given document.",
@@ -69,6 +73,14 @@ class RunFilters(FilterBase):
             return {RunStatus(item) for item in parsed}
         except ValueError as exc:  # pragma: no cover - validation guard
             raise HTTPException(422, "Invalid status value") from exc
+
+    @field_validator("configuration_id", mode="before")
+    @classmethod
+    def _parse_configuration_ids(cls, value):
+        parsed = parse_csv_or_repeated(value)
+        if parsed and len(parsed) > MAX_SET_SIZE:
+            raise HTTPException(422, f"Too many configuration IDs; max {MAX_SET_SIZE}.")
+        return parsed or None
 
     @field_validator("file_type", mode="before")
     @classmethod
@@ -157,6 +169,9 @@ def apply_run_filters(stmt: Select, filters: RunFilters) -> Select:
             for status in filters.status
         )
         predicates.append(Run.status.in_(status_values))
+
+    if filters.configuration_id:
+        predicates.append(Run.configuration_id.in_(sorted(filters.configuration_id)))
 
     if filters.input_document_id:
         predicates.append(Run.input_document_id == filters.input_document_id)

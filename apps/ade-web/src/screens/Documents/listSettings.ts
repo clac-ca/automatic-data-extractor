@@ -1,6 +1,6 @@
 import type { ListDensity, ListPageSize, ListRefreshInterval, ListSettings } from "./types";
 
-export const LIST_PAGE_SIZES: ListPageSize[] = [50, 100, 200];
+export const LIST_PAGE_SIZES: ListPageSize[] = [50, 100, 200, 1000, 2000];
 
 export const LIST_REFRESH_INTERVALS: Array<{
   value: ListRefreshInterval;

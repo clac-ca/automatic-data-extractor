@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 import { RequireSession } from "@shared/auth/components/RequireSession";
@@ -16,14 +16,17 @@ import { DocumentsGrid } from "./components/DocumentsGrid";
 import { DocumentsHeader } from "./components/DocumentsHeader";
 import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
+import { UploadPreflightDialog } from "./components/UploadPreflightDialog";
 import { useDocumentsModel } from "./hooks/useDocumentsModel";
 import { getDocumentOutputRun } from "./data";
 import type { DocumentEntry, DocumentsFilters, DocumentStatus, FileType } from "./types";
 import {
   DEFAULT_DOCUMENT_FILTERS,
   assigneeKeysFromIds,
+  buildFiltersForBuiltInView,
   filtersEqual,
   normalizeAssignees,
+  type BuiltInViewId,
 } from "./filters";
 
 export default function DocumentsScreen() {
@@ -33,20 +36,6 @@ export default function DocumentsScreen() {
     </RequireSession>
   );
 }
-
-const FILTER_PARAM_KEYS = [
-  "status",
-  "status_in",
-  "display_status",
-  "display_status_in",
-  "file_type",
-  "tags",
-  "tag_mode",
-  "tags_match",
-  "assignee_user_id",
-  "assignee_user_id_in",
-  "assignee_unassigned",
-];
 
 const STATUS_VALUES = new Set<DocumentStatus>(["queued", "processing", "ready", "failed", "archived"]);
 const FILE_TYPE_VALUES = new Set<FileType>(["xlsx", "xls", "csv", "pdf"]);
@@ -73,6 +62,28 @@ function parseFiltersFromSearch(search: string): DocumentsFilters {
     tagMode,
     assignees,
   };
+}
+
+function buildDocumentsSearchParams(filters: DocumentsFilters, search: string, docId: string | null) {
+  const params = new URLSearchParams();
+  const trimmedSearch = search.trim();
+  if (trimmedSearch) params.set("q", trimmedSearch);
+  if (docId) params.set("doc", docId);
+
+  filters.statuses.forEach((status) => params.append("status", status));
+  filters.fileTypes.forEach((type) => params.append("file_type", type));
+  filters.tags.forEach((tag) => params.append("tags", tag));
+  if (filters.tags.length > 0 && filters.tagMode !== "any") {
+    params.set("tag_mode", filters.tagMode);
+  }
+
+  const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
+  assigneeIds.forEach((id) => params.append("assignee_user_id", id));
+  if (includeUnassigned) {
+    params.set("assignee_unassigned", "true");
+  }
+
+  return params.toString();
 }
 
 function coerceTagMode(value: string | null): DocumentsFilters["tagMode"] {
@@ -153,6 +164,7 @@ export function DocumentsWorkbench() {
 
   const currentUserLabel = session.user.display_name || session.user.email || "You";
   const currentUserId = session.user.id;
+  const currentUserKey = `user:${currentUserId}`;
   const canManageConfigurations = hasPermission("workspace.configurations.manage");
   const canManageSettings = hasPermission("workspace.settings.manage");
 
@@ -174,12 +186,7 @@ export function DocumentsWorkbench() {
     description: string;
     confirmLabel: string;
   } | null>(null);
-  const handleClearFilters = () => {
-    setSearchParam("");
-    actions.setSearch("");
-    actions.setBuiltInView("all_documents");
-  };
-
+  const [uploadPreflightFiles, setUploadPreflightFiles] = useState<File[]>([]);
   const urlSearch = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get("q") ?? "";
@@ -203,42 +210,21 @@ export function DocumentsWorkbench() {
   }, [model.actions, model.state.filters, urlFilters]);
 
   useEffect(() => {
-    if (!urlDocId) return;
-    actions.openPreview(urlDocId);
-  }, [actions, urlDocId]);
-
-  const setDocParam = useCallback(
-    (docId: string | null, replace = false) => {
-      const params = new URLSearchParams(location.search);
-      if (docId) params.set("doc", docId);
-      else params.delete("doc");
-      const nextSearch = params.toString();
-      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
-      navigate(target, { replace });
-    },
-    [location.hash, location.pathname, location.search, navigate],
-  );
-
-  const syncFiltersToUrl = useCallback(
-    (filters: DocumentsFilters, replace = true) => {
-      const params = new URLSearchParams(location.search);
-      FILTER_PARAM_KEYS.forEach((key) => params.delete(key));
-
-      filters.statuses.forEach((status) => params.append("status", status));
-      filters.fileTypes.forEach((type) => params.append("file_type", type));
-      filters.tags.forEach((tag) => params.append("tags", tag));
-      if (filters.tags.length > 0 && filters.tagMode !== "any") {
-        params.set("tag_mode", filters.tagMode);
+    if (!urlDocId) {
+      if (state.previewOpen) {
+        actions.closePreview();
       }
+      return;
+    }
+    if (state.activeId !== urlDocId || !state.previewOpen) {
+      actions.openPreview(urlDocId);
+    }
+  }, [actions, state.activeId, state.previewOpen, urlDocId]);
 
-      const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
-      assigneeIds.forEach((id) => params.append("assignee_user_id", id));
-      if (includeUnassigned) {
-        params.set("assignee_unassigned", "true");
-      }
-
-      const nextSearch = params.toString();
-      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
+  const syncUrl = useCallback(
+    (filters: DocumentsFilters, search: string, docId: string | null, replace = true) => {
+      const params = buildDocumentsSearchParams(filters, search, docId);
+      const target = `${location.pathname}${params ? `?${params}` : ""}${location.hash ?? ""}`;
       const current = `${location.pathname}${location.search}${location.hash ?? ""}`;
       if (target !== current) {
         navigate(target, { replace });
@@ -250,28 +236,47 @@ export function DocumentsWorkbench() {
   useEffect(() => {
     if (!state.previewOpen) return;
     if (!state.activeId) return;
+    if (!urlDocId) return;
     if (urlDocId === state.activeId) return;
-    setDocParam(state.activeId, true);
-  }, [setDocParam, state.activeId, state.previewOpen, urlDocId]);
+    syncUrl(state.filters, urlSearch, state.activeId, true);
+  }, [state.activeId, state.filters, state.previewOpen, syncUrl, urlDocId, urlSearch]);
 
-  const setSearchParam = useCallback(
-    (value: string, replace = true) => {
-      const params = new URLSearchParams(location.search);
-      if (value) {
-        params.set("q", value);
-      } else {
-        params.delete("q");
-      }
-      const nextSearch = params.toString();
-      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
-      navigate(target, { replace });
+  const handleFiltersChange = useCallback(
+    (next: DocumentsFilters) => {
+      actions.setFilters(next);
+      const docId = state.previewOpen ? state.activeId : null;
+      syncUrl(next, urlSearch, docId);
     },
-    [location.hash, location.pathname, location.search, navigate],
+    [actions, state.activeId, state.previewOpen, syncUrl, urlSearch],
   );
 
-  useEffect(() => {
-    syncFiltersToUrl(model.state.filters);
-  }, [model.state.filters, syncFiltersToUrl]);
+  const handleSetBuiltInView = useCallback(
+    (id: BuiltInViewId) => {
+      actions.setBuiltInView(id);
+      const docId = state.previewOpen ? state.activeId : null;
+      const nextFilters = buildFiltersForBuiltInView(id, currentUserKey);
+      syncUrl(nextFilters, urlSearch, docId);
+    },
+    [actions, currentUserKey, state.activeId, state.previewOpen, syncUrl, urlSearch],
+  );
+
+  const handleSelectSavedView = useCallback(
+    (viewId: string) => {
+      const view = model.derived.savedViews.find((saved) => saved.id === viewId);
+      if (!view) return;
+      actions.selectSavedView(viewId);
+      const docId = state.previewOpen ? state.activeId : null;
+      syncUrl(view.filters, urlSearch, docId);
+    },
+    [actions, model.derived.savedViews, state.activeId, state.previewOpen, syncUrl, urlSearch],
+  );
+
+  const handleClearFilters = () => {
+    actions.setSearch("");
+    actions.setBuiltInView("all_documents");
+    const docId = state.previewOpen ? state.activeId : null;
+    syncUrl(DEFAULT_DOCUMENT_FILTERS, "", docId);
+  };
 
   const openConfigBuilder = useCallback(() => {
     navigate(`/workspaces/${workspace.id}/config-builder`);
@@ -281,39 +286,36 @@ export function DocumentsWorkbench() {
   }, [navigate, workspace.id]);
 
   const onActivate = (id: string) => {
-    if (model.state.activeId === id && model.state.previewOpen) {
+    if (state.activeId === id && state.previewOpen) {
       onClosePreview();
       return;
     }
-    const hadDoc = Boolean(urlDocId);
-    setDocParam(id, hadDoc);
-    model.actions.openPreview(id);
+    actions.openPreview(id);
+    syncUrl(state.filters, urlSearch, id, Boolean(urlDocId));
   };
 
   const onClosePreview = () => {
-    setDocParam(null, false);
-    model.actions.closePreview();
+    actions.closePreview();
     setDetailsRequest(null);
+    syncUrl(state.filters, urlSearch, null, false);
   };
 
   const onOpenDetails = useCallback(
     (id: string) => {
-      const hadDoc = Boolean(urlDocId);
-      setDocParam(id, hadDoc);
-      model.actions.openPreview(id);
+      actions.openPreview(id);
+      syncUrl(state.filters, urlSearch, id, Boolean(urlDocId));
       setDetailsRequest({ id, tab: "details" });
     },
-    [model.actions, setDocParam, urlDocId],
+    [actions, state.filters, syncUrl, urlDocId, urlSearch],
   );
 
   const onOpenNotes = useCallback(
     (id: string) => {
-      const hadDoc = Boolean(urlDocId);
-      setDocParam(id, hadDoc);
-      model.actions.openPreview(id);
+      actions.openPreview(id);
+      syncUrl(state.filters, urlSearch, id, Boolean(urlDocId));
       setDetailsRequest({ id, tab: "notes" });
     },
-    [model.actions, setDocParam, urlDocId],
+    [actions, state.filters, syncUrl, urlDocId, urlSearch],
   );
 
   const requestDeleteDocument = useCallback((doc: DocumentEntry) => {
@@ -368,6 +370,26 @@ export function DocumentsWorkbench() {
     }
     setDeleteDialog(null);
   }, [actions, deleteDialog, onClosePreview, state.activeId, state.previewOpen]);
+
+  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    if (selected.length > 0) {
+      setUploadPreflightFiles(selected);
+    }
+    event.target.value = "";
+  }, []);
+
+  const handleUploadConfirm = useCallback(
+    (items: Parameters<typeof model.actions.queueUploads>[0]) => {
+      model.actions.queueUploads(items);
+      setUploadPreflightFiles([]);
+    },
+    [model.actions.queueUploads],
+  );
+
+  const handleUploadCancel = useCallback(() => {
+    setUploadPreflightFiles([]);
+  }, []);
   return (
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
@@ -381,7 +403,7 @@ export function DocumentsWorkbench() {
         now={model.derived.now}
         onUploadClick={model.actions.handleUploadClick}
         fileInputRef={model.refs.fileInputRef}
-        onFileInputChange={model.actions.handleFileInputChange}
+        onFileInputChange={handleFileInputChange}
         showConfigurationWarning={model.derived.configMissing}
         processingPaused={model.derived.processingPaused}
         canManageConfigurations={canManageConfigurations}
@@ -397,19 +419,28 @@ export function DocumentsWorkbench() {
         onClearCompletedUploads={model.actions.clearCompletedUploads}
       />
 
+      <UploadPreflightDialog
+        open={uploadPreflightFiles.length > 0}
+        files={uploadPreflightFiles}
+        onConfirm={handleUploadConfirm}
+        onCancel={handleUploadCancel}
+        processingPaused={model.derived.processingPaused}
+        configMissing={model.derived.configMissing}
+      />
+
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DocumentsFiltersBar
             workspaceId={workspace.id}
             filters={model.state.filters}
-            onChange={model.actions.setFilters}
+            onChange={handleFiltersChange}
             people={model.derived.people}
             showingCount={model.derived.visibleDocuments.length}
             totalCount={model.derived.documents.length}
             activeViewId={model.state.activeViewId}
-            onSetBuiltInView={(id) => model.actions.setBuiltInView(id)}
+            onSetBuiltInView={handleSetBuiltInView}
             savedViews={model.derived.savedViews}
-            onSelectSavedView={(id) => model.actions.selectSavedView(id)}
+            onSelectSavedView={handleSelectSavedView}
             onDeleteSavedView={(id) => model.actions.deleteView(id)}
             onOpenSaveDialog={model.actions.openSaveView}
             counts={model.derived.counts}

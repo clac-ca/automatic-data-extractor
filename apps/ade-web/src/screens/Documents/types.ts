@@ -32,7 +32,7 @@ export type BoardGroup = "status" | "tag" | "uploader";
 
 export type ListDensity = "comfortable" | "compact";
 export type ListRefreshInterval = "auto" | "off" | "30s" | "1m" | "5m";
-export type ListPageSize = 50 | 100 | 200;
+export type ListPageSize = 50 | 100 | 200 | 1000 | 2000;
 export type ListSettings = {
   pageSize: ListPageSize;
   refreshInterval: ListRefreshInterval;

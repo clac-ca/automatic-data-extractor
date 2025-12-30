@@ -36,7 +36,9 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
   const lastSelectionStorage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
 
   const configQuery = useConfigurationQuery({ workspaceId: workspace.id, configurationId: configId });
+  const { refetch: refetchConfig } = configQuery;
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const { refetch: refetchConfigurations } = configurationsQuery;
   const config = configQuery.data;
   const configurationId = config?.id ?? configId ?? "";
   const status = normalizeConfigStatus(config?.status);
@@ -231,6 +233,8 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
           notifyToast({ title: "Configuration is now active.", intent: "success", duration: 4000 });
           setMakeActiveOpen(false);
           setMakeActiveState(null);
+          void refetchConfigurations();
+          void refetchConfig();
         },
         onError(error) {
           notifyToast({
@@ -241,7 +245,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         },
       },
     );
-  }, [config, makeActiveConfig, notifyToast]);
+  }, [config, makeActiveConfig, notifyToast, refetchConfig, refetchConfigurations]);
 
   const handleConfirmArchive = useCallback(() => {
     if (!config) {
@@ -253,6 +257,8 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         onSuccess() {
           notifyToast({ title: "Active configuration archived.", intent: "success", duration: 4000 });
           setArchiveOpen(false);
+          void refetchConfigurations();
+          void refetchConfig();
         },
         onError(error) {
           notifyToast({
@@ -263,7 +269,7 @@ export default function WorkspaceConfigRoute({ params }: WorkspaceConfigRoutePro
         },
       },
     );
-  }, [archiveConfig, config, notifyToast]);
+  }, [archiveConfig, config, notifyToast, refetchConfig, refetchConfigurations]);
 
   if (!configId) {
     return (

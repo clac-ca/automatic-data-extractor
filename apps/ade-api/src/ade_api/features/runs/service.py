@@ -281,7 +281,6 @@ class RunsService:
 
         await self._session.flush()
         await self._session.commit()
-        await self._session.refresh(run)
 
         mode_literal = "validate" if options.validate_only else "execute"
         await self._emit_api_event(
@@ -337,6 +336,7 @@ class RunsService:
         configuration_id: UUID,
         document_ids: Sequence[UUID],
         options: RunBatchCreateOptions,
+        input_sheet_names_by_document_id: dict[UUID, list[str]] | None = None,
     ) -> list[Run]:
         """Create queued runs for each document id, enforcing all-or-nothing semantics."""
 
@@ -380,13 +380,20 @@ class RunsService:
 
         runs: list[Run] = []
         for run_id, document_id in zip(run_ids, document_ids, strict=True):
+            input_sheet_names = None
+            if input_sheet_names_by_document_id and document_id in input_sheet_names_by_document_id:
+                raw_names = input_sheet_names_by_document_id.get(document_id) or []
+                normalized = self._select_input_sheet_names(
+                    RunCreateOptions(input_document_id=document_id, input_sheet_names=raw_names),
+                )
+                input_sheet_names = normalized or None
             run = Run(
                 id=run_id,
                 workspace_id=configuration.workspace_id,
                 configuration_id=configuration.id,
                 status=RunStatus.QUEUED,
                 input_document_id=document_id,
-                input_sheet_names=None,
+                input_sheet_names=input_sheet_names,
                 build_id=build.id,
             )
             self._session.add(run)
@@ -398,14 +405,14 @@ class RunsService:
         await self._session.commit()
 
         for run, document_id in zip(runs, document_ids, strict=True):
-            await self._session.refresh(run)
+            input_sheet_names = run.input_sheet_names or None
             run_options = RunCreateOptions(
                 dry_run=options.dry_run,
                 validate_only=options.validate_only,
                 force_rebuild=options.force_rebuild,
                 log_level=options.log_level,
                 input_document_id=document_id,
-                input_sheet_names=None,
+                input_sheet_names=input_sheet_names,
                 metadata=options.metadata,
             )
             mode_literal = "validate" if options.validate_only else "execute"
@@ -540,17 +547,24 @@ class RunsService:
             if remaining is not None and remaining <= 0:
                 break
             limit = batch_size if remaining is None else min(batch_size, remaining)
-            document_ids = await self._pending_document_ids(
+            documents = await self._pending_documents(
                 workspace_id=configuration.workspace_id,
                 limit=limit,
             )
-            if not document_ids:
+            if not documents:
                 break
+            document_ids = [doc.id for doc in documents]
+            sheet_names_by_document_id: dict[UUID, list[str]] = {}
+            for document in documents:
+                run_options = self._documents_service.read_upload_run_options(document.attributes)
+                if run_options and run_options.input_sheet_names is not None:
+                    sheet_names_by_document_id[document.id] = list(run_options.input_sheet_names)
             try:
                 runs = await self.prepare_runs_batch(
                     configuration_id=configuration.id,
                     document_ids=document_ids,
                     options=RunBatchCreateOptions(),
+                    input_sheet_names_by_document_id=sheet_names_by_document_id or None,
                 )
             except RunQueueFullError:
                 logger.warning(
@@ -664,7 +678,7 @@ class RunsService:
         queued = await self._runs.count_queued()
         return max(limit - queued, 0)
 
-    async def _pending_document_ids(self, *, workspace_id: UUID, limit: int) -> list[UUID]:
+    async def _pending_documents(self, *, workspace_id: UUID, limit: int) -> list[Document]:
         if limit <= 0:
             return []
         pending_run_exists = (
@@ -674,7 +688,7 @@ class RunsService:
             .exists()
         )
         stmt = (
-            select(Document.id)
+            select(Document)
             .where(
                 Document.workspace_id == workspace_id,
                 Document.status == DocumentStatus.UPLOADED,

@@ -11,7 +11,7 @@ import { RunPreviewPanel } from "./components/RunPreviewPanel";
 import { RunsTable } from "./components/RunsTable";
 import { DEFAULT_RUNS_FILTERS, DATE_RANGE_OPTIONS } from "./constants";
 import { useRunsModel } from "./hooks/useRunsModel";
-import { coerceDateRange, coerceResult, coerceStatus } from "./utils";
+import { coerceDateRange, coerceStatus } from "./utils";
 import type { RunsFilters } from "./types";
 
 export default function WorkspaceRunsRoute() {
@@ -112,8 +112,6 @@ export default function WorkspaceRunsRoute() {
           <RunsFiltersBar
             filters={model.state.filters}
             configOptions={model.derived.configOptions}
-            ownerOptions={model.derived.ownerOptions}
-            resultEnabled={model.derived.supportsResultFilters}
             showingCount={model.derived.visibleRuns.length}
             totalCount={model.derived.totalCount}
             onChange={handleFiltersChange}
@@ -136,7 +134,7 @@ export default function WorkspaceRunsRoute() {
             <div className="flex-1 bg-card px-6 py-10">
               <PageState
                 title="No runs found"
-                description="Try adjusting filters or clearing the search."
+                description="Try adjusting filters or clearing them."
                 variant="empty"
               />
             </div>
@@ -176,29 +174,23 @@ function parseFiltersFromSearch(search: string): RunsFilters {
   const params = new URLSearchParams(search);
   const searchValue = params.get("q") ?? DEFAULT_RUNS_FILTERS.search;
   const status = coerceStatus(params.get("status"));
-  const result = coerceResult(params.get("result"));
   const dateRange = coerceDateRange(params.get("range"));
-  const config = params.get("config") ?? DEFAULT_RUNS_FILTERS.config;
-  const owner = params.get("owner") ?? DEFAULT_RUNS_FILTERS.owner;
+  const configurationId = params.get("configuration_id");
 
   return {
     search: searchValue,
     status,
-    result,
     dateRange,
-    config,
-    owner,
+    configurationId: configurationId || null,
   };
 }
 
 function buildSearchParams(filters: RunsFilters, runId: string | null) {
   const params = new URLSearchParams();
-  if (filters.search) params.set("q", filters.search);
+  if (filters.search.trim()) params.set("q", filters.search.trim());
   if (filters.status !== DEFAULT_RUNS_FILTERS.status) params.set("status", filters.status);
-  if (filters.result !== DEFAULT_RUNS_FILTERS.result) params.set("result", filters.result);
   if (filters.dateRange !== DEFAULT_RUNS_FILTERS.dateRange) params.set("range", filters.dateRange);
-  if (filters.config !== DEFAULT_RUNS_FILTERS.config) params.set("config", filters.config);
-  if (filters.owner !== DEFAULT_RUNS_FILTERS.owner) params.set("owner", filters.owner);
+  if (filters.configurationId) params.set("configuration_id", filters.configurationId);
   if (runId) params.set("run", runId);
   return params.toString();
 }
@@ -207,10 +199,8 @@ function filtersEqual(a: RunsFilters, b: RunsFilters) {
   return (
     a.search === b.search &&
     a.status === b.status &&
-    a.result === b.result &&
     a.dateRange === b.dateRange &&
-    a.config === b.config &&
-    a.owner === b.owner
+    a.configurationId === b.configurationId
   );
 }
 

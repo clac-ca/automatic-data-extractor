@@ -707,6 +707,57 @@ export type paths = {
         patch: operations["update_document_api_v1_workspaces__workspace_id__documents__document_id__patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update tags on multiple documents */
+        post: operations["patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive multiple documents */
+        post: operations["archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore multiple documents from the archive */
+        post: operations["restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive": {
         parameters: {
             query?: never;
@@ -757,57 +808,6 @@ export type paths = {
         head?: never;
         /** Update document tags */
         patch: operations["patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch"];
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/documents/batch/tags": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Update tags on multiple documents */
-        post: operations["patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive multiple documents */
-        post: operations["archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore multiple documents from the archive */
-        post: operations["restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/download": {
@@ -1727,41 +1727,6 @@ export type components = {
              */
             file: string;
         };
-        /** Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get */
-        Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get: {
-            /** Status */
-            status?: components["schemas"]["RunStatus"][] | null;
-            /** File Type */
-            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
-        };
-        /** Body_list_documents_api_v1_workspaces__workspace_id__documents_get */
-        Body_list_documents_api_v1_workspaces__workspace_id__documents_get: {
-            /** Display Status */
-            display_status?: components["schemas"]["DocumentDisplayStatus"][] | null;
-            /** Run Status */
-            run_status?: components["schemas"]["RunStatus"][] | null;
-            /** Source In */
-            source_in?: components["schemas"]["DocumentSource"][] | null;
-            /** Tags */
-            tags?: string[] | null;
-            /** Tags Not */
-            tags_not?: string[] | null;
-            /** Uploader Id */
-            uploader_id?: string[] | null;
-            /** Uploader Email */
-            uploader_email?: string[] | null;
-            /** Assignee User Id */
-            assignee_user_id?: string[] | null;
-            /** File Type */
-            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
-        };
-        /** Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get */
-        Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get: {
-            /** Status */
-            status?: components["schemas"]["RunStatus"][] | null;
-            /** File Type */
-            file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
-        };
         /** Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put */
         Body_replace_configuration_from_archive_api_v1_workspaces__workspace_id__configurations__configuration_id__import_put: {
             /**
@@ -1781,6 +1746,8 @@ export type components = {
             metadata?: string | null;
             /** Expires At */
             expires_at?: string | null;
+            /** Run Options */
+            run_options?: string | null;
         };
         /**
          * BuildCreateOptions
@@ -2365,6 +2332,17 @@ export type components = {
          */
         DocumentUploadConflictBehavior: "rename" | "replace" | "fail";
         /**
+         * DocumentUploadRunOptions
+         * @description Run-specific options captured at upload time.
+         */
+        DocumentUploadRunOptions: {
+            /**
+             * Input Sheet Names
+             * @description Optional worksheet names to ingest when processing XLSX files.
+             */
+            input_sheet_names?: string[] | null;
+        };
+        /**
          * DocumentUploadSessionCreateRequest
          * @description Create a resumable upload session for a document.
          */
@@ -2383,6 +2361,7 @@ export type components = {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            run_options?: components["schemas"]["DocumentUploadRunOptions"] | null;
         };
         /**
          * DocumentUploadSessionCreateResponse
@@ -5959,23 +5938,6 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                q?: string | null;
-                tag_mode?: ("any" | "all") | null;
-                tags_empty?: boolean | null;
-                uploader?: string | null;
-                assignee_unassigned?: boolean | null;
-                folder_id?: string | null;
-                created_after?: string | null;
-                created_before?: string | null;
-                updated_after?: string | null;
-                updated_before?: string | null;
-                activity_after?: string | null;
-                activity_before?: string | null;
-                last_run_from?: string | null;
-                last_run_to?: string | null;
-                byte_size_from?: number | null;
-                byte_size_to?: number | null;
-                has_output?: boolean | null;
                 /** @description CSV; prefix '-' for DESC. Allowed: activity_at, byte_size, created_at, display_status, id, last_run_at, name, source, status. Example: -created_at,name */
                 sort?: string | null;
             };
@@ -5986,11 +5948,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["Body_list_documents_api_v1_workspaces__workspace_id__documents_get"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -6521,6 +6479,181 @@ export interface operations {
             };
         };
     };
+    patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchTagsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchTagsResponse"];
+                };
+            };
+            /** @description Authentication required to update tags. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tag payload is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
+                };
+            };
+            /** @description Authentication required to update documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
+                };
+            };
+            /** @description Authentication required to update documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more documents were not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     archive_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__archive_post: {
         parameters: {
             query?: never;
@@ -6750,181 +6883,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    patch_document_tags_batch_api_v1_workspaces__workspace_id__documents_batch_tags_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentBatchTagsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBatchTagsResponse"];
-                };
-            };
-            /** @description Authentication required to update tags. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Tag payload is invalid. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                /** @description Workspace identifier */
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
-                };
-            };
-            /** @description Authentication required to update documents. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Workspace permissions do not allow document updates. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more documents were not found within the workspace. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
@@ -7996,11 +7954,6 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                q?: string | null;
-                input_document_id?: string | null;
-                created_after?: string | null;
-                created_before?: string | null;
-                has_output?: boolean | null;
                 /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
                 sort?: string | null;
             };
@@ -8011,11 +7964,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["Body_list_configuration_runs_endpoint_api_v1_configurations__configuration_id__runs_get"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -8119,11 +8068,6 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 include_total?: boolean;
-                q?: string | null;
-                input_document_id?: string | null;
-                created_after?: string | null;
-                created_before?: string | null;
-                has_output?: boolean | null;
                 /** @description CSV; prefix '-' for DESC. Allowed: completed_at, created_at, id, started_at, status. Example: -created_at,name */
                 sort?: string | null;
             };
@@ -8134,11 +8078,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["Body_list_workspace_runs_endpoint_api_v1_workspaces__workspace_id__runs_get"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

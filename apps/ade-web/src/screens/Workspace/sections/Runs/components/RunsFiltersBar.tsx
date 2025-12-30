@@ -1,22 +1,18 @@
 import { Button } from "@ui/Button";
 
-import type { RunsFilters } from "../types";
+import type { RunConfigOption, RunsFilters } from "../types";
 import { DATE_RANGE_OPTIONS } from "../constants";
 
 export function RunsFiltersBar({
   filters,
   configOptions,
-  ownerOptions,
-  resultEnabled,
   showingCount,
   totalCount,
   onChange,
   onReset,
 }: {
   filters: RunsFilters;
-  configOptions: string[];
-  ownerOptions: string[];
-  resultEnabled: boolean;
+  configOptions: RunConfigOption[];
   showingCount: number;
   totalCount: number;
   onChange: (next: Partial<RunsFilters>) => void;
@@ -25,7 +21,7 @@ export function RunsFiltersBar({
   return (
     <div className="shrink-0 border-b border-border bg-card px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr]">
           <select
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
             value={filters.dateRange}
@@ -51,37 +47,13 @@ export function RunsFiltersBar({
           </select>
           <select
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            value={filters.result}
-            onChange={(event) => onChange({ result: event.target.value as RunsFilters["result"] })}
-            disabled={!resultEnabled}
+            value={filters.configurationId ?? ""}
+            onChange={(event) => onChange({ configurationId: event.target.value || null })}
           >
-            <option value="all">Result: all</option>
-            <option value="clean">Clean</option>
-            <option value="warnings">Warnings</option>
-            <option value="errors">Errors</option>
-          </select>
-          <select
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            value={filters.config}
-            onChange={(event) => onChange({ config: event.target.value })}
-          >
-            <option value="any">Config: any</option>
+            <option value="">Config: all</option>
             {configOptions.map((config) => (
-              <option key={config} value={config}>
-                {config}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            value={filters.owner}
-            onChange={(event) => onChange({ owner: event.target.value })}
-            disabled={ownerOptions.length === 0}
-          >
-            <option value="all">Owner: all</option>
-            {ownerOptions.map((owner) => (
-              <option key={owner} value={owner}>
-                {owner}
+              <option key={config.id} value={config.id}>
+                {config.label}
               </option>
             ))}
           </select>

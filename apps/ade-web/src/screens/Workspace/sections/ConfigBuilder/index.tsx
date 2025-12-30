@@ -41,6 +41,7 @@ export default function WorkspaceConfigsIndexRoute() {
   const storageKey = useMemo(() => buildLastSelectionStorageKey(workspace.id), [workspace.id]);
   const storage = useMemo(() => createLastSelectionStorage(workspace.id), [workspace.id]);
   const configurationsQuery = useConfigurationsQuery({ workspaceId: workspace.id });
+  const { refetch: refetchConfigurations } = configurationsQuery;
   const createConfig = useCreateConfigurationMutation(workspace.id);
   const importConfig = useImportConfigurationMutation(workspace.id);
   const makeActiveConfig = useMakeActiveConfigurationMutation(workspace.id);
@@ -309,6 +310,7 @@ export default function WorkspaceConfigsIndexRoute() {
             duration: 4000,
           });
           closeMakeActiveDialog();
+          void refetchConfigurations();
         },
         onError(error) {
           notifyToast({
@@ -319,7 +321,7 @@ export default function WorkspaceConfigsIndexRoute() {
         },
       },
     );
-  }, [closeMakeActiveDialog, makeActiveConfig, makeActiveTarget, notifyToast]);
+  }, [closeMakeActiveDialog, makeActiveConfig, makeActiveTarget, notifyToast, refetchConfigurations]);
 
   const handleConfirmArchive = useCallback(() => {
     if (!archiveTarget) {
@@ -335,6 +337,7 @@ export default function WorkspaceConfigsIndexRoute() {
             duration: 4000,
           });
           closeArchiveDialog();
+          void refetchConfigurations();
         },
         onError(error) {
           notifyToast({
@@ -345,7 +348,7 @@ export default function WorkspaceConfigsIndexRoute() {
         },
       },
     );
-  }, [archiveConfig, archiveTarget, closeArchiveDialog, notifyToast]);
+  }, [archiveConfig, archiveTarget, closeArchiveDialog, notifyToast, refetchConfigurations]);
 
   const handleConfirmDuplicate = useCallback(() => {
     if (!duplicateSource) {

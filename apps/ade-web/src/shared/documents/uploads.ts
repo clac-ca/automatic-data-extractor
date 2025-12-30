@@ -4,6 +4,7 @@ import { ApiError, type ProblemDetails } from "@shared/api/errors";
 import { uploadWithProgressXHR, type UploadHandle, type UploadProgress } from "@shared/uploads/xhr";
 
 export type DocumentUploadResponse = components["schemas"]["DocumentOut"];
+export type DocumentUploadRunOptions = components["schemas"]["DocumentUploadRunOptions"];
 export type DocumentUploadSessionCreateRequest =
   components["schemas"]["DocumentUploadSessionCreateRequest"];
 export type DocumentUploadSessionCreateResponse =
@@ -15,6 +16,7 @@ export type DocumentUploadSessionUploadResponse =
 
 interface UploadDocumentOptions {
   readonly onProgress?: (progress: UploadProgress) => void;
+  readonly runOptions?: DocumentUploadRunOptions;
 }
 
 export function uploadWorkspaceDocument(
@@ -24,6 +26,9 @@ export function uploadWorkspaceDocument(
 ): UploadHandle<DocumentUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (options.runOptions) {
+    formData.append("run_options", JSON.stringify(options.runOptions));
+  }
   return uploadWithProgressXHR<DocumentUploadResponse>(
     `/api/v1/workspaces/${workspaceId}/documents`,
     formData,

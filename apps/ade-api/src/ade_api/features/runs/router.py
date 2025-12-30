@@ -19,6 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import ValidationError
 
 from ade_api.api.deps import (
     get_runs_service,
@@ -81,6 +82,7 @@ get_sort_order = make_sort_dependency(
 _FILTER_KEYS = {
     "q",
     "status",
+    "configuration_id",
     "input_document_id",
     "created_after",
     "created_before",
@@ -99,7 +101,6 @@ _COLUMN_FILTER_KEYS = {
 
 def get_run_filters(
     request: Request,
-    filters: Annotated[RunFilters, Depends()],
 ) -> RunFilters:
     allowed = _FILTER_KEYS
     allowed_with_shared = allowed | {"sort", "page", "page_size", "include_total"}
@@ -115,7 +116,20 @@ def get_run_filters(
             for key in extras
         ]
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
-    return filters
+    data: dict[str, object] = {}
+    for key in allowed:
+        values = request.query_params.getlist(key)
+        if not values:
+            continue
+        data[key] = values if len(values) > 1 else values[0]
+
+    try:
+        return RunFilters.model_validate(data)
+    except ValidationError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.errors(),
+        ) from exc
 
 
 def get_run_column_filters(
