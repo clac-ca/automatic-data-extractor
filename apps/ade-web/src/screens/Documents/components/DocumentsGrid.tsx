@@ -10,7 +10,7 @@ import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "@ui/Icons";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { RowActionsMenu } from "./RowActionsMenu";
-import { StatusPicker } from "./StatusPicker";
+import { StatusPill } from "./StatusPill";
 import { TagPicker } from "./TagPicker";
 import { UploadProgress } from "./UploadProgress";
 
@@ -236,7 +236,6 @@ export function DocumentsGrid({
               const hasNotes = doc.commentCount > 0;
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
               const canEditTags = canSelectRow;
-              const canEditStatus = canSelectRow;
               const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
                 if (isInteractiveTarget(event.target, event.currentTarget)) return;
                 if (isSelectionModifier(event)) {
@@ -341,14 +340,7 @@ export function DocumentsGrid({
 
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <StatusPicker
-                          status={doc.status}
-                          queueState={doc.queueState}
-                          queueReason={doc.queueReason}
-                          disabled={!canEditStatus}
-                          onArchive={() => onArchive(doc)}
-                          onRestore={() => onRestore(doc)}
-                        />
+                        <StatusPill status={doc.status} queueState={doc.queueState} queueReason={doc.queueReason} />
                         <MappingBadge mapping={doc.mapping} />
                       </div>
                       {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}

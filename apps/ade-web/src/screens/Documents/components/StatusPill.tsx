@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 import type { DocumentQueueReason, DocumentQueueState, DocumentStatus } from "../types";
 
-export const STATUS_STYLES: Record<
+const STATUS_STYLES: Record<
   DocumentStatus,
   {
     label: string;
@@ -37,17 +37,6 @@ export const STATUS_STYLES: Record<
   },
 };
 
-export function resolveStatusLabel(
-  status: DocumentStatus,
-  queueState?: DocumentQueueState | null,
-  queueReason?: DocumentQueueReason | null,
-) {
-  if (status === "queued") {
-    return resolveQueuedLabel(queueState, queueReason);
-  }
-  return STATUS_STYLES[status].label;
-}
-
 export function StatusPill({
   status,
   queueState,
@@ -58,7 +47,7 @@ export function StatusPill({
   queueReason?: DocumentQueueReason | null;
 }) {
   const style = STATUS_STYLES[status];
-  const label = resolveStatusLabel(status, queueState, queueReason);
+  const label = status === "queued" ? resolveQueuedLabel(queueState, queueReason) : style.label;
   return (
     <span className={clsx("inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold", style.pill)}>
       <span className={clsx("h-2 w-2 rounded-full", style.dot)} />
