@@ -3,9 +3,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Input } from "@ui/Input";
 import type { WorkspacePerson } from "../types";
-import { CheckIcon, ChevronDownIcon, SearchIcon } from "./icons";
-
-const UNASSIGNED_KEY = "__unassigned__";
+import { UNASSIGNED_KEY } from "../filters";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "@ui/Icons";
 
 export function PeoplePicker({
   people,
@@ -16,6 +15,7 @@ export function PeoplePicker({
   includeUnassigned = false,
   disabled = false,
   buttonClassName,
+  onOpenChange,
 }: {
   people: WorkspacePerson[];
   value: string[];
@@ -25,6 +25,7 @@ export function PeoplePicker({
   includeUnassigned?: boolean;
   disabled?: boolean;
   buttonClassName?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -37,6 +38,10 @@ export function PeoplePicker({
       inputRef.current?.focus();
     }
   }, [open]);
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {

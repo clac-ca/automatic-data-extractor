@@ -149,7 +149,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/api-keys": {
+    "/api/v1/me/apiKeys": {
         parameters: {
             query?: never;
             header?: never;
@@ -157,17 +157,17 @@ export type paths = {
             cookie?: never;
         };
         /** List API keys for the current user */
-        get: operations["list_my_api_keys_api_v1_me_api_keys_get"];
+        get: operations["list_my_api_keys_api_v1_me_apiKeys_get"];
         put?: never;
         /** Create an API key for the current user */
-        post: operations["create_my_api_key_api_v1_me_api_keys_post"];
+        post: operations["create_my_api_key_api_v1_me_apiKeys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/api-keys/{api_key_id}": {
+    "/api/v1/me/apiKeys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -178,13 +178,13 @@ export type paths = {
         put?: never;
         post?: never;
         /** Revoke one of the current user's API keys */
-        delete: operations["revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete"];
+        delete: operations["revoke_my_api_key_api_v1_me_apiKeys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/api-keys": {
+    "/api/v1/apiKeys": {
         parameters: {
             query?: never;
             header?: never;
@@ -192,17 +192,17 @@ export type paths = {
             cookie?: never;
         };
         /** List API keys across the tenant (admin) */
-        get: operations["list_api_keys_api_v1_api_keys_get"];
+        get: operations["list_api_keys_api_v1_apiKeys_get"];
         put?: never;
         /** Create an API key for a user (admin) */
-        post: operations["create_api_key_api_v1_api_keys_post"];
+        post: operations["create_api_key_api_v1_apiKeys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/api-keys/{api_key_id}": {
+    "/api/v1/apiKeys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -210,17 +210,17 @@ export type paths = {
             cookie?: never;
         };
         /** Retrieve a single API key (admin) */
-        get: operations["get_api_key_api_v1_api_keys__api_key_id__get"];
+        get: operations["get_api_key_api_v1_apiKeys__api_key_id__get"];
         put?: never;
         post?: never;
         /** Revoke an API key (admin) */
-        delete: operations["revoke_api_key_api_v1_api_keys__api_key_id__delete"];
+        delete: operations["revoke_api_key_api_v1_apiKeys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{user_id}/api-keys": {
+    "/api/v1/users/{user_id}/apiKeys": {
         parameters: {
             query?: never;
             header?: never;
@@ -228,17 +228,17 @@ export type paths = {
             cookie?: never;
         };
         /** List API keys for a specific user (admin) */
-        get: operations["list_user_api_keys_api_v1_users__user_id__api_keys_get"];
+        get: operations["list_user_api_keys_api_v1_users__user_id__apiKeys_get"];
         put?: never;
         /** Create an API key for a specific user (admin) */
-        post: operations["create_user_api_key_api_v1_users__user_id__api_keys_post"];
+        post: operations["create_user_api_key_api_v1_users__user_id__apiKeys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
+    "/api/v1/users/{user_id}/apiKeys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -249,7 +249,7 @@ export type paths = {
         put?: never;
         post?: never;
         /** Revoke an API key for a specific user (admin) */
-        delete: operations["revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete"];
+        delete: operations["revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -361,7 +361,7 @@ export type paths = {
         patch: operations["update_role_api_v1_rbac_roles__role_id__patch"];
         trace?: never;
     };
-    "/api/v1/rbac/role-assignments": {
+    "/api/v1/rbac/roleAssignments": {
         parameters: {
             query?: never;
             header?: never;
@@ -369,7 +369,7 @@ export type paths = {
             cookie?: never;
         };
         /** List role assignments (admin view) */
-        get: operations["list_assignments_api_v1_rbac_role_assignments_get"];
+        get: operations["list_assignments_api_v1_rbac_roleAssignments_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -601,6 +601,146 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document changes */
+        get: operations["list_document_changes_api_v1_workspaces__workspace_id__documents_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/changes/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Document Changes */
+        get: operations["stream_document_changes_api_v1_workspaces__workspace_id__documents_changes_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a resumable upload session */
+        post: operations["create_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get upload session status */
+        get: operations["get_upload_session_status_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__get"];
+        /** Upload a byte range to a session */
+        put: operations["upload_session_range_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__put"];
+        post?: never;
+        /** Cancel an upload session */
+        delete: operations["cancel_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/uploadSessions/{upload_session_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit an upload session */
+        post: operations["commit_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve document metadata */
+        get: operations["read_document_api_v1_workspaces__workspace_id__documents__document_id__get"];
+        put?: never;
+        post?: never;
+        /** Soft delete a document */
+        delete: operations["delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update document metadata or assignment */
+        patch: operations["update_document_api_v1_workspaces__workspace_id__documents__document_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a document */
+        post: operations["archive_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore a document from the archive */
+        post: operations["restore_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/tags": {
         parameters: {
             query?: never;
@@ -636,19 +776,35 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/documents/{document_id}": {
+    "/api/v1/workspaces/{workspace_id}/documents/batch/archive": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Retrieve document metadata */
-        get: operations["read_document_api_v1_workspaces__workspace_id__documents__document_id__get"];
+        get?: never;
         put?: never;
-        post?: never;
-        /** Soft delete a document */
-        delete: operations["delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete"];
+        /** Archive multiple documents */
+        post: operations["archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/documents/batch/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore multiple documents from the archive */
+        post: operations["restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1253,7 +1409,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/system/safe-mode": {
+    "/api/v1/system/safeMode": {
         parameters: {
             query?: never;
             header?: never;
@@ -1264,12 +1420,12 @@ export type paths = {
          * Read ADE safe mode status
          * @description Return the current ADE safe mode status.
          */
-        get: operations["read_safe_mode_api_v1_system_safe_mode_get"];
+        get: operations["read_safe_mode_api_v1_system_safeMode_get"];
         /**
          * Toggle ADE safe mode
          * @description Persist and broadcast an updated ADE safe mode state.
          */
-        put: operations["update_safe_mode_api_v1_system_safe_mode_put"];
+        put: operations["update_safe_mode_api_v1_system_safeMode_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1580,8 +1736,8 @@ export type components = {
         };
         /** Body_list_documents_api_v1_workspaces__workspace_id__documents_get */
         Body_list_documents_api_v1_workspaces__workspace_id__documents_get: {
-            /** Status */
-            status?: components["schemas"]["DocumentStatus"][] | null;
+            /** Display Status */
+            display_status?: components["schemas"]["DocumentDisplayStatus"][] | null;
             /** Run Status */
             run_status?: components["schemas"]["RunStatus"][] | null;
             /** Source In */
@@ -1594,6 +1750,8 @@ export type components = {
             uploader_id?: string[] | null;
             /** Uploader Email */
             uploader_email?: string[] | null;
+            /** Assignee User Id */
+            assignee_user_id?: string[] | null;
             /** File Type */
             file_type?: ("xlsx" | "xls" | "csv" | "pdf")[] | null;
         };
@@ -1888,6 +2046,25 @@ export type components = {
             created: boolean;
         };
         /**
+         * DocumentBatchArchiveRequest
+         * @description Payload for archiving or restoring multiple documents.
+         */
+        DocumentBatchArchiveRequest: {
+            /**
+             * Document Ids
+             * @description Documents to archive or restore (all-or-nothing).
+             */
+            document_ids: string[];
+        };
+        /**
+         * DocumentBatchArchiveResponse
+         * @description Response envelope for batch archive or restore operations.
+         */
+        DocumentBatchArchiveResponse: {
+            /** Documents */
+            documents?: components["schemas"]["DocumentOut"][];
+        };
+        /**
          * DocumentBatchDeleteRequest
          * @description Payload for soft-deleting multiple documents.
          */
@@ -1935,6 +2112,43 @@ export type components = {
             /** Documents */
             documents?: components["schemas"]["DocumentOut"][];
         };
+        /**
+         * DocumentChangeEntry
+         * @description Single entry from the documents change feed.
+         */
+        DocumentChangeEntry: {
+            /** Cursor */
+            cursor: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "document.upsert" | "document.deleted";
+            document?: components["schemas"]["DocumentOut"] | null;
+            /** Document Id */
+            document_id?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+        };
+        /**
+         * DocumentChangesPage
+         * @description Envelope for cursor-based change feed results.
+         */
+        DocumentChangesPage: {
+            /** Changes */
+            changes?: components["schemas"]["DocumentChangeEntry"][];
+            /** Next Cursor */
+            next_cursor: string;
+        };
+        /**
+         * DocumentDisplayStatus
+         * @description UI-friendly status derived from document + run state.
+         * @enum {string}
+         */
+        DocumentDisplayStatus: "queued" | "processing" | "ready" | "failed" | "archived";
         /**
          * DocumentLastRun
          * @description Minimal representation of the last engine execution for a document.
@@ -1989,6 +2203,10 @@ export type components = {
                 [key: string]: unknown;
             };
             status: components["schemas"]["DocumentStatus"];
+            /** @default queued */
+            display_status: components["schemas"]["DocumentDisplayStatus"];
+            queue_state?: components["schemas"]["DocumentQueueState"] | null;
+            queue_reason?: components["schemas"]["DocumentQueueReason"] | null;
             source: components["schemas"]["DocumentSource"];
             /**
              * Expires At
@@ -1997,6 +2215,8 @@ export type components = {
             expires_at: string;
             /** Last Run At */
             last_run_at?: string | null;
+            /** Activity At */
+            activity_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -2009,6 +2229,8 @@ export type components = {
             updated_at: string;
             /** Deleted At */
             deleted_at?: string | null;
+            /** Assignee User Id */
+            assignee_user_id?: string | null;
             /** Deleted By */
             deleted_by?: string | null;
             /**
@@ -2040,7 +2262,24 @@ export type components = {
             has_previous: boolean;
             /** Total */
             total?: number | null;
+            /**
+             * Changes Cursor
+             * @description Watermark cursor for the documents change feed at response time.
+             */
+            changes_cursor: string;
         };
+        /**
+         * DocumentQueueReason
+         * @description Reason for documents waiting to enter the run queue.
+         * @enum {string}
+         */
+        DocumentQueueReason: "no_active_configuration" | "queue_full" | "processing_paused";
+        /**
+         * DocumentQueueState
+         * @description Queue lifecycle for documents that are not yet processing.
+         * @enum {string}
+         */
+        DocumentQueueState: "waiting" | "queued";
         /**
          * DocumentSheet
          * @description Descriptor for a worksheet or single-sheet document.
@@ -2100,6 +2339,121 @@ export type components = {
              * @description Complete set of tags for the document.
              */
             tags: string[];
+        };
+        /**
+         * DocumentUpdateRequest
+         * @description Payload for updating document metadata or assignment.
+         */
+        DocumentUpdateRequest: {
+            /**
+             * Assignee User Id
+             * @description Assign the document to a user (null clears assignment).
+             */
+            assignee_user_id?: string | null;
+            /**
+             * Metadata
+             * @description Replace the document metadata payload.
+             */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * DocumentUploadConflictBehavior
+         * @description Conflict handling modes for upload sessions.
+         * @enum {string}
+         */
+        DocumentUploadConflictBehavior: "rename" | "replace" | "fail";
+        /**
+         * DocumentUploadSessionCreateRequest
+         * @description Create a resumable upload session for a document.
+         */
+        DocumentUploadSessionCreateRequest: {
+            /** Filename */
+            filename: string;
+            /** Byte Size */
+            byte_size: number;
+            /** Content Type */
+            content_type?: string | null;
+            /** @default rename */
+            conflict_behavior: components["schemas"]["DocumentUploadConflictBehavior"];
+            /** Folder Id */
+            folder_id?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * DocumentUploadSessionCreateResponse
+         * @description Response payload for a new upload session.
+         */
+        DocumentUploadSessionCreateResponse: {
+            /**
+             * Upload Session Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            upload_session_id: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Chunk Size Bytes */
+            chunk_size_bytes: number;
+            /** Next Expected Ranges */
+            next_expected_ranges: string[];
+            /** Upload Url */
+            upload_url: string;
+        };
+        /**
+         * DocumentUploadSessionStatus
+         * @description Lifecycle states for document upload sessions.
+         * @enum {string}
+         */
+        DocumentUploadSessionStatus: "active" | "complete" | "committed" | "cancelled";
+        /**
+         * DocumentUploadSessionStatusResponse
+         * @description Status payload for an upload session.
+         */
+        DocumentUploadSessionStatusResponse: {
+            /**
+             * Upload Session Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            upload_session_id: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Byte Size */
+            byte_size: number;
+            /** Received Bytes */
+            received_bytes: number;
+            /** Next Expected Ranges */
+            next_expected_ranges: string[];
+            /**
+             * Upload Complete
+             * @default false
+             */
+            upload_complete: boolean;
+            status: components["schemas"]["DocumentUploadSessionStatus"];
+        };
+        /**
+         * DocumentUploadSessionUploadResponse
+         * @description Response payload after uploading a range.
+         */
+        DocumentUploadSessionUploadResponse: {
+            /** Next Expected Ranges */
+            next_expected_ranges: string[];
+            /**
+             * Upload Complete
+             * @default false
+             */
+            upload_complete: boolean;
         };
         /**
          * EffectivePermissions
@@ -3443,6 +3797,11 @@ export type components = {
             settings?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Processing Paused
+             * @description Optional processing pause state for the workspace.
+             */
+            processing_paused?: boolean | null;
         };
         /**
          * WorkspaceMemberCreate
@@ -3526,6 +3885,12 @@ export type components = {
             permissions: string[];
             /** Is Default */
             is_default: boolean;
+            /**
+             * Processing Paused
+             * @description Whether document processing is paused for the workspace.
+             * @default false
+             */
+            processing_paused: boolean;
         };
         /**
          * WorkspacePage
@@ -3558,6 +3923,11 @@ export type components = {
             settings?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Processing Paused
+             * @description Optional processing pause state for the workspace.
+             */
+            processing_paused?: boolean | null;
         };
     };
     responses: never;
@@ -3873,7 +4243,7 @@ export interface operations {
             };
         };
     };
-    list_my_api_keys_api_v1_me_api_keys_get: {
+    list_my_api_keys_api_v1_me_apiKeys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -3915,7 +4285,7 @@ export interface operations {
             };
         };
     };
-    create_my_api_key_api_v1_me_api_keys_post: {
+    create_my_api_key_api_v1_me_apiKeys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -3964,7 +4334,7 @@ export interface operations {
             };
         };
     };
-    revoke_my_api_key_api_v1_me_api_keys__api_key_id__delete: {
+    revoke_my_api_key_api_v1_me_apiKeys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4016,7 +4386,7 @@ export interface operations {
             };
         };
     };
-    list_api_keys_api_v1_api_keys_get: {
+    list_api_keys_api_v1_apiKeys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4067,7 +4437,7 @@ export interface operations {
             };
         };
     };
-    create_api_key_api_v1_api_keys_post: {
+    create_api_key_api_v1_apiKeys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4123,7 +4493,7 @@ export interface operations {
             };
         };
     };
-    get_api_key_api_v1_api_keys__api_key_id__get: {
+    get_api_key_api_v1_apiKeys__api_key_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4175,7 +4545,7 @@ export interface operations {
             };
         };
     };
-    revoke_api_key_api_v1_api_keys__api_key_id__delete: {
+    revoke_api_key_api_v1_apiKeys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4227,7 +4597,7 @@ export interface operations {
             };
         };
     };
-    list_user_api_keys_api_v1_users__user_id__api_keys_get: {
+    list_user_api_keys_api_v1_users__user_id__apiKeys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4278,7 +4648,7 @@ export interface operations {
             };
         };
     };
-    create_user_api_key_api_v1_users__user_id__api_keys_post: {
+    create_user_api_key_api_v1_users__user_id__apiKeys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4336,7 +4706,7 @@ export interface operations {
             };
         };
     };
-    revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
+    revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4799,7 +5169,7 @@ export interface operations {
             };
         };
     };
-    list_assignments_api_v1_rbac_role_assignments_get: {
+    list_assignments_api_v1_rbac_roleAssignments_get: {
         parameters: {
             query?: {
                 /** @description Scope to filter assignments by */
@@ -5593,17 +5963,20 @@ export interface operations {
                 tag_mode?: ("any" | "all") | null;
                 tags_empty?: boolean | null;
                 uploader?: string | null;
+                assignee_unassigned?: boolean | null;
                 folder_id?: string | null;
                 created_after?: string | null;
                 created_before?: string | null;
                 updated_after?: string | null;
                 updated_before?: string | null;
+                activity_after?: string | null;
+                activity_before?: string | null;
                 last_run_from?: string | null;
                 last_run_to?: string | null;
                 byte_size_from?: number | null;
                 byte_size_to?: number | null;
                 has_output?: boolean | null;
-                /** @description CSV; prefix '-' for DESC. Allowed: byte_size, created_at, id, last_run_at, name, source, status. Example: -created_at,name */
+                /** @description CSV; prefix '-' for DESC. Allowed: activity_at, byte_size, created_at, display_status, id, last_run_at, name, source, status. Example: -created_at,name */
                 sort?: string | null;
             };
             header?: never;
@@ -5710,6 +6083,542 @@ export interface operations {
             };
             /** @description Uploaded file exceeds the configured size limit. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_document_changes_api_v1_workspaces__workspace_id__documents_changes_get: {
+        parameters: {
+            query?: {
+                /** @description Cursor token or 'latest'. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentChangesPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_document_changes_api_v1_workspaces__workspace_id__documents_changes_stream_get: {
+        parameters: {
+            query?: {
+                /** @description Cursor token or 'latest'. */
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUploadSessionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentUploadSessionCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_upload_session_status_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Upload session identifier */
+                upload_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentUploadSessionStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_session_range_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Content-Range"?: string | null;
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Upload session identifier */
+                upload_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentUploadSessionUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Upload session identifier */
+                upload_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_upload_session_api_v1_workspaces__workspace_id__documents_uploadSessions__upload_session_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Upload session identifier */
+                upload_session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_document_api_v1_workspaces__workspace_id__documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to access documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required to delete documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document deletion. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_document_api_v1_workspaces__workspace_id__documents__document_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_document_endpoint_api_v1_workspaces__workspace_id__documents__document_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication required to update documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document updates. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5901,19 +6810,23 @@ export interface operations {
             };
         };
     };
-    read_document_api_v1_workspaces__workspace_id__documents__document_id__get: {
+    archive_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_archive_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
-                /** @description Document identifier */
-                document_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5921,24 +6834,24 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentOut"];
+                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
                 };
             };
-            /** @description Authentication required to access documents. */
+            /** @description Authentication required to update documents. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Workspace permissions do not allow document access. */
+            /** @description Workspace permissions do not allow document updates. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Document not found within the workspace. */
+            /** @description One or more documents were not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5956,7 +6869,7 @@ export interface operations {
             };
         };
     };
-    delete_document_api_v1_workspaces__workspace_id__documents__document_id__delete: {
+    restore_documents_batch_endpoint_api_v1_workspaces__workspace_id__documents_batch_restore_post: {
         parameters: {
             query?: never;
             header?: {
@@ -5965,35 +6878,39 @@ export interface operations {
             path: {
                 /** @description Workspace identifier */
                 workspace_id: string;
-                /** @description Document identifier */
-                document_id: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentBatchArchiveRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentBatchArchiveResponse"];
+                };
             };
-            /** @description Authentication required to delete documents. */
+            /** @description Authentication required to update documents. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Workspace permissions do not allow document deletion. */
+            /** @description Workspace permissions do not allow document updates. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Document not found within the workspace. */
+            /** @description One or more documents were not found within the workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7707,7 +8624,7 @@ export interface operations {
             };
         };
     };
-    read_safe_mode_api_v1_system_safe_mode_get: {
+    read_safe_mode_api_v1_system_safeMode_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7727,7 +8644,7 @@ export interface operations {
             };
         };
     };
-    update_safe_mode_api_v1_system_safe_mode_put: {
+    update_safe_mode_api_v1_system_safeMode_put: {
         parameters: {
             query?: never;
             header?: {

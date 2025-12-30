@@ -48,6 +48,7 @@ export default defineConfig({
       "/api": {
         target: `http://localhost:${backendPort}`,
         changeOrigin: true,
+        ws: true,
       },
     },
   },

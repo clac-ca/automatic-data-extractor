@@ -1,4 +1,5 @@
 import type { DocumentsFilters, SavedView, WorkspacePerson } from "../types";
+import type { BuiltInViewCounts, BuiltInViewId } from "../filters";
 import { FiltersPopover } from "./FiltersPopover";
 import { ViewsPopover } from "./ViewsPopover";
 
@@ -24,31 +25,12 @@ export function DocumentsFiltersBar({
   showingCount: number;
   totalCount: number;
   activeViewId: string;
-  onSetBuiltInView: (
-    id:
-      | "all_documents"
-      | "assigned_to_me"
-      | "assigned_to_me_or_unassigned"
-      | "unassigned"
-      | "processed"
-      | "processing"
-      | "failed"
-      | "archived",
-  ) => void;
+  onSetBuiltInView: (id: BuiltInViewId) => void;
   savedViews: SavedView[];
   onSelectSavedView: (viewId: string) => void;
   onDeleteSavedView: (viewId: string) => void;
   onOpenSaveDialog: () => void;
-  counts: {
-    total: number;
-    assignedToMe: number;
-    assignedToMeOrUnassigned: number;
-    unassigned: number;
-    processed: number;
-    processing: number;
-    failed: number;
-    archived: number;
-  };
+  counts: BuiltInViewCounts;
 }) {
   const activeCount =
     filters.statuses.length + filters.fileTypes.length + filters.tags.length + filters.assignees.length;

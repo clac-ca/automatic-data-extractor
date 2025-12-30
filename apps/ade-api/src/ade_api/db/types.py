@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.types import CHAR, TypeDecorator
+from sqlalchemy.types import CHAR, DateTime, TypeDecorator
 
-__all__ = ["UUIDType"]
+__all__ = ["UUIDType", "UTCDateTime"]
 
 
 class UUIDType(TypeDecorator):
@@ -50,3 +51,28 @@ class UUIDType(TypeDecorator):
     @property
     def python_type(self) -> type[uuid.UUID]:
         return uuid.UUID
+
+
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware datetime that normalizes values to UTC."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=UTC)
+            return value.astimezone(UTC)
+        return value
+
+    def process_result_value(self, value: Any, dialect: Any):
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=UTC)
+            return value.astimezone(UTC)
+        return value

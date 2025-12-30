@@ -2,6 +2,8 @@ import clsx from "clsx";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { CloseIcon } from "@ui/Icons";
+
 interface SettingsDrawerProps {
   readonly open: boolean;
   readonly title: string;
@@ -92,7 +94,7 @@ export function SettingsDrawer({
             className="rounded-full border border-border bg-card p-2 text-muted-foreground transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             aria-label="Close drawer"
           >
-            <CloseIcon />
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
 
@@ -102,14 +104,5 @@ export function SettingsDrawer({
       </div>
     </div>,
     document.body,
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 6l8 8" strokeLinecap="round" />
-      <path d="M14 6l-8 8" strokeLinecap="round" />
-    </svg>
   );
 }

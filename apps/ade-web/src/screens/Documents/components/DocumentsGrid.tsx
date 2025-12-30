@@ -6,12 +6,13 @@ import type { DocumentEntry, ListDensity, WorkspacePerson } from "../types";
 import { getDocumentOutputRun } from "../data";
 import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
-import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "./icons";
+import { ChatIcon, DocumentIcon, DownloadIcon, UserIcon } from "@ui/Icons";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { RowActionsMenu } from "./RowActionsMenu";
-import { StatusPill } from "./StatusPill";
+import { StatusPicker } from "./StatusPicker";
 import { TagPicker } from "./TagPicker";
+import { UploadProgress } from "./UploadProgress";
 
 const INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button'], [role='menuitem'], [data-ignore-row-click='true']";
@@ -82,6 +83,7 @@ export function DocumentsGrid({
   onRefresh,
   now,
   onKeyNavigate,
+  processingPaused,
 
   people,
   onAssign,
@@ -93,6 +95,8 @@ export function DocumentsGrid({
   onCopyLink,
   onReprocess,
   onDelete,
+  onArchive,
+  onRestore,
   onOpenDetails,
   onOpenNotes,
   onClosePreview,
@@ -122,6 +126,7 @@ export function DocumentsGrid({
   onRefresh: () => void;
   now: number;
   onKeyNavigate: (event: KeyboardEvent<HTMLDivElement>) => void;
+  processingPaused: boolean;
 
   people: WorkspacePerson[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
@@ -133,6 +138,8 @@ export function DocumentsGrid({
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry) => void;
   onDelete: (doc: DocumentEntry) => void;
+  onArchive: (doc: DocumentEntry) => void;
+  onRestore: (doc: DocumentEntry) => void;
   onOpenDetails: (docId: string) => void;
   onOpenNotes: (docId: string) => void;
   onClosePreview: () => void;
@@ -224,11 +231,12 @@ export function DocumentsGrid({
               const isExpanded = Boolean(expandedContent && expandedId === doc.id);
               const isActive = Boolean(isExpanded && activeId === doc.id);
               const isSelected = selectedIds.has(doc.id);
+              const isArchived = doc.status === "archived";
               const previewId = `documents-preview-${doc.id}`;
               const hasNotes = doc.commentCount > 0;
               const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
               const canEditTags = canSelectRow;
-
+              const canEditStatus = canSelectRow;
               const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
                 if (isInteractiveTarget(event.target, event.currentTarget)) return;
                 if (isSelectionModifier(event)) {
@@ -331,9 +339,19 @@ export function DocumentsGrid({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <StatusPill status={doc.status} />
-                      <MappingBadge mapping={doc.mapping} />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <StatusPicker
+                          status={doc.status}
+                          queueState={doc.queueState}
+                          queueReason={doc.queueReason}
+                          disabled={!canEditStatus}
+                          onArchive={() => onArchive(doc)}
+                          onRestore={() => onRestore(doc)}
+                        />
+                        <MappingBadge mapping={doc.mapping} />
+                      </div>
+                      {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -414,15 +432,19 @@ export function DocumentsGrid({
                         <RowActionsMenu
                           onOpenDetails={() => onOpenDetails(doc.id)}
                           onReprocess={isExpanded ? () => onReprocess(doc) : undefined}
-                          reprocessDisabled={!doc.record || !isExpanded}
+                          reprocessDisabled={!doc.record || !isExpanded || processingPaused}
                           showClosePreview={isExpanded}
                           onClosePreview={onClosePreview}
                           onDownloadOriginal={() => onDownloadOriginal(doc)}
                           onCopyLink={() => onCopyLink(doc)}
                           onDelete={() => onDelete(doc)}
+                          onArchive={() => onArchive(doc)}
+                          onRestore={() => onRestore(doc)}
+                          isArchived={isArchived}
                           originalDisabled={!doc.record}
                           copyDisabled={!doc.record}
                           deleteDisabled={!doc.record}
+                          archiveDisabled={!doc.record}
                         />
                       </div>
                     </div>

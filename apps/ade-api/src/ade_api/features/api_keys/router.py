@@ -75,12 +75,12 @@ def _map_page(page: GenericPage[ApiKey]) -> ApiKeyPage:
 
 
 # ---------------------------------------------------------------------------
-# Self-service: /me/api-keys
+# Self-service: /me/apiKeys
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/me/api-keys",
+    "/me/apiKeys",
     response_model=ApiKeyPage,
     summary="List API keys for the current user",
     responses={
@@ -88,7 +88,7 @@ def _map_page(page: GenericPage[ApiKey]) -> ApiKeyPage:
     },
 )
 async def list_my_api_keys(
-    principal: Annotated[AuthenticatedPrincipal, Security(get_current_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
     page: Annotated[PageParams, Depends()],
     include_revoked: Annotated[
@@ -110,7 +110,7 @@ async def list_my_api_keys(
 
 
 @router.post(
-    "/me/api-keys",
+    "/me/apiKeys",
     dependencies=[Security(require_csrf)],
     response_model=ApiKeyCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -122,7 +122,7 @@ async def list_my_api_keys(
 )
 async def create_my_api_key(
     payload: ApiKeyCreateRequest,
-    principal: Annotated[AuthenticatedPrincipal, Security(get_current_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
 ) -> ApiKeyCreateResponse:
     try:
@@ -144,7 +144,7 @@ async def create_my_api_key(
 
 
 @router.delete(
-    "/me/api-keys/{api_key_id}",
+    "/me/apiKeys/{api_key_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke one of the current user's API keys",
@@ -156,7 +156,7 @@ async def create_my_api_key(
 )
 async def revoke_my_api_key(
     api_key_id: UUID,
-    principal: Annotated[AuthenticatedPrincipal, Security(get_current_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
 ) -> Response:
     try:
@@ -179,12 +179,12 @@ async def revoke_my_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Admin: tenant-wide /api-keys
+# Admin: tenant-wide /apiKeys
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/api-keys",
+    "/apiKeys",
     response_model=ApiKeyPage,
     summary="List API keys across the tenant (admin)",
     responses={
@@ -220,7 +220,7 @@ async def list_api_keys(
 
 
 @router.post(
-    "/api-keys",
+    "/apiKeys",
     dependencies=[Security(require_csrf)],
     response_model=ApiKeyCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -235,7 +235,7 @@ async def list_api_keys(
 )
 async def create_api_key(
     payload: ApiKeyIssueRequest,
-    principal: Annotated[AuthenticatedPrincipal, Security(get_current_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
 ) -> ApiKeyCreateResponse:
@@ -259,7 +259,7 @@ async def create_api_key(
 
 
 @router.get(
-    "/api-keys/{api_key_id}",
+    "/apiKeys/{api_key_id}",
     response_model=ApiKeySummary,
     summary="Retrieve a single API key (admin)",
     responses={
@@ -284,7 +284,7 @@ async def get_api_key(
 
 
 @router.delete(
-    "/api-keys/{api_key_id}",
+    "/apiKeys/{api_key_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke an API key (admin)",
@@ -312,12 +312,12 @@ async def revoke_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Admin: per-user /users/{user_id}/api-keys
+# Admin: per-user /users/{user_id}/apiKeys
 # ---------------------------------------------------------------------------
 
 
 @router.get(
-    "/users/{user_id}/api-keys",
+    "/users/{user_id}/apiKeys",
     response_model=ApiKeyPage,
     summary="List API keys for a specific user (admin)",
     responses={
@@ -348,7 +348,7 @@ async def list_user_api_keys(
 
 
 @router.post(
-    "/users/{user_id}/api-keys",
+    "/users/{user_id}/apiKeys",
     dependencies=[Security(require_csrf)],
     response_model=ApiKeyCreateResponse,
     status_code=status.HTTP_201_CREATED,
@@ -364,7 +364,7 @@ async def list_user_api_keys(
 async def create_user_api_key(
     user_id: UUID,
     payload: ApiKeyCreateRequest,
-    principal: Annotated[AuthenticatedPrincipal, Security(get_current_principal)],
+    principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     _: Annotated[None, Security(require_global("api_keys.manage_all"))],
     service: Annotated[ApiKeyService, Depends(get_api_keys_service)],
 ) -> ApiKeyCreateResponse:
@@ -387,7 +387,7 @@ async def create_user_api_key(
 
 
 @router.delete(
-    "/users/{user_id}/api-keys/{api_key_id}",
+    "/users/{user_id}/apiKeys/{api_key_id}",
     dependencies=[Security(require_csrf)],
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Revoke an API key for a specific user (admin)",

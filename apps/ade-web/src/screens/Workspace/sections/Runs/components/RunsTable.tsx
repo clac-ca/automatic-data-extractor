@@ -1,4 +1,6 @@
 import clsx from "clsx";
+
+import { LogsIcon, OutputIcon } from "@ui/Icons";
 import { useEffect, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 
@@ -144,12 +146,12 @@ export function RunsTable({
                     <ActionButton
                       label="View logs"
                       href={run.raw.links?.logs ?? null}
-                      icon={<LogsIcon />}
+                      icon={<LogsIcon className="h-4 w-4" />}
                     />
                     <ActionButton
                       label={run.raw.output?.ready ? "Open output" : "Output not ready"}
                       href={run.raw.output?.ready ? (run.raw.links?.output_download ?? run.raw.links?.output ?? null) : null}
-                      icon={<OutputIcon />}
+                      icon={<OutputIcon className="h-4 w-4" />}
                     />
                   </div>
                 </div>
@@ -242,29 +244,5 @@ function ActionButton({
     >
       {icon}
     </button>
-  );
-}
-
-function LogsIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M3 3.5h10v9H3z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M5 6h6M5 8.5h6M5 11h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function OutputIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M8 3v7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M5.5 7.5 8 10l2.5-2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M3 12.5h10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
   );
 }

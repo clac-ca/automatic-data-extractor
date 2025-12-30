@@ -20,6 +20,7 @@ import { defaultWorkspaceSection, getWorkspacePrimaryNavigation } from "@screens
 import { DEFAULT_SAFE_MODE_MESSAGE, useSafeModeStatus } from "@shared/system";
 import { Alert } from "@ui/Alert";
 import { PageState } from "@ui/PageState";
+import { ChevronDownIcon, CloseIcon, MenuIcon } from "@ui/Icons";
 import { useShortcutHint } from "@shared/hooks/useShortcutHint";
 import type { GlobalSearchSuggestion } from "@app/shell/GlobalTopBar";
 import { NotificationsProvider } from "@shared/notifications";
@@ -327,7 +328,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         )}
         aria-label="Open workspace navigation"
       >
-        <MenuIcon />
+        <MenuIcon className="h-4 w-4" />
       </button>
       <button
         type="button"
@@ -336,7 +337,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         title={workspaceSwitcherLabel}
         className={clsx(
           "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-          "w-full sm:w-[16rem] lg:w-[18rem] sm:shrink-0",
+          "w-fit max-w-full sm:max-w-[16rem] lg:max-w-[18rem] sm:shrink-0",
           "border-header-border/40 bg-header/20 text-header-foreground hover:border-header-border/70 hover:bg-header/30",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-ring focus-visible:ring-offset-2 focus-visible:ring-offset-header",
         )}
@@ -349,7 +350,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
           <span className="hidden truncate text-xs text-header-muted sm:block">Switch workspace</span>
         </span>
         <span className="hidden text-header-muted sm:inline-flex" aria-hidden>
-          <ChevronDownIcon />
+          <ChevronDownIcon className="h-4 w-4" />
         </span>
       </button>
     </div>
@@ -536,7 +537,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
                       className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sidebar-border bg-sidebar-item-hover text-sidebar-foreground/80 hover:bg-sidebar-item-active hover:text-sidebar-foreground"
                       aria-label="Close navigation"
                     >
-                      <CloseIcon />
+                      <CloseIcon className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto px-3 py-4">
@@ -625,33 +626,6 @@ function getWorkspaceInitials(name: string) {
   if (parts.length === 0) return "WS";
   const initials = parts.slice(0, 2).map((part) => part[0] ?? "");
   return initials.join("").toUpperCase();
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function MenuIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M4 6h12" strokeLinecap="round" />
-      <path d="M4 10h12" strokeLinecap="round" />
-      <path d="M4 14h8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 6l8 8" strokeLinecap="round" />
-      <path d="M14 6l-8 8" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 export function resolveWorkspaceSection(

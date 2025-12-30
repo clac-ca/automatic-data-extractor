@@ -73,6 +73,41 @@ class InvalidDocumentTagsError(Exception):
         super().__init__(message)
 
 
+class DocumentUploadSessionNotFoundError(Exception):
+    """Raised when an upload session cannot be located."""
+
+    def __init__(self, session_id: UUID | str) -> None:
+        session_value = str(session_id)
+        super().__init__(f"Upload session {session_value!r} not found")
+        self.session_id = session_value
+
+
+class DocumentUploadSessionExpiredError(Exception):
+    """Raised when an upload session has expired."""
+
+    def __init__(self, session_id: UUID | str) -> None:
+        session_value = str(session_id)
+        super().__init__(f"Upload session {session_value!r} has expired")
+        self.session_id = session_value
+
+
+class DocumentUploadRangeError(Exception):
+    """Raised when an upload range is invalid for the session."""
+
+    def __init__(self, message: str, *, next_expected_ranges: list[str]) -> None:
+        super().__init__(message)
+        self.next_expected_ranges = next_expected_ranges
+
+
+class DocumentUploadSessionNotReadyError(Exception):
+    """Raised when attempting to commit before an upload completes."""
+
+    def __init__(self, session_id: UUID | str) -> None:
+        session_value = str(session_id)
+        super().__init__(f"Upload session {session_value!r} is not complete")
+        self.session_id = session_value
+
+
 __all__ = [
     "DocumentNotFoundError",
     "DocumentFileMissingError",
@@ -80,4 +115,8 @@ __all__ = [
     "InvalidDocumentExpirationError",
     "DocumentWorksheetParseError",
     "InvalidDocumentTagsError",
+    "DocumentUploadRangeError",
+    "DocumentUploadSessionExpiredError",
+    "DocumentUploadSessionNotFoundError",
+    "DocumentUploadSessionNotReadyError",
 ]

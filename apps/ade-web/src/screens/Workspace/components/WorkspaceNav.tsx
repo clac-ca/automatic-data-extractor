@@ -7,6 +7,7 @@ import {
   type WorkspaceNavigationItem,
 } from "@screens/Workspace/components/workspace-navigation";
 import type { WorkspaceProfile } from "@shared/workspaces";
+import { GearIcon, PinIcon, UnpinIcon } from "@ui/Icons";
 
 const NAV_RAIL_WIDTH = "4.5rem";
 const NAV_DRAWER_WIDTH = "16rem";
@@ -337,7 +338,7 @@ function WorkspaceSettingsLink({ item, expanded }: { readonly item: WorkspaceNav
             )}
             aria-hidden
           >
-            <GearIcon />
+            <GearIcon className="h-5 w-5" />
           </span>
 
           <span
@@ -390,7 +391,7 @@ function NavPinButton({
         )}
         aria-hidden
       >
-        {isPinned ? <UnpinIcon /> : <PinIcon />}
+        {isPinned ? <UnpinIcon className="h-4 w-4" /> : <PinIcon className="h-4 w-4" />}
       </span>
 
       <span
@@ -427,39 +428,4 @@ function pickWorkspaceSettingsItem(items: readonly WorkspaceNavigationItem[]) {
 
   const byLabel = items.find((item) => /settings|preferences/i.test(item.label));
   return byLabel;
-}
-
-function GearIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path
-        d="M10 12.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2Z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16.6 10.3a7 7 0 0 0 0-.6l1.4-1.1a.8.8 0 0 0 .2-1l-1.3-2.2a.8.8 0 0 0-1-.3l-1.6.6c-.2-.2-.6-.4-.9-.5l-.2-1.7a.8.8 0 0 0-.8-.7H8.7a.8.8 0 0 0-.8.7l-.2 1.7c-.3.1-.6.3-.9.5l-1.6-.6a.8.8 0 0 0-1 .3L2.9 7.6a.8.8 0 0 0 .2 1L4.5 9.7a7 7 0 0 0 0 .6l-1.4 1.1a.8.8 0 0 0-.2 1l1.3 2.2a.8.8 0 0 0 1 .3l1.6-.6c.3.2.6.4.9.5l.2 1.7a.8.8 0 0 0 .8.7h2.6a.8.8 0 0 0 .8-.7l.2-1.7c.3-.1.6-.3.9-.5l1.6.6a.8.8 0 0 0 1-.3l1.3-2.2a.8.8 0 0 0-.2-1l-1.4-1.1Z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PinIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M7 3h6l-1 6 3 3H5l3-3-1-6Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 12v5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function UnpinIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M7 3h6l-1 6 3 3H5l3-3-1-6Z" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 16 14 8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }

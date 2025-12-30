@@ -65,6 +65,7 @@ async def create_workspace(
         slug=payload.slug,
         owner_user_id=payload.owner_user_id,
         settings=payload.settings,
+        processing_paused=payload.processing_paused,
     )
     return workspace
 
@@ -172,6 +173,7 @@ async def update_workspace(
         name=payload.name,
         slug=payload.slug,
         settings=payload.settings,
+        processing_paused=payload.processing_paused,
     )
     return workspace
 

@@ -1,4 +1,5 @@
 import { Button } from "@ui/Button";
+import { RunIcon } from "@ui/Icons";
 
 export function RunsHeader({ onExport }: { onExport: () => void }) {
   return (
@@ -6,7 +7,7 @@ export function RunsHeader({ onExport }: { onExport: () => void }) {
       <div className="flex flex-wrap items-center gap-4 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted text-foreground">
-            <RunIcon />
+            <RunIcon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h1 className="text-lg font-semibold text-foreground">Runs</h1>
@@ -21,13 +22,5 @@ export function RunsHeader({ onExport }: { onExport: () => void }) {
         </div>
       </div>
     </header>
-  );
-}
-
-function RunIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path d="M6 4.5v11l8.5-5.5L6 4.5Z" fill="currentColor" />
-    </svg>
   );
 }

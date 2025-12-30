@@ -158,6 +158,36 @@ DOCUMENT_SOURCE = sa.Enum(
     length=50,
 )
 
+DOCUMENT_CHANGE_TYPE = sa.Enum(
+    "upsert",
+    "deleted",
+    name="document_change_type",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
+DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR = sa.Enum(
+    "rename",
+    "replace",
+    "fail",
+    name="document_upload_conflict_behavior",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
+DOCUMENT_UPLOAD_SESSION_STATUS = sa.Enum(
+    "active",
+    "complete",
+    "committed",
+    "cancelled",
+    name="document_upload_session_status",
+    native_enum=False,
+    create_constraint=True,
+    length=20,
+)
+
 PERMISSION_SCOPE = sa.Enum(
     "global",
     "workspace",
@@ -205,6 +235,8 @@ def upgrade() -> None:
     # Content
     _create_documents()
     _create_document_tags()
+    _create_document_changes()
+    _create_document_upload_sessions()
 
     # Runtime
     _create_runs()
@@ -913,6 +945,12 @@ def _create_documents() -> None:
             sa.ForeignKey("users.id", ondelete="NO ACTION"),
             nullable=True,
         ),
+        sa.Column(
+            "assignee_user_id",
+            UUIDType(),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
         sa.Column("status", DOCUMENT_STATUS, nullable=False, server_default="uploaded"),
         sa.Column(
             "source",
@@ -996,6 +1034,12 @@ def _create_documents() -> None:
         ["workspace_id", "uploaded_by_user_id"],
         unique=False,
     )
+    op.create_index(
+        "ix_documents_workspace_assignee",
+        "documents",
+        ["workspace_id", "assignee_user_id"],
+        unique=False,
+    )
 
 
 def _create_document_tags() -> None:
@@ -1026,5 +1070,134 @@ def _create_document_tags() -> None:
         "document_tags_tag_document_id_idx",
         "document_tags",
         ["tag", "document_id"],
+        unique=False,
+    )
+
+
+def _create_document_changes() -> None:
+    op.create_table(
+        "document_changes",
+        sa.Column(
+            "cursor",
+            sa.BigInteger().with_variant(sa.Integer(), "sqlite"),
+            primary_key=True,
+            autoincrement=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "workspace_id",
+            UUIDType(),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
+            nullable=False,
+        ),
+        sa.Column(
+            "document_id",
+            UUIDType(),
+            sa.ForeignKey("documents.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
+        sa.Column(
+            "type",
+            DOCUMENT_CHANGE_TYPE,
+            nullable=False,
+        ),
+        sa.Column(
+            "payload",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
+        sa.Column(
+            "occurred_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+    )
+    op.create_index(
+        "ix_document_changes_workspace_cursor",
+        "document_changes",
+        ["workspace_id", "cursor"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_changes_workspace_document",
+        "document_changes",
+        ["workspace_id", "document_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_changes_workspace_occurred",
+        "document_changes",
+        ["workspace_id", "occurred_at"],
+        unique=False,
+    )
+
+
+def _create_document_upload_sessions() -> None:
+    op.create_table(
+        "document_upload_sessions",
+        _uuid_pk(),
+        sa.Column(
+            "workspace_id",
+            UUIDType(),
+            sa.ForeignKey("workspaces.id", ondelete="NO ACTION"),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_by_user_id",
+            UUIDType(),
+            sa.ForeignKey("users.id", ondelete="NO ACTION"),
+            nullable=True,
+        ),
+        sa.Column("filename", sa.String(length=255), nullable=False),
+        sa.Column("content_type", sa.String(length=255), nullable=True),
+        sa.Column("byte_size", sa.Integer(), nullable=False),
+        sa.Column(
+            "metadata",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'{}'"),
+        ),
+        sa.Column(
+            "conflict_behavior",
+            DOCUMENT_UPLOAD_CONFLICT_BEHAVIOR,
+            nullable=False,
+            server_default="rename",
+        ),
+        sa.Column("folder_id", sa.String(length=255), nullable=True),
+        sa.Column("temp_stored_uri", sa.String(length=512), nullable=False),
+        sa.Column("received_bytes", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "received_ranges",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("'[]'"),
+        ),
+        sa.Column(
+            "status",
+            DOCUMENT_UPLOAD_SESSION_STATUS,
+            nullable=False,
+            server_default="active",
+        ),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        *_timestamps(),
+    )
+    op.create_index(
+        "ix_document_upload_sessions_workspace",
+        "document_upload_sessions",
+        ["workspace_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_upload_sessions_expires",
+        "document_upload_sessions",
+        ["expires_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_document_upload_sessions_status",
+        "document_upload_sessions",
+        ["status"],
         unique=False,
     )

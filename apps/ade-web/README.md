@@ -273,7 +273,7 @@ Key concepts:
 - Email/password and SSO login, with safe `redirectTo` handling.
 - Separate global vs workspace-scoped roles and role assignments.
 - `useEffectivePermissionsQuery` + helpers like `useCanInWorkspace` / `useCanStartRuns`.
-- Safe mode status (`enabled`, `detail`) from `/system/safe-mode` with a workspace banner and disabled run/build/activation controls.
+- Safe mode status (`enabled`, `detail`) from `/system/safeMode` with a workspace banner and disabled run/build/activation controls.
 
 See: [`docs/05-auth-session-rbac-and-safe-mode.md`](./docs/05-auth-session-rbac-and-safe-mode.md)
 

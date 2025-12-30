@@ -3,6 +3,7 @@ import clsx from "clsx";
 
 import { BUILTIN_THEMES, MODE_OPTIONS, useTheme } from "@shared/theme";
 import { ContextMenu } from "@ui/ContextMenu";
+import { CheckIcon, ChevronDownIcon, SettingsIcon } from "@ui/Icons";
 
 const MENU_OFFSET = 8;
 
@@ -55,7 +56,7 @@ export function AppearanceMenu({
         setModePreference(option.value);
         closeMenu();
       },
-      icon: modePreference === option.value ? <CheckIcon /> : undefined,
+      icon: modePreference === option.value ? <CheckIcon className="h-3.5 w-3.5 text-brand-500" /> : undefined,
     }));
 
     const themeItems = BUILTIN_THEMES.map((entry, index) => ({
@@ -66,7 +67,7 @@ export function AppearanceMenu({
         closeMenu();
       },
       onHover: () => setPreviewTheme(entry.id),
-      icon: theme === entry.id ? <CheckIcon /> : undefined,
+      icon: theme === entry.id ? <CheckIcon className="h-3.5 w-3.5 text-brand-500" /> : undefined,
       dividerAbove: index === 0,
     }));
 
@@ -105,9 +106,9 @@ export function AppearanceMenu({
           style={{ backgroundColor: "rgb(var(--sys-color-accent))" }}
           aria-hidden
         />
-        <AppearanceIcon className="h-4 w-4" />
-        <span className="hidden lg:inline">Appearance</span>
-        <ChevronIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
+        <SettingsIcon className="h-4 w-4" />
+        <span className="hidden xl:inline">Appearance</span>
+        <ChevronDownIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
       </button>
 
       <ContextMenu
@@ -119,38 +120,5 @@ export function AppearanceMenu({
         onPointerLeave={() => setPreviewTheme(null)}
       />
     </div>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg className="h-3.5 w-3.5 text-brand-500" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M5 10.5l3 3 7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function AppearanceIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M3.5 6h13" strokeLinecap="round" />
-      <path d="M3.5 14h13" strokeLinecap="round" />
-      <circle cx="7" cy="6" r="2" />
-      <circle cx="13" cy="14" r="2" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

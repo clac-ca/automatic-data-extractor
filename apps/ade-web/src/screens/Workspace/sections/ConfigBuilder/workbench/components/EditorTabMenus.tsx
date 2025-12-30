@@ -13,6 +13,8 @@ import {
   MenuIconUnpin,
 } from "./EditorIcons";
 
+const MENU_ICON_CLASS = "h-4 w-4 text-current opacity-80";
+
 interface BuildTabContextMenuItemsArgs {
   readonly currentTab: WorkbenchFileTab;
   readonly tabs: readonly WorkbenchFileTab[];
@@ -61,7 +63,7 @@ export function buildTabContextMenuItems({
     {
       id: "save",
       label: currentTab.saving ? "Saving…" : "Save",
-      icon: <MenuIconSave />,
+      icon: <MenuIconSave className={MENU_ICON_CLASS} />,
       disabled: !canSaveCurrent,
       shortcut: shortcuts.save,
       onSelect: () => onSaveTab?.(currentTab.id),
@@ -69,7 +71,7 @@ export function buildTabContextMenuItems({
     {
       id: "save-all",
       label: "Save All",
-      icon: <MenuIconSaveAll />,
+      icon: <MenuIconSaveAll className={MENU_ICON_CLASS} />,
       disabled: !canSaveAny,
       shortcut: shortcuts.saveAll,
       onSelect: () => onSaveAllTabs?.(),
@@ -77,14 +79,14 @@ export function buildTabContextMenuItems({
     {
       id: "pin",
       label: currentTab.pinned ? "Unpin" : "Pin",
-      icon: currentTab.pinned ? <MenuIconUnpin /> : <MenuIconPin />,
+      icon: currentTab.pinned ? <MenuIconUnpin className={MENU_ICON_CLASS} /> : <MenuIconPin className={MENU_ICON_CLASS} />,
       dividerAbove: true,
       onSelect: () => (currentTab.pinned ? onUnpinTab(currentTab.id) : onPinTab(currentTab.id)),
     },
     {
       id: "close",
       label: "Close",
-      icon: <MenuIconClose />,
+      icon: <MenuIconClose className={MENU_ICON_CLASS} />,
       dividerAbove: true,
       shortcut: shortcuts.close,
       onSelect: () => onCloseTab(currentTab.id),
@@ -92,7 +94,7 @@ export function buildTabContextMenuItems({
     {
       id: "close-others",
       label: "Close Others",
-      icon: <MenuIconCloseOthers />,
+      icon: <MenuIconCloseOthers className={MENU_ICON_CLASS} />,
       disabled: !hasMultipleTabs,
       shortcut: shortcuts.closeOthers,
       onSelect: () => onCloseOtherTabs(currentTab.id),
@@ -100,7 +102,7 @@ export function buildTabContextMenuItems({
     {
       id: "close-right",
       label: "Close Tabs to the Right",
-      icon: <MenuIconCloseRight />,
+      icon: <MenuIconCloseRight className={MENU_ICON_CLASS} />,
       disabled: !hasTabsToRight,
       shortcut: shortcuts.closeRight,
       onSelect: () => onCloseTabsToRight(currentTab.id),
@@ -108,7 +110,7 @@ export function buildTabContextMenuItems({
     {
       id: "close-all",
       label: "Close All",
-      icon: <MenuIconCloseAll />,
+      icon: <MenuIconCloseAll className={MENU_ICON_CLASS} />,
       dividerAbove: true,
       disabled: tabs.length === 0,
       shortcut: shortcuts.closeAll,
@@ -156,7 +158,7 @@ export function buildTabCatalogItems({
     items.push({
       id: `switch-${tab.id}`,
       label: `${tab.saving ? "↻ " : isDirty ? "● " : ""}${tab.name}`,
-      icon: tab.pinned ? <MenuIconPin /> : <MenuIconFile />,
+      icon: tab.pinned ? <MenuIconPin className={MENU_ICON_CLASS} /> : <MenuIconFile className={MENU_ICON_CLASS} />,
       shortcut: badges.length > 0 ? badges.join(" · ") : undefined,
       dividerAbove,
       onSelect: () => onSelectTab(tab.id),

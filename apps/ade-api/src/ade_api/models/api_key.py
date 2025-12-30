@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ade_api.core.rbac.types import ScopeType
 from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
+from ade_api.db.types import UTCDateTime
 from ade_api.db.enums import enum_values
 
 from .user import User
@@ -53,9 +54,9 @@ class ApiKey(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     token_prefix: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     label: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_used_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     last_used_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
 

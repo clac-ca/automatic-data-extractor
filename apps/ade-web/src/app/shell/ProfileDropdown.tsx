@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useNavigate } from "@app/nav/history";
+import { ChevronDownIcon, SpinnerIcon } from "@ui/Icons";
 
 interface ProfileDropdownAction {
   readonly id: string;
@@ -196,7 +197,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-on-brand shadow-sm">
           {initials}
         </span>
-        <span className="hidden min-w-0 flex-col lg:flex">
+        <span className="hidden min-w-0 flex-col xl:flex">
           <span className={clsx("truncate text-sm font-semibold", isHeaderTone ? "text-header-foreground" : "text-foreground")}>
             {displayName}
           </span>
@@ -204,9 +205,9 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
             {email}
           </span>
         </span>
-        <ChevronIcon
+        <ChevronDownIcon
           className={clsx(
-            "transition-transform duration-150",
+            "h-4 w-4 transition-transform duration-150",
             isHeaderTone ? "text-header-muted" : "text-muted-foreground",
             open && "rotate-180",
           )}
@@ -304,7 +305,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
                   disabled={isSigningOut}
                 >
                   <span>Sign out</span>
-                  {isSigningOut ? <Spinner /> : null}
+                  {isSigningOut ? <SpinnerIcon className="h-4 w-4 animate-spin text-brand-600" /> : null}
                 </button>
               </div>
             </div>,
@@ -324,20 +325,4 @@ function deriveInitials(source: string) {
   if (parts.length === 0) return "•";
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
-}
-
-function Spinner() {
-  return (
-    <svg className="h-4 w-4 animate-spin text-brand-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M10 3a7 7 0 1 1-7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ChevronIcon({ className }: { className?: string }) {
-  return (
-    <svg className={clsx("h-4 w-4", className)} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
 }

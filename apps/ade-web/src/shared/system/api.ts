@@ -10,7 +10,7 @@ interface RequestOptions {
 }
 
 export async function fetchSafeModeStatus(options: RequestOptions = {}): Promise<SafeModeStatus> {
-  const { data } = await client.GET("/api/v1/system/safe-mode", {
+  const { data } = await client.GET("/api/v1/system/safeMode", {
     signal: options.signal,
   });
 
@@ -40,7 +40,7 @@ export async function updateSafeModeStatus(
   payload: SafeModeUpdateRequest,
   options: RequestOptions = {},
 ): Promise<SafeModeStatus> {
-  await client.PUT("/api/v1/system/safe-mode", {
+  await client.PUT("/api/v1/system/safeMode", {
     body: payload,
     signal: options.signal,
   });

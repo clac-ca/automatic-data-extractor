@@ -14,6 +14,7 @@ import {
   toURLSearchParams,
   type SetSearchParamsInit,
 } from "@app/nav/urlState";
+import { DockCloseIcon, DockRestoreIcon, DockWindowIcon } from "@ui/Icons";
 
 type WorkbenchWindowState = "restored" | "maximized" | "minimized";
 
@@ -369,7 +370,7 @@ function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps)
             className="group flex min-w-0 flex-1 items-center gap-4 rounded-md px-3 py-1.5 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40"
           >
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-brand-600 shadow-inner">
-              <DockWindowIcon />
+              <DockWindowIcon className="h-4 w-4" />
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
               <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
@@ -385,10 +386,10 @@ function WorkbenchDock({ configName, onRestore, onDismiss }: WorkbenchDockProps)
           </button>
           <div className="ml-3 flex h-10 overflow-hidden rounded-md border border-border bg-card text-muted-foreground">
             <DockActionButton ariaLabel="Restore minimized workbench" onClick={onRestore} destructive={false}>
-              <DockRestoreIcon />
+              <DockRestoreIcon className="h-3.5 w-3.5" />
             </DockActionButton>
             <DockActionButton ariaLabel="Close minimized workbench" onClick={onDismiss} destructive>
-              <DockCloseIcon />
+              <DockCloseIcon className="h-3.5 w-3.5" />
             </DockActionButton>
           </div>
         </div>
@@ -420,34 +421,6 @@ function DockActionButton({
     >
       {children}
     </button>
-  );
-}
-
-function DockWindowIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="2" y="2" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="9" y="2" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="2" y="9" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="9" y="9" width="5" height="5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function DockRestoreIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4.5 5.5h6v6h-6z" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function DockCloseIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4.5 11.5 11.5 4.5" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M11.5 11.5 4.5 4.5" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
   );
 }
 

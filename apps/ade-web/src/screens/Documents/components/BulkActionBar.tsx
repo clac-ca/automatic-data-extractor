@@ -3,6 +3,10 @@ import { Button } from "@ui/Button";
 export function BulkActionBar({
   count,
   outputReadyCount,
+  archiveCount,
+  restoreCount,
+  onArchive,
+  onRestore,
   onClear,
   onAddTag,
   onDownloadOriginals,
@@ -11,6 +15,10 @@ export function BulkActionBar({
 }: {
   count: number;
   outputReadyCount: number;
+  archiveCount: number;
+  restoreCount: number;
+  onArchive: () => void;
+  onRestore: () => void;
   onClear: () => void;
   onAddTag: () => void;
   onDownloadOriginals: () => void;
@@ -28,6 +36,12 @@ export function BulkActionBar({
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" type="button" variant="secondary" onClick={onAddTag}>
             Add tags
+          </Button>
+          <Button size="sm" type="button" variant="secondary" onClick={onArchive} disabled={archiveCount <= 0}>
+            Archive ({archiveCount})
+          </Button>
+          <Button size="sm" type="button" variant="secondary" onClick={onRestore} disabled={restoreCount <= 0}>
+            Restore ({restoreCount})
           </Button>
           <div className="flex items-center gap-2">
             <Button size="sm" type="button" variant="secondary" onClick={onDownloadOutputs}>

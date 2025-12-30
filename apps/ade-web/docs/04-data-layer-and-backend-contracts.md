@@ -159,7 +159,7 @@ Example patterns:
 
 * System
 
-  * `['system', 'safe-mode']`
+  * `['system', 'safeMode']`
   * `['system', 'health']`
 
 Example helper:
@@ -308,9 +308,9 @@ Roles:
 
 Assignments:
 
-* `GET    /api/v1/rbac/role-assignments`
-* `POST   /api/v1/rbac/role-assignments`
-* `DELETE /api/v1/rbac/role-assignments/{assignment_id}`
+* `GET    /api/v1/rbac/roleAssignments`
+* `POST   /api/v1/rbac/roleAssignments`
+* `DELETE /api/v1/rbac/roleAssignments/{assignment_id}`
 * `GET    /api/v1/users/{user_id}/roles`
 * `PUT    /api/v1/users/{user_id}/roles/{role_id}`
 * `DELETE /api/v1/users/{user_id}/roles/{role_id}`
@@ -591,8 +591,8 @@ Hooks:
 **Key routes**
 
 * `GET /api/v1/health`
-* `GET /api/v1/system/safe-mode`
-* `PUT /api/v1/system/safe-mode`
+* `GET /api/v1/system/safeMode`
+* `PUT /api/v1/system/safeMode`
 
 **Example functions**
 
@@ -622,9 +622,9 @@ Users:
 
 API keys:
 
-* Self-service: `GET /api/v1/me/api-keys`, `POST /api/v1/me/api-keys`, `DELETE /api/v1/me/api-keys/{api_key_id}`
-* Admin (global): `GET /api/v1/api-keys`, `POST /api/v1/api-keys`, `GET /api/v1/api-keys/{api_key_id}`, `DELETE /api/v1/api-keys/{api_key_id}`
-* Admin (per user): `GET /api/v1/users/{user_id}/api-keys`, `POST /api/v1/users/{user_id}/api-keys`, `DELETE /api/v1/users/{user_id}/api-keys/{api_key_id}`
+* Self-service: `GET /api/v1/me/apiKeys`, `POST /api/v1/me/apiKeys`, `DELETE /api/v1/me/apiKeys/{api_key_id}`
+* Admin (global): `GET /api/v1/apiKeys`, `POST /api/v1/apiKeys`, `GET /api/v1/apiKeys/{api_key_id}`, `DELETE /api/v1/apiKeys/{api_key_id}`
+* Admin (per user): `GET /api/v1/users/{user_id}/apiKeys`, `POST /api/v1/users/{user_id}/apiKeys`, `DELETE /api/v1/users/{user_id}/apiKeys/{api_key_id}`
 
 **Example functions**
 

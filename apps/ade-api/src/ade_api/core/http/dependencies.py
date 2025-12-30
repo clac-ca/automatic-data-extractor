@@ -11,6 +11,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.db.session import get_session as get_db_session
+from ade_api.db.session import get_websocket_session
 from ade_api.models.user import User
 from ade_api.settings import Settings, get_settings
 
@@ -24,6 +25,7 @@ from ..auth.pipeline import ApiKeyAuthenticator, SessionAuthenticator
 from ..rbac.service_interface import RbacService as RbacServiceInterface
 
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+WebSocketSessionDep = Annotated[AsyncSession, Depends(get_websocket_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 PermissionDependency = Callable[..., Awaitable[User]]
@@ -124,6 +126,17 @@ def get_api_key_authenticator(
     settings: SettingsDep,
 ) -> ApiKeyAuthenticator:
     """Provide the API key authenticator."""
+
+    from ade_api.features.api_keys.service import ApiKeyService
+
+    return ApiKeyService(session=db, settings=settings)
+
+
+def get_api_key_authenticator_websocket(
+    db: WebSocketSessionDep,
+    settings: SettingsDep,
+) -> ApiKeyAuthenticator:
+    """Provide the API key authenticator for WebSocket endpoints."""
 
     from ade_api.features.api_keys.service import ApiKeyService
 

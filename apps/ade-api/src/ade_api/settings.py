@@ -74,7 +74,7 @@ DEFAULT_ENGINE_SPEC = "apps/ade-engine"
 DEFAULT_BUILD_TIMEOUT = 600
 
 DEFAULT_PAGE_SIZE = 25
-MAX_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 200
 MAX_SORT_FIELDS = 3
 MIN_SEARCH_LEN = 2
 MAX_SEARCH_LEN = 128
@@ -291,6 +291,9 @@ class Settings(BaseSettings):
     pip_cache_dir: Path = Field(default=DEFAULT_PIP_CACHE_DIR)
     storage_upload_max_bytes: int = Field(25 * 1024 * 1024, gt=0)
     storage_document_retention_period: timedelta = Field(default=timedelta(days=30))
+    documents_change_feed_retention_period: timedelta = Field(default=timedelta(days=14))
+    documents_upload_session_ttl: timedelta = Field(default=timedelta(minutes=10))
+    documents_upload_session_chunk_bytes: int = Field(5 * 1024 * 1024, gt=0)
 
     # Builds
     engine_spec: str = Field(default=DEFAULT_ENGINE_SPEC)
@@ -431,6 +434,8 @@ class Settings(BaseSettings):
         "session_last_seen_interval",
         "failed_login_lock_duration",
         "storage_document_retention_period",
+        "documents_change_feed_retention_period",
+        "documents_upload_session_ttl",
         "run_worker_poll_interval",
         mode="before",
     )

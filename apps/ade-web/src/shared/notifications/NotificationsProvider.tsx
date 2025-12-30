@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import type { BannerOptions, NotificationAction, NotificationIntent, ToastOptions } from "./types";
+import { CloseIcon, ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from "@ui/Icons";
 
 interface ToastEntry {
   readonly kind: "toast";
@@ -256,7 +257,7 @@ function ToastCard({ toast, onDismiss }: { readonly toast: ToastEntry; readonly 
             aria-label="Dismiss notification"
             onClick={() => onDismiss(toast.id)}
           >
-            <CloseIcon />
+            <CloseIcon className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -335,7 +336,7 @@ function BannerCard({ banner, onDismiss }: { readonly banner: BannerEntry; reado
             aria-label="Dismiss notification"
             onClick={() => onDismiss(banner.id)}
           >
-            <CloseIcon />
+            <CloseIcon className="h-4 w-4" />
           </button>
         ) : null}
       </div>
@@ -378,13 +379,13 @@ function NotificationActionButton({
 function renderNotificationIcon(intent: NotificationIntent) {
   switch (intent) {
     case "success":
-      return <SuccessIcon />;
+      return <SuccessIcon className="h-5 w-5" />;
     case "warning":
-      return <WarningIcon />;
+      return <WarningIcon className="h-5 w-5" />;
     case "danger":
-      return <ErrorIcon />;
+      return <ErrorIcon className="h-5 w-5" />;
     default:
-      return <InfoIcon />;
+      return <InfoIcon className="h-5 w-5" />;
   }
 }
 
@@ -457,56 +458,4 @@ function createNotificationId() {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2);
-}
-
-function InfoIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6" opacity={0.8} />
-      <path d="M10 7.5v.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M9.2 9.5h1.6V14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SuccessIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6" opacity={0.8} />
-      <path d="M6.5 10.5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function WarningIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M9 4.6l-6 10.4a1 1 0 0 0 .87 1.5h12.26a1 1 0 0 0 .87-1.5L11 4.6a1 1 0 0 0-1.74 0Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M10 8v3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M10 14h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ErrorIcon() {
-  return (
-    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden>
-      <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.6" opacity={0.8} />
-      <path d="M7 7l6 6m0-6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path d="M4 4l8 8m0-8-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
 }

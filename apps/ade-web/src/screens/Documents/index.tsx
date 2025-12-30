@@ -18,7 +18,13 @@ import { DocumentsPreviewPane } from "./components/DocumentsPreviewPane";
 import { SaveViewDialog } from "./components/SaveViewDialog";
 import { useDocumentsModel } from "./hooks/useDocumentsModel";
 import { getDocumentOutputRun } from "./data";
-import type { DocumentEntry } from "./types";
+import type { DocumentEntry, DocumentsFilters, DocumentStatus, FileType } from "./types";
+import {
+  DEFAULT_DOCUMENT_FILTERS,
+  assigneeKeysFromIds,
+  filtersEqual,
+  normalizeAssignees,
+} from "./filters";
 
 export default function DocumentsScreen() {
   return (
@@ -26,6 +32,70 @@ export default function DocumentsScreen() {
       <DocumentsRedirect />
     </RequireSession>
   );
+}
+
+const FILTER_PARAM_KEYS = [
+  "status",
+  "status_in",
+  "display_status",
+  "display_status_in",
+  "file_type",
+  "tags",
+  "tag_mode",
+  "tags_match",
+  "assignee_user_id",
+  "assignee_user_id_in",
+  "assignee_unassigned",
+];
+
+const STATUS_VALUES = new Set<DocumentStatus>(["queued", "processing", "ready", "failed", "archived"]);
+const FILE_TYPE_VALUES = new Set<FileType>(["xlsx", "xls", "csv", "pdf"]);
+
+function parseFiltersFromSearch(search: string): DocumentsFilters {
+  const params = new URLSearchParams(search);
+  const statuses = filterAllowed(
+    readParamList(params, ["status", "status_in", "display_status", "display_status_in"]),
+    STATUS_VALUES,
+  );
+  const fileTypes = filterAllowed(readParamList(params, ["file_type"]), FILE_TYPE_VALUES);
+  const tags = readParamList(params, ["tags"]);
+  const rawTagMode = coerceTagMode(params.get("tag_mode") ?? params.get("tags_match"));
+  const tagMode = tags.length > 0 ? rawTagMode : "any";
+  const assigneeIds = readParamList(params, ["assignee_user_id", "assignee_user_id_in"]);
+  const includeUnassigned = parseBooleanParam(params.get("assignee_unassigned"));
+  const assignees = assigneeKeysFromIds(assigneeIds, includeUnassigned);
+
+  return {
+    ...DEFAULT_DOCUMENT_FILTERS,
+    statuses,
+    fileTypes,
+    tags,
+    tagMode,
+    assignees,
+  };
+}
+
+function coerceTagMode(value: string | null): DocumentsFilters["tagMode"] {
+  return value === "all" ? "all" : "any";
+}
+
+function parseBooleanParam(value: string | null) {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+}
+
+function readParamList(params: URLSearchParams, keys: string[]): string[] {
+  const values = keys.flatMap((key) => params.getAll(key));
+  const parsed = values
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parsed));
+}
+
+function filterAllowed<T extends string>(values: string[], allowed: Set<T>): T[] {
+  return values.filter((value): value is T => allowed.has(value as T));
 }
 
 function DocumentsRedirect() {
@@ -77,14 +147,24 @@ function DocumentsRedirect() {
 
 export function DocumentsWorkbench() {
   const session = useSession();
-  const { workspace } = useWorkspaceContext();
+  const { workspace, hasPermission } = useWorkspaceContext();
   const location = useLocation();
   const navigate = useNavigate();
 
   const currentUserLabel = session.user.display_name || session.user.email || "You";
   const currentUserId = session.user.id;
+  const canManageConfigurations = hasPermission("workspace.configurations.manage");
+  const canManageSettings = hasPermission("workspace.settings.manage");
 
-  const model = useDocumentsModel({ currentUserLabel, currentUserId, workspaceId: workspace.id });
+  const urlFilters = useMemo(() => parseFiltersFromSearch(location.search), [location.search]);
+
+  const model = useDocumentsModel({
+    currentUserLabel,
+    currentUserId,
+    workspaceId: workspace.id,
+    processingPaused: workspace.processing_paused ?? false,
+    initialFilters: urlFilters,
+  });
   const { actions, state } = model;
   const [detailsRequest, setDetailsRequest] = useState<{ id: string; tab: "details" | "notes" } | null>(null);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
@@ -117,6 +197,12 @@ export function DocumentsWorkbench() {
   }, [actions, state.search, urlSearch]);
 
   useEffect(() => {
+    if (!filtersEqual(model.state.filters, urlFilters)) {
+      model.actions.setFilters(urlFilters);
+    }
+  }, [model.actions, model.state.filters, urlFilters]);
+
+  useEffect(() => {
     if (!urlDocId) return;
     actions.openPreview(urlDocId);
   }, [actions, urlDocId]);
@@ -129,6 +215,34 @@ export function DocumentsWorkbench() {
       const nextSearch = params.toString();
       const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
       navigate(target, { replace });
+    },
+    [location.hash, location.pathname, location.search, navigate],
+  );
+
+  const syncFiltersToUrl = useCallback(
+    (filters: DocumentsFilters, replace = true) => {
+      const params = new URLSearchParams(location.search);
+      FILTER_PARAM_KEYS.forEach((key) => params.delete(key));
+
+      filters.statuses.forEach((status) => params.append("status", status));
+      filters.fileTypes.forEach((type) => params.append("file_type", type));
+      filters.tags.forEach((tag) => params.append("tags", tag));
+      if (filters.tags.length > 0 && filters.tagMode !== "any") {
+        params.set("tag_mode", filters.tagMode);
+      }
+
+      const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
+      assigneeIds.forEach((id) => params.append("assignee_user_id", id));
+      if (includeUnassigned) {
+        params.set("assignee_unassigned", "true");
+      }
+
+      const nextSearch = params.toString();
+      const target = `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}${location.hash ?? ""}`;
+      const current = `${location.pathname}${location.search}${location.hash ?? ""}`;
+      if (target !== current) {
+        navigate(target, { replace });
+      }
     },
     [location.hash, location.pathname, location.search, navigate],
   );
@@ -155,6 +269,16 @@ export function DocumentsWorkbench() {
     [location.hash, location.pathname, location.search, navigate],
   );
 
+  useEffect(() => {
+    syncFiltersToUrl(model.state.filters);
+  }, [model.state.filters, syncFiltersToUrl]);
+
+  const openConfigBuilder = useCallback(() => {
+    navigate(`/workspaces/${workspace.id}/config-builder`);
+  }, [navigate, workspace.id]);
+  const openProcessingSettings = useCallback(() => {
+    navigate(`/workspaces/${workspace.id}/settings/processing`);
+  }, [navigate, workspace.id]);
 
   const onActivate = (id: string) => {
     if (model.state.activeId === id && model.state.previewOpen) {
@@ -210,6 +334,11 @@ export function DocumentsWorkbench() {
     () => selectedDocuments.filter((doc) => Boolean(getDocumentOutputRun(doc.record))).length,
     [selectedDocuments],
   );
+  const selectedArchivedCount = useMemo(
+    () => selectedDocuments.filter((doc) => doc.status === "archived").length,
+    [selectedDocuments],
+  );
+  const selectedActiveCount = selectedDocuments.length - selectedArchivedCount;
 
   const requestBulkDelete = useCallback(() => {
     if (selectedDocuments.length === 0) return;
@@ -239,7 +368,6 @@ export function DocumentsWorkbench() {
     }
     setDeleteDialog(null);
   }, [actions, deleteDialog, onClosePreview, state.activeId, state.previewOpen]);
-
   return (
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
@@ -254,6 +382,19 @@ export function DocumentsWorkbench() {
         onUploadClick={model.actions.handleUploadClick}
         fileInputRef={model.refs.fileInputRef}
         onFileInputChange={model.actions.handleFileInputChange}
+        showConfigurationWarning={model.derived.configMissing}
+        processingPaused={model.derived.processingPaused}
+        canManageConfigurations={canManageConfigurations}
+        canManageSettings={canManageSettings}
+        onOpenConfigBuilder={openConfigBuilder}
+        onOpenSettings={openProcessingSettings}
+        uploads={model.derived.uploads}
+        onPauseUpload={model.actions.pauseUpload}
+        onResumeUpload={model.actions.resumeUpload}
+        onRetryUpload={model.actions.retryUpload}
+        onCancelUpload={model.actions.cancelUpload}
+        onRemoveUpload={model.actions.removeUpload}
+        onClearCompletedUploads={model.actions.clearCompletedUploads}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -300,6 +441,7 @@ export function DocumentsWorkbench() {
                 onRefresh={model.actions.refreshDocuments}
                 now={model.derived.now}
                 onKeyNavigate={model.actions.handleKeyNavigate}
+                processingPaused={model.derived.processingPaused}
                 people={model.derived.people}
                 onAssign={model.actions.assignDocument}
                 onPickUp={model.actions.pickUpDocument}
@@ -309,6 +451,8 @@ export function DocumentsWorkbench() {
                 onCopyLink={model.actions.copyLink}
                 onReprocess={(doc) => model.actions.reprocess(doc)}
                 onDelete={requestDeleteDocument}
+                onArchive={(doc) => model.actions.archiveDocument(doc.id)}
+                onRestore={(doc) => model.actions.restoreDocument(doc.id)}
                 onOpenDetails={onOpenDetails}
                 onOpenNotes={onOpenNotes}
                 onClosePreview={onClosePreview}
@@ -332,6 +476,13 @@ export function DocumentsWorkbench() {
                       onDownloadOutput={model.actions.downloadOutput}
                       onDownloadOriginal={model.actions.downloadOriginal}
                       onReprocess={model.actions.reprocess}
+                      onArchive={(doc) => {
+                        if (doc) model.actions.archiveDocument(doc.id);
+                      }}
+                      onRestore={(doc) => {
+                        if (doc) model.actions.restoreDocument(doc.id);
+                      }}
+                      processingPaused={model.derived.processingPaused}
                       people={model.derived.people}
                       currentUserKey={model.derived.currentUserKey}
                       currentUserLabel={currentUserLabel}
@@ -358,6 +509,10 @@ export function DocumentsWorkbench() {
               <BulkActionBar
                 count={selectedDocuments.length}
                 outputReadyCount={selectedOutputReadyCount}
+                archiveCount={selectedActiveCount}
+                restoreCount={selectedArchivedCount}
+                onArchive={model.actions.bulkArchiveDocuments}
+                onRestore={model.actions.bulkRestoreDocuments}
                 onClear={model.actions.clearSelection}
                 onAddTag={() => setBulkTagOpen(true)}
                 onDownloadOriginals={model.actions.bulkDownloadOriginals}
@@ -409,6 +564,13 @@ export function DocumentsWorkbench() {
                       onDownloadOutput={model.actions.downloadOutput}
                       onDownloadOriginal={model.actions.downloadOriginal}
                       onReprocess={model.actions.reprocess}
+                      onArchive={(doc) => {
+                        if (doc) model.actions.archiveDocument(doc.id);
+                      }}
+                      onRestore={(doc) => {
+                        if (doc) model.actions.restoreDocument(doc.id);
+                      }}
+                      processingPaused={model.derived.processingPaused}
                       people={model.derived.people}
                       currentUserKey={model.derived.currentUserKey}
                       currentUserLabel={currentUserLabel}

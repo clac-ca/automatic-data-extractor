@@ -1,6 +1,7 @@
 import clsx from "clsx";
 
 import { BUILTIN_THEMES, type ThemeId } from "@shared/theme";
+import { CheckIcon } from "@ui/Icons";
 
 interface ThemeSelectProps {
   readonly theme: ThemeId;
@@ -49,19 +50,5 @@ export function ThemeSelect({
         })}
       </div>
     </div>
-  );
-}
-
-function CheckIcon({ className }: { readonly className?: string }) {
-  return (
-    <svg className={clsx("h-4 w-4", className)} viewBox="0 0 20 20" fill="none" aria-hidden>
-      <path
-        d="M5 10.5l3 3 7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

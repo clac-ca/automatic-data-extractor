@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
+import time
+from collections.abc import AsyncIterator
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -9,43 +13,62 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Header,
     HTTPException,
     Path,
     Query,
     Request,
+    Response,
     Security,
     UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
-
-from ade_api.api.deps import get_documents_service
+from ade_api.api.deps import get_documents_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
+from ade_api.common.logging import log_context
 from ade_api.common.pagination import PageParams
+from ade_api.common.sse import sse_json
 from ade_api.common.sorting import make_sort_dependency
 from ade_api.common.types import OrderBy
 from ade_api.core.http import require_authenticated, require_csrf, require_workspace
+from ade_api.features.configs.exceptions import ConfigurationNotFoundError
+from ade_api.features.runs.exceptions import RunQueueFullError
+from ade_api.features.runs.service import RunsService
 from ade_api.models import User
 
+from .change_feed import DocumentChangeCursorTooOld
 from .exceptions import (
     DocumentFileMissingError,
     DocumentNotFoundError,
     DocumentTooLargeError,
+    DocumentUploadRangeError,
+    DocumentUploadSessionExpiredError,
+    DocumentUploadSessionNotFoundError,
+    DocumentUploadSessionNotReadyError,
     DocumentWorksheetParseError,
     InvalidDocumentExpirationError,
     InvalidDocumentTagsError,
 )
 from .filters import DocumentFilters
 from .schemas import (
+    DocumentBatchArchiveRequest,
+    DocumentBatchArchiveResponse,
     DocumentBatchDeleteRequest,
     DocumentBatchDeleteResponse,
     DocumentBatchTagsRequest,
     DocumentBatchTagsResponse,
+    DocumentChangesPage,
     DocumentOut,
     DocumentPage,
     DocumentSheet,
     DocumentTagsPatch,
     DocumentTagsReplace,
+    DocumentUpdateRequest,
+    DocumentUploadSessionCreateRequest,
+    DocumentUploadSessionCreateResponse,
+    DocumentUploadSessionStatusResponse,
+    DocumentUploadSessionUploadResponse,
     TagCatalogPage,
 )
 from .service import DocumentsService
@@ -62,6 +85,8 @@ tags_router = APIRouter(
     dependencies=[Security(require_authenticated)],
 )
 
+logger = logging.getLogger(__name__)
+
 
 WorkspacePath = Annotated[
     UUID,
@@ -76,6 +101,7 @@ DocumentPath = Annotated[
     ),
 ]
 DocumentsServiceDep = Annotated[DocumentsService, Depends(get_documents_service)]
+RunsServiceDep = Annotated[RunsService, Depends(get_runs_service)]
 DocumentReader = Annotated[
     User,
     Security(
@@ -102,6 +128,8 @@ _FILTER_KEYS = {
     "q",
     "status",
     "status_in",
+    "display_status",
+    "display_status_in",
     "run_status",
     "source_in",
     "tags",
@@ -113,6 +141,9 @@ _FILTER_KEYS = {
     "uploader_id",
     "uploader_id_in",
     "uploader_email",
+    "assignee_user_id",
+    "assignee_user_id_in",
+    "assignee_unassigned",
     "folder_id",
     "created_after",
     "created_before",
@@ -122,6 +153,10 @@ _FILTER_KEYS = {
     "created_at_to",
     "last_run_from",
     "last_run_to",
+    "activity_after",
+    "activity_before",
+    "activity_at_from",
+    "activity_at_to",
     "byte_size_from",
     "byte_size_to",
     "file_type",
@@ -172,6 +207,35 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
     return decoded
 
 
+async def _try_enqueue_run(
+    *,
+    runs_service: RunsService,
+    workspace_id: UUID,
+    document_id: UUID,
+) -> None:
+    try:
+        if await runs_service.is_processing_paused(workspace_id=workspace_id):
+            return
+        await runs_service.prepare_run_for_workspace(
+            workspace_id=workspace_id,
+            input_document_id=document_id,
+            configuration_id=None,
+            options=None,
+        )
+    except ConfigurationNotFoundError:
+        return
+    except RunQueueFullError as exc:
+        logger.warning(
+            "document.auto_run.queue_full",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id, detail=str(exc)),
+        )
+    except Exception:
+        logger.exception(
+            "document.auto_run.failed",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id),
+        )
+
+
 @router.post(
     "",
     dependencies=[Security(require_csrf)],
@@ -197,6 +261,7 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any]:
 async def upload_document(
     workspace_id: WorkspacePath,
     service: DocumentsServiceDep,
+    runs_service: RunsServiceDep,
     _actor: DocumentManager,
     *,
     file: Annotated[UploadFile, File(...)],
@@ -205,7 +270,7 @@ async def upload_document(
 ) -> DocumentOut:
     payload = _parse_metadata(metadata)
     try:
-        return await service.create_document(
+        document = await service.create_document(
             workspace_id=workspace_id,
             upload=file,
             metadata=payload,
@@ -216,6 +281,14 @@ async def upload_document(
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
     except InvalidDocumentExpirationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    await _try_enqueue_run(
+        runs_service=runs_service,
+        workspace_id=workspace_id,
+        document_id=document.id,
+    )
+
+    return document
 
 
 @router.get(
@@ -242,9 +315,10 @@ async def list_documents(
     filters: Annotated[DocumentFilters, Depends(get_document_filters)],
     order_by: Annotated[OrderBy, Depends(get_sort_order)],
     service: DocumentsServiceDep,
+    response: Response,
     actor: DocumentReader,
 ) -> DocumentPage:
-    return await service.list_documents(
+    page_result = await service.list_documents(
         workspace_id=workspace_id,
         page=page.page,
         page_size=page.page_size,
@@ -253,6 +327,502 @@ async def list_documents(
         filters=filters,
         actor=actor,
     )
+    response.headers["X-Ade-Changes-Cursor"] = page_result.changes_cursor
+    return page_result
+
+
+@router.get(
+    "/changes",
+    response_model=DocumentChangesPage,
+    status_code=status.HTTP_200_OK,
+    summary="List document changes",
+    response_model_exclude_none=True,
+)
+async def list_document_changes(
+    workspace_id: WorkspacePath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+    *,
+    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> DocumentChangesPage:
+    if cursor is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="cursor is required; use cursor=latest to sync from now",
+        )
+    try:
+        return await service.list_document_changes(
+            workspace_id=workspace_id,
+            cursor_token=cursor,
+            limit=limit,
+        )
+    except DocumentChangeCursorTooOld as exc:
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/changes/stream")
+async def stream_document_changes(
+    workspace_id: WorkspacePath,
+    request: Request,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+    *,
+    cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
+) -> StreamingResponse:
+    last_event_id = request.headers.get("Last-Event-ID") or request.headers.get("last-event-id")
+    if last_event_id and cursor and last_event_id != cursor:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="cursor and Last-Event-ID must match when both are provided",
+        )
+    start_token = last_event_id or cursor or "latest"
+
+    try:
+        initial_page = await service.list_document_changes(
+            workspace_id=workspace_id,
+            cursor_token=start_token,
+            limit=limit,
+        )
+    except DocumentChangeCursorTooOld as exc:
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            detail={"error": "resync_required", "latest_cursor": str(exc.latest_cursor)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        poll_interval = 1.5
+        heartbeat_interval = 15.0
+        last_heartbeat = time.monotonic()
+
+        cursor_value = 0
+        pending = initial_page.changes
+        if start_token != "latest":
+            try:
+                cursor_value = int(start_token)
+            except (TypeError, ValueError):
+                cursor_value = 0
+        if start_token == "latest":
+            cursor_value = int(initial_page.next_cursor)
+
+        while True:
+            if pending:
+                for change in pending:
+                    cursor_value = int(change.cursor)
+                    yield sse_json(
+                        change.type,
+                        change.model_dump(),
+                        event_id=change.cursor,
+                    )
+                pending = []
+                continue
+
+            if await request.is_disconnected():
+                return
+
+            now = time.monotonic()
+            if now - last_heartbeat >= heartbeat_interval:
+                last_heartbeat = now
+                yield b": keepalive\n\n"
+
+            try:
+                page = await service.list_document_changes(
+                    workspace_id=workspace_id,
+                    cursor_token=str(cursor_value),
+                    limit=limit,
+                )
+            except DocumentChangeCursorTooOld:
+                return
+
+            if page.changes:
+                pending = page.changes
+                continue
+
+            await asyncio.sleep(poll_interval)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/uploadSessions",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentUploadSessionCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a resumable upload session",
+    response_model_exclude_none=True,
+)
+async def create_upload_session(
+    workspace_id: WorkspacePath,
+    payload: DocumentUploadSessionCreateRequest,
+    service: DocumentsServiceDep,
+    actor: DocumentManager,
+) -> DocumentUploadSessionCreateResponse:
+    try:
+        return await service.create_upload_session(
+            workspace_id=workspace_id,
+            payload=payload,
+            actor=actor,
+        )
+    except DocumentTooLargeError as exc:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, detail=str(exc)) from exc
+
+
+@router.put(
+    "/uploadSessions/{upload_session_id}",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentUploadSessionUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Upload a byte range to a session",
+    response_model_exclude_none=True,
+)
+async def upload_session_range(
+    workspace_id: WorkspacePath,
+    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
+    request: Request,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+    content_range: Annotated[str | None, Header(alias="Content-Range")] = None,
+) -> DocumentUploadSessionUploadResponse:
+    try:
+        return await service.upload_session_range(
+            workspace_id=workspace_id,
+            upload_session_id=upload_session_id,
+            content_range=content_range,
+            body=request.stream(),
+        )
+    except DocumentUploadSessionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentUploadSessionExpiredError as exc:
+        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
+    except DocumentUploadRangeError as exc:
+        raise HTTPException(
+            status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+            detail={
+                "detail": str(exc),
+                "next_expected_ranges": exc.next_expected_ranges,
+            },
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get(
+    "/uploadSessions/{upload_session_id}",
+    response_model=DocumentUploadSessionStatusResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get upload session status",
+    response_model_exclude_none=True,
+)
+async def get_upload_session_status(
+    workspace_id: WorkspacePath,
+    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+) -> DocumentUploadSessionStatusResponse:
+    try:
+        return await service.get_upload_session_status(
+            workspace_id=workspace_id,
+            upload_session_id=upload_session_id,
+        )
+    except DocumentUploadSessionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentUploadSessionExpiredError as exc:
+        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
+
+
+@router.post(
+    "/uploadSessions/{upload_session_id}/commit",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Commit an upload session",
+    response_model_exclude_none=True,
+)
+async def commit_upload_session(
+    workspace_id: WorkspacePath,
+    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
+    service: DocumentsServiceDep,
+    runs_service: RunsServiceDep,
+    actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        document = await service.commit_upload_session(
+            workspace_id=workspace_id,
+            upload_session_id=upload_session_id,
+            actor=actor,
+        )
+    except DocumentUploadSessionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentUploadSessionExpiredError as exc:
+        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
+    except DocumentUploadSessionNotReadyError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    await _try_enqueue_run(
+        runs_service=runs_service,
+        workspace_id=workspace_id,
+        document_id=document.id,
+    )
+
+    return document
+
+
+@router.delete(
+    "/uploadSessions/{upload_session_id}",
+    dependencies=[Security(require_csrf)],
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cancel an upload session",
+)
+async def cancel_upload_session(
+    workspace_id: WorkspacePath,
+    upload_session_id: Annotated[UUID, Path(description="Upload session identifier")],
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> Response:
+    try:
+        await service.cancel_upload_session(
+            workspace_id=workspace_id,
+            upload_session_id=upload_session_id,
+        )
+    except DocumentUploadSessionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except DocumentUploadSessionExpiredError as exc:
+        raise HTTPException(status.HTTP_410_GONE, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch(
+    "/{document_id}",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Update document metadata or assignment",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+async def update_document(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    payload: DocumentUpdateRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return await service.update_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+            payload=payload,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/batch/tags",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchTagsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update tags on multiple documents",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update tags.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {
+            "description": "Tag payload is invalid.",
+        },
+    },
+)
+async def patch_document_tags_batch(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchTagsRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentBatchTagsResponse:
+    try:
+        documents = await service.patch_document_tags_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+            add=payload.add,
+            remove=payload.remove,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except InvalidDocumentTagsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+    return DocumentBatchTagsResponse(documents=documents)
+
+
+@router.post(
+    "/batch/archive",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchArchiveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Archive multiple documents",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+    },
+)
+async def archive_documents_batch_endpoint(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchArchiveRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentBatchArchiveResponse:
+    try:
+        documents = await service.archive_documents_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return DocumentBatchArchiveResponse(documents=documents)
+
+
+@router.post(
+    "/batch/restore",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentBatchArchiveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Restore multiple documents from the archive",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "One or more documents were not found within the workspace.",
+        },
+    },
+)
+async def restore_documents_batch_endpoint(
+    workspace_id: WorkspacePath,
+    payload: DocumentBatchArchiveRequest,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentBatchArchiveResponse:
+    try:
+        documents = await service.restore_documents_batch(
+            workspace_id=workspace_id,
+            document_ids=payload.document_ids,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return DocumentBatchArchiveResponse(documents=documents)
+
+
+@router.post(
+    "/{document_id}/archive",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Archive a document",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+async def archive_document_endpoint(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return await service.archive_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{document_id}/restore",
+    dependencies=[Security(require_csrf)],
+    response_model=DocumentOut,
+    status_code=status.HTTP_200_OK,
+    summary="Restore a document from the archive",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to update documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document updates.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+async def restore_document_endpoint(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentManager,
+) -> DocumentOut:
+    try:
+        return await service.restore_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.put(
@@ -336,49 +906,6 @@ async def patch_document_tags(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except InvalidDocumentTagsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-
-
-@router.post(
-    "/batch/tags",
-    dependencies=[Security(require_csrf)],
-    response_model=DocumentBatchTagsResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Update tags on multiple documents",
-    response_model_exclude_none=True,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "description": "Authentication required to update tags.",
-        },
-        status.HTTP_403_FORBIDDEN: {
-            "description": "Workspace permissions do not allow document updates.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "One or more documents were not found within the workspace.",
-        },
-        status.HTTP_422_UNPROCESSABLE_CONTENT: {
-            "description": "Tag payload is invalid.",
-        },
-    },
-)
-async def patch_document_tags_batch(
-    workspace_id: WorkspacePath,
-    payload: DocumentBatchTagsRequest,
-    service: DocumentsServiceDep,
-    _actor: DocumentManager,
-) -> DocumentBatchTagsResponse:
-    try:
-        documents = await service.patch_document_tags_batch(
-            workspace_id=workspace_id,
-            document_ids=payload.document_ids,
-            add=payload.add,
-            remove=payload.remove,
-        )
-    except DocumentNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except InvalidDocumentTagsError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
-
-    return DocumentBatchTagsResponse(documents=documents)
 
 
 @router.get(

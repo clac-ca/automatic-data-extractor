@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { UIEvent } from "react";
 import clsx from "clsx";
+
+import { DownloadIcon } from "@ui/Icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { WorkbenchConsoleStore } from "../state/consoleStore";
@@ -618,28 +620,8 @@ function RunArtifactLink({
 
   return (
     <a className={clsx(base, enabledClass)} href={href} title={label}>
-      <DownloadIcon />
+      <DownloadIcon className="h-3.5 w-3.5 text-terminal-muted" />
       <span className="truncate">{label}</span>
     </a>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-terminal-muted" fill="none" aria-hidden>
-      <path
-        d="M10 3v8m0 0 3-3m-3 3-3-3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4 13.5v2A1.5 1.5 0 0 0 5.5 17h9A1.5 1.5 0 0 0 16 15.5v-2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

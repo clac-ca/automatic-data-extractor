@@ -1,8 +1,8 @@
 import clsx from "clsx";
 
-import type { DocumentStatus } from "../types";
+import type { DocumentQueueReason, DocumentQueueState, DocumentStatus } from "../types";
 
-const STATUS_STYLES: Record<
+export const STATUS_STYLES: Record<
   DocumentStatus,
   {
     label: string;
@@ -37,12 +37,50 @@ const STATUS_STYLES: Record<
   },
 };
 
-export function StatusPill({ status }: { status: DocumentStatus }) {
+export function resolveStatusLabel(
+  status: DocumentStatus,
+  queueState?: DocumentQueueState | null,
+  queueReason?: DocumentQueueReason | null,
+) {
+  if (status === "queued") {
+    return resolveQueuedLabel(queueState, queueReason);
+  }
+  return STATUS_STYLES[status].label;
+}
+
+export function StatusPill({
+  status,
+  queueState,
+  queueReason,
+}: {
+  status: DocumentStatus;
+  queueState?: DocumentQueueState | null;
+  queueReason?: DocumentQueueReason | null;
+}) {
   const style = STATUS_STYLES[status];
+  const label = resolveStatusLabel(status, queueState, queueReason);
   return (
     <span className={clsx("inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold", style.pill)}>
       <span className={clsx("h-2 w-2 rounded-full", style.dot)} />
-      {style.label}
+      {label}
     </span>
   );
+}
+
+function resolveQueuedLabel(
+  queueState: DocumentQueueState | null | undefined,
+  queueReason: DocumentQueueReason | null | undefined,
+) {
+  if (queueState === "queued") return "Queued";
+  if (queueState !== "waiting") return "Queued";
+  switch (queueReason) {
+    case "processing_paused":
+      return "Processing paused";
+    case "queue_full":
+      return "Waiting for capacity";
+    case "no_active_configuration":
+      return "Waiting for configuration";
+    default:
+      return "Waiting to start";
+  }
 }

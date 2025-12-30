@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
+from ade_api.db.types import UTCDateTime
 
 
 def _normalise_email(value: str) -> str:
@@ -44,9 +45,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_service_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     identities: Mapped[list[UserIdentity]] = relationship(
         "UserIdentity",
@@ -95,7 +96,7 @@ class UserCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    last_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_rotated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     user: Mapped[User] = relationship("User", back_populates="credential")
 
@@ -111,9 +112,7 @@ class UserIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
-    last_authenticated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     user: Mapped[User] = relationship("User", back_populates="identities")
 

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from ade_api.common.events import EventRecord, new_event_record
 from ade_api.common.time import utc_now
@@ -29,6 +30,7 @@ from ade_api.models import (
     Document,
     DocumentSource,
     DocumentStatus,
+    Run,
     RunStatus,
     Workspace,
 )
@@ -267,6 +269,81 @@ async def test_prepare_run_rejects_when_queue_is_full(
 
     with pytest.raises(RunQueueFullError):
         await service.prepare_run(configuration_id=configuration.id, options=options)
+
+
+@pytest.mark.asyncio()
+async def test_enqueue_pending_runs_for_configuration_queues_uploaded_document(
+    session,
+    tmp_path: Path,
+) -> None:
+    service, configuration, document, _fake_builds, _ = await _build_service(
+        session,
+        tmp_path,
+        build_status=BuildStatus.READY,
+    )
+
+    queued = await service.enqueue_pending_runs_for_configuration(
+        configuration_id=configuration.id,
+    )
+    assert queued == 1
+
+    result = await session.execute(
+        select(Run).where(Run.input_document_id == document.id)
+    )
+    runs = result.scalars().all()
+    assert len(runs) == 1
+    assert runs[0].configuration_id == configuration.id
+    assert runs[0].status is RunStatus.QUEUED
+
+    second = await service.enqueue_pending_runs_for_configuration(
+        configuration_id=configuration.id,
+    )
+    assert second == 0
+
+
+@pytest.mark.asyncio()
+async def test_complete_run_backfills_pending_documents(
+    session,
+    tmp_path: Path,
+) -> None:
+    service, configuration, document, _fake_builds, settings = await _build_service(
+        session,
+        tmp_path,
+        build_status=BuildStatus.READY,
+    )
+    settings.queue_size = 1
+
+    doc_storage = DocumentStorage(workspace_documents_root(settings, configuration.workspace_id))
+    second_id = generate_uuid7()
+    stored_uri = doc_storage.make_stored_uri(str(second_id))
+    document_path = doc_storage.path_for(stored_uri)
+    document_path.parent.mkdir(parents=True, exist_ok=True)
+    document_path.write_text("name\nBob\n", encoding="utf-8")
+
+    second_document = Document(
+        id=second_id,
+        workspace_id=configuration.workspace_id,
+        original_filename="second.csv",
+        content_type="text/csv",
+        byte_size=document_path.stat().st_size,
+        sha256="beadfeed",
+        stored_uri=stored_uri,
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add(second_document)
+    await session.commit()
+
+    options = RunCreateOptions(input_document_id=str(document.id))
+    run = await service.prepare_run(configuration_id=configuration.id, options=options)
+    await service._complete_run(run, status=RunStatus.SUCCEEDED, exit_code=0)
+
+    result = await session.execute(select(Run).where(Run.input_document_id == second_document.id))
+    runs = result.scalars().all()
+    assert len(runs) == 1
+    assert runs[0].status is RunStatus.QUEUED
 
 
 @pytest.mark.asyncio()

@@ -20,20 +20,20 @@ async def test_safe_mode_toggle_persists_state(
     token, _ = await login(async_client, email=admin.email, password=admin.password)
     headers = {"Authorization": f"Bearer {token}"}
 
-    initial = await async_client.get("/api/v1/system/safe-mode", headers=headers)
+    initial = await async_client.get("/api/v1/system/safeMode", headers=headers)
     assert initial.status_code == 200
     payload = initial.json()
     assert payload == {"enabled": False, "detail": SAFE_MODE_DEFAULT_DETAIL}
 
     updated = await async_client.put(
-        "/api/v1/system/safe-mode",
+        "/api/v1/system/safeMode",
         json={"enabled": True, "detail": "Maintenance window"},
         headers=headers,
     )
     assert updated.status_code == 204
     assert updated.text == ""
 
-    reread = await async_client.get("/api/v1/system/safe-mode", headers=headers)
+    reread = await async_client.get("/api/v1/system/safeMode", headers=headers)
     assert reread.status_code == 200
     reread_payload = reread.json()
     assert reread_payload["enabled"] is True

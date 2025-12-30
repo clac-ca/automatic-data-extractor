@@ -4,10 +4,12 @@ import { DangerSettingsPage } from "./pages/DangerSettingsPage";
 import { AppearanceSettingsPage } from "./pages/AppearanceSettingsPage";
 import { GeneralSettingsPage } from "./pages/GeneralSettingsPage";
 import { MembersSettingsPage } from "./pages/MembersSettingsPage";
+import { ProcessingSettingsPage } from "./pages/ProcessingSettingsPage";
 import { RolesSettingsPage } from "./pages/RolesSettingsPage";
 
 export type WorkspaceSettingsRouteId =
   | "workspace.general"
+  | "workspace.processing"
   | "preferences.appearance"
   | "access.members"
   | "access.roles"
@@ -56,6 +58,15 @@ export const workspaceSettingsSections: SettingsSection[] = [
     description: "Workspace name, slug, and defaults.",
     path: "general",
     element: <GeneralSettingsPage />,
+  },
+  {
+    id: "workspace.processing",
+    group: "workspace",
+    label: "Processing",
+    description: "Pause or resume automatic processing.",
+    path: "processing",
+    required: { view: ["workspace.settings.manage"], edit: ["workspace.settings.manage"] },
+    element: <ProcessingSettingsPage />,
   },
   {
     id: "preferences.appearance",

@@ -7,6 +7,7 @@ export const LIST_REFRESH_INTERVALS: Array<{
   label: string;
   intervalMs: number | false;
 }> = [
+  { value: "auto", label: "Auto", intervalMs: false },
   { value: "off", label: "Off", intervalMs: false },
   { value: "30s", label: "Every 30s", intervalMs: 30_000 },
   { value: "1m", label: "Every 1m", intervalMs: 60_000 },
@@ -20,14 +21,15 @@ export const LIST_DENSITIES: Array<{ value: ListDensity; label: string }> = [
 
 export const DEFAULT_LIST_SETTINGS: ListSettings = {
   pageSize: LIST_PAGE_SIZES[0],
-  refreshInterval: "off",
+  refreshInterval: "auto",
   density: "comfortable",
 };
 
 export function normalizeListSettings(value: Partial<ListSettings> | null | undefined): ListSettings {
   const settings = value ?? {};
+  const pageSize = typeof settings.pageSize === "string" ? Number(settings.pageSize) : settings.pageSize;
   return {
-    pageSize: isListPageSize(settings.pageSize) ? settings.pageSize : DEFAULT_LIST_SETTINGS.pageSize,
+    pageSize: isListPageSize(pageSize) ? pageSize : DEFAULT_LIST_SETTINGS.pageSize,
     refreshInterval: isListRefreshInterval(settings.refreshInterval)
       ? settings.refreshInterval
       : DEFAULT_LIST_SETTINGS.refreshInterval,

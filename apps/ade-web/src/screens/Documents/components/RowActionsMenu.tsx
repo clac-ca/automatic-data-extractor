@@ -2,7 +2,16 @@ import { useState } from "react";
 
 import { ContextMenu } from "@ui/ContextMenu";
 
-import { CloseIcon, DownloadIcon, LinkIcon, MoreIcon, RefreshIcon, TrashIcon } from "./icons";
+import {
+  CloseIcon,
+  DownloadIcon,
+  FolderMinusIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  MoreIcon,
+  RefreshIcon,
+  TrashIcon,
+} from "@ui/Icons";
 
 export function RowActionsMenu({
   onOpenDetails,
@@ -13,9 +22,13 @@ export function RowActionsMenu({
   onDownloadOriginal,
   onCopyLink,
   onDelete,
+  onArchive,
+  onRestore,
+  isArchived,
   originalDisabled,
   copyDisabled,
   deleteDisabled,
+  archiveDisabled,
 }: {
   onOpenDetails: () => void;
   onReprocess?: () => void;
@@ -25,12 +38,19 @@ export function RowActionsMenu({
   onDownloadOriginal: () => void;
   onCopyLink: () => void;
   onDelete?: () => void;
+  onArchive?: () => void;
+  onRestore?: () => void;
+  isArchived?: boolean;
   originalDisabled?: boolean;
   copyDisabled?: boolean;
   deleteDisabled?: boolean;
+  archiveDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const showArchive = Boolean(onArchive) && !isArchived;
+  const showRestore = Boolean(onRestore) && Boolean(isArchived);
+  const hasArchiveAction = showArchive || showRestore;
 
   return (
     <>
@@ -84,6 +104,18 @@ export function RowActionsMenu({
             disabled: copyDisabled,
             icon: <LinkIcon className="h-4 w-4" />,
           },
+          ...(hasArchiveAction
+            ? [
+                {
+                  id: showRestore ? "restore" : "archive",
+                  label: showRestore ? "Restore document" : "Archive document",
+                  onSelect: showRestore ? onRestore : onArchive,
+                  disabled: archiveDisabled,
+                  icon: showRestore ? <FolderOpenIcon className="h-4 w-4" /> : <FolderMinusIcon className="h-4 w-4" />,
+                  dividerAbove: true,
+                },
+              ]
+            : []),
           ...(showClosePreview && onClosePreview
             ? [
                 {
@@ -104,7 +136,7 @@ export function RowActionsMenu({
                   disabled: deleteDisabled,
                   danger: true,
                   icon: <TrashIcon className="h-4 w-4" />,
-                  dividerAbove: true,
+                  dividerAbove: !hasArchiveAction,
                 },
               ]
             : []),

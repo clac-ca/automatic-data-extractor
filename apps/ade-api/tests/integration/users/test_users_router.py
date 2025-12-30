@@ -199,7 +199,7 @@ async def test_deactivate_user_revokes_api_keys(
     admin_token, _ = await login(async_client, email=admin.email, password=admin.password)
 
     create_key = await async_client.post(
-        f"/api/v1/users/{target.id}/api-keys",
+        f"/api/v1/users/{target.id}/apiKeys",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"label": "Target key"},
     )
@@ -221,7 +221,7 @@ async def test_deactivate_user_revokes_api_keys(
     assert payload["is_active"] is False
 
     key_list = await async_client.get(
-        f"/api/v1/users/{target.id}/api-keys",
+        f"/api/v1/users/{target.id}/apiKeys",
         headers={"Authorization": f"Bearer {admin_token}"},
         params={"include_revoked": True},
     )

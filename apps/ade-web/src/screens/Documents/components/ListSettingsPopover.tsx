@@ -10,7 +10,7 @@ import {
   LIST_REFRESH_INTERVALS,
 } from "../listSettings";
 import type { ListPageSize, ListRefreshInterval, ListSettings } from "../types";
-import { ChevronDownIcon, SettingsIcon } from "./icons";
+import { ChevronDownIcon, SettingsIcon } from "@ui/Icons";
 
 export function ListSettingsPopover({
   settings,
@@ -92,9 +92,9 @@ export function ListSettingsPopover({
               </Select>
             </SettingsRow>
 
-            <SettingsRow label="Display density">
+            <SettingsRow label="Display density" controlClassName="w-auto">
               <div
-                className="flex items-center gap-1 rounded-full border border-border bg-background p-1"
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-background p-1"
                 role="radiogroup"
                 aria-label="Display density"
               >
@@ -108,7 +108,7 @@ export function ListSettingsPopover({
                       aria-checked={isSelected}
                       onClick={() => update({ density: density.value })}
                       className={clsx(
-                        "rounded-full px-3 py-1 text-[11px] font-semibold transition",
+                        "rounded-full px-3 py-1 text-[11px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                         isSelected
                           ? "bg-card text-foreground shadow-sm"
                           : "text-muted-foreground hover:text-foreground",
@@ -151,14 +151,16 @@ export function ListSettingsPopover({
 function SettingsRow({
   label,
   children,
+  controlClassName,
 }: {
   label: string;
   children: ReactNode;
+  controlClassName?: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
-      <div className="w-40">{children}</div>
+      <div className="min-w-0 text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className={clsx("w-44", controlClassName)}>{children}</div>
     </div>
   );
 }

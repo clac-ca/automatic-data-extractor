@@ -60,7 +60,7 @@ Legend: **Base** indicates whether the DTO currently extends `BaseSchema` or raw
 | `AuthProvider`, `ProviderDiscoveryResponse` | `BaseSchema` | provider IDs as str | ok but rename to `AuthProviderOut`, `AuthProvidersOut`. | align |
 | `APIKeyIssueRequest` | `BaseSchema` | `user_id: str` | Need `ULIDStr`, rename fields? | keep |
 | `APIKeyIssueResponse` | `BaseSchema` | `principal_id: str` | `principal_type` literal; should align with enum + rename to `APIKeyIssueOut`. | `APIKeyIssueOut` |
-| `APIKeySummary` | `BaseSchema` | `api_key_id: str` etc. | Response used for `/api-keys` list; rename to `APIKeyOut`, adopt pagination. | `APIKeyOut` |
+| `APIKeySummary` | `BaseSchema` | `api_key_id: str` etc. | Response used for `/apiKeys` list; rename to `APIKeyOut`, adopt pagination. | `APIKeyOut` |
 
 ### Configurations & File Tree (`apps/ade-api/src/ade_api/features/configs/schemas.py`)
 
@@ -144,10 +144,10 @@ All endpoints below currently declare `response_model=list[...]` and should adop
 | Endpoint | Module / file | Current model | Notes |
 | --- | --- | --- | --- |
 | `GET /roles` | `apps/ade-api/src/ade_api/features/roles/router.py:225` | `list[RoleRead]` | Should become `Page[RoleOut]` with sort/filter query params. |
-| `GET /role-assignments` | `roles/router.py:482` | `list[RoleAssignmentRead]` | Add pagination + filtering (principal_id/user_id). |
-| `GET /workspaces/{workspace_id}/role-assignments` | `roles/router.py:644` | `list[RoleAssignmentRead]` | Same as above, workspace-scoped. |
+| `GET /roleAssignments` | `roles/router.py:482` | `list[RoleAssignmentRead]` | Add pagination + filtering (principal_id/user_id). |
+| `GET /workspaces/{workspace_id}/roleAssignments` | `roles/router.py:644` | `list[RoleAssignmentRead]` | Same as above, workspace-scoped. |
 | `GET /permissions` | `roles/router.py:830` | `list[PermissionRead]` | Could remain list if bounded, but spec calls for Page envelope. |
-| `GET /auth/api-keys` | `auth/router.py:412` | `list[APIKeySummary]` | Convert to `Page[APIKeyOut]`, add filters (revoked, owner). |
+| `GET /apiKeys` | `auth/router.py:412` | `list[APIKeySummary]` | Convert to `Page[APIKeyOut]`, add filters (revoked, owner). |
 | `GET /workspaces` | `workspaces/router.py:106` | `list[WorkspaceProfile]` | Response should be paged for multi-workspace orgs. |
 | `GET /workspaces/{workspace_id}/members` | `features/workspaces/members_router.py` | `WorkspaceMemberPage` | Already paginated; add richer filters (role/default) if needed. |
 | `GET /workspaces/{workspace_id}/roles` | `workspaces/router.py:200` | `list[RoleRead]` | Should re-use `Page[RoleOut]`. |

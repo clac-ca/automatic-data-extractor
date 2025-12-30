@@ -18,7 +18,18 @@ import type {
   WorkbookSheet,
 } from "../types";
 import { columnLabel, formatRelativeTime, shortId } from "../utils";
-import { ChatIcon, CloseIcon, DownloadIcon, LinkIcon, MoreIcon, OpenInNewIcon, RefreshIcon, UserIcon } from "./icons";
+import {
+  ChatIcon,
+  CloseIcon,
+  DownloadIcon,
+  FolderMinusIcon,
+  FolderOpenIcon,
+  LinkIcon,
+  MoreIcon,
+  OpenInNewIcon,
+  RefreshIcon,
+  UserIcon,
+} from "@ui/Icons";
 import { CommentsPanel } from "./CommentsPanel";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
 import { TagPicker } from "./TagPicker";
@@ -44,6 +55,9 @@ export function DocumentsPreviewPane({
   onDownloadOutput,
   onDownloadOriginal,
   onReprocess,
+  onArchive,
+  onRestore,
+  processingPaused,
 
   people,
   currentUserKey,
@@ -85,6 +99,9 @@ export function DocumentsPreviewPane({
   onDownloadOutput: (doc: DocumentEntry | null) => void;
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry | null) => void;
+  onArchive: (doc: DocumentEntry | null) => void;
+  onRestore: (doc: DocumentEntry | null) => void;
+  processingPaused: boolean;
 
   people: WorkspacePerson[];
   currentUserKey: string;
@@ -150,7 +167,7 @@ export function DocumentsPreviewPane({
 
   const canDownloadOutput = Boolean(document?.record && outputUrl);
   const canDownloadOriginal = Boolean(document?.record);
-  const canReprocess = Boolean(document?.record && activeRun?.configuration_id);
+  const canReprocess = Boolean(document?.record && activeRun?.configuration_id && !processingPaused);
 
   const openDetails = (tab: DetailsPanelTab) => {
     setDetailsTab(tab);
@@ -247,6 +264,8 @@ export function DocumentsPreviewPane({
                     onDownloadOriginal={onDownloadOriginal}
                     onCopyLink={onCopyLink}
                     onReprocess={onReprocess}
+                    onArchive={onArchive}
+                    onRestore={onRestore}
                     onOpenDetails={() => openDetails("details")}
                     onOpenNotes={() => openDetails("notes")}
                     onClosePreview={onClose}
@@ -317,7 +336,7 @@ export function DocumentsPreviewPane({
                   Fetching the latest run status.
                 </PreviewMessage>
               ) : (
-                <PreviewMessage title="Processing output">
+                <PreviewMessage title={resolvePreviewTitle(document)}>
                   {document.stage ?? "Preparing normalized output"}
                 </PreviewMessage>
               )}
@@ -358,6 +377,16 @@ function PreviewMessage({ title, children }: { title: string; children: string }
       <p>{children}</p>
     </div>
   );
+}
+
+function resolvePreviewTitle(document: DocumentEntry) {
+  if (document.queueState === "waiting" && document.queueReason === "processing_paused") {
+    return "Processing paused";
+  }
+  if (document.queueState === "waiting") return "Waiting to start";
+  if (document.queueState === "queued" || document.status === "queued") return "Queued for processing";
+  if (document.status === "processing") return "Processing output";
+  return "Processing output";
 }
 
 const METRICS_NUMBER_FORMATTER = new Intl.NumberFormat();
@@ -550,6 +579,8 @@ function PreviewActionsMenu({
   onDownloadOriginal,
   onCopyLink,
   onReprocess,
+  onArchive,
+  onRestore,
   onOpenDetails,
   onOpenNotes,
   onClosePreview,
@@ -562,12 +593,16 @@ function PreviewActionsMenu({
   onDownloadOriginal: (doc: DocumentEntry | null) => void;
   onCopyLink: (doc: DocumentEntry | null) => void;
   onReprocess: (doc: DocumentEntry | null) => void;
+  onArchive: (doc: DocumentEntry | null) => void;
+  onRestore: (doc: DocumentEntry | null) => void;
   onOpenDetails: () => void;
   onOpenNotes: () => void;
   onClosePreview: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const isArchived = document.status === "archived";
+  const canArchive = Boolean(document.record);
 
   return (
     <>
@@ -632,11 +667,19 @@ function PreviewActionsMenu({
             icon: <RefreshIcon className="h-4 w-4" />,
           },
           {
+            id: isArchived ? "restore" : "archive",
+            label: isArchived ? "Restore document" : "Archive document",
+            onSelect: () => (isArchived ? onRestore(document) : onArchive(document)),
+            disabled: !canArchive,
+            icon: isArchived ? <FolderOpenIcon className="h-4 w-4" /> : <FolderMinusIcon className="h-4 w-4" />,
+            dividerAbove: true,
+          },
+          {
             id: "close-preview",
             label: "Close preview",
             onSelect: onClosePreview,
             icon: <CloseIcon className="h-4 w-4" />,
-            dividerAbove: true,
+            dividerAbove: false,
           },
         ]}
       />

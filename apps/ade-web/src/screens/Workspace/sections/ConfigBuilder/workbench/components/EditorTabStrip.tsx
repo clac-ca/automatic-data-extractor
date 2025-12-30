@@ -346,7 +346,7 @@ export function EditorTabStrip({
               aria-label="Open editors list"
               onClick={openTabListMenu}
             >
-              <ChevronDownIcon />
+              <ChevronDownIcon className="h-4 w-4" />
             </button>
           </div>
         </SortableContext>
@@ -391,7 +391,7 @@ function ScrollButton({ appearance, direction, disabled, onClick }: ScrollButton
       disabled={disabled}
       aria-label={direction === "left" ? "Scroll tabs left" : "Scroll tabs right"}
     >
-      {direction === "left" ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+      {direction === "left" ? <ChevronLeftIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
     </button>
   );
 }

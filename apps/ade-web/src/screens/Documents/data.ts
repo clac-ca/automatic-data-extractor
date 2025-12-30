@@ -3,12 +3,16 @@ import { client } from "@shared/api/client";
 import type { RunResource } from "@schema";
 
 import type {
+  ApiDocumentDisplayStatus,
   ApiDocumentStatus,
   DocumentEntry,
   DocumentLastRun,
-  DocumentPage,
+  DocumentPageResult,
   DocumentRecord,
   DocumentStatus,
+  DocumentsFilters,
+  DocumentQueueReason,
+  DocumentQueueState,
   FileType,
   ListDocumentsQuery,
   MappingHealth,
@@ -35,8 +39,10 @@ export const MAX_PREVIEW_ROWS = 200;
 export const documentsKeys = {
   root: () => ["documents"] as const,
   workspace: (workspaceId: string) => [...documentsKeys.root(), workspaceId] as const,
-  list: (workspaceId: string, sort: string | null, pageSize: number) =>
-    [...documentsKeys.workspace(workspaceId), "list", { sort, pageSize }] as const,
+  list: (
+    workspaceId: string,
+    options: { sort: string | null; pageSize: number; filters?: DocumentsFilters; search?: string },
+  ) => [...documentsKeys.workspace(workspaceId), "list", options] as const,
   members: (workspaceId: string) => [...documentsKeys.workspace(workspaceId), "members"] as const,
   document: (workspaceId: string, documentId: string) =>
     [...documentsKeys.workspace(workspaceId), "document", documentId] as const,
@@ -49,23 +55,33 @@ export const documentsKeys = {
 
 export async function fetchWorkspaceDocuments(
   workspaceId: string,
-  options: { sort: string | null; page: number; pageSize: number },
+  options: {
+    sort: string | null;
+    page: number;
+    pageSize: number;
+    query?: Partial<ListDocumentsQuery>;
+  },
   signal?: AbortSignal,
-): Promise<DocumentPage> {
+): Promise<DocumentPageResult> {
   const query: ListDocumentsQuery = {
     sort: options.sort ?? undefined,
     page: options.page > 0 ? options.page : 1,
     page_size: options.pageSize > 0 ? options.pageSize : DOCUMENTS_PAGE_SIZE,
     include_total: false,
+    ...(options.query ?? {}),
   };
 
-  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
+  const { data, response } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
     params: { path: { workspace_id: workspaceId }, query },
     signal,
   });
 
   if (!data) throw new Error("Expected document page payload.");
-  return data;
+  const changesCursorHeader = response?.headers?.get("x-ade-changes-cursor");
+  return {
+    ...data,
+    changesCursorHeader,
+  };
 }
 
 export async function fetchWorkspaceDocumentById(
@@ -158,14 +174,17 @@ export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): P
 }
 
 export function buildDocumentEntry(document: DocumentRecord): DocumentEntry {
-  const status = deriveDocumentStatus(document);
+  const status = resolveDisplayStatus(document);
   const uploader = deriveUploaderLabel(document);
   const createdAt = parseTimestamp(document.created_at);
   const updatedAt = resolveDocumentUpdatedAt(document);
-  const stage = buildStageLabel(status, document.last_run);
+  const stage = buildStageLabel(status, document.last_run, document.queue_state, document.queue_reason);
   const mapping = deriveMappingHealth(document);
+  const queueState = document.queue_state ?? null;
+  const queueReason = document.queue_reason ?? null;
 
   const fileType: FileType = fileTypeFromName(document.name);
+  const assigneeKey = document.assignee_user_id ? `user:${document.assignee_user_id}` : null;
 
   return {
     id: document.id,
@@ -180,9 +199,10 @@ export function buildDocumentEntry(document: DocumentRecord): DocumentEntry {
     stage,
     error: status === "failed" ? buildDocumentError(document) : undefined,
     mapping,
+    queueState,
+    queueReason,
 
-    // Collaborative defaults (overridden by model)
-    assigneeKey: null,
+    assigneeKey,
     assigneeLabel: null,
     commentCount: 0,
 
@@ -285,6 +305,75 @@ export async function deleteWorkspaceDocumentsBatch(workspaceId: string, documen
   return data.document_ids ?? [];
 }
 
+export async function patchWorkspaceDocument(
+  workspaceId: string,
+  documentId: string,
+  payload: { assigneeUserId?: string | null; metadata?: Record<string, unknown> | null },
+): Promise<DocumentRecord> {
+  const body: {
+    assignee_user_id?: string | null;
+    metadata?: Record<string, unknown> | null;
+  } = {};
+  if ("assigneeUserId" in payload) {
+    body.assignee_user_id = payload.assigneeUserId ?? null;
+  }
+  if ("metadata" in payload) {
+    body.metadata = payload.metadata ?? null;
+  }
+
+  const { data } = await client.PATCH("/api/v1/workspaces/{workspace_id}/documents/{document_id}", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+    body,
+  });
+
+  if (!data) throw new Error("Expected updated document record.");
+  return data;
+}
+
+export async function archiveWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/{document_id}/archive", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  });
+
+  if (!data) throw new Error("Expected updated document record.");
+  return data;
+}
+
+export async function restoreWorkspaceDocument(workspaceId: string, documentId: string): Promise<DocumentRecord> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/{document_id}/restore", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+  });
+
+  if (!data) throw new Error("Expected updated document record.");
+  return data;
+}
+
+export async function archiveWorkspaceDocumentsBatch(
+  workspaceId: string,
+  documentIds: string[],
+): Promise<DocumentRecord[]> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/archive", {
+    params: { path: { workspace_id: workspaceId } },
+    body: { document_ids: documentIds },
+  });
+
+  if (!data) throw new Error("Expected updated document records.");
+  return data.documents;
+}
+
+export async function restoreWorkspaceDocumentsBatch(
+  workspaceId: string,
+  documentIds: string[],
+): Promise<DocumentRecord[]> {
+  const { data } = await client.POST("/api/v1/workspaces/{workspace_id}/documents/batch/restore", {
+    params: { path: { workspace_id: workspaceId } },
+    body: { document_ids: documentIds },
+  });
+
+  if (!data) throw new Error("Expected updated document records.");
+  return data.documents;
+}
+
 export function runOutputDownloadUrl(run: RunResource): string | null {
   if (run.output?.download_url) return run.output.download_url;
   if (run.links?.output_download) return run.links.output_download;
@@ -343,11 +432,22 @@ function deriveDocumentStatus(document: DocumentRecord): DocumentStatus {
 }
 
 function resolveDocumentUpdatedAt(document: DocumentRecord): number {
+  if (document.activity_at) {
+    return parseTimestamp(document.activity_at);
+  }
   const updatedAt = parseTimestamp(document.updated_at);
   if (!document.last_run_at) return updatedAt;
 
   const lastRunAt = parseTimestamp(document.last_run_at);
   return Math.max(updatedAt, lastRunAt);
+}
+
+function resolveDisplayStatus(document: DocumentRecord): DocumentStatus {
+  const display = document.display_status as ApiDocumentDisplayStatus | undefined;
+  if (display) {
+    return display as DocumentStatus;
+  }
+  return deriveDocumentStatus(document);
 }
 
 export function deriveUploaderLabel(document: DocumentRecord): string | null {
@@ -401,13 +501,39 @@ function readMappingFromMetadata(metadata: Record<string, unknown>): MappingHeal
   return null;
 }
 
-function buildStageLabel(status: DocumentStatus, lastRun: DocumentLastRun | null | undefined) {
+function buildStageLabel(
+  status: DocumentStatus,
+  lastRun: DocumentLastRun | null | undefined,
+  queueState: DocumentQueueState | null | undefined,
+  queueReason: DocumentQueueReason | null | undefined,
+) {
+  const queuedLabel = buildQueueLabel(queueState, queueReason);
+  if (queuedLabel) return queuedLabel;
   if (status === "queued") return "Queued for processing";
   if (status === "processing") {
     if (lastRun?.status === "queued") return "Queued for processing";
     return "Processing output";
   }
   return undefined;
+}
+
+function buildQueueLabel(
+  queueState: DocumentQueueState | null | undefined,
+  queueReason: DocumentQueueReason | null | undefined,
+) {
+  if (!queueState) return null;
+  if (queueState === "queued") return "Queued for processing";
+  if (queueState !== "waiting") return null;
+  switch (queueReason) {
+    case "processing_paused":
+      return "Processing paused";
+    case "queue_full":
+      return "Waiting for capacity";
+    case "no_active_configuration":
+      return "Waiting for configuration";
+    default:
+      return "Waiting to start";
+  }
 }
 
 function buildDocumentError(document: DocumentRecord) {

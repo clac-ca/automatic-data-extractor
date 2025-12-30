@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import clsx from "clsx";
+import { CloseIcon, SearchIcon, SpinnerIcon } from "@ui/Icons";
 
 export interface GlobalSearchSuggestion {
   readonly id: string;
@@ -362,7 +363,7 @@ export function GlobalSearchField({
                 aria-live="polite"
                 aria-label={loadingLabel}
               >
-                <SpinnerIcon className="h-4 w-4 text-brand-600" />
+                <SpinnerIcon className="h-4 w-4 animate-spin text-brand-600" />
               </span>
             ) : null}
 
@@ -472,33 +473,6 @@ function DefaultSuggestion({ suggestion, active }: { suggestion: GlobalSearchSug
         ) : null}
       </span>
     </div>
-  );
-}
-
-function SearchIcon({ className = "h-4 w-4 flex-shrink-0 text-muted-foreground" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <circle cx="9" cy="9" r="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="m13.5 13.5 3 3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CloseIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.6}>
-      <path d="M6 6l8 8" strokeLinecap="round" />
-      <path d="M14 6l-8 8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className = "h-4 w-4" }: { className?: string }) {
-  return (
-    <svg className={clsx("animate-spin", className)} viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-      <path className="opacity-70" d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-    </svg>
   );
 }
 

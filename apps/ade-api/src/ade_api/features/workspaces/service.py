@@ -46,6 +46,7 @@ from .schemas import (
     WorkspaceMemberUpdate,
     WorkspaceOut,
 )
+from .settings import apply_processing_paused, read_processing_paused
 
 if TYPE_CHECKING:
     from ade_api.features.rbac.schemas import RoleCreate, RoleUpdate
@@ -76,6 +77,12 @@ class WorkspacesService:
     # ------------------------------------------------------------------
     # Workspace profiles
     # ------------------------------------------------------------------
+    @staticmethod
+    def _processing_paused(workspace: Workspace | None) -> bool:
+        if workspace is None:
+            return False
+        return read_processing_paused(workspace.settings)
+
     async def get_workspace_profile(
         self,
         *,
@@ -116,6 +123,7 @@ class WorkspacesService:
                     roles=[],
                     permissions=sorted(permissions),
                     is_default=False,
+                    processing_paused=self._processing_paused(workspace),
                 )
                 logger.info(
                     "workspace.profile.global_admin",
@@ -157,6 +165,7 @@ class WorkspacesService:
                 roles=sorted(role.slug for role in roles),
                 permissions=sorted(permissions),
                 is_default=membership.is_default,
+                processing_paused=self._processing_paused(workspace),
             )
             logger.info(
                 "workspace.profile.success",
@@ -206,6 +215,7 @@ class WorkspacesService:
             roles=sorted(role.slug for role in roles),
             permissions=sorted(permissions),
             is_default=membership.is_default,
+            processing_paused=self._processing_paused(membership.workspace),
         )
         logger.info(
             "workspace.profile.default_success",
@@ -258,6 +268,7 @@ class WorkspacesService:
                         roles=[],
                         permissions=sorted(permissions),
                         is_default=False,
+                        processing_paused=self._processing_paused(workspace),
                     )
                 )
             profiles.sort(key=lambda profile: profile.slug)
@@ -280,6 +291,7 @@ class WorkspacesService:
                         roles=sorted(role.slug for role in roles),
                         permissions=sorted(permissions),
                         is_default=membership.is_default,
+                        processing_paused=self._processing_paused(membership.workspace),
                     )
                 )
             profiles.sort(key=lambda profile: profile.slug)
@@ -322,6 +334,7 @@ class WorkspacesService:
         slug: str | None,
         owner_user_id: UUID | None = None,
         settings: Mapping[str, object] | None = None,
+        processing_paused: bool | None = None,
     ) -> WorkspaceOut:
         slug_value = _slugify(slug or name)
         if not slug_value:
@@ -344,11 +357,16 @@ class WorkspacesService:
             extra=log_context(slug=slug_value, owner_id=owner_id),
         )
 
+        settings_payload = (
+            apply_processing_paused(settings, processing_paused)
+            if settings is not None or processing_paused is not None
+            else None
+        )
         try:
             workspace = await self._repo.create_workspace(
                 name=name.strip(),
                 slug=slug_value,
-                settings=settings,
+                settings=settings_payload,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive double check
             logger.warning(
@@ -384,6 +402,7 @@ class WorkspacesService:
             roles=[_WORKSPACE_OWNER_SLUG],
             permissions=sorted(permissions),
             is_default=membership.is_default,
+            processing_paused=self._processing_paused(workspace),
         )
         logger.info(
             "workspace.create.success",
@@ -403,18 +422,24 @@ class WorkspacesService:
         name: str | None,
         slug: str | None,
         settings: Mapping[str, object] | None = None,
+        processing_paused: bool | None = None,
     ) -> WorkspaceOut:
         workspace = await self._ensure_workspace(workspace_id)
         slug_value = _slugify(slug) if slug else None
         if slug_value:
             await self._ensure_slug_available(slug_value, current_id=workspace.id)
 
+        settings_payload = None
+        if settings is not None or processing_paused is not None:
+            base_settings = dict(settings) if settings is not None else dict(workspace.settings or {})
+            settings_payload = apply_processing_paused(base_settings, processing_paused)
+
         try:
             workspace = await self._repo.update_workspace(
                 workspace,
                 name=name.strip() if name else None,
                 slug=slug_value,
-                settings=settings,
+                settings=settings_payload,
             )
         except IntegrityError as exc:  # pragma: no cover - defensive double check
             raise HTTPException(
@@ -441,6 +466,7 @@ class WorkspacesService:
             roles=sorted(role.slug for role in roles),
             permissions=sorted(permissions),
             is_default=membership.is_default if membership else False,
+            processing_paused=self._processing_paused(workspace),
         )
         return profile
 

@@ -5,6 +5,7 @@ import { formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
+import { UploadProgress } from "./UploadProgress";
 
 const STATUS_DOT: Record<string, string> = {
   queued: "bg-muted-foreground",
@@ -141,77 +142,84 @@ export function DocumentsBoard({
                       <p>No items yet</p>
                     </div>
                   ) : (
-                    column.items.map((doc) => (
-                      <div
-                        key={doc.id}
-                        onClick={() => onActivate(doc.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            onActivate(doc.id);
-                          }
-                        }}
-                        className={clsx(
-                          "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          cardGap,
-                          cardPadding,
-                          activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
-                        )}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Open ${doc.name}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
-                            <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
-                          </div>
-                          <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
-                          {!doc.assigneeKey ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onPickUp(doc.id);
-                              }}
-                              className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
-                            >
-                              Pick up
-                            </button>
-                          ) : null}
-                          <div
-                            onPointerDown={(event) => event.stopPropagation()}
-                            className="min-w-0 rounded-full border border-border bg-background px-1 py-0.5"
-                          >
-                            <PeoplePicker
-                              people={people}
-                              value={[doc.assigneeKey ?? unassignedKey()]}
-                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                              placeholder="Assign..."
-                              includeUnassigned
-                              buttonClassName="min-w-0 max-w-[11rem] border-0 bg-transparent px-2 py-0 text-[11px] shadow-none"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
-                          {doc.tags.length > 0 ? (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5">
-                              {doc.tags[0]}
-                              {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">No tags</span>
+                    column.items.map((doc) => {
+                      return (
+                        <div
+                          key={doc.id}
+                          onClick={() => onActivate(doc.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onActivate(doc.id);
+                            }
+                          }}
+                          className={clsx(
+                            "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            cardGap,
+                            cardPadding,
+                            activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
                           )}
-                          <MappingBadge mapping={doc.mapping} />
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open ${doc.name}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
+                            </div>
+                            <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
+                            {!doc.assigneeKey ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onPickUp(doc.id);
+                                }}
+                                className="shrink-0 whitespace-nowrap rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 font-semibold text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/20 dark:text-brand-200"
+                              >
+                                Pick up
+                              </button>
+                            ) : null}
+                            <div
+                              onPointerDown={(event) => event.stopPropagation()}
+                              className="min-w-0 rounded-full border border-border bg-background px-1 py-0.5"
+                            >
+                              <PeoplePicker
+                                people={people}
+                                value={[doc.assigneeKey ?? unassignedKey()]}
+                                onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                                placeholder="Assign..."
+                                includeUnassigned
+                                buttonClassName="min-w-0 max-w-[11rem] border-0 bg-transparent px-2 py-0 text-[11px] shadow-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
+                            {doc.tags.length > 0 ? (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5">
+                                {doc.tags[0]}
+                                {doc.tags.length > 1 ? ` +${doc.tags.length - 1}` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">No tags</span>
+                            )}
+                            <MappingBadge mapping={doc.mapping} />
+                          </div>
+                          {doc.upload && doc.upload.status !== "succeeded" ? (
+                            <div className="pt-1">
+                              <UploadProgress upload={doc.upload} />
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
-                    ))
+                      );
+                  })
                   )}
                 </div>
               </div>

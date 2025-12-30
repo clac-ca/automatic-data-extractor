@@ -387,7 +387,7 @@ async def delete_role(
 
 
 @router.get(
-    "/role-assignments",
+    "/roleAssignments",
     response_model=RoleAssignmentPage,
     response_model_exclude_none=True,
     summary="List role assignments (admin view)",

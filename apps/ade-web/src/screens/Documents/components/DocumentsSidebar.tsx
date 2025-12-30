@@ -1,18 +1,9 @@
 import clsx from "clsx";
 
-import type { DocumentsFilters, SavedView } from "../types";
-import { unassignedKey } from "./PeoplePicker";
+import { PlusIcon, TrashIcon } from "@ui/Icons";
 
-type BuiltInViewId =
-  | "all_documents"
-  | "assigned_to_me"
-  | "assigned_to_me_or_unassigned"
-  | "unassigned"
-  | "processed"
-  | "processing"
-  | "failed"
-  | "archived"
-  | "custom";
+import type { DocumentsFilters, SavedView } from "../types";
+import { buildBuiltInViews, buildFiltersForBuiltInView, type BuiltInViewCounts, type BuiltInViewId } from "../filters";
 
 export function DocumentsSidebar({
   activeViewId,
@@ -31,31 +22,9 @@ export function DocumentsSidebar({
   onDeleteSavedView: (viewId: string) => void;
   onOpenSaveDialog: () => void;
 
-  counts: {
-    total: number;
-    assignedToMe: number;
-    assignedToMeOrUnassigned: number;
-    unassigned: number;
-    processed: number;
-    processing: number;
-    failed: number;
-    archived: number;
-  };
+  counts: BuiltInViewCounts;
 }) {
-  const builtins: { id: BuiltInViewId; label: string; count?: number }[] = [
-    { id: "all_documents", label: "All documents", count: counts.total },
-    { id: "assigned_to_me", label: "Assigned to me", count: counts.assignedToMe },
-    {
-      id: "assigned_to_me_or_unassigned",
-      label: "Assigned to me or Unassigned",
-      count: counts.assignedToMeOrUnassigned,
-    },
-    { id: "unassigned", label: "Unassigned", count: counts.unassigned },
-    { id: "processed", label: "Processed", count: counts.processed },
-    { id: "processing", label: "Processing", count: counts.processing },
-    { id: "failed", label: "Failed", count: counts.failed },
-    { id: "archived", label: "Archived", count: counts.archived },
-  ];
+  const builtins = buildBuiltInViews(counts);
 
   return (
     <aside className="flex min-h-0 min-w-0 w-full flex-col border-r border-border bg-card lg:w-72 lg:shrink-0">
@@ -67,8 +36,9 @@ export function DocumentsSidebar({
         <button
           type="button"
           onClick={onOpenSaveDialog}
-          className="mt-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:border-brand-300"
+          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:border-brand-300"
         >
+          <PlusIcon className="h-3.5 w-3.5" />
           Save current view
         </button>
       </div>
@@ -126,9 +96,10 @@ export function DocumentsSidebar({
                   <button
                     type="button"
                     onClick={() => onDeleteSavedView(view.id)}
-                    className="ml-2 hidden text-xs font-semibold text-muted-foreground hover:text-danger-600 group-hover:inline"
+                    className="ml-2 hidden items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-danger-600 group-hover:inline-flex"
                     aria-label={`Delete view ${view.name}`}
                   >
+                    <TrashIcon className="h-3.5 w-3.5" />
                     Delete
                   </button>
                 </div>
@@ -145,45 +116,10 @@ export function DocumentsSidebar({
 }
 
 export function filtersForBuiltInView(
-  id:
-    | "all_documents"
-    | "assigned_to_me"
-    | "assigned_to_me_or_unassigned"
-    | "unassigned"
-    | "processed"
-    | "processing"
-    | "failed"
-    | "archived",
+  id: BuiltInViewId,
   base: DocumentsFilters,
   currentUserKey: string,
 ): DocumentsFilters {
-  const cleared: DocumentsFilters = {
-    ...base,
-    statuses: [],
-    fileTypes: [],
-    tags: [],
-    tagMode: "any",
-    assignees: [],
-  };
-
-  switch (id) {
-    case "all_documents":
-      return cleared;
-    case "assigned_to_me":
-      return { ...cleared, assignees: [currentUserKey] };
-    case "assigned_to_me_or_unassigned":
-      return { ...cleared, assignees: [currentUserKey, unassignedKey()] };
-    case "unassigned":
-      return { ...cleared, assignees: [unassignedKey()] };
-    case "processed":
-      return { ...cleared, statuses: ["ready"] };
-    case "processing":
-      return { ...cleared, statuses: ["queued", "processing"] };
-    case "failed":
-      return { ...cleared, statuses: ["failed"] };
-    case "archived":
-      return { ...cleared, statuses: ["archived"] };
-    default:
-      return cleared;
-  }
+  const filters = buildFiltersForBuiltInView(id, currentUserKey);
+  return { ...base, ...filters };
 }

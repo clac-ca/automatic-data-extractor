@@ -125,7 +125,7 @@ export interface SafeModeStatus {
 }
 ```
 
-* Fetched from `GET /api/v1/system/safe-mode`.
+* Fetched from `GET /api/v1/system/safeMode`.
 * Cached via React Query with a moderate `staleTime`.
 * Drives:
 
@@ -370,9 +370,9 @@ Roles are defined and assigned via the API; the frontend treats them as named bu
 
 * Assignments:
 
-  * `GET /api/v1/rbac/role-assignments`
-  * `POST /api/v1/rbac/role-assignments`
-  * `DELETE /api/v1/rbac/role-assignments/{assignment_id}`
+  * `GET /api/v1/rbac/roleAssignments`
+  * `POST /api/v1/rbac/roleAssignments`
+  * `DELETE /api/v1/rbac/roleAssignments/{assignment_id}`
   * `GET /api/v1/users/{user_id}/roles`
   * `PUT /api/v1/users/{user_id}/roles/{role_id}`
   * `DELETE /api/v1/users/{user_id}/roles/{role_id}`
@@ -529,7 +529,7 @@ Safe mode is a system‑wide switch that stops new engine work from executing (w
 
 Endpoints:
 
-* `GET /api/v1/system/safe-mode`:
+* `GET /api/v1/system/safeMode`:
 
   ```json
   {
@@ -538,7 +538,7 @@ Endpoints:
   }
   ```
 
-* `PUT /api/v1/system/safe-mode`:
+* `PUT /api/v1/system/safeMode`:
 
   * Permission‑gated (e.g. requires `System.SafeMode.ReadWrite`).
   * Accepts:
@@ -565,7 +565,7 @@ function useSafeModeStatus(): {
 
 Implementation details:
 
-* Wraps `GET /api/v1/system/safe-mode` in a React Query query.
+* Wraps `GET /api/v1/system/safeMode` in a React Query query.
 * Uses a `staleTime` on the order of tens of seconds (exact value configurable).
 * Allows manual refetch (e.g. after toggling Safe mode).
 
@@ -637,7 +637,7 @@ UI pattern:
 * The toggle workflow:
 
   1. User edits the switch and/or message.
-  2. UI calls `PUT /api/v1/system/safe-mode`.
+  2. UI calls `PUT /api/v1/system/safeMode`.
   3. On success:
 
      * Refetch Safe mode status.

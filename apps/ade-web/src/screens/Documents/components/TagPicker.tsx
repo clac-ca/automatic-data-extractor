@@ -6,7 +6,7 @@ import { client } from "@shared/api/client";
 import { Input } from "@ui/Input";
 
 import type { components } from "@schema";
-import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon } from "./icons";
+import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon, TagIcon } from "@ui/Icons";
 
 type TagCatalogPage = components["schemas"]["TagCatalogPage"];
 
@@ -17,6 +17,7 @@ export function TagPicker({
   placeholder,
   disabled,
   buttonClassName,
+  onOpenChange,
 }: {
   workspaceId: string;
   selected: string[];
@@ -24,6 +25,7 @@ export function TagPicker({
   placeholder: string;
   disabled?: boolean;
   buttonClassName?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -74,6 +76,10 @@ export function TagPicker({
   }, [open]);
 
   useEffect(() => {
+    onOpenChange?.(open);
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
     if (!open) return;
 
     const onClick = (event: MouseEvent) => {
@@ -115,6 +121,7 @@ export function TagPicker({
         aria-haspopup="listbox"
         aria-controls={open ? listId : undefined}
       >
+        <TagIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
         {selected.length === 0 ? (
           <span className="min-w-0 truncate text-muted-foreground">{placeholder}</span>
         ) : (

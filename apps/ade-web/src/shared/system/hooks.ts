@@ -10,7 +10,7 @@ import {
   type SystemVersions,
 } from "./api";
 
-export const SAFE_MODE_QUERY_KEY = ["system", "safe-mode"] as const;
+export const SAFE_MODE_QUERY_KEY = ["system", "safeMode"] as const;
 export const SYSTEM_VERSIONS_QUERY_KEY = ["system", "versions"] as const;
 
 export function useSafeModeStatus() {

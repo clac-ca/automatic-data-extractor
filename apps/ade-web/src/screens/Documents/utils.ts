@@ -1,7 +1,6 @@
 import type { FileType } from "./types";
 
 export const numberFormatter = new Intl.NumberFormat("en-US");
-
 export function formatRelativeTime(nowTimestamp: number, timestamp: number) {
   const diff = Math.max(0, nowTimestamp - timestamp);
   const minutes = Math.floor(diff / 60000);

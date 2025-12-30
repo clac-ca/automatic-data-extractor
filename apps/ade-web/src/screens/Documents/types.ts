@@ -1,10 +1,16 @@
 import type { components, paths } from "@schema";
 import type { DocumentUploadResponse } from "@shared/documents";
-import type { UploadQueueItem } from "@shared/uploads/queue";
+import type { UploadManagerItem } from "@shared/documents/uploadManager";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"];
 export type DocumentPage = components["schemas"]["DocumentPage"];
+export type DocumentPageResult = DocumentPage & { changesCursorHeader?: string | null };
+export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
+export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type ApiDocumentStatus = components["schemas"]["DocumentStatus"];
+export type ApiDocumentDisplayStatus = components["schemas"]["DocumentDisplayStatus"];
+export type DocumentQueueState = components["schemas"]["DocumentQueueState"];
+export type DocumentQueueReason = components["schemas"]["DocumentQueueReason"];
 export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
 export type ListDocumentsQuery =
   paths["/api/v1/workspaces/{workspace_id}/documents"]["get"]["parameters"]["query"];
@@ -25,7 +31,7 @@ export type ViewMode = "grid" | "board";
 export type BoardGroup = "status" | "tag" | "uploader";
 
 export type ListDensity = "comfortable" | "compact";
-export type ListRefreshInterval = "off" | "30s" | "1m" | "5m";
+export type ListRefreshInterval = "auto" | "off" | "30s" | "1m" | "5m";
 export type ListPageSize = 50 | 100 | 200;
 export type ListSettings = {
   pageSize: ListPageSize;
@@ -112,7 +118,10 @@ export type DocumentEntry = {
   mapping: MappingHealth;
 
   record?: DocumentRecord;
-  upload?: UploadQueueItem<DocumentUploadResponse>;
+  upload?: UploadManagerItem<DocumentUploadResponse>;
+
+  queueState?: DocumentQueueState | null;
+  queueReason?: DocumentQueueReason | null;
 };
 
 export type BoardColumn = {

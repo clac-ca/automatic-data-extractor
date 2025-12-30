@@ -320,7 +320,7 @@ async def test_list_documents_invalid_filter_returns_422(
 
     assert response.status_code == 422
     payload = response.json()
-    assert payload["detail"] == "Invalid status value"
+    assert payload["detail"] == "Invalid display status value"
 
 
 async def test_list_documents_uploader_me_filters(

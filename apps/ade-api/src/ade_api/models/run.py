@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +14,7 @@ from ade_api.common.ids import generate_uuid7
 from ade_api.common.time import utc_now
 from ade_api.db import Base, UUIDType
 from ade_api.db.enums import enum_values
+from ade_api.db.types import UTCDateTime
 
 
 class RunStatus(str, Enum):
@@ -64,11 +65,11 @@ class Run(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utc_now
+        UTCDateTime(), nullable=False, default=utc_now
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 

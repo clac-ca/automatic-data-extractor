@@ -33,6 +33,8 @@ from ade_api.features.configs.storage import ConfigStorage
 from ade_api.features.documents.repository import DocumentsRepository
 from ade_api.features.documents.staging import stage_document_input
 from ade_api.features.documents.storage import DocumentStorage
+from ade_api.features.workspaces.repository import WorkspacesRepository
+from ade_api.features.workspaces.settings import read_processing_paused
 from ade_api.features.runs.event_stream import (
     RunEventContext,
     RunEventStream,
@@ -54,12 +56,14 @@ from ade_api.models import (
     Configuration,
     ConfigurationStatus,
     Document,
+    DocumentStatus,
     Run,
     RunField,
     RunMetrics,
     RunStatus,
     RunTableColumn,
 )
+from ade_api.features.documents.schemas import DocumentOut
 from ade_api.settings import Settings
 
 from .exceptions import (
@@ -175,6 +179,8 @@ class RunsService:
         build_event_streams: RunEventStreamRegistry | None = None,
     ) -> None:
         from ade_api.features.builds.service import BuildsService
+        from ade_api.features.documents.change_feed import DocumentChangesService
+        from ade_api.features.documents.service import DocumentsService
 
         self._session = session
         self._settings = settings
@@ -182,6 +188,7 @@ class RunsService:
         self._runs = RunsRepository(session)
         self._supervisor = supervisor or RunExecutionSupervisor()
         self._documents = DocumentsRepository(session)
+        self._workspaces = WorkspacesRepository(session)
         self._safe_mode_service = safe_mode_service
         self._storage = storage or ConfigStorage(
             settings=settings,
@@ -194,6 +201,8 @@ class RunsService:
             storage=self._storage,
             event_streams=self._build_event_streams,
         )
+        self._document_changes = DocumentChangesService(session=session, settings=settings)
+        self._documents_service = DocumentsService(session=session, settings=settings)
 
         if settings.documents_dir is None:
             raise RuntimeError("ADE_DOCUMENTS_DIR is not configured")
@@ -489,6 +498,109 @@ class RunsService:
             return None
         return await self._require_run(run.id)
 
+    async def enqueue_pending_runs_for_configuration(
+        self,
+        *,
+        configuration_id: UUID,
+        batch_size: int | None = None,
+    ) -> int:
+        """Queue runs for uploaded documents without runs using the active configuration."""
+
+        try:
+            configuration = await self._resolve_configuration(configuration_id)
+        except ConfigurationNotFoundError:
+            return 0
+        if await self._processing_paused(configuration.workspace_id):
+            logger.info(
+                "run.pending.enqueue.skip.processing_paused",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                ),
+            )
+            return 0
+        if configuration.status is not ConfigurationStatus.ACTIVE:
+            logger.info(
+                "run.pending.enqueue.skip.inactive_config",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    status=configuration.status.value,
+                ),
+            )
+            return 0
+
+        batch_size = batch_size or self._settings.queue_size or 100
+        if batch_size <= 0:
+            return 0
+
+        total = 0
+        while True:
+            remaining = await self._remaining_queue_capacity()
+            if remaining is not None and remaining <= 0:
+                break
+            limit = batch_size if remaining is None else min(batch_size, remaining)
+            document_ids = await self._pending_document_ids(
+                workspace_id=configuration.workspace_id,
+                limit=limit,
+            )
+            if not document_ids:
+                break
+            try:
+                runs = await self.prepare_runs_batch(
+                    configuration_id=configuration.id,
+                    document_ids=document_ids,
+                    options=RunBatchCreateOptions(),
+                )
+            except RunQueueFullError:
+                logger.warning(
+                    "run.pending.enqueue.queue_full",
+                    extra=log_context(
+                        workspace_id=configuration.workspace_id,
+                        configuration_id=configuration.id,
+                    ),
+                )
+                break
+            total += len(runs)
+            if len(document_ids) < limit:
+                break
+
+        if total:
+            logger.info(
+                "run.pending.enqueue.completed",
+                extra=log_context(
+                    workspace_id=configuration.workspace_id,
+                    configuration_id=configuration.id,
+                    count=total,
+                ),
+            )
+        return total
+
+    async def is_processing_paused(self, *, workspace_id: UUID) -> bool:
+        return await self._processing_paused(workspace_id)
+
+    async def _maybe_enqueue_pending_runs(self, *, workspace_id: UUID) -> None:
+        try:
+            configuration = await self._configs.get_active(workspace_id)
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception(
+                "run.pending.enqueue.auto.failed",
+                extra=log_context(workspace_id=workspace_id),
+            )
+            return
+        if configuration is None:
+            return
+        try:
+            await self.enqueue_pending_runs_for_configuration(configuration_id=configuration.id)
+        except Exception:  # pragma: no cover - defensive guard
+            logger.exception(
+                "run.pending.enqueue.auto.failed",
+                extra=log_context(
+                    workspace_id=workspace_id,
+                    configuration_id=configuration.id,
+                ),
+            )
+
     async def expire_stuck_runs(self) -> int:
         timeout_seconds = self._settings.run_timeout_seconds
         if not timeout_seconds:
@@ -544,6 +656,37 @@ class RunsService:
 
     async def expire_stuck_builds(self) -> int:
         return await self._builds_service.expire_stuck_builds()
+
+    async def _remaining_queue_capacity(self) -> int | None:
+        limit = self._settings.queue_size
+        if not limit:
+            return None
+        queued = await self._runs.count_queued()
+        return max(limit - queued, 0)
+
+    async def _pending_document_ids(self, *, workspace_id: UUID, limit: int) -> list[UUID]:
+        if limit <= 0:
+            return []
+        pending_run_exists = (
+            select(Run.id)
+            .where(Run.input_document_id == Document.id)
+            .limit(1)
+            .exists()
+        )
+        stmt = (
+            select(Document.id)
+            .where(
+                Document.workspace_id == workspace_id,
+                Document.status == DocumentStatus.UPLOADED,
+                Document.deleted_at.is_(None),
+                ~pending_run_exists,
+            )
+            .order_by(Document.created_at.asc())
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
 
     async def _enforce_queue_capacity(self, *, requested: int = 1) -> None:
         limit = self._settings.queue_size
@@ -2142,6 +2285,12 @@ class RunsService:
             )
         return configuration
 
+    async def _processing_paused(self, workspace_id: UUID) -> bool:
+        workspace = await self._workspaces.get_workspace(workspace_id)
+        if workspace is None:
+            return False
+        return read_processing_paused(workspace.settings)
+
     async def _resolve_workspace_configuration(
         self,
         *,
@@ -2182,12 +2331,55 @@ class RunsService:
             )
         return configuration
 
+    async def _emit_document_upsert(self, document: Document) -> None:
+        payload = DocumentOut.model_validate(document)
+        await self._documents_service._attach_last_runs(document.workspace_id, [payload])
+        queue_context = await self._documents_service.build_queue_context(
+            workspace_id=document.workspace_id,
+        )
+        self._documents_service._apply_derived_fields(payload, queue_context)
+        await self._document_changes.record_upsert(
+            workspace_id=document.workspace_id,
+            document_id=document.id,
+            payload=payload.model_dump(),
+        )
+        await self._session.commit()
+
+    async def _touch_document_status(
+        self,
+        *,
+        run: Run,
+        status: DocumentStatus,
+    ) -> Document | None:
+        if not run.input_document_id:
+            return None
+        document = await self._documents.get_document(
+            workspace_id=run.workspace_id,
+            document_id=run.input_document_id,
+            include_deleted=True,
+        )
+        if document is None or document.status == DocumentStatus.ARCHIVED:
+            return None
+        if document.status == status:
+            return document
+        document.status = status
+        await self._session.flush()
+        return document
+
     async def _transition_status(self, run: Run, status: RunStatus) -> Run:
         if status is RunStatus.RUNNING:
             run.started_at = run.started_at or utc_now()
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.PROCESSING,
+            )
+        else:
+            document = None
         run.status = status
         await self._session.commit()
         await self._session.refresh(run)
+        if document is not None:
+            await self._emit_document_upsert(document)
         logger.debug(
             "run.status.transition",
             extra=log_context(
@@ -2207,6 +2399,17 @@ class RunsService:
         exit_code: int | None,
         error_message: str | None = None,
     ) -> Run:
+        document = None
+        if status is RunStatus.SUCCEEDED:
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.PROCESSED,
+            )
+        elif status is RunStatus.FAILED or status is RunStatus.CANCELLED:
+            document = await self._touch_document_status(
+                run=run,
+                status=DocumentStatus.FAILED,
+            )
         run.status = status
         run.exit_code = exit_code
         if error_message is not None:
@@ -2217,6 +2420,9 @@ class RunsService:
         await self._session.refresh(run)
 
         await self._ensure_terminal_metrics_stub(run=run)
+        if document is not None:
+            await self._emit_document_upsert(document)
+        await self._maybe_enqueue_pending_runs(workspace_id=run.workspace_id)
 
         logger.info(
             "run.complete",

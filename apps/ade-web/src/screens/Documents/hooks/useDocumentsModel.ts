@@ -11,16 +11,25 @@ import {
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 
+import { ApiError } from "@shared/api";
+import { useConfigurationsQuery } from "@shared/configurations";
 import { useNotifications } from "@shared/notifications";
 import { resolveApiUrl } from "@shared/api/client";
-import { uploadWorkspaceDocument, type DocumentUploadResponse } from "@shared/documents";
-import { useUploadQueue } from "@shared/uploads/queue";
-import { createRun, streamRunEvents } from "@shared/runs/api";
+import { documentChangesStreamUrl, streamDocumentChanges, type DocumentUploadResponse } from "@shared/documents";
+import {
+  useUploadManager,
+  type UploadManagerItem,
+  type UploadManagerStatus,
+  type UploadManagerSummary,
+} from "@shared/documents/uploadManager";
+import { streamRunEvents } from "@shared/runs/api";
 
 import type { RunResource } from "@schema";
 
 import {
   DOCUMENTS_PAGE_SIZE,
+  archiveWorkspaceDocument,
+  archiveWorkspaceDocumentsBatch,
   buildDocumentEntry,
   createRunForDocument,
   deleteWorkspaceDocument,
@@ -36,21 +45,27 @@ import {
   fetchWorkspaceMembers,
   fetchWorkspaceRunsForDocument,
   getDocumentOutputRun,
+  patchWorkspaceDocument,
   patchWorkspaceDocumentTags,
   patchWorkspaceDocumentTagsBatch,
+  restoreWorkspaceDocument,
+  restoreWorkspaceDocumentsBatch,
   runHasDownloadableOutput,
   runOutputDownloadUrl,
 } from "../data";
 import { DEFAULT_LIST_SETTINGS, normalizeListSettings, resolveRefreshIntervalMs } from "../listSettings";
+import { mergeDocumentChangeIntoPages } from "../changeFeed";
 import type {
   BoardColumn,
   BoardGroup,
   DocumentComment,
   DocumentEntry,
+  DocumentPageResult,
+  DocumentChangeEntry,
   DocumentsFilters,
-  DocumentPage,
   DocumentStatus,
   ListSettings,
+  ListDocumentsQuery,
   RunMetricsResource,
   SavedView,
   ViewMode,
@@ -58,6 +73,15 @@ import type {
   WorkspacePerson,
 } from "../types";
 import { copyToClipboard, fileTypeFromName, formatBytes, parseTimestamp, shortId } from "../utils";
+import {
+  ACTIVE_DOCUMENT_STATUSES,
+  type BuiltInViewId,
+  DEFAULT_DOCUMENT_FILTERS,
+  UNASSIGNED_KEY,
+  buildFiltersForBuiltInView,
+  normalizeAssignees,
+  resolveActiveViewId,
+} from "../filters";
 
 type WorkbenchState = {
   viewMode: ViewMode;
@@ -124,6 +148,7 @@ type WorkbenchDerived = {
   // Counts for sidebar
   counts: {
     total: number;
+    active: number;
     assignedToMe: number;
     assignedToMeOrUnassigned: number;
     unassigned: number;
@@ -135,6 +160,15 @@ type WorkbenchDerived = {
 
   lastUpdatedAt: number | null;
   isRefreshing: boolean;
+
+  changesCursor: string | null;
+  configMissing: boolean;
+  processingPaused: boolean;
+
+  uploads: {
+    items: UploadManagerItem<DocumentUploadResponse>[];
+    summary: UploadManagerSummary;
+  };
 };
 
 type WorkbenchRefs = {
@@ -157,6 +191,12 @@ type WorkbenchActions = {
 
   handleUploadClick: () => void;
   handleFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  pauseUpload: (uploadId: string) => void;
+  resumeUpload: (uploadId: string) => void;
+  retryUpload: (uploadId: string) => void;
+  cancelUpload: (uploadId: string) => void;
+  removeUpload: (uploadId: string) => void;
+  clearCompletedUploads: () => void;
 
   refreshDocuments: () => void;
   loadMore: () => void;
@@ -166,7 +206,7 @@ type WorkbenchActions = {
   // Filters & views
   setFilters: (next: DocumentsFilters) => void;
   setListSettings: (next: ListSettings) => void;
-  setBuiltInView: (id: string) => void;
+  setBuiltInView: (id: BuiltInViewId) => void;
   selectSavedView: (viewId: string) => void;
   openSaveView: () => void;
   closeSaveView: () => void;
@@ -176,10 +216,9 @@ type WorkbenchActions = {
   // Tags (persisted)
   updateTagsOptimistic: (documentId: string, nextTags: string[]) => void;
 
-  // Assignment (local-first)
+  // Assignment
   assignDocument: (documentId: string, assigneeKey: string | null) => void;
   pickUpDocument: (documentId: string) => void;
-
   // Notes (local-first)
   addComment: (documentId: string, body: string, mentions: { key: string; label: string }[]) => void;
   editComment: (documentId: string, commentId: string, body: string, mentions: { key: string; label: string }[]) => void;
@@ -195,9 +234,13 @@ type WorkbenchActions = {
   reprocess: (doc: DocumentEntry | null) => void;
   copyLink: (doc: DocumentEntry | null) => void;
   deleteDocument: (documentId: string) => void;
+  archiveDocument: (documentId: string) => void;
+  restoreDocument: (documentId: string) => void;
 
   // Bulk actions
   bulkDeleteDocuments: (documentIds?: string[]) => void;
+  bulkArchiveDocuments: (documentIds?: string[]) => void;
+  bulkRestoreDocuments: (documentIds?: string[]) => void;
   bulkUpdateTags: (payload: { add: string[]; remove: string[] }) => void;
   bulkDownloadOriginals: () => void;
   bulkDownloadOutputs: () => void;
@@ -212,20 +255,9 @@ export type WorkbenchModel = {
 
 const STATUS_ORDER: DocumentStatus[] = ["queued", "processing", "ready", "failed", "archived"];
 
-const DEFAULT_FILTERS: DocumentsFilters = {
-  statuses: [],
-  fileTypes: [],
-  tags: [],
-  tagMode: "any",
-  assignees: [],
-};
-
-const UNASSIGNED_KEY = "__unassigned__";
 const DOCUMENTS_STORAGE_KEYS = {
   views: (workspaceId: string) => `ade.documents.views.${workspaceId}`,
   viewsLegacy: (workspaceId: string) => `ade.documents.v10.views.${workspaceId}`,
-  assignments: (workspaceId: string) => `ade.documents.assignments.${workspaceId}`,
-  assignmentsLegacy: (workspaceId: string) => `ade.documents.v10.assignments.${workspaceId}`,
   comments: (workspaceId: string) => `ade.documents.comments.${workspaceId}`,
   commentsLegacy: (workspaceId: string) => `ade.documents.v10.comments.${workspaceId}`,
   listSettings: (workspaceId: string) => `ade.documents.list_settings.${workspaceId}`,
@@ -250,7 +282,7 @@ function loadSavedViews(workspaceId: string): SavedView[] {
   return parsed.map((v) => ({
     ...v,
     filters: {
-      ...DEFAULT_FILTERS,
+      ...DEFAULT_DOCUMENT_FILTERS,
       ...(v.filters ?? {}),
       tagMode: v.filters?.tagMode ?? "any",
       assignees: v.filters?.assignees ?? [],
@@ -261,20 +293,6 @@ function loadSavedViews(workspaceId: string): SavedView[] {
 function storeSavedViews(workspaceId: string, views: SavedView[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.views(workspaceId), JSON.stringify(views));
-}
-
-function loadAssignments(workspaceId: string): Record<string, string | null> {
-  if (typeof window === "undefined") return {};
-  const raw =
-    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.assignments(workspaceId)) ??
-    window.localStorage.getItem(DOCUMENTS_STORAGE_KEYS.assignmentsLegacy(workspaceId));
-  const parsed = safeJsonParse<Record<string, string | null>>(raw);
-  return parsed ?? {};
-}
-
-function storeAssignments(workspaceId: string, map: Record<string, string | null>) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(DOCUMENTS_STORAGE_KEYS.assignments(workspaceId), JSON.stringify(map));
 }
 
 function loadComments(workspaceId: string): Record<string, DocumentComment[]> {
@@ -307,15 +325,21 @@ export function useDocumentsModel({
   workspaceId,
   currentUserLabel,
   currentUserId,
+  processingPaused,
+  initialFilters,
 }: {
   workspaceId: string;
   currentUserLabel: string;
   currentUserId: string;
+  processingPaused: boolean;
+  initialFilters?: DocumentsFilters;
 }): WorkbenchModel {
   const { notifyToast } = useNotifications();
   const queryClient = useQueryClient();
 
   const currentUserKey = `user:${currentUserId}`;
+  const initialFiltersValue = initialFilters ?? DEFAULT_DOCUMENT_FILTERS;
+  const initialSavedViews = useMemo(() => loadSavedViews(workspaceId), [workspaceId]);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [groupBy, setGroupBy] = useState<BoardGroup>("status");
@@ -326,15 +350,16 @@ export function useDocumentsModel({
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState<DocumentsFilters>(DEFAULT_FILTERS);
-  const [activeViewId, setActiveViewId] = useState<string>("all_documents");
+  const [filters, setFilters] = useState<DocumentsFilters>(initialFiltersValue);
+  const [activeViewId, setActiveViewId] = useState<string>(() =>
+    resolveActiveViewId(initialFiltersValue, "", initialSavedViews, currentUserKey),
+  );
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [listSettings, setListSettings] = useState<ListSettings>(() => loadListSettings(workspaceId));
 
-  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews(workspaceId));
-  const [assignments, setAssignments] = useState<Record<string, string | null>>(() => loadAssignments(workspaceId));
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => initialSavedViews);
   const [commentsByDocId, setCommentsByDocId] = useState<Record<string, DocumentComment[]>>(() => loadComments(workspaceId));
-
+  const [changesCursor, setChangesCursor] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -342,9 +367,17 @@ export function useDocumentsModel({
   const shiftPressedRef = useRef(false);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
-  const runOnUploadHandledRef = useRef(new Set<string>());
+  const uploadIdMapRef = useRef(new Map<string, string>());
   const runStreamControllersRef = useRef(new Map<string, AbortController>());
   const runStreamWorkspaceRef = useRef(workspaceId);
+  const changesCursorRef = useRef<string | null>(null);
+  const changeStreamControllerRef = useRef<AbortController | null>(null);
+  const pendingChangesRef = useRef<DocumentChangeEntry[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+  const lastChangeCursorRef = useRef<string | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30000);
@@ -374,34 +407,44 @@ export function useDocumentsModel({
 
   useEffect(() => {
     setSavedViews(loadSavedViews(workspaceId));
-    setAssignments(loadAssignments(workspaceId));
     setCommentsByDocId(loadComments(workspaceId));
     setListSettings(loadListSettings(workspaceId));
+    uploadIdMapRef.current.clear();
   }, [workspaceId]);
 
-  const startUpload = useCallback(
-    (
-      file: File,
-      handlers: { onProgress: (progress: { loaded: number; total: number | null; percent: number | null }) => void },
-    ) => uploadWorkspaceDocument(workspaceId, file, { onProgress: handlers.onProgress }),
-    [workspaceId],
-  );
+  useEffect(() => {
+    if (!workspaceId) return;
+    storeListSettings(workspaceId, listSettings);
+  }, [listSettings, workspaceId]);
 
-  const uploadQueue = useUploadQueue<DocumentUploadResponse>({
-    startUpload,
-  });
+  const uploadManager = useUploadManager({ workspaceId });
 
-  const sort = "-created_at";
+  const configurationsQuery = useConfigurationsQuery({ workspaceId });
+  const { refetch: refetchConfigurations } = configurationsQuery;
+  const activeConfiguration = useMemo(() => {
+    const items = configurationsQuery.data?.items ?? [];
+    return items.find((config) => config.status === "active") ?? null;
+  }, [configurationsQuery.data?.items]);
+  const configMissing = configurationsQuery.isSuccess && !activeConfiguration;
+
+  const sort = "-activity_at";
   const listKey = useMemo(
-    () => documentsKeys.list(workspaceId, sort, listSettings.pageSize),
-    [listSettings.pageSize, sort, workspaceId],
+    () =>
+      documentsKeys.list(workspaceId, {
+        sort,
+        pageSize: listSettings.pageSize,
+        filters,
+        search,
+      }),
+    [filters, listSettings.pageSize, search, sort, workspaceId],
   );
   const refreshInterval = useMemo(
     () => resolveRefreshIntervalMs(listSettings.refreshInterval),
     [listSettings.refreshInterval],
   );
+  const changeDetectionEnabled = listSettings.refreshInterval === "auto";
 
-  const documentsQuery = useInfiniteQuery<DocumentPage>({
+  const documentsQuery = useInfiniteQuery<DocumentPageResult>({
     queryKey: listKey,
     initialPageParam: 1,
     queryFn: ({ pageParam, signal }) =>
@@ -411,20 +454,47 @@ export function useDocumentsModel({
           sort,
           page: typeof pageParam === "number" ? pageParam : 1,
           pageSize: listSettings.pageSize ?? DOCUMENTS_PAGE_SIZE,
+          query: buildDocumentsQuery(filters, search),
         },
         signal,
       ),
     getNextPageParam: (lastPage) => (lastPage.has_next ? lastPage.page + 1 : undefined),
     enabled: workspaceId.length > 0,
-    placeholderData: (previous) => previous,
     staleTime: 15_000,
     refetchInterval: refreshInterval,
   });
+  const { refetch: refetchDocuments } = documentsQuery;
 
   const documentsRaw = useMemo(
     () => documentsQuery.data?.pages.flatMap((page) => page.items ?? []) ?? [],
     [documentsQuery.data?.pages],
   );
+
+  useEffect(() => {
+    const firstPage = documentsQuery.data?.pages[0];
+    const cursor = firstPage?.changes_cursor ?? firstPage?.changesCursorHeader ?? null;
+    if (!cursor) return;
+    if (changesCursorRef.current === cursor) return;
+    changesCursorRef.current = cursor;
+    lastChangeCursorRef.current = cursor;
+    setChangesCursor(cursor);
+  }, [documentsQuery.data?.pages]);
+
+  useEffect(() => {
+    setChangesCursor(null);
+    changesCursorRef.current = null;
+    lastChangeCursorRef.current = null;
+    pendingChangesRef.current = [];
+    changeStreamControllerRef.current?.abort();
+    if (flushTimerRef.current) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, [listKey]);
 
   const documentsById = useMemo(() => new Map(documentsRaw.map((doc) => [doc.id, doc])), [documentsRaw]);
   const activeRunIds = useMemo(() => {
@@ -490,40 +560,238 @@ export function useDocumentsModel({
     [],
   );
 
+  useEffect(
+    () => () => {
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    uploadQueue.items.forEach((item) => {
+    if (changeDetectionEnabled) return;
+    changeStreamControllerRef.current?.abort();
+    pendingChangesRef.current = [];
+    lastChangeCursorRef.current = null;
+    if (flushTimerRef.current) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, [changeDetectionEnabled]);
+
+  const refreshDocumentsFirstPage = useCallback(async () => {
+    if (!workspaceId) return;
+    if (refreshInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+
+    refreshInFlightRef.current = true;
+    try {
+      const page = await fetchWorkspaceDocuments(workspaceId, {
+        sort,
+        page: 1,
+        pageSize: listSettings.pageSize ?? DOCUMENTS_PAGE_SIZE,
+        query: buildDocumentsQuery(filters, search),
+      });
+
+      queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
+        if (!existing) return existing;
+        return {
+          ...existing,
+          pages: [page],
+          pageParams: existing.pageParams.length > 0 ? [existing.pageParams[0]] : [1],
+        };
+      });
+    } catch (error) {
+      console.warn("Document refresh failed", error);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        void refreshDocumentsFirstPage();
+      }
+    }
+  }, [filters, listKey, listSettings.pageSize, queryClient, search, sort, workspaceId]);
+
+  const scheduleDocumentsRefresh = useCallback(() => {
+    if (refreshTimerRef.current) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      void refreshDocumentsFirstPage();
+    }, 500);
+  }, [refreshDocumentsFirstPage]);
+
+  const flushPendingChanges = useCallback(() => {
+    if (flushTimerRef.current) {
+      window.clearTimeout(flushTimerRef.current);
+    }
+    flushTimerRef.current = null;
+    const batch = pendingChangesRef.current.splice(0);
+    if (batch.length === 0) return;
+
+    let shouldRefresh = false;
+    queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
+      if (!existing) return existing;
+      let data = existing;
+      batch.forEach((change) => {
+        const result = mergeDocumentChangeIntoPages(data, change, {
+          filters,
+          search,
+          sort,
+        });
+        data = result.data;
+        if (result.updatesAvailable) {
+          shouldRefresh = true;
+        }
+      });
+      return data;
+    });
+
+    batch.forEach((change) => {
+      if (change.type === "document.upsert" && change.document) {
+        queryClient.setQueryData(documentsKeys.document(workspaceId, change.document.id), change.document);
+      }
+      if (change.type === "document.deleted" && change.document_id) {
+        queryClient.removeQueries({ queryKey: documentsKeys.document(workspaceId, change.document_id) });
+      }
+    });
+
+    if (shouldRefresh) {
+      scheduleDocumentsRefresh();
+    }
+  }, [filters, listKey, queryClient, scheduleDocumentsRefresh, search, sort, workspaceId]);
+
+  const enqueueChange = useCallback(
+    (change: DocumentChangeEntry) => {
+      pendingChangesRef.current.push(change);
+      if (flushTimerRef.current) return;
+      flushTimerRef.current = window.setTimeout(() => {
+        flushPendingChanges();
+      }, 200);
+    },
+    [flushPendingChanges],
+  );
+
+  useEffect(() => {
+    if (!workspaceId || !changesCursor || !changeDetectionEnabled) return;
+
+    changeStreamControllerRef.current?.abort();
+    pendingChangesRef.current = [];
+    if (flushTimerRef.current) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+
+    const controller = new AbortController();
+    changeStreamControllerRef.current = controller;
+    const sleep = (duration: number) =>
+      new Promise<void>((resolve) => {
+        let timeout: number;
+        const handleAbort = () => {
+          window.clearTimeout(timeout);
+          controller.signal.removeEventListener("abort", handleAbort);
+          resolve();
+        };
+        timeout = window.setTimeout(() => {
+          controller.signal.removeEventListener("abort", handleAbort);
+          resolve();
+        }, duration);
+        controller.signal.addEventListener("abort", handleAbort);
+      });
+
+    void (async () => {
+      let retryAttempt = 0;
+      while (!controller.signal.aborted) {
+        const cursor = lastChangeCursorRef.current ?? changesCursor;
+        const streamUrl = documentChangesStreamUrl(workspaceId, { cursor });
+
+        try {
+          for await (const change of streamDocumentChanges(streamUrl, controller.signal)) {
+            lastChangeCursorRef.current = change.cursor;
+            enqueueChange(change);
+            retryAttempt = 0;
+          }
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          if (error instanceof ApiError && error.status === 410) {
+            void refetchDocuments();
+            return;
+          }
+          console.warn("Document change stream failed", error);
+        }
+
+        if (controller.signal.aborted) return;
+        const baseDelay = 1000;
+        const maxDelay = 30000;
+        const delay = Math.min(maxDelay, baseDelay * 2 ** Math.min(retryAttempt, 5));
+        retryAttempt += 1;
+        const jitter = Math.floor(delay * 0.15 * Math.random());
+        await sleep(delay + jitter);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [changeDetectionEnabled, changesCursor, enqueueChange, refetchDocuments, workspaceId]);
+
+  useEffect(() => {
+    uploadManager.items.forEach((item) => {
       if (item.status === "succeeded" && item.response && !handledUploadsRef.current.has(item.id)) {
         handledUploadsRef.current.add(item.id);
-        queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
       }
       if (item.status === "failed" && item.error && !handledUploadsRef.current.has(`fail-${item.id}`)) {
         handledUploadsRef.current.add(`fail-${item.id}`);
         notifyToast({ title: "Upload failed", description: item.error, intent: "danger" });
       }
     });
-  }, [notifyToast, queryClient, uploadQueue.items, workspaceId]);
+  }, [notifyToast, uploadManager.items]);
 
   useEffect(() => {
-    uploadQueue.items.forEach((item) => {
-      if (item.status !== "succeeded" || !item.response?.id) return;
-      if (item.response.status && item.response.status !== "uploaded") return;
-      if (runOnUploadHandledRef.current.has(item.id)) return;
-      runOnUploadHandledRef.current.add(item.id);
+    if (!configMissing) return;
+    const interval = window.setInterval(() => {
+      void refetchConfigurations();
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, [configMissing, refetchConfigurations]);
 
-      void createRun(workspaceId, { input_document_id: item.response.id })
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
-        })
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : "Unable to start a run for this upload.";
-          notifyToast({ title: "Run not started", description: message, intent: "warning" });
-        });
+  useEffect(() => {
+    let hasMapping = false;
+    uploadManager.items.forEach((item) => {
+      if (item.status === "succeeded" && item.response?.id) {
+        uploadIdMapRef.current.set(item.id, item.response.id);
+        hasMapping = true;
+      }
     });
-  }, [notifyToast, queryClient, uploadQueue.items, workspaceId]);
+    if (!hasMapping) return;
+
+    setSelectedIds((prev) => {
+      let next: Set<string> | null = null;
+      uploadIdMapRef.current.forEach((docId, uploadId) => {
+        if (!prev.has(uploadId)) return;
+        if (!next) next = new Set(prev);
+        next.delete(uploadId);
+        next.add(docId);
+      });
+      return next ?? prev;
+    });
+
+    setActiveId((prev) => {
+      if (!prev) return prev;
+      const mapped = uploadIdMapRef.current.get(prev);
+      return mapped ?? prev;
+    });
+
+    const anchor = selectionAnchorRef.current;
+    if (anchor && uploadIdMapRef.current.has(anchor)) {
+      selectionAnchorRef.current = uploadIdMapRef.current.get(anchor) ?? anchor;
+    }
+  }, [uploadManager.items]);
 
   const uploadEntries = useMemo(() => {
     const entries: DocumentEntry[] = [];
-    uploadQueue.items.forEach((item) => {
+    uploadManager.items.forEach((item) => {
       const createdAt = uploadCreatedAtRef.current.get(item.id) ?? Date.now();
       const fileName = item.file.name;
       if (item.status === "succeeded" && item.response) {
@@ -545,7 +813,7 @@ export function useDocumentsModel({
         createdAt,
         updatedAt: createdAt,
         size: formatBytes(item.file.size),
-        stage: item.status === "failed" ? "Upload failed" : item.status === "uploading" ? "Uploading" : "Queued for upload",
+        stage: buildUploadStageLabel(item.status),
         progress: item.status === "uploading" ? item.progress.percent : undefined,
         error:
           item.status === "failed"
@@ -557,7 +825,7 @@ export function useDocumentsModel({
             : undefined,
         mapping: { attention: 0, unmapped: 0, pending: true },
 
-        assigneeKey: assignments[item.id] ?? null,
+        assigneeKey: null,
         assigneeLabel: null,
         commentCount: (commentsByDocId[item.id] ?? []).length,
 
@@ -566,7 +834,7 @@ export function useDocumentsModel({
       });
     });
     return entries;
-  }, [assignments, commentsByDocId, currentUserLabel, documentsById, uploadQueue.items]);
+  }, [commentsByDocId, currentUserLabel, documentsById, uploadManager.items]);
 
   const apiEntriesBase = useMemo(() => documentsRaw.map((doc) => buildDocumentEntry(doc)), [documentsRaw]);
 
@@ -588,15 +856,8 @@ export function useDocumentsModel({
       if (!set.has(key)) set.set(key, { key, label, kind: "user", userId: m.user_id });
     });
 
-    apiEntriesBase.forEach((d) => {
-      if (d.uploader) {
-        const key = `label:${d.uploader}`;
-        if (!set.has(key)) set.set(key, { key, label: d.uploader, kind: "label" });
-      }
-    });
-
     return Array.from(set.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [apiEntriesBase, currentUserId, currentUserKey, currentUserLabel, membersQuery.data?.items]);
+  }, [currentUserId, currentUserKey, currentUserLabel, membersQuery.data?.items]);
 
   const peopleByKey = useMemo(() => new Map(people.map((p) => [p.key, p])), [people]);
 
@@ -628,17 +889,16 @@ export function useDocumentsModel({
   }, [activeDocQuery.data]);
 
   const baseDocuments = useMemo(() => {
-    const all = [...uploadEntries, ...apiEntriesBase];
+    const all = [...filterUploadEntries(uploadEntries, filters, search), ...apiEntriesBase];
     if (pinnedActiveEntry && !all.some((d) => d.id === pinnedActiveEntry.id)) {
       return [pinnedActiveEntry, ...all];
     }
     return all;
-  }, [apiEntriesBase, pinnedActiveEntry, uploadEntries]);
+  }, [apiEntriesBase, filters, pinnedActiveEntry, search, uploadEntries]);
 
   const documents = useMemo<DocumentEntry[]>(() => {
     return baseDocuments.map((doc) => {
-      const overrideAssignee = assignments[doc.id] ?? null;
-      const assigneeKey = overrideAssignee ?? doc.assigneeKey ?? null;
+      const assigneeKey = doc.assigneeKey ?? null;
       const commentCount = (commentsByDocId[doc.id] ?? []).length;
 
       return {
@@ -648,7 +908,7 @@ export function useDocumentsModel({
         commentCount,
       };
     });
-  }, [assignments, assigneeLabelForKey, baseDocuments, commentsByDocId]);
+  }, [assigneeLabelForKey, baseDocuments, commentsByDocId]);
 
   const documentsByEntryId = useMemo(() => new Map(documents.map((d) => [d.id, d])), [documents]);
 
@@ -667,46 +927,7 @@ export function useDocumentsModel({
     [activeId, documentsByEntryId],
   );
 
-  const visibleDocuments = useMemo(() => {
-    const searchValue = search.trim().toLowerCase();
-    const hasSearch = searchValue.length >= 2;
-
-    return documents.filter((doc) => {
-      if (hasSearch) {
-        const haystack = [
-          doc.name,
-          doc.uploader ?? "",
-          doc.tags.join(" "),
-          doc.assigneeLabel ?? "",
-          doc.assigneeKey ?? "",
-          doc.fileType,
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(searchValue)) return false;
-      }
-
-      if (filters.statuses.length > 0 && !filters.statuses.includes(doc.status)) return false;
-      if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) return false;
-
-      if (filters.tags.length > 0) {
-        if (filters.tagMode === "all") {
-          if (!filters.tags.every((t) => doc.tags.includes(t))) return false;
-        } else if (!filters.tags.some((t) => doc.tags.includes(t))) {
-          return false;
-        }
-      }
-
-      if (filters.assignees.length > 0) {
-        const includeUnassigned = filters.assignees.includes(UNASSIGNED_KEY);
-        const assignedMatch = doc.assigneeKey ? filters.assignees.includes(doc.assigneeKey) : false;
-        const unassignedMatch = !doc.assigneeKey && includeUnassigned;
-        if (!assignedMatch && !unassignedMatch) return false;
-      }
-
-      return true;
-    });
-  }, [documents, filters, search]);
+  const visibleDocuments = useMemo(() => documents, [documents]);
 
   const boardColumns = useMemo<BoardColumn[]>(() => {
     if (groupBy === "status") {
@@ -752,6 +973,11 @@ export function useDocumentsModel({
   }, [groupBy, visibleDocuments]);
 
   const selectableIds = useMemo(() => visibleDocuments.filter((doc) => doc.record).map((doc) => doc.id), [visibleDocuments]);
+  const selectedDocumentIds = useMemo(() => {
+    return documents
+      .filter((doc) => selectedIds.has(doc.id) && doc.record)
+      .map((doc) => doc.record!.id);
+  }, [documents, selectedIds]);
   const visibleSelectedCount = useMemo(
     () => selectableIds.filter((id) => selectedIds.has(id)).length,
     [selectableIds, selectedIds],
@@ -773,8 +999,14 @@ export function useDocumentsModel({
     }
   }, [selectableIds]);
 
-  const showNoDocuments = documents.length === 0;
-  const showNoResults = documents.length > 0 && visibleDocuments.length === 0;
+  const hasActiveFilters =
+    search.trim().length >= 2 ||
+    filters.statuses.length > 0 ||
+    filters.fileTypes.length > 0 ||
+    filters.tags.length > 0 ||
+    filters.assignees.length > 0;
+  const showNoDocuments = documents.length === 0 && !hasActiveFilters;
+  const showNoResults = documents.length === 0 && hasActiveFilters;
   const lastUpdatedAt = documentsQuery.dataUpdatedAt > 0 ? documentsQuery.dataUpdatedAt : null;
   const isRefreshing = documentsQuery.isFetching && Boolean(documentsQuery.data);
 
@@ -784,12 +1016,14 @@ export function useDocumentsModel({
     const assignedToMeOrUnassigned = documents.filter(
       (d) => d.assigneeKey === currentUserKey || !d.assigneeKey,
     ).length;
+    const active = documents.filter((d) => ACTIVE_DOCUMENT_STATUSES.includes(d.status)).length;
     const processed = documents.filter((d) => d.status === "ready").length;
     const processing = documents.filter((d) => d.status === "processing" || d.status === "queued").length;
     const failed = documents.filter((d) => d.status === "failed").length;
     const archived = documents.filter((d) => d.status === "archived").length;
     return {
       total: documents.length,
+      active,
       assignedToMe,
       assignedToMeOrUnassigned,
       unassigned,
@@ -878,7 +1112,19 @@ export function useDocumentsModel({
     if (workbookQuery.data?.sheets.length) setActiveSheetId(workbookQuery.data.sheets[0].name);
   }, [workbookQuery.data?.sheets]);
 
-  const setSearchValue = useCallback((value: string) => setSearch(value), []);
+  const resolveViewId = useCallback(
+    (nextFilters: DocumentsFilters, nextSearch: string) =>
+      resolveActiveViewId(nextFilters, nextSearch, savedViews, currentUserKey),
+    [currentUserKey, savedViews],
+  );
+
+  const setSearchValue = useCallback(
+    (value: string) => {
+      setSearch(value);
+      setActiveViewId(resolveViewId(filters, value));
+    },
+    [filters, resolveViewId],
+  );
   const setViewModeValue = useCallback((value: ViewMode) => setViewMode(value), []);
   const setGroupByValue = useCallback((value: BoardGroup) => setGroupBy(value), []);
 
@@ -932,18 +1178,25 @@ export function useDocumentsModel({
   const handleFiles = useCallback(
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
-      const nextItems = uploadQueue.enqueue(Array.from(files));
+      const nextItems = uploadManager.enqueue(Array.from(files));
       const nowTimestamp = Date.now();
       nextItems.forEach((item, index) => {
         uploadCreatedAtRef.current.set(item.id, nowTimestamp + index * 1000);
       });
+      const description = processingPaused
+        ? configMissing
+          ? "Uploads saved. Processing is paused and no configuration is active yet."
+          : "Uploads saved. Processing is paused for this workspace."
+        : configMissing
+          ? "Uploads saved. Processing will start once an active configuration is set."
+          : "Processing will begin automatically.";
       notifyToast({
         title: `${nextItems.length} file${nextItems.length === 1 ? "" : "s"} added`,
-        description: "Processing will begin automatically.",
+        description,
         intent: "success",
       });
     },
-    [notifyToast, uploadQueue],
+    [configMissing, notifyToast, processingPaused, uploadManager],
   );
 
   const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
@@ -955,7 +1208,16 @@ export function useDocumentsModel({
     [handleFiles],
   );
 
-  const refreshDocuments = useCallback(() => void documentsQuery.refetch(), [documentsQuery]);
+  const pauseUpload = useCallback((uploadId: string) => uploadManager.pause(uploadId), [uploadManager]);
+  const resumeUpload = useCallback((uploadId: string) => uploadManager.resume(uploadId), [uploadManager]);
+  const retryUpload = useCallback((uploadId: string) => uploadManager.retry(uploadId), [uploadManager]);
+  const cancelUpload = useCallback((uploadId: string) => uploadManager.cancel(uploadId), [uploadManager]);
+  const removeUpload = useCallback((uploadId: string) => uploadManager.remove(uploadId), [uploadManager]);
+  const clearCompletedUploads = useCallback(() => uploadManager.clearCompleted(), [uploadManager]);
+
+  const refreshDocuments = useCallback(() => {
+    void documentsQuery.refetch();
+  }, [documentsQuery]);
   const loadMore = useCallback(() => {
     if (documentsQuery.hasNextPage) void documentsQuery.fetchNextPage();
   }, [documentsQuery]);
@@ -989,59 +1251,23 @@ export function useDocumentsModel({
   const setFiltersValue = useCallback(
     (next: DocumentsFilters) => {
       setFilters(next);
-      const hasSearch = search.trim().length >= 2;
-      const isDefault =
-        next.statuses.length === 0 &&
-        next.fileTypes.length === 0 &&
-        next.tags.length === 0 &&
-        next.assignees.length === 0;
-      setActiveViewId(!hasSearch && isDefault ? "all_documents" : "custom");
+      setActiveViewId(resolveViewId(next, search));
     },
-    [search],
+    [resolveViewId, search],
   );
 
   const setListSettingsValue = useCallback(
     (next: ListSettings) => {
       const normalized = normalizeListSettings(next);
       setListSettings(normalized);
-      storeListSettings(workspaceId, normalized);
     },
-    [workspaceId],
+    [normalizeListSettings],
   );
 
   const setBuiltInView = useCallback(
-    (id: string) => {
+    (id: BuiltInViewId) => {
       setActiveViewId(id);
-      setFilters((prev) => {
-        const cleared: DocumentsFilters = {
-          ...prev,
-          statuses: [],
-          fileTypes: [],
-          tags: [],
-          tagMode: "any",
-          assignees: [],
-        };
-
-        switch (id) {
-          case "assigned_to_me":
-            return { ...cleared, assignees: [currentUserKey] };
-          case "assigned_to_me_or_unassigned":
-            return { ...cleared, assignees: [currentUserKey, UNASSIGNED_KEY] };
-          case "unassigned":
-            return { ...cleared, assignees: [UNASSIGNED_KEY] };
-          case "processed":
-            return { ...cleared, statuses: ["ready"] };
-          case "processing":
-            return { ...cleared, statuses: ["queued", "processing"] };
-          case "failed":
-            return { ...cleared, statuses: ["failed"] };
-          case "archived":
-            return { ...cleared, statuses: ["archived"] };
-          case "all_documents":
-          default:
-            return cleared;
-        }
-      });
+      setFilters(buildFiltersForBuiltInView(id, currentUserKey));
     },
     [currentUserKey],
   );
@@ -1103,7 +1329,7 @@ export function useDocumentsModel({
 
       void patchWorkspaceDocumentTags(workspaceId, entry.record.id, { add, remove })
         .then((updated) => {
-          queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPage> | undefined) => {
+          queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
             if (!existing?.pages) return existing;
             return {
               ...existing,
@@ -1128,18 +1354,38 @@ export function useDocumentsModel({
 
   const assignDocument = useCallback(
     (documentId: string, assigneeKey: string | null) => {
-      setAssignments((prev) => {
-        const next = { ...prev, [documentId]: assigneeKey };
-        storeAssignments(workspaceId, next);
-        return next;
-      });
-      notifyToast({
-        title: "Assignment updated",
-        description: assigneeKey ? (peopleByKey.get(assigneeKey)?.label ?? assigneeKey) : "Unassigned",
-        intent: "success",
-      });
+      const entry = documentsByEntryId.get(documentId);
+      if (!entry?.record) return;
+      const assigneeUserId = assigneeKey?.startsWith("user:") ? assigneeKey.slice(5) : null;
+
+      void patchWorkspaceDocument(workspaceId, entry.record.id, { assigneeUserId })
+        .then((updated) => {
+          queryClient.setQueryData(listKey, (existing: InfiniteData<DocumentPageResult> | undefined) => {
+            if (!existing?.pages) return existing;
+            return {
+              ...existing,
+              pages: existing.pages.map((page) => ({
+                ...page,
+                items: (page.items ?? []).map((item) => (item.id === updated.id ? updated : item)),
+              })),
+            };
+          });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, updated.id) });
+          notifyToast({
+            title: "Assignment updated",
+            description: assigneeKey ? (peopleByKey.get(assigneeKey)?.label ?? assigneeKey) : "Unassigned",
+            intent: "success",
+          });
+        })
+        .catch((error) => {
+          notifyToast({
+            title: "Assignment failed",
+            description: error instanceof Error ? error.message : "Unable to update assignment.",
+            intent: "danger",
+          });
+        });
     },
-    [notifyToast, peopleByKey, workspaceId],
+    [documentsByEntryId, listKey, notifyToast, peopleByKey, queryClient, workspaceId],
   );
 
   const pickUpDocument = useCallback(
@@ -1273,6 +1519,14 @@ export function useDocumentsModel({
   const reprocess = useCallback(
     (doc: DocumentEntry | null) => {
       if (!doc?.record) return;
+      if (processingPaused) {
+        notifyToast({
+          title: "Processing is paused",
+          description: "Resume processing in workspace settings to reprocess documents.",
+          intent: "warning",
+        });
+        return;
+      }
       if (!activeRun?.configuration_id) {
         notifyToast({
           title: "Cannot reprocess yet",
@@ -1295,7 +1549,7 @@ export function useDocumentsModel({
           }),
         );
     },
-    [activeRun?.configuration_id, notifyToast, queryClient, workspaceId],
+    [activeRun?.configuration_id, notifyToast, processingPaused, queryClient, workspaceId],
   );
 
   const copyLink = useCallback(
@@ -1340,6 +1594,60 @@ export function useDocumentsModel({
     [documentsByEntryId, notifyToast, queryClient, workspaceId],
   );
 
+  const archiveDocument = useCallback(
+    (documentId: string) => {
+      const entry = documentsByEntryId.get(documentId);
+      if (!entry?.record) return;
+      void archiveWorkspaceDocument(workspaceId, entry.record.id)
+        .then(() => {
+          notifyToast({ title: "Document archived", description: entry.name, intent: "success" });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, entry.record!.id) });
+          setSelectedIds((prev) => {
+            if (!prev.has(documentId)) return prev;
+            const next = new Set(prev);
+            next.delete(documentId);
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Archive failed",
+            description: error instanceof Error ? error.message : "Unable to archive document.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, workspaceId],
+  );
+
+  const restoreDocument = useCallback(
+    (documentId: string) => {
+      const entry = documentsByEntryId.get(documentId);
+      if (!entry?.record) return;
+      void restoreWorkspaceDocument(workspaceId, entry.record.id)
+        .then(() => {
+          notifyToast({ title: "Document restored", description: entry.name, intent: "success" });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, entry.record!.id) });
+          setSelectedIds((prev) => {
+            if (!prev.has(documentId)) return prev;
+            const next = new Set(prev);
+            next.delete(documentId);
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Restore failed",
+            description: error instanceof Error ? error.message : "Unable to restore document.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, workspaceId],
+  );
+
   const bulkDeleteDocuments = useCallback(
     (documentIds?: string[]) => {
       const docs = (documentIds?.length
@@ -1371,6 +1679,86 @@ export function useDocumentsModel({
           notifyToast({
             title: "Bulk delete failed",
             description: error instanceof Error ? error.message : "Unable to delete documents.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId],
+  );
+
+  const bulkArchiveDocuments = useCallback(
+    (documentIds?: string[]) => {
+      const docs = (documentIds?.length
+        ? documentIds.map((id) => documentsByEntryId.get(id)).filter((doc): doc is DocumentEntry => Boolean(doc?.record))
+        : visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record)) as DocumentEntry[];
+
+      const eligible = docs.filter((doc) => doc.status !== "archived");
+      if (eligible.length === 0) return;
+
+      void archiveWorkspaceDocumentsBatch(
+        workspaceId,
+        eligible.map((doc) => doc.record!.id),
+      )
+        .then(() => {
+          notifyToast({
+            title: "Documents archived",
+            description: `${eligible.length} archived`,
+            intent: "success",
+          });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          eligible.forEach((doc) => {
+            queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, doc.record!.id) });
+          });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            eligible.forEach((doc) => next.delete(doc.id));
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Bulk archive failed",
+            description: error instanceof Error ? error.message : "Unable to archive documents.",
+            intent: "danger",
+          }),
+        );
+    },
+    [documentsByEntryId, notifyToast, queryClient, selectedIds, visibleDocuments, workspaceId],
+  );
+
+  const bulkRestoreDocuments = useCallback(
+    (documentIds?: string[]) => {
+      const docs = (documentIds?.length
+        ? documentIds.map((id) => documentsByEntryId.get(id)).filter((doc): doc is DocumentEntry => Boolean(doc?.record))
+        : visibleDocuments.filter((d) => selectedIds.has(d.id) && d.record)) as DocumentEntry[];
+
+      const eligible = docs.filter((doc) => doc.status === "archived");
+      if (eligible.length === 0) return;
+
+      void restoreWorkspaceDocumentsBatch(
+        workspaceId,
+        eligible.map((doc) => doc.record!.id),
+      )
+        .then(() => {
+          notifyToast({
+            title: "Documents restored",
+            description: `${eligible.length} restored`,
+            intent: "success",
+          });
+          queryClient.invalidateQueries({ queryKey: documentsKeys.workspace(workspaceId) });
+          eligible.forEach((doc) => {
+            queryClient.invalidateQueries({ queryKey: documentsKeys.document(workspaceId, doc.record!.id) });
+          });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            eligible.forEach((doc) => next.delete(doc.id));
+            return next;
+          });
+        })
+        .catch((error) =>
+          notifyToast({
+            title: "Bulk restore failed",
+            description: error instanceof Error ? error.message : "Unable to restore documents.",
             intent: "danger",
           }),
         );
@@ -1489,6 +1877,13 @@ export function useDocumentsModel({
       counts,
       lastUpdatedAt,
       isRefreshing,
+      changesCursor,
+      configMissing,
+      processingPaused,
+      uploads: {
+        items: uploadManager.items,
+        summary: uploadManager.summary,
+      },
     },
     refs: {
       fileInputRef,
@@ -1505,6 +1900,12 @@ export function useDocumentsModel({
       setActiveSheetId: setActiveSheetIdValue,
       handleUploadClick,
       handleFileInputChange,
+      pauseUpload,
+      resumeUpload,
+      retryUpload,
+      cancelUpload,
+      removeUpload,
+      clearCompletedUploads,
       refreshDocuments,
       loadMore,
       handleKeyNavigate,
@@ -1529,12 +1930,106 @@ export function useDocumentsModel({
       reprocess,
       copyLink,
       deleteDocument,
+      archiveDocument,
+      restoreDocument,
       bulkDeleteDocuments,
+      bulkArchiveDocuments,
+      bulkRestoreDocuments,
       bulkUpdateTags,
       bulkDownloadOriginals,
       bulkDownloadOutputs,
     },
   };
+}
+
+function buildDocumentsQuery(filters: DocumentsFilters, search: string): Partial<ListDocumentsQuery> {
+  const query: Partial<ListDocumentsQuery> = {};
+  const trimmedSearch = search.trim();
+  if (trimmedSearch.length >= 2) {
+    query.q = trimmedSearch;
+  }
+  if (filters.statuses.length > 0) {
+    query.display_status = filters.statuses;
+  }
+  if (filters.fileTypes.length > 0) {
+    const fileTypes = filters.fileTypes.filter((type) => type !== "unknown");
+    if (fileTypes.length > 0) query.file_type = fileTypes;
+  }
+  if (filters.tags.length > 0) {
+    query.tags = filters.tags;
+    query.tag_mode = filters.tagMode;
+  }
+  if (filters.assignees.length > 0) {
+    const { assigneeIds, includeUnassigned } = normalizeAssignees(filters.assignees);
+    if (assigneeIds.length > 0) {
+      query.assignee_user_id = assigneeIds;
+    }
+    if (includeUnassigned) {
+      query.assignee_unassigned = true;
+    }
+  }
+  return query;
+}
+
+function filterUploadEntries(entries: DocumentEntry[], filters: DocumentsFilters, search: string): DocumentEntry[] {
+  const searchValue = search.trim().toLowerCase();
+  const hasSearch = searchValue.length >= 2;
+  const statusFilters = filters.statuses;
+
+  return entries.filter((doc) => {
+    if (hasSearch) {
+      const haystack = [
+        doc.name,
+        doc.uploader ?? "",
+        doc.tags.join(" "),
+        doc.assigneeLabel ?? "",
+        doc.assigneeKey ?? "",
+        doc.fileType,
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(searchValue)) return false;
+    }
+
+    if (statusFilters.length > 0 && !statusFilters.includes(doc.status)) return false;
+    if (filters.fileTypes.length > 0 && !filters.fileTypes.includes(doc.fileType)) return false;
+
+    if (filters.tags.length > 0) {
+      if (filters.tagMode === "all") {
+        if (!filters.tags.every((t) => doc.tags.includes(t))) return false;
+      } else if (!filters.tags.some((t) => doc.tags.includes(t))) {
+        return false;
+      }
+    }
+
+    if (filters.assignees.length > 0) {
+      const includeUnassigned = filters.assignees.includes(UNASSIGNED_KEY);
+      const assignedMatch = doc.assigneeKey ? filters.assignees.includes(doc.assigneeKey) : false;
+      const unassignedMatch = !doc.assigneeKey && includeUnassigned;
+      if (!assignedMatch && !unassignedMatch) return false;
+    }
+
+    return true;
+  });
+}
+
+function buildUploadStageLabel(status: UploadManagerStatus) {
+  switch (status) {
+    case "paused":
+      return "Upload paused";
+    case "cancelled":
+      return "Upload cancelled";
+    case "failed":
+      return "Upload failed";
+    case "uploading":
+      return "Uploading";
+    case "queued":
+      return "Queued for upload";
+    case "succeeded":
+      return "Upload complete";
+    default:
+      return "Queued for upload";
+  }
 }
 
 function statusLabel(status: DocumentStatus) {

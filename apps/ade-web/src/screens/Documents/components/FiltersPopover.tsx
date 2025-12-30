@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { ChevronDownSmallIcon, FilterIcon } from "@ui/Icons";
+
 import type { DocumentsFilters, DocumentStatus, FileType, TagMode, WorkspacePerson } from "../types";
 import { fileTypeLabel } from "../utils";
 import { PeoplePicker } from "./PeoplePicker";
@@ -59,15 +61,14 @@ export function FiltersPopover({
         aria-expanded={open}
         aria-haspopup="dialog"
       >
+        <FilterIcon className="h-4 w-4" />
         Filters
         {activeCount > 0 ? (
           <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
             {activeCount}
           </span>
         ) : null}
-        <span className="text-muted-foreground" aria-hidden>
-          v
-        </span>
+        <ChevronDownSmallIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
       </button>
 
       {open ? (
