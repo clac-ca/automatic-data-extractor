@@ -106,7 +106,7 @@ export function AppearanceMenu({
           aria-hidden
         />
         <AppearanceIcon className="h-4 w-4" />
-        <span className="hidden sm:inline">Appearance</span>
+        <span className="hidden lg:inline">Appearance</span>
         <ChevronIcon className={clsx("h-3.5 w-3.5 transition", open && "rotate-180")} />
       </button>
 

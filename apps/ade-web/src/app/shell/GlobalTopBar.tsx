@@ -68,7 +68,7 @@ export function GlobalTopBar({
         // Default to a top-bar-friendly look unless caller overrides.
         variant: search.variant ?? "header",
         className: clsx(
-          "w-full col-span-2 row-start-2 md:col-span-1 md:row-start-1 md:col-start-2",
+          "w-full col-span-2 row-start-2 lg:col-span-1 lg:row-start-1 lg:col-start-2",
           search.className,
         ),
       }
@@ -104,7 +104,7 @@ export function GlobalTopBar({
           className={clsx(
             "grid min-h-[3.5rem] w-full items-center gap-3 sm:gap-4",
             showSearch
-              ? "grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_minmax(0,1fr)] md:gap-6 lg:gap-8"
+              ? "grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_minmax(0,1fr)] lg:gap-8"
               : "grid-cols-[minmax(0,1fr)_auto]",
           )}
         >
@@ -118,7 +118,7 @@ export function GlobalTopBar({
           <div
             className={clsx(
               "col-start-2 row-start-1 flex w-full min-w-0 flex-wrap items-center justify-end gap-2",
-              showSearch && "md:col-start-3 md:row-start-1",
+              showSearch && "lg:col-start-3 lg:row-start-1",
             )}
           >
             {actions}

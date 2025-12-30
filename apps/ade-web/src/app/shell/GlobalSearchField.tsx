@@ -242,6 +242,7 @@ export function GlobalSearchField({
   const shortcutClass = isHeaderVariant
     ? "border-header-border/40 bg-header/30 text-header-foreground"
     : "border-border/70 bg-card/80 text-muted-foreground";
+  const shortcutVisibilityClass = isHeaderVariant ? "lg:inline-flex" : "md:inline-flex";
   const clearButtonClass = isHeaderVariant
     ? "text-header-muted hover:border-header-border/50 hover:bg-header/20"
     : "text-muted-foreground hover:border-border hover:bg-card";
@@ -370,8 +371,9 @@ export function GlobalSearchField({
             {shortcutLabel ? (
               <span
                 className={clsx(
-                  "hidden items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold shadow-inner shadow-white/10 md:inline-flex",
+                  "hidden items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold shadow-inner shadow-white/10",
                   shortcutClass,
+                  shortcutVisibilityClass,
                 )}
               >
                 {shortcutLabel}

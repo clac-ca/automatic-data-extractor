@@ -196,7 +196,7 @@ export function ProfileDropdown({ displayName, email, actions = [], tone = "defa
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-on-brand shadow-sm">
           {initials}
         </span>
-        <span className="hidden min-w-0 flex-col sm:flex">
+        <span className="hidden min-w-0 flex-col lg:flex">
           <span className={clsx("truncate text-sm font-semibold", isHeaderTone ? "text-header-foreground" : "text-foreground")}>
             {displayName}
           </span>

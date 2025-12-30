@@ -336,6 +336,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         title={workspaceSwitcherLabel}
         className={clsx(
           "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+          "w-full sm:w-[16rem] lg:w-[18rem] sm:shrink-0",
           "border-header-border/40 bg-header/20 text-header-foreground hover:border-header-border/70 hover:bg-header/30",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-ring focus-visible:ring-offset-2 focus-visible:ring-offset-header",
         )}
@@ -345,7 +346,7 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         </span>
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-sm font-semibold text-header-foreground">{workspace.name}</span>
-          <span className="hidden text-xs text-header-muted sm:block">Switch workspace</span>
+          <span className="hidden truncate text-xs text-header-muted sm:block">Switch workspace</span>
         </span>
         <span className="hidden text-header-muted sm:inline-flex" aria-hidden>
           <ChevronDownIcon />
