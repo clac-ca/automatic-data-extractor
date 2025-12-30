@@ -66,7 +66,7 @@ export function GlobalTopBar({
     ? {
         ...search,
         // Default to a top-bar-friendly look unless caller overrides.
-        variant: search.variant ?? "minimal",
+        variant: search.variant ?? "header",
         className: clsx(
           "w-full col-span-2 row-start-2 md:col-span-1 md:row-start-1 md:col-start-2",
           search.className,

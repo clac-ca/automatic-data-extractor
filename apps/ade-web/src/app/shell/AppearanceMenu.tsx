@@ -6,11 +6,18 @@ import { ContextMenu } from "@ui/ContextMenu";
 
 const MENU_OFFSET = 8;
 
-export function AppearanceMenu({ className }: { readonly className?: string }) {
+export function AppearanceMenu({
+  className,
+  tone = "default",
+}: {
+  readonly className?: string;
+  readonly tone?: "default" | "header";
+}) {
   const { theme, modePreference, resolvedMode, setModePreference, setPreviewTheme, setTheme } = useTheme();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const isHeaderTone = tone === "header";
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) {
@@ -76,9 +83,14 @@ export function AppearanceMenu({ className }: { readonly className?: string }) {
         aria-label="Appearance settings"
         title="Appearance"
         className={clsx(
-          "focus-ring inline-flex h-9 items-center gap-2 rounded-xl border border-border/80 bg-card px-2.5 text-xs",
-          "text-muted-foreground shadow-sm transition hover:border-border-strong hover:text-foreground",
-          open && "border-brand-400 ring-2 ring-brand-500/10 text-foreground",
+          "focus-ring inline-flex h-9 items-center gap-2 rounded-xl border px-2.5 text-xs transition",
+          isHeaderTone
+            ? "border-header-border/40 bg-header/25 text-header-foreground shadow-none hover:border-header-border/70 hover:bg-header/30"
+            : "border-border/80 bg-card text-muted-foreground shadow-sm hover:border-border-strong hover:text-foreground",
+          open &&
+            (isHeaderTone
+              ? "border-header-ring ring-2 ring-header-ring/30"
+              : "border-brand-400 ring-2 ring-brand-500/10 text-foreground"),
         )}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {

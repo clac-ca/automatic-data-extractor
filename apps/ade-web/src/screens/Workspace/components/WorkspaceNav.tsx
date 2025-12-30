@@ -90,7 +90,6 @@ export function WorkspaceNav({
 
   React.useEffect(() => clearTimers, [clearTimers]);
 
-  // Global shortcut: Ctrl/⌘B toggles pin (common in app shells, e.g. IDEs).
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -99,18 +98,11 @@ export function WorkspaceNav({
       if (key === "tab" || key.startsWith("arrow")) {
         setInputMode("keyboard");
       }
-
-      if ((e.metaKey || e.ctrlKey) && key === "b") {
-        const target = e.target as EventTarget | null;
-        if (isEditableTarget(target)) return;
-        e.preventDefault();
-        onTogglePinned();
-      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onTogglePinned]);
+  }, []);
 
   const panelExpanded = isPinned || isPeekOpen;
 
@@ -376,7 +368,6 @@ function NavPinButton({
   readonly onToggle: () => void;
 }) {
   const label = isPinned ? "Unpin sidebar" : "Pin sidebar";
-  const shortcutHint = "Ctrl/⌘B";
 
   return (
     <button
@@ -384,7 +375,7 @@ function NavPinButton({
       onClick={onToggle}
       aria-label={label}
       aria-pressed={isPinned}
-      title={!expanded ? `${label} (${shortcutHint})` : `${label} (${shortcutHint})`}
+      title={label}
       className={clsx(
         "group relative flex w-full items-center rounded-lg",
         "transition-colors duration-150 motion-reduce:transition-none",
@@ -412,7 +403,6 @@ function NavPinButton({
         aria-hidden={!expanded}
       >
         {isPinned ? "Pinned" : "Pin sidebar"}
-        <span className="ml-2 text-[0.7rem] font-semibold text-sidebar-foreground">{shortcutHint}</span>
       </span>
 
     </button>
@@ -421,18 +411,6 @@ function NavPinButton({
 
 function isPlainLeftClick(e: React.MouseEvent) {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
-}
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!target) return false;
-  if (!(target instanceof HTMLElement)) return false;
-
-  const tag = target.tagName.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
-  if (target.isContentEditable) return true;
-  if (target.closest?.("[contenteditable='true']")) return true;
-
-  return false;
 }
 
 function pickWorkspaceSettingsItem(items: readonly WorkspaceNavigationItem[]) {

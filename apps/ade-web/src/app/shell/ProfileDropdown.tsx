@@ -16,6 +16,7 @@ interface ProfileDropdownProps {
   readonly displayName: string;
   readonly email: string;
   readonly actions?: readonly ProfileDropdownAction[];
+  readonly tone?: "default" | "header";
 }
 
 const MENU_ANIMATION_MS = 140;
@@ -23,7 +24,7 @@ const MENU_FALLBACK_WIDTH = 288;
 const MENU_OFFSET = 8;
 const MENU_VIEWPORT_PADDING = 12;
 
-export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDropdownProps) {
+export function ProfileDropdown({ displayName, email, actions = [], tone = "default" }: ProfileDropdownProps) {
   const menuId = useId();
 
   const [open, setOpen] = useState(false);
@@ -37,6 +38,7 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
   const menuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const initials = useMemo(() => deriveInitials(displayName || email), [displayName, email]);
+  const isHeaderTone = tone === "header";
 
   const closeMenu = useCallback((opts?: { restoreFocus?: boolean }) => {
     setOpen(false);
@@ -173,9 +175,11 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
         ref={triggerRef}
         type="button"
         className={clsx(
-          "focus-ring inline-flex items-center gap-3 rounded-xl border bg-card px-2.5 py-1.5 text-left text-sm font-semibold text-muted-foreground shadow-sm transition",
-          "hover:border-border-strong hover:text-foreground",
-          open ? "border-brand-400 ring-2 ring-brand-500/10" : "border-border",
+          "focus-ring inline-flex items-center gap-3 rounded-xl border px-2.5 py-1.5 text-left text-sm font-semibold transition",
+          isHeaderTone
+            ? "border-header-border/40 bg-header/25 text-header-foreground shadow-none hover:border-header-border/70 hover:bg-header/30"
+            : "border-border bg-card text-muted-foreground shadow-sm hover:border-border-strong hover:text-foreground",
+          open && (isHeaderTone ? "border-header-ring ring-2 ring-header-ring/30" : "border-brand-400 ring-2 ring-brand-500/10"),
         )}
         aria-haspopup="menu"
         aria-controls={menuId}
@@ -193,10 +197,20 @@ export function ProfileDropdown({ displayName, email, actions = [] }: ProfileDro
           {initials}
         </span>
         <span className="hidden min-w-0 flex-col sm:flex">
-          <span className="truncate text-sm font-semibold text-foreground">{displayName}</span>
-          <span className="truncate text-xs text-muted-foreground">{email}</span>
+          <span className={clsx("truncate text-sm font-semibold", isHeaderTone ? "text-header-foreground" : "text-foreground")}>
+            {displayName}
+          </span>
+          <span className={clsx("truncate text-xs", isHeaderTone ? "text-header-muted" : "text-muted-foreground")}>
+            {email}
+          </span>
         </span>
-        <ChevronIcon className={clsx("text-muted-foreground transition-transform duration-150", open && "rotate-180")} />
+        <ChevronIcon
+          className={clsx(
+            "transition-transform duration-150",
+            isHeaderTone ? "text-header-muted" : "text-muted-foreground",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
       {isMounted && typeof document !== "undefined"

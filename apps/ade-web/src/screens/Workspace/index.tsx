@@ -320,7 +320,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
       <button
         type="button"
         onClick={openMobileNav}
-        className="focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/80 bg-card text-muted-foreground shadow-sm lg:hidden"
+        className={clsx(
+          "focus-ring inline-flex h-11 w-11 items-center justify-center rounded-xl border lg:hidden",
+          "border-header-border/40 bg-header/20 text-header-muted transition",
+          "hover:border-header-border/70 hover:bg-header/30 hover:text-header-foreground",
+        )}
         aria-label="Open workspace navigation"
       >
         <MenuIcon />
@@ -331,19 +335,19 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
         aria-label={workspaceSwitcherLabel}
         title={workspaceSwitcherLabel}
         className={clsx(
-          "group inline-flex min-w-0 items-center gap-3 rounded-xl border border-border/80 bg-card px-3 py-2 text-left shadow-sm transition",
-          "hover:border-border-strong hover:bg-background",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "group inline-flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
+          "border-header-border/40 bg-header/20 text-header-foreground hover:border-header-border/70 hover:bg-header/30",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-ring focus-visible:ring-offset-2 focus-visible:ring-offset-header",
         )}
       >
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500 text-xs font-semibold uppercase text-on-brand shadow-sm transition-colors group-hover:bg-brand-600">
           {workspaceInitials}
         </span>
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-semibold text-foreground">{workspace.name}</span>
-          <span className="hidden text-xs text-muted-foreground sm:block">Switch workspace</span>
+          <span className="truncate text-sm font-semibold text-header-foreground">{workspace.name}</span>
+          <span className="hidden text-xs text-header-muted sm:block">Switch workspace</span>
         </span>
-        <span className="hidden text-muted-foreground sm:inline-flex" aria-hidden>
+        <span className="hidden text-header-muted sm:inline-flex" aria-hidden>
           <ChevronDownIcon />
         </span>
       </button>
@@ -355,10 +359,11 @@ function WorkspaceShellLayout({ workspace }: WorkspaceShellProps) {
 
   const topBarTrailing = (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <AppearanceMenu />
+      <AppearanceMenu tone="header" />
       <ProfileDropdown
         displayName={displayName}
         email={email}
+        tone="header"
         actions={[
           {
             id: "about-versions",
