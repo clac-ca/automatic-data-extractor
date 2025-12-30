@@ -25,7 +25,7 @@ ADE Engine is a plugin-driven spreadsheet normalizer. The runtime is split into 
    - After registration, `registry.finalize()` sorts callables by priority and groups transforms/validators by field.
 
 4. **Process workbook**  
-   The source workbook is opened (CSV files are converted to an in-memory workbook). Visible sheets are chosen either from the source order or filtered by `--input-sheet`. A shared `state` dict and `metadata` (input/output filenames) travel through hooks and pipeline stages.
+   The source workbook is opened (CSV files are converted to an in-memory workbook). Visible sheets are chosen either from the source order, filtered by `--input-sheet`, or restricted to the active sheet when `--active-sheet-only` is set. A shared `state` dict and `metadata` (input/output filenames) travel through hooks and pipeline stages.
 
 5. **Sheet pipeline**  
    For each sheet, the engine fires `on_sheet_start` (input workbook), then `Pipeline.process_sheet` performs:

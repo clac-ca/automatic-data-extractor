@@ -50,10 +50,25 @@ def create_output_workbook() -> Workbook:
     return workbook
 
 
-def resolve_sheet_names(workbook: Workbook, requested: list[str] | None) -> list[str]:
+def resolve_sheet_names(
+    workbook: Workbook,
+    requested: list[str] | None,
+    *,
+    active_only: bool = False,
+) -> list[str]:
     """Determine which sheets to process, preserving source order."""
 
     visible = [ws.title for ws in workbook.worksheets if getattr(ws, "sheet_state", "visible") == "visible"]
+    if active_only:
+        if not visible:
+            return []
+        active = workbook.active
+        active_name = getattr(active, "title", None)
+        if not active_name:
+            raise InputError("Active worksheet is not available")
+        if active_name not in visible:
+            raise InputError(f"Active worksheet is hidden: {active_name}")
+        return [active_name]
     if not requested:
         return visible
 

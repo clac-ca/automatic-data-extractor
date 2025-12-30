@@ -38,6 +38,7 @@ class RunRequest:
     config_package: Path
     input_file: Path
     input_sheets: list[str] | None = None
+    active_sheet_only: bool = False
 
     # Output planning:
     # - If output_path is provided, it wins.
