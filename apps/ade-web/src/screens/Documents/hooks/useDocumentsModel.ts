@@ -339,6 +339,7 @@ export function useDocumentsModel({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectionAnchorRef = useRef<string | null>(null);
+  const shiftPressedRef = useRef(false);
   const uploadCreatedAtRef = useRef(new Map<string, number>());
   const handledUploadsRef = useRef(new Set<string>());
   const runOnUploadHandledRef = useRef(new Set<string>());
@@ -353,9 +354,22 @@ export function useDocumentsModel({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setPreviewOpen(false);
+      if (event.key === "Shift") shiftPressedRef.current = true;
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Shift") shiftPressedRef.current = false;
+    };
+    const handleBlur = () => {
+      shiftPressedRef.current = false;
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, []);
 
   useEffect(() => {
@@ -870,7 +884,7 @@ export function useDocumentsModel({
 
   const updateSelection = useCallback(
     (id: string, options?: { mode?: "toggle" | "range"; checked?: boolean }) => {
-      const isRange = options?.mode === "range";
+      const isRange = options?.mode === "range" || shiftPressedRef.current;
       setSelectedIds((previous) => {
         const next = new Set(previous);
         const shouldSelect = isRange ? options?.checked ?? true : options?.checked ?? !previous.has(id);
@@ -892,7 +906,9 @@ export function useDocumentsModel({
         else next.delete(id);
         return next;
       });
-      selectionAnchorRef.current = id;
+      if (!isRange || !selectionAnchorRef.current) {
+        selectionAnchorRef.current = id;
+      }
     },
     [selectableIds],
   );

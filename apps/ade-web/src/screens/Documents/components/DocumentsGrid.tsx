@@ -272,7 +272,7 @@ export function DocumentsGrid({
                     onClick={handleRowClick}
                     onKeyDown={handleRowKeyDown}
                     className={clsx(
-                      "group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                      "group grid cursor-pointer select-none grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                       densityStyles.rowGap,
                       densityStyles.rowPadding,
                       isActive
