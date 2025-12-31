@@ -80,7 +80,7 @@ async def get_session(
         raise
     finally:
         try:
-            if session.in_transaction():
+            if session.in_transaction() or session.new or session.dirty or session.deleted:
                 commit_on_error = session.info.pop("force_commit_on_error", False)
                 if error is None or commit_on_error:
                     try:
@@ -112,7 +112,7 @@ async def get_websocket_session(
         raise
     finally:
         try:
-            if session.in_transaction():
+            if session.in_transaction() or session.new or session.dirty or session.deleted:
                 commit_on_error = session.info.pop("force_commit_on_error", False)
                 if error is None or commit_on_error:
                     try:

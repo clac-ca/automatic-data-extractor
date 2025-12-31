@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ade-api"
-version = "1.6.4"
+version = "1.6.5"
 description = "Internal ADE FastAPI service."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,8 +32,7 @@ dependencies = [
   "openpyxl==3.1.5",
   "greenlet==3.2.4",
   "fastapi-users[sqlalchemy]==15.0.3",
-  "Authlib==1.6.6",
-  "fastapi-csrf-protect==1.0.7",
+  "authlib==1.6.6",
   "sse-starlette==3.1.1",
   "pwdlib[argon2]==0.3.0",
   "ade-engine",

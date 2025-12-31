@@ -11,7 +11,7 @@ from ade_api.db import Base, UUIDType
 
 
 class RunField(Base):
-    """Persist field-level mapping info for a run."""
+    """Persist field-level detection info for a run."""
 
     __tablename__ = "run_fields"
 
@@ -20,7 +20,7 @@ class RunField(Base):
     )
     field: Mapped[str] = mapped_column(String(128), primary_key=True)
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    mapped: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    detected: Mapped[bool] = mapped_column(Boolean, nullable=False)
     best_mapping_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     occurrences_tables: Mapped[int] = mapped_column(Integer, nullable=False)
     occurrences_columns: Mapped[int] = mapped_column(Integer, nullable=False)

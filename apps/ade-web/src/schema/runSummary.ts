@@ -18,10 +18,10 @@ export interface ColumnCounts {
 export interface FieldCounts {
   readonly total: number;
   readonly required: number;
-  readonly mapped: number;
-  readonly unmapped: number;
-  readonly required_mapped: number;
-  readonly required_unmapped: number;
+  readonly detected: number;
+  readonly not_detected: number;
+  readonly required_detected: number;
+  readonly required_not_detected: number;
 }
 
 export interface Counts {
@@ -37,7 +37,7 @@ export interface FieldSummaryTable {
   readonly field: string;
   readonly label?: string | null;
   readonly required: boolean;
-  readonly mapped: boolean;
+  readonly detected: boolean;
   readonly score?: number | null;
   readonly source_column_index?: number | null;
   readonly header?: string | null;
@@ -47,11 +47,11 @@ export interface FieldSummaryAggregate {
   readonly field: string;
   readonly label?: string | null;
   readonly required: boolean;
-  readonly mapped: boolean;
+  readonly detected: boolean;
   readonly max_score?: number | null;
-  readonly tables_mapped?: number | null;
-  readonly sheets_mapped?: number | null;
-  readonly files_mapped?: number | null;
+  readonly tables_detected?: number | null;
+  readonly sheets_detected?: number | null;
+  readonly files_detected?: number | null;
 }
 
 export interface ColumnSummaryTable {
@@ -71,8 +71,8 @@ export interface ColumnSummaryDistinct {
   readonly header_normalized: string;
   readonly occurrences: Record<string, number>;
   readonly mapped: boolean;
-  readonly mapped_fields: string[];
-  readonly mapped_fields_counts: Record<string, number>;
+  readonly detected_fields: string[];
+  readonly detected_fields_counts: Record<string, number>;
 }
 
 export interface ValidationSummary {

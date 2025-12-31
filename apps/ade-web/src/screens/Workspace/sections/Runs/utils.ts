@@ -26,9 +26,9 @@ export function formatScore(value: number | null | undefined): string {
 export function computeMappingQuality(metrics: RunMetrics | null | undefined): number | null {
   if (!metrics) return null;
   const expected = metrics.field_count_expected ?? null;
-  const mapped = metrics.field_count_mapped ?? null;
-  if (!expected || expected <= 0 || mapped === null) return null;
-  return Math.round((mapped / expected) * 100);
+  const detected = metrics.field_count_detected ?? null;
+  if (!expected || expected <= 0 || detected === null) return null;
+  return Math.round((detected / expected) * 100);
 }
 
 export function formatDuration(seconds: number | null | undefined, status: RunRecord["status"]): string {

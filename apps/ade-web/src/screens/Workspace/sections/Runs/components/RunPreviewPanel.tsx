@@ -205,12 +205,10 @@ function MetricsTab({
     { label: "Empty rows", value: formatNumber(metrics.row_count_empty) },
     { label: "Columns", value: formatNumber(metrics.column_count_total) },
     { label: "Mapped columns", value: formatNumber(metrics.column_count_mapped) },
-    { label: "Ambiguous columns", value: formatNumber(metrics.column_count_ambiguous) },
     { label: "Unmapped columns", value: formatNumber(metrics.column_count_unmapped) },
-    { label: "Passthrough columns", value: formatNumber(metrics.column_count_passthrough) },
     {
-      label: "Fields mapped",
-      value: `${formatNumber(metrics.field_count_mapped)} / ${formatNumber(metrics.field_count_expected)}`,
+      label: "Fields detected",
+      value: `${formatNumber(metrics.field_count_detected)} / ${formatNumber(metrics.field_count_expected)}`,
     },
     { label: "Cells non-empty", value: formatNumber(metrics.cell_count_non_empty) },
     { label: "Cells total", value: formatNumber(metrics.cell_count_total) },
@@ -243,33 +241,33 @@ function FieldsTab({
   error: boolean;
 }) {
   if (loading) {
-    return <TabState title="Loading field mappings" description="Fetching per-field mapping coverage." />;
+    return <TabState title="Loading field detection" description="Fetching per-field detection coverage." />;
   }
   if (error) {
-    return <TabState title="Unable to load field mappings" description="Refresh the page or try again later." />;
+    return <TabState title="Unable to load field detection" description="Refresh the page or try again later." />;
   }
   if (!fields) {
     return (
       <TabState
-        title="Field mappings not available"
+        title="Field detection not available"
         description="Field summaries appear once the run metrics are computed."
       />
     );
   }
   if (fields.length === 0) {
-    return <TabState title="No field mappings" description="No fields were detected for this run." />;
+    return <TabState title="No fields detected" description="No fields were detected for this run." />;
   }
 
-  const mappedCount = fields.filter((field) => field.mapped).length;
-  const unmappedCount = fields.length - mappedCount;
-  const coverage = fields.length > 0 ? Math.round((mappedCount / fields.length) * 100) : null;
+  const detectedCount = fields.filter((field) => field.detected).length;
+  const notDetectedCount = fields.length - detectedCount;
+  const coverage = fields.length > 0 ? Math.round((detectedCount / fields.length) * 100) : null;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         <SummaryPill label="Total fields" value={formatNumber(fields.length)} />
-        <SummaryPill label="Mapped" value={formatNumber(mappedCount)} />
-        <SummaryPill label="Unmapped" value={formatNumber(unmappedCount)} />
+        <SummaryPill label="Detected" value={formatNumber(detectedCount)} />
+        <SummaryPill label="Not detected" value={formatNumber(notDetectedCount)} />
         <SummaryPill label="Coverage" value={formatQuality(coverage)} />
       </div>
 
@@ -289,7 +287,7 @@ function FieldsTab({
                   <p className="text-sm font-semibold text-foreground">{field.label ?? field.field}</p>
                   <p className="text-xs text-muted-foreground">{field.field}</p>
                 </div>
-                <MappingBadge mapped={field.mapped} />
+                <DetectionBadge detected={field.detected} />
                 <span className="text-xs text-foreground">{formatScore(field.best_mapping_score)}</span>
                 <span className="text-xs text-muted-foreground">{formatNumber(field.occurrences_tables)}</span>
                 <span className="text-xs text-muted-foreground">{formatNumber(field.occurrences_columns)}</span>
@@ -331,7 +329,7 @@ function ColumnsTab({
 
   const statusCounts = columns.reduce(
     (acc, column) => {
-      const status = (column.mapping_status || "unknown").toLowerCase();
+      const status = normalizeColumnStatus(column.mapping_status);
       acc.total += 1;
       acc[status] = (acc[status] ?? 0) + 1;
       return acc;
@@ -438,40 +436,42 @@ function SummaryPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MappingBadge({ mapped }: { mapped: boolean }) {
+function DetectionBadge({ detected }: { detected: boolean }) {
   return (
     <span
       className={clsx(
         "inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold",
-        mapped ? "bg-success-100 text-success-700" : "bg-muted text-muted-foreground",
+        detected ? "bg-success-100 text-success-700" : "bg-muted text-muted-foreground",
       )}
     >
-      {mapped ? "Mapped" : "Unmapped"}
+      {detected ? "Detected" : "Not detected"}
     </span>
   );
 }
 
 const COLUMN_STATUS_META: Record<string, { label: string; className: string }> = {
   mapped: { label: "Mapped", className: "bg-success-100 text-success-700" },
-  ambiguous: { label: "Ambiguous", className: "bg-warning-100 text-warning-700" },
   unmapped: { label: "Unmapped", className: "bg-muted text-muted-foreground" },
-  passthrough: { label: "Passthrough", className: "bg-info-100 text-info-700" },
 };
 
 function MappingStatusBadge({ status }: { status?: string | null }) {
-  const key = status?.toLowerCase?.() ?? "unknown";
+  const key = normalizeColumnStatus(status);
   const meta = COLUMN_STATUS_META[key];
 
   return (
     <span
       className={clsx(
         "inline-flex items-center justify-center rounded-full px-2 py-1 text-[11px] font-semibold",
-        meta ? meta.className : "bg-muted text-muted-foreground",
+        meta.className,
       )}
     >
-      {meta ? meta.label : status || "Unknown"}
+      {meta.label}
     </span>
   );
+}
+
+function normalizeColumnStatus(status?: string | null): "mapped" | "unmapped" {
+  return status?.toLowerCase?.() === "mapped" ? "mapped" : "unmapped";
 }
 
 function TabButton({ value, label, active }: { value: InspectorTab; label: string; active: boolean }) {

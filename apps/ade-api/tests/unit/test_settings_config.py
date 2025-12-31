@@ -39,10 +39,7 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_STORAGE_DOCUMENT_RETENTION_PERIOD",
         "ADE_DATABASE_DSN",
         "ADE_JWT_ACCESS_TTL",
-        "ADE_JWT_REFRESH_TTL",
-        "ADE_SESSION_LAST_SEEN_INTERVAL",
         "ADE_SESSION_COOKIE_NAME",
-        "ADE_SESSION_REFRESH_COOKIE_NAME",
         "ADE_SESSION_CSRF_COOKIE_NAME",
         "ADE_SESSION_COOKIE_PATH",
         "ADE_SESSION_COOKIE_DOMAIN",
@@ -50,6 +47,8 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "ADE_FAILED_LOGIN_LOCK_DURATION",
         "ADE_MAX_CONCURRENCY",
         "ADE_QUEUE_SIZE",
+        "ADE_RUN_LEASE_SECONDS",
+        "ADE_RUN_MAX_ATTEMPTS",
         "ADE_RUN_TIMEOUT_SECONDS",
         "ADE_WORKER_CPU_SECONDS",
         "ADE_WORKER_MEM_MB",
@@ -91,7 +90,6 @@ def test_settings_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.server_cors_origins == ["http://localhost:5173"]
     assert settings.database_dsn.endswith("data/db/ade.sqlite")
     assert settings.jwt_access_ttl == timedelta(minutes=60)
-    assert settings.jwt_refresh_ttl == timedelta(days=14)
     expected_root = (tmp_path / "data").resolve()
     expected_workspaces = (expected_root / "workspaces").resolve()
     expected_venvs = (Path(tempfile.gettempdir()) / "ade-venvs").resolve()
@@ -135,7 +133,6 @@ ADE_API_DOCS_ENABLED=true
 ADE_SERVER_PUBLIC_URL=https://api.dev.local
 ADE_SERVER_CORS_ORIGINS=http://localhost:3000,http://example.dev:4000
 ADE_JWT_ACCESS_TTL=5m
-ADE_JWT_REFRESH_TTL=7d
 """
     )
 
@@ -152,7 +149,6 @@ ADE_JWT_REFRESH_TTL=7d
         "http://example.dev:4000",
     ]
     assert settings.jwt_access_ttl == timedelta(minutes=5)
-    assert settings.jwt_refresh_ttl == timedelta(days=7)
 
 
 def test_settings_env_var_override(monkeypatch: pytest.MonkeyPatch) -> None:

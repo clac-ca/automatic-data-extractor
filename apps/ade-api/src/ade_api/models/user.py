@@ -1,11 +1,11 @@
-"""Canonical user and identity models shared across auth and RBAC."""
+"""Canonical user and auth-related models shared across auth and RBAC."""
 
 from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ade_api.db import Base, TimestampMixin, UUIDPrimaryKeyMixin, UUIDType
@@ -41,32 +41,34 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    email_canonical: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    email_normalized: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_service_account: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
-    identities: Mapped[list[UserIdentity]] = relationship(
-        "UserIdentity",
+    oauth_accounts: Mapped[list[OAuthAccount]] = relationship(
+        "OAuthAccount",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    credential: Mapped[UserCredential | None] = relationship(
-        "UserCredential",
+    access_tokens: Mapped[list[AccessToken]] = relationship(
+        "AccessToken",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
-        uselist=False,
     )
 
     @validates("email")
     def _store_normalised_email(self, _key: str, value: str) -> str:
         cleaned = _normalise_email(value)
-        self.email_canonical = _canonicalise_email(cleaned)
+        self.email_normalized = _canonicalise_email(cleaned)
         return cleaned
 
     @validates("display_name")
@@ -80,43 +82,48 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             return base or "Service account"
         return base
 
-    @property
-    def password_hash(self) -> str | None:
-        credential = getattr(self, "credential", None)
-        if credential is None:
-            return None
-        return credential.password_hash
 
-
-class UserCredential(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Hashed password secret associated with a user."""
-
-    __tablename__ = "user_credentials"
-    user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
-    )
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    last_rotated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-
-    user: Mapped[User] = relationship("User", back_populates="credential")
-
-    __table_args__ = (UniqueConstraint("user_id"),)
-
-
-class UserIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class OAuthAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """External identity mapping for SSO and federated logins."""
 
-    __tablename__ = "user_identities"
+    __tablename__ = "oauth_accounts"
+
     user_id: Mapped[UUID] = mapped_column(
-        UUIDType(), ForeignKey("users.id", ondelete="NO ACTION"), nullable=False
+        UUIDType(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
     )
-    provider: Mapped[str] = mapped_column(String(100), nullable=False)
-    subject: Mapped[str] = mapped_column(String(255), nullable=False)
-    last_authenticated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    oauth_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    account_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    account_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    access_token: Mapped[str] = mapped_column(Text(), nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
-    user: Mapped[User] = relationship("User", back_populates="identities")
+    user: Mapped[User] = relationship("User", back_populates="oauth_accounts")
 
-    __table_args__ = (UniqueConstraint("provider", "subject"),)
+    __table_args__ = (UniqueConstraint("oauth_name", "account_id"),)
 
 
-__all__ = ["User", "UserCredential", "UserIdentity"]
+class AccessToken(UUIDPrimaryKeyMixin, Base):
+    """Opaque session token for cookie-authenticated sessions."""
+
+    __tablename__ = "access_tokens"
+
+    user_id: Mapped[UUID] = mapped_column(
+        UUIDType(),
+        ForeignKey("users.id", ondelete="NO ACTION"),
+        nullable=False,
+    )
+    token: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+    user: Mapped[User] = relationship("User", back_populates="access_tokens")
+
+
+__all__ = ["User", "OAuthAccount", "AccessToken"]

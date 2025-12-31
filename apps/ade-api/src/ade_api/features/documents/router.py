@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
+import random
 from collections.abc import AsyncIterator
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -24,6 +24,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 from pydantic import ValidationError
 from ade_api.api.deps import get_documents_service, get_runs_service
 from ade_api.common.downloads import build_content_disposition
@@ -260,8 +261,11 @@ async def _try_enqueue_run(
         if await runs_service.is_processing_paused(workspace_id=workspace_id):
             return
         options = None
-        if run_options and run_options.input_sheet_names is not None:
-            options = RunCreateOptionsBase(input_sheet_names=run_options.input_sheet_names)
+        if run_options:
+            options = RunCreateOptionsBase(
+                input_sheet_names=run_options.input_sheet_names,
+                active_sheet_only=run_options.active_sheet_only,
+            )
         await runs_service.prepare_run_for_workspace(
             workspace_id=workspace_id,
             input_document_id=document_id,
@@ -425,7 +429,7 @@ async def stream_document_changes(
     *,
     cursor: Annotated[str | None, Query(description="Cursor token or 'latest'.")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
-) -> StreamingResponse:
+) -> EventSourceResponse:
     last_event_id = request.headers.get("Last-Event-ID") or request.headers.get("last-event-id")
     if last_event_id and cursor and last_event_id != cursor:
         raise HTTPException(
@@ -448,10 +452,12 @@ async def stream_document_changes(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    async def event_stream() -> AsyncIterator[bytes]:
-        poll_interval = 1.5
-        heartbeat_interval = 15.0
-        last_heartbeat = time.monotonic()
+    async def event_stream() -> AsyncIterator[dict[str, str]]:
+        base_interval = 2.0
+        max_interval = 30.0
+        backoff = 1.6
+        jitter_ratio = 0.2
+        poll_interval = base_interval
 
         cursor_value = 0
         pending = initial_page.changes
@@ -478,11 +484,6 @@ async def stream_document_changes(
             if await request.is_disconnected():
                 return
 
-            now = time.monotonic()
-            if now - last_heartbeat >= heartbeat_interval:
-                last_heartbeat = now
-                yield b": keepalive\n\n"
-
             try:
                 page = await service.list_document_changes(
                     workspace_id=workspace_id,
@@ -494,17 +495,21 @@ async def stream_document_changes(
 
             if page.changes:
                 pending = page.changes
+                poll_interval = base_interval
                 continue
 
-            await asyncio.sleep(poll_interval)
+            jitter = poll_interval * jitter_ratio
+            delay = max(0.0, poll_interval + random.uniform(-jitter, jitter))
+            await asyncio.sleep(delay)
+            poll_interval = min(max_interval, poll_interval * backoff)
 
-    return StreamingResponse(
+    return EventSourceResponse(
         event_stream(),
-        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+        ping=15,
     )
 
 

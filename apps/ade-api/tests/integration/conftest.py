@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -25,7 +24,7 @@ from ade_api.db.engine import ensure_database_ready, get_engine, reset_database_
 from ade_api.db.session import get_session as get_session_dependency
 from ade_api.features.rbac.service import RbacService
 from ade_api.main import create_app
-from ade_api.models import Role, User, UserCredential, Workspace, WorkspaceMembership
+from ade_api.models import Role, User, Workspace, WorkspaceMembership
 from ade_api.settings import Settings, get_settings
 
 
@@ -287,11 +286,41 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
     member_manage_email = f"member-manage+{workspace_slug}@example.com"
     orphan_email = f"orphan+{workspace_slug}@example.com"
 
-    admin = User(email=admin_email, is_active=True)
-    workspace_owner = User(email=workspace_owner_email, is_active=True)
-    member = User(email=member_email, is_active=True)
-    member_with_manage = User(email=member_manage_email, is_active=True)
-    orphan = User(email=orphan_email, is_active=True)
+    admin = User(
+        email=admin_email,
+        hashed_password=hash_password(admin_password),
+        is_active=True,
+        is_verified=True,
+        is_service_account=False,
+    )
+    workspace_owner = User(
+        email=workspace_owner_email,
+        hashed_password=hash_password(workspace_owner_password),
+        is_active=True,
+        is_verified=True,
+        is_service_account=False,
+    )
+    member = User(
+        email=member_email,
+        hashed_password=hash_password(member_password),
+        is_active=True,
+        is_verified=True,
+        is_service_account=False,
+    )
+    member_with_manage = User(
+        email=member_manage_email,
+        hashed_password=hash_password(member_manage_password),
+        is_active=True,
+        is_verified=True,
+        is_service_account=False,
+    )
+    orphan = User(
+        email=orphan_email,
+        hashed_password=hash_password(orphan_password),
+        is_active=True,
+        is_verified=True,
+        is_service_account=False,
+    )
 
     db_session.add_all(
         [
@@ -329,24 +358,6 @@ async def seed_identity(db_session: AsyncSession) -> SeededIdentity:
                 scope_type=ScopeType.GLOBAL,
                 scope_id=None,
             )
-
-    def _add_password(user: User, password: str) -> None:
-        db_session.add(
-            UserCredential(
-                user_id=user.id,
-                password_hash=hash_password(password),
-                last_rotated_at=datetime.now(tz=UTC),
-            )
-        )
-
-    for account, secret in (
-        (admin, admin_password),
-        (workspace_owner, workspace_owner_password),
-        (member, member_password),
-        (member_with_manage, member_manage_password),
-        (orphan, orphan_password),
-    ):
-        _add_password(account, secret)
 
     workspace_owner_membership = WorkspaceMembership(
         user_id=workspace_owner.id,

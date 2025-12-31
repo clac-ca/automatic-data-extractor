@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 
 import { useLocation, useNavigate } from "@app/nav/history";
 
-import { completeSsoLogin, sessionKeys } from "@shared/auth/api";
-import { chooseDestination } from "@shared/auth/utils/authNavigation";
+import { completeAuthCallback, sessionKeys } from "@shared/auth/api";
+import { chooseDestination, resolveRedirectParam } from "@shared/auth/utils/authNavigation";
 import { ApiError } from "@shared/api";
 import { Button } from "@ui/Button";
 import { PageState } from "@ui/PageState";
@@ -18,24 +18,20 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams(location.search);
-    const code = params.get("code") ?? "";
-    const stateParam = params.get("state") ?? "";
-
-    if (!code || !stateParam) {
-      setErrorMessage("Missing authorization details from the identity provider.");
-      return;
-    }
+    const returnTo = resolveRedirectParam(
+      params.get("return_to") ?? params.get("redirectTo") ?? params.get("next"),
+    );
 
     async function finishSso() {
       try {
-        const envelope = await completeSsoLogin({ code, state: stateParam });
+        const envelope = await completeAuthCallback();
         if (cancelled) {
           return;
         }
 
         queryClient.setQueryData(sessionKeys.detail(), envelope);
 
-        const next = chooseDestination(envelope.return_to, params.get("next"));
+        const next = chooseDestination(null, returnTo);
 
         navigate(next, { replace: true });
       } catch (error: unknown) {

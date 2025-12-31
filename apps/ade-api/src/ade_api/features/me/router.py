@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.core.auth.principal import AuthenticatedPrincipal
-from ade_api.core.http import get_current_principal, get_rbac_service
+from ade_api.core.http import get_current_principal, get_rbac_service, require_csrf
+from ade_api.core.http.csrf import set_csrf_cookie
 from ade_api.core.rbac.service_interface import RbacService
 from ade_api.db.session import get_session
+from ade_api.settings import Settings, get_settings
 
 from .schemas import (
     EffectivePermissions,
@@ -78,6 +80,8 @@ async def get_me(
 async def get_me_bootstrap(
     principal: Annotated[AuthenticatedPrincipal, Depends(get_current_principal)],
     service: Annotated[MeService, Depends(get_me_service)],
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings)],
     page: Annotated[
         int,
         Query(ge=1, description="Workspace page number (1-based)."),
@@ -99,6 +103,7 @@ async def get_me_bootstrap(
 ) -> MeContext:
     """Return a consolidated bootstrap payload for the current principal."""
 
+    set_csrf_cookie(response, settings)
     return await service.get_context(
         principal,
         page=page,
@@ -132,6 +137,7 @@ async def get_me_permissions(
     response_model=PermissionCheckResponse,
     status_code=status.HTTP_200_OK,
     summary="Check whether the caller has specific permissions",
+    dependencies=[Security(require_csrf)],
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "Authentication required to evaluate permissions."

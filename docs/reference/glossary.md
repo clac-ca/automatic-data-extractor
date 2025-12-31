@@ -15,4 +15,4 @@ Workspace-scoped configuration packages with a lifecycle of `draft` → `active`
 A logical tenant boundary enforced by [`apps/ade-api/src/ade_api/features/workspaces`](../../apps/ade-api/src/ade_api/features/workspaces). Workspace identifiers are part of the URL path (for example `/workspaces/{workspace_id}/documents`) so dependencies can scope database queries appropriately.
 
 ## API Key
-A long-lived credential provisioned for automation clients via routes in [`apps/ade-api/src/ade_api/features/auth`](../../apps/ade-api/src/ade_api/features/auth). Hashes are stored in the database, and usage is throttled via the `session_last_seen_interval` setting.
+A long-lived credential provisioned for automation clients via routes in [`apps/ade-api/src/ade_api/features/auth`](../../apps/ade-api/src/ade_api/features/auth). Hashes are stored in the database and usage is tracked via `last_used_at`.

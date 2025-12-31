@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import socket
 import time
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -50,9 +52,10 @@ class RunWorkerPool:
         self._tasks.clear()
 
     async def _worker_loop(self, worker_id: int) -> None:
+        worker_identity = f"{socket.gethostname()}:{os.getpid()}:{worker_id}"
         logger.info(
             "run.worker.start",
-            extra=log_context(worker_id=worker_id),
+            extra=log_context(worker_id=worker_id, worker_identity=worker_identity),
         )
         last_cleanup = 0.0
         while not self._stop.is_set():
@@ -66,18 +69,22 @@ class RunWorkerPool:
                         await service.expire_stuck_builds()
                         last_cleanup = now
 
-                    run = await service.claim_next_run()
+                    run = await service.claim_next_run(worker_id=worker_identity)
                     if run is None:
                         should_sleep = True
                     else:
                         options = await service.load_run_options(run)
-                        await service.run_to_completion(run_id=run.id, options=options)
+                        await service.run_to_completion(
+                            run_id=run.id,
+                            options=options,
+                            worker_id=worker_identity,
+                        )
             except asyncio.CancelledError:
                 break
             except Exception:
                 logger.exception(
                     "run.worker.loop.error",
-                    extra=log_context(worker_id=worker_id),
+                    extra=log_context(worker_id=worker_id, worker_identity=worker_identity),
                 )
                 should_sleep = True
 
@@ -86,7 +93,7 @@ class RunWorkerPool:
 
         logger.info(
             "run.worker.stop",
-            extra=log_context(worker_id=worker_id),
+            extra=log_context(worker_id=worker_id, worker_identity=worker_identity),
         )
 
     def _build_service(self, session: AsyncSession) -> RunsService:

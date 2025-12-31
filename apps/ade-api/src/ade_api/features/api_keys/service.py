@@ -15,13 +15,12 @@ from ade_api.common.pagination import Page, paginate_sql
 from ade_api.common.time import utc_now
 from ade_api.core.auth.errors import AuthenticationError
 from ade_api.core.auth.principal import AuthenticatedPrincipal, AuthVia, PrincipalType
-from ade_api.core.rbac.types import ScopeType
 from ade_api.core.security.api_keys import (
     generate_api_key_prefix,
     generate_api_key_secret,
     hash_api_key_secret,
 )
-from ade_api.models import ApiKey, User, Workspace
+from ade_api.models import ApiKey, User
 from ade_api.settings import Settings
 
 
@@ -38,7 +37,7 @@ class ApiKeyAuthenticationResult:
     """Result of authenticating a raw API key."""
 
     api_key: ApiKey
-    owner_user_id: UUID
+    user_id: UUID
 
 
 class ApiKeyNotFoundError(LookupError):
@@ -74,14 +73,6 @@ def _normalize_label(label: str | None) -> str | None:
     return cleaned[:100]
 
 
-def _canonical_email(value: str) -> str:
-    cleaned = value.strip()
-    if not cleaned:
-        msg = "Email must not be empty"
-        raise ValueError(msg)
-    return cleaned.lower()
-
-
 def _normalize_dt(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -100,42 +91,21 @@ class ApiKeyService:
     async def create_for_user(
         self,
         *,
-        owner_user_id: UUID | None = None,
-        email: str | None = None,
-        created_by_user_id: UUID | None,
-        label: str | None,
+        user_id: UUID,
+        name: str | None,
         expires_in_days: int | None,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
     ) -> ApiKeyCreateResult:
         """Create a new API key for the specified owner."""
 
-        owner = await self._get_owner(owner_user_id=owner_user_id, email=email)
+        owner = await self._get_user(user_id=user_id)
         return await self._create_api_key(
-            owner_user_id=owner.id,
-            created_by_user_id=created_by_user_id,
-            label=label,
+            user_id=owner.id,
+            name=name,
             expires_in_days=expires_in_days,
-            scope_type=scope_type,
-            scope_id=scope_id,
         )
 
-    async def _get_owner(self, *, owner_user_id: UUID | None, email: str | None) -> User:
-        provided = [owner_user_id, email]
-        if sum(value is not None for value in provided) != 1:
-            msg = "Provide exactly one of owner_user_id or email"
-            raise ValueError(msg)
-
-        if owner_user_id is not None:
-            owner = await self._session.get(User, owner_user_id)
-        else:
-            assert email is not None
-            canonical_email = _canonical_email(email)
-            result = await self._session.execute(
-                select(User).where(User.email_canonical == canonical_email)
-            )
-            owner = result.scalar_one_or_none()
-
+    async def _get_user(self, *, user_id: UUID) -> User:
+        owner = await self._session.get(User, user_id)
         if owner is None:
             raise ValueError("Owner user not found")
         if not owner.is_active:
@@ -145,26 +115,11 @@ class ApiKeyService:
     async def _create_api_key(
         self,
         *,
-        owner_user_id: UUID,
-        created_by_user_id: UUID | None,
-        label: str | None,
+        user_id: UUID,
+        name: str | None,
         expires_in_days: int | None,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
     ) -> ApiKeyCreateResult:
-        label = _normalize_label(label)
-
-        if scope_type == ScopeType.GLOBAL and scope_id is not None:
-            msg = "scope_id must be null when scope_type=global"
-            raise ValueError(msg)
-        if scope_type == ScopeType.WORKSPACE and scope_id is None:
-            msg = "scope_id is required when scope_type=workspace"
-            raise ValueError(msg)
-
-        if scope_type == ScopeType.WORKSPACE and scope_id is not None:
-            _workspace = await self._session.get(Workspace, scope_id)
-            if _workspace is None:
-                raise ValueError("Workspace not found for scope_id")
+        name = _normalize_label(name)
 
         expires_at: datetime | None = None
         if expires_in_days is not None:
@@ -177,13 +132,10 @@ class ApiKeyService:
         token_hash = hash_api_key_secret(secret_part)
 
         api_key = ApiKey(
-            owner_user_id=owner_user_id,
-            created_by_user_id=created_by_user_id,
-            token_prefix=prefix,
-            token_hash=token_hash,
-            label=label,
-            scope_type=scope_type,
-            scope_id=scope_id,
+            user_id=user_id,
+            name=name,
+            prefix=prefix,
+            hashed_secret=token_hash,
             expires_at=expires_at,
             revoked_at=None,
         )
@@ -209,20 +161,20 @@ class ApiKeyService:
             stmt = stmt.where(ApiKey.revoked_at.is_(None))
         return stmt
 
-    async def list_for_owner(
+    async def list_for_user(
         self,
         *,
-        owner_user_id: UUID,
+        user_id: UUID,
         include_revoked: bool,
         page: int,
         page_size: int,
         include_total: bool,
     ) -> Page[ApiKey]:
-        """List keys for a specific owner (self-service and admin use)."""
+        """List keys for a specific user (self-service and admin use)."""
 
         stmt = (
             self._base_query()
-            .where(ApiKey.owner_user_id == owner_user_id)
+            .where(ApiKey.user_id == user_id)
             .order_by(ApiKey.created_at.desc())
         )
         stmt = self._apply_revoked_filter(stmt, include_revoked=include_revoked)
@@ -240,7 +192,7 @@ class ApiKeyService:
         self,
         *,
         include_revoked: bool,
-        owner_user_id: UUID | None,
+        user_id: UUID | None,
         page: int,
         page_size: int,
         include_total: bool,
@@ -248,8 +200,8 @@ class ApiKeyService:
         """List keys across the tenant (admin use)."""
 
         stmt = self._base_query().order_by(ApiKey.created_at.desc())
-        if owner_user_id is not None:
-            stmt = stmt.where(ApiKey.owner_user_id == owner_user_id)
+        if user_id is not None:
+            stmt = stmt.where(ApiKey.user_id == user_id)
         stmt = self._apply_revoked_filter(stmt, include_revoked=include_revoked)
 
         return await paginate_sql(
@@ -279,18 +231,18 @@ class ApiKeyService:
         await self._session.refresh(api_key)
         return api_key
 
-    async def revoke_for_owner(
+    async def revoke_for_user(
         self,
         *,
         api_key_id: UUID,
-        owner_user_id: UUID,
+        user_id: UUID,
     ) -> ApiKey:
-        """Revoke a key ensuring it belongs to a specific owner."""
+        """Revoke a key ensuring it belongs to a specific user."""
 
         api_key = await self.get_by_id(api_key_id)
-        if api_key.owner_user_id != owner_user_id:
+        if api_key.user_id != user_id:
             raise ApiKeyAccessDeniedError(
-                f"API key {api_key_id} is not owned by user {owner_user_id}"
+                f"API key {api_key_id} is not owned by user {user_id}"
             )
         if api_key.revoked_at is not None:
             return api_key
@@ -299,13 +251,13 @@ class ApiKeyService:
         await self._session.refresh(api_key)
         return api_key
 
-    async def revoke_all_for_owner(self, *, owner_user_id: UUID) -> None:
+    async def revoke_all_for_user(self, *, user_id: UUID) -> None:
         """Revoke all API keys owned by the specified user."""
 
         now = utc_now()
         await self._session.execute(
             sa.update(ApiKey)
-            .where(ApiKey.owner_user_id == owner_user_id, ApiKey.revoked_at.is_(None))
+            .where(ApiKey.user_id == user_id, ApiKey.revoked_at.is_(None))
             .values(revoked_at=now)
         )
         await self._session.flush()
@@ -331,7 +283,7 @@ class ApiKeyService:
 
         result = await self._session.execute(
             self._base_query()
-            .where(ApiKey.token_prefix == prefix)
+            .where(ApiKey.prefix == prefix)
             .execution_options(populate_existing=True)
         )
         api_key = result.scalar_one_or_none()
@@ -346,24 +298,24 @@ class ApiKeyService:
         if revoked_at is not None and revoked_at <= now:
             raise ApiKeyRevokedError("API key has been revoked")
 
-        expected_hash = api_key.token_hash
+        expected_hash = api_key.hashed_secret
         candidate_hash = hash_api_key_secret(secret)
         if not secrets.compare_digest(expected_hash, candidate_hash):
             raise ApiKeyNotFoundError("API key not recognized")
 
-        owner = getattr(api_key, "owner", None)
-        if owner is None:
-            owner = await self._session.get(User, api_key.owner_user_id)
-        if owner is None:
+        user = getattr(api_key, "user", None)
+        if user is None:
+            user = await self._session.get(User, api_key.user_id)
+        if user is None:
             raise ApiKeyNotFoundError("API key not recognized")
-        if not owner.is_active:
+        if not user.is_active:
             raise ApiKeyOwnerInactiveError("API key owner is inactive")
 
         if touch_usage:
             api_key.last_used_at = now
             await self._session.flush()
 
-        return ApiKeyAuthenticationResult(api_key=api_key, owner_user_id=api_key.owner_user_id)
+        return ApiKeyAuthenticationResult(api_key=api_key, user_id=api_key.user_id)
 
     async def authenticate(self, raw_token: str) -> AuthenticatedPrincipal | None:
         """Adapter for the auth pipeline; return a principal or ``None``."""
@@ -380,14 +332,14 @@ class ApiKeyService:
             raise AuthenticationError(str(exc)) from exc
 
         api_key = result.api_key
-        owner = getattr(api_key, "owner", None)
+        owner = getattr(api_key, "user", None)
         principal_type = (
             PrincipalType.SERVICE_ACCOUNT
             if getattr(owner, "is_service_account", False)
             else PrincipalType.USER
         )
         return AuthenticatedPrincipal(
-            user_id=result.owner_user_id,
+            user_id=result.user_id,
             principal_type=principal_type,
             auth_via=AuthVia.API_KEY,
             api_key_id=api_key.id,

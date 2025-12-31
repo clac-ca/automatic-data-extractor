@@ -418,6 +418,7 @@ export function useDocumentsModel({
   }, [listSettings, workspaceId]);
 
   const uploadManager = useUploadManager({ workspaceId });
+  const updateUploadResponse = uploadManager.updateResponse;
 
   const configurationsQuery = useConfigurationsQuery({ workspaceId });
   const { refetch: refetchConfigurations } = configurationsQuery;
@@ -653,6 +654,13 @@ export function useDocumentsModel({
     batch.forEach((change) => {
       if (change.type === "document.upsert" && change.document) {
         queryClient.setQueryData(documentsKeys.document(workspaceId, change.document.id), change.document);
+        if (uploadIdMapRef.current.size > 0) {
+          uploadIdMapRef.current.forEach((docId, uploadId) => {
+            if (docId === change.document.id) {
+              updateUploadResponse(uploadId, change.document);
+            }
+          });
+        }
       }
       if (change.type === "document.deleted" && change.document_id) {
         queryClient.removeQueries({ queryKey: documentsKeys.document(workspaceId, change.document_id) });
@@ -662,7 +670,7 @@ export function useDocumentsModel({
     if (shouldRefresh) {
       scheduleDocumentsRefresh();
     }
-  }, [filters, listKey, queryClient, scheduleDocumentsRefresh, search, sort, workspaceId]);
+  }, [filters, listKey, queryClient, scheduleDocumentsRefresh, search, sort, updateUploadResponse, workspaceId]);
 
   const enqueueChange = useCallback(
     (change: DocumentChangeEntry) => {

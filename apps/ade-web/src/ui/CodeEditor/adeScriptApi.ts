@@ -363,10 +363,10 @@ def on_table_mapped(
     logger,
     **_,
 ) -> dict | None:
-    """\${1:Propose mapping tweaks or log mapped columns.}"""
+    """\${1:Propose mapping tweaks or log detected fields.}"""
     if logger and table:
-        mapped = [col.field_name for col in getattr(table, "mapped_columns", [])]
-        logger.info("table mapped fields=%s", mapped)
+        detected_fields = [col.field_name for col in getattr(table, "mapped_columns", [])]
+        logger.info("table mapped (detected_fields=%s)", detected_fields)
     return None
 `.trim(),
   parameters: ["hook_name", "metadata", "state", "workbook", "sheet", "table", "input_file_name", "logger"],

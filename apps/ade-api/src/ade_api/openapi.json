@@ -61,132 +61,19 @@
         ]
       }
     },
-    "/api/v1/auth/providers": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "List configured authentication providers",
-        "operationId": "list_auth_providers_api_v1_auth_providers_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthProviderListResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/setup": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Return whether initial administrator setup is required",
-        "operationId": "read_setup_status_api_v1_auth_setup_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthSetupStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      },
+    "/api/v1/auth/cookie/login": {
       "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Create the first administrator account and start a session",
-        "operationId": "complete_setup_api_v1_auth_setup_post",
+        "summary": "Auth:Cookie.Login",
+        "operationId": "auth_cookie_login_api_v1_auth_cookie_login_post",
         "requestBody": {
           "content": {
-            "application/json": {
+            "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/AuthSetupRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      }
-    },
-    "/api/v1/auth/session": {
-      "get": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Return the current session snapshot",
-        "operationId": "read_session_api_v1_auth_session_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Create a session via email/password",
-        "operationId": "create_session_api_v1_auth_session_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthLoginRequest"
+                "$ref": "#/components/schemas/Body_auth_cookie_login_api_v1_auth_cookie_login_post"
               }
             }
           },
@@ -197,51 +84,36 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
+                "schema": {}
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": []
-      },
-      "delete": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Terminate the current session",
-        "operationId": "end_session_api_v1_auth_session_delete",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AuthRefreshRequest"
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "LOGIN_BAD_CREDENTIALS": {
+                    "summary": "Bad credentials or the user is inactive.",
+                    "value": {
+                      "detail": "LOGIN_BAD_CREDENTIALS"
+                    }
                   },
-                  {
-                    "type": "null"
+                  "LOGIN_USER_NOT_VERIFIED": {
+                    "summary": "The user is not verified.",
+                    "value": {
+                      "detail": "LOGIN_USER_NOT_VERIFIED"
+                    }
                   }
-                ],
-                "title": "Payload"
+                }
               }
             }
-          }
-        },
-        "responses": {
+          },
           "204": {
-            "description": "Successful Response"
+            "description": "No Content"
           },
           "422": {
             "description": "Validation Error",
@@ -254,42 +126,88 @@
             }
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        "security": []
       }
     },
-    "/api/v1/auth/session/refresh": {
+    "/api/v1/auth/cookie/logout": {
       "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Refresh an existing session using a refresh token",
-        "operationId": "refresh_session_api_v1_auth_session_refresh_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AuthRefreshRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
+        "summary": "Auth:Cookie.Logout",
+        "operationId": "auth_cookie_logout_api_v1_auth_cookie_logout_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing token or inactive user."
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/auth/jwt/login": {
+      "post": {
+        "tags": [
+          "auth",
+          "auth"
+        ],
+        "summary": "Auth:Jwt.Login",
+        "operationId": "auth_jwt_login_api_v1_auth_jwt_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_auth_jwt_login_api_v1_auth_jwt_login_post"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -297,7 +215,35 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
+                  "$ref": "#/components/schemas/BearerResponse"
+                },
+                "example": {
+                  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiOTIyMWZmYzktNjQwZi00MzcyLTg2ZDMtY2U2NDJjYmE1NjAzIiwiYXVkIjoiZmFzdGFwaS11c2VyczphdXRoIiwiZXhwIjoxNTcxNTA0MTkzfQ.M10bjOe45I5Ncu_uXvOmVV8QxnL-nZfcH96U90JaocI",
+                  "token_type": "bearer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "LOGIN_BAD_CREDENTIALS": {
+                    "summary": "Bad credentials or the user is inactive.",
+                    "value": {
+                      "detail": "LOGIN_BAD_CREDENTIALS"
+                    }
+                  },
+                  "LOGIN_USER_NOT_VERIFIED": {
+                    "summary": "The user is not verified.",
+                    "value": {
+                      "detail": "LOGIN_USER_NOT_VERIFIED"
+                    }
+                  }
                 }
               }
             }
@@ -313,26 +259,77 @@
             }
           }
         },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        "security": []
       }
     },
-    "/api/v1/auth/sso/{provider}/authorize": {
-      "get": {
+    "/api/v1/auth/jwt/logout": {
+      "post": {
         "tags": [
+          "auth",
           "auth"
         ],
-        "summary": "Initiate the SSO login flow",
-        "operationId": "start_sso_login_api_v1_auth_sso__provider__authorize_get",
+        "summary": "Auth:Jwt.Logout",
+        "operationId": "auth_jwt_logout_api_v1_auth_jwt_logout_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing token or inactive user."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{provider}/authorize": {
+      "get": {
+        "tags": [
+          "auth",
+          "auth",
+          "auth"
+        ],
+        "summary": "Authorize Oidc",
+        "operationId": "authorize_oidc_api_v1_auth_oidc__provider__authorize_get",
         "parameters": [
           {
             "name": "provider",
@@ -344,7 +341,7 @@
             }
           },
           {
-            "name": "next_path",
+            "name": "return_to",
             "in": "query",
             "required": false,
             "schema": {
@@ -356,12 +353,12 @@
                   "type": "null"
                 }
               ],
-              "title": "Next Path"
+              "title": "Return To"
             }
           }
         ],
         "responses": {
-          "302": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -383,13 +380,15 @@
         "security": []
       }
     },
-    "/api/v1/auth/sso/{provider}/callback": {
+    "/api/v1/auth/oidc/{provider}/callback": {
       "get": {
         "tags": [
+          "auth",
+          "auth",
           "auth"
         ],
-        "summary": "Handle the SSO callback and issue tokens",
-        "operationId": "finish_sso_login_api_v1_auth_sso__provider__callback_get",
+        "summary": "Callback Oidc",
+        "operationId": "callback_oidc_api_v1_auth_oidc__provider__callback_get",
         "parameters": [
           {
             "name": "provider",
@@ -401,48 +400,12 @@
             }
           },
           {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Code"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "State"
-            }
-          },
-          {
             "name": "response_mode",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "json",
-                    "redirect"
-                  ],
                   "type": "string"
                 },
                 {
@@ -458,14 +421,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEnvelope"
-                }
+                "schema": {}
               }
             }
-          },
-          "302": {
-            "description": "Redirect to the frontend after establishing a browser session. Includes session cookies."
           },
           "422": {
             "description": "Validation Error",
@@ -481,13 +439,160 @@
         "security": []
       }
     },
-    "/api/v1/me/apiKeys": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "auth",
+          "auth"
+        ],
+        "summary": "Register:Register",
+        "operationId": "register_register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                },
+                "examples": {
+                  "REGISTER_USER_ALREADY_EXISTS": {
+                    "summary": "A user with this email already exists.",
+                    "value": {
+                      "detail": "REGISTER_USER_ALREADY_EXISTS"
+                    }
+                  },
+                  "REGISTER_INVALID_PASSWORD": {
+                    "summary": "Password validation failed.",
+                    "value": {
+                      "detail": {
+                        "code": "REGISTER_INVALID_PASSWORD",
+                        "reason": "Password should beat least 3 characters"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/setup": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Return setup status for the first admin user",
+        "operationId": "get_setup_status_api_v1_auth_setup_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSetupStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create the first admin user and log them in",
+        "operationId": "complete_setup_api_v1_auth_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Return configured authentication providers",
+        "operationId": "list_auth_providers_api_v1_auth_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthProviderListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/users/me/api-keys": {
       "get": {
         "tags": [
           "api-keys"
         ],
         "summary": "List API keys for the current user",
-        "operationId": "list_my_api_keys_api_v1_me_apiKeys_get",
+        "operationId": "list_my_api_keys_api_v1_users_me_api_keys_get",
         "parameters": [
           {
             "name": "include_revoked",
@@ -577,7 +682,7 @@
           "api-keys"
         ],
         "summary": "Create an API key for the current user",
-        "operationId": "create_my_api_key_api_v1_me_apiKeys_post",
+        "operationId": "create_my_api_key_api_v1_users_me_api_keys_post",
         "parameters": [
           {
             "name": "X-CSRF-Token",
@@ -647,13 +752,13 @@
         ]
       }
     },
-    "/api/v1/me/apiKeys/{api_key_id}": {
+    "/api/v1/users/me/api-keys/{api_key_id}": {
       "delete": {
         "tags": [
           "api-keys"
         ],
         "summary": "Revoke one of the current user's API keys",
-        "operationId": "revoke_my_api_key_api_v1_me_apiKeys__api_key_id__delete",
+        "operationId": "revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete",
         "parameters": [
           {
             "name": "api_key_id",
@@ -719,337 +824,13 @@
         ]
       }
     },
-    "/api/v1/apiKeys": {
-      "get": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "List API keys across the tenant (admin)",
-        "operationId": "list_api_keys_api_v1_apiKeys_get",
-        "parameters": [
-          {
-            "name": "include_revoked",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "description": "Include revoked keys in the response.",
-              "default": false,
-              "title": "Include Revoked"
-            },
-            "description": "Include revoked keys in the response."
-          },
-          {
-            "name": "owner_user_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional filter by owner user id.",
-              "title": "Owner User Id"
-            },
-            "description": "Optional filter by owner user id."
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1,
-              "title": "Page"
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 2000,
-              "minimum": 1,
-              "default": 25,
-              "title": "Page Size"
-            }
-          },
-          {
-            "name": "include_total",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Total"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeyPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.read_all global permission."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Create an API key for a user (admin)",
-        "operationId": "create_api_key_api_v1_apiKeys_post",
-        "parameters": [
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApiKeyIssueRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeyCreateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.manage_all global permission."
-          },
-          "400": {
-            "description": "Invalid API key payload."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/apiKeys/{api_key_id}": {
-      "get": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Retrieve a single API key (admin)",
-        "operationId": "get_api_key_api_v1_apiKeys__api_key_id__get",
-        "parameters": [
-          {
-            "name": "api_key_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Api Key Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiKeySummary"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.read_all global permission."
-          },
-          "404": {
-            "description": "API key not found."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "api-keys"
-        ],
-        "summary": "Revoke an API key (admin)",
-        "operationId": "revoke_api_key_api_v1_apiKeys__api_key_id__delete",
-        "parameters": [
-          {
-            "name": "api_key_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Api Key Id"
-            }
-          },
-          {
-            "name": "X-CSRF-Token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Csrf-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "401": {
-            "description": "Authentication required."
-          },
-          "403": {
-            "description": "Requires api_keys.manage_all global permission."
-          },
-          "404": {
-            "description": "API key not found."
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "SessionCookie": []
-          },
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/users/{user_id}/apiKeys": {
+    "/api/v1/users/{user_id}/api-keys": {
       "get": {
         "tags": [
           "api-keys"
         ],
         "summary": "List API keys for a specific user (admin)",
-        "operationId": "list_user_api_keys_api_v1_users__user_id__apiKeys_get",
+        "operationId": "list_user_api_keys_api_v1_users__user_id__api_keys_get",
         "parameters": [
           {
             "name": "user_id",
@@ -1152,7 +933,7 @@
           "api-keys"
         ],
         "summary": "Create an API key for a specific user (admin)",
-        "operationId": "create_user_api_key_api_v1_users__user_id__apiKeys_post",
+        "operationId": "create_user_api_key_api_v1_users__user_id__api_keys_post",
         "parameters": [
           {
             "name": "user_id",
@@ -1235,13 +1016,13 @@
         ]
       }
     },
-    "/api/v1/users/{user_id}/apiKeys/{api_key_id}": {
+    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
       "delete": {
         "tags": [
           "api-keys"
         ],
         "summary": "Revoke an API key for a specific user (admin)",
-        "operationId": "revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete",
+        "operationId": "revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete",
         "parameters": [
           {
             "name": "user_id",
@@ -2682,15 +2463,33 @@
         "summary": "Check whether the caller has specific permissions",
         "description": "Evaluate a set of permission keys for the current principal.",
         "operationId": "check_permissions_api_v1_me_permissions_check_post",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PermissionCheckRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -8472,9 +8271,7 @@
                 {
                   "enum": [
                     "mapped",
-                    "ambiguous",
-                    "unmapped",
-                    "passthrough"
+                    "unmapped"
                   ],
                   "type": "string"
                 },
@@ -9071,7 +8868,7 @@
     "schemas": {
       "ApiKeyCreateRequest": {
         "properties": {
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string",
@@ -9081,8 +8878,8 @@
                 "type": "null"
               }
             ],
-            "title": "Label",
-            "description": "Optional human-friendly label (e.g. 'CLI on laptop')."
+            "title": "Name",
+            "description": "Optional human-friendly name (e.g. 'CLI on laptop')."
           },
           "expires_in_days": {
             "anyOf": [
@@ -9097,25 +8894,6 @@
             ],
             "title": "Expires In Days",
             "description": "Optional TTL in days; omit for a non-expiring key."
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType",
-            "description": "Scope of the key: global or workspace.",
-            "default": "global"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id",
-            "description": "Workspace identifier when scope_type=workspace. Must be null for global keys."
           }
         },
         "additionalProperties": false,
@@ -9131,37 +8909,23 @@
             "title": "Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "owner_user_id": {
+          "user_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Owner User Id",
+            "title": "User Id",
             "description": "User that this key authenticates as."
-          },
-          "created_by_user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By User Id",
-            "description": "User who created the key (may equal owner for self-service)."
           },
           "secret": {
             "type": "string",
             "title": "Secret",
             "description": "Full API key secret, returned once at creation time."
           },
-          "token_prefix": {
+          "prefix": {
             "type": "string",
-            "title": "Token Prefix",
+            "title": "Prefix",
             "description": "Prefix used for identification in logs/UI."
           },
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string"
@@ -9170,23 +8934,7 @@
                 "type": "null"
               }
             ],
-            "title": "Label"
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id"
+            "title": "Name"
           },
           "created_at": {
             "type": "string",
@@ -9210,95 +8958,13 @@
         "type": "object",
         "required": [
           "id",
-          "owner_user_id",
+          "user_id",
           "secret",
-          "token_prefix",
-          "scope_type",
+          "prefix",
           "created_at"
         ],
         "title": "ApiKeyCreateResponse",
         "description": "Response returned when a new API key is created."
-      },
-      "ApiKeyIssueRequest": {
-        "properties": {
-          "label": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label",
-            "description": "Optional human-friendly label (e.g. 'CLI on laptop')."
-          },
-          "expires_in_days": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 3650.0,
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expires In Days",
-            "description": "Optional TTL in days; omit for a non-expiring key."
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType",
-            "description": "Scope of the key: global or workspace.",
-            "default": "global"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id",
-            "description": "Workspace identifier when scope_type=workspace. Must be null for global keys."
-          },
-          "user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Id",
-            "description": "Target user id; provide exactly one of user_id or email."
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "email"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email",
-            "description": "Target user email; provide exactly one of user_id or email."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "ApiKeyIssueRequest",
-        "description": "Admin payload to issue a key by user id or email."
       },
       "ApiKeyPage": {
         "properties": {
@@ -9357,30 +9023,17 @@
             "title": "Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "owner_user_id": {
+          "user_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Owner User Id",
+            "title": "User Id",
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
-          "created_by_user_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By User Id"
-          },
-          "token_prefix": {
+          "prefix": {
             "type": "string",
-            "title": "Token Prefix"
+            "title": "Prefix"
           },
-          "label": {
+          "name": {
             "anyOf": [
               {
                 "type": "string"
@@ -9389,23 +9042,7 @@
                 "type": "null"
               }
             ],
-            "title": "Label"
-          },
-          "scope_type": {
-            "$ref": "#/components/schemas/ScopeType"
-          },
-          "scope_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "description": "UUIDv7 (RFC 9562) generated in the application layer."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope Id"
+            "title": "Name"
           },
           "created_at": {
             "type": "string",
@@ -9453,45 +9090,19 @@
         "type": "object",
         "required": [
           "id",
-          "owner_user_id",
-          "token_prefix",
-          "scope_type",
+          "user_id",
+          "prefix",
           "created_at"
         ],
         "title": "ApiKeySummary",
         "description": "Metadata describing an API key without exposing the secret."
-      },
-      "AuthLoginRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email",
-            "description": "User email address."
-          },
-          "password": {
-            "type": "string",
-            "format": "password",
-            "title": "Password",
-            "description": "User password.",
-            "writeOnly": true
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "AuthLoginRequest",
-        "description": "Credentials submitted when performing a password login."
       },
       "AuthProvider": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id",
-            "description": "Provider identifier, e.g. 'password' or 'sso'."
+            "description": "Provider identifier, e.g. 'password' or 'oidc'."
           },
           "label": {
             "type": "string",
@@ -9566,26 +9177,6 @@
         "title": "AuthProviderListResponse",
         "description": "Response payload returned by /auth/providers."
       },
-      "AuthRefreshRequest": {
-        "properties": {
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token",
-            "description": "Refresh token to rotate. Optional when using the refresh cookie."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "AuthRefreshRequest",
-        "description": "Optional payload for refresh / logout.\n\nBrowser clients typically rely on the refresh cookie; API clients can\nsupply the token in the request body instead."
-      },
       "AuthSetupRequest": {
         "properties": {
           "email": {
@@ -9626,25 +9217,177 @@
       },
       "AuthSetupStatusResponse": {
         "properties": {
-          "requires_setup": {
+          "setup_required": {
             "type": "boolean",
-            "title": "Requires Setup",
-            "description": "True when no users exist and an initial admin must be created."
+            "title": "Setup Required"
           },
-          "has_users": {
+          "registration_mode": {
+            "type": "string",
+            "enum": [
+              "setup-only",
+              "closed",
+              "open"
+            ],
+            "title": "Registration Mode"
+          },
+          "oidc_configured": {
             "type": "boolean",
-            "title": "Has Users",
-            "description": "True when at least one user already exists."
+            "title": "Oidc Configured"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/AuthProvider"
+            },
+            "type": "array",
+            "title": "Providers"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "requires_setup",
-          "has_users"
+          "setup_required",
+          "registration_mode",
+          "oidc_configured",
+          "providers"
         ],
         "title": "AuthSetupStatusResponse",
-        "description": "Describes whether initial administrator setup is required."
+        "description": "Setup status response returned by /auth/setup."
+      },
+      "BearerResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type"
+        ],
+        "title": "BearerResponse"
+      },
+      "Body_auth_cookie_login_api_v1_auth_cookie_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_auth_cookie_login_api_v1_auth_cookie_login_post"
+      },
+      "Body_auth_jwt_login_api_v1_auth_jwt_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_auth_jwt_login_api_v1_auth_jwt_login_post"
       },
       "Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post": {
         "properties": {
@@ -10997,6 +10740,12 @@
             ],
             "title": "Input Sheet Names",
             "description": "Optional worksheet names to ingest when processing XLSX files."
+          },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -11228,6 +10977,29 @@
         "type": "object",
         "title": "EffectivePermissions",
         "description": "Effective permission sets for the current principal."
+      },
+      "ErrorModel": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorModel"
       },
       "FileCapabilities": {
         "properties": {
@@ -12393,6 +12165,12 @@
             "title": "Log Level",
             "description": "Engine log level passed as --log-level to ade_engine."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -12511,6 +12289,10 @@
           },
           "mapping_status": {
             "type": "string",
+            "enum": [
+              "mapped",
+              "unmapped"
+            ],
             "title": "Mapping Status"
           },
           "mapped_field": {
@@ -12624,6 +12406,12 @@
             "title": "Input Sheet Names",
             "description": "Optional worksheet names to ingest when processing XLSX files."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -12705,6 +12493,12 @@
             "title": "Input Sheet Names",
             "description": "Optional worksheet names to ingest when processing XLSX files."
           },
+          "active_sheet_only": {
+            "type": "boolean",
+            "title": "Active Sheet Only",
+            "description": "If true, process only the active worksheet when ingesting XLSX files.",
+            "default": false
+          },
           "metadata": {
             "anyOf": [
               {
@@ -12784,9 +12578,9 @@
             ],
             "title": "Label"
           },
-          "mapped": {
+          "detected": {
             "type": "boolean",
-            "title": "Mapped"
+            "title": "Detected"
           },
           "best_mapping_score": {
             "anyOf": [
@@ -12812,12 +12606,12 @@
         "type": "object",
         "required": [
           "field",
-          "mapped",
+          "detected",
           "occurrences_tables",
           "occurrences_columns"
         ],
         "title": "RunFieldResource",
-        "description": "Field-level mapping summary for a run."
+        "description": "Field-level detection summary for a run."
       },
       "RunInput": {
         "properties": {
@@ -13180,17 +12974,6 @@
             ],
             "title": "Column Count Mapped"
           },
-          "column_count_ambiguous": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Column Count Ambiguous"
-          },
           "column_count_unmapped": {
             "anyOf": [
               {
@@ -13201,17 +12984,6 @@
               }
             ],
             "title": "Column Count Unmapped"
-          },
-          "column_count_passthrough": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Column Count Passthrough"
           },
           "field_count_expected": {
             "anyOf": [
@@ -13224,7 +12996,7 @@
             ],
             "title": "Field Count Expected"
           },
-          "field_count_mapped": {
+          "field_count_detected": {
             "anyOf": [
               {
                 "type": "integer"
@@ -13233,7 +13005,18 @@
                 "type": "null"
               }
             ],
-            "title": "Field Count Mapped"
+            "title": "Field Count Detected"
+          },
+          "field_count_not_detected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Count Not Detected"
           },
           "cell_count_total": {
             "anyOf": [
@@ -13423,10 +13206,17 @@
             "description": "UUIDv7 (RFC 9562) generated in the application layer."
           },
           "build_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Build Id",
-            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -13608,7 +13398,6 @@
           "id",
           "workspace_id",
           "configuration_id",
-          "build_id",
           "status",
           "created_at",
           "links"
@@ -13758,169 +13547,6 @@
         "title": "ScopeType",
         "description": "Scopes supported by RBAC-aware resources."
       },
-      "SessionEnvelope": {
-        "properties": {
-          "session": {
-            "$ref": "#/components/schemas/SessionTokens",
-            "description": "Issued session token pair."
-          },
-          "csrf_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Csrf Token",
-            "description": "CSRF token mirrored in the ade_csrf cookie for double-submit."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "session"
-        ],
-        "title": "SessionEnvelope",
-        "description": "Wrapper around issued session tokens."
-      },
-      "SessionSnapshot": {
-        "properties": {
-          "user_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "User Id",
-            "description": "Subject of the session."
-          },
-          "principal_type": {
-            "type": "string",
-            "enum": [
-              "user",
-              "service_account"
-            ],
-            "title": "Principal Type",
-            "description": "Type of principal represented by the session."
-          },
-          "issued_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issued At",
-            "description": "When the session was issued (UTC), if known."
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At",
-            "description": "When the session expires (UTC)."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "user_id",
-          "principal_type",
-          "expires_at"
-        ],
-        "title": "SessionSnapshot",
-        "description": "Minimal view of the current session."
-      },
-      "SessionStatusResponse": {
-        "properties": {
-          "session": {
-            "$ref": "#/components/schemas/SessionSnapshot",
-            "description": "Details about the currently authenticated session."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "session"
-        ],
-        "title": "SessionStatusResponse",
-        "description": "Snapshot response for GET /auth/session."
-      },
-      "SessionTokens": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token",
-            "description": "JWT access token."
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token",
-            "description": "Refresh token, if one is issued."
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type",
-            "description": "Token type, usually 'bearer'.",
-            "default": "bearer"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Expires At",
-            "description": "When the access token expires (UTC)."
-          },
-          "refresh_expires_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Expires At",
-            "description": "When the refresh token expires (UTC), if applicable."
-          },
-          "expires_in": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expires In",
-            "description": "Seconds until the access token expires."
-          },
-          "refresh_expires_in": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Expires In",
-            "description": "Seconds until the refresh token expires, if applicable."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "access_token",
-          "expires_at",
-          "expires_in"
-        ],
-        "title": "SessionTokens",
-        "description": "Session token pair issued to a client."
-      },
       "TagCatalogItem": {
         "properties": {
           "tag": {
@@ -14025,6 +13651,72 @@
         ],
         "title": "UploaderOut",
         "description": "Minimal representation of the user who uploaded the document."
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "default": true
+          },
+          "is_superuser": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Superuser",
+            "default": false
+          },
+          "is_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Verified",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserCreate"
       },
       "UserOut": {
         "properties": {
@@ -14156,6 +13848,57 @@
         ],
         "title": "UserPage",
         "description": "Paginated collection of users."
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          },
+          "is_superuser": {
+            "type": "boolean",
+            "title": "Is Superuser",
+            "default": false
+          },
+          "is_verified": {
+            "type": "boolean",
+            "title": "Is Verified",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "is_service_account": {
+            "type": "boolean",
+            "title": "Is Service Account",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "UserRead"
       },
       "UserRoleSummary": {
         "properties": {
@@ -14662,6 +14405,20 @@
       }
     },
     "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "ade_session"
+      },
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/api/v1/auth/jwt/login"
+          }
+        }
+      },
       "SessionCookie": {
         "type": "apiKey",
         "in": "cookie",

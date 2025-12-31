@@ -336,6 +336,16 @@ class DocumentUploadRunOptions(BaseSchema):
         default=None,
         description="Optional worksheet names to ingest when processing XLSX files.",
     )
+    active_sheet_only: bool = Field(
+        default=False,
+        description="If true, process only the active worksheet when ingesting XLSX files.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_sheet_options(self) -> "DocumentUploadRunOptions":
+        if self.active_sheet_only and self.input_sheet_names:
+            raise ValueError("active_sheet_only cannot be combined with input_sheet_names")
+        return self
 
 
 class DocumentUploadSessionCreateRequest(BaseSchema):

@@ -188,6 +188,10 @@ export function useUploadManager({
     setItems((current) => current.filter((item) => !isTerminalStatus(item.status)));
   }, []);
 
+  const updateResponse = useCallback((itemId: string, response: DocumentUploadResponse) => {
+    setItems((current) => current.map((item) => (item.id === itemId ? { ...item, response } : item)));
+  }, []);
+
   useEffect(() => {
     if (!workspaceId) {
       return;
@@ -359,6 +363,7 @@ export function useUploadManager({
     cancel,
     remove,
     clearCompleted,
+    updateResponse,
   };
 }
 

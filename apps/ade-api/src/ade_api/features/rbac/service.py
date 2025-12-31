@@ -73,7 +73,7 @@ class AssignmentNotFoundError(AssignmentError):
 
 
 class ScopeMismatchError(AssignmentError):
-    """Raised when a scope_type/scope_id pairing is invalid."""
+    """Raised when a role assignment scope is invalid."""
 
 
 @dataclass(frozen=True)
@@ -182,6 +182,26 @@ def _role_allows_scope(role: Role, scope: ScopeType) -> bool:
 
 def _role_permissions(role: Role) -> tuple[str, ...]:
     return tuple(rp.permission.key for rp in role.permissions if rp.permission is not None)
+
+
+_ALL_GLOBAL_PERMISSIONS = frozenset(
+    key for key, definition in PERMISSION_REGISTRY.items() if definition.scope_type == ScopeType.GLOBAL
+)
+_ALL_WORKSPACE_PERMISSIONS = frozenset(
+    key for key, definition in PERMISSION_REGISTRY.items() if definition.scope_type == ScopeType.WORKSPACE
+)
+
+
+def _all_permissions_for_scope(scope: ScopeType) -> frozenset[str]:
+    if scope == ScopeType.GLOBAL:
+        return _ALL_GLOBAL_PERMISSIONS
+    return _ALL_WORKSPACE_PERMISSIONS
+
+
+def _assignment_scope_filter(workspace_id: UUID | None):
+    if workspace_id is None:
+        return UserRoleAssignment.workspace_id.is_(None)
+    return UserRoleAssignment.workspace_id == workspace_id
 
 
 # ---------------------------------------------------------------------------
@@ -498,8 +518,7 @@ class RbacService:
     async def list_assignments(
         self,
         *,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
         user_id: UUID | None,
         role_id: UUID | None,
         page: int,
@@ -515,14 +534,8 @@ class RbacService:
                 .selectinload(Role.permissions)
                 .selectinload(RolePermission.permission),
             )
-            .where(UserRoleAssignment.scope_type == scope_type)
+            .where(_assignment_scope_filter(workspace_id))
         )
-        if scope_type == ScopeType.WORKSPACE:
-            if scope_id is None:
-                raise ScopeMismatchError("workspace scope requires scope_id")
-            stmt = stmt.where(UserRoleAssignment.scope_id == scope_id)
-        else:
-            stmt = stmt.where(UserRoleAssignment.scope_id.is_(None))
 
         if user_id:
             stmt = stmt.where(UserRoleAssignment.user_id == user_id)
@@ -559,16 +572,14 @@ class RbacService:
         *,
         user_id: UUID,
         role_id: UUID,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
     ) -> UserRoleAssignment | None:
         stmt = (
             select(UserRoleAssignment)
             .where(
                 UserRoleAssignment.user_id == user_id,
                 UserRoleAssignment.role_id == role_id,
-                UserRoleAssignment.scope_type == scope_type,
-                UserRoleAssignment.scope_id == scope_id,
+                _assignment_scope_filter(workspace_id),
             )
             .limit(1)
         )
@@ -580,9 +591,9 @@ class RbacService:
         *,
         user_id: UUID,
         role_id: UUID,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
     ) -> UserRoleAssignment:
+        scope_type = ScopeType.WORKSPACE if workspace_id is not None else ScopeType.GLOBAL
         role = await self.get_role(role_id)
         if role is None:
             raise RoleNotFoundError("Role not found")
@@ -593,19 +604,14 @@ class RbacService:
         if user is None:
             raise AssignmentError("User not found")
 
-        if scope_type == ScopeType.WORKSPACE:
-            if scope_id is None:
-                raise ScopeMismatchError("Workspace assignments require scope_id")
-            if await self._session.get(Workspace, scope_id) is None:
+        if workspace_id is not None:
+            if await self._session.get(Workspace, workspace_id) is None:
                 raise AssignmentError("Workspace not found")
-        else:
-            scope_id = None
 
         assignment = UserRoleAssignment(
             user_id=user.id,
             role_id=role.id,
-            scope_type=scope_type,
-            scope_id=scope_id,
+            workspace_id=workspace_id,
         )
         self._session.add(assignment)
         try:
@@ -617,7 +623,7 @@ class RbacService:
                     "user_id": str(user_id),
                     "role_id": str(role_id),
                     "scope_type": scope_type.value,
-                    "scope_id": str(scope_id) if scope_id else None,
+                    "workspace_id": str(workspace_id) if workspace_id else None,
                 },
             )
             raise RoleConflictError("Assignment already exists") from exc
@@ -633,14 +639,12 @@ class RbacService:
         *,
         user_id: UUID,
         role_id: UUID,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
     ) -> UserRoleAssignment:
         existing = await self.get_assignment_for_user_role(
             user_id=user_id,
             role_id=role_id,
-            scope_type=scope_type,
-            scope_id=scope_id,
+            workspace_id=workspace_id,
         )
         if existing is not None:
             return existing
@@ -648,15 +652,13 @@ class RbacService:
             return await self.assign_role(
                 user_id=user_id,
                 role_id=role_id,
-                scope_type=scope_type,
-                scope_id=scope_id,
+                workspace_id=workspace_id,
             )
         except RoleConflictError:
             existing = await self.get_assignment_for_user_role(
                 user_id=user_id,
                 role_id=role_id,
-                scope_type=scope_type,
-                scope_id=scope_id,
+                workspace_id=workspace_id,
             )
             if existing is None:  # very defensive
                 raise
@@ -666,18 +668,13 @@ class RbacService:
         self,
         *,
         assignment_id: UUID,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
     ) -> None:
         assignment = await self.get_assignment(assignment_id=assignment_id)
         if assignment is None:
             raise AssignmentNotFoundError("Role assignment not found")
 
-        if assignment.scope_type != scope_type:
-            raise ScopeMismatchError("Scope mismatch for assignment deletion")
-        if scope_type == ScopeType.WORKSPACE and assignment.scope_id != scope_id:
-            raise ScopeMismatchError("Scope mismatch for assignment deletion")
-        if scope_type == ScopeType.GLOBAL and assignment.scope_id is not None:
+        if assignment.workspace_id != workspace_id:
             raise ScopeMismatchError("Scope mismatch for assignment deletion")
 
         await self._session.delete(assignment)
@@ -696,15 +693,13 @@ class RbacService:
         self,
         *,
         role_id: UUID,
-        scope_type: ScopeType,
-        scope_id: UUID | None,
+        workspace_id: UUID | None,
     ) -> bool:
         stmt = (
             select(UserRoleAssignment.id)
             .where(
                 UserRoleAssignment.role_id == role_id,
-                UserRoleAssignment.scope_type == scope_type,
-                UserRoleAssignment.scope_id == scope_id,
+                _assignment_scope_filter(workspace_id),
             )
             .limit(1)
         )
@@ -716,6 +711,8 @@ class RbacService:
     async def get_global_permissions_for_user(self, *, user: User) -> frozenset[str]:
         if user.is_service_account:
             return frozenset()
+        if user.is_superuser:
+            return _expand_implications(_all_permissions_for_scope(ScopeType.GLOBAL), scope=ScopeType.GLOBAL)
 
         cache_key = ("global_permissions", str(user.id))
         cached = self._get_cached(cache_key)
@@ -730,7 +727,7 @@ class RbacService:
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
                 UserRoleAssignment.user_id == user.id,
-                UserRoleAssignment.scope_type == ScopeType.GLOBAL,
+                UserRoleAssignment.workspace_id.is_(None),
                 Permission.scope_type == ScopeType.GLOBAL,
             )
         )
@@ -748,6 +745,11 @@ class RbacService:
     ) -> frozenset[str]:
         if user.is_service_account:
             return frozenset()
+        if user.is_superuser:
+            return _expand_implications(
+                _all_permissions_for_scope(ScopeType.WORKSPACE),
+                scope=ScopeType.WORKSPACE,
+            )
 
         cache_key = ("workspace_permissions", str(user.id), str(workspace_id))
         cached = self._get_cached(cache_key)
@@ -762,8 +764,7 @@ class RbacService:
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
                 UserRoleAssignment.user_id == user.id,
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id == workspace_id,
+                UserRoleAssignment.workspace_id == workspace_id,
                 Permission.scope_type == ScopeType.WORKSPACE,
             )
         )
@@ -797,6 +798,10 @@ class RbacService:
         normalized = _normalize_permission_key(permission_key)
         definition = PERMISSION_REGISTRY[normalized]
         required = (normalized,)
+
+        if user.is_superuser:
+            granted = _all_permissions_for_scope(definition.scope_type)
+            return AuthorizationDecision(granted=granted, required=required, missing=())
 
         if definition.scope_type == ScopeType.GLOBAL:
             granted = await self.get_global_permissions_for_user(user=user)
@@ -832,7 +837,7 @@ class RbacService:
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
                 UserRoleAssignment.user_id == user.id,
-                UserRoleAssignment.scope_type == ScopeType.GLOBAL,
+                UserRoleAssignment.workspace_id.is_(None),
             )
         )
         result = await self._session.execute(stmt)

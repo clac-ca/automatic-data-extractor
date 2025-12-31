@@ -1,6 +1,6 @@
 import { ApiError } from "@shared/api";
 import { client } from "@shared/api/client";
-import { establishSessionFromEnvelope, type SessionEnvelope } from "@shared/auth/api";
+import { bootstrapSession, type SessionEnvelope } from "@shared/auth/api";
 import type { AuthSetupRequest, AuthSetupStatus, components } from "@schema";
 
 export async function fetchSetupStatus(options: RequestOptions = {}): Promise<AuthSetupStatus> {
@@ -14,22 +14,22 @@ export async function fetchSetupStatus(options: RequestOptions = {}): Promise<Au
     return data;
   } catch (error: unknown) {
     if (error instanceof ApiError && error.status === 404) {
-      return { requires_setup: false, has_users: true };
+      return {
+        setup_required: false,
+        registration_mode: "closed",
+        oidc_configured: false,
+        providers: [],
+      };
     }
     throw error;
   }
 }
 
 export async function completeSetup(payload: SetupPayload): Promise<SessionEnvelope> {
-  const { data } = await client.POST("/api/v1/auth/setup", {
+  await client.POST("/api/v1/auth/setup", {
     body: payload as AuthSetupRequest,
   });
-
-  if (!data) {
-    throw new Error("Expected session payload from setup response.");
-  }
-
-  return establishSessionFromEnvelope(data);
+  return bootstrapSession();
 }
 
 type SetupPayload = components["schemas"]["AuthSetupRequest"];

@@ -29,7 +29,6 @@ from ade_api.features.rbac import (
 from ade_api.models import (
     Role,
     RolePermission,
-    ScopeType,
     User,
     UserRoleAssignment,
     Workspace,
@@ -553,8 +552,7 @@ class WorkspacesService:
                 await self._rbac.assign_role_if_missing(
                     user_id=payload.user_id,
                     role_id=role_id,
-                    scope_type=ScopeType.WORKSPACE,
-                    scope_id=workspace_id,
+                    workspace_id=workspace_id,
                 )
             except (RoleNotFoundError, AssignmentError) as exc:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -650,8 +648,7 @@ class WorkspacesService:
         for assignment in assignments:
             await self._rbac.delete_assignment(
                 assignment_id=assignment.id,
-                scope_type=ScopeType.WORKSPACE,
-                scope_id=workspace_id,
+                workspace_id=workspace_id,
             )
         await self._delete_membership_if_exists(
             workspace_id=workspace_id,
@@ -788,8 +785,7 @@ class WorkspacesService:
                 selectinload(UserRoleAssignment.user),
             )
             .where(
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id == workspace_id,
+                UserRoleAssignment.workspace_id == workspace_id,
             )
         )
         if user_id:
@@ -848,8 +844,7 @@ class WorkspacesService:
             .join(UserRoleAssignment, UserRoleAssignment.role_id == Role.id)
             .where(
                 UserRoleAssignment.user_id == user_id,
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id == workspace_id,
+                UserRoleAssignment.workspace_id == workspace_id,
             )
         )
         result = await self._session.execute(stmt)
@@ -876,8 +871,7 @@ class WorkspacesService:
                 await self._rbac.assign_role_if_missing(
                     user_id=user_id,
                     role_id=role.id,
-                    scope_type=ScopeType.WORKSPACE,
-                    scope_id=workspace_id,
+                    workspace_id=workspace_id,
                 )
             except ScopeMismatchError:
                 continue
@@ -894,8 +888,7 @@ class WorkspacesService:
                 await self._rbac.assign_role_if_missing(
                     user_id=user_id,
                     role_id=role_id,
-                    scope_type=ScopeType.WORKSPACE,
-                    scope_id=workspace_id,
+                    workspace_id=workspace_id,
                 )
             except RoleNotFoundError as exc:
                 raise HTTPException(
@@ -919,8 +912,7 @@ class WorkspacesService:
     ) -> None:
         criteria = [
             UserRoleAssignment.user_id == user_id,
-            UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-            UserRoleAssignment.scope_id == workspace_id,
+            UserRoleAssignment.workspace_id == workspace_id,
         ]
         if role_ids:
             criteria.append(~UserRoleAssignment.role_id.in_(role_ids))
@@ -939,8 +931,7 @@ class WorkspacesService:
         result = await self._session.execute(
             select(UserRoleAssignment.id).where(
                 UserRoleAssignment.role_id == owner_role.id,
-                UserRoleAssignment.scope_type == ScopeType.WORKSPACE,
-                UserRoleAssignment.scope_id == workspace_id,
+                UserRoleAssignment.workspace_id == workspace_id,
             )
         )
         if result.scalar_one_or_none() is None:

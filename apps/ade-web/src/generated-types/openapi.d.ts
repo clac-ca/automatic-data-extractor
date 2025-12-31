@@ -44,17 +44,119 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/providers": {
+    "/api/v1/auth/cookie/login": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List configured authentication providers */
-        get: operations["list_auth_providers_api_v1_auth_providers_get"];
+        get?: never;
+        put?: never;
+        /** Auth:Cookie.Login */
+        post: operations["auth_cookie_login_api_v1_auth_cookie_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/cookie/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auth:Cookie.Logout */
+        post: operations["auth_cookie_logout_api_v1_auth_cookie_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/jwt/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auth:Jwt.Login */
+        post: operations["auth_jwt_login_api_v1_auth_jwt_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/jwt/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auth:Jwt.Logout */
+        post: operations["auth_jwt_logout_api_v1_auth_jwt_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{provider}/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Authorize Oidc */
+        get: operations["authorize_oidc_api_v1_auth_oidc__provider__authorize_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Callback Oidc */
+        get: operations["callback_oidc_api_v1_auth_oidc__provider__callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register:Register */
+        post: operations["register_register_api_v1_auth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -68,10 +170,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Return whether initial administrator setup is required */
-        get: operations["read_setup_status_api_v1_auth_setup_get"];
+        /** Return setup status for the first admin user */
+        get: operations["get_setup_status_api_v1_auth_setup_get"];
         put?: never;
-        /** Create the first administrator account and start a session */
+        /** Create the first admin user and log them in */
         post: operations["complete_setup_api_v1_auth_setup_post"];
         delete?: never;
         options?: never;
@@ -79,51 +181,15 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/session": {
+    "/api/v1/auth/providers": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Return the current session snapshot */
-        get: operations["read_session_api_v1_auth_session_get"];
-        put?: never;
-        /** Create a session via email/password */
-        post: operations["create_session_api_v1_auth_session_post"];
-        /** Terminate the current session */
-        delete: operations["end_session_api_v1_auth_session_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/session/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Refresh an existing session using a refresh token */
-        post: operations["refresh_session_api_v1_auth_session_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/sso/{provider}/authorize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Initiate the SSO login flow */
-        get: operations["start_sso_login_api_v1_auth_sso__provider__authorize_get"];
+        /** Return configured authentication providers */
+        get: operations["list_auth_providers_api_v1_auth_providers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -132,24 +198,7 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/sso/{provider}/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Handle the SSO callback and issue tokens */
-        get: operations["finish_sso_login_api_v1_auth_sso__provider__callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/me/apiKeys": {
+    "/api/v1/users/me/api-keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -157,17 +206,17 @@ export type paths = {
             cookie?: never;
         };
         /** List API keys for the current user */
-        get: operations["list_my_api_keys_api_v1_me_apiKeys_get"];
+        get: operations["list_my_api_keys_api_v1_users_me_api_keys_get"];
         put?: never;
         /** Create an API key for the current user */
-        post: operations["create_my_api_key_api_v1_me_apiKeys_post"];
+        post: operations["create_my_api_key_api_v1_users_me_api_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/apiKeys/{api_key_id}": {
+    "/api/v1/users/me/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -178,49 +227,13 @@ export type paths = {
         put?: never;
         post?: never;
         /** Revoke one of the current user's API keys */
-        delete: operations["revoke_my_api_key_api_v1_me_apiKeys__api_key_id__delete"];
+        delete: operations["revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/apiKeys": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List API keys across the tenant (admin) */
-        get: operations["list_api_keys_api_v1_apiKeys_get"];
-        put?: never;
-        /** Create an API key for a user (admin) */
-        post: operations["create_api_key_api_v1_apiKeys_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/apiKeys/{api_key_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Retrieve a single API key (admin) */
-        get: operations["get_api_key_api_v1_apiKeys__api_key_id__get"];
-        put?: never;
-        post?: never;
-        /** Revoke an API key (admin) */
-        delete: operations["revoke_api_key_api_v1_apiKeys__api_key_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/users/{user_id}/apiKeys": {
+    "/api/v1/users/{user_id}/api-keys": {
         parameters: {
             query?: never;
             header?: never;
@@ -228,17 +241,17 @@ export type paths = {
             cookie?: never;
         };
         /** List API keys for a specific user (admin) */
-        get: operations["list_user_api_keys_api_v1_users__user_id__apiKeys_get"];
+        get: operations["list_user_api_keys_api_v1_users__user_id__api_keys_get"];
         put?: never;
         /** Create an API key for a specific user (admin) */
-        post: operations["create_user_api_key_api_v1_users__user_id__apiKeys_post"];
+        post: operations["create_user_api_key_api_v1_users__user_id__api_keys_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users/{user_id}/apiKeys/{api_key_id}": {
+    "/api/v1/users/{user_id}/api-keys/{api_key_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -249,7 +262,7 @@ export type paths = {
         put?: never;
         post?: never;
         /** Revoke an API key for a specific user (admin) */
-        delete: operations["revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete"];
+        delete: operations["revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1443,25 +1456,15 @@ export type components = {
          */
         ApiKeyCreateRequest: {
             /**
-             * Label
-             * @description Optional human-friendly label (e.g. 'CLI on laptop').
+             * Name
+             * @description Optional human-friendly name (e.g. 'CLI on laptop').
              */
-            label?: string | null;
+            name?: string | null;
             /**
              * Expires In Days
              * @description Optional TTL in days; omit for a non-expiring key.
              */
             expires_in_days?: number | null;
-            /**
-             * @description Scope of the key: global or workspace.
-             * @default global
-             */
-            scope_type: components["schemas"]["ScopeType"];
-            /**
-             * Scope Id
-             * @description Workspace identifier when scope_type=workspace. Must be null for global keys.
-             */
-            scope_id?: string | null;
         };
         /**
          * ApiKeyCreateResponse
@@ -1475,31 +1478,23 @@ export type components = {
              */
             id: string;
             /**
-             * Owner User Id
+             * User Id
              * Format: uuid
              * @description User that this key authenticates as.
              */
-            owner_user_id: string;
-            /**
-             * Created By User Id
-             * @description User who created the key (may equal owner for self-service).
-             */
-            created_by_user_id?: string | null;
+            user_id: string;
             /**
              * Secret
              * @description Full API key secret, returned once at creation time.
              */
             secret: string;
             /**
-             * Token Prefix
+             * Prefix
              * @description Prefix used for identification in logs/UI.
              */
-            token_prefix: string;
-            /** Label */
-            label?: string | null;
-            scope_type: components["schemas"]["ScopeType"];
-            /** Scope Id */
-            scope_id?: string | null;
+            prefix: string;
+            /** Name */
+            name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1507,42 +1502,6 @@ export type components = {
             created_at: string;
             /** Expires At */
             expires_at?: string | null;
-        };
-        /**
-         * ApiKeyIssueRequest
-         * @description Admin payload to issue a key by user id or email.
-         */
-        ApiKeyIssueRequest: {
-            /**
-             * Label
-             * @description Optional human-friendly label (e.g. 'CLI on laptop').
-             */
-            label?: string | null;
-            /**
-             * Expires In Days
-             * @description Optional TTL in days; omit for a non-expiring key.
-             */
-            expires_in_days?: number | null;
-            /**
-             * @description Scope of the key: global or workspace.
-             * @default global
-             */
-            scope_type: components["schemas"]["ScopeType"];
-            /**
-             * Scope Id
-             * @description Workspace identifier when scope_type=workspace. Must be null for global keys.
-             */
-            scope_id?: string | null;
-            /**
-             * User Id
-             * @description Target user id; provide exactly one of user_id or email.
-             */
-            user_id?: string | null;
-            /**
-             * Email
-             * @description Target user email; provide exactly one of user_id or email.
-             */
-            email?: string | null;
         };
         /**
          * ApiKeyPage
@@ -1574,20 +1533,15 @@ export type components = {
              */
             id: string;
             /**
-             * Owner User Id
+             * User Id
              * Format: uuid
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
-            owner_user_id: string;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
-            /** Token Prefix */
-            token_prefix: string;
-            /** Label */
-            label?: string | null;
-            scope_type: components["schemas"]["ScopeType"];
-            /** Scope Id */
-            scope_id?: string | null;
+            user_id: string;
+            /** Prefix */
+            prefix: string;
+            /** Name */
+            name?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -1601,31 +1555,13 @@ export type components = {
             last_used_at?: string | null;
         };
         /**
-         * AuthLoginRequest
-         * @description Credentials submitted when performing a password login.
-         */
-        AuthLoginRequest: {
-            /**
-             * Email
-             * Format: email
-             * @description User email address.
-             */
-            email: string;
-            /**
-             * Password
-             * Format: password
-             * @description User password.
-             */
-            password: string;
-        };
-        /**
          * AuthProvider
          * @description Describes an interactive authentication provider option.
          */
         AuthProvider: {
             /**
              * Id
-             * @description Provider identifier, e.g. 'password' or 'sso'.
+             * @description Provider identifier, e.g. 'password' or 'oidc'.
              */
             id: string;
             /**
@@ -1665,20 +1601,6 @@ export type components = {
             force_sso: boolean;
         };
         /**
-         * AuthRefreshRequest
-         * @description Optional payload for refresh / logout.
-         *
-         *     Browser clients typically rely on the refresh cookie; API clients can
-         *     supply the token in the request body instead.
-         */
-        AuthRefreshRequest: {
-            /**
-             * Refresh Token
-             * @description Refresh token to rotate. Optional when using the refresh cookie.
-             */
-            refresh_token?: string | null;
-        };
-        /**
          * AuthSetupRequest
          * @description Payload used to create the first administrator account.
          */
@@ -1703,19 +1625,75 @@ export type components = {
         };
         /**
          * AuthSetupStatusResponse
-         * @description Describes whether initial administrator setup is required.
+         * @description Setup status response returned by /auth/setup.
          */
         AuthSetupStatusResponse: {
+            /** Setup Required */
+            setup_required: boolean;
             /**
-             * Requires Setup
-             * @description True when no users exist and an initial admin must be created.
+             * Registration Mode
+             * @enum {string}
              */
-            requires_setup: boolean;
+            registration_mode: "setup-only" | "closed" | "open";
+            /** Oidc Configured */
+            oidc_configured: boolean;
+            /** Providers */
+            providers: components["schemas"]["AuthProvider"][];
+        };
+        /** BearerResponse */
+        BearerResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Token Type */
+            token_type: string;
+        };
+        /** Body_auth_cookie_login_api_v1_auth_cookie_login_post */
+        Body_auth_cookie_login_api_v1_auth_cookie_login_post: {
+            /** Grant Type */
+            grant_type?: string | null;
+            /** Username */
+            username: string;
             /**
-             * Has Users
-             * @description True when at least one user already exists.
+             * Password
+             * Format: password
              */
-            has_users: boolean;
+            password: string;
+            /**
+             * Scope
+             * @default
+             */
+            scope: string;
+            /** Client Id */
+            client_id?: string | null;
+            /**
+             * Client Secret
+             * Format: password
+             */
+            client_secret?: string | null;
+        };
+        /** Body_auth_jwt_login_api_v1_auth_jwt_login_post */
+        Body_auth_jwt_login_api_v1_auth_jwt_login_post: {
+            /** Grant Type */
+            grant_type?: string | null;
+            /** Username */
+            username: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /**
+             * Scope
+             * @default
+             */
+            scope: string;
+            /** Client Id */
+            client_id?: string | null;
+            /**
+             * Client Secret
+             * Format: password
+             */
+            client_secret?: string | null;
         };
         /** Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post */
         Body_import_configuration_api_v1_workspaces__workspace_id__configurations_import_post: {
@@ -2341,6 +2319,12 @@ export type components = {
              * @description Optional worksheet names to ingest when processing XLSX files.
              */
             input_sheet_names?: string[] | null;
+            /**
+             * Active Sheet Only
+             * @description If true, process only the active worksheet when ingesting XLSX files.
+             * @default false
+             */
+            active_sheet_only: boolean;
         };
         /**
          * DocumentUploadSessionCreateRequest
@@ -2450,6 +2434,13 @@ export type components = {
              */
             workspaces?: {
                 [key: string]: string[];
+            };
+        };
+        /** ErrorModel */
+        ErrorModel: {
+            /** Detail */
+            detail: string | {
+                [key: string]: string;
             };
         };
         /** FileCapabilities */
@@ -3008,6 +2999,12 @@ export type components = {
              */
             log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
             /**
+             * Active Sheet Only
+             * @description If true, process only the active worksheet when ingesting XLSX files.
+             * @default false
+             */
+            active_sheet_only: boolean;
+            /**
              * Metadata
              * @description Opaque metadata to propagate with run telemetry.
              */
@@ -3058,8 +3055,11 @@ export type components = {
             header_normalized?: string | null;
             /** Non Empty Cells */
             non_empty_cells: number;
-            /** Mapping Status */
-            mapping_status: string;
+            /**
+             * Mapping Status
+             * @enum {string}
+             */
+            mapping_status: "mapped" | "unmapped";
             /** Mapped Field */
             mapped_field?: string | null;
             /** Mapping Score */
@@ -3100,6 +3100,12 @@ export type components = {
              * @description Optional worksheet names to ingest when processing XLSX files.
              */
             input_sheet_names?: string[] | null;
+            /**
+             * Active Sheet Only
+             * @description If true, process only the active worksheet when ingesting XLSX files.
+             * @default false
+             */
+            active_sheet_only: boolean;
             /**
              * Metadata
              * @description Opaque metadata to propagate with run telemetry.
@@ -3146,6 +3152,12 @@ export type components = {
              */
             input_sheet_names?: string[] | null;
             /**
+             * Active Sheet Only
+             * @description If true, process only the active worksheet when ingesting XLSX files.
+             * @default false
+             */
+            active_sheet_only: boolean;
+            /**
              * Metadata
              * @description Opaque metadata to propagate with run telemetry.
              */
@@ -3174,15 +3186,15 @@ export type components = {
         };
         /**
          * RunFieldResource
-         * @description Field-level mapping summary for a run.
+         * @description Field-level detection summary for a run.
          */
         RunFieldResource: {
             /** Field */
             field: string;
             /** Label */
             label?: string | null;
-            /** Mapped */
-            mapped: boolean;
+            /** Detected */
+            detected: boolean;
             /** Best Mapping Score */
             best_mapping_score?: number | null;
             /** Occurrences Tables */
@@ -3279,16 +3291,14 @@ export type components = {
             column_count_empty?: number | null;
             /** Column Count Mapped */
             column_count_mapped?: number | null;
-            /** Column Count Ambiguous */
-            column_count_ambiguous?: number | null;
             /** Column Count Unmapped */
             column_count_unmapped?: number | null;
-            /** Column Count Passthrough */
-            column_count_passthrough?: number | null;
             /** Field Count Expected */
             field_count_expected?: number | null;
-            /** Field Count Mapped */
-            field_count_mapped?: number | null;
+            /** Field Count Detected */
+            field_count_detected?: number | null;
+            /** Field Count Not Detected */
+            field_count_not_detected?: number | null;
             /** Cell Count Total */
             cell_count_total?: number | null;
             /** Cell Count Non Empty */
@@ -3369,12 +3379,8 @@ export type components = {
              * @description UUIDv7 (RFC 9562) generated in the application layer.
              */
             configuration_id: string;
-            /**
-             * Build Id
-             * Format: uuid
-             * @description UUIDv7 (RFC 9562) generated in the application layer.
-             */
-            build_id: string;
+            /** Build Id */
+            build_id?: string | null;
             status: components["schemas"]["RunStatus"];
             /** Failure Code */
             failure_code?: string | null;
@@ -3493,99 +3499,6 @@ export type components = {
          */
         ScopeType: "global" | "workspace";
         /**
-         * SessionEnvelope
-         * @description Wrapper around issued session tokens.
-         */
-        SessionEnvelope: {
-            /** @description Issued session token pair. */
-            session: components["schemas"]["SessionTokens"];
-            /**
-             * Csrf Token
-             * @description CSRF token mirrored in the ade_csrf cookie for double-submit.
-             */
-            csrf_token?: string | null;
-        };
-        /**
-         * SessionSnapshot
-         * @description Minimal view of the current session.
-         */
-        SessionSnapshot: {
-            /**
-             * User Id
-             * Format: uuid
-             * @description Subject of the session.
-             */
-            user_id: string;
-            /**
-             * Principal Type
-             * @description Type of principal represented by the session.
-             * @enum {string}
-             */
-            principal_type: "user" | "service_account";
-            /**
-             * Issued At
-             * @description When the session was issued (UTC), if known.
-             */
-            issued_at?: string | null;
-            /**
-             * Expires At
-             * Format: date-time
-             * @description When the session expires (UTC).
-             */
-            expires_at: string;
-        };
-        /**
-         * SessionStatusResponse
-         * @description Snapshot response for GET /auth/session.
-         */
-        SessionStatusResponse: {
-            /** @description Details about the currently authenticated session. */
-            session: components["schemas"]["SessionSnapshot"];
-        };
-        /**
-         * SessionTokens
-         * @description Session token pair issued to a client.
-         */
-        SessionTokens: {
-            /**
-             * Access Token
-             * @description JWT access token.
-             */
-            access_token: string;
-            /**
-             * Refresh Token
-             * @description Refresh token, if one is issued.
-             */
-            refresh_token?: string | null;
-            /**
-             * Token Type
-             * @description Token type, usually 'bearer'.
-             * @default bearer
-             */
-            token_type: string;
-            /**
-             * Expires At
-             * Format: date-time
-             * @description When the access token expires (UTC).
-             */
-            expires_at: string;
-            /**
-             * Refresh Expires At
-             * @description When the refresh token expires (UTC), if applicable.
-             */
-            refresh_expires_at?: string | null;
-            /**
-             * Expires In
-             * @description Seconds until the access token expires.
-             */
-            expires_in: number;
-            /**
-             * Refresh Expires In
-             * @description Seconds until the refresh token expires, if applicable.
-             */
-            refresh_expires_in?: number | null;
-        };
-        /**
          * TagCatalogItem
          * @description Tag entry with document counts.
          */
@@ -3634,6 +3547,33 @@ export type components = {
              * @description Uploader email address.
              */
             email: string;
+        };
+        /** UserCreate */
+        UserCreate: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean | null;
+            /**
+             * Is Superuser
+             * @default false
+             */
+            is_superuser: boolean | null;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean | null;
+            /** Display Name */
+            display_name?: string | null;
         };
         /**
          * UserOut
@@ -3688,6 +3628,41 @@ export type components = {
             has_previous: boolean;
             /** Total */
             total?: number | null;
+        };
+        /** UserRead */
+        UserRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Is Superuser
+             * @default false
+             */
+            is_superuser: boolean;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Is Service Account
+             * @default false
+             */
+            is_service_account: boolean;
         };
         /**
          * UserRoleSummary
@@ -3957,10 +3932,61 @@ export interface operations {
             };
         };
     };
-    list_auth_providers_api_v1_auth_providers_get: {
+    auth_cookie_login_api_v1_auth_cookie_login_post: {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_auth_cookie_login_api_v1_auth_cookie_login_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_cookie_logout_api_v1_auth_cookie_logout_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3972,12 +3998,229 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthProviderListResponse"];
+                    "application/json": unknown;
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing token or inactive user. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    read_setup_status_api_v1_auth_setup_get: {
+    auth_jwt_login_api_v1_auth_jwt_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_auth_jwt_login_api_v1_auth_jwt_login_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiOTIyMWZmYzktNjQwZi00MzcyLTg2ZDMtY2U2NDJjYmE1NjAzIiwiYXVkIjoiZmFzdGFwaS11c2VyczphdXRoIiwiZXhwIjoxNTcxNTA0MTkzfQ.M10bjOe45I5Ncu_uXvOmVV8QxnL-nZfcH96U90JaocI",
+                     *       "token_type": "bearer"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BearerResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auth_jwt_logout_api_v1_auth_jwt_logout_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing token or inactive user. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    authorize_oidc_api_v1_auth_oidc__provider__authorize_get: {
+        parameters: {
+            query?: {
+                return_to?: string | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    callback_oidc_api_v1_auth_oidc__provider__callback_get: {
+        parameters: {
+            query?: {
+                response_mode?: string | null;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_register_api_v1_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setup_status_api_v1_auth_setup_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4011,92 +4254,6 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    read_session_api_v1_auth_session_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionStatusResponse"];
-                };
-            };
-        };
-    };
-    create_session_api_v1_auth_session_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AuthLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    end_session_api_v1_auth_session_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AuthRefreshRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -4114,85 +4271,13 @@ export interface operations {
             };
         };
     };
-    refresh_session_api_v1_auth_session_refresh_post: {
+    list_auth_providers_api_v1_auth_providers_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AuthRefreshRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_sso_login_api_v1_auth_sso__provider__authorize_get: {
-        parameters: {
-            query?: {
-                next_path?: string | null;
-            };
-            header?: never;
-            path: {
-                provider: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            302: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    finish_sso_login_api_v1_auth_sso__provider__callback_get: {
-        parameters: {
-            query?: {
-                code?: string | null;
-                state?: string | null;
-                response_mode?: ("json" | "redirect") | null;
-            };
-            header?: never;
-            path: {
-                provider: string;
-            };
-            cookie?: never;
-        };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
@@ -4201,28 +4286,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionEnvelope"];
-                };
-            };
-            /** @description Redirect to the frontend after establishing a browser session. Includes session cookies. */
-            302: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["AuthProviderListResponse"];
                 };
             };
         };
     };
-    list_my_api_keys_api_v1_me_apiKeys_get: {
+    list_my_api_keys_api_v1_users_me_api_keys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4264,7 +4333,7 @@ export interface operations {
             };
         };
     };
-    create_my_api_key_api_v1_me_apiKeys_post: {
+    create_my_api_key_api_v1_users_me_api_keys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4313,7 +4382,7 @@ export interface operations {
             };
         };
     };
-    revoke_my_api_key_api_v1_me_apiKeys__api_key_id__delete: {
+    revoke_my_api_key_api_v1_users_me_api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -4365,218 +4434,7 @@ export interface operations {
             };
         };
     };
-    list_api_keys_api_v1_apiKeys_get: {
-        parameters: {
-            query?: {
-                /** @description Include revoked keys in the response. */
-                include_revoked?: boolean;
-                /** @description Optional filter by owner user id. */
-                owner_user_id?: string | null;
-                page?: number;
-                page_size?: number;
-                include_total?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiKeyPage"];
-                };
-            };
-            /** @description Authentication required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Requires api_keys.read_all global permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_api_key_api_v1_apiKeys_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApiKeyIssueRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiKeyCreateResponse"];
-                };
-            };
-            /** @description Invalid API key payload. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Requires api_keys.manage_all global permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_api_key_api_v1_apiKeys__api_key_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                api_key_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiKeySummary"];
-                };
-            };
-            /** @description Authentication required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Requires api_keys.read_all global permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API key not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    revoke_api_key_api_v1_apiKeys__api_key_id__delete: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-CSRF-Token"?: string | null;
-            };
-            path: {
-                api_key_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Authentication required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Requires api_keys.manage_all global permission. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API key not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_user_api_keys_api_v1_users__user_id__apiKeys_get: {
+    list_user_api_keys_api_v1_users__user_id__api_keys_get: {
         parameters: {
             query?: {
                 /** @description Include revoked keys in the response. */
@@ -4627,7 +4485,7 @@ export interface operations {
             };
         };
     };
-    create_user_api_key_api_v1_users__user_id__apiKeys_post: {
+    create_user_api_key_api_v1_users__user_id__api_keys_post: {
         parameters: {
             query?: never;
             header?: {
@@ -4685,7 +4543,7 @@ export interface operations {
             };
         };
     };
-    revoke_user_api_key_api_v1_users__user_id__apiKeys__api_key_id__delete: {
+    revoke_user_api_key_api_v1_users__user_id__api_keys__api_key_id__delete: {
         parameters: {
             query?: never;
             header?: {
@@ -5414,7 +5272,9 @@ export interface operations {
     check_permissions_api_v1_me_permissions_check_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8279,7 +8139,7 @@ export interface operations {
                 sheet_index?: number | null;
                 table_index?: number | null;
                 mapped_field?: string | null;
-                mapping_status?: ("mapped" | "ambiguous" | "unmapped" | "passthrough") | null;
+                mapping_status?: ("mapped" | "unmapped") | null;
             };
             header?: never;
             path: {

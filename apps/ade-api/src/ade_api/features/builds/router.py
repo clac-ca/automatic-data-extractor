@@ -18,6 +18,7 @@ from fastapi import (
 )
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 
 from ade_api.api.deps import get_builds_service
 from ade_api.common.encoding import json_bytes
@@ -199,7 +200,7 @@ async def stream_build_events_endpoint(
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: BuildsService = builds_service_dependency,
-) -> StreamingResponse:
+) -> EventSourceResponse:
     build = await service.get_build(build_id)
     if build is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Build not found")
@@ -218,7 +219,7 @@ async def stream_build_events_endpoint(
             start_sequence = None
     start_sequence = start_sequence or 0
 
-    async def event_stream() -> AsyncIterator[bytes]:
+    async def event_stream() -> AsyncIterator[dict[str, str]]:
         last_sequence = start_sequence
 
         async with service.subscribe_to_events(build) as subscription:
@@ -262,11 +263,11 @@ async def stream_build_events_endpoint(
                 if live_event.get("event") in {"build.complete", "build.failed"}:
                     break
 
-    return StreamingResponse(
+    return EventSourceResponse(
         event_stream(),
-        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+        ping=15,
     )

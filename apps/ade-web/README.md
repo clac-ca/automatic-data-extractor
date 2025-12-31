@@ -315,7 +315,7 @@ See:
 
 ADE Web is backend-agnostic but assumes a set of HTTP APIs and behaviours under `/api/v1/...`:
 
-- **Auth & session** – setup status, login/logout/refresh, auth providers, session endpoint exposing identity + membership; consistent `401` vs `403` semantics.
+- **Auth & session** – setup status, login/logout, auth providers, bootstrap endpoint exposing identity + membership; consistent `401` vs `403` semantics.
 - **Workspaces** – list/create/update/delete, default workspace, membership and workspace-scoped roles.
 - **Documents** – upload, list with filters, download, optional worksheet metadata.
 - **Runs** – workspace run ledger (`/workspaces/{workspace_id}/runs` for list/create), run detail/outputs/logs (`/runs/{run_id}/...`), streaming NDJSON event streams using the `ade.event/v1` envelope.

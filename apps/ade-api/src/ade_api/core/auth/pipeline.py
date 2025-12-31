@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import secrets
 import uuid
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
@@ -29,10 +30,16 @@ class ApiKeyAuthenticator(Protocol):
 
 
 @runtime_checkable
-class SessionAuthenticator(Protocol):
-    """Interface for authenticating browser/CLI sessions."""
+class CookieAuthenticator(Protocol):
+    """Interface for authenticating cookie-backed sessions."""
 
-    async def authenticate(self, request: Request) -> AuthenticatedPrincipal | None: ...
+    async def authenticate(self, token: str) -> AuthenticatedPrincipal | None: ...
+
+
+class BearerAuthenticator(Protocol):
+    """Interface for authenticating bearer JWTs."""
+
+    async def authenticate(self, token: str) -> AuthenticatedPrincipal | None: ...
 
 
 def _dev_principal(settings: Settings) -> AuthenticatedPrincipal:
@@ -97,18 +104,22 @@ async def _ensure_dev_user(
         user = await session.get(User, principal.user_id)
         if user is None:
             alias = settings.auth_disabled_user_email or "developer@example.com"
+            from ade_api.core.security.hashing import hash_password
+
             user = User(
                 id=principal.user_id,
                 email=alias,
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
                 display_name=settings.auth_disabled_user_name,
                 is_service_account=False,
                 is_active=True,
+                is_superuser=True,
+                is_verified=True,
             )
             session.add(user)
             await session.flush()
 
         try:
-            from ade_api.core.rbac.types import ScopeType
             from ade_api.features.rbac import RbacService
 
             rbac = RbacService(session=session)
@@ -118,8 +129,7 @@ async def _ensure_dev_user(
                 await rbac.assign_role_if_missing(
                     user_id=principal.user_id,
                     role_id=admin_role.id,
-                    scope_type=ScopeType.GLOBAL,
-                    scope_id=None,
+                    workspace_id=None,
                 )
         except Exception:
             logger.warning(
@@ -153,7 +163,8 @@ async def authenticate_request(
     _db: AsyncSession,  # kept for future interfaces and parity with feature services
     settings: Settings,
     api_key_service: ApiKeyAuthenticator,
-    session_service: SessionAuthenticator,
+    cookie_service: CookieAuthenticator,
+    bearer_service: BearerAuthenticator | None,
 ) -> AuthenticatedPrincipal:
     """Authenticate an incoming request to a principal.
 
@@ -175,10 +186,21 @@ async def authenticate_request(
             await _ensure_active_principal(principal=principal, session=_db)
             return principal
 
-    principal = await session_service.authenticate(request)
-    if principal is not None:
-        await _ensure_active_principal(principal=principal, session=_db)
-        return principal
+    cookie_token = (request.cookies.get(settings.session_cookie_name) or "").strip()
+    if cookie_token:
+        principal = await cookie_service.authenticate(cookie_token)
+        if principal is not None:
+            await _ensure_active_principal(principal=principal, session=_db)
+            return principal
+
+    auth_header = request.headers.get("authorization") or ""
+    scheme, _, token = auth_header.partition(" ")
+    candidate = token.strip() if scheme.lower() == "bearer" else ""
+    if candidate and bearer_service is not None:
+        principal = await bearer_service.authenticate(candidate)
+        if principal is not None:
+            await _ensure_active_principal(principal=principal, session=_db)
+            return principal
 
     raise AuthenticationError("Authentication required")
 
@@ -188,6 +210,8 @@ async def authenticate_websocket(
     _db: AsyncSession,
     settings: Settings,
     api_key_service: ApiKeyAuthenticator,
+    cookie_service: CookieAuthenticator,
+    bearer_service: BearerAuthenticator | None,
 ) -> AuthenticatedPrincipal:
     """Authenticate a WebSocket connection to a principal."""
 
@@ -207,20 +231,29 @@ async def authenticate_websocket(
     auth_header = websocket.headers.get("authorization") or ""
     scheme, _, token = auth_header.partition(" ")
     candidate = token.strip() if scheme.lower() == "bearer" else ""
-    if not candidate:
-        candidate = (websocket.query_params.get("access_token") or "").strip()
-    if not candidate:
-        candidate = (websocket.cookies.get(settings.session_cookie_name) or "").strip()
-
-    if candidate:
-        from ade_api.features.auth.service import AuthService
-
-        service = AuthService(session=_db, settings=settings)
-        principal = await service.resolve_principal_from_access_token(candidate)
+    if candidate and bearer_service is not None:
+        principal = await bearer_service.authenticate(candidate)
         if principal is not None:
             await _ensure_active_principal(principal=principal, session=_db)
             return principal
 
-        raise AuthenticationError("Authentication required")
+    cookie_token = (websocket.cookies.get(settings.session_cookie_name) or "").strip()
+    if cookie_token:
+        principal = await cookie_service.authenticate(cookie_token)
+        if principal is not None:
+            await _ensure_active_principal(principal=principal, session=_db)
+            return principal
+
+    query_token = (websocket.query_params.get("access_token") or "").strip()
+    if query_token:
+        if bearer_service is not None:
+            principal = await bearer_service.authenticate(query_token)
+            if principal is not None:
+                await _ensure_active_principal(principal=principal, session=_db)
+                return principal
+        principal = await cookie_service.authenticate(query_token)
+        if principal is not None:
+            await _ensure_active_principal(principal=principal, session=_db)
+            return principal
 
     raise AuthenticationError("Authentication required")

@@ -135,9 +135,9 @@ class RunColumnFilters(FilterBase):
         None,
         description="Filter columns mapped to a specific field.",
     )
-    mapping_status: Literal["mapped", "ambiguous", "unmapped", "passthrough"] | None = Field(
+    mapping_status: Literal["mapped", "unmapped"] | None = Field(
         None,
-        description="Filter columns by mapping status.",
+        description="Filter columns by mapping status (mapped or unmapped).",
     )
 
     @field_validator("sheet_name", "mapped_field", mode="before")

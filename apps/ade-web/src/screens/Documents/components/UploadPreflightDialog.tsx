@@ -74,47 +74,44 @@ export function UploadPreflightDialog({
 
   useEffect(() => {
     if (!open || localFiles.length === 0) return;
+    if (localFiles.length !== 1) {
+      setSheetInfoById({});
+      return;
+    }
+    const entry = localFiles[0];
+    if (!isSpreadsheet(entry.type)) {
+      setSheetInfoById({
+        [entry.id]: { status: "ready", names: [], activeName: null },
+      });
+      return;
+    }
     let canceled = false;
-    const baseInfo: Record<string, SheetInfo> = {};
-
-    localFiles.forEach((entry) => {
-      if (isSpreadsheet(entry.type)) {
-        baseInfo[entry.id] = { status: "loading", names: [], activeName: null };
-      } else {
-        baseInfo[entry.id] = { status: "ready", names: [], activeName: null };
-      }
+    setSheetInfoById({
+      [entry.id]: { status: "loading", names: [], activeName: null },
     });
-    setSheetInfoById(baseInfo);
 
     const parseSheets = async () => {
-      await Promise.all(
-        localFiles.map(async (entry) => {
-          if (!isSpreadsheet(entry.type)) return;
-          try {
-            const info = await inspectWorkbookFile(entry.file);
-            if (canceled) return;
-            setSheetInfoById((current) => ({
-              ...current,
-              [entry.id]: {
-                status: "ready",
-                names: info.names,
-                activeName: info.activeName,
-              },
-            }));
-          } catch (error) {
-            if (canceled) return;
-            setSheetInfoById((current) => ({
-              ...current,
-              [entry.id]: {
-                status: "error",
-                names: [],
-                activeName: null,
-                error: error instanceof Error ? error.message : "Unable to read worksheets.",
-              },
-            }));
-          }
-        }),
-      );
+      try {
+        const info = await inspectWorkbookFile(entry.file);
+        if (canceled) return;
+        setSheetInfoById({
+          [entry.id]: {
+            status: "ready",
+            names: info.names,
+            activeName: info.activeName,
+          },
+        });
+      } catch (error) {
+        if (canceled) return;
+        setSheetInfoById({
+          [entry.id]: {
+            status: "error",
+            names: [],
+            activeName: null,
+            error: error instanceof Error ? error.message : "Unable to read worksheets.",
+          },
+        });
+      }
     };
 
     void parseSheets();
@@ -190,27 +187,6 @@ export function UploadPreflightDialog({
     }
   }, [activeSheetName, open, selectedSheets.length, sheetMode]);
 
-  const activeOnlyLoading = useMemo(() => {
-    if (!activeOnly) return [];
-    return localFiles.filter((entry) => {
-      if (!isSpreadsheet(entry.type)) return false;
-      const info = sheetInfoById[entry.id];
-      return !info || info.status === "loading";
-    });
-  }, [activeOnly, localFiles, sheetInfoById]);
-
-  const activeOnlyErrors = useMemo(() => {
-    if (!activeOnly) return [];
-    return localFiles.filter((entry) => {
-      if (!isSpreadsheet(entry.type)) return false;
-      const info = sheetInfoById[entry.id];
-      if (!info) return false;
-      if (info.status === "error") return true;
-      if (info.status === "ready" && !info.activeName) return true;
-      return false;
-    });
-  }, [activeOnly, localFiles, sheetInfoById]);
-
   const confirmDisabled = useMemo(() => {
     if (localFiles.length === 0) return true;
     if (isSingle) {
@@ -219,12 +195,8 @@ export function UploadPreflightDialog({
       if (sheetMode === "custom") return selectedSheets.length === 0;
       return !activeSheetName || sheetStatus !== "ready";
     }
-    if (!activeOnly) return false;
-    return activeOnlyErrors.length > 0 || activeOnlyLoading.length > 0;
+    return false;
   }, [
-    activeOnly,
-    activeOnlyErrors.length,
-    activeOnlyLoading.length,
     activeSheetName,
     isActiveFileSpreadsheet,
     isSingle,
@@ -257,18 +229,18 @@ export function UploadPreflightDialog({
       }
       if (isSingle) {
         if (sheetMode === "custom" && selectedSheets.length > 0) {
-          return { file: entry.file, runOptions: { input_sheet_names: selectedSheets } };
+          return {
+            file: entry.file,
+            runOptions: { input_sheet_names: selectedSheets, active_sheet_only: false },
+          };
         }
         if (sheetMode === "active" && activeSheetName) {
-          return { file: entry.file, runOptions: { input_sheet_names: [activeSheetName] } };
+          return { file: entry.file, runOptions: { active_sheet_only: true } };
         }
         return { file: entry.file };
       }
       if (activeOnly) {
-        const info = sheetInfoById[entry.id];
-        if (info?.activeName) {
-          return { file: entry.file, runOptions: { input_sheet_names: [info.activeName] } };
-        }
+        return { file: entry.file, runOptions: { active_sheet_only: true } };
       }
       return { file: entry.file };
     });
@@ -514,27 +486,10 @@ export function UploadPreflightDialog({
                   </span>
                 </label>
 
-                {activeOnly && activeOnlyLoading.length > 0 && activeOnlyErrors.length === 0 ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-flex h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-                    Reading active sheets for {activeOnlyLoading.length} file
-                    {activeOnlyLoading.length === 1 ? "" : "s"}...
-                  </div>
-                ) : null}
-
-                {activeOnly && activeOnlyErrors.length > 0 ? (
-                  <Alert tone="warning" heading="Active sheet unavailable">
-                    <div className="space-y-2 text-sm">
-                      <p>
-                        We could not read the active sheet for {activeOnlyErrors.length} file
-                        {activeOnlyErrors.length === 1 ? "" : "s"}. Disable this option or remove those files to
-                        continue.
-                      </p>
-                      <div className="text-xs text-muted-foreground">
-                        {activeOnlyErrors.map((entry) => entry.file.name).join(", ")}
-                      </div>
-                    </div>
-                  </Alert>
+                {activeOnly ? (
+                  <p className="text-xs text-muted-foreground">
+                    Active sheet selection is resolved during processing.
+                  </p>
                 ) : null}
               </div>
             )}

@@ -84,15 +84,15 @@ export async function* streamDocumentChanges(
       const { value, done } = await reader.read();
       buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
 
-      const parts = buffer.split("\n\n");
-      buffer = parts.pop() ?? "";
-
-      for (const part of parts) {
-        const event = parseSseEvent(part);
-        if (!event) {
-          continue;
+      while (true) {
+        const match = buffer.match(/\r?\n\r?\n/);
+        if (!match || match.index === undefined) break;
+        const rawEvent = buffer.slice(0, match.index);
+        buffer = buffer.slice(match.index + match[0].length);
+        const event = parseSseEvent(rawEvent);
+        if (event) {
+          yield event;
         }
-        yield event;
       }
 
       if (done) {
@@ -128,7 +128,7 @@ export async function* streamDocumentChanges(
 function parseSseEvent(rawEvent: string): DocumentChangeEntry | null {
   const dataLines: string[] = [];
 
-  for (const line of rawEvent.split(/\n/)) {
+  for (const line of rawEvent.split(/\r?\n/)) {
     if (line.startsWith("data:")) {
       const value = line.slice(5);
       dataLines.push(value.startsWith(" ") ? value.slice(1) : value);

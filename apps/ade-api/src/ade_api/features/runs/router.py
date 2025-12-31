@@ -19,6 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 from pydantic import ValidationError
 
 from ade_api.api.deps import (
@@ -510,7 +511,7 @@ async def stream_run_events_endpoint(
     request: Request,
     after_sequence: int | None = Query(default=None, ge=0),
     service: RunsService = runs_service_dependency,
-) -> StreamingResponse:
+) -> EventSourceResponse:
     run = await service.get_run(run_id)
     if run is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Run not found")
@@ -526,7 +527,7 @@ async def stream_run_events_endpoint(
             start_sequence = None
     start_sequence = start_sequence or 0
 
-    async def event_stream() -> AsyncIterator[bytes]:
+    async def event_stream() -> AsyncIterator[dict[str, str]]:
         last_sequence = start_sequence
 
         async with service.subscribe_to_events(run) as subscription:
@@ -570,13 +571,13 @@ async def stream_run_events_endpoint(
                 if live_event.get("event") == "run.complete":
                     break
 
-    return StreamingResponse(
+    return EventSourceResponse(
         event_stream(),
-        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+        ping=15,
     )
 
 

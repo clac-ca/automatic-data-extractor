@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
@@ -10,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ade_api.models import User, UserCredential, UserIdentity
+from ade_api.models import User
 
 
 def _canonical_email(value: str) -> str:
@@ -29,10 +28,7 @@ class UsersRepository:
     async def get_by_id(self, user_id: str | UUID) -> User | None:
         stmt = (
             select(User)
-            .options(
-                selectinload(User.credential),
-                selectinload(User.identities),
-            )
+            .options(selectinload(User.oauth_accounts))
             .where(User.id == user_id)
         )
         result = await self._session.execute(stmt)
@@ -46,29 +42,14 @@ class UsersRepository:
     async def get_by_email(self, email: str) -> User | None:
         stmt = (
             select(User)
-            .options(
-                selectinload(User.credential),
-                selectinload(User.identities),
-            )
-            .where(User.email_canonical == _canonical_email(email))
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_identity(self, provider: str, subject: str) -> UserIdentity | None:
-        stmt = (
-            select(UserIdentity)
-            .options(selectinload(UserIdentity.user))
-            .where(
-                UserIdentity.provider == provider,
-                UserIdentity.subject == subject,
-            )
+            .options(selectinload(User.oauth_accounts))
+            .where(User.email_normalized == _canonical_email(email))
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_users(self) -> list[User]:
-        stmt = select(User).options(selectinload(User.credential)).order_by(User.email_canonical)
+        stmt = select(User).order_by(User.email_normalized)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -76,64 +57,33 @@ class UsersRepository:
         self,
         *,
         email: str,
-        password_hash: str | None = None,
+        hashed_password: str,
         display_name: str | None = None,
         is_active: bool = True,
         is_service_account: bool = False,
+        is_superuser: bool = False,
+        is_verified: bool = True,
     ) -> User:
         user = User(
             email=email,
+            hashed_password=hashed_password,
             display_name=display_name,
             is_active=is_active,
             is_service_account=is_service_account,
+            is_superuser=is_superuser,
+            is_verified=is_verified,
             failed_login_count=0,
         )
         self._session.add(user)
         await self._session.flush()
-
-        if password_hash:
-            credential = UserCredential(
-                user_id=user.id,
-                password_hash=password_hash,
-                last_rotated_at=datetime.now(tz=UTC),
-            )
-            self._session.add(credential)
-            await self._session.flush()
         await self._session.refresh(user)
         return user
 
-    async def set_password(self, user: User, password_hash: str) -> UserCredential:
-        credential = await self.get_credential(user.id)
-        now = datetime.now(tz=UTC)
-        if credential is None:
-            credential = UserCredential(
-                user_id=user.id,
-                password_hash=password_hash,
-                last_rotated_at=now,
-            )
-            self._session.add(credential)
-        else:
-            credential.password_hash = password_hash
-            credential.last_rotated_at = now
+    async def set_password(self, user: User, password_hash: str) -> User:
+        user.hashed_password = password_hash
         await self._session.flush()
-        await self._session.refresh(credential)
-        return credential
-
-    async def get_credential(self, user_id: str) -> UserCredential | None:
-        stmt = select(UserCredential).where(UserCredential.user_id == user_id).limit(1)
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def create_identity(self, *, user: User, provider: str, subject: str) -> UserIdentity:
-        identity = UserIdentity(
-            user_id=user.id,
-            provider=provider,
-            subject=subject,
-        )
-        self._session.add(identity)
-        await self._session.flush()
-        await self._session.refresh(identity)
-        return identity
+        await self._session.refresh(user)
+        return user
 
     async def update_user(
         self,

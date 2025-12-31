@@ -36,7 +36,7 @@ export function RequireSession({ children }: RequireSessionProps) {
         return;
       }
 
-      if (isSetupSuccess && setupStatus?.requires_setup) {
+      if (isSetupSuccess && setupStatus?.setup_required) {
         const next = normalizeNextFromLocation(location);
         navigate(buildSetupRedirect(next), { replace: true });
         return;
@@ -54,7 +54,7 @@ export function RequireSession({ children }: RequireSessionProps) {
     location,
     navigate,
     session,
-    setupStatus?.requires_setup,
+    setupStatus?.setup_required,
     shouldCheckSetup,
   ]);
 

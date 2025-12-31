@@ -242,9 +242,12 @@ async def test_prepare_run_emits_queued_event(session, tmp_path: Path) -> None:
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
     assert run.status is RunStatus.QUEUED
-    assert fake_builds.force_calls == [False]
+    assert fake_builds.force_calls == []
+    assert run.build_id is None
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
+    assert run.run_options is not None
+    assert run.run_options.get("input_document_id") == str(document.id)
 
     events, _ = await service.get_run_events(run_id=run.id, limit=5)
     assert events and events[0]["event"] == "run.queued"
@@ -267,8 +270,27 @@ async def test_prepare_run_rejects_when_queue_is_full(
     options = RunCreateOptions(input_document_id=str(document.id))
     await service.prepare_run(configuration_id=configuration.id, options=options)
 
+    second_document = Document(
+        id=generate_uuid7(),
+        workspace_id=configuration.workspace_id,
+        original_filename="second.csv",
+        content_type="text/csv",
+        byte_size=12,
+        sha256="deadbeef",
+        stored_uri="documents/second.csv",
+        attributes={},
+        status=DocumentStatus.UPLOADED,
+        source=DocumentSource.MANUAL_UPLOAD,
+        expires_at=utc_now(),
+    )
+    session.add(second_document)
+    await session.commit()
+
     with pytest.raises(RunQueueFullError):
-        await service.prepare_run(configuration_id=configuration.id, options=options)
+        await service.prepare_run(
+            configuration_id=configuration.id,
+            options=RunCreateOptions(input_document_id=str(second_document.id)),
+        )
 
 
 @pytest.mark.asyncio()
@@ -359,6 +381,7 @@ async def test_execute_engine_sets_config_package_flag(
     )
     options = RunCreateOptions(input_document_id=str(document.id))
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
+    await service._ensure_run_build(run=run, options=options)
     context = await service._execution_context_for_run(run.id)
 
     captured_command: list[str] | None = None
@@ -408,12 +431,23 @@ async def test_stream_run_requeues_if_build_not_ready(
     options = RunCreateOptions(input_document_id=str(document.id), force_rebuild=True)
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
+    claimed = await service.claim_next_run(worker_id="worker-1")
+    assert claimed is not None
+
+    events = [
+        event
+        async for event in service.stream_run(
+            run_id=run.id,
+            options=options,
+            worker_id="worker-1",
+        )
+    ]
     assert events and events[0]["event"] == "run.queued"
 
     refreshed = await service.get_run(run.id)
     assert refreshed is not None
     assert refreshed.status is RunStatus.QUEUED
+    assert refreshed.attempt_count == 0
     assert fake_builds.force_calls == [True]
 
 
@@ -458,7 +492,17 @@ async def test_stream_run_respects_persisted_safe_mode_override(
     options = RunCreateOptions(input_document_id=str(document.id))
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
+    claimed = await service.claim_next_run(worker_id="worker-2")
+    assert claimed is not None
+
+    events = [
+        event
+        async for event in service.stream_run(
+            run_id=run.id,
+            options=options,
+            worker_id="worker-2",
+        )
+    ]
 
     assert observed_flags == [False]
     assert events[-1]["event"] == "run.complete"
@@ -480,7 +524,17 @@ async def test_validate_only_short_circuits_and_completes(
     options = RunCreateOptions(input_document_id=str(document.id), validate_only=True)
     run = await service.prepare_run(configuration_id=configuration.id, options=options)
 
-    events = [event async for event in service.stream_run(run_id=run.id, options=options)]
+    claimed = await service.claim_next_run(worker_id="worker-3")
+    assert claimed is not None
+
+    events = [
+        event
+        async for event in service.stream_run(
+            run_id=run.id,
+            options=options,
+            worker_id="worker-3",
+        )
+    ]
     event_types = [event["event"] for event in events]
 
     assert event_types[0] == "run.queued"

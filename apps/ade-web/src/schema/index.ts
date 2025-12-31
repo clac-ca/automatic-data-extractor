@@ -12,14 +12,9 @@ export type paths = GeneratedPaths;
 export type operations = GeneratedOperations;
 
 // Frequently used schema fragments. Extend this list as new app-level contracts emerge.
-export type AuthLoginRequest = GeneratedComponents["schemas"]["AuthLoginRequest"];
-export type AuthRefreshRequest = GeneratedComponents["schemas"]["AuthRefreshRequest"];
 export type AuthSetupStatus = GeneratedComponents["schemas"]["AuthSetupStatusResponse"];
 export type AuthSetupRequest = GeneratedComponents["schemas"]["AuthSetupRequest"];
 export type AuthProviderListResponse = GeneratedComponents["schemas"]["AuthProviderListResponse"];
-export type SessionTokens = GeneratedComponents["schemas"]["SessionTokens"];
-export type SessionEnvelope = GeneratedComponents["schemas"]["SessionEnvelope"];
-export type SessionStatusResponse = GeneratedComponents["schemas"]["SessionStatusResponse"];
 export type MeContext = GeneratedComponents["schemas"]["MeContext"];
 export type MeProfile = GeneratedComponents["schemas"]["MeProfile"];
 export type User = GeneratedComponents["schemas"]["UserOut"];
@@ -53,5 +48,4 @@ export type WorkspaceMemberUpdate = GeneratedComponents["schemas"]["WorkspaceMem
 export type ApiKeySummary = GeneratedComponents["schemas"]["ApiKeySummary"];
 export type ApiKeyPage = GeneratedComponents["schemas"]["ApiKeyPage"];
 export type ApiKeyCreateRequest = GeneratedComponents["schemas"]["ApiKeyCreateRequest"];
-export type ApiKeyIssueRequest = GeneratedComponents["schemas"]["ApiKeyIssueRequest"];
 export type ApiKeyCreateResponse = GeneratedComponents["schemas"]["ApiKeyCreateResponse"];

@@ -18,6 +18,7 @@ const DEFAULT_RUN_OPTIONS: RunCreateOptions = {
   validate_only: false,
   force_rebuild: false,
   log_level: "INFO",
+  active_sheet_only: false,
 };
 
 export async function createRun(

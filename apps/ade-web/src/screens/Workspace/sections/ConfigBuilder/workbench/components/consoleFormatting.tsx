@@ -341,15 +341,17 @@ function formatEventRecord(event: Record<string, unknown>) {
   if (name === "engine.table.mapped") {
     const sheet = asString(data.sheet_name);
     const tableIdx = typeof data.table_index === "number" ? data.table_index + 1 : undefined;
-    const mappedFields = typeof data.mapped_fields === "number" ? data.mapped_fields : undefined;
-    const totalFields = typeof data.total_fields === "number" ? data.total_fields : undefined;
-    const passthroughFields = typeof data.passthrough_fields === "number" ? data.passthrough_fields : undefined;
+    const detectedFields = typeof data.detected_fields === "number" ? data.detected_fields : undefined;
+    const expectedFields = typeof data.expected_fields === "number" ? data.expected_fields : undefined;
+    const notDetectedFields = typeof data.not_detected_fields === "number" ? data.not_detected_fields : undefined;
     const parts = [
       sheet ? sheet : null,
       typeof tableIdx === "number" ? `Table ${tableIdx}` : "Table",
       "mapped",
-      typeof mappedFields === "number" && typeof totalFields === "number" ? `mapped=${mappedFields}/${totalFields}` : null,
-      typeof passthroughFields === "number" ? `passthrough=${passthroughFields}` : null,
+      typeof detectedFields === "number" && typeof expectedFields === "number"
+        ? `detected=${detectedFields}/${expectedFields}`
+        : null,
+      typeof notDetectedFields === "number" ? `not_detected=${notDetectedFields}` : null,
     ].filter(Boolean);
     return <span className="break-words">{parts.join(" · ")}</span>;
   }
@@ -677,8 +679,8 @@ function parseConfigHook(message: string): { text: string; title?: string } {
   // Common patterns:
   // - "Config hook: workbook start (<path>)"
   // - "Config hook: sheet start (NOV 2025)"
-  // - "Config hook: table detected (sheet=..., header_row=..., mapped=...)"
-  // - "Config hook: table mapped (fields=[...])"
+  // - "Config hook: table detected (sheet=..., header_row=..., mapped_columns=...)"
+  // - "Config hook: table mapped (detected_fields=[...])"
   // - "Config hook: table written (rows=..., issues=...)"
   // - "Config hook: workbook before save (<path>)"
   const prefix = "Config hook:";
@@ -712,11 +714,10 @@ function parseConfigHook(message: string): { text: string; title?: string } {
   const tableMapped = text.match(/^table mapped\s*\((.+)\)\s*$/i);
   if (tableMapped) {
     const inside = tableMapped[1];
-    // fields=[...]
-    const fields = inside.match(/fields=\[(.*)\]/i);
-    if (fields) {
-      const count = fields[1].split(",").map((s) => s.trim()).filter(Boolean).length;
-      return { text: `Table mapped · fields=${count}`, title: inside };
+    const detectedFields = inside.match(/detected_fields=\[(.*)\]/i);
+    if (detectedFields) {
+      const count = detectedFields[1].split(",").map((s) => s.trim()).filter(Boolean).length;
+      return { text: `Table mapped · detected=${count}`, title: inside };
     }
     return { text: `Table mapped · ${inside}` };
   }

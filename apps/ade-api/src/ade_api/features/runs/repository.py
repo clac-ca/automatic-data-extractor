@@ -9,15 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ade_api.common.pagination import Page, paginate_sql
 from ade_api.common.types import OrderBy
-from ade_api.models import (
-    Build,
-    BuildStatus,
-    Run,
-    RunField,
-    RunMetrics,
-    RunStatus,
-    RunTableColumn,
-)
+from ade_api.models import Run, RunField, RunMetrics, RunStatus, RunTableColumn
 
 from .filters import RunColumnFilters, RunFilters, apply_run_column_filters, apply_run_filters
 
@@ -63,33 +55,32 @@ class RunsRepository:
         )
 
     async def count_queued(self) -> int:
-        stmt = select(func.count()).select_from(Run).where(Run.status == RunStatus.QUEUED)
+        stmt = (
+            select(func.count())
+            .select_from(Run)
+            .where(
+                Run.status == RunStatus.QUEUED,
+                Run.attempt_count < Run.max_attempts,
+            )
+        )
         result = await self._session.execute(stmt)
         return int(result.scalar_one())
 
-    async def next_queued_with_terminal_build(self) -> tuple[Run, BuildStatus] | None:
-        stmt = (
-            select(Run, Build.status)
-            .join(Build, Run.build_id == Build.id)
-            .where(
-                Run.status == RunStatus.QUEUED,
-                Build.status.in_(
-                    [
-                        BuildStatus.READY,
-                        BuildStatus.FAILED,
-                        BuildStatus.CANCELLED,
-                    ]
-                ),
-            )
-            .order_by(Run.created_at.asc())
-            .limit(1)
+    async def list_active_for_documents(
+        self,
+        *,
+        configuration_id: UUID,
+        document_ids: list[UUID],
+    ) -> list[Run]:
+        if not document_ids:
+            return []
+        stmt = select(Run).where(
+            Run.configuration_id == configuration_id,
+            Run.input_document_id.in_(document_ids),
+            Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]),
         )
         result = await self._session.execute(stmt)
-        row = result.first()
-        if row is None:
-            return None
-        run, build_status = row
-        return run, BuildStatus(build_status)
+        return list(result.scalars().all())
 
     async def get_metrics(self, run_id: UUID) -> RunMetrics | None:
         return await self._session.get(RunMetrics, run_id)

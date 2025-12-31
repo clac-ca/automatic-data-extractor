@@ -59,10 +59,8 @@ export type SessionEnvelope = {
     has_next: boolean;
     has_previous: boolean;
   };
-  global_roles: string[];
-  global_permissions: string[];
-  expires_at: string | null;         // ISO expiry derived from access token
-  refresh_expires_at: string | null; // ISO expiry derived from refresh token
+  roles: string[];
+  permissions: string[];
   return_to: string | null;
 };
 
@@ -77,11 +75,11 @@ export interface WorkspaceMembershipSummary {
 
 Characteristics:
 
-* Fetched via `GET /api/v1/me/bootstrap` with a bearer token header.
+* Fetched via `GET /api/v1/me/bootstrap` using the session cookie.
 * Normalised in `shared/auth/api.ts` from the generated OpenAPI types.
 * Cached with React Query.
 * Treated as the **single source of truth** for “who am I?”; we do not duplicate user identity elsewhere.
-* Access tokens and expiry hints are persisted in `localStorage` (`ade.auth.tokens`) by `shared/auth/api.ts` so the SPA can resume sessions across reloads; refresh tokens stay in HttpOnly cookies and are never stored client-side.
+* Sessions are cookie-only; no access tokens are persisted in `localStorage`.
 * Default workspace is server‑backed (`is_default` on memberships) and set via `PUT /api/v1/workspaces/{workspace_id}/default`.
 
 ### 2.2 Effective permissions
@@ -162,7 +160,7 @@ On first deployment, ADE may require a “first admin” to be created.
 The entry strategy:
 
 1. Call `GET /api/v1/auth/setup`.
-2. If `requires_setup == true`:
+2. If `setup_required == true`:
 
    * Navigate to `/setup`.
    * Render the first‑admin setup screen.
@@ -179,25 +177,24 @@ The setup screen:
   * The workspace directory (`/workspaces`), or
   * A validated `redirectTo` path, if present.
 
-Setup endpoints are public but should be callable only while `requires_setup == true`. After setup, this flag becomes false and the `/setup` path should redirect to `/login` or `/workspaces`.
+Setup endpoints are public but should be callable only while `setup_required == true`. After setup, this flag becomes false and the `/setup` path should redirect to `/login` or `/workspaces`.
 
 ### 3.2 Email/password login
 
 Email/password authentication uses:
 
-* `POST /api/v1/auth/session` – create a session (public).
-* `DELETE /api/v1/auth/session` – terminate the current session (authenticated).
-* `POST /api/v1/auth/session/refresh` – optional session refresh (authenticated; refresh cookie for browsers, optional body for API clients).
+* `POST /api/v1/auth/cookie/login` – create a session cookie (public).
+* `POST /api/v1/auth/cookie/logout` – terminate the current session (authenticated).
+* `POST /api/v1/auth/jwt/login` – issue a bearer token (non-browser clients).
 
 Flow:
 
 1. On `/login`, render the login form.
 2. On submit:
 
-   * Call `createSession({ email, password })`.
+   * Call `createSession({ email, password })` (cookie login + bootstrap).
    * On success:
 
-     * Store tokens via `persistTokens` (shared/auth/api) – access token + expiry only.
      * Invalidate and refetch the `session` and `effectivePermissions` queries.
      * Redirect to `redirectTo` (if safe) or to the default route.
 3. On invalid credentials:
@@ -210,24 +207,24 @@ Flow:
 Logout:
 
 * Initiated via “Sign out” in the profile menu.
-* Calls `DELETE /api/v1/auth/session`.
-* Clears the React Query cache, clears tokens from `localStorage`, and navigates to `/login`.
+* Calls `POST /api/v1/auth/cookie/logout`.
+* Clears the React Query cache and navigates to `/login`.
 
 ### 3.3 SSO login
 
 When SSO is enabled, providers are listed via:
 
 * `GET /api/v1/auth/providers`.
-* Public SSO endpoints (`/auth/providers`, `/auth/setup`, `/auth/session` for login, and the SSO redirects) are the only unauthenticated surface area; everything else requires a session cookie, bearer token, or API key.
+* Public SSO endpoints (`/auth/providers`, `/auth/setup`, `/auth/cookie/login`, and the SSO redirects) are the only unauthenticated surface area; everything else requires a session cookie, bearer token, or API key.
 
 SSO flow:
 
 1. `/login` renders buttons for each provider.
-2. Clicking a provider navigates to `GET /api/v1/auth/sso/{provider}/authorize?redirectTo=<path>`:
+2. Clicking a provider navigates to `GET /api/v1/auth/oidc/{provider}/authorize?return_to=<path>`:
 
    * Backend responds with a redirect to the IdP.
-3. After IdP authentication, the user is redirected to `GET /api/v1/auth/sso/{provider}/callback`.
-4. Backend verifies the callback, establishes a session, and then redirects to the ADE Web app (e.g. `/auth/callback`).
+3. After IdP authentication, the user is redirected to `GET /api/v1/auth/oidc/{provider}/callback`.
+4. Backend verifies the callback, establishes a session, and then redirects to the ADE Web app (e.g. `/auth/callback?return_to=/path`).
 
 The `/auth/callback` screen:
 
@@ -235,7 +232,7 @@ The `/auth/callback` screen:
 * Refetches the `session` and `effectivePermissions` queries.
 * Redirects just like email/password login:
 
-  * To a validated `redirectTo`, or
+  * To a validated `return_to`, or
   * To the default route.
 
 ### 3.4 Redirect handling
@@ -290,20 +287,9 @@ Behaviour:
 
   * Redirect them to `/login` with an optional `redirectTo` back to the original path.
 
-### 4.2 Refreshing the session
+### 4.2 Session expiry
 
-If the backend offers `POST /api/v1/auth/session/refresh`, it can be used to extend session lifetime without forcing the user back to `/login`.
-
-The frontend should:
-
-* Use the shared helper in `shared/auth/api.ts` which:
-
-  * Relies on the refresh cookie (no body for the SPA),
-  * Persists new access tokens + expiry hints,
-  * Re‑bootstraps the session via `/me/bootstrap`.
-* Trigger a refresh only when the backend’s contract requires it (e.g. via a small helper hook that calls refresh on certain error codes, then retries the failed request).
-
-The exact refresh policy is backend‑driven; the frontend’s job is to re‑read `Session` and `EffectivePermissions` whenever the backend indicates that the session has changed.
+ADE uses cookie sessions without refresh tokens. When a session expires, the frontend treats the user as signed out and redirects to `/login` after the next bootstrap attempt.
 
 ### 4.3 Global vs workspace‑local data
 
@@ -682,7 +668,6 @@ in `localStorage` or `sessionStorage`.
 
 We **do** store:
 
-* Access tokens and derived expiries under `ade.auth.tokens` (managed centrally in `shared/auth/api.ts`). Refresh tokens remain in HttpOnly cookies.
 * UI preferences such as:
 
   * Left nav collapsed/expanded,

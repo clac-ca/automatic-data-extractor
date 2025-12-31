@@ -84,6 +84,12 @@ async def test_run_defaults(session: AsyncSession) -> None:
     assert run.input_document_id == document.id
     assert run.input_sheet_names is None
     assert isinstance(run.created_at, datetime)
+    assert run.available_at is not None
+    assert run.attempt_count == 0
+    assert run.max_attempts == 3
+    assert run.claimed_by is None
+    assert run.claim_expires_at is None
+    assert run.run_options is None
     assert run.started_at is None
     assert run.completed_at is None
     assert run.cancelled_at is None
