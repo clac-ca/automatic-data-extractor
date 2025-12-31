@@ -18,17 +18,17 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/nav/history.tsx \
   apps/ade-web/src/app/nav/urlState.ts \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/defaultConfig.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/seed/stubWorkbenchData.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state/useEditorThemePreference.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state/useUnsavedChangesGuard.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state/useWorkbenchFiles.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state/useWorkbenchUrlState.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/types.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/console.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/drag.ts \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/utils/tree.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/defaultConfig.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/seed/stubWorkbenchData.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/state/useEditorThemePreference.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/state/useUnsavedChangesGuard.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/state/useWorkbenchFiles.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/state/useWorkbenchUrlState.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/state/workbenchWindowState.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/types.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/utils/console.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/utils/drag.ts \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/utils/tree.ts \
   apps/ade-web/vite.config.ts \
   apps/ade-web/vitest.config.ts \
   --out "${generated_dir}/bundle-config-builder-logic.md" \
@@ -42,15 +42,15 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/nav/history.tsx \
   apps/ade-web/src/app/nav/urlState.ts \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/detail/index.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/Workbench.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/ActivityBar.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/BottomPanel.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/EditorArea.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/Explorer.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/Inspector.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/components/PanelResizeHandle.tsx \
-  apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/index.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/detail/index.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/Workbench.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/ActivityBar.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/BottomPanel.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/EditorArea.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/Explorer.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/Inspector.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/components/PanelResizeHandle.tsx \
+  apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/index.tsx \
   apps/ade-web/vite.config.ts \
   apps/ade-web/vitest.config.ts \
   --out "${generated_dir}/bundle-config-builder-ui.md" \
@@ -64,13 +64,12 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/nav/history.tsx \
   apps/ade-web/src/app/nav/urlState.ts \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/shared/api/client.ts \
-  apps/ade-web/src/shared/api/csrf.ts \
-  apps/ade-web/src/shared/api/ndjson.ts \
-  apps/ade-web/src/shared/api/pagination.ts \
-  apps/ade-web/src/shared/auth/api.ts \
-  apps/ade-web/src/shared/auth/api/logout.ts \
-  apps/ade-web/src/shared/auth/hooks/useAuthProvidersQuery.ts \
+  apps/ade-web/src/api/client.ts \
+  apps/ade-web/src/api/csrf.ts \
+  apps/ade-web/src/api/ndjson.ts \
+  apps/ade-web/src/api/pagination.ts \
+  apps/ade-web/src/api/auth/api.ts \
+  apps/ade-web/src/hooks/auth/useAuthProvidersQuery.ts \
   --out "${generated_dir}/bundle-shared-data.md" \
   --show
 
@@ -85,10 +84,10 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/shell/GlobalTopBar.tsx \
   apps/ade-web/src/app/shell/ProfileDropdown.tsx \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/ui/Alert/Alert.tsx \
-  apps/ade-web/src/ui/Alert/index.ts \
-  apps/ade-web/src/ui/Avatar/Avatar.tsx \
-  apps/ade-web/src/ui/Avatar/index.ts \
+  apps/ade-web/src/components/Alert/Alert.tsx \
+  apps/ade-web/src/components/Alert/index.ts \
+  apps/ade-web/src/components/Avatar/Avatar.tsx \
+  apps/ade-web/src/components/Avatar/index.ts \
   --out "${generated_dir}/bundle-ui-and-editor.md" \
   --show
 
@@ -100,22 +99,22 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/nav/history.tsx \
   apps/ade-web/src/app/nav/urlState.ts \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Documents/components/DocumentDetail.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Runs/index.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Overview/index.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/WorkspaceSettingsRoute.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsLayout.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsDrawer.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/SettingsSectionHeader.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/SaveBar.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/ConfirmDialog.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/components/UnsavedChangesPrompt.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/sectionContext.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/pages/GeneralSettingsPage.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/pages/MembersSettingsPage.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/pages/RolesSettingsPage.tsx \
-  apps/ade-web/src/screens/Workspace/sections/Settings/pages/DangerSettingsPage.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Documents/components/DocumentDetail.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Documents/index.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Runs/index.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Overview/index.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/WorkspaceSettingsRoute.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/SettingsLayout.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/SettingsDrawer.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/SettingsSectionHeader.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/SaveBar.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/ConfirmDialog.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/components/UnsavedChangesPrompt.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/sectionContext.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/pages/GeneralSettingsPage.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/pages/MembersSettingsPage.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/pages/RolesSettingsPage.tsx \
+  apps/ade-web/src/pages/Workspace/sections/Settings/pages/DangerSettingsPage.tsx \
   --out "${generated_dir}/bundle-workspace-sections.md" \
   --show
 
@@ -127,13 +126,13 @@ ade bundle apps/ade-web/README.md \
   apps/ade-web/src/app/nav/history.tsx \
   apps/ade-web/src/app/nav/urlState.ts \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/screens/Workspace/components/WorkspaceNav.tsx \
-  apps/ade-web/src/screens/Workspace/components/workspace-navigation.tsx \
-  apps/ade-web/src/screens/Workspace/index.tsx \
-  apps/ade-web/src/screens/Workspaces/New/hooks/useCreateWorkspaceMutation.ts \
-  apps/ade-web/src/screens/Workspaces/New/index.tsx \
-  apps/ade-web/src/screens/Workspaces/components/WorkspaceDirectoryLayout.tsx \
-  apps/ade-web/src/screens/Workspaces/index.tsx \
+  apps/ade-web/src/pages/Workspace/components/WorkspaceNav.tsx \
+  apps/ade-web/src/pages/Workspace/components/workspace-navigation.tsx \
+  apps/ade-web/src/pages/Workspace/index.tsx \
+  apps/ade-web/src/hooks/workspaces/useCreateWorkspaceMutation.ts \
+  apps/ade-web/src/pages/Workspaces/New/index.tsx \
+  apps/ade-web/src/pages/Workspaces/components/WorkspaceDirectoryLayout.tsx \
+  apps/ade-web/src/pages/Workspaces/index.tsx \
   --out "${generated_dir}/bundle-workspace-shell.md" \
   --show
 

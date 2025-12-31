@@ -29,11 +29,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@app": resolveSrc("app"),
-      "@screens": resolveSrc("screens"),
-      "@ui": resolveSrc("ui"),
-      "@shared": resolveSrc("shared"),
-      "@schema": resolveSrc("schema"),
-      "@generated-types": resolveSrc("generated-types"),
+      "@pages": resolveSrc("pages"),
+      "@components": resolveSrc("components"),
+      "@api": resolveSrc("api"),
+      "@hooks": resolveSrc("hooks"),
+      "@utils": resolveSrc("utils"),
+      "@schema": resolveSrc("types"),
+      "@schema/generated": resolveSrc("types/generated"),
       "@test": resolveSrc("test"),
     },
   },

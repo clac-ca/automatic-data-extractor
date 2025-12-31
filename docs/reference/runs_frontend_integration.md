@@ -10,7 +10,7 @@ and WP12 when planning the UI work.
 The documents screen already references "runs" in copy and state but still
 relies on older runs endpoints. Key touchpoints:
 
-- `apps/ade-web/src/screens/Workspace/sections/Documents/index.tsx`
+- `apps/ade-web/src/pages/Workspace/sections/Documents/index.tsx`
   - Uploads now use an XHR-backed queue (progress, cancel, retry) and support an optional "Run on upload" toggle that queues runs after each successful upload.
   - Bulk "Run selected" actions now call `POST /api/v1/configurations/{configuration_id}/runs/batch` and skip sheet selection.
   - `DocumentRunsDrawer` keeps run drawer state in `document_runs` storage
@@ -26,7 +26,7 @@ relies on older runs endpoints. Key touchpoints:
 
 ## Config Builder panel (Terminal | Run | Problems)
 
-- `apps/ade-web/src/screens/Workspace/sections/ConfigBuilder/workbench/` now
+- `apps/ade-web/src/pages/Workspace/sections/ConfigBuilder/workbench/` now
   consumes run/build NDJSON streams: `Terminal` shows raw logs, `Problems`
   shows validation issues, and `Run` hosts output and event log cards.
 - `BottomPanel.tsx` already accepts console lines with `origin` and supports
@@ -40,10 +40,10 @@ relies on older runs endpoints. Key touchpoints:
 
 ## Generated API types
 
-Once the backend endpoints are available, run `ade openapi-types`
-to regenerate `apps/ade-web/src/generated-types/openapi.d.ts` and add curated
-schema exports under `apps/ade-web/src/schema/`. Update the React hooks to use
-those types instead of ad-hoc interfaces.
+Once the backend endpoints are available, run `ade types` to regenerate
+`apps/ade-web/src/types/generated/openapi.d.ts` and add curated schema exports
+under `apps/ade-web/src/types/`. Update the React hooks to use those types
+instead of ad-hoc interfaces.
 
 ## Follow-up work items
 

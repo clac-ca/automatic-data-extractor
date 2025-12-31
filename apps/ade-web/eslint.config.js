@@ -47,7 +47,7 @@ export default defineConfig([
       "react/react-in-jsx-scope": "off",
       "react/jsx-uses-react": "off",
       "react/no-unescaped-entities": "off",
-      "@typescript-eslint/no-unused-vars": [
+      "@schemacript-eslint/no-unused-vars": [
         "error",
         {
           argsIgnorePattern: "^_",
@@ -60,7 +60,7 @@ export default defineConfig([
         {
           paths: [
             {
-              name: "@generated-types/openapi",
+              name: "@schema/openapi",
               message: "Import app-facing types from @schema, not the raw generated file.",
             },
           ],
@@ -69,7 +69,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/schema/**/*.{ts,tsx}"],
+    files: ["src/types/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": "off",
     },

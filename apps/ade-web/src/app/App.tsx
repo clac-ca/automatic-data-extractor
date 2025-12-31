@@ -1,16 +1,16 @@
 import { NavProvider, useLocation } from "@app/nav/history";
 
 import { AppProviders } from "./AppProviders";
-import HomeScreen from "@screens/Home";
-import LoginScreen from "@screens/Login";
-import AuthCallbackScreen from "@screens/AuthCallback";
-import SetupScreen from "@screens/Setup";
-import WorkspacesScreen from "@screens/Workspaces";
-import WorkspaceCreateScreen from "@screens/Workspaces/New";
-import WorkspaceScreen from "@screens/Workspace";
-import DocumentsScreen from "@screens/Documents";
-import LogoutScreen from "@screens/Logout";
-import NotFoundScreen from "@screens/NotFound";
+import HomeScreen from "@pages/Home";
+import LoginScreen from "@pages/Login";
+import AuthCallbackScreen from "@pages/AuthCallback";
+import SetupScreen from "@pages/Setup";
+import WorkspacesScreen from "@pages/Workspaces";
+import WorkspaceCreateScreen from "@pages/Workspaces/New";
+import WorkspaceScreen from "@pages/Workspace";
+import DocumentsScreen from "@pages/Documents";
+import LogoutScreen from "@pages/Logout";
+import NotFoundScreen from "@pages/NotFound";
 
 export function App() {
   return (

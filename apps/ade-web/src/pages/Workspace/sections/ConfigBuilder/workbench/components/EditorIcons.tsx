@@ -1,0 +1,16 @@
+export {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseAllIcon as MenuIconCloseAll,
+  CloseIcon as MenuIconClose,
+  CloseOthersIcon as MenuIconCloseOthers,
+  CloseRightIcon as MenuIconCloseRight,
+  FileIcon as MenuIconFile,
+  PinGlyph,
+  PinIcon as MenuIconPin,
+  SaveAllIcon as MenuIconSaveAll,
+  SaveIcon as MenuIconSave,
+  TabSavingSpinner,
+  UnpinIcon as MenuIconUnpin,
+} from "@components/Icons";

@@ -3,7 +3,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { ThemeProvider } from "@shared/theme";
+import { ThemeProvider } from "@components/theme";
 
 interface AppProvidersProps {
   readonly children: ReactNode;

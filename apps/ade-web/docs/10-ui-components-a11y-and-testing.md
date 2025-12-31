@@ -1,6 +1,6 @@
 # 10. UI components, accessibility, and testing
 
-This document describes the UI component layer in `ade-web`: what lives in `src/ui`, how components are designed, the accessibility and keyboard conventions they follow, how user preferences are persisted, and how we test UI behaviour.
+This document describes the UI component layer in `ade-web`: what lives in `src/components`, how components are designed, the accessibility and keyboard conventions they follow, how user preferences are persisted, and how we test UI behaviour.
 
 It assumes you’ve read:
 
@@ -11,7 +11,7 @@ It assumes you’ve read:
 
 ## 1. Scope of the UI layer
 
-All reusable UI components live in `src/ui`. The layer has a narrow, intentional scope:
+All reusable UI components live in `src/components`. The layer has a narrow, intentional scope:
 
 * **Responsibilities**
 
@@ -23,20 +23,20 @@ All reusable UI components live in `src/ui`. The layer has a narrow, intentional
 * **Non‑responsibilities**
 
   * No HTTP or React Query calls.
-  * No knowledge of ADE concepts (no runs/documents/workspaces inside `src/ui`).
+  * No knowledge of ADE concepts (no runs/documents/workspaces inside `src/components`).
   * No permission checks or business rules.
   * No direct `localStorage` or routing logic.
 
-If a component needs to know *which* run to start, *who* the user is, or *whether* an action is allowed, that logic belongs in `src/features`, not `src/ui`.
+If a component needs to know *which* run to start, *who* the user is, or *whether* an action is allowed, that logic belongs in `src/features`, not `src/components`.
 
 ---
 
-## 2. Structure of `src/ui`
+## 2. Structure of `src/components`
 
 The UI library is organised by function, not by domain:
 
 ```text
-src/ui/
+src/components/
   button/
     Button.tsx
     SplitButton.tsx
@@ -72,7 +72,7 @@ Conventions:
 
 ### 2.1 Design constraints
 
-All `src/ui` components follow a few design rules:
+All `src/components` components follow a few design rules:
 
 * **Presentational**
   They receive data and callbacks via props; they don’t fetch or derive it from global state.
@@ -451,7 +451,7 @@ Shortcuts (below) build on top of these primitives.
 
 ## 5. Keyboard shortcuts
 
-Keyboard shortcuts are implemented centrally (e.g. in `src/shared/keyboard`). UI components may display shortcut hints, but they do not bind global listeners themselves.
+Keyboard shortcuts are implemented centrally (e.g. in `src/hooks/useHotkeys.ts`). UI components may display shortcut hints, but they do not bind global listeners themselves.
 
 ### 5.1 Global shortcuts
 
@@ -541,7 +541,7 @@ These use `Alert` directly within the layout.
 
 ## 7. State persistence and user preferences
 
-UI state and preferences are stored in `localStorage` via helpers in `src/shared/storage`. Components in `src/ui` are written to work cleanly whether preferences are present or absent.
+UI state and preferences are stored in `localStorage` via helpers in `src/utils/storage`. Components in `src/components` are written to work cleanly whether preferences are present or absent.
 
 ### 7.1 Key naming convention
 
@@ -607,7 +607,7 @@ All storage access goes through helpers such as:
 * `setPreference(workspaceId, suffix, value)`
 * `clearWorkspacePreferences(workspaceId)`
 
-Feature code (not `src/ui`) calls these helpers. Components simply receive the derived state via props.
+Feature code (not `src/components`) calls these helpers. Components simply receive the derived state via props.
 
 ---
 
@@ -630,7 +630,7 @@ Configuration (see `vitest.config.ts`):
 * Configuring React Testing Library defaults.
 * Optionally mocking `window.matchMedia` and similar browser APIs.
 
-### 8.2 Testing `src/ui` components
+### 8.2 Testing `src/components` components
 
 For each component, prefer small, focused tests:
 
@@ -685,7 +685,7 @@ Examples:
   * Simulate `Ctrl+S` and assert the save handler is called.
   * Simulate `Ctrl+W` and assert the active tab closes.
 
-These tests live under `src/features/.../__tests__/` and treat `src/ui` components as black boxes.
+These tests live under `src/features/.../__tests__/` and treat `src/components` components as black boxes.
 
 ### 8.4 Testing state persistence
 
@@ -713,8 +713,8 @@ To keep the UI layer maintainable:
 
 * **No direct globals**
 
-  * Don’t call `window.location` or `localStorage` directly in `src/ui`.
-  * Don’t attach global event listeners from `src/ui` without a clear cleanup path.
+  * Don’t call `window.location` or `localStorage` directly in `src/components`.
+  * Don’t attach global event listeners from `src/components` without a clear cleanup path.
 
 * **Linting & formatting**
 
@@ -729,6 +729,6 @@ To keep the UI layer maintainable:
 
 ### 8.6 Selecting elements in tests
 
-Prefer semantic queries in React Testing Library (`getByRole`, `getByLabelText`, visible text) so tests match user behaviour. Use `data-testid` only when no suitable semantic selector exists, and declare them in `src/ui` components to keep selectors stable for feature tests.
+Prefer semantic queries in React Testing Library (`getByRole`, `getByLabelText`, visible text) so tests match user behaviour. Use `data-testid` only when no suitable semantic selector exists, and declare them in `src/components` components to keep selectors stable for feature tests.
 
 This keeps the UI layer small, predictable, and easy for both humans and AI agents to understand and extend.

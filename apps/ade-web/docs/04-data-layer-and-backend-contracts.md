@@ -39,7 +39,7 @@ Flow:
 [ API modules ]         e.g. workspacesApi, documentsApi, runsApi
         │
         ▼
-[ HTTP client ]         shared/api/client.ts
+[ HTTP client ]         api/client.ts
         │
         ▼
 [ ADE API ]             /api/v1/...
@@ -52,17 +52,17 @@ Design goals:
 * **Predictable caching** – React Query keys follow consistent patterns.
 * **Clear boundaries**:
 
-  * Screens know about **hooks + domain types**.
+  * Pages know about **hooks + domain types**.
   * Hooks know about **API modules**.
   * API modules know about **HTTP + paths**.
 
-> **Rule:** UI code never calls `fetch` directly. All network calls go through the shared HTTP client.
+> **Rule:** UI code never calls `fetch` directly. All network calls go through the shared HTTP client in `api/`.
 
 ---
 
 ## 2. HTTP client
 
-All HTTP calls go through `src/shared/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
+All HTTP calls go through `src/api/client.ts`, a typed `openapi-fetch` client backed by the generated OpenAPI schema (`@schema`). Middleware attaches auth/CSRF headers, and non‑2xx responses are normalised into `ApiError`.
 
 ### 2.1 Responsibilities
 
@@ -89,7 +89,7 @@ Rules:
 * **401 (Unauthenticated)**
   Handled globally (session invalidation, redirect to `/login`, etc.).
 * **403 (Forbidden)**
-  Exposed to the UI as a permissions error; screens decide how to present it.
+  Exposed to the UI as a permissions error; pages decide how to present it.
 
 The HTTP client itself does not manage sessions; the auth layer handles cookie login and bootstrap.
 
@@ -193,23 +193,24 @@ Per domain:
   * Queries: `useWorkspaceRunsQuery(workspaceId, filters)`, `useDocumentsQuery(workspaceId, filters)`
   * Mutations: `useCreateWorkspaceRunMutation(workspaceId)`, `useUploadDocumentMutation(workspaceId)`
 
-Hooks live next to the screens that use them (e.g. `features/workspace-shell/runs/useWorkspaceRunsQuery.ts`) and depend only on the shared API modules.
+Shared hooks live under `src/hooks/`, while page-specific hooks stay under the owning page (e.g. `pages/Workspace/sections/Runs/hooks/useWorkspaceRunsQuery.ts`). They depend only on the API modules.
 
 ---
 
 ## 4. Domain API modules
 
-Domain modules live under `src/shared/api/`. Each one:
+Domain modules live under `src/api/`. Each one:
 
 * owns a set of related endpoints, and
 * exposes typed functions named `<verb><Noun>`.
 
 Examples:
 
-* `authApi`, `permissionsApi`, `rolesApi`
-* `workspacesApi`, `documentsApi`, `runsApi`
-* `configurationsApi`, `buildsApi`
-* `systemApi`, `usersApi`, `apiKeysApi`
+* `auth/api.ts`
+* `workspaces/api.ts`
+* `documents/index.ts`, `documents/uploads.ts`
+* `runs/api.ts`, `configurations/api.ts`
+* `system/api.ts`, `users/api.ts`, `api-keys/api.ts`
 
 You should be able to navigate from a backend route to its module and function without guessing.
 
@@ -633,7 +634,7 @@ API keys:
 Hooks:
 
 * `useUsersQuery()`
-* (API keys hooks not yet defined; call `@shared/api-keys/api` directly from screens as needed.)
+* (API keys hooks not yet defined; call `@api/api-keys/api` directly from pages as needed.)
 
 ---
 
@@ -641,8 +642,8 @@ Hooks:
 
 The data layer uses TypeScript types from two places:
 
-1. **Generated types** (if available) in `src/generated-types/`
-2. **Domain models** in `src/schema/`
+1. **Generated types** (if available) in `src/types/`
+2. **Domain models** in `src/types/`
 
 ### 5.1 Generated types (wire format)
 
@@ -659,7 +660,7 @@ They are typically used in:
 
 ### 5.2 Domain models (UI-facing)
 
-Domain models in `src/schema/` define the curated shapes the UI actually consumes, e.g.:
+Domain models in `src/types/` define the curated shapes the UI actually consumes, e.g.:
 
 * `WorkspaceOut`, `DocumentOut`
 * `RunResource`, `RunStatus`
@@ -670,7 +671,7 @@ When mapping is required, helpers live alongside the domain types to keep snake_
 
 Benefits:
 
-* Screens & hooks only see **camelCase**, front-end-friendly types.
+* Pages & hooks only see **camelCase**, front-end-friendly types.
 * Backend field changes are localised to mapping functions, not scattered across features.
 
 ---
@@ -822,7 +823,7 @@ When backend adds a route:
 1. **Pick a module**
 
    * Does it belong to workspaces, documents, runs, configurations, roles, auth, system, …?
-   * If no good fit, create a new module in `shared/api`.
+   * If no good fit, create a new module in `api/`.
 
 2. **Add a typed function**
 
@@ -836,7 +837,7 @@ When backend adds a route:
 
 4. **Update types**
 
-   * Add/adjust domain types in `schema/`.
+   * Add/adjust domain types in `types/`.
    * Wire in generated types if available.
 
 5. **Update docs**

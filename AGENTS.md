@@ -121,9 +121,9 @@ ade bundle README.md apps/ade-api/AGENTS.md --out /tmp/bundle.md
 
 ## Frontend API types
 
-- Generated types: `apps/ade-web/src/generated-types/openapi.d.ts`.
+- Generated types: `apps/ade-web/src/types/openapi.d.ts`.
 - If missing/stale, run `ade types` before touching frontend API code.
-- Import shapes via curated schema module (`@schema`) instead of `@generated-types/*`.
+- Import shapes via curated types module (`@schema`) instead of `@schema/*`.
 
 ## 🤖 Agent rules
 

@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import clsx from "clsx";
-import { CloseIcon, SearchIcon, SpinnerIcon } from "@ui/Icons";
+import { CloseIcon, SearchIcon, SpinnerIcon } from "@components/Icons";
 
 export interface GlobalSearchSuggestion {
   readonly id: string;

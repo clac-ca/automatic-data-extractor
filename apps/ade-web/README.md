@@ -16,19 +16,19 @@ ADE Web is intentionally **backend-agnostic**. This README describes **what** th
 Use these as your “don’t break the mental model” guardrails:
 
 - **Name things after the domain**  
-  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `screens/workspace-shell/sections`.  
+  Use `Workspace`, `Run`, `Configuration`, `Document`, and keep routes/sections aligned (`/documents`, `/runs`, `/config-builder`, `/settings`) and mirrored under `pages/Workspace/sections`.  
   See: [`docs/01-domain-model-and-naming.md`](./docs/01-domain-model-and-naming.md)
 
 - **Use canonical routes & URL helpers**  
-  Build URLs via `@shared/nav/routes`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
+  Build URLs via helpers in `@app/nav`; keep query params consistent with the filter helpers for Documents/Runs and the builder URL helpers.  
   See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md), [`docs/06-workspace-layout-and-sections.md`](./docs/06-workspace-layout-and-sections.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Respect layer boundaries**  
-  Do not import “upwards”: `shared/` and `ui/` must not depend on `screens/` or `app/`. ESLint enforces this.  
+  Do not import “upwards”: `api/`, `hooks/`, `utils/`, and `components/` must not depend on `pages/` or `app/`. ESLint enforces this.  
   See: [`docs/02-architecture-and-project-structure.md`](./docs/02-architecture-and-project-structure.md)
 
 - **Reuse existing patterns**  
-  New list/detail flows should copy Documents/Runs; NDJSON streaming should use the shared helper and `ade.event/v1` model; permissions should go through `@schema/permissions` + helpers in `@shared/permissions`.  
+  New list/detail flows should copy Documents/Runs; NDJSON streaming should use `api/ndjson` and the `ade.event/v1` model; permissions should go through `@schema` and the workspace context helpers.  
   See: [`docs/04-data-layer-and-backend-contracts.md`](./docs/04-data-layer-and-backend-contracts.md), [`docs/07-documents-and-runs.md`](./docs/07-documents-and-runs.md)
 
 - **Check RBAC & Safe mode rules**  
@@ -157,7 +157,7 @@ Workspace sections live under:
 - `/workspaces/:workspaceId/settings`
 - Optional `/workspaces/:workspaceId/overview`
 
-Route builders live in `@shared/nav/routes.ts` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
+Route helpers live in `@app/nav` and are the **only** place strings like `/workspaces/${id}/runs` should appear.
 
 See: [`docs/03-routing-navigation-and-url-state.md`](./docs/03-routing-navigation-and-url-state.md)
 
@@ -182,7 +182,7 @@ Important UI state is encoded in **query parameters**, not local component state
 - Configuration Builder workbench layout: `file`, `pane`, `console`, `view`  
   (See [`docs/09-workbench-editor-and-scripting.md`](./docs/09-workbench-editor-and-scripting.md#5-workbench-url-state))
 
-Utilities for this live in `@shared/url-state`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
+Utilities for this live in `@app/nav/urlState`: `useSearchParams`, `toURLSearchParams`, `setParams`, and the builder-specific helpers.
 
 ---
 
@@ -286,11 +286,11 @@ ADE Web is a React + TypeScript SPA built with Vite and React Query.
 High-level layout (under `apps/ade-web/src`):
 
 - `app/` – application shell, providers, and top-level routing.
-- `screens/` (aliased as `@screens`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
+- `screens/` (aliased as `@pages`) – feature/screen slices (auth, workspace directory, workspace shell, sections).
 - `ui/` – presentational component library (buttons, forms, top bar, search, tabs, context menus, code editor).
 - `shared/` – cross-cutting utilities and API modules (HTTP client, nav helpers, URL state, NDJSON streaming, permissions).
-- `schema/` – handwritten domain models and mapping from generated types.
-- `generated-types/` – OpenAPI-generated types.
+- `types/` – handwritten domain models and mapping from generated types.
+- `types/` – OpenAPI-generated types.
 - `test/` – Vitest setup and helpers.
 
 Data layer:

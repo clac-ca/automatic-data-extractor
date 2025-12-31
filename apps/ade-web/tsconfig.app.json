@@ -10,11 +10,16 @@
     "baseUrl": "./src",
     "paths": {
       "@app/*": ["app/*"],
-      "@screens/*": ["screens/*"],
-      "@shared/*": ["shared/*"],
-      "@schema/*": ["schema/*"],
-      "@generated-types/*": ["generated-types/*"],
-      "@ui/*": ["ui/*"],
+      "@pages/*": ["pages/*"],
+      "@components/*": ["components/*"],
+      "@api": ["api/index.ts"],
+      "@api/*": ["api/*"],
+      "@hooks/*": ["hooks/*"],
+      "@utils/*": ["utils/*"],
+      "@schema": ["types"],
+      "@schema/*": ["types/*"],
+      "@schema/generated": ["types/generated"],
+      "@schema/generated/*": ["types/generated/*"],
       "@test/*": ["test/*"]
     },
 

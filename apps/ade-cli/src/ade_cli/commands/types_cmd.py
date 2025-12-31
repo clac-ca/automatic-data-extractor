@@ -11,7 +11,7 @@ from ade_cli.commands import common
 
 
 def run_types() -> None:
-    """Generate OpenAPI JSON and TypeScript types into apps/ade-web/src/generated-types/openapi.d.ts."""
+    """Generate OpenAPI JSON and TypeScript types into apps/ade-web/src/types/generated/openapi.d.ts."""
 
     common.refresh_paths()
     common.ensure_backend_dir()
@@ -20,7 +20,7 @@ def run_types() -> None:
         "Install ADE into your virtualenv (e.g., `pip install -e apps/ade-cli -e apps/ade-engine -e apps/ade-api`).",
     )
     openapi_path = common.BACKEND_SRC / "openapi.json"
-    output_path = common.FRONTEND_DIR / "src" / "generated-types" / "openapi.d.ts"
+    output_path = common.FRONTEND_DIR / "src" / "types" / "generated" / "openapi.d.ts"
 
     common.run(
         [sys.executable, "-m", "ade_api.scripts.generate_openapi", "--output", str(openapi_path)]

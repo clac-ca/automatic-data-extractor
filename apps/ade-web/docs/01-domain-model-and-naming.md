@@ -486,12 +486,12 @@ Examples:
 
 **Sources of truth**
 
-* OpenAPI-generated types live in `apps/ade-web/src/generated-types/openapi.d.ts`.
-* A curated module under `src/schema/` re-exports stable shapes (e.g. `WorkspaceEnvelope`, `RunEnvelope`).
+* OpenAPI-generated types live in `apps/ade-web/src/types/openapi.d.ts`.
+* A curated module under `src/types/` re-exports stable shapes (e.g. `WorkspaceEnvelope`, `RunEnvelope`).
 
 **Conventions**
 
-* **App code imports from `@schema`**, not from `@generated-types/*` directly.
+* **App code imports from `@schema`**, not from `@schema/*` directly.
 
 * At the edge, alias verbose API types to clean domain types:
 
@@ -558,7 +558,7 @@ interface RunRef {
 
 **Screens**
 
-* Place under `src/screens/<FeatureName>/`.
+* Place under `src/pages/<FeatureName>/`.
 * Name the top-level component `<FeatureName>Screen`:
 
   * `<WorkspacesScreen />`

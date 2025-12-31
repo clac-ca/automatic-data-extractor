@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { useNavigate } from "@app/nav/history";
-import { ChevronDownIcon, SpinnerIcon } from "@ui/Icons";
+import { ChevronDownIcon, SpinnerIcon } from "@components/Icons";
 
 interface ProfileDropdownAction {
   readonly id: string;

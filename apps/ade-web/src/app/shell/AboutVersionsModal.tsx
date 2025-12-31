@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-import { ADE_WEB_VERSION } from "@shared/version";
-import { useSystemVersions } from "@shared/system";
-import { Alert } from "@ui/Alert";
-import { Button } from "@ui/Button";
+import { ADE_WEB_VERSION } from "@utils/version";
+import { useSystemVersions } from "@hooks/system";
+import { Alert } from "@components/Alert";
+import { Button } from "@components/Button";
 
 interface AboutVersionsModalProps {
   readonly open: boolean;
