@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ConfirmDialog } from "@components/ui/confirm-dialog";
-import { useNavigate, useNavigationBlocker, type NavigationIntent } from "@navigation/history";
+import { useNavigate, useNavigationBlocker, type NavigationIntent } from "@app/navigation/history";
 
 interface UnsavedChangesPromptProps {
   readonly when: boolean;

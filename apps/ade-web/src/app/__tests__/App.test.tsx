@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@test/test-utils";
 
-import { ScreenSwitch } from "./App";
-import { normalizePathname } from "@navigation/paths";
+import { ScreenSwitch } from "../App";
+import { normalizePathname } from "@app/navigation/paths";
 
 vi.mock("@pages/Home", () => ({ default: () => <div data-testid="home-screen">home</div> }));
 vi.mock("@pages/Login", () => ({ default: () => <div data-testid="login-screen">login</div> }));

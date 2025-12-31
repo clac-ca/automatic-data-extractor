@@ -1,5 +1,5 @@
-import type { LocationLike } from "@navigation/history";
-import { normalizePathname } from "@navigation/paths";
+import type { LocationLike } from "@app/navigation/history";
+import { normalizePathname } from "@app/navigation/paths";
 
 export const DEFAULT_APP_HOME = "/workspaces";
 

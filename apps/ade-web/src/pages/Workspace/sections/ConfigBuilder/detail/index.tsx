@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { useNavigate } from "@navigation/history";
+import { useNavigate } from "@app/navigation/history";
 
 import { Button } from "@components/ui/button";
 import { ConfirmDialog } from "@components/ui/confirm-dialog";

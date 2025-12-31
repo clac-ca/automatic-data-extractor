@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-import { useNavigate } from "@navigation/history";
+import { useNavigate } from "@app/navigation/history";
 
 import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";

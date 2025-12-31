@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 import { ApiError } from "@api";
 import { createSession, sessionKeys, type AuthProvider } from "@api/auth/api";
 import { useAuthProvidersQuery } from "@hooks/auth/useAuthProvidersQuery";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocationLike } from "@navigation/history";
+import type { LocationLike } from "@app/navigation/history";
 
 import {
   DEFAULT_APP_HOME,

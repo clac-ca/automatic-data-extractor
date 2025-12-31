@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 
-import { useSearchParams } from "@navigation/urlState";
+import { useSearchParams } from "@app/navigation/urlState";
 import { DataTableRangeFilter } from "@components/tablecn/data-table/data-table-range-filter";
 import { Button } from "@components/tablecn/ui/button";
 import { Calendar } from "@components/tablecn/ui/calendar";

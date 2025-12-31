@@ -29,9 +29,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@pages": resolveSrc("pages"),
+      "@app": resolveSrc("app"),
       "@components": resolveSrc("components"),
       "@api": resolveSrc("api"),
-      "@navigation": resolveSrc("navigation"),
       "@hooks": resolveSrc("hooks"),
       "@utils": resolveSrc("utils"),
       "@schema": resolveSrc("types"),

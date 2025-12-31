@@ -1,7 +1,7 @@
-import { NavProvider, useLocation } from "@navigation/history";
-import { normalizePathname } from "@navigation/paths";
+import { NavProvider, useLocation } from "@app/navigation/history";
+import { normalizePathname } from "@app/navigation/paths";
 
-import { AppProviders } from "@components/providers/AppProviders";
+import { AppProviders } from "@app/providers/AppProviders";
 import HomeScreen from "@pages/Home";
 import LoginScreen from "@pages/Login";
 import AuthCallbackScreen from "@pages/AuthCallback";

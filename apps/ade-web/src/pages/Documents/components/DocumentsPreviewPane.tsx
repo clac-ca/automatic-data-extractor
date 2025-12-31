@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@navigation/history";
+import { useNavigate } from "@app/navigation/history";
 
 import { Button } from "@components/ui/button";
 import { ContextMenu } from "@components/ui/context-menu";

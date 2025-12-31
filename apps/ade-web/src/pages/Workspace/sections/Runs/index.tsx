@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { PageState } from "@components/layouts/page-state";
 

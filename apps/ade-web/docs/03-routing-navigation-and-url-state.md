@@ -33,7 +33,7 @@ We follow a few rules:
 
 ### Canonical sources and names
 
-- Build workspace routes via helpers in `@navigation` instead of hand‑rolled strings so the route map below and the code stay in sync.
+- Build workspace routes via helpers in `@app/navigation` instead of hand‑rolled strings so the route map below and the code stay in sync.
 - Query parameter names for workspace sections are defined in the Documents/Runs filter helpers (`parseDocumentFilters` / `buildDocumentSearchParams`, `parseRunFilters` / `buildRunSearchParams`) described in `docs/06` and `docs/07`; add new keys there to keep deep links consistent.
 - Permission checks referenced in navigation (e.g. showing nav items) should use the keys from `@schema` and the workspace context helpers, not ad‑hoc strings.
 
@@ -53,7 +53,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 ````
 
 ```tsx
-// App.tsx
+// app/App.tsx
 export function App() {
   return (
     <NavProvider>

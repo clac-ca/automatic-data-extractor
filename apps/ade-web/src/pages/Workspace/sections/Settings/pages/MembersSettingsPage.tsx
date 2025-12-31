@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { useUsersQuery } from "@hooks/users/useUsersQuery";
 import { SettingsDrawer } from "../components/SettingsDrawer";

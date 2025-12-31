@@ -593,7 +593,7 @@ interface RunRef {
 
 **Routes**
 
-* Use nav helpers from `@navigation` (`useNavigate`, `useLocation`, `Link`, `NavLink`).
+* Use nav helpers from `@app/navigation` (`useNavigate`, `useLocation`, `Link`, `NavLink`).
 * Match route param names to the `<entity>Id` convention:
 
   ```text

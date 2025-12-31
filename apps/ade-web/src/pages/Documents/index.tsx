@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 import { RequireSession } from "@components/providers/auth/RequireSession";
 import { useSession } from "@components/providers/auth/SessionContext";
 import { usePresenceChannel, type PresenceParticipant } from "@hooks/presence";

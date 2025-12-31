@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 import { PageState } from "@components/layouts/page-state";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";
 import { SettingsLayout } from "./components/SettingsLayout";

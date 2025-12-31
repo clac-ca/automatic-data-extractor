@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useNavigate } from "@navigation/history";
+import { useNavigate } from "@app/navigation/history";
 
 import { useSession } from "@components/providers/auth/SessionContext";
 import { AppearanceMenu } from "@components/shell/AppearanceMenu";

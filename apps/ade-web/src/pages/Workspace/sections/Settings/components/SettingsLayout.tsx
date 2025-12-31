@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { NavLink } from "@navigation/Link";
+import { NavLink } from "@app/navigation/Link";
 import type { WorkspaceSettingsNavGroup, WorkspaceSettingsRouteId } from "../settingsNav";
 import { Input } from "@components/ui/input";
 

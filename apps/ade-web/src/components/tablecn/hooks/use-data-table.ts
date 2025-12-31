@@ -20,7 +20,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 
-import { useSearchParams } from "@navigation/urlState";
+import { useSearchParams } from "@app/navigation/urlState";
 import { useDebouncedCallback } from "@components/tablecn/hooks/use-debounced-callback";
 import {
   parseSortingState,

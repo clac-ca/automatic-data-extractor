@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 
 import { completeAuthCallback, sessionKeys } from "@api/auth/api";
 import { chooseDestination, resolveRedirectParam } from "@utils/authNavigation";

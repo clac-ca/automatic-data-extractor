@@ -13,9 +13,9 @@ mkdir -p "${generated_dir}"
 # App shell + navigation + bootstrap
 ade bundle apps/ade-web/README.md \
   apps/ade-web/src/main.tsx \
-  apps/ade-web/src/App.tsx \
-  apps/ade-web/src/components/providers/AppProviders.tsx \
-  --dir apps/ade-web/src/navigation \
+  apps/ade-web/src/app/App.tsx \
+  apps/ade-web/src/app/providers/AppProviders.tsx \
+  --dir apps/ade-web/src/app/navigation \
   --ext ts --ext tsx --ext md \
   --out "${generated_dir}/ade-web-src-app.md" \
   --no-show

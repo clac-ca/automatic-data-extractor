@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { useNavigate } from "@navigation/history";
+import { useNavigate } from "@app/navigation/history";
 import { deleteWorkspace } from "@api/workspaces/api";
 import { workspacesKeys } from "@hooks/workspaces";
 import { useWorkspaceContext } from "@pages/Workspace/context/WorkspaceContext";

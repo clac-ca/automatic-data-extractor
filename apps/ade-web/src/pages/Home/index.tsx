@@ -7,7 +7,7 @@ import { getDefaultWorkspacePath, readPreferredWorkspaceId } from "@utils/worksp
 import type { WorkspaceProfile } from "@schema/workspaces";
 import { Button } from "@components/ui/button";
 import { PageState } from "@components/layouts/page-state";
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 
 export default function HomeScreen() {
   return (

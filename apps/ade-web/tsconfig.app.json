@@ -10,10 +10,10 @@
     "baseUrl": "./src",
     "paths": {
       "@pages/*": ["pages/*"],
+      "@app/*": ["app/*"],
       "@components/*": ["components/*"],
       "@api": ["api/index.ts"],
       "@api/*": ["api/*"],
-      "@navigation/*": ["navigation/*"],
       "@hooks/*": ["hooks/*"],
       "@utils/*": ["utils/*"],
       "@schema": ["types"],

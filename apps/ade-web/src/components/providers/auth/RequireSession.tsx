@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-import { useLocation, useNavigate } from "@navigation/history";
+import { useLocation, useNavigate } from "@app/navigation/history";
 
 import { useSessionQuery } from "@hooks/auth/useSessionQuery";
 import { useSetupStatusQuery } from "@hooks/auth/useSetupStatusQuery";

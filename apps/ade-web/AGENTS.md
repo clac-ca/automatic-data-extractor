@@ -8,10 +8,10 @@ apps/ade-web/
 ├─ index.html
 └─ src/
    ├─ main.tsx                     # Vite entry point → renders <App />
-   ├─ App.tsx                      # App shell + <ScreenSwitch />
-   ├─ index.css                    # Global styles + theme tokens
-   ├─ vite-env.d.ts                # Vite client typings + globals
-   ├─ navigation/                  # History-based navigation helpers
+   ├─ app/                         # Composition root (App.tsx, providers, navigation)
+   │  ├─ App.tsx                   # App shell + <ScreenSwitch />
+   │  ├─ providers/                # AppProviders + bootstrapping
+   │  └─ navigation/               # History-based navigation helpers
    ├─ api/                         # HTTP client + domain API calls
    ├─ pages/                       # Route-level pages (Home, Login, Workspace, …)
    ├─ components/                  # Shared UI primitives + layouts + providers
@@ -20,6 +20,8 @@ apps/ade-web/
    │  ├─ providers/                 # Auth, theme, notifications
    │  ├─ shell/                     # Global chrome (top bar, profile menu, etc.)
    │  ├─ icons.tsx                  # Icon exports
+   ├─ index.css                    # Global styles + theme tokens
+   ├─ vite-env.d.ts                # Vite client typings + globals
    ├─ hooks/                       # React Query + shared app hooks
    ├─ utils/                       # Cross-cutting utilities (URL/auth helpers)
    ├─ types/                       # Curated, app-facing type exports
@@ -30,10 +32,10 @@ apps/ade-web/
 ### Navigation & URL helpers
 
 * The app no longer uses React Router. A lightweight history provider powers navigation.
-* Use the helpers from `@navigation`:
+* Use the helpers from `@app/navigation`:
   * `NavProvider`, `useNavigate`, `useLocation`, `useSearchParams`
   * `Link`/`NavLink` render `<a>` tags with history-aware click handling.
-* Page selection happens inside `App.tsx` – add new pages by extending the switch logic there.
+* Page selection happens inside `app/App.tsx` – add new pages by extending the switch logic there.
 
 ### Commands
 
@@ -62,7 +64,7 @@ This app is a **Vite + React + TypeScript SPA** built to be boringly predictable
 
 Think in three layers:
 
-1. **App shell** – global providers, layout, navigation wiring (`src/App.tsx`, `src/navigation/`, `src/components/providers/`).
+1. **App shell** – global providers, layout, navigation wiring (`src/app/`).
 2. **Pages** – URL-addressable pages and big experiences (`src/pages`).
 3. **Shared building blocks** – reusable UI + app infrastructure (`src/components`, `src/api`, `src/hooks`, `src/utils`).
 
@@ -72,10 +74,8 @@ Screens are thin: they **compose** things, they don’t invent new infra.
 
 ### 2. Folder contracts
 
-- `src/App.tsx`
-  - Bootstrapping and top‑level routing (`ScreenSwitch`).
-- `src/navigation/`
-  - History-based navigation utilities (`NavProvider`, `Link`, URL state helpers).
+- `src/app/`
+  - Bootstrapping and global wiring (App shell, providers, navigation).
 - `src/pages/`
   - One folder per **page**, with an `index.tsx`.
   - Subfolders like `sections/` and `components/` are allowed, but keep them page-specific.
