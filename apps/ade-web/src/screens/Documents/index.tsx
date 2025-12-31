@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "rea
 import { useLocation, useNavigate } from "@app/nav/history";
 import { RequireSession } from "@shared/auth/components/RequireSession";
 import { useSession } from "@shared/auth/context/SessionContext";
+import { usePresenceChannel, type PresenceParticipant } from "@shared/presence";
 import { readPreferredWorkspaceId, useWorkspacesQuery, type WorkspaceProfile } from "@shared/workspaces";
 import { useWorkspaceContext } from "@screens/Workspace/context/WorkspaceContext";
 import { ConfirmDialog } from "@ui/ConfirmDialog";
@@ -177,6 +178,53 @@ export function DocumentsWorkbench() {
     processingPaused: workspace.processing_paused ?? false,
     initialFilters: urlFilters,
   });
+  const presenceContext = useMemo(() => ({ screen: "documents" }), []);
+  const presence = usePresenceChannel({
+    workspaceId: workspace.id,
+    scope: "documents",
+    context: presenceContext,
+  });
+  const activeParticipants = useMemo(() => {
+    const seen = new Set<string>();
+    const deduped: PresenceParticipant[] = [];
+    presence.participants.forEach((participant) => {
+      if (seen.has(participant.user_id)) return;
+      seen.add(participant.user_id);
+      deduped.push(participant);
+    });
+    return deduped;
+  }, [presence.participants]);
+
+  const presenceByDocument = useMemo(() => {
+    const map: Record<string, PresenceParticipant[]> = {};
+    const seenByDocument = new Map<string, Set<string>>();
+    presence.participants.forEach((participant) => {
+      const selection = participant.selection;
+      if (!selection || typeof selection !== "object") return;
+      const docId = (selection as { doc_id?: unknown }).doc_id;
+      if (typeof docId !== "string" || !docId) return;
+      let seen = seenByDocument.get(docId);
+      if (!seen) {
+        seen = new Set();
+        seenByDocument.set(docId, seen);
+      }
+      if (seen.has(participant.user_id)) return;
+      seen.add(participant.user_id);
+      (map[docId] ??= []).push(participant);
+    });
+    return map;
+  }, [presence.participants]);
+
+  useEffect(() => {
+    if (presence.connectionState !== "open") return;
+    const selectionId = model.state.previewOpen ? model.state.activeId : null;
+    presence.sendSelection({ doc_id: selectionId ?? null });
+  }, [
+    model.state.activeId,
+    model.state.previewOpen,
+    presence.connectionState,
+    presence.sendSelection,
+  ]);
   const { actions, state } = model;
   const [detailsRequest, setDetailsRequest] = useState<{ id: string; tab: "details" | "notes" } | null>(null);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
@@ -393,14 +441,6 @@ export function DocumentsWorkbench() {
   return (
     <div className="documents flex min-h-0 flex-1 flex-col bg-background text-foreground">
       <DocumentsHeader
-        viewMode={model.state.viewMode}
-        onViewModeChange={model.actions.setViewMode}
-        listSettings={model.state.listSettings}
-        onListSettingsChange={model.actions.setListSettings}
-        onRefresh={model.actions.refreshDocuments}
-        isRefreshing={model.derived.isRefreshing}
-        lastUpdatedAt={model.derived.lastUpdatedAt}
-        now={model.derived.now}
         onUploadClick={model.actions.handleUploadClick}
         fileInputRef={model.refs.fileInputRef}
         onFileInputChange={handleFileInputChange}
@@ -431,12 +471,21 @@ export function DocumentsWorkbench() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col">
           <DocumentsFiltersBar
+            viewMode={model.state.viewMode}
+            onViewModeChange={model.actions.setViewMode}
+            listSettings={model.state.listSettings}
+            onListSettingsChange={model.actions.setListSettings}
             workspaceId={workspace.id}
             filters={model.state.filters}
             onChange={handleFiltersChange}
             people={model.derived.people}
             showingCount={model.derived.visibleDocuments.length}
             totalCount={model.derived.documents.length}
+            isRefreshing={model.derived.isRefreshing}
+            lastUpdatedAt={model.derived.lastUpdatedAt}
+            now={model.derived.now}
+            onRefresh={model.actions.refreshDocuments}
+            presenceParticipants={activeParticipants}
             activeViewId={model.state.activeViewId}
             onSetBuiltInView={handleSetBuiltInView}
             savedViews={model.derived.savedViews}
@@ -453,6 +502,7 @@ export function DocumentsWorkbench() {
                 documents={model.derived.visibleDocuments}
                 density={model.state.listSettings.density}
                 activeId={model.state.activeId}
+                presenceByDocument={presenceByDocument}
                 selectedIds={model.state.selectedIds}
                 onSelect={model.actions.updateSelection}
                 onSelectAll={model.actions.selectAllVisible}
@@ -567,6 +617,7 @@ export function DocumentsWorkbench() {
                 isFetchingNextPage={model.derived.isFetchingNextPage}
                 onLoadMore={model.actions.loadMore}
                 onRefresh={model.actions.refreshDocuments}
+                presenceByDocument={presenceByDocument}
                 onUploadClick={model.actions.handleUploadClick}
                 onClearFilters={handleClearFilters}
                 showNoDocuments={model.derived.showNoDocuments}

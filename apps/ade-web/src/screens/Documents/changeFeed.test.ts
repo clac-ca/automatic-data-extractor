@@ -2,7 +2,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { mergeDocumentChangeIntoPages } from "./changeFeed";
-import type { DocumentChangeEntry, DocumentPageResult, DocumentRecord, DocumentsFilters } from "./types";
+import type { DocumentChangeEntry, DocumentListRow, DocumentPageResult, DocumentsFilters } from "./types";
 
 const BASE_TIME = "2024-01-01T00:00:00.000Z";
 
@@ -14,34 +14,33 @@ const DEFAULT_FILTERS: DocumentsFilters = {
   assignees: [],
 };
 
-function makeDocument(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
+function makeRow(overrides: Partial<DocumentListRow> = {}): DocumentListRow {
   return {
     id: "doc-1",
     workspace_id: "ws-1",
     name: "Report.xlsx",
-    content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    file_type: "xlsx",
+    status: "queued",
+    stage: null,
+    uploader_label: null,
+    assignee_user_id: null,
+    assignee_key: null,
+    tags: [],
     byte_size: 1234,
-    metadata: {},
-    status: "uploaded",
-    display_status: "queued",
-    source: "manual_upload",
-    expires_at: BASE_TIME,
-    last_run_at: null,
+    size_label: "1.2 KB",
+    queue_state: null,
+    queue_reason: null,
+    mapping_health: { attention: 0, unmapped: 0 },
     activity_at: BASE_TIME,
     created_at: BASE_TIME,
     updated_at: BASE_TIME,
-    deleted_at: null,
-    assignee_user_id: null,
-    deleted_by: null,
-    tags: [],
-    uploader: null,
     last_run: null,
     last_successful_run: null,
     ...overrides,
   };
 }
 
-function makePage(documents: DocumentRecord[]): DocumentPageResult {
+function makePage(documents: DocumentListRow[]): DocumentPageResult {
   return {
     items: documents,
     page: 1,
@@ -62,13 +61,13 @@ function makeData(pages: DocumentPageResult[]): InfiniteData<DocumentPageResult>
 
 describe("mergeDocumentChangeIntoPages", () => {
   it("flags updates when activity_at changes under activity sort", () => {
-    const doc = makeDocument({ id: "doc-1", activity_at: "2024-01-01T00:00:00.000Z" });
+    const doc = makeRow({ id: "doc-1", activity_at: "2024-01-01T00:00:00.000Z" });
     const data = makeData([makePage([doc])]);
 
     const change: DocumentChangeEntry = {
       cursor: "10",
       type: "document.upsert",
-      document: makeDocument({ id: "doc-1", activity_at: "2024-01-02T00:00:00.000Z" }),
+      row: makeRow({ id: "doc-1", activity_at: "2024-01-02T00:00:00.000Z" }),
       document_id: null,
       occurred_at: "2024-01-02T00:00:00.000Z",
     };
@@ -84,13 +83,13 @@ describe("mergeDocumentChangeIntoPages", () => {
   });
 
   it("flags updates for off-page upserts that match filters", () => {
-    const doc = makeDocument({ id: "doc-1" });
+    const doc = makeRow({ id: "doc-1" });
     const data = makeData([makePage([doc])]);
 
     const change: DocumentChangeEntry = {
       cursor: "11",
       type: "document.upsert",
-      document: makeDocument({ id: "doc-2", name: "New.xlsx" }),
+      row: makeRow({ id: "doc-2", name: "New.xlsx" }),
       document_id: null,
       occurred_at: "2024-01-02T00:00:00.000Z",
     };

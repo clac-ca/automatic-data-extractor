@@ -1,8 +1,11 @@
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 
 import type { DocumentEntry, ListDensity, WorkspacePerson } from "../types";
+import type { PresenceParticipant } from "@shared/presence";
+import { AvatarStack, type AvatarStackItem } from "@ui/AvatarStack";
 import { getDocumentOutputRun } from "../data";
 import { fileTypeLabel, formatRelativeTime } from "../utils";
 import { EmptyState } from "./EmptyState";
@@ -102,6 +105,7 @@ export function DocumentsGrid({
   onClosePreview,
   expandedId,
   expandedContent,
+  presenceByDocument,
 }: {
   workspaceId: string;
   documents: DocumentEntry[];
@@ -145,12 +149,34 @@ export function DocumentsGrid({
   onClosePreview: () => void;
   expandedId?: string | null;
   expandedContent?: ReactNode;
+  presenceByDocument?: Record<string, PresenceParticipant[]>;
 }) {
-  const hasSelectableRows = documents.some((doc) => doc.record);
+  const hasSelectableRows = useMemo(() => documents.some((doc) => Boolean(doc.record)), [documents]);
+
   const showLoading = isLoading && documents.length === 0;
   const showError = isError && documents.length === 0;
+
   const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
-  const densityStyles = getDensityStyles(density);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const densityStyles = useMemo(() => getDensityStyles(density), [density]);
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+
+  // Keep getItemKey stable; virtualizer notifies on option changes.
+  const getItemKey = useCallback((index: number) => documentsRef.current[index]?.id ?? index, []);
+  const estimateSize = useCallback(() => (density === "compact" ? 96 : 120), [density]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: documents.length,
+    getScrollElement: () => scrollRef.current,
+    // Keep this roughly stable; we still allow measuring because content can vary slightly.
+    estimateSize,
+    overscan: 10,
+    getItemKey,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
 
   useEffect(() => {
     if (!headerCheckboxRef.current) return;
@@ -159,7 +185,8 @@ export function DocumentsGrid({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
-      <div className="shrink-0 border-b border-border bg-background/40 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border/70 bg-background/60 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         <div
           className={clsx(
             "grid grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center",
@@ -186,7 +213,9 @@ export function DocumentsGrid({
         </div>
       </div>
 
+      {/* Scroll region */}
       <div
+        ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto px-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         onKeyDown={onKeyNavigate}
         tabIndex={0}
@@ -223,240 +252,278 @@ export function DocumentsGrid({
           </div>
         ) : (
           <div className="flex flex-col">
-            {documents.map((doc) => {
-              const canSelectRow = Boolean(doc.record);
-              const outputRun = getDocumentOutputRun(doc.record);
-              const canDownloadOutput = Boolean(outputRun?.run_id);
-              const isUnassigned = !doc.assigneeKey;
-              const isExpanded = Boolean(expandedContent && expandedId === doc.id);
-              const isActive = Boolean(isExpanded && activeId === doc.id);
-              const isSelected = selectedIds.has(doc.id);
-              const isArchived = doc.status === "archived";
-              const previewId = `documents-preview-${doc.id}`;
-              const hasNotes = doc.commentCount > 0;
-              const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
-              const canEditTags = canSelectRow;
-              const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-                if (isInteractiveTarget(event.target, event.currentTarget)) return;
-                if (isSelectionModifier(event)) {
-                  if (canSelectRow) {
+            <div className="relative" style={{ height: rowVirtualizer.getTotalSize() }}>
+              {virtualRows.map((virtualRow: VirtualItem) => {
+                const doc = documents[virtualRow.index];
+                if (!doc) return null;
+
+                const canSelectRow = Boolean(doc.record);
+                const canEditTags = canSelectRow;
+
+                const outputRun = getDocumentOutputRun(doc.record);
+                const canDownloadOutput = Boolean(outputRun?.run_id);
+
+                const isExpanded = Boolean(expandedContent && expandedId === doc.id);
+                const isActive = Boolean(isExpanded && activeId === doc.id);
+                const isSelected = selectedIds.has(doc.id);
+
+                const isUnassigned = !doc.assignee_key;
+                const isArchived = doc.status === "archived";
+
+                const rowPresence = presenceByDocument?.[doc.id] ?? [];
+                const hasPresence = rowPresence.length > 0;
+                const presenceItems: AvatarStackItem[] = rowPresence.map((participant) => ({
+                  id: participant.client_id,
+                  name: participant.display_name,
+                  email: participant.email,
+                }));
+
+                const previewId = `documents-preview-${doc.id}`;
+                const hasNotes = doc.comment_count > 0;
+
+                const downloadLabel = canDownloadOutput ? "Download output" : "Output not ready";
+
+                const handleRowClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+                  if (isInteractiveTarget(event.target, event.currentTarget)) return;
+
+                  // Multi-select
+                  if (isSelectionModifier(event)) {
+                    if (!canSelectRow) return;
                     const isRange = isRangeSelection(event);
                     onSelect(doc.id, {
                       mode: isRange ? "range" : "toggle",
                       checked: isRange ? true : !isSelected,
                     });
+                    return;
                   }
-                  return;
-                }
-                onActivate(doc.id);
-              };
 
-              const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                if (event.currentTarget !== event.target) return;
-                event.preventDefault();
-                onActivate(doc.id);
-              };
+                  onActivate(doc.id);
+                };
 
-              const handleSelectClick = (event: ReactMouseEvent<HTMLInputElement>) => {
-                event.stopPropagation();
-                if (!canSelectRow) return;
-                const isRange = isRangeSelection(event);
-                const nextChecked = !isSelected;
-                onSelect(doc.id, {
-                  mode: isRange ? "range" : "toggle",
-                  checked: nextChecked,
-                });
-              };
+                const handleRowKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  if (event.currentTarget !== event.target) return;
+                  event.preventDefault();
+                  onActivate(doc.id);
+                };
 
-              return (
-                <div
-                  key={doc.id}
-                  className="border-b border-border/70"
-                >
+                const handleSelectClick = (event: ReactMouseEvent<HTMLInputElement>) => {
+                  event.stopPropagation();
+                  if (!canSelectRow) return;
+                  const isRange = isRangeSelection(event);
+                  onSelect(doc.id, {
+                    mode: isRange ? "range" : "toggle",
+                    checked: isRange ? true : !isSelected,
+                  });
+                };
+
+                return (
                   <div
-                    role="button"
-                    onClick={handleRowClick}
-                    onKeyDown={handleRowKeyDown}
-                    className={clsx(
-                      "group grid cursor-pointer select-none grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      densityStyles.rowGap,
-                      densityStyles.rowPadding,
-                      isActive
-                        ? "bg-brand-50 dark:bg-brand-500/20"
-                        : isSelected
-                          ? "bg-muted/40 dark:bg-muted/30"
-                          : "hover:bg-background dark:hover:bg-muted/40",
-                    )}
-                    tabIndex={0}
-                    aria-expanded={isExpanded}
-                    aria-controls={isExpanded ? previewId : undefined}
+                    key={virtualRow.key}
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    className="absolute left-0 top-0 w-full border-b border-border/70"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <div>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => undefined}
-                        onClick={handleSelectClick}
-                        aria-label={`Select ${doc.name}`}
-                        disabled={!canSelectRow}
-                        className="h-4 w-4 rounded border-border-strong"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={clsx(
-                          "flex items-center justify-center rounded-xl border border-border bg-background",
-                          densityStyles.iconSize,
-                        )}
-                      >
-                        <DocumentIcon className="h-4 w-4 text-muted-foreground" />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={handleRowClick}
+                      onKeyDown={handleRowKeyDown}
+                      aria-expanded={isExpanded}
+                      aria-controls={isExpanded ? previewId : undefined}
+                      className={clsx(
+                        "group grid cursor-pointer select-none grid-cols-[auto_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.6fr)_auto] items-center transition-colors duration-150 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        densityStyles.rowGap,
+                        densityStyles.rowPadding,
+                        isActive
+                          ? "bg-brand-50 dark:bg-brand-500/20"
+                          : isSelected
+                            ? "bg-muted/40 dark:bg-muted/30"
+                            : "hover:bg-muted/20 dark:hover:bg-muted/40",
+                        hasPresence && !isActive ? "ring-1 ring-brand-200/50 ring-inset" : null,
+                      )}
+                    >
+                      <div>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => undefined}
+                          onClick={handleSelectClick}
+                          aria-label={`Select ${doc.name}`}
+                          disabled={!canSelectRow}
+                          className="h-4 w-4 rounded border-border-strong"
+                        />
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
-                        <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="text-[10px] font-semibold text-muted-foreground">
-                            {fileTypeLabel(doc.fileType)}
-                          </span>
-                          <span aria-hidden className="text-muted-foreground">·</span>
-                          <span>Uploaded {formatRelativeTime(now, doc.createdAt)}</span>
-                          <span aria-hidden className="text-muted-foreground">·</span>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onOpenNotes(doc.id);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
-                            title={hasNotes ? `${doc.commentCount} notes` : "No notes yet"}
-                          >
-                            <ChatIcon className="h-3 w-3" />
-                            <span className="tabular-nums">{doc.commentCount}</span>
-                          </button>
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <StatusPill status={doc.status} queueState={doc.queueState} queueReason={doc.queueReason} />
-                        <MappingBadge mapping={doc.mapping} />
-                      </div>
-                      {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}
-                    </div>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={clsx(
+                            "flex items-center justify-center rounded-xl border border-border bg-background",
+                            densityStyles.iconSize,
+                          )}
+                        >
+                          <DocumentIcon className="h-4 w-4 text-muted-foreground" />
+                        </div>
 
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={clsx(
-                          "inline-flex items-center justify-center rounded-full border border-border bg-background",
-                          densityStyles.avatarSize,
-                        )}
-                      >
-                        <UserIcon className="h-4 w-4 text-muted-foreground" />
-                      </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
 
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <PeoplePicker
-                            people={people}
-                            value={[doc.assigneeKey ?? unassignedKey()]}
-                            onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
-                            placeholder="Assignee..."
-                            includeUnassigned
-                            buttonClassName={densityStyles.pickerButtonClass}
-                          />
-                          {isUnassigned ? (
+                          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <span className="text-[10px] font-semibold text-muted-foreground">
+                              {fileTypeLabel(doc.file_type)}
+                            </span>
+                            <span aria-hidden className="text-muted-foreground">
+                              ·
+                            </span>
+                            <span>Uploaded {formatRelativeTime(now, doc.created_at)}</span>
+                            <span aria-hidden className="text-muted-foreground">
+                              ·
+                            </span>
                             <button
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                onPickUp(doc.id);
+                                onOpenNotes(doc.id);
                               }}
-                              className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition hover:text-foreground"
+                              title={hasNotes ? `${doc.comment_count} notes` : "No notes yet"}
                             >
-                              Assign to me
+                              <ChatIcon className="h-3 w-3" />
+                              <span className="tabular-nums">{doc.comment_count}</span>
                             </button>
+                          </p>
+
+                          {hasPresence ? (
+                            <div className="mt-1 flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
+                              <AvatarStack items={presenceItems} size="xs" max={3} />
+                              <span>Viewing</span>
+                            </div>
                           ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <StatusPill status={doc.status} queueState={doc.queue_state} queueReason={doc.queue_reason} />
+                          <MappingBadge mapping={doc.mapping_health} />
+                        </div>
+                        {doc.upload && doc.upload.status !== "succeeded" ? <UploadProgress upload={doc.upload} /> : null}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={clsx(
+                            "inline-flex items-center justify-center rounded-full border border-border bg-background",
+                            densityStyles.avatarSize,
+                          )}
+                        >
+                          <UserIcon className="h-4 w-4 text-muted-foreground" />
+                        </span>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <PeoplePicker
+                              people={people}
+                              value={[doc.assignee_key ?? unassignedKey()]}
+                              onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
+                              placeholder="Assignee..."
+                              includeUnassigned
+                              buttonClassName={densityStyles.pickerButtonClass}
+                            />
+
+                            {isUnassigned ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onPickUp(doc.id);
+                                }}
+                                className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-brand-600 hover:text-brand-700"
+                              >
+                                Assign to me
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex min-w-0 items-center">
+                        <TagPicker
+                          workspaceId={workspaceId}
+                          selected={doc.tags}
+                          onToggle={(tag) => {
+                            const nextTags = doc.tags.includes(tag)
+                              ? doc.tags.filter((t) => t !== tag)
+                              : [...doc.tags, tag];
+                            onTagsChange(doc.id, nextTags);
+                          }}
+                          placeholder="Add tags"
+                          disabled={!canEditTags}
+                          buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
+                        />
+                      </div>
+
+                      <div className="text-right text-xs text-muted-foreground">
+                        {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                      </div>
+
+                      <div className="flex justify-end" data-ignore-row-click>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (canDownloadOutput) onDownloadOutput(doc);
+                            }}
+                            disabled={!canDownloadOutput}
+                            aria-label={downloadLabel}
+                            title={downloadLabel}
+                            className={clsx(
+                              "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
+                              "hover:bg-background hover:text-muted-foreground",
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                              "disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card disabled:hover:text-muted-foreground",
+                            )}
+                          >
+                            <DownloadIcon className="h-4 w-4" />
+                          </button>
+
+                          <RowActionsMenu
+                            onOpenDetails={() => onOpenDetails(doc.id)}
+                            onReprocess={isExpanded ? () => onReprocess(doc) : undefined}
+                            reprocessDisabled={!doc.record || !isExpanded || processingPaused}
+                            showClosePreview={isExpanded}
+                            onClosePreview={onClosePreview}
+                            onDownloadOriginal={() => onDownloadOriginal(doc)}
+                            onCopyLink={() => onCopyLink(doc)}
+                            onDelete={() => onDelete(doc)}
+                            onArchive={() => onArchive(doc)}
+                            onRestore={() => onRestore(doc)}
+                            isArchived={isArchived}
+                            originalDisabled={!doc.record}
+                            copyDisabled={!doc.record}
+                            deleteDisabled={!doc.record}
+                            archiveDisabled={!doc.record}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex min-w-0 items-center">
-                      <TagPicker
-                        workspaceId={workspaceId}
-                        selected={doc.tags}
-                        onToggle={(tag) => {
-                          const nextTags = doc.tags.includes(tag)
-                            ? doc.tags.filter((t) => t !== tag)
-                            : [...doc.tags, tag];
-                          onTagsChange(doc.id, nextTags);
-                        }}
-                        placeholder="Add tags"
-                        disabled={!canEditTags}
-                        buttonClassName="min-w-0 max-w-[12rem] bg-background px-2 py-1 text-[11px] shadow-none"
-                      />
-                    </div>
-
-                    <div className="text-right text-xs text-muted-foreground">{formatRelativeTime(now, doc.updatedAt)}</div>
-
-                    <div className="flex justify-end" data-ignore-row-click>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (canDownloadOutput) onDownloadOutput(doc);
-                          }}
-                          disabled={!canDownloadOutput}
-                          aria-label={downloadLabel}
-                          title={downloadLabel}
-                          className={clsx(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition",
-                            "hover:bg-background hover:text-muted-foreground",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                            "disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-card disabled:hover:text-muted-foreground",
-                          )}
-                        >
-                          <DownloadIcon className="h-4 w-4" />
-                        </button>
-
-                        <RowActionsMenu
-                          onOpenDetails={() => onOpenDetails(doc.id)}
-                          onReprocess={isExpanded ? () => onReprocess(doc) : undefined}
-                          reprocessDisabled={!doc.record || !isExpanded || processingPaused}
-                          showClosePreview={isExpanded}
-                          onClosePreview={onClosePreview}
-                          onDownloadOriginal={() => onDownloadOriginal(doc)}
-                          onCopyLink={() => onCopyLink(doc)}
-                          onDelete={() => onDelete(doc)}
-                          onArchive={() => onArchive(doc)}
-                          onRestore={() => onRestore(doc)}
-                          isArchived={isArchived}
-                          originalDisabled={!doc.record}
-                          copyDisabled={!doc.record}
-                          deleteDisabled={!doc.record}
-                          archiveDisabled={!doc.record}
-                        />
+                    {isExpanded ? (
+                      <div
+                        id={previewId}
+                        role="region"
+                        aria-label={`Preview details for ${doc.name}`}
+                        className="bg-background/60 px-6 pb-4 pt-2"
+                      >
+                        <div className="rounded-2xl border border-border bg-card shadow-sm">{expandedContent}</div>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
-
-                  {isExpanded ? (
-                    <div
-                      id={previewId}
-                      role="region"
-                      aria-label={`Preview details for ${doc.name}`}
-                      className="bg-background/60 px-6 pb-4 pt-2"
-                    >
-                      <div className="rounded-2xl border border-border bg-card shadow-sm">
-                        {expandedContent}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
             {hasNextPage ? (
               <div className="flex justify-center py-4">

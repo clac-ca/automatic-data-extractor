@@ -2,6 +2,8 @@ import clsx from "clsx";
 
 import type { BoardColumn, BoardGroup, ListDensity, WorkspacePerson } from "../types";
 import { formatRelativeTime } from "../utils";
+import type { PresenceParticipant } from "@shared/presence";
+import { AvatarStack, type AvatarStackItem } from "@ui/AvatarStack";
 import { EmptyState } from "./EmptyState";
 import { MappingBadge } from "./MappingBadge";
 import { PeoplePicker, normalizeSingleAssignee, unassignedKey } from "./PeoplePicker";
@@ -34,6 +36,7 @@ export function DocumentsBoard({
   onClearFilters,
   showNoDocuments,
   showNoResults,
+  presenceByDocument,
 
   people,
   onAssign,
@@ -57,6 +60,7 @@ export function DocumentsBoard({
   onClearFilters: () => void;
   showNoDocuments: boolean;
   showNoResults: boolean;
+  presenceByDocument?: Record<string, PresenceParticipant[]>;
 
   people: WorkspacePerson[];
   onAssign: (documentId: string, assigneeKey: string | null) => void;
@@ -143,6 +147,13 @@ export function DocumentsBoard({
                     </div>
                   ) : (
                     column.items.map((doc) => {
+                      const rowPresence = presenceByDocument?.[doc.id] ?? [];
+                      const hasPresence = rowPresence.length > 0;
+                      const presenceItems: AvatarStackItem[] = rowPresence.map((participant) => ({
+                        id: participant.client_id,
+                        name: participant.display_name,
+                        email: participant.email,
+                      }));
                       return (
                         <div
                           key={doc.id}
@@ -154,10 +165,13 @@ export function DocumentsBoard({
                             }
                           }}
                           className={clsx(
-                            "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                            "flex cursor-pointer flex-col rounded-2xl border bg-card shadow-sm transition-colors duration-150 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                             cardGap,
                             cardPadding,
-                            activeId === doc.id ? "border-brand-400" : "border-border hover:border-brand-300",
+                            activeId === doc.id
+                              ? "border-brand-400"
+                              : "border-border hover:border-brand-300 hover:bg-background/40",
+                            hasPresence && activeId !== doc.id ? "ring-1 ring-brand-200/60 ring-inset" : null,
                           )}
                           role="button"
                           tabIndex={0}
@@ -166,14 +180,19 @@ export function DocumentsBoard({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold text-foreground">{doc.name}</p>
-                              <p className="text-xs text-muted-foreground">Updated {formatRelativeTime(now, doc.updatedAt)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Updated {formatRelativeTime(now, doc.activity_at ?? doc.updated_at)}
+                              </p>
                             </div>
-                            <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
+                            <div className="flex items-center gap-2">
+                              {hasPresence ? <AvatarStack items={presenceItems} size="xs" max={3} /> : null}
+                              <span className={clsx("h-2.5 w-2.5 rounded-full", STATUS_DOT[doc.status])} aria-hidden />
+                            </div>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">Assignee: {doc.assigneeLabel ?? "Unassigned"}</span>
-                            {!doc.assigneeKey ? (
+                            <span className="font-semibold">Assignee: {doc.assignee_label ?? "Unassigned"}</span>
+                            {!doc.assignee_key ? (
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -191,7 +210,7 @@ export function DocumentsBoard({
                             >
                               <PeoplePicker
                                 people={people}
-                                value={[doc.assigneeKey ?? unassignedKey()]}
+                                value={[doc.assignee_key ?? unassignedKey()]}
                                 onChange={(keys) => onAssign(doc.id, normalizeSingleAssignee(keys))}
                                 placeholder="Assign..."
                                 includeUnassigned
@@ -201,7 +220,7 @@ export function DocumentsBoard({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="font-semibold">{doc.uploader ?? "Unassigned"}</span>
+                            <span className="font-semibold">{doc.uploader_label ?? "Unassigned"}</span>
                             {doc.tags.length > 0 ? (
                               <span className="rounded-full border border-border bg-background px-2 py-0.5">
                                 {doc.tags[0]}
@@ -210,7 +229,7 @@ export function DocumentsBoard({
                             ) : (
                               <span className="text-muted-foreground">No tags</span>
                             )}
-                            <MappingBadge mapping={doc.mapping} />
+                            <MappingBadge mapping={doc.mapping_health} />
                           </div>
                           {doc.upload && doc.upload.status !== "succeeded" ? (
                             <div className="pt-1">

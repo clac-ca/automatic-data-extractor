@@ -3,7 +3,7 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = {
+export interface paths {
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -823,6 +823,23 @@ export type paths = {
         patch: operations["patch_document_tags_api_v1_workspaces__workspace_id__documents__document_id__tags_patch"];
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/listRow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve document list row */
+        get: operations["read_document_list_row_api_v1_workspaces__workspace_id__documents__document_id__listRow_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents/{document_id}/download": {
         parameters: {
             query?: never;
@@ -1446,9 +1463,9 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-};
+}
 export type webhooks = Record<string, never>;
-export type components = {
+export interface components {
     schemas: {
         /**
          * ApiKeyCreateRequest
@@ -2069,7 +2086,7 @@ export type components = {
              * @enum {string}
              */
             type: "document.upsert" | "document.deleted";
-            document?: components["schemas"]["DocumentOut"] | null;
+            row?: components["schemas"]["DocumentListRow"] | null;
             /** Document Id */
             document_id?: string | null;
             /**
@@ -2095,6 +2112,12 @@ export type components = {
          */
         DocumentDisplayStatus: "queued" | "processing" | "ready" | "failed" | "archived";
         /**
+         * DocumentFileType
+         * @description Normalized file types for documents.
+         * @enum {string}
+         */
+        DocumentFileType: "xlsx" | "xls" | "csv" | "pdf" | "unknown";
+        /**
          * DocumentLastRun
          * @description Minimal representation of the last engine execution for a document.
          */
@@ -2116,6 +2139,100 @@ export type components = {
              * @description Optional status or error message associated with the execution.
              */
             message?: string | null;
+        };
+        /**
+         * DocumentListPage
+         * @description Paginated envelope of document list rows.
+         */
+        DocumentListPage: {
+            /** Items */
+            items: components["schemas"]["DocumentListRow"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Has Next */
+            has_next: boolean;
+            /** Has Previous */
+            has_previous: boolean;
+            /** Total */
+            total?: number | null;
+            /**
+             * Changes Cursor
+             * @description Watermark cursor for the documents change feed at response time.
+             */
+            changes_cursor: string;
+        };
+        /**
+         * DocumentListRow
+         * @description Table-ready projection for document list rows.
+         */
+        DocumentListRow: {
+            /**
+             * Id
+             * Format: uuid
+             * @description Document UUIDv7 (RFC 9562).
+             */
+            id: string;
+            /**
+             * Workspace Id
+             * Format: uuid
+             * @description UUIDv7 (RFC 9562) generated in the application layer.
+             */
+            workspace_id: string;
+            /**
+             * Name
+             * @description Display name mapped from the original filename.
+             */
+            name: string;
+            file_type: components["schemas"]["DocumentFileType"];
+            status: components["schemas"]["DocumentDisplayStatus"];
+            /** Stage */
+            stage?: string | null;
+            /** Uploader Label */
+            uploader_label?: string | null;
+            /** Assignee User Id */
+            assignee_user_id?: string | null;
+            /** Assignee Key */
+            assignee_key?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Byte Size */
+            byte_size: number;
+            /** Size Label */
+            size_label: string;
+            queue_state?: components["schemas"]["DocumentQueueState"] | null;
+            queue_reason?: components["schemas"]["DocumentQueueReason"] | null;
+            mapping_health: components["schemas"]["DocumentMappingHealth"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Activity At
+             * Format: date-time
+             */
+            activity_at: string;
+            last_run?: components["schemas"]["DocumentLastRun"] | null;
+            last_successful_run?: components["schemas"]["DocumentLastRun"] | null;
+        };
+        /**
+         * DocumentMappingHealth
+         * @description Mapping health summary for a document.
+         */
+        DocumentMappingHealth: {
+            /** Attention */
+            attention: number;
+            /** Unmapped */
+            unmapped: number;
+            /** Pending */
+            pending?: boolean | null;
         };
         /**
          * DocumentOut
@@ -2189,29 +2306,6 @@ export type components = {
             last_run?: components["schemas"]["DocumentLastRun"] | null;
             /** @description Latest successful run execution associated with the document when available. */
             last_successful_run?: components["schemas"]["DocumentLastRun"] | null;
-        };
-        /**
-         * DocumentPage
-         * @description Paginated envelope of document records.
-         */
-        DocumentPage: {
-            /** Items */
-            items: components["schemas"]["DocumentOut"][];
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Has Next */
-            has_next: boolean;
-            /** Has Previous */
-            has_previous: boolean;
-            /** Total */
-            total?: number | null;
-            /**
-             * Changes Cursor
-             * @description Watermark cursor for the documents change feed at response time.
-             */
-            changes_cursor: string;
         };
         /**
          * DocumentQueueReason
@@ -3889,7 +3983,7 @@ export type components = {
     requestBodies: never;
     headers: never;
     pathItems: never;
-};
+}
 export type $defs = Record<string, never>;
 export interface operations {
     read_health_api_v1_health_get: {
@@ -5816,7 +5910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentPage"];
+                    "application/json": components["schemas"]["DocumentListPage"];
                 };
             };
             /** @description Query parameters are invalid or unsupported. */
@@ -6743,6 +6837,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    read_document_list_row_api_v1_workspaces__workspace_id__documents__document_id__listRow_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace identifier */
+                workspace_id: string;
+                /** @description Document identifier */
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentListRow"];
+                };
+            };
+            /** @description Authentication required to access documents. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Workspace permissions do not allow document access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Document not found within the workspace. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

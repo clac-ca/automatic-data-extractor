@@ -12,6 +12,7 @@ from ade_api.features.documents.router import router as documents_router
 from ade_api.features.documents.router import tags_router as document_tags_router
 from ade_api.features.health.router import router as health_router
 from ade_api.features.me.router import router as me_router
+from ade_api.features.presence.router import router as presence_router
 from ade_api.features.rbac.router import router as rbac_router
 from ade_api.features.rbac.router import user_roles_router as rbac_user_roles_router
 from ade_api.features.runs.router import router as runs_router
@@ -36,6 +37,7 @@ def create_api_router(settings: Settings) -> APIRouter:
     api_router.include_router(workspace_members_router)
     api_router.include_router(documents_router)
     api_router.include_router(document_tags_router)
+    api_router.include_router(presence_router)
     api_router.include_router(configurations_router)
     api_router.include_router(builds_router)
     api_router.include_router(runs_router)

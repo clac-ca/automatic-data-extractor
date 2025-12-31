@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { useMemo } from "react";
 
 const SIZE_STYLES = {
+  xs: "h-6 w-6 text-[10px]",
   sm: "h-8 w-8 text-sm",
   md: "h-10 w-10 text-base",
   lg: "h-12 w-12 text-lg",

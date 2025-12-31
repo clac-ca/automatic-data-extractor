@@ -3,12 +3,14 @@ import type { DocumentUploadResponse } from "@shared/documents";
 import type { UploadManagerItem } from "@shared/documents/uploadManager";
 
 export type DocumentRecord = components["schemas"]["DocumentOut"];
-export type DocumentPage = components["schemas"]["DocumentPage"];
-export type DocumentPageResult = DocumentPage & { changesCursorHeader?: string | null };
+export type DocumentListRow = components["schemas"]["DocumentListRow"];
+export type DocumentListPage = components["schemas"]["DocumentListPage"];
+export type DocumentPageResult = DocumentListPage & { changesCursorHeader?: string | null };
 export type DocumentChangeEntry = components["schemas"]["DocumentChangeEntry"];
 export type DocumentChangesPage = components["schemas"]["DocumentChangesPage"];
 export type ApiDocumentStatus = components["schemas"]["DocumentStatus"];
 export type ApiDocumentDisplayStatus = components["schemas"]["DocumentDisplayStatus"];
+export type DocumentMappingHealth = components["schemas"]["DocumentMappingHealth"];
 export type DocumentQueueState = components["schemas"]["DocumentQueueState"];
 export type DocumentQueueReason = components["schemas"]["DocumentQueueReason"];
 export type DocumentLastRun = components["schemas"]["DocumentLastRun"];
@@ -26,7 +28,7 @@ export type RunMetricsResource = components["schemas"]["RunMetricsResource"];
 export type ConfigurationPage = components["schemas"]["ConfigurationPage"];
 export type ConfigurationRecord = components["schemas"]["ConfigurationRecord"];
 
-export type DocumentStatus = "queued" | "processing" | "ready" | "failed" | "archived";
+export type DocumentStatus = components["schemas"]["DocumentDisplayStatus"];
 export type ViewMode = "grid" | "board";
 export type BoardGroup = "status" | "tag" | "uploader";
 
@@ -63,11 +65,7 @@ export type SavedView = {
   filters: DocumentsFilters;
 };
 
-export type MappingHealth = {
-  attention: number;
-  unmapped: number;
-  pending?: boolean;
-};
+export type MappingHealth = DocumentMappingHealth;
 
 export type DocumentError = {
   summary: string;
@@ -95,33 +93,14 @@ export type DocumentComment = {
   mentions: { key: string; label: string }[];
 };
 
-export type DocumentEntry = {
-  id: string;
-  name: string;
-  status: DocumentStatus;
-  fileType: FileType;
-  uploader: string | null;
-
-  /** Collaborative fields (local-first until backend supports them). */
-  assigneeKey: string | null;
-  assigneeLabel: string | null;
-  commentCount: number;
-
-  tags: string[];
-  createdAt: number;
-  updatedAt: number;
-  size: string;
-
-  stage?: string;
+export type DocumentEntry = DocumentListRow & {
+  /** Local-only UI fields. */
+  assignee_label: string | null;
+  comment_count: number;
   progress?: number;
   error?: DocumentError;
-  mapping: MappingHealth;
-
-  record?: DocumentRecord;
   upload?: UploadManagerItem<DocumentUploadResponse>;
-
-  queueState?: DocumentQueueState | null;
-  queueReason?: DocumentQueueReason | null;
+  record?: DocumentListRow;
 };
 
 export type BoardColumn = {

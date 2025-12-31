@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ChevronDownSmallIcon, PlusIcon, TrashIcon } from "@ui/Icons";
+import { ChevronDownSmallIcon, EyeIcon, PlusIcon, TrashIcon } from "@ui/Icons";
 
 import type { SavedView } from "../types";
 import { buildBuiltInViews, type BuiltInViewCounts, type BuiltInViewId } from "../filters";
@@ -54,10 +54,11 @@ export function ViewsPopover({
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm hover:border-brand-300"
+        className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm hover:border-brand-300"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
+        <EyeIcon className="h-4 w-4" />
         <span>Views</span>
         <span className="max-w-[10rem] truncate text-[11px] font-medium text-muted-foreground">{activeLabel}</span>
         <ChevronDownSmallIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />

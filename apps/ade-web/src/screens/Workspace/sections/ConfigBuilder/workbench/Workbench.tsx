@@ -140,7 +140,7 @@ type WorkbenchUploadPlan = {
   readonly skipped: readonly { readonly relativePath: string; readonly reason: string }[];
 };
 
-type DocumentRecord = components["schemas"]["DocumentOut"];
+type DocumentRow = components["schemas"]["DocumentListRow"];
 type RunLogLevel = "DEBUG" | "INFO" | "WARNING" | "ERROR";
 const RUN_LOG_LEVEL_OPTIONS: Array<{ value: RunLogLevel; label: string }> = [
   { value: "DEBUG", label: "Debug" },
@@ -950,7 +950,7 @@ export function Workbench({
     if (!ready) {
       return;
     }
-    let document: DocumentRecord | null = null;
+    let document: DocumentRow | null = null;
     try {
       const documents = await fetchRecentDocuments(workspaceId);
       document = documents[0] ?? null;
@@ -2594,7 +2594,7 @@ function RunExtractionDialog({
   onRun,
 }: RunExtractionDialogProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const documentsQuery = useQuery<DocumentRecord[]>({
+  const documentsQuery = useQuery<DocumentRow[]>({
     queryKey: ["builder-documents", workspaceId],
     queryFn: ({ signal }) => fetchRecentDocuments(workspaceId, signal),
     staleTime: 60_000,
@@ -2841,12 +2841,12 @@ function RunExtractionDialog({
   return typeof document === "undefined" ? null : createPortal(content, document.body);
 }
 
-async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRecord[]> {
+async function fetchRecentDocuments(workspaceId: string, signal?: AbortSignal): Promise<DocumentRow[]> {
   const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents", {
     params: { path: { workspace_id: workspaceId }, query: { sort: "-created_at", page_size: 50 } },
     signal,
   });
-  return ((data as components["schemas"]["DocumentPage"] | undefined)?.items ?? []) as DocumentRecord[];
+  return data?.items ?? [];
 }
 
 function formatDocumentTimestamp(value: string | null | undefined): string {

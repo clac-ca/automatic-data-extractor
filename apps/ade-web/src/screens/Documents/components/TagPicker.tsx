@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { client } from "@shared/api/client";
@@ -30,8 +30,19 @@ export function TagPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listId = useId();
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpen((prev) => {
+      if (prev) setQuery("");
+      return !prev;
+    });
+  }, []);
 
   const effectiveQuery = query.trim();
   const canSearch = effectiveQuery.length >= 2;
@@ -81,35 +92,37 @@ export function TagPicker({
 
   useEffect(() => {
     if (!open) return;
-
-    const onClick = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        setOpen(false);
-      }
+      if (containerRef.current?.contains(target)) return;
+      close();
     };
-
-    const onKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        event.preventDefault();
+        close();
       }
     };
-
-    window.addEventListener("mousedown", onClick);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener("mousedown", onClick);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [close, open]);
 
   return (
-    <div className="relative" ref={containerRef} data-ignore-row-click="true">
+    <div
+      ref={containerRef}
+      className={clsx("relative", open ? "z-50" : "z-0")}
+      data-ignore-row-click="true"
+    >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         disabled={disabled}
+        ref={triggerRef}
         className={clsx(
           "inline-flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
           disabled
@@ -137,7 +150,7 @@ export function TagPicker({
 
       {open ? (
         <div
-          className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-[20rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
+          className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-[20rem] rounded-2xl border border-border bg-card p-3 shadow-lg"
           data-ignore-row-click="true"
           role="listbox"
           id={listId}
@@ -224,9 +237,7 @@ export function TagPicker({
             )}
           </div>
 
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            Click a tag to toggle it.
-          </div>
+          <div className="mt-2 text-[11px] text-muted-foreground">Click a tag to toggle it.</div>
         </div>
       ) : null}
     </div>

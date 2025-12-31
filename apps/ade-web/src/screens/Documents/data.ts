@@ -3,19 +3,13 @@ import { client } from "@shared/api/client";
 import type { RunResource } from "@schema";
 
 import type {
-  ApiDocumentDisplayStatus,
-  ApiDocumentStatus,
-  DocumentEntry,
   DocumentLastRun,
+  DocumentListRow,
   DocumentPageResult,
   DocumentRecord,
   DocumentStatus,
   DocumentsFilters,
-  DocumentQueueReason,
-  DocumentQueueState,
-  FileType,
   ListDocumentsQuery,
-  MappingHealth,
   RunMetricsResource,
   WorkspaceMemberPage,
   WorkbookPreview,
@@ -25,11 +19,8 @@ import {
   buildHeaders,
   buildNormalizedFilename,
   extractFilename,
-  fileTypeFromName,
-  formatBytes,
   normalizeCell,
   normalizeRow,
-  parseTimestamp,
   triggerDownload,
 } from "./utils";
 
@@ -94,6 +85,19 @@ export async function fetchWorkspaceDocumentById(
     signal,
   });
   if (!data) throw new Error("Expected document payload.");
+  return data;
+}
+
+export async function fetchWorkspaceDocumentRowById(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<DocumentListRow> {
+  const { data } = await client.GET("/api/v1/workspaces/{workspace_id}/documents/{document_id}/listRow", {
+    params: { path: { workspace_id: workspaceId, document_id: documentId } },
+    signal,
+  });
+  if (!data) throw new Error("Expected document list row payload.");
   return data;
 }
 
@@ -171,43 +175,6 @@ export async function fetchWorkbookPreview(url: string, signal?: AbortSignal): P
   });
 
   return { sheets };
-}
-
-export function buildDocumentEntry(document: DocumentRecord): DocumentEntry {
-  const status = resolveDisplayStatus(document);
-  const uploader = deriveUploaderLabel(document);
-  const createdAt = parseTimestamp(document.created_at);
-  const updatedAt = resolveDocumentUpdatedAt(document);
-  const stage = buildStageLabel(status, document.last_run, document.queue_state, document.queue_reason);
-  const mapping = deriveMappingHealth(document);
-  const queueState = document.queue_state ?? null;
-  const queueReason = document.queue_reason ?? null;
-
-  const fileType: FileType = fileTypeFromName(document.name);
-  const assigneeKey = document.assignee_user_id ? `user:${document.assignee_user_id}` : null;
-
-  return {
-    id: document.id,
-    name: document.name,
-    status,
-    fileType,
-    uploader,
-    tags: document.tags ?? [],
-    createdAt,
-    updatedAt,
-    size: formatBytes(document.byte_size),
-    stage,
-    error: status === "failed" ? buildDocumentError(document) : undefined,
-    mapping,
-    queueState,
-    queueReason,
-
-    assigneeKey,
-    assigneeLabel: null,
-    commentCount: 0,
-
-    record: document,
-  };
 }
 
 export async function downloadOriginalDocument(
@@ -386,163 +353,11 @@ export function runHasDownloadableOutput(run: RunResource | null) {
   return Boolean(runOutputDownloadUrl(run));
 }
 
-export function getDocumentOutputRun(document: DocumentRecord | null | undefined): DocumentLastRun | null {
+export function getDocumentOutputRun(document: DocumentListRow | DocumentRecord | null | undefined): DocumentLastRun | null {
   if (!document) return null;
   if (document.last_successful_run) return document.last_successful_run;
   if (document.last_run?.status === "succeeded") return document.last_run;
   return null;
-}
-
-export function mapApiStatus(status: ApiDocumentStatus): DocumentStatus {
-  switch (status) {
-    case "processed":
-      return "ready";
-    case "processing":
-      return "processing";
-    case "failed":
-      return "failed";
-    case "archived":
-      return "archived";
-    case "uploaded":
-      return "queued";
-    default:
-      return "queued";
-  }
-}
-
-function deriveDocumentStatus(document: DocumentRecord): DocumentStatus {
-  if (document.status === "archived") return "archived";
-
-  const lastRunStatus = document.last_run?.status;
-  switch (lastRunStatus) {
-    case "queued":
-      return "queued";
-    case "running":
-      return "processing";
-    case "succeeded":
-      return "ready";
-    case "failed":
-    case "cancelled":
-      return "failed";
-    default:
-      break;
-  }
-
-  return mapApiStatus(document.status);
-}
-
-function resolveDocumentUpdatedAt(document: DocumentRecord): number {
-  if (document.activity_at) {
-    return parseTimestamp(document.activity_at);
-  }
-  const updatedAt = parseTimestamp(document.updated_at);
-  if (!document.last_run_at) return updatedAt;
-
-  const lastRunAt = parseTimestamp(document.last_run_at);
-  return Math.max(updatedAt, lastRunAt);
-}
-
-function resolveDisplayStatus(document: DocumentRecord): DocumentStatus {
-  const display = document.display_status as ApiDocumentDisplayStatus | undefined;
-  if (display) {
-    return display as DocumentStatus;
-  }
-  return deriveDocumentStatus(document);
-}
-
-export function deriveUploaderLabel(document: DocumentRecord): string | null {
-  const metadata = document.metadata ?? {};
-  const ownerFromMetadata = readOwnerFromMetadata(metadata);
-  if (ownerFromMetadata) return ownerFromMetadata;
-
-  const uploader = document.uploader;
-  if (uploader?.name || uploader?.email) return uploader.name ?? uploader.email ?? "Unassigned";
-  return null;
-}
-
-function readOwnerFromMetadata(metadata: Record<string, unknown>): string | null {
-  const ownerName = typeof metadata.owner === "string" ? metadata.owner : undefined;
-  const ownerEmail = typeof metadata.owner_email === "string" ? metadata.owner_email : undefined;
-  return ownerName || ownerEmail ? ownerName ?? ownerEmail ?? null : null;
-}
-
-export function deriveMappingHealth(document: DocumentRecord): MappingHealth {
-  const metadata = document.metadata ?? {};
-  const fromMetadata = readMappingFromMetadata(metadata);
-  if (fromMetadata) return fromMetadata;
-
-  if (document.status === "uploaded" || document.status === "processing") {
-    return { attention: 0, unmapped: 0, pending: true };
-  }
-  return { attention: 0, unmapped: 0 };
-}
-
-function readMappingFromMetadata(metadata: Record<string, unknown>): MappingHealth | null {
-  const candidate = metadata.mapping ?? metadata.mapping_health ?? metadata.mapping_quality;
-  if (candidate && typeof candidate === "object") {
-    const record = candidate as Record<string, unknown>;
-    const attention =
-      typeof record.issues === "number"
-        ? record.issues
-        : typeof record.attention === "number"
-          ? record.attention
-          : 0;
-    const unmapped = typeof record.unmapped === "number" ? record.unmapped : 0;
-    const pending = typeof record.status === "string" && record.status === "pending";
-    return { attention, unmapped, pending: pending || undefined };
-  }
-
-  const attention = typeof metadata.mapping_issues === "number" ? metadata.mapping_issues : null;
-  const unmapped = typeof metadata.unmapped_columns === "number" ? metadata.unmapped_columns : null;
-  if (attention !== null || unmapped !== null) {
-    return { attention: attention ?? 0, unmapped: unmapped ?? 0 };
-  }
-
-  return null;
-}
-
-function buildStageLabel(
-  status: DocumentStatus,
-  lastRun: DocumentLastRun | null | undefined,
-  queueState: DocumentQueueState | null | undefined,
-  queueReason: DocumentQueueReason | null | undefined,
-) {
-  const queuedLabel = buildQueueLabel(queueState, queueReason);
-  if (queuedLabel) return queuedLabel;
-  if (status === "queued") return "Queued for processing";
-  if (status === "processing") {
-    if (lastRun?.status === "queued") return "Queued for processing";
-    return "Processing output";
-  }
-  return undefined;
-}
-
-function buildQueueLabel(
-  queueState: DocumentQueueState | null | undefined,
-  queueReason: DocumentQueueReason | null | undefined,
-) {
-  if (!queueState) return null;
-  if (queueState === "queued") return "Queued for processing";
-  if (queueState !== "waiting") return null;
-  switch (queueReason) {
-    case "processing_paused":
-      return "Processing paused";
-    case "queue_full":
-      return "Waiting for capacity";
-    case "no_active_configuration":
-      return "Waiting for configuration";
-    default:
-      return "Waiting to start";
-  }
-}
-
-function buildDocumentError(document: DocumentRecord) {
-  const message = document.last_run?.message?.trim();
-  return {
-    summary: message ?? "Processing failed",
-    detail: message ?? "We could not complete normalization for this file.",
-    nextStep: "Retry now or fix mapping later.",
-  };
 }
 
 export function buildStatusDescription(status: DocumentStatus, run?: RunResource | null) {

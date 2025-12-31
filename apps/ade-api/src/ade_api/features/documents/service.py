@@ -67,12 +67,15 @@ from .repository import DocumentsRepository
 from .schemas import (
     DocumentChangeEntry,
     DocumentChangesPage,
+    DocumentFileType,
     DocumentLastRun,
+    DocumentListPage,
+    DocumentListRow,
+    DocumentMappingHealth,
     DocumentDisplayStatus,
     DocumentQueueReason,
     DocumentQueueState,
     DocumentOut,
-    DocumentPage,
     DocumentSheet,
     DocumentUpdateRequest,
     DocumentUploadSessionCreateRequest,
@@ -243,7 +246,7 @@ class DocumentsService:
         order_by: OrderBy,
         filters: DocumentFilters,
         actor: User | None = None,
-    ) -> DocumentPage:
+    ) -> DocumentListPage:
         """Return paginated documents with the shared envelope."""
 
         actor_id: UUID | None = actor.id if actor is not None else None
@@ -292,8 +295,10 @@ class DocumentsService:
             ),
         )
 
-        return DocumentPage(
-            items=items,
+        rows = [self._build_list_row(item) for item in items]
+
+        return DocumentListPage(
+            items=rows,
             page=page_result.page,
             page_size=page_result.page_size,
             has_next=page_result.has_next,
@@ -562,6 +567,31 @@ class DocumentsService:
             ),
         )
         return payload
+
+    async def get_document_list_row(self, *, workspace_id: UUID, document_id: UUID) -> DocumentListRow:
+        """Return a table-ready row projection for ``document_id``."""
+
+        logger.debug(
+            "document.list_row.start",
+            extra=log_context(workspace_id=workspace_id, document_id=document_id),
+        )
+        document = await self._get_document(workspace_id, document_id)
+        payload = DocumentOut.model_validate(document)
+        await self._attach_last_runs(workspace_id, [payload])
+        queue_context = await self.build_queue_context(workspace_id=workspace_id)
+        self._apply_derived_fields(payload, queue_context)
+        row = self._build_list_row(payload)
+
+        logger.info(
+            "document.list_row.success",
+            extra=log_context(
+                workspace_id=workspace_id,
+                document_id=document_id,
+                status=document.status,
+                byte_size=document.byte_size,
+            ),
+        )
+        return row
 
     async def update_document(
         self,
@@ -1275,6 +1305,41 @@ class DocumentsService:
         elif not context.queue_has_capacity:
             document.queue_reason = DocumentQueueReason.QUEUE_FULL
 
+    def _build_list_row(self, document: DocumentOut) -> DocumentListRow:
+        status = document.display_status or self._derive_display_status(document)
+        activity_at = document.activity_at or document.updated_at
+        mapping_health = self._derive_mapping_health(document)
+        stage = self._build_stage_label(
+            status=status,
+            last_run=document.last_run,
+            queue_state=document.queue_state,
+            queue_reason=document.queue_reason,
+        )
+        assignee_key = f"user:{document.assignee_user_id}" if document.assignee_user_id else None
+
+        return DocumentListRow(
+            id=document.id,
+            workspace_id=document.workspace_id,
+            name=document.name,
+            file_type=self._derive_file_type(document.name),
+            status=status,
+            stage=stage,
+            uploader_label=self._derive_uploader_label(document),
+            assignee_user_id=document.assignee_user_id,
+            assignee_key=assignee_key,
+            tags=document.tags,
+            byte_size=document.byte_size,
+            size_label=self._format_bytes(document.byte_size),
+            queue_state=document.queue_state,
+            queue_reason=document.queue_reason,
+            mapping_health=mapping_health,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            activity_at=activity_at,
+            last_run=document.last_run,
+            last_successful_run=document.last_successful_run,
+        )
+
     @staticmethod
     def _derive_display_status(document: DocumentOut) -> DocumentDisplayStatus:
         if document.status == DocumentStatus.ARCHIVED:
@@ -1286,6 +1351,134 @@ class DocumentsService:
         if document.status == DocumentStatus.PROCESSING:
             return DocumentDisplayStatus.PROCESSING
         return DocumentDisplayStatus.QUEUED
+
+    @staticmethod
+    def _derive_file_type(name: str) -> DocumentFileType:
+        suffix = Path(name).suffix.lower().lstrip(".")
+        if suffix == "xlsx":
+            return DocumentFileType.XLSX
+        if suffix == "xls":
+            return DocumentFileType.XLS
+        if suffix == "csv":
+            return DocumentFileType.CSV
+        if suffix == "pdf":
+            return DocumentFileType.PDF
+        return DocumentFileType.UNKNOWN
+
+    @staticmethod
+    def _format_bytes(byte_size: int) -> str:
+        if byte_size <= 0:
+            return "0 B"
+        units = ["B", "KB", "MB", "GB"]
+        size = float(byte_size)
+        unit_index = 0
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        precision = 0 if size >= 10 or unit_index == 0 else 1
+        return f"{size:.{precision}f} {units[unit_index]}"
+
+    @staticmethod
+    def _read_owner_from_metadata(metadata: Mapping[str, Any]) -> str | None:
+        owner = metadata.get("owner")
+        if isinstance(owner, str):
+            candidate = owner.strip()
+            if candidate:
+                return candidate
+        owner_email = metadata.get("owner_email")
+        if isinstance(owner_email, str):
+            candidate = owner_email.strip()
+            if candidate:
+                return candidate
+        return None
+
+    @classmethod
+    def _derive_uploader_label(cls, document: DocumentOut) -> str | None:
+        metadata = document.metadata or {}
+        owner = cls._read_owner_from_metadata(metadata)
+        if owner:
+            return owner
+        uploader = document.uploader
+        if uploader and (uploader.name or uploader.email):
+            return uploader.name or uploader.email
+        return None
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        return None
+
+    @classmethod
+    def _derive_mapping_health(cls, document: DocumentOut) -> DocumentMappingHealth:
+        metadata = document.metadata or {}
+        candidate = (
+            metadata.get("mapping") or metadata.get("mapping_health") or metadata.get("mapping_quality")
+        )
+        if isinstance(candidate, Mapping):
+            attention = cls._coerce_int(candidate.get("issues"))
+            if attention is None:
+                attention = cls._coerce_int(candidate.get("attention")) or 0
+            unmapped = cls._coerce_int(candidate.get("unmapped")) or 0
+            pending = candidate.get("status") == "pending"
+            return DocumentMappingHealth(
+                attention=attention,
+                unmapped=unmapped,
+                pending=True if pending else None,
+            )
+
+        attention = cls._coerce_int(metadata.get("mapping_issues"))
+        unmapped = cls._coerce_int(metadata.get("unmapped_columns"))
+        if attention is not None or unmapped is not None:
+            return DocumentMappingHealth(
+                attention=attention or 0,
+                unmapped=unmapped or 0,
+            )
+
+        if document.status in {DocumentStatus.UPLOADED, DocumentStatus.PROCESSING}:
+            return DocumentMappingHealth(attention=0, unmapped=0, pending=True)
+
+        return DocumentMappingHealth(attention=0, unmapped=0)
+
+    @staticmethod
+    def _build_queue_label(
+        queue_state: DocumentQueueState | None,
+        queue_reason: DocumentQueueReason | None,
+    ) -> str | None:
+        if queue_state == DocumentQueueState.QUEUED:
+            return "Queued for processing"
+        if queue_state != DocumentQueueState.WAITING:
+            return None
+        if queue_reason == DocumentQueueReason.PROCESSING_PAUSED:
+            return "Processing paused"
+        if queue_reason == DocumentQueueReason.QUEUE_FULL:
+            return "Waiting for capacity"
+        if queue_reason == DocumentQueueReason.NO_ACTIVE_CONFIGURATION:
+            return "Waiting for configuration"
+        return "Waiting to start"
+
+    def _build_stage_label(
+        self,
+        *,
+        status: DocumentDisplayStatus,
+        last_run: DocumentLastRun | None,
+        queue_state: DocumentQueueState | None,
+        queue_reason: DocumentQueueReason | None,
+    ) -> str | None:
+        queued_label = self._build_queue_label(queue_state, queue_reason)
+        if queued_label:
+            return queued_label
+        if status == DocumentDisplayStatus.QUEUED:
+            return "Queued for processing"
+        if status == DocumentDisplayStatus.PROCESSING:
+            if last_run and last_run.status == RunStatus.QUEUED:
+                return "Queued for processing"
+            return "Processing output"
+        return None
 
     @staticmethod
     def _status_from_last_run(status: RunStatus | None) -> DocumentStatus:
@@ -1644,10 +1837,11 @@ class DocumentsService:
         if change.type == DocumentChangeType.UPSERT:
             document = DocumentOut.model_validate(change.payload)
             self._apply_derived_fields(document, queue_context)
+            row = self._build_list_row(document)
             return DocumentChangeEntry(
                 cursor=cursor,
                 type="document.upsert",
-                document=document,
+                row=row,
                 occurred_at=change.occurred_at,
             )
         return DocumentChangeEntry(

@@ -50,7 +50,7 @@ export function ListSettingsPopover({
         type="button"
         onClick={() => setOpen((value) => !value)}
         className={clsx(
-          "inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-sm transition",
+          "inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold shadow-sm transition",
           open ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         )}
         aria-expanded={open}

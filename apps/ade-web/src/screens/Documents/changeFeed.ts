@@ -1,7 +1,7 @@
 import type { InfiniteData } from "@tanstack/react-query";
 
-import type { DocumentChangeEntry, DocumentPageResult, DocumentRecord, DocumentsFilters, DocumentStatus } from "./types";
-import { fileTypeFromName, parseTimestamp } from "./utils";
+import type { DocumentChangeEntry, DocumentListRow, DocumentPageResult, DocumentsFilters, DocumentStatus } from "./types";
+import { parseTimestamp } from "./utils";
 import { UNASSIGNED_KEY } from "./filters";
 
 type MergeOptions = {
@@ -21,7 +21,7 @@ export function mergeDocumentChangeIntoPages(
   change: DocumentChangeEntry,
   options: MergeOptions,
 ): MergeChangeResult {
-  const id = change.document_id ?? change.document?.id;
+  const id = change.document_id ?? change.row?.id;
   if (!id) {
     return { data: existing, updatesAvailable: false, applied: false };
   }
@@ -44,8 +44,8 @@ export function mergeDocumentChangeIntoPages(
       };
     }
 
-    if (change.type === "document.upsert" && change.document) {
-      const nextDoc = change.document;
+    if (change.type === "document.upsert" && change.row) {
+      const nextDoc = change.row;
       if (!matchesDocumentFilters(nextDoc, options.filters, options.search)) {
         applied = true;
         updatesAvailable = true;
@@ -68,8 +68,8 @@ export function mergeDocumentChangeIntoPages(
     return page;
   });
 
-  if (!found && change.type === "document.upsert" && change.document) {
-    if (matchesDocumentFilters(change.document, options.filters, options.search)) {
+  if (!found && change.type === "document.upsert" && change.row) {
+    if (matchesDocumentFilters(change.row, options.filters, options.search)) {
       updatesAvailable = true;
     }
   }
@@ -86,7 +86,7 @@ export function mergeDocumentChangeIntoPages(
 }
 
 export function matchesDocumentFilters(
-  document: DocumentRecord,
+  document: DocumentListRow,
   filters: DocumentsFilters,
   search: string,
 ): boolean {
@@ -94,8 +94,12 @@ export function matchesDocumentFilters(
   const hasSearch = searchValue.length >= 2;
 
   if (hasSearch) {
-    const uploader = document.uploader?.name ?? document.uploader?.email ?? "";
-    const haystack = [document.name, uploader, (document.tags ?? []).join(" "), fileTypeFromName(document.name)]
+    const haystack = [
+      document.name,
+      document.uploader_label ?? "",
+      (document.tags ?? []).join(" "),
+      document.file_type,
+    ]
       .join(" ")
       .toLowerCase();
     if (!haystack.includes(searchValue)) return false;
@@ -103,13 +107,12 @@ export function matchesDocumentFilters(
 
   const statusFilters = filters.statuses;
   if (statusFilters.length > 0) {
-    const status = (document.display_status as DocumentStatus | undefined) ?? "queued";
+    const status = (document.status as DocumentStatus | undefined) ?? "queued";
     if (!statusFilters.includes(status)) return false;
   }
 
   if (filters.fileTypes.length > 0) {
-    const fileType = fileTypeFromName(document.name);
-    if (!filters.fileTypes.includes(fileType)) return false;
+    if (!filters.fileTypes.includes(document.file_type)) return false;
   }
 
   if (filters.tags.length > 0) {
@@ -123,9 +126,8 @@ export function matchesDocumentFilters(
 
   if (filters.assignees.length > 0) {
     const includeUnassigned = filters.assignees.includes(UNASSIGNED_KEY);
-    const assigneeId = document.assignee_user_id;
-    if (assigneeId) {
-      const assigneeKey = `user:${assigneeId}`;
+    const assigneeKey = document.assignee_key;
+    if (assigneeKey) {
       if (!filters.assignees.includes(assigneeKey)) return false;
     } else if (!includeUnassigned) {
       return false;
@@ -135,7 +137,7 @@ export function matchesDocumentFilters(
   return true;
 }
 
-function shouldFlagReorder(prevDoc: DocumentRecord, nextDoc: DocumentRecord, sort: string | null): boolean {
+function shouldFlagReorder(prevDoc: DocumentListRow, nextDoc: DocumentListRow, sort: string | null): boolean {
   if (!sort) return false;
   const field = sort.replace(/^-/, "");
   switch (field) {
@@ -150,7 +152,7 @@ function shouldFlagReorder(prevDoc: DocumentRecord, nextDoc: DocumentRecord, sor
       return prevValue !== nextValue;
     }
     case "display_status":
-      return prevDoc.display_status !== nextDoc.display_status;
+      return prevDoc.status !== nextDoc.status;
     default:
       return false;
   }

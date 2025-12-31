@@ -1,6 +1,5 @@
 import clsx from "clsx";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Input } from "@ui/Input";
 import type { WorkspacePerson } from "../types";
 import { UNASSIGNED_KEY } from "../filters";
@@ -28,10 +27,21 @@ export function PeoplePicker({
   onOpenChange?: (open: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpen((prev) => {
+      if (prev) setQuery("");
+      return !prev;
+    });
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -44,28 +54,26 @@ export function PeoplePicker({
   }, [onOpenChange, open]);
 
   useEffect(() => {
-    function onClickOutside(event: MouseEvent) {
-      if (!open) return;
+    if (!open) return;
+    const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node | null;
-      if (containerRef.current && target && !containerRef.current.contains(target)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (!open) return;
-      if (event.key === "Escape") {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    window.addEventListener("mousedown", onClickOutside);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("mousedown", onClickOutside);
-      window.removeEventListener("keydown", onKeyDown);
+      if (!target) return;
+      if (containerRef.current?.contains(target)) return;
+      close();
     };
-  }, [open]);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+      }
+    };
+    window.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [close, open]);
 
   const allOptions = useMemo(() => {
     const base = people.slice().sort((a, b) => a.label.localeCompare(b.label));
@@ -90,8 +98,7 @@ export function PeoplePicker({
 
     if (!multiple) {
       onChange([key]);
-      setOpen(false);
-      setQuery("");
+      close();
       return;
     }
     const next = new Set(value);
@@ -110,11 +117,16 @@ export function PeoplePicker({
         : selectedLabels[0];
 
   return (
-    <div ref={containerRef} className="relative" data-ignore-row-click="true">
+    <div
+      ref={containerRef}
+      className={clsx("relative", open ? "z-50" : "z-0")}
+      data-ignore-row-click="true"
+    >
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
+        ref={triggerRef}
         className={clsx(
           "inline-flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition",
           disabled ? "opacity-60" : "hover:bg-background",
@@ -139,7 +151,7 @@ export function PeoplePicker({
 
       {open ? (
         <div
-          className="absolute left-0 z-30 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg"
+          className="absolute left-0 z-50 mt-2 w-72 rounded-2xl border border-border bg-card shadow-lg"
           role="listbox"
           id={listId}
           aria-multiselectable={multiple || undefined}
@@ -171,7 +183,9 @@ export function PeoplePicker({
                     aria-selected={selected}
                     className={clsx(
                       "flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition",
-                      selected ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200" : "hover:bg-background dark:hover:bg-muted/40",
+                      selected
+                        ? "bg-brand-50 text-foreground dark:bg-brand-500/20 dark:text-brand-200"
+                        : "hover:bg-background dark:hover:bg-muted/40",
                     )}
                   >
                     <span className="min-w-0 truncate font-semibold text-foreground">{person.label}</span>
@@ -191,14 +205,7 @@ export function PeoplePicker({
               >
                 Clear
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className="text-xs font-semibold text-brand-600"
-              >
+              <button type="button" onClick={close} className="text-xs font-semibold text-brand-600">
                 Done
               </button>
             </div>

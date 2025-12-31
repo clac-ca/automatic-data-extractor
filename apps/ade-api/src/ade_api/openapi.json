@@ -3513,7 +3513,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DocumentPage"
+                  "$ref": "#/components/schemas/DocumentListPage"
                 }
               }
             }
@@ -5017,6 +5017,83 @@
           },
           "422": {
             "description": "Tag payload is invalid."
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          },
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/documents/{document_id}/listRow": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Retrieve document list row",
+        "operationId": "read_document_list_row_api_v1_workspaces__workspace_id__documents__document_id__listRow_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Workspace identifier",
+              "title": "Workspace Id"
+            },
+            "description": "Workspace identifier"
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Document identifier",
+              "title": "Document Id"
+            },
+            "description": "Document identifier"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentListRow"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required to access documents."
+          },
+          "403": {
+            "description": "Workspace permissions do not allow document access."
+          },
+          "404": {
+            "description": "Document not found within the workspace."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -10170,10 +10247,10 @@
             ],
             "title": "Type"
           },
-          "document": {
+          "row": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DocumentOut"
+                "$ref": "#/components/schemas/DocumentListRow"
               },
               {
                 "type": "null"
@@ -10243,6 +10320,18 @@
         "title": "DocumentDisplayStatus",
         "description": "UI-friendly status derived from document + run state."
       },
+      "DocumentFileType": {
+        "type": "string",
+        "enum": [
+          "xlsx",
+          "xls",
+          "csv",
+          "pdf",
+          "unknown"
+        ],
+        "title": "DocumentFileType",
+        "description": "Normalized file types for documents."
+      },
       "DocumentLastRun": {
         "properties": {
           "run_id": {
@@ -10288,6 +10377,257 @@
         ],
         "title": "DocumentLastRun",
         "description": "Minimal representation of the last engine execution for a document."
+      },
+      "DocumentListPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentListRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_next": {
+            "type": "boolean",
+            "title": "Has Next"
+          },
+          "has_previous": {
+            "type": "boolean",
+            "title": "Has Previous"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "changes_cursor": {
+            "type": "string",
+            "title": "Changes Cursor",
+            "description": "Watermark cursor for the documents change feed at response time."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "page_size",
+          "has_next",
+          "has_previous",
+          "changes_cursor"
+        ],
+        "title": "DocumentListPage",
+        "description": "Paginated envelope of document list rows."
+      },
+      "DocumentListRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Document UUIDv7 (RFC 9562)."
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id",
+            "description": "UUIDv7 (RFC 9562) generated in the application layer."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display name mapped from the original filename."
+          },
+          "file_type": {
+            "$ref": "#/components/schemas/DocumentFileType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentDisplayStatus"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "uploader_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploader Label"
+          },
+          "assignee_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7 (RFC 9562) generated in the application layer."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee User Id"
+          },
+          "assignee_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Key"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "byte_size": {
+            "type": "integer",
+            "title": "Byte Size"
+          },
+          "size_label": {
+            "type": "string",
+            "title": "Size Label"
+          },
+          "queue_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queue_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentQueueReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mapping_health": {
+            "$ref": "#/components/schemas/DocumentMappingHealth"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Activity At"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_successful_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "file_type",
+          "status",
+          "byte_size",
+          "size_label",
+          "mapping_health",
+          "created_at",
+          "updated_at",
+          "activity_at"
+        ],
+        "title": "DocumentListRow",
+        "description": "Table-ready projection for document list rows."
+      },
+      "DocumentMappingHealth": {
+        "properties": {
+          "attention": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Attention"
+          },
+          "unmapped": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Unmapped"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "attention",
+          "unmapped"
+        ],
+        "title": "DocumentMappingHealth",
+        "description": "Mapping health summary for a document."
       },
       "DocumentOut": {
         "properties": {
@@ -10492,61 +10832,6 @@
         ],
         "title": "DocumentOut",
         "description": "Serialised representation of a stored document."
-      },
-      "DocumentPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentOut"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "page": {
-            "type": "integer",
-            "title": "Page"
-          },
-          "page_size": {
-            "type": "integer",
-            "title": "Page Size"
-          },
-          "has_next": {
-            "type": "boolean",
-            "title": "Has Next"
-          },
-          "has_previous": {
-            "type": "boolean",
-            "title": "Has Previous"
-          },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
-          },
-          "changes_cursor": {
-            "type": "string",
-            "title": "Changes Cursor",
-            "description": "Watermark cursor for the documents change feed at response time."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "page",
-          "page_size",
-          "has_next",
-          "has_previous",
-          "changes_cursor"
-        ],
-        "title": "DocumentPage",
-        "description": "Paginated envelope of document records."
       },
       "DocumentQueueReason": {
         "type": "string",

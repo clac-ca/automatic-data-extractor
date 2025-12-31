@@ -46,6 +46,16 @@ class DocumentQueueReason(str, Enum):
     PROCESSING_PAUSED = "processing_paused"
 
 
+class DocumentFileType(str, Enum):
+    """Normalized file types for documents."""
+
+    XLSX = "xlsx"
+    XLS = "xls"
+    CSV = "csv"
+    PDF = "pdf"
+    UNKNOWN = "unknown"
+
+
 def _fallback_display_status(status: DocumentStatus) -> DocumentDisplayStatus:
     if status == DocumentStatus.ARCHIVED:
         return DocumentDisplayStatus.ARCHIVED
@@ -296,8 +306,41 @@ class DocumentLastRun(BaseSchema):
     )
 
 
-class DocumentPage(Page[DocumentOut]):
-    """Paginated envelope of document records."""
+class DocumentMappingHealth(BaseSchema):
+    """Mapping health summary for a document."""
+
+    attention: int = Field(ge=0)
+    unmapped: int = Field(ge=0)
+    pending: bool | None = None
+
+
+class DocumentListRow(BaseSchema):
+    """Table-ready projection for document list rows."""
+
+    id: UUIDStr = Field(description="Document UUIDv7 (RFC 9562).")
+    workspace_id: UUIDStr
+    name: str = Field(description="Display name mapped from the original filename.")
+    file_type: DocumentFileType
+    status: DocumentDisplayStatus
+    stage: str | None = None
+    uploader_label: str | None = None
+    assignee_user_id: UUIDStr | None = None
+    assignee_key: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    byte_size: int
+    size_label: str
+    queue_state: DocumentQueueState | None = None
+    queue_reason: DocumentQueueReason | None = None
+    mapping_health: DocumentMappingHealth
+    created_at: datetime
+    updated_at: datetime
+    activity_at: datetime
+    last_run: DocumentLastRun | None = None
+    last_successful_run: DocumentLastRun | None = None
+
+
+class DocumentListPage(Page[DocumentListRow]):
+    """Paginated envelope of document list rows."""
 
     changes_cursor: str = Field(
         description="Watermark cursor for the documents change feed at response time.",
@@ -309,7 +352,7 @@ class DocumentChangeEntry(BaseSchema):
 
     cursor: str
     type: Literal["document.upsert", "document.deleted"]
-    document: DocumentOut | None = None
+    row: DocumentListRow | None = None
     document_id: UUIDStr | None = None
     occurred_at: datetime
 
@@ -317,8 +360,8 @@ class DocumentChangeEntry(BaseSchema):
     def _validate_payload(self) -> "DocumentChangeEntry":
         if self.type == "document.deleted" and not self.document_id:
             raise ValueError("document_id is required for document.deleted changes")
-        if self.type == "document.upsert" and self.document is None:
-            raise ValueError("document is required for document.upsert changes")
+        if self.type == "document.upsert" and self.row is None:
+            raise ValueError("row is required for document.upsert changes")
         return self
 
 
@@ -408,11 +451,14 @@ __all__ = [
     "DocumentChangeEntry",
     "DocumentChangesPage",
     "DocumentDisplayStatus",
+    "DocumentFileType",
+    "DocumentListPage",
+    "DocumentListRow",
+    "DocumentMappingHealth",
     "DocumentQueueReason",
     "DocumentQueueState",
     "DocumentLastRun",
     "DocumentOut",
-    "DocumentPage",
     "DocumentSheet",
     "DocumentTagsPatch",
     "DocumentTagsReplace",

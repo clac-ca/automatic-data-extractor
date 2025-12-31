@@ -63,7 +63,8 @@ from .schemas import (
     DocumentBatchTagsResponse,
     DocumentChangesPage,
     DocumentOut,
-    DocumentPage,
+    DocumentListPage,
+    DocumentListRow,
     DocumentSheet,
     DocumentTagsPatch,
     DocumentTagsReplace,
@@ -347,7 +348,7 @@ async def upload_document(
 
 @router.get(
     "",
-    response_model=DocumentPage,
+    response_model=DocumentListPage,
     status_code=status.HTTP_200_OK,
     summary="List documents",
     response_model_exclude_none=True,
@@ -371,7 +372,7 @@ async def list_documents(
     service: DocumentsServiceDep,
     response: Response,
     actor: DocumentReader,
-) -> DocumentPage:
+) -> DocumentListPage:
     page_result = await service.list_documents(
         workspace_id=workspace_id,
         page=page.page,
@@ -990,6 +991,39 @@ async def read_document(
 ) -> DocumentOut:
     try:
         return await service.get_document(
+            workspace_id=workspace_id,
+            document_id=document_id,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{document_id}/listRow",
+    response_model=DocumentListRow,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve document list row",
+    response_model_exclude_none=True,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Authentication required to access documents.",
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Workspace permissions do not allow document access.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Document not found within the workspace.",
+        },
+    },
+)
+async def read_document_list_row(
+    workspace_id: WorkspacePath,
+    document_id: DocumentPath,
+    service: DocumentsServiceDep,
+    _actor: DocumentReader,
+) -> DocumentListRow:
+    try:
+        return await service.get_document_list_row(
             workspace_id=workspace_id,
             document_id=document_id,
         )
